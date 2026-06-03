@@ -18,6 +18,7 @@ Date: 2026-06-03
 | Frequency views | `ScanStats.top_words`, `top_phrases`, `repeated_prompts`; UI Frequency panel | PASS |
 | Large-history UI safety | `ScanOptions.preview_limit`, `include_markdown`; UI requests latest 1,000 prompts and omits Markdown over IPC | PASS |
 | Source-specific smoke scans | `ScanOptions.source_ids`; CLI `scan --source ID`; Antigravity DB source smoke scans 2 prompts without full-history scan | PASS |
+| No-export stats scan | `ScanOptions.write_markdown`; CLI `scan --no-export`; full no-export scan writes no Markdown file | PASS |
 | Prompt quality scoring | `PromptQuality`, `ScanStats.average_quality`, `weak_prompt_count`, `top_quality_gaps`; UI quality metrics and suggestions | PASS |
 | Prompt improvement app | UI selected-prompt panel plus `improve_prompt` Tauri command | PASS |
 | GLM from `secrets.env` as fallback-capable AI path | Reads `GLM_API_KEY`/`GLM_API_KEY_2`, `GLM_CODING_ENDPOINT`, `GLM_CODING_MODEL`; normalizes base endpoint; falls back locally on 429 | PASS |
@@ -39,6 +40,7 @@ cargo run --quiet --bin promptvault-cli -- scan --source missing-source --previe
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview-five.md --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --output /tmp/promptvault-quality-smoke.md --json
 cargo build --release --bin promptvault-cli
+./target/release/promptvault-cli scan --no-export --json > /tmp/promptvault-no-export-full.json
 ./target/release/promptvault-cli scan --output /tmp/promptvault-antigravity-db-full.md --json
 npm run tauri build
 VITE_PORT=5174 VITE_HMR_PORT=5175 npm run dev
@@ -53,6 +55,7 @@ VITE_PORT=5174 VITE_HMR_PORT=5175 npm run dev
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
 - Unknown-source smoke: PASS, `--source missing-source` returned no source summaries and warning `Unknown source id requested: missing-source`.
+- No-export full scan: PASS, current release CLI scanned 155,484 prompts from 27,608 files in 1m31s with `output_path=null`, `markdown_written=false`, `markdown_included=false`, `warnings=[]`, and no `/tmp/promptvault-no-export-full.md` file created.
 - Preview-payload scan: PASS, default CLI JSON returned `returned_prompt_count=0`, bounded preview returned `returned_prompt_count=5`.
 - Prompt quality smoke: PASS, 100-prompt smoke reported `average_quality=71.6`, `weak_prompt_count=16`, and top quality gaps `constraints`, `verification`, `output_format`, `action_verb`, `context`.
 - Antigravity DB source: PASS, full release scan reported `files_seen=2`, `prompts_found=2`, status `ok`, notes `[]`.
@@ -66,6 +69,6 @@ VITE_PORT=5174 VITE_HMR_PORT=5175 npm run dev
 
 ## Residual Risks
 
-- The full Markdown export is large (`364M`) on this machine. The release CLI completes, and the Tauri UI now receives only a latest-prompt preview instead of all prompt bodies/Markdown over IPC.
+- The full Markdown export is large (`364M`) on this machine. The default release CLI export completes, the Tauri UI receives only a latest-prompt preview over IPC, and CLI automation can now use `--no-export` for stats-only scans.
 - Antigravity raw `.pb` conversation files are still deferred because no stable local schema has been verified for separating user prompts from model/tool output. SQLite `conversations/*.db` is implemented only for the confirmed `steps.step_type=14` user-input lane.
 - Direct Codex SDK prompt rewriting is documented but not enabled by default, because the official SDK is agent/workflow oriented and prompt rewriting is safer through a narrow chat-completion path.

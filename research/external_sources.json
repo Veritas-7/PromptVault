@@ -45,7 +45,15 @@
     "checked_at": "2026-06-03",
     "authority": "official GitHub",
     "relevance": "Agent-native CLI reference emphasizing self-describing commands, structured output, docs, and tests.",
-    "adoption": "Adopted for promptvault-cli sources/scan/improve commands and machine-readable --json summaries."
+    "adoption": "Adopted for promptvault-cli sources/scan/improve commands, machine-readable --json summaries, source filters, and no-export stats mode."
+  },
+  {
+    "title": "Tauri IPC module documentation",
+    "url": "https://docs.rs/tauri/latest/tauri/ipc/index.html",
+    "checked_at": "2026-06-03",
+    "authority": "official Rust crate documentation",
+    "relevance": "Documents Tauri IPC request/response types and reinforces keeping large payloads out of command responses unless explicitly requested.",
+    "adoption": "Adopted as rationale for skipping Markdown rendering/writing when callers request JSON-only stats."
   },
   {
     "title": "CLI-Anything project summary",

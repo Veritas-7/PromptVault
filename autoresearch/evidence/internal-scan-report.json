@@ -1,0 +1,22 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "624662c",
+  "worktree_status": "clean",
+  "observed_strengths": [
+    "PromptVault has a private pushed source repo and clean worktree.",
+    "CLI supports source-filtered scans for targeted source validation.",
+    "Full release scan exports 155484 prompts from 27608 files.",
+    "Tauri UI avoids returning full Markdown over IPC by default."
+  ],
+  "observed_weaknesses": [
+    "Full scans still render and write a 364M Markdown export even when an agent only needs JSON stats.",
+    "The CLI has no explicit stats-only/no-export mode.",
+    "Mandatory export makes iteration slower for parser and analytics work."
+  ],
+  "selected_candidate": {
+    "name": "no-export scan mode",
+    "reason": "Preserves the full Markdown default while enabling fast stats-only automation for autoresearch and source validation.",
+    "success_metric": "Full JSON scan can run with markdown_written=false, markdown_included=false, no output path, and no 364M export file."
+  }
+}

@@ -73,13 +73,14 @@ pub struct ScanStats {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanResult {
     pub generated_at: String,
-    pub output_path: String,
+    pub output_path: Option<String>,
     pub markdown: String,
     pub stats: ScanStats,
     pub prompts: Vec<PromptRecord>,
     pub returned_prompt_count: usize,
     pub prompts_truncated: bool,
     pub markdown_included: bool,
+    pub markdown_written: bool,
     pub warnings: Vec<String>,
 }
 
@@ -105,6 +106,7 @@ pub struct ScanOptions {
     pub output_path: Option<String>,
     pub preview_limit: Option<usize>,
     pub include_markdown: Option<bool>,
+    pub write_markdown: Option<bool>,
     pub source_ids: Option<Vec<String>>,
 }
 
@@ -115,6 +117,7 @@ impl Default for ScanOptions {
             output_path: None,
             preview_limit: None,
             include_markdown: None,
+            write_markdown: None,
             source_ids: None,
         }
     }
@@ -157,6 +160,7 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
     let limit = options.limit.unwrap_or(usize::MAX);
     let preview_limit = options.preview_limit;
     let include_markdown = options.include_markdown.unwrap_or(true);
+    let write_markdown = options.write_markdown.unwrap_or(true);
     let mut warnings = Vec::new();
     let mut prompts = Vec::new();
     let mut summaries = Vec::new();
@@ -213,16 +217,28 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
 
     let stats = build_stats(&prompts, summaries);
     let generated_at = Utc::now().to_rfc3339();
-    let markdown = render_markdown(&generated_at, &stats, &prompts);
-    let output_path = options
-        .output_path
-        .map(PathBuf::from)
-        .unwrap_or_else(default_markdown_path);
+    let should_render_markdown = write_markdown || include_markdown;
+    let markdown = if should_render_markdown {
+        render_markdown(&generated_at, &stats, &prompts)
+    } else {
+        String::new()
+    };
+    let requested_output_path = options.output_path.map(PathBuf::from);
+    let output_path = if write_markdown {
+        Some(requested_output_path.unwrap_or_else(default_markdown_path))
+    } else {
+        if requested_output_path.is_some() {
+            warnings.push("Output path ignored because Markdown export was disabled.".to_string());
+        }
+        None
+    };
 
-    if let Some(parent) = output_path.parent() {
-        fs::create_dir_all(parent)?;
+    if let Some(path) = &output_path {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, &markdown)?;
     }
-    fs::write(&output_path, &markdown)?;
 
     let response_prompts = response_prompts(&prompts, preview_limit);
     let returned_prompt_count = response_prompts.len();
@@ -235,13 +251,14 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
 
     Ok(ScanResult {
         generated_at,
-        output_path: output_path.display().to_string(),
+        output_path: output_path.map(|path| path.display().to_string()),
         markdown: response_markdown,
         stats,
         prompts: response_prompts,
         returned_prompt_count,
         prompts_truncated,
         markdown_included: include_markdown,
+        markdown_written: write_markdown,
         warnings,
     })
 }

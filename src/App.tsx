@@ -126,7 +126,7 @@ function App() {
         <section className="notice">
           <FileText size={18} />
           <span>
-            {result.output_path} · preview {result.returned_prompt_count.toLocaleString()} /{" "}
+            {result.output_path ?? "no export"} · preview {result.returned_prompt_count.toLocaleString()} /{" "}
             {result.stats.total_prompts.toLocaleString()}
           </span>
         </section>

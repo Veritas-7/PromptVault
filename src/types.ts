@@ -51,13 +51,14 @@ export interface ScanStats {
 
 export interface ScanResult {
   generated_at: string;
-  output_path: string;
+  output_path: string | null;
   markdown: string;
   stats: ScanStats;
   prompts: PromptRecord[];
   returned_prompt_count: number;
   prompts_truncated: boolean;
   markdown_included: boolean;
+  markdown_written: boolean;
   warnings: string[];
 }
 

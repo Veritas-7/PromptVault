@@ -52,6 +52,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "scan" => {
             let json = take_flag(&mut args, "--json");
             let include_markdown = take_flag(&mut args, "--include-markdown");
+            let no_export = take_flag(&mut args, "--no-export");
             let mut limit = None;
             let mut output_path = None;
             let mut preview_limit = Some(0);
@@ -89,6 +90,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 output_path,
                 preview_limit,
                 include_markdown: Some(include_markdown),
+                write_markdown: Some(!no_export),
                 source_ids: if source_ids.is_empty() {
                     None
                 } else {
@@ -103,13 +105,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     "returned_prompt_count": result.returned_prompt_count,
                     "prompts_truncated": result.prompts_truncated,
                     "markdown_included": result.markdown_included,
+                    "markdown_written": result.markdown_written,
                     "warnings": result.warnings
                 });
                 println!("{}", serde_json::to_string_pretty(&summary)?);
                 return Ok(());
             }
             println!("PromptVault scan complete");
-            println!("output: {}", result.output_path);
+            println!(
+                "output: {}",
+                result.output_path.as_deref().unwrap_or("<no export>")
+            );
+            println!("markdown_written: {}", result.markdown_written);
             println!("prompts: {}", result.stats.total_prompts);
             println!("returned_prompts: {}", result.returned_prompt_count);
             println!("files: {}", result.stats.total_files);
@@ -187,6 +194,6 @@ fn take_flag(args: &mut Vec<String>, flag: &str) -> bool {
 
 fn print_help() {
     println!(
-        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--include-markdown] [--json]\n  improve [--json] --prompt TEXT\n  improve [--json] < prompt.txt"
+        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--include-markdown] [--no-export] [--json]\n  improve [--json] --prompt TEXT\n  improve [--json] < prompt.txt"
     );
 }

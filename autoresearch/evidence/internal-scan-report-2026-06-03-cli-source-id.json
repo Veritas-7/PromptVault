@@ -1,0 +1,38 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "0b6f1a5",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "command": "scan --source missing-source --limit 1 --preview-limit 0 --no-export --json",
+      "exit_code": 0,
+      "observed": "returned empty scan JSON with warning: Unknown source id requested: missing-source"
+    },
+    {
+      "command": "repair --source missing-source --limit 1 --count 0 --json",
+      "exit_code": 0,
+      "observed": "returned empty repair JSON with warning: Unknown source id requested: missing-source"
+    },
+    {
+      "command": "scan --source codex --limit 1 --preview-limit 0 --no-export --json",
+      "exit_code": 0,
+      "observed": "valid source id scanned successfully"
+    }
+  ],
+  "observed_weaknesses": [
+    "The CLI accepted unknown explicit source ids and exited successfully.",
+    "Automation could mistype a source filter and receive an empty successful result."
+  ],
+  "selected_candidate": {
+    "name": "CLI source id validation",
+    "reason": "Fail closed for explicit CLI source filters while preserving library/API warning behavior.",
+    "success_metric": "Unknown CLI source ids exit non-zero for scan and repair; valid source ids still scan successfully."
+  },
+  "safety_controls": [
+    "The change is limited to promptvault-cli.rs.",
+    "Validation uses the existing source_specs registry.",
+    "A valid codex source smoke test was rerun.",
+    "npm run check was rerun after fixing the clippy manual_contains warning."
+  ]
+}

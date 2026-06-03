@@ -1,0 +1,27 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "a63e95e",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "promptvault-cli --help",
+      "observed": "repair --count was documented as N>0 even though the command caps batches at 10 and emits a warning for larger requests."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --bin promptvault-cli help_text_documents_cli_validation_rules",
+    "result": "FAILED before implementation because help_text did not contain the repair count cap rule."
+  },
+  "selected_candidate": {
+    "name": "CLI help repair count cap documentation",
+    "reason": "Make the CLI help match the existing bounded repair batch behavior without changing the safety cap.",
+    "success_metric": "Help documents the repair count cap, bounded_count behavior remains green, and full local checks still pass."
+  },
+  "safety_controls": [
+    "The change is limited to src-tauri/src/bin/promptvault-cli.rs.",
+    "No command behavior changed.",
+    "Focused help and repair cap tests were rerun.",
+    "npm run check was rerun after the change."
+  ]
+}

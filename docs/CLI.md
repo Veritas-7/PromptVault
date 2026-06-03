@@ -7,8 +7,8 @@ PromptVault ships a Rust CLI binary for agent-native use. It is intentionally no
 ```bash
 cargo run --bin promptvault-cli -- sources
 cargo run --bin promptvault-cli -- sources --json
-cargo run --bin promptvault-cli -- scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-markdown] [--no-export]
-cargo run --bin promptvault-cli -- scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-markdown] [--no-export] --json
+cargo run --bin promptvault-cli -- scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export]
+cargo run --bin promptvault-cli -- scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] --json
 cargo run --bin promptvault-cli -- improve --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve --json --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve < prompt.txt
@@ -23,7 +23,8 @@ cargo run --bin promptvault-cli -- improve < prompt.txt
 - `scan --no-export` skips Markdown rendering/writing when `--include-markdown` is not set; use it for fast JSON-only stats.
 - `scan --preview-sort quality-asc` returns the weakest bounded preview first; `--weakest-first` is the same shortcut.
 - `--json` prints machine-readable summaries for agents. `scan --json` still writes prompt bodies to the Markdown output path rather than dumping them to stdout.
-- CLI scan results return zero prompt bodies by default. Use `--preview-limit N` for a bounded latest-prompt preview.
+- CLI scan results return zero prompt bodies by default. Use `--preview-limit N --include-prompts` for an explicit bounded prompt preview in stdout JSON.
+- `--include-prompts` is capped at 25 prompt records in stdout even if `--preview-limit` is higher.
 - `--include-markdown` includes the Markdown body in the returned `ScanResult`; omit it for safer/leaner agent automation.
 - `improve` reads one prompt and returns provider, revised prompt, rationale, quality before/after delta, resolved gaps, remaining gaps, and warnings.
 
@@ -48,6 +49,7 @@ cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-sm
 cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
 cargo run --bin promptvault-cli -- scan --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
+cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.json.md --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
 cargo run --bin promptvault-cli -- improve --json --prompt "make better"

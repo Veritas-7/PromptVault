@@ -86,7 +86,7 @@ Bands:
 - `workable`: 60-79
 - `weak`: 0-59
 
-Use the quality gaps as a repair queue: add missing context, constraints, verification commands, and output format before asking an agent to execute a complex task. In the app, scan with `Weakest` mode to load the lowest-scoring prompt preview first; in the CLI, use `scan --weakest-first`.
+Use the quality gaps as a repair queue: add missing context, constraints, verification commands, and output format before asking an agent to execute a complex task. In the app, scan with `Weakest` mode to load the lowest-scoring prompt preview first; in the CLI, use `scan --weakest-first --include-prompts` for an explicit bounded repair queue.
 
 ## Research Basis
 

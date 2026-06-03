@@ -20,6 +20,7 @@ Date: 2026-06-03
 | Source-specific smoke scans | `ScanOptions.source_ids`; CLI `scan --source ID`; Antigravity DB source smoke scans 2 prompts without full-history scan | PASS |
 | No-export stats scan | `ScanOptions.write_markdown`; CLI `scan --no-export`; full no-export scan writes no Markdown file | PASS |
 | Weak-first repair queue | `ScanOptions.preview_sort`; CLI `--weakest-first`; UI `Weakest` mode; bounded preview can return lowest-quality prompts first | PASS |
+| Explicit stdout prompt preview | CLI `--include-prompts`; prompt bodies remain omitted by default and opt-in stdout previews are capped at 25 records | PASS |
 | Prompt quality scoring | `PromptQuality`, `ScanStats.average_quality`, `weak_prompt_count`, `top_quality_gaps`; UI quality metrics and suggestions | PASS |
 | Prompt improvement app | UI selected-prompt panel plus `improve_prompt` Tauri command | PASS |
 | Measurable improvement delta | `QualityDelta`; CLI/UI expose before score, after score, score delta, resolved gaps, and remaining gaps | PASS |
@@ -42,6 +43,7 @@ cargo run --quiet --bin promptvault-cli -- scan --source missing-source --previe
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview-five.md --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --output /tmp/promptvault-quality-smoke.md --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
+cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
 cargo run --quiet --bin promptvault-cli -- improve --json --prompt "make better"
 cargo build --release --bin promptvault-cli
 ./target/release/promptvault-cli scan --no-export --json > /tmp/promptvault-no-export-full.json
@@ -54,7 +56,7 @@ VITE_PORT=5174 VITE_HMR_PORT=5175 npm run dev
 
 - `npm run build`: PASS, Vite production build completed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 11 tests passed.
+- `cargo test`: PASS, 11 library tests plus 1 CLI test passed.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
@@ -62,6 +64,9 @@ VITE_PORT=5174 VITE_HMR_PORT=5175 npm run dev
 - No-export full scan: PASS, current release CLI scanned 155,484 prompts from 27,608 files in 1m31s with `output_path=null`, `markdown_written=false`, `markdown_included=false`, `warnings=[]`, and no `/tmp/promptvault-no-export-full.md` file created.
 - Preview-payload scan: PASS, default CLI JSON returned `returned_prompt_count=0`, bounded preview returned `returned_prompt_count=5`.
 - Weak-first preview smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --no-export --json` returned `preview_sort=quality_asc`, `returned_prompt_count=5`, `markdown_written=false`, and `output_path=null`.
+- Explicit prompt stdout smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json` returned `prompt_stdout_count=5`; first prompt quality was `36 · weak` with gaps `specific_goal`, `context`, `constraints`, `verification`, `output_format`.
+- Default stdout safety smoke: PASS, the same scan without `--include-prompts` returned `prompt_stdout_count=0` and `prompts_len=0`.
+- Stdout cap smoke: PASS, `--preview-limit 30 --include-prompts` returned `returned_prompt_count=30`, `prompt_stdout_count=25`, `prompts_len=25`, and one cap warning.
 - Prompt quality smoke: PASS, 100-prompt smoke reported `average_quality=71.6`, `weak_prompt_count=16`, and top quality gaps `constraints`, `verification`, `output_format`, `action_verb`, `context`.
 - Improvement delta smoke: PASS, `improve --json --prompt "make better"` returned `quality_delta.score_delta=64`, `before.score=36`, `after.score=100`, and resolved gaps `specific_goal`, `context`, `constraints`, `verification`, `output_format`.
 - Antigravity DB source: PASS, full release scan reported `files_seen=2`, `prompts_found=2`, status `ok`, notes `[]`.

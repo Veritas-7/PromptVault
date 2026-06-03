@@ -44,12 +44,13 @@ cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-sm
 cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
 cargo run --bin promptvault-cli -- scan --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
+cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
 cargo run --bin promptvault-cli -- improve --prompt "Fix the failing parser test and verify it."
 cargo run --bin promptvault-cli -- improve --json --prompt "make better"
 ```
 
-Omit `--limit` for a full scan. Use `--source ID` to verify one source without scanning the whole history. Use `--no-export` when an agent only needs JSON stats and should not create a large Markdown file. Use `--weakest-first` or `--preview-sort quality-asc` when the preview should prioritize the weakest prompts for repair. The scan command writes prompt bodies to the Markdown output path by default and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N` only when an agent or test needs a bounded prompt preview in the JSON result.
+Omit `--limit` for a full scan. Use `--source ID` to verify one source without scanning the whole history. Use `--no-export` when an agent only needs JSON stats and should not create a large Markdown file. Use `--weakest-first` or `--preview-sort quality-asc` when the preview should prioritize the weakest prompts for repair. The scan command writes prompt bodies to the Markdown output path by default and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N --include-prompts` only when an agent or test needs a bounded prompt preview in the JSON result. Stdout prompt previews are capped at 25 records.
 
 The Tauri UI runs full exports but receives only a latest-prompt preview over IPC, so the large Markdown file remains on disk instead of being serialized into the frontend.
 
@@ -81,6 +82,7 @@ cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-sm
 cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
 cargo run --bin promptvault-cli -- scan --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
+cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
 ```
 

@@ -1,0 +1,43 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "d65921b",
+  "worktree_status_before_iteration": "clean",
+  "scan_scope": [
+    "src-tauri/src/bin/promptvault-cli.rs",
+    "docs/CLI.md",
+    "docs/PROMPT_BEST_PRACTICES.md",
+    "README.md",
+    "autoresearch/evidence/completion_audit.md"
+  ],
+  "observed_strengths": [
+    "PromptVault can sort bounded previews by weakest prompt quality.",
+    "CLI scan JSON stays conservative by omitting prompt bodies by default.",
+    "The scan result already contains bounded PromptRecord previews internally."
+  ],
+  "observed_weaknesses": [
+    "The CLI could report which preview sort was used, but agents still could not inspect the selected weak prompts from stdout.",
+    "The documentation said preview-limit could support bounded JSON preview, but the CLI summary did not expose prompt records.",
+    "Printing prompt bodies by default would be unsafe, so the missing capability needed an explicit opt-in and a hard cap."
+  ],
+  "selected_candidate": {
+    "name": "explicit bounded stdout prompt preview",
+    "reason": "Let agents inspect a small weak-first repair queue without writing a large Markdown export or dumping prompt bodies by default.",
+    "success_metric": "A scan with --weakest-first --include-prompts --preview-limit 5 returns prompt_stdout_count=5 and the first prompt quality is weak while Markdown export remains disabled."
+  },
+  "safety_controls": [
+    "Prompt bodies remain omitted unless --include-prompts is passed.",
+    "Stdout prompt preview is capped at 25 records.",
+    "The no-export path can be combined with prompt preview to avoid creating a Markdown file."
+  ],
+  "expected_local_gate": {
+    "command": "cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json",
+    "required_fields": [
+      "prompt_stdout_count=5",
+      "preview_sort=quality_asc",
+      "prompts[0].quality.band=weak",
+      "markdown_written=false",
+      "output_path=null"
+    ]
+  }
+}

@@ -1339,6 +1339,15 @@ fn detect_risks(text: &str) -> Vec<String> {
     flags
 }
 
+pub fn redact_sensitive_text(text: &str) -> String {
+    let mut redacted = text.to_string();
+    for (label, regex) in risk_regexes() {
+        let replacement = format!("[REDACTED_{}]", label.to_ascii_uppercase());
+        redacted = regex.replace_all(&redacted, replacement.as_str()).to_string();
+    }
+    redacted
+}
+
 fn assess_prompt_quality(text: &str, risk_flags: &[String]) -> PromptQuality {
     let lower = text.to_lowercase();
     let words = count_words(text);

@@ -1,5 +1,6 @@
 use promptvault_lib::{
-    improve_prompt_inner, run_scan, source_specs, ImproveRequest, PromptRecord, ScanOptions,
+    improve_prompt_inner, redact_sensitive_text, run_scan, source_specs, ImproveRequest,
+    PromptRecord, ScanOptions,
 };
 
 const MAX_JSON_PROMPT_PREVIEW: usize = 25;
@@ -448,11 +449,11 @@ fn take_flag(args: &mut Vec<String>, flag: &str) -> bool {
     found
 }
 
-fn json_prompt_preview<'a>(
-    prompts: &'a [PromptRecord],
+fn json_prompt_preview(
+    prompts: &[PromptRecord],
     include_prompts: bool,
     warnings: &mut Vec<String>,
-) -> Vec<&'a PromptRecord> {
+) -> Vec<PromptRecord> {
     if !include_prompts {
         return Vec::new();
     }
@@ -461,7 +462,15 @@ fn json_prompt_preview<'a>(
             "Prompt stdout preview capped at {MAX_JSON_PROMPT_PREVIEW}; lower --preview-limit for exact stdout previews."
         ));
     }
-    prompts.iter().take(MAX_JSON_PROMPT_PREVIEW).collect()
+    prompts
+        .iter()
+        .take(MAX_JSON_PROMPT_PREVIEW)
+        .map(|prompt| {
+            let mut prompt = prompt.clone();
+            prompt.text = redact_sensitive_text(&prompt.text);
+            prompt
+        })
+        .collect()
 }
 
 fn bounded_count(requested: usize, max: usize, label: &str, warnings: &mut Vec<String>) -> usize {
@@ -519,6 +528,36 @@ mod tests {
         assert_eq!(preview.len(), MAX_JSON_PROMPT_PREVIEW);
         assert_eq!(preview[0].text, "prompt 0");
         assert_eq!(warnings.len(), 1);
+    }
+
+    #[test]
+    fn json_prompt_preview_redacts_long_token_text() {
+        let synthetic_token = format!("sk-{}", "A".repeat(60));
+        let prompts = vec![PromptRecord {
+            id: "secret".to_string(),
+            source: "test".to_string(),
+            session_id: "secret".to_string(),
+            path: "/tmp/test.jsonl".to_string(),
+            timestamp: None,
+            cwd: None,
+            text: synthetic_token,
+            word_count: 1,
+            char_count: 80,
+            hash: "secret".to_string(),
+            risk_flags: vec!["long_base64_like_token".to_string()],
+            quality: promptvault_lib::PromptQuality {
+                score: 10,
+                band: "weak".to_string(),
+                missing: Vec::new(),
+                suggestions: Vec::new(),
+            },
+        }];
+
+        let mut warnings = Vec::new();
+        let preview = json_prompt_preview(&prompts, true, &mut warnings);
+
+        assert_eq!(preview.len(), 1);
+        assert_eq!(preview[0].text, "[REDACTED_LONG_BASE64_LIKE_TOKEN]");
     }
 
     #[test]

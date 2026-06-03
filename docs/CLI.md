@@ -22,6 +22,7 @@ cargo run --bin promptvault-cli -- repair [--source ID] [--limit N] [--count N] 
 - Unknown commands print help plus an error and exit non-zero.
 - `scan` writes a Markdown export and prints only summary metadata, not prompt bodies.
 - `scan --limit N` is for smoke tests; omit `--limit` for a full scan.
+- Numeric options such as `--limit`, `--preview-limit`, and `--count` require non-negative integers and exit non-zero for invalid values.
 - `scan --source ID` restricts scanning to one source ID from `sources`; repeat it or pass comma-separated IDs for multi-source smoke tests.
 - Scan JSON and Markdown source summaries include `average_quality` and `weak_prompt_count` for each source.
 - `scan --no-export` skips Markdown rendering/writing when `--include-markdown` is not set; use it for fast JSON-only stats.
@@ -64,5 +65,6 @@ cargo run --bin promptvault-cli -- improve --json --prompt "make better"
 cargo run --bin promptvault-cli -- improve --local --json --prompt "make better"
 set +e; cargo run --bin promptvault-cli -- improve --json --prompt ""; test "$?" -ne 0; set -e
 cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
+set +e; cargo run --bin promptvault-cli -- scan --limit nope --no-export --json; test "$?" -ne 0; set -e
 set +e; cargo run --bin promptvault-cli -- scna; test "$?" -ne 0; set -e
 ```

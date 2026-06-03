@@ -1,0 +1,38 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "39ece52",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "command": "scan --source antigravity-cli-conversation-db --limit nope --no-export --json",
+      "exit_code": 0,
+      "observed": "scanned 2 prompts with no warning"
+    },
+    {
+      "command": "scan --limit 10 --preview-limit nope --no-export --json",
+      "exit_code": 0,
+      "observed": "returned 10 prompts because preview_limit became None"
+    },
+    {
+      "command": "repair --limit 10 --count nope --json",
+      "exit_code": 0,
+      "observed": "used default repair_count=5"
+    }
+  ],
+  "observed_weaknesses": [
+    "Invalid numeric scan options were silently ignored.",
+    "Invalid preview limits could return a larger preview than intended.",
+    "Invalid repair count silently used the default batch size."
+  ],
+  "selected_candidate": {
+    "name": "strict numeric CLI options",
+    "reason": "Agent automation should fail closed when numeric caps are malformed.",
+    "success_metric": "Invalid --limit, --preview-limit, and --count exit non-zero; valid numeric scan still exits 0."
+  },
+  "safety_controls": [
+    "Valid numeric scan behavior was smoke-tested.",
+    "The change is limited to CLI parsing.",
+    "npm run check was rerun after the change."
+  ]
+}

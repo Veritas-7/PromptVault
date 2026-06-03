@@ -18,6 +18,7 @@ Date: 2026-06-03
 | Frequency views | `ScanStats.top_words`, `top_phrases`, `repeated_prompts`; UI Frequency panel | PASS |
 | Large-history UI safety | `ScanOptions.preview_limit`, `include_markdown`; UI requests latest 1,000 prompts and omits Markdown over IPC | PASS |
 | Source-specific smoke scans | `ScanOptions.source_ids`; CLI `scan --source ID`; Antigravity DB source smoke scans 2 prompts without full-history scan | PASS |
+| Numeric option safety | invalid `--limit`, `--preview-limit`, and repair `--count` exit non-zero instead of silently removing/defaulting caps | PASS |
 | No-export stats scan | `ScanOptions.write_markdown`; CLI `scan --no-export`; full no-export scan writes no Markdown file | PASS |
 | Weak-first repair queue | `ScanOptions.preview_sort`; CLI `--weakest-first`; UI `Weakest` mode; bounded preview can return lowest-quality prompts first | PASS |
 | Source-level quality triage | `SourceSummary.average_quality`, `weak_prompt_count`; CLI JSON, Markdown source table, and UI source panel expose source quality | PASS |
@@ -60,6 +61,9 @@ set +e; cargo run --quiet --bin promptvault-cli -- improve --json; test "$?" -ne
 cargo run --quiet --bin promptvault-cli -- improve --local --json --prompt "make better"
 cargo run --quiet --bin promptvault-cli -- repair --json --limit 100 --count 3
 cargo run --quiet --bin promptvault-cli -- repair --json --limit 100 --count 99
+set +e; cargo run --quiet --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --limit nope --no-export --json; test "$?" -ne 0; set -e
+set +e; cargo run --quiet --bin promptvault-cli -- scan --limit 10 --preview-limit nope --no-export --json; test "$?" -ne 0; set -e
+set +e; cargo run --quiet --bin promptvault-cli -- repair --limit 10 --count nope --json; test "$?" -ne 0; set -e
 cargo clippy --all-targets --all-features -- -D warnings
 cargo build --release --bin promptvault-cli
 ./target/release/promptvault-cli scan --no-export --json > /tmp/promptvault-no-export-full.json
@@ -75,15 +79,16 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run check`: PASS, Vite production build completed, 14 library tests plus 4 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, Vite production build completed, 14 library tests plus 5 CLI tests passed, and strict clippy passed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 14 library tests plus 4 CLI tests passed.
-- CLI unit tests: PASS, 4 CLI tests passed including explicit help command recognition and empty prompt rejection.
+- `cargo test`: PASS, 14 library tests plus 5 CLI tests passed.
+- CLI unit tests: PASS, 5 CLI tests passed including explicit help command recognition, empty prompt rejection, and numeric argument validation.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
 - Unknown-source smoke: PASS, `--source missing-source` returned no source summaries and warning `Unknown source id requested: missing-source`.
+- Numeric option smoke: PASS, invalid `--limit`, `--preview-limit`, and repair `--count` each exited 1 with the expected non-negative integer error; valid `--limit 10 --preview-limit 0` scan exited 0.
 - No-export full scan: PASS, current release CLI scanned 155,484 prompts from 27,608 files in 1m31s with `output_path=null`, `markdown_written=false`, `markdown_included=false`, `warnings=[]`, and no `/tmp/promptvault-no-export-full.md` file created.
 - Preview-payload scan: PASS, default CLI JSON returned `returned_prompt_count=0`, bounded preview returned `returned_prompt_count=5`.
 - Weak-first preview smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --no-export --json` returned `preview_sort=quality_asc`, `returned_prompt_count=5`, `markdown_written=false`, and `output_path=null`.

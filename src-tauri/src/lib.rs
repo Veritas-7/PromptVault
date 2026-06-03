@@ -166,6 +166,9 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
     let preview_limit = options.preview_limit;
     let include_markdown = options.include_markdown.unwrap_or(true);
     let write_markdown = options.write_markdown.unwrap_or(true);
+    if matches!(options.output_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("output path requires a non-empty value".into());
+    }
     if !write_markdown && options.output_path.is_some() {
         return Err("output path cannot be used when markdown export is disabled".into());
     }
@@ -2015,6 +2018,22 @@ mod tests {
         assert!(err
             .to_string()
             .contains("output path cannot be used when markdown export is disabled"));
+    }
+
+    #[test]
+    fn run_scan_rejects_empty_output_path() {
+        let err = run_scan(ScanOptions {
+            output_path: Some("  ".to_string()),
+            include_markdown: Some(false),
+            write_markdown: Some(true),
+            source_ids: Some(vec!["missing-source".to_string()]),
+            ..Default::default()
+        })
+        .expect_err("empty output path should fail closed");
+
+        assert!(err
+            .to_string()
+            .contains("output path requires a non-empty value"));
     }
 
     #[test]

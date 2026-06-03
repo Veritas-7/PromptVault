@@ -1,0 +1,29 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "726ff8a",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "command": "scan --source codex --limit 1 --output /tmp/promptvault-no-export.md --no-export --json",
+      "exit_code": 0,
+      "observed": "returned JSON with output_path null and warning: Output path ignored because Markdown export was disabled."
+    }
+  ],
+  "observed_weaknesses": [
+    "The CLI accepted contradictory output and no-export options.",
+    "A requested output path could be silently ignored while the command still exited successfully."
+  ],
+  "selected_candidate": {
+    "name": "CLI output/no-export conflict rejection",
+    "reason": "Make mutually exclusive scan output options fail before scanning.",
+    "success_metric": "scan --output ... --no-export exits non-zero; scan --output without --no-export still writes markdown."
+  },
+  "safety_controls": [
+    "The change is limited to promptvault-cli.rs.",
+    "The library run_scan warning behavior remains unchanged for API callers.",
+    "A valid output export smoke test was rerun.",
+    "Temporary /tmp export files were removed after smoke testing.",
+    "npm run check was rerun after the change."
+  ]
+}

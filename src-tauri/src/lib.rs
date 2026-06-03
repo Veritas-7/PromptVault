@@ -1680,7 +1680,8 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             ),
             (
                 "private_key",
-                Regex::new(r"-----BEGIN [A-Z ]*PRIVATE KEY-----").expect("private key regex"),
+                Regex::new(r"(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----")
+                    .expect("private key regex"),
             ),
             (
                 "long_base64_like_token",
@@ -2877,6 +2878,17 @@ mod tests {
             redact_sensitive_text(&text),
             "[REDACTED_POSSIBLE_API_KEY]"
         );
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_private_key_blocks() {
+        let marker = "TEST PRIVATE KEY";
+        let text = format!(
+            "-----BEGIN {marker}-----\n{}\n-----END {marker}-----",
+            "short-body"
+        );
+
+        assert_eq!(redact_sensitive_text(&text), "[REDACTED_PRIVATE_KEY]");
     }
 
     #[test]

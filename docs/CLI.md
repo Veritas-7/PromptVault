@@ -24,7 +24,7 @@ cargo run --bin promptvault-cli -- improve < prompt.txt
 - `--json` prints machine-readable summaries for agents. `scan --json` still writes prompt bodies to the Markdown output path rather than dumping them to stdout.
 - CLI scan results return zero prompt bodies by default. Use `--preview-limit N` for a bounded latest-prompt preview.
 - `--include-markdown` includes the Markdown body in the returned `ScanResult`; omit it for safer/leaner agent automation.
-- `improve` reads one prompt and returns provider, revised prompt, rationale, and warnings.
+- `improve` reads one prompt and returns provider, revised prompt, rationale, quality before/after delta, resolved gaps, remaining gaps, and warnings.
 
 ## Agent-Native Design Notes
 
@@ -48,4 +48,5 @@ cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db
 cargo run --bin promptvault-cli -- scan --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.json.md --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
+cargo run --bin promptvault-cli -- improve --json --prompt "make better"
 ```

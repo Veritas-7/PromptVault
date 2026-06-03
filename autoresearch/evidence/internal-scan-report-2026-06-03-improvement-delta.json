@@ -1,0 +1,41 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "128a740",
+  "worktree_status_before_iteration": "clean",
+  "scan_scope": [
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/bin/promptvault-cli.rs",
+    "src/types.ts",
+    "src/App.tsx",
+    "src/App.css",
+    "docs/CLI.md",
+    "README.md",
+    "autoresearch/evidence/completion_audit.md"
+  ],
+  "observed_strengths": [
+    "PromptVault already assigns deterministic quality scores and gap suggestions to scanned prompts.",
+    "The improve command is shared by the Tauri UI and Rust CLI.",
+    "Local fallback recommendations are deterministic enough to test without depending on GLM availability."
+  ],
+  "observed_weaknesses": [
+    "ImproveResult returned a revised prompt but did not report whether the revision improved the prompt-quality score.",
+    "CLI and UI users had to manually compare the selected prompt quality against the recommendation.",
+    "The documented future A/B path needed a small local measurement surface before broader prompt-optimizer experiments."
+  ],
+  "selected_candidate": {
+    "name": "measurable improvement delta",
+    "reason": "Expose before/after quality scores, score delta, resolved gaps, and remaining gaps for every prompt recommendation.",
+    "success_metric": "The improve CLI JSON output includes quality_delta and a weak prompt smoke reports a positive score_delta with resolved gaps."
+  },
+  "expected_local_gate": {
+    "command": "cargo run --quiet --bin promptvault-cli -- improve --json --prompt \"make better\"",
+    "required_fields": [
+      "quality_delta.before.score",
+      "quality_delta.after.score",
+      "quality_delta.score_delta",
+      "quality_delta.resolved_gaps",
+      "quality_delta.remaining_gaps"
+    ]
+  }
+}

@@ -21,6 +21,7 @@ Date: 2026-06-03
 | No-export stats scan | `ScanOptions.write_markdown`; CLI `scan --no-export`; full no-export scan writes no Markdown file | PASS |
 | Prompt quality scoring | `PromptQuality`, `ScanStats.average_quality`, `weak_prompt_count`, `top_quality_gaps`; UI quality metrics and suggestions | PASS |
 | Prompt improvement app | UI selected-prompt panel plus `improve_prompt` Tauri command | PASS |
+| Measurable improvement delta | `QualityDelta`; CLI/UI expose before score, after score, score delta, resolved gaps, and remaining gaps | PASS |
 | GLM from `secrets.env` as fallback-capable AI path | Reads `GLM_API_KEY`/`GLM_API_KEY_2`, `GLM_CODING_ENDPOINT`, `GLM_CODING_MODEL`; normalizes base endpoint; falls back locally on 429 | PASS |
 | Codex SDK considered | `research/external_sources.json` and strategy doc cite official Codex SDK README and defer direct SDK invocation for safety | PASS_WITH_NOTE |
 | CLI-Anything-inspired strong CLI | `promptvault-cli` supports `sources`, `scan`, `improve`, and `--json` summaries | PASS |
@@ -39,6 +40,7 @@ cargo run --quiet --bin promptvault-cli -- scan --source antigravity-cli-convers
 cargo run --quiet --bin promptvault-cli -- scan --source missing-source --preview-limit 0 --output /tmp/promptvault-source-filter-missing.md --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview-five.md --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --output /tmp/promptvault-quality-smoke.md --json
+cargo run --quiet --bin promptvault-cli -- improve --json --prompt "make better"
 cargo build --release --bin promptvault-cli
 ./target/release/promptvault-cli scan --no-export --json > /tmp/promptvault-no-export-full.json
 ./target/release/promptvault-cli scan --output /tmp/promptvault-antigravity-db-full.md --json
@@ -50,7 +52,7 @@ VITE_PORT=5174 VITE_HMR_PORT=5175 npm run dev
 
 - `npm run build`: PASS, Vite production build completed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 9 tests passed.
+- `cargo test`: PASS, 10 tests passed.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
@@ -58,12 +60,14 @@ VITE_PORT=5174 VITE_HMR_PORT=5175 npm run dev
 - No-export full scan: PASS, current release CLI scanned 155,484 prompts from 27,608 files in 1m31s with `output_path=null`, `markdown_written=false`, `markdown_included=false`, `warnings=[]`, and no `/tmp/promptvault-no-export-full.md` file created.
 - Preview-payload scan: PASS, default CLI JSON returned `returned_prompt_count=0`, bounded preview returned `returned_prompt_count=5`.
 - Prompt quality smoke: PASS, 100-prompt smoke reported `average_quality=71.6`, `weak_prompt_count=16`, and top quality gaps `constraints`, `verification`, `output_format`, `action_verb`, `context`.
+- Improvement delta smoke: PASS, `improve --json --prompt "make better"` returned `quality_delta.score_delta=64`, `before.score=36`, `after.score=100`, and resolved gaps `specific_goal`, `context`, `constraints`, `verification`, `output_format`.
 - Antigravity DB source: PASS, full release scan reported `files_seen=2`, `prompts_found=2`, status `ok`, notes `[]`.
 - Full release scan: PASS, current code exported 155,484 prompts from 27,608 files to `/tmp/promptvault-antigravity-db-full.md`, output `364M`, UTF-8 Markdown text.
 - Full release scan response payload: PASS, `returned_prompt_count=0`, `prompts_truncated=true`, `markdown_included=false`.
 - Full release quality distribution: PASS, `average_quality=66.49`, `weak_prompt_count=61,243`, and top quality gaps `constraints`, `verification`, `output_format`, `action_verb`, `context`.
 - Tauri production build: PASS, produced `src-tauri/target/release/bundle/macos/promptvault.app` and `src-tauri/target/release/bundle/dmg/promptvault_0.1.0_aarch64.dmg`.
 - Dev server smoke: PASS, `http://localhost:5174/` returned HTTP 200. Existing CareVault server occupied default port 1420, so PromptVault was started with `VITE_PORT=5174`.
+- Playwright render smoke: PASS, `Agent prompt intelligence` loaded, `Recommendation` panel rendered, 5 panels were present, and `bodyWidth=viewportWidth=1440`.
 - GitHub remote: PASS, `origin/main` pushed to private repo `Veritas-7/PromptVault`.
 - GLM improve smoke: fallback path PASS; live GLM returned `429 Too Many Requests`, then local rules returned a recommendation.
 

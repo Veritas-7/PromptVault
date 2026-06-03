@@ -1,0 +1,42 @@
+{
+  "schema": "promptvault-autoresearch-internal-scan-v1",
+  "generated_at": "2026-06-03T21:12:41+0900",
+  "iteration": "key-value-redaction",
+  "code_commit": "4b2e67ef54a2a4698209cf7a900f768d114f6460",
+  "status": "pass",
+  "candidate": {
+    "problem": "The possible_api_key regex matched only the key prefix and delimiter, so redaction could leave short secret values visible.",
+    "risk": "Key/value secrets that are too short for the long-token pattern could still leak in redacted previews.",
+    "decision": "Extend possible_api_key to include an optional non-whitespace value segment."
+  },
+  "red": {
+    "command": "cargo test redact_sensitive_text_redacts_key_value_pairs",
+    "status": "failed_as_expected",
+    "evidence": "The new test failed because the value remained after [REDACTED_POSSIBLE_API_KEY]."
+  },
+  "green": {
+    "command": "cargo test redact_sensitive_text_redacts_key_value_pairs",
+    "status": "passed",
+    "evidence": "The focused test passed after the possible_api_key regex redacted the key/value pair."
+  },
+  "full_verification": {
+    "command": "npm run check",
+    "status": "passed",
+    "evidence": "10 UI helper tests passed, Vite build passed, 40 Rust library tests passed, 14 CLI tests passed, doc-tests passed, and strict clippy passed."
+  },
+  "staged_checks": {
+    "commands": [
+      "git diff --cached --check",
+      "gitleaks protect --staged --verbose"
+    ],
+    "status": "passed",
+    "evidence": "gitleaks scanned staged code and found no leaks."
+  },
+  "changed_paths": [
+    "src-tauri/src/lib.rs",
+    "autoresearch/evidence/completion_audit.md",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-key-value-redaction.json",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-key-value-redaction.md",
+    "autoresearch/evidence/iteration-2026-06-03-key-value-redaction.md"
+  ]
+}

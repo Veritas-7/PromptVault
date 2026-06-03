@@ -205,6 +205,7 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
             Ok(mut found) => {
                 summary.prompts_found = found.len();
                 summarize_source_quality(&mut summary, &found);
+                promote_source_notes_to_warning(&source, &mut summary, &mut warnings);
                 prompts.append(&mut found);
             }
             Err(err) => {
@@ -1513,6 +1514,18 @@ fn summarize_source_quality(summary: &mut SourceSummary, prompts: &[PromptRecord
         .count();
 }
 
+fn promote_source_notes_to_warning(
+    source: &SourceSpec,
+    summary: &mut SourceSummary,
+    warnings: &mut Vec<String>,
+) {
+    if summary.notes.is_empty() {
+        return;
+    }
+    summary.status = "partial".to_string();
+    warnings.push(format!("{}: {}", source.label, summary.notes.join("; ")));
+}
+
 fn top_words(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
     let stop = stop_words();
     let mut counts: HashMap<String, usize> = HashMap::new();
@@ -2314,6 +2327,35 @@ mod tests {
         assert_eq!(summary.weak_prompt_count, 1);
         assert!(summary.average_quality > 0.0);
         assert!(summary.average_quality < 100.0);
+    }
+
+    #[test]
+    fn source_notes_are_promoted_to_partial_warning() {
+        let source = SourceSpec {
+            id: "test-source",
+            label: "Test Source",
+            root: PathBuf::from("/tmp/test-source"),
+            kind: SourceKind::CodexJsonl,
+        };
+        let mut summary = SourceSummary {
+            id: source.id.to_string(),
+            label: source.label.to_string(),
+            root_path: source.root.display().to_string(),
+            files_seen: 1,
+            prompts_found: 0,
+            average_quality: 0.0,
+            weak_prompt_count: 0,
+            status: "ok".to_string(),
+            notes: vec!["Skipped bad.jsonl: stream did not contain valid UTF-8".to_string()],
+        };
+        let mut warnings = Vec::new();
+
+        promote_source_notes_to_warning(&source, &mut summary, &mut warnings);
+
+        assert_eq!(summary.status, "partial");
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("Test Source"));
+        assert!(warnings[0].contains("Skipped bad.jsonl"));
     }
 
     #[test]

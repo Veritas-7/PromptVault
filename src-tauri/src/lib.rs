@@ -166,6 +166,9 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
     let preview_limit = options.preview_limit;
     let include_markdown = options.include_markdown.unwrap_or(true);
     let write_markdown = options.write_markdown.unwrap_or(true);
+    if !write_markdown && options.output_path.is_some() {
+        return Err("output path cannot be used when markdown export is disabled".into());
+    }
     let mut warnings = Vec::new();
     let preview_sort = PreviewSort::from_option(options.preview_sort.as_deref(), &mut warnings);
     let mut prompts = Vec::new();
@@ -236,9 +239,6 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
     let output_path = if write_markdown {
         Some(requested_output_path.unwrap_or_else(default_markdown_path))
     } else {
-        if requested_output_path.is_some() {
-            warnings.push("Output path ignored because Markdown export was disabled.".to_string());
-        }
         None
     };
 
@@ -1965,6 +1965,22 @@ mod tests {
         assert!(err
             .to_string()
             .contains("scan limit requires a positive integer"));
+    }
+
+    #[test]
+    fn run_scan_rejects_output_path_when_export_disabled() {
+        let err = run_scan(ScanOptions {
+            output_path: Some("/tmp/promptvault-disabled-export.md".to_string()),
+            include_markdown: Some(false),
+            write_markdown: Some(false),
+            source_ids: Some(vec!["missing-source".to_string()]),
+            ..Default::default()
+        })
+        .expect_err("output path with disabled export should fail closed");
+
+        assert!(err
+            .to_string()
+            .contains("output path cannot be used when markdown export is disabled"));
     }
 
     #[test]

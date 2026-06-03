@@ -171,6 +171,7 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
     }
     let mut warnings = Vec::new();
     let preview_sort = PreviewSort::from_option(options.preview_sort.as_deref())?;
+    validate_source_ids(options.source_ids.as_deref())?;
     let mut prompts = Vec::new();
     let mut summaries = Vec::new();
     let (sources, mut source_warnings) = selected_source_specs(options.source_ids.as_deref());
@@ -349,6 +350,35 @@ fn response_prompts(
             out.truncate(limit);
             out
         }
+    }
+}
+
+fn validate_source_ids(source_ids: Option<&[String]>) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(requested) = source_ids else {
+        return Ok(());
+    };
+    let requested = requested
+        .iter()
+        .map(|id| id.trim())
+        .filter(|id| !id.is_empty())
+        .collect::<BTreeSet<_>>();
+    if requested.is_empty() {
+        return Ok(());
+    }
+
+    let known = source_specs()
+        .into_iter()
+        .map(|source| source.id)
+        .collect::<HashSet<_>>();
+    let unknown = requested
+        .into_iter()
+        .filter(|id| !known.contains(id))
+        .collect::<Vec<_>>();
+
+    if unknown.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("unknown source id: {}", unknown.join(", ")).into())
     }
 }
 
@@ -1995,6 +2025,21 @@ mod tests {
         assert!(err
             .to_string()
             .contains("preview sort must be one of latest, quality-asc, quality-desc"));
+    }
+
+    #[test]
+    fn run_scan_rejects_unknown_source_ids() {
+        let err = run_scan(ScanOptions {
+            include_markdown: Some(false),
+            write_markdown: Some(false),
+            source_ids: Some(vec!["missing-source".to_string()]),
+            ..Default::default()
+        })
+        .expect_err("unknown source ids should fail closed");
+
+        assert!(err
+            .to_string()
+            .contains("unknown source id: missing-source"));
     }
 
     #[test]

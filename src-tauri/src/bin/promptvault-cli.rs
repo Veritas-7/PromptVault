@@ -320,21 +320,26 @@ fn is_help_command(command: &str) -> bool {
 }
 
 fn collect_prompt_arg(args: Vec<String>) -> Result<String, Box<dyn std::error::Error>> {
-    if args.is_empty() {
+    let prompt = if args.is_empty() {
         let mut buf = String::new();
         std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf)?;
-        return Ok(buf);
-    }
-
-    let mut iter = args.into_iter();
-    let mut prompt = None;
-    while let Some(arg) = iter.next() {
-        match arg.as_str() {
-            "--prompt" => prompt = iter.next(),
-            other => return Err(format!("unknown improve argument: {other}").into()),
+        buf
+    } else {
+        let mut iter = args.into_iter();
+        let mut prompt = None;
+        while let Some(arg) = iter.next() {
+            match arg.as_str() {
+                "--prompt" => prompt = iter.next(),
+                other => return Err(format!("unknown improve argument: {other}").into()),
+            }
         }
+        prompt.unwrap_or_default()
+    };
+
+    if prompt.trim().is_empty() {
+        return Err("improve requires a non-empty prompt".into());
     }
-    Ok(prompt.unwrap_or_default())
+    Ok(prompt)
 }
 
 fn take_flag(args: &mut Vec<String>, flag: &str) -> bool {
@@ -443,5 +448,16 @@ mod tests {
         assert!(is_help_command("-h"));
         assert!(is_help_command("--help"));
         assert!(!is_help_command("scna"));
+    }
+
+    #[test]
+    fn collect_prompt_arg_rejects_empty_prompt_flag() {
+        assert!(collect_prompt_arg(vec!["--prompt".to_string(), "".to_string()]).is_err());
+        assert!(collect_prompt_arg(vec!["--prompt".to_string(), "  ".to_string()]).is_err());
+        assert_eq!(
+            collect_prompt_arg(vec!["--prompt".to_string(), "make better".to_string()])
+                .expect("non-empty prompt"),
+            "make better"
+        );
     }
 }

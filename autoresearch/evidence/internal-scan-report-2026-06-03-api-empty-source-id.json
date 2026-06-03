@@ -1,0 +1,28 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "77ed664",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "run_scan",
+      "observed": "API source_ids: Some([]) and blank-only source ids were accepted and interpreted like a full-source scan."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib run_scan_rejects_empty_source_ids",
+    "result": "FAILED before implementation because run_scan returned Ok and scanned Codex session files despite the explicit empty source list."
+  },
+  "selected_candidate": {
+    "name": "API empty source id validation",
+    "reason": "Align explicit empty API source selections with CLI --source empty-value rejection and avoid accidental full-source scans.",
+    "success_metric": "run_scan returns an error for source_ids: Some([]) and blank-only ids, unknown source validation still passes, and full local checks still pass."
+  },
+  "safety_controls": [
+    "The change is limited to src-tauri/src/lib.rs.",
+    "The new guard runs before source traversal.",
+    "The RED test used limit: Some(1) to bound the baseline scan.",
+    "Focused API and CLI source-id tests were rerun.",
+    "npm run check was rerun after the change."
+  ]
+}

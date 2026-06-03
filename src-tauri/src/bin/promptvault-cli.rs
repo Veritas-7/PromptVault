@@ -68,13 +68,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
                     "--limit" => {
-                        limit = iter.next().and_then(|value| value.parse::<usize>().ok());
+                        limit = Some(parse_usize_arg(iter.next(), "--limit")?);
                     }
                     "--output" => {
                         output_path = iter.next();
                     }
                     "--preview-limit" => {
-                        preview_limit = iter.next().and_then(|value| value.parse::<usize>().ok());
+                        preview_limit = Some(parse_usize_arg(iter.next(), "--preview-limit")?);
                     }
                     "--preview-sort" => {
                         preview_sort = iter.next();
@@ -200,13 +200,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
                     "--count" => {
-                        count = iter
-                            .next()
-                            .and_then(|value| value.parse::<usize>().ok())
-                            .unwrap_or(count);
+                        count = parse_usize_arg(iter.next(), "--count")?;
                     }
                     "--limit" => {
-                        limit = iter.next().and_then(|value| value.parse::<usize>().ok());
+                        limit = Some(parse_usize_arg(iter.next(), "--limit")?);
                     }
                     "--source" => {
                         if let Some(value) = iter.next() {
@@ -317,6 +314,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 fn is_help_command(command: &str) -> bool {
     matches!(command, "help" | "-h" | "--help")
+}
+
+fn parse_usize_arg(value: Option<String>, flag: &str) -> Result<usize, Box<dyn std::error::Error>> {
+    let value = value.ok_or_else(|| format!("{flag} requires a value"))?;
+    value
+        .parse::<usize>()
+        .map_err(|_| format!("{flag} requires a non-negative integer").into())
 }
 
 fn collect_prompt_arg(args: Vec<String>) -> Result<String, Box<dyn std::error::Error>> {
@@ -459,5 +463,15 @@ mod tests {
                 .expect("non-empty prompt"),
             "make better"
         );
+    }
+
+    #[test]
+    fn parse_usize_arg_rejects_missing_or_invalid_values() {
+        assert_eq!(
+            parse_usize_arg(Some("5".to_string()), "--limit").expect("valid usize"),
+            5
+        );
+        assert!(parse_usize_arg(None, "--limit").is_err());
+        assert!(parse_usize_arg(Some("nope".to_string()), "--limit").is_err());
     }
 }

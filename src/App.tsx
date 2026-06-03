@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import "./App.css";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
+import { selectedPromptForView } from "./selection";
 import type { ImproveResult, PromptRecord, ScanResult } from "./types";
 
 type ScanState = "idle" | "scanning" | "ready" | "failed";
@@ -66,8 +67,8 @@ function App() {
   }, [promptListMode, prompts, query]);
 
   const selectedPrompt = useMemo(() => {
-    return prompts.find((prompt) => prompt.id === selectedId) ?? filteredPrompts[0] ?? null;
-  }, [filteredPrompts, prompts, selectedId]);
+    return selectedPromptForView(filteredPrompts, selectedId);
+  }, [filteredPrompts, selectedId]);
 
   async function runScan() {
     setError(null);

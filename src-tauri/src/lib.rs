@@ -395,13 +395,7 @@ pub async fn improve_prompt_inner(
 ) -> Result<ImproveResult, Box<dyn std::error::Error>> {
     let prompt = request.prompt.trim().to_string();
     if prompt.is_empty() {
-        return Ok(local_improvement(
-            "",
-            request.context.as_deref(),
-            vec![
-                "Empty prompt; local fallback returned the improvement checklist only.".to_string(),
-            ],
-        ));
+        return Err("improve requires a non-empty prompt".into());
     }
 
     if request.force_local.unwrap_or(false) {
@@ -1920,6 +1914,21 @@ mod tests {
         assert!(!result.used_ai);
         assert!(result.warnings.is_empty());
         assert!(result.quality_delta.score_delta > 0);
+    }
+
+    #[tokio::test]
+    async fn improve_prompt_inner_rejects_empty_prompt() {
+        let err = improve_prompt_inner(ImproveRequest {
+            prompt: "  ".to_string(),
+            context: None,
+            force_local: Some(true),
+        })
+        .await
+        .expect_err("empty prompt should fail closed");
+
+        assert!(err
+            .to_string()
+            .contains("improve requires a non-empty prompt"));
     }
 
     #[test]

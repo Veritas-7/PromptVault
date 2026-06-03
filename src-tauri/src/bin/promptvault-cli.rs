@@ -337,6 +337,18 @@ fn parse_source_ids_arg(value: Option<String>) -> Result<Vec<String>, Box<dyn st
     if ids.is_empty() {
         return Err("--source requires at least one source id".into());
     }
+    let known_ids = source_specs()
+        .into_iter()
+        .map(|source| source.id)
+        .collect::<Vec<_>>();
+    let unknown_ids = ids
+        .iter()
+        .filter(|id| !known_ids.contains(&id.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    if !unknown_ids.is_empty() {
+        return Err(format!("unknown source id: {}", unknown_ids.join(", ")).into());
+    }
     Ok(ids)
 }
 
@@ -528,12 +540,14 @@ mod tests {
     #[test]
     fn parse_source_ids_rejects_empty_values() {
         assert_eq!(
-            parse_source_ids_arg(Some("codex, claude-projects".to_string())).expect("source ids"),
-            vec!["codex".to_string(), "claude-projects".to_string()]
+            parse_source_ids_arg(Some("codex, claude-code-projects".to_string()))
+                .expect("source ids"),
+            vec!["codex".to_string(), "claude-code-projects".to_string()]
         );
         assert!(parse_source_ids_arg(None).is_err());
         assert!(parse_source_ids_arg(Some(",".to_string())).is_err());
         assert!(parse_source_ids_arg(Some("--limit".to_string())).is_err());
+        assert!(parse_source_ids_arg(Some("missing-source".to_string())).is_err());
     }
 
     #[test]

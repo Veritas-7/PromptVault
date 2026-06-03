@@ -365,14 +365,15 @@ fn validate_source_ids(source_ids: Option<&[String]>) -> Result<(), Box<dyn std:
     if requested.is_empty() {
         return Err("source ids require at least one source id".into());
     }
-    let requested = requested
-        .iter()
-        .map(|id| id.trim())
-        .filter(|id| !id.is_empty())
-        .collect::<BTreeSet<_>>();
-    if requested.is_empty() {
+    let trimmed = requested.iter().map(|id| id.trim()).collect::<Vec<_>>();
+    if trimmed.iter().all(|id| id.is_empty()) {
         return Err("source ids require at least one source id".into());
     }
+    if trimmed.iter().any(|id| id.is_empty()) {
+        return Err("source ids cannot include empty values".into());
+    }
+
+    let requested = trimmed.into_iter().collect::<BTreeSet<_>>();
 
     let known = source_specs()
         .into_iter()
@@ -2090,6 +2091,16 @@ mod tests {
                 .to_string()
                 .contains("source ids require at least one source id"));
         }
+    }
+
+    #[test]
+    fn validate_source_ids_rejects_mixed_empty_source_ids() {
+        let err = validate_source_ids(Some(&["codex".to_string(), " ".to_string()]))
+            .expect_err("mixed empty source ids should fail closed");
+
+        assert!(err
+            .to_string()
+            .contains("source ids cannot include empty values"));
     }
 
     #[test]

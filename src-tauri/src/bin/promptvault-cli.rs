@@ -352,15 +352,14 @@ fn parse_required_arg(
 
 fn parse_source_ids_arg(value: Option<String>) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let value = parse_required_arg(value, "--source")?;
-    let ids = value
-        .split(',')
-        .map(str::trim)
-        .filter(|id| !id.is_empty())
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    if ids.is_empty() {
+    let raw_ids = value.split(',').map(str::trim).collect::<Vec<_>>();
+    if raw_ids.iter().all(|id| id.is_empty()) {
         return Err("--source requires at least one source id".into());
     }
+    if raw_ids.iter().any(|id| id.is_empty()) {
+        return Err("--source cannot include empty values".into());
+    }
+    let ids = raw_ids.into_iter().map(str::to_string).collect::<Vec<_>>();
     let known_ids = source_specs()
         .into_iter()
         .map(|source| source.id)
@@ -618,6 +617,8 @@ mod tests {
         );
         assert!(parse_source_ids_arg(None).is_err());
         assert!(parse_source_ids_arg(Some(",".to_string())).is_err());
+        assert!(parse_source_ids_arg(Some("codex,".to_string())).is_err());
+        assert!(parse_source_ids_arg(Some("codex,,claude-code-projects".to_string())).is_err());
         assert!(parse_source_ids_arg(Some("--limit".to_string())).is_err());
         assert!(parse_source_ids_arg(Some("missing-source".to_string())).is_err());
     }

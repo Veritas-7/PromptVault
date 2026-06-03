@@ -1,0 +1,44 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "56c176b",
+  "code_commit": "88743df",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src-tauri/src/lib.rs",
+      "observed": "jsonl_lines used map_while(Result::ok), so a line read error stopped iteration and returned earlier lines as if the file were complete."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib jsonl_lines_propagates_read_errors",
+    "result": "FAILED before implementation because invalid UTF-8 returned Ok with the preceding valid line."
+  },
+  "change": {
+    "summary": "jsonl_lines now iterates explicitly and propagates BufRead::lines errors.",
+    "test_added": "jsonl_lines_propagates_read_errors"
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib jsonl_lines_propagates_read_errors",
+      "result": "PASS"
+    },
+    {
+      "command": "find /tmp -maxdepth 1 -type f -name 'promptvault-invalid-jsonl-*.jsonl' -print",
+      "result": "PASS: no temp invalid JSONL fixtures remained."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: Vite build, 27 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "Started with a failing invalid UTF-8 fixture test.",
+    "Kept the change scoped to JSONL line reading.",
+    "Confirmed temporary fixtures were removed."
+  ]
+}

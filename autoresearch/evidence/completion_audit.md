@@ -21,6 +21,7 @@ Date: 2026-06-03
 | Scan warning visibility | `ScanResult.warnings`; UI renders backend scan warnings as a warning notice instead of hiding them | PASS |
 | Markdown warning preservation | Markdown exports include `ScanResult.warnings` so limited or partial scans remain self-describing | PASS |
 | Source-specific smoke scans | `ScanOptions.source_ids`; CLI `scan --source ID`; Antigravity DB source smoke scans 2 prompts without full-history scan | PASS |
+| JSONL read error safety | `jsonl_lines`; invalid UTF-8/read errors propagate instead of silently truncating a source file | PASS |
 | Numeric option safety | invalid `--limit`, `--preview-limit`, and repair `--count` exit non-zero instead of silently removing/defaulting caps | PASS |
 | Required option value safety | missing values and empty source ID components exit non-zero instead of widening/defaulting scope | PASS |
 | No-export stats scan | `ScanOptions.write_markdown`; CLI `scan --no-export`; full no-export scan writes no Markdown file | PASS |
@@ -91,10 +92,10 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run check`: PASS, Vite production build completed, 26 library tests plus 13 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, Vite production build completed, 27 library tests plus 13 CLI tests passed, and strict clippy passed.
 - UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 26 library tests plus 13 CLI tests passed.
+- `cargo test`: PASS, 27 library tests plus 13 CLI tests passed.
 - CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty and flag-like prompt rejection, numeric argument validation, required value validation, empty source component rejection, repair count cap documentation, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.

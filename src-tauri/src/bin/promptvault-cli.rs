@@ -306,9 +306,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        _ => print_help(),
+        command if is_help_command(command) => print_help(),
+        other => {
+            print_help();
+            return Err(format!("unknown command: {other}").into());
+        }
     }
     Ok(())
+}
+
+fn is_help_command(command: &str) -> bool {
+    matches!(command, "help" | "-h" | "--help")
 }
 
 fn collect_prompt_arg(args: Vec<String>) -> Result<String, Box<dyn std::error::Error>> {
@@ -427,5 +435,13 @@ mod tests {
             MAX_REPAIR_COUNT
         );
         assert_eq!(warnings.len(), 1);
+    }
+
+    #[test]
+    fn explicit_help_commands_are_recognized() {
+        assert!(is_help_command("help"));
+        assert!(is_help_command("-h"));
+        assert!(is_help_command("--help"));
+        assert!(!is_help_command("scna"));
     }
 }

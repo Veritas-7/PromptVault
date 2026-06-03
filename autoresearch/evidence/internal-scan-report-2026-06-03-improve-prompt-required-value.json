@@ -1,0 +1,44 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "2080cc5",
+  "code_commit": "58da57a",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src-tauri/src/bin/promptvault-cli.rs",
+      "observed": "collect_prompt_arg accepted a flag-like value after --prompt, so improve --prompt --bogus treated --bogus as prompt text."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --bin promptvault-cli collect_prompt_arg_rejects_empty_prompt_flag",
+    "result": "FAILED before implementation because --prompt --bogus returned Ok."
+  },
+  "change": {
+    "summary": "collect_prompt_arg now parses --prompt with parse_required_arg, matching other value-taking CLI options.",
+    "test_updated": "collect_prompt_arg_rejects_empty_prompt_flag"
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --bin promptvault-cli collect_prompt_arg_rejects_empty_prompt_flag",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo run --quiet --bin promptvault-cli -- improve --prompt --bogus",
+      "result": "PASS: exited 1 with '--prompt requires a value'."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: Vite build, 24 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "Started with a failing parser test.",
+    "Reused the existing required-value parser instead of adding a new parsing rule.",
+    "Ran targeted CLI smoke and full project check."
+  ]
+}

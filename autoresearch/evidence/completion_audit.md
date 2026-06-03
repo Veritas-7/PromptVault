@@ -90,7 +90,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - `npm run check`: PASS, Vite production build completed, 24 library tests plus 13 CLI tests passed, and strict clippy passed.
 - `cargo check`: PASS.
 - `cargo test`: PASS, 24 library tests plus 13 CLI tests passed.
-- CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty prompt rejection, numeric argument validation, required value validation, repair count cap documentation, and sources extra-arg rejection.
+- CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty and flag-like prompt rejection, numeric argument validation, required value validation, repair count cap documentation, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Sources extra-arg smoke: PASS, `sources --bogus` and `sources --json --bogus` both exited 1 with `unknown sources argument: --bogus`; valid `sources --json` still returned 11 roots.
@@ -98,7 +98,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
 - Unknown-source smoke: PASS, `--source missing-source` exited 1 with `unknown source id: missing-source`.
 - Numeric option smoke: PASS, invalid `--limit`, `--preview-limit`, and repair `--count` each exited 1 with the expected non-negative integer error; valid `--limit 10 --preview-limit 0` scan exited 0.
-- Required value smoke: PASS, missing scan `--source`, `--output`, `--preview-sort`, and repair `--source` each exited 1; valid `--source codex --limit 1` scan exited 0.
+- Required value smoke: PASS, missing scan `--source`, `--output`, `--preview-sort`, repair `--source`, and flag-like improve `--prompt` values each exited 1; valid `--source codex --limit 1` scan exited 0.
 - No-export full scan: PASS, current release CLI scanned 155,484 prompts from 27,608 files in 1m31s with `output_path=null`, `markdown_written=false`, `markdown_included=false`, `warnings=[]`, and no `/tmp/promptvault-no-export-full.md` file created.
 - Preview-payload scan: PASS, default CLI JSON returned `returned_prompt_count=0`, bounded preview returned `returned_prompt_count=5`.
 - Weak-first preview smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --no-export --json` returned `preview_sort=quality_asc`, `returned_prompt_count=5`, `markdown_written=false`, and `output_path=null`.

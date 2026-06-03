@@ -1,0 +1,40 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "fc370ab",
+  "code_commit": "77ffa32",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src/App.tsx",
+      "observed": "runImprove kept the prior recommendation visible until the new request completed, so a retry for the same prompt or a failed request could leave stale recommendation output on screen."
+    }
+  ],
+  "red_test": {
+    "command": "npm run test:ui",
+    "result": "FAILED before implementation because improvementRequestStarted was not exported."
+  },
+  "change": {
+    "summary": "Added improvementRequestStarted and used it at the start of runImprove to clear stale recommendation output while tracking request ownership.",
+    "files": [
+      "src/improvementSelection.ts",
+      "src/App.tsx",
+      "tests/improvementSelection.test.ts"
+    ]
+  },
+  "verification": [
+    {
+      "command": "npm run test:ui",
+      "result": "PASS: 10 Node UI helper tests passed."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: 10 quiet UI helper tests, Vite build, 32 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "No new npm dependency was added.",
+    "The selected prompt id still owns the in-flight improvement result.",
+    "Existing recommendation ownership tests still pass."
+  ]
+}

@@ -11,6 +11,7 @@ Date: 2026-06-03
 | Own source repo boundary | Nested `.git` initialized in PromptVault | PASS |
 | Private GitHub repo 1:1 | `https://github.com/Veritas-7/PromptVault`, verified private with `gh repo view` | PASS |
 | Find Claude Code, Antigravity, Codex session stores | `docs/SOURCE_DISCOVERY.md`; CLI `sources --json` returned all configured roots | PASS |
+| Sources command argument safety | `sources` accepts `--json` and rejects unknown extra args with non-zero exit | PASS |
 | Extract only user prompts | Parsers filter user-role/user-input records; Codex injected `AGENTS.md` and `<environment_context>` blocks are stripped | PASS |
 | Antigravity conversation DB parser | `AntigravityConversationSqlite`; read-only SQLite `steps.step_type=14`; protobuf string extraction fixture | PASS |
 | Single Markdown export | `/tmp/promptvault-antigravity-db-full.md` and prior `/Users/wj/Documents/PromptVault/promptvault-export-2026-06-03-152155.md` | PASS |
@@ -47,6 +48,8 @@ npm run check
 cargo check
 cargo test
 cargo run --quiet --bin promptvault-cli -- sources --json
+set +e; cargo run --quiet --bin promptvault-cli -- sources --bogus; test "$?" -ne 0; set -e
+set +e; cargo run --quiet --bin promptvault-cli -- sources --json --bogus; test "$?" -ne 0; set -e
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-json-smoke.md --json
 cargo run --quiet --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --preview-limit 0 --output /tmp/promptvault-source-filter-antigravity-db.md --json
 cargo run --quiet --bin promptvault-cli -- scan --source missing-source --preview-limit 0 --output /tmp/promptvault-source-filter-missing.md --json
@@ -84,12 +87,13 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run check`: PASS, Vite production build completed, 14 library tests plus 7 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, Vite production build completed, 14 library tests plus 8 CLI tests passed, and strict clippy passed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 14 library tests plus 7 CLI tests passed.
-- CLI unit tests: PASS, 7 CLI tests passed including explicit help command recognition, empty prompt rejection, numeric argument validation, and required value validation.
+- `cargo test`: PASS, 14 library tests plus 8 CLI tests passed.
+- CLI unit tests: PASS, 8 CLI tests passed including explicit help command recognition, empty prompt rejection, numeric argument validation, required value validation, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
+- Sources extra-arg smoke: PASS, `sources --bogus` and `sources --json --bogus` both exited 1 with `unknown sources argument: --bogus`; valid `sources --json` still returned 11 roots.
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
 - Unknown-source smoke: PASS, `--source missing-source` returned no source summaries and warning `Unknown source id requested: missing-source`.

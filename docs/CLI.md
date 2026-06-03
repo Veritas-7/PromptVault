@@ -18,6 +18,7 @@ cargo run --bin promptvault-cli -- repair [--source ID] [--limit N] [--count N] 
 ## Contract
 
 - `sources` prints discovered source IDs, labels, status, and paths.
+- `sources` accepts only `--json`; unknown extra arguments exit non-zero.
 - `help`, `--help`, and no-argument invocation print help and exit 0.
 - Unknown commands print help plus an error and exit non-zero.
 - `scan` writes a Markdown export and prints only summary metadata, not prompt bodies.
@@ -55,6 +56,7 @@ cargo check
 npm run build
 cargo run --bin promptvault-cli -- sources
 cargo run --bin promptvault-cli -- sources --json
+set +e; cargo run --bin promptvault-cli -- sources --bogus; test "$?" -ne 0; set -e
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md
 cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
 cargo run --bin promptvault-cli -- scan --no-export --json

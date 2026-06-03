@@ -1,0 +1,32 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "b160858",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "command": "sources --bogus",
+      "exit_code": 0,
+      "observed": "printed source rows"
+    },
+    {
+      "command": "sources --json --bogus",
+      "exit_code": 0,
+      "observed": "printed JSON source rows"
+    }
+  ],
+  "observed_weaknesses": [
+    "The sources command ignored unknown extra arguments.",
+    "Automation could pass a misspelled sources flag and still see a successful command."
+  ],
+  "selected_candidate": {
+    "name": "sources extra-arg rejection",
+    "reason": "Make sources parsing consistent with other fail-closed CLI commands.",
+    "success_metric": "sources --bogus and sources --json --bogus exit non-zero; sources --json still returns 11 roots."
+  },
+  "safety_controls": [
+    "Valid sources --json behavior was smoke-tested.",
+    "The change is limited to sources command argument validation.",
+    "npm run check was rerun after the change."
+  ]
+}

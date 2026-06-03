@@ -1246,6 +1246,13 @@ fn strip_injected_context(text: &str) -> String {
         }
     }
 
+    if candidate.starts_with("<command-name>")
+        && candidate.contains("</command-name>")
+        && candidate.contains("<command-message>")
+    {
+        return String::new();
+    }
+
     loop {
         let trimmed = candidate.trim_start();
         if let Some(rest) = trimmed.strip_prefix("<environment_context>") {
@@ -2692,6 +2699,57 @@ mod tests {
 
         assert_eq!(records.len(), 1);
         assert!(records[0].text.contains("Fix Claude tool result filtering"));
+    }
+
+    #[test]
+    fn parse_claude_project_jsonl_skips_command_wrapper_records() {
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-claude-command-wrapper-{}.jsonl",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            [
+                serde_json::json!({
+                    "type": "user",
+                    "message": {
+                        "role": "user",
+                        "content": "<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>"
+                    },
+                    "sessionId": "claude-session",
+                    "timestamp": "2026-06-03T11:44:00Z",
+                    "cwd": "/tmp/project"
+                })
+                .to_string(),
+                serde_json::json!({
+                    "type": "user",
+                    "message": {
+                        "role": "user",
+                        "content": "Fix Claude command wrapper filtering, run cargo test, and report PASS/FAIL."
+                    },
+                    "sessionId": "claude-session",
+                    "timestamp": "2026-06-03T11:45:00Z",
+                    "cwd": "/tmp/project"
+                })
+                .to_string(),
+            ]
+            .join("\n"),
+        )
+        .expect("write claude command wrapper fixture");
+
+        let source = SourceSpec {
+            id: "claude-test",
+            label: "Claude test",
+            root: path.clone(),
+            kind: SourceKind::ClaudeProjectJsonl,
+        };
+        let records = parse_claude_project_jsonl(&source, &path).expect("parse claude fixture");
+        std::fs::remove_file(path).expect("remove claude command wrapper fixture");
+
+        assert_eq!(records.len(), 1);
+        assert!(records[0]
+            .text
+            .contains("Fix Claude command wrapper filtering"));
     }
 
     #[test]

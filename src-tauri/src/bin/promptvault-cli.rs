@@ -69,7 +69,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
                     "--limit" => {
-                        limit = Some(parse_usize_arg(iter.next(), "--limit")?);
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
                     }
                     "--output" => {
                         output_path = Some(parse_required_arg(iter.next(), "--output")?);
@@ -196,7 +196,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         count = parse_usize_arg(iter.next(), "--count")?;
                     }
                     "--limit" => {
-                        limit = Some(parse_usize_arg(iter.next(), "--limit")?);
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
                     }
                     "--source" => {
                         source_ids.extend(parse_source_ids_arg(iter.next())?);
@@ -313,6 +313,17 @@ fn parse_usize_arg(value: Option<String>, flag: &str) -> Result<usize, Box<dyn s
     value
         .parse::<usize>()
         .map_err(|_| format!("{flag} requires a non-negative integer").into())
+}
+
+fn parse_positive_usize_arg(
+    value: Option<String>,
+    flag: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let parsed = parse_usize_arg(value, flag)?;
+    if parsed == 0 {
+        return Err(format!("{flag} requires a positive integer").into());
+    }
+    Ok(parsed)
 }
 
 fn parse_required_arg(
@@ -524,6 +535,16 @@ mod tests {
         );
         assert!(parse_usize_arg(None, "--limit").is_err());
         assert!(parse_usize_arg(Some("nope".to_string()), "--limit").is_err());
+    }
+
+    #[test]
+    fn parse_positive_usize_arg_rejects_zero() {
+        assert_eq!(
+            parse_positive_usize_arg(Some("5".to_string()), "--limit").expect("positive usize"),
+            5
+        );
+        assert!(parse_positive_usize_arg(Some("0".to_string()), "--limit").is_err());
+        assert!(parse_positive_usize_arg(Some("nope".to_string()), "--limit").is_err());
     }
 
     #[test]

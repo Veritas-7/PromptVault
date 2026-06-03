@@ -1,0 +1,44 @@
+{
+  "schema": "promptvault-autoresearch-internal-scan-v1",
+  "generated_at": "2026-06-03T21:07:13+0900",
+  "iteration": "command-only-history-filter",
+  "code_commit": "742639db7aa65bae6f24068de0dc75ee4024d048",
+  "status": "pass",
+  "local_evidence": {
+    "source": "/Users/wj/.claude/history.jsonl",
+    "observed_shape": "History includes slash command-only display records such as /exit, /clear, /login, and /model.",
+    "preservation_rule": "Command strings with arguments, such as /sdd ... prompts, are preserved."
+  },
+  "candidate": {
+    "problem": "parse_claude_history_jsonl collected command-only display rows as prompt records.",
+    "risk": "Operational slash commands polluted prompt history, weak-prompt previews, and repair queues.",
+    "decision": "Drop slash command-only strings while preserving slash commands that include prompt arguments."
+  },
+  "red": {
+    "command": "cargo test parse_claude_history_jsonl_skips_command_only_records",
+    "status": "failed_as_expected",
+    "evidence": "The new test failed with 2 records instead of the expected 1."
+  },
+  "green": {
+    "command": "cargo test parse_claude_history_jsonl_skips_command_only_records",
+    "status": "passed",
+    "evidence": "The focused test passed after command-only slash strings were stripped to empty text."
+  },
+  "full_verification": {
+    "command": "npm run check",
+    "status": "passed",
+    "evidence": "10 UI helper tests passed, Vite build passed, 39 Rust library tests passed, 14 CLI tests passed, doc-tests passed, and strict clippy passed."
+  },
+  "post_fix_smoke": {
+    "command": "cargo run --quiet --bin promptvault-cli -- scan --source claude-code-history --limit 60 --preview-limit 20 --weakest-first --include-prompts --no-export --json",
+    "status": "passed",
+    "evidence": "commandOnlyCount=0, containsRedaction=true, and the configured-limit warning was present."
+  },
+  "changed_paths": [
+    "src-tauri/src/lib.rs",
+    "autoresearch/evidence/completion_audit.md",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-command-only-history-filter.json",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-command-only-history-filter.md",
+    "autoresearch/evidence/iteration-2026-06-03-command-only-history-filter.md"
+  ]
+}

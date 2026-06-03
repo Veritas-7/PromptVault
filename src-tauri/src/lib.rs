@@ -13,6 +13,7 @@ use walkdir::WalkDir;
 
 const APP_DIR_NAME: &str = "PromptVault";
 const SECRET_ENV_PATH: &str = "/Users/wj/Ai/System/70_Governance/🔐 Secrets/secrets.env";
+const DEFAULT_GLM_CHAT_ENDPOINT: &str = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptRecord {
@@ -437,10 +438,11 @@ pub async fn improve_prompt_inner(
         .get("GLM_API_KEY")
         .or_else(|| env.get("GLM_API_KEY_2"))
         .cloned();
-    let endpoint =
-        normalize_chat_endpoint(&env.get("GLM_CODING_ENDPOINT").cloned().unwrap_or_else(|| {
-            "https://open.bigmodel.cn/api/paas/v4/chat/completions".to_string()
-        }));
+    let endpoint = normalize_chat_endpoint(
+        &env.get("GLM_CODING_ENDPOINT")
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_GLM_CHAT_ENDPOINT.to_string()),
+    );
     let model = env
         .get("GLM_CODING_MODEL")
         .cloned()
@@ -1913,6 +1915,9 @@ fn read_secret_env(path: &Path) -> Result<HashMap<String, String>, Box<dyn std::
 
 fn normalize_chat_endpoint(endpoint: &str) -> String {
     let trimmed = endpoint.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return DEFAULT_GLM_CHAT_ENDPOINT.to_string();
+    }
     if trimmed.ends_with("/chat/completions") {
         trimmed.to_string()
     } else {
@@ -2496,6 +2501,10 @@ mod tests {
 
     #[test]
     fn normalizes_glm_base_endpoint() {
+        assert_eq!(
+            normalize_chat_endpoint("   "),
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        );
         assert_eq!(
             normalize_chat_endpoint("https://api.z.ai/api/coding/paas/v4"),
             "https://api.z.ai/api/coding/paas/v4/chat/completions"

@@ -1,0 +1,28 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "c454a12",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "run_scan",
+      "observed": "CLI rejected unknown preview sort values, but run_scan accepted preview_sort: Some(\"nonsense\") and returned latest with a warning."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib run_scan_rejects_unknown_preview_sort",
+    "result": "FAILED before implementation because run_scan returned Ok with preview_sort: latest and warnings instead of an error."
+  },
+  "selected_candidate": {
+    "name": "API preview sort validation",
+    "reason": "Align the run_scan API boundary with CLI preview sort validation.",
+    "success_metric": "run_scan returns an error for unknown preview sort values, valid aliases remain accepted, and full local checks still pass."
+  },
+  "safety_controls": [
+    "The change is limited to src-tauri/src/lib.rs.",
+    "The parser still accepts latest, quality-asc, quality_asc, weakest, quality-desc, quality_desc, and strongest.",
+    "A focused unit test covers the API guard.",
+    "A focused CLI preview-sort test was rerun.",
+    "npm run check was rerun after the change."
+  ]
+}

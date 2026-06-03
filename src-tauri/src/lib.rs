@@ -1252,6 +1252,9 @@ fn strip_injected_context(text: &str) -> String {
     {
         return String::new();
     }
+    if candidate.starts_with("<local-command-") && candidate.contains("</local-command-") {
+        return String::new();
+    }
 
     loop {
         let trimmed = candidate.trim_start();
@@ -2750,6 +2753,57 @@ mod tests {
         assert!(records[0]
             .text
             .contains("Fix Claude command wrapper filtering"));
+    }
+
+    #[test]
+    fn parse_claude_project_jsonl_skips_local_command_output_records() {
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-claude-local-command-{}.jsonl",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            [
+                serde_json::json!({
+                    "type": "user",
+                    "message": {
+                        "role": "user",
+                        "content": "<local-command-stdout>Set model to glm-5.1 for this session</local-command-stdout>"
+                    },
+                    "sessionId": "claude-session",
+                    "timestamp": "2026-06-03T11:46:00Z",
+                    "cwd": "/tmp/project"
+                })
+                .to_string(),
+                serde_json::json!({
+                    "type": "user",
+                    "message": {
+                        "role": "user",
+                        "content": "Fix Claude local command output filtering, run cargo test, and report PASS/FAIL."
+                    },
+                    "sessionId": "claude-session",
+                    "timestamp": "2026-06-03T11:47:00Z",
+                    "cwd": "/tmp/project"
+                })
+                .to_string(),
+            ]
+            .join("\n"),
+        )
+        .expect("write claude local command fixture");
+
+        let source = SourceSpec {
+            id: "claude-test",
+            label: "Claude test",
+            root: path.clone(),
+            kind: SourceKind::ClaudeProjectJsonl,
+        };
+        let records = parse_claude_project_jsonl(&source, &path).expect("parse claude fixture");
+        std::fs::remove_file(path).expect("remove claude local command fixture");
+
+        assert_eq!(records.len(), 1);
+        assert!(records[0]
+            .text
+            .contains("Fix Claude local command output filtering"));
     }
 
     #[test]

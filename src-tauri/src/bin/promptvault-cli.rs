@@ -3,6 +3,7 @@ use promptvault_lib::{
 };
 
 const MAX_JSON_PROMPT_PREVIEW: usize = 25;
+const MAX_REPAIR_COUNT: usize = 10;
 
 #[tokio::main]
 async fn main() {
@@ -189,6 +190,122 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+        "repair" => {
+            let json = take_flag(&mut args, "--json");
+            let mut count = 5usize;
+            let mut limit = None;
+            let mut source_ids = Vec::new();
+            let mut warnings = Vec::new();
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--count" => {
+                        count = iter
+                            .next()
+                            .and_then(|value| value.parse::<usize>().ok())
+                            .unwrap_or(count);
+                    }
+                    "--limit" => {
+                        limit = iter.next().and_then(|value| value.parse::<usize>().ok());
+                    }
+                    "--source" => {
+                        if let Some(value) = iter.next() {
+                            source_ids.extend(
+                                value
+                                    .split(',')
+                                    .map(str::trim)
+                                    .filter(|id| !id.is_empty())
+                                    .map(str::to_string),
+                            );
+                        }
+                    }
+                    other => return Err(format!("unknown repair argument: {other}").into()),
+                }
+            }
+
+            let count = bounded_count(count, MAX_REPAIR_COUNT, "Repair", &mut warnings);
+            let scan = run_scan(ScanOptions {
+                limit,
+                output_path: None,
+                preview_limit: Some(count),
+                preview_sort: Some("quality-asc".to_string()),
+                include_markdown: Some(false),
+                write_markdown: Some(false),
+                source_ids: if source_ids.is_empty() {
+                    None
+                } else {
+                    Some(source_ids)
+                },
+            })?;
+            warnings.extend(scan.warnings.clone());
+
+            let mut repairs = Vec::new();
+            for prompt in &scan.prompts {
+                let recommendation = improve_prompt_inner(ImproveRequest {
+                    prompt: prompt.text.clone(),
+                    context: Some(format!(
+                        "{} · {}",
+                        prompt.source,
+                        prompt.cwd.as_deref().unwrap_or("unknown workspace")
+                    )),
+                    force_local: Some(true),
+                })
+                .await?;
+                repairs.push(serde_json::json!({
+                    "prompt": prompt,
+                    "recommendation": recommendation
+                }));
+            }
+
+            if json {
+                let summary = serde_json::json!({
+                    "generated_at": &scan.generated_at,
+                    "provider": "local-rules",
+                    "preview_sort": &scan.preview_sort,
+                    "scanned_prompt_count": scan.stats.total_prompts,
+                    "returned_prompt_count": scan.returned_prompt_count,
+                    "repair_count": repairs.len(),
+                    "markdown_written": scan.markdown_written,
+                    "output_path": &scan.output_path,
+                    "warnings": warnings,
+                    "repairs": repairs
+                });
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+                return Ok(());
+            }
+
+            println!("PromptVault repair suggestions");
+            println!("provider: local-rules");
+            println!("repairs: {}", repairs.len());
+            if !warnings.is_empty() {
+                println!("warnings:");
+                for warning in warnings {
+                    println!("- {warning}");
+                }
+            }
+            for (idx, repair) in repairs.iter().enumerate() {
+                let prompt = &scan.prompts[idx];
+                let recommendation = repair
+                    .get("recommendation")
+                    .expect("repair recommendation exists");
+                println!(
+                    "\n#{} {} · {} · {}",
+                    idx + 1,
+                    prompt.quality.score,
+                    prompt.quality.band,
+                    prompt.source
+                );
+                if let Some(delta) = recommendation.pointer("/quality_delta/score_delta") {
+                    println!("score_delta: {delta}");
+                }
+                if let Some(revised) = recommendation
+                    .get("revised_prompt")
+                    .and_then(serde_json::Value::as_str)
+                {
+                    println!("{revised}");
+                }
+            }
+        }
         _ => print_help(),
     }
     Ok(())
@@ -241,9 +358,20 @@ fn json_prompt_preview<'a>(
     prompts.iter().take(MAX_JSON_PROMPT_PREVIEW).collect()
 }
 
+fn bounded_count(requested: usize, max: usize, label: &str, warnings: &mut Vec<String>) -> usize {
+    if requested > max {
+        warnings.push(format!(
+            "{label} count capped at {max}; lower --count for exact repair batches."
+        ));
+        max
+    } else {
+        requested
+    }
+}
+
 fn print_help() {
     println!(
-        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt"
+        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID] [--limit N] [--count N]"
     );
 }
 
@@ -282,6 +410,22 @@ mod tests {
         let preview = json_prompt_preview(&prompts, true, &mut warnings);
         assert_eq!(preview.len(), MAX_JSON_PROMPT_PREVIEW);
         assert_eq!(preview[0].text, "prompt 0");
+        assert_eq!(warnings.len(), 1);
+    }
+
+    #[test]
+    fn bounded_count_caps_repair_batches() {
+        let mut warnings = Vec::new();
+        assert_eq!(
+            bounded_count(3, MAX_REPAIR_COUNT, "Repair", &mut warnings),
+            3
+        );
+        assert!(warnings.is_empty());
+
+        assert_eq!(
+            bounded_count(99, MAX_REPAIR_COUNT, "Repair", &mut warnings),
+            MAX_REPAIR_COUNT
+        );
         assert_eq!(warnings.len(), 1);
     }
 }

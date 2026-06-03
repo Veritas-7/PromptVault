@@ -139,8 +139,13 @@ function App() {
         <Metric icon={<Brain size={18} />} label="Words" value={result?.stats.total_words ?? 0} />
         <Metric
           icon={<ShieldCheck size={18} />}
-          label="Avg words"
-          value={(result?.stats.average_words ?? 0).toFixed(1)}
+          label="Quality"
+          value={(result?.stats.average_quality ?? 0).toFixed(1)}
+        />
+        <Metric
+          icon={<AlertTriangle size={18} />}
+          label="Weak"
+          value={result?.stats.weak_prompt_count ?? 0}
         />
       </section>
 
@@ -175,6 +180,7 @@ function App() {
             <FrequencyColumn title="Words" items={result?.stats.top_words ?? []} />
             <FrequencyColumn title="Phrases" items={result?.stats.top_phrases ?? []} />
             <FrequencyColumn title="Repeats" items={result?.stats.repeated_prompts ?? []} />
+            <FrequencyColumn title="Quality gaps" items={result?.stats.top_quality_gaps ?? []} />
           </div>
         </section>
       </section>
@@ -212,6 +218,9 @@ function App() {
                 <span className="prompt-meta">
                   {prompt.source} · {prompt.word_count} words
                 </span>
+                <span className={`quality-pill ${prompt.quality.band}`}>
+                  {prompt.quality.score} · {prompt.quality.band}
+                </span>
                 <strong>{oneLine(prompt.text)}</strong>
                 {prompt.risk_flags.length ? (
                   <span className="risk">
@@ -238,7 +247,17 @@ function App() {
                 <span>{selectedPrompt.source}</span>
                 <span>{selectedPrompt.timestamp ?? "unknown time"}</span>
                 <span>{selectedPrompt.cwd ?? "unknown workspace"}</span>
+                <span>
+                  {selectedPrompt.quality.score} · {selectedPrompt.quality.band}
+                </span>
               </div>
+              {selectedPrompt.quality.suggestions.length ? (
+                <div className="quality-box">
+                  {selectedPrompt.quality.suggestions.map((suggestion) => (
+                    <p key={suggestion}>{suggestion}</p>
+                  ))}
+                </div>
+              ) : null}
               <pre className="prompt-text">{selectedPrompt.text}</pre>
             </>
           ) : (

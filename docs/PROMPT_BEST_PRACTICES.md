@@ -66,9 +66,32 @@ PromptVault's local fallback rewrites prompts into:
 
 The GLM-backed AI path uses the same rubric and asks for strict JSON with `revised_prompt`, `rationale`, and `checklist`.
 
+## PromptVault Quality Score
+
+PromptVault also computes a local structural quality score for each extracted prompt. The score is not a model-performance benchmark; it is a fast triage signal for which prompts are likely to need clearer instructions before reuse.
+
+| Dimension | Why it matters |
+|---|---|
+| Specific goal | Prevents vague "make it better" tasks |
+| Action verb | Makes the agent's first step unambiguous |
+| Context | Provides repo/path/current state/error inputs |
+| Constraints | Separates allowed actions from forbidden actions |
+| Verification | Forces command-level PASS/FAIL evidence |
+| Output format | Makes results parseable and reviewable |
+| Sensitive-content risk | Flags token/key/secret-like prompt text |
+
+Bands:
+
+- `strong`: 80-100
+- `workable`: 60-79
+- `weak`: 0-59
+
+Use the quality gaps as a repair queue: add missing context, constraints, verification commands, and output format before asking an agent to execute a complex task.
+
 ## Research Basis
 
 - The Prompt Report surveys prompting terminology and techniques and argues for structured, task-specific prompting rather than universal magic phrases.
 - Automatic Prompt Optimization literature treats prompt improvement as iterative and measurable.
 - Prompt-management research over GitHub repositories identifies formatting inconsistency, duplication, readability, and spelling as maintainability risks.
 - OpenAI and Anthropic guidance both emphasize clear instructions, examples when useful, structured outputs, and evaluation.
+- Microsoft prompt-injection guidance supports treating safety as layered risk evaluation rather than prompt text alone.

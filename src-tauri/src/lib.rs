@@ -26,6 +26,15 @@ pub struct PromptRecord {
     pub char_count: usize,
     pub hash: String,
     pub risk_flags: Vec<String>,
+    pub quality: PromptQuality,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PromptQuality {
+    pub score: u8,
+    pub band: String,
+    pub missing: Vec<String>,
+    pub suggestions: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,9 +60,12 @@ pub struct ScanStats {
     pub total_files: usize,
     pub total_words: usize,
     pub average_words: f64,
+    pub average_quality: f64,
+    pub weak_prompt_count: usize,
     pub top_words: Vec<FrequencyItem>,
     pub top_phrases: Vec<FrequencyItem>,
     pub repeated_prompts: Vec<FrequencyItem>,
+    pub top_quality_gaps: Vec<FrequencyItem>,
     pub source_summaries: Vec<SourceSummary>,
 }
 
@@ -682,6 +694,7 @@ fn push_record(
     let hash = hash_text(&format!("{}:{}:{}", source.id, session_id, text));
     let words = count_words(&text);
     let risk_flags = detect_risks(&text);
+    let quality = assess_prompt_quality(&text, &risk_flags);
 
     records.push(PromptRecord {
         id: hash.chars().take(16).collect(),
@@ -695,6 +708,7 @@ fn push_record(
         char_count: text.chars().count(),
         hash,
         risk_flags,
+        quality,
     });
 }
 
@@ -857,6 +871,152 @@ fn detect_risks(text: &str) -> Vec<String> {
     flags
 }
 
+fn assess_prompt_quality(text: &str, risk_flags: &[String]) -> PromptQuality {
+    let lower = text.to_lowercase();
+    let words = count_words(text);
+    let mut missing = Vec::new();
+    let mut suggestions = Vec::new();
+    let mut penalty: i32 = 0;
+
+    if words < 8 {
+        missing.push("specific_goal".to_string());
+        suggestions.push("목표 산출물과 성공 기준을 한 문장 이상으로 구체화하세요.".to_string());
+        penalty += 18;
+    } else if !contains_any(
+        &lower,
+        &[
+            "build",
+            "fix",
+            "create",
+            "write",
+            "analyze",
+            "review",
+            "test",
+            "deploy",
+            "improve",
+            "구현",
+            "수정",
+            "작성",
+            "분석",
+            "검토",
+            "테스트",
+            "배포",
+            "개선",
+        ],
+    ) {
+        missing.push("action_verb".to_string());
+        suggestions.push("에이전트가 해야 할 동사를 명확히 넣으세요.".to_string());
+        penalty += 10;
+    }
+
+    if !contains_any(
+        &lower,
+        &[
+            "/", ".rs", ".ts", ".tsx", ".py", "repo", "path", "file", "error", "current", "경로",
+            "파일", "레포", "오류", "현재", "상태",
+        ],
+    ) {
+        missing.push("context".to_string());
+        suggestions.push("관련 repo/path, 현재 상태, 오류, 입력 자료를 추가하세요.".to_string());
+        penalty += 12;
+    }
+
+    if !contains_any(
+        &lower,
+        &[
+            "must",
+            "only",
+            "do not",
+            "avoid",
+            "preserve",
+            "constraint",
+            "scope",
+            "반드시",
+            "하지",
+            "금지",
+            "보존",
+            "범위",
+            "제약",
+        ],
+    ) {
+        missing.push("constraints".to_string());
+        suggestions.push("허용/금지 작업, 보존해야 할 파일, 작업 범위를 분리하세요.".to_string());
+        penalty += 12;
+    }
+
+    if !contains_any(
+        &lower,
+        &[
+            "verify",
+            "test",
+            "build",
+            "check",
+            "pass",
+            "fail",
+            "qa",
+            "screenshot",
+            "검증",
+            "확인",
+            "테스트",
+            "빌드",
+            "통과",
+            "실패",
+        ],
+    ) {
+        missing.push("verification".to_string());
+        suggestions.push("완료 전 실행할 검증 명령과 PASS/FAIL 기준을 명시하세요.".to_string());
+        penalty += 14;
+    }
+
+    if !contains_any(
+        &lower,
+        &[
+            "json", "markdown", "table", "report", "summary", "format", "output", "docs", "md",
+            "형식", "출력", "표", "보고", "문서",
+        ],
+    ) {
+        missing.push("output_format".to_string());
+        suggestions.push("최종 산출물 형식과 저장 위치를 명시하세요.".to_string());
+        penalty += 8;
+    }
+
+    if text.chars().count() > 4000 {
+        missing.push("too_long".to_string());
+        suggestions.push("긴 배경과 실제 지시를 분리해 context drift를 줄이세요.".to_string());
+        penalty += 8;
+    }
+
+    if !risk_flags.is_empty() {
+        missing.push("sensitive_content_risk".to_string());
+        suggestions.push(
+            "API key, token, secret처럼 보이는 문자열은 제거하거나 별도 안전 경로로 전달하세요."
+                .to_string(),
+        );
+        penalty += 20;
+    }
+
+    let score = (100 - penalty).clamp(0, 100) as u8;
+    let band = if score >= 80 {
+        "strong"
+    } else if score >= 60 {
+        "workable"
+    } else {
+        "weak"
+    }
+    .to_string();
+
+    PromptQuality {
+        score,
+        band,
+        missing,
+        suggestions,
+    }
+}
+
+fn contains_any(haystack: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| haystack.contains(needle))
+}
+
 fn build_stats(prompts: &[PromptRecord], source_summaries: Vec<SourceSummary>) -> ScanStats {
     let total_words = prompts.iter().map(|prompt| prompt.word_count).sum();
     let average_words = if prompts.is_empty() {
@@ -873,11 +1033,28 @@ fn build_stats(prompts: &[PromptRecord], source_summaries: Vec<SourceSummary>) -
             .sum(),
         total_words,
         average_words,
+        average_quality: average_quality(prompts),
+        weak_prompt_count: prompts
+            .iter()
+            .filter(|prompt| prompt.quality.band == "weak")
+            .count(),
         top_words: top_words(prompts, 40),
         top_phrases: top_phrases(prompts, 30),
         repeated_prompts: repeated_prompts(prompts, 20),
+        top_quality_gaps: top_quality_gaps(prompts, 20),
         source_summaries,
     }
+}
+
+fn average_quality(prompts: &[PromptRecord]) -> f64 {
+    if prompts.is_empty() {
+        return 0.0;
+    }
+    let total: usize = prompts
+        .iter()
+        .map(|prompt| prompt.quality.score as usize)
+        .sum();
+    total as f64 / prompts.len() as f64
 }
 
 fn top_words(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
@@ -933,6 +1110,16 @@ fn repeated_prompts(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem
         .into_iter()
         .filter(|item| item.count > 1)
         .collect()
+}
+
+fn top_quality_gaps(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for prompt in prompts {
+        for gap in &prompt.quality.missing {
+            *counts.entry(gap.clone()).or_default() += 1;
+        }
+    }
+    rank_counts(counts, limit)
 }
 
 fn rank_counts(counts: HashMap<String, usize>, limit: usize) -> Vec<FrequencyItem> {
@@ -1038,6 +1225,14 @@ fn render_markdown(generated_at: &str, stats: &ScanStats, prompts: &[PromptRecor
         "- Average words per prompt: `{:.1}`\n\n",
         stats.average_words
     ));
+    md.push_str(&format!(
+        "- Average quality score: `{:.1}`\n",
+        stats.average_quality
+    ));
+    md.push_str(&format!(
+        "- Weak prompts: `{}`\n\n",
+        stats.weak_prompt_count
+    ));
 
     md.push_str("## Source Coverage\n\n");
     md.push_str("| Source | Status | Files | Prompts | Path |\n");
@@ -1069,6 +1264,15 @@ fn render_markdown(generated_at: &str, stats: &ScanStats, prompts: &[PromptRecor
     } else {
         for item in &stats.repeated_prompts {
             md.push_str(&format!("- {} ({})\n", item.text, item.count));
+        }
+    }
+
+    md.push_str("\n## Frequent Quality Gaps\n\n");
+    if stats.top_quality_gaps.is_empty() {
+        md.push_str("- No quality gaps found in this scan.\n");
+    } else {
+        for item in &stats.top_quality_gaps {
+            md.push_str(&format!("- `{}`: {}\n", item.text, item.count));
         }
     }
 
@@ -1105,6 +1309,16 @@ fn render_markdown(generated_at: &str, stats: &ScanStats, prompts: &[PromptRecor
                 md.push_str(&format!(
                     "- Risk flags: `{}`\n",
                     prompt.risk_flags.join(", ")
+                ));
+            }
+            md.push_str(&format!(
+                "- Quality: `{}` ({})\n",
+                prompt.quality.score, prompt.quality.band
+            ));
+            if !prompt.quality.missing.is_empty() {
+                md.push_str(&format!(
+                    "- Quality gaps: `{}`\n",
+                    prompt.quality.missing.join(", ")
                 ));
             }
             md.push_str("\n```text\n");
@@ -1289,6 +1503,21 @@ mod tests {
     }
 
     #[test]
+    fn prompt_quality_scores_actionable_prompts_higher() {
+        let strong = assess_prompt_quality(
+            "Fix src-tauri/src/lib.rs parser error, preserve existing user files, run cargo test, and report PASS/FAIL in Markdown.",
+            &[],
+        );
+        let weak = assess_prompt_quality("make better", &[]);
+
+        assert!(strong.score >= 80);
+        assert_eq!(strong.band, "strong");
+        assert!(weak.score < strong.score);
+        assert!(weak.missing.contains(&"specific_goal".to_string()));
+        assert!(weak.missing.contains(&"verification".to_string()));
+    }
+
+    #[test]
     fn normalizes_glm_base_endpoint() {
         assert_eq!(
             normalize_chat_endpoint("https://api.z.ai/api/coding/paas/v4"),
@@ -1313,6 +1542,7 @@ mod tests {
             char_count: 1,
             hash: id.to_string(),
             risk_flags: Vec::new(),
+            quality: assess_prompt_quality(id, &[]),
         }
     }
 }

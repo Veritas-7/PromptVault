@@ -296,7 +296,7 @@ h3 {
 .frequency-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   padding: 14px;
 }
 
@@ -394,6 +394,33 @@ h3 {
   font-size: 11px;
 }
 
+.quality-pill {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 760;
+  height: 23px;
+  justify-self: start;
+  padding: 0 8px;
+  text-transform: uppercase;
+}
+
+.quality-pill.strong {
+  background: #e7f5e6;
+  color: #24612f;
+}
+
+.quality-pill.workable {
+  background: #fff6d9;
+  color: #735511;
+}
+
+.quality-pill.weak {
+  background: #ffebe5;
+  color: #8a3928;
+}
+
 .risk {
   align-items: center;
   color: #975225;
@@ -419,6 +446,20 @@ h3 {
   padding: 4px 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.quality-box {
+  background: #f7faf6;
+  border-bottom: 1px solid #edf2eb;
+  color: #314137;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.quality-box p {
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .prompt-text {

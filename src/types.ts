@@ -25,6 +25,14 @@ export interface PromptRecord {
   char_count: number;
   hash: string;
   risk_flags: string[];
+  quality: PromptQuality;
+}
+
+export interface PromptQuality {
+  score: number;
+  band: string;
+  missing: string[];
+  suggestions: string[];
 }
 
 export interface ScanStats {
@@ -32,9 +40,12 @@ export interface ScanStats {
   total_files: number;
   total_words: number;
   average_words: number;
+  average_quality: number;
+  weak_prompt_count: number;
   top_words: FrequencyItem[];
   top_phrases: FrequencyItem[];
   repeated_prompts: FrequencyItem[];
+  top_quality_gaps: FrequencyItem[];
   source_summaries: SourceSummary[];
 }
 

@@ -86,5 +86,29 @@
     "authority": "official",
     "relevance": "Emphasizes grounding, few-shot examples, and response validation.",
     "adoption": "Adopted in docs and completion-audit requirement."
+  },
+  {
+    "title": "OpenAI Help Center prompt engineering best practices",
+    "url": "https://help.openai.com/en/articles/6654000-best-practices-for-prompt-engineering-with-openai-api",
+    "checked_at": "2026-06-03",
+    "authority": "official",
+    "relevance": "Emphasizes instructions first, context separators, specificity, desired format, examples, and less vague wording.",
+    "adoption": "Adopted as quality-score dimensions for goal, context, output format, and specificity."
+  },
+  {
+    "title": "Microsoft guidance on defending against indirect prompt injection attacks",
+    "url": "https://learn.microsoft.com/en-us/security/zero-trust/sfi/defend-indirect-prompt-injection",
+    "checked_at": "2026-06-03",
+    "authority": "official",
+    "relevance": "Frames indirect prompt injection as a defense-in-depth problem requiring risk evaluations, isolation, monitoring, least privilege, and human review.",
+    "adoption": "Adopted as safety/risk scoring guidance for sensitive-content and verification gaps."
+  },
+  {
+    "title": "A Survey of Automatic Prompt Optimization with Instruction-focused Heuristic-based Search Algorithm",
+    "url": "https://arxiv.org/abs/2502.18746",
+    "checked_at": "2026-06-03",
+    "authority": "ACL 2025/arXiv survey",
+    "relevance": "Surveys systematic prompt optimization by criteria, operators, and iterative search rather than intuition-only edits.",
+    "adoption": "Adopted as rationale for measurable quality dimensions and future A/B optimization gates."
   }
 ]

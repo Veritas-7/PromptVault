@@ -68,5 +68,12 @@ export interface ImproveResult {
   revised_prompt: string;
   rationale: string[];
   checklist: string[];
+  quality_delta: {
+    before: PromptQuality;
+    after: PromptQuality;
+    score_delta: number;
+    resolved_gaps: string[];
+    remaining_gaps: string[];
+  };
   warnings: string[];
 }

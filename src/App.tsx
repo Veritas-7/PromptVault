@@ -272,6 +272,32 @@ function App() {
           </div>
           {improvement ? (
             <>
+              <div className="quality-delta">
+                <strong>
+                  {improvement.quality_delta.before.score}
+                  {" -> "}
+                  {improvement.quality_delta.after.score}
+                  <span>
+                    {improvement.quality_delta.score_delta >= 0 ? "+" : ""}
+                    {improvement.quality_delta.score_delta}
+                  </span>
+                </strong>
+                {improvement.quality_delta.resolved_gaps.length ? (
+                  <p>
+                    Resolved:{" "}
+                    {improvement.quality_delta.resolved_gaps
+                      .slice(0, 4)
+                      .join(", ")}
+                  </p>
+                ) : (
+                  <p>
+                    Remaining:{" "}
+                    {improvement.quality_delta.remaining_gaps
+                      .slice(0, 4)
+                      .join(", ") || "none"}
+                  </p>
+                )}
+              </div>
               <pre className="prompt-text revised">{improvement.revised_prompt}</pre>
               <div className="advice">
                 {improvement.rationale.map((item) => (

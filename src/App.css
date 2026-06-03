@@ -483,6 +483,38 @@ h3 {
   max-height: 290px;
 }
 
+.quality-delta {
+  background: #f7faf6;
+  border-bottom: 1px solid #edf2eb;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.quality-delta strong {
+  align-items: center;
+  color: #1f3025;
+  display: flex;
+  font-size: 18px;
+  font-weight: 760;
+  gap: 8px;
+}
+
+.quality-delta strong span {
+  background: #e7f5e6;
+  border-radius: 999px;
+  color: #24612f;
+  font-size: 12px;
+  padding: 3px 7px;
+}
+
+.quality-delta p {
+  color: #5d6b61;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .advice,
 .warning-list {
   display: grid;

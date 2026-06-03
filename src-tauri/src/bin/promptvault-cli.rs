@@ -142,6 +142,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("provider: {}", result.provider);
             println!("used_ai: {}", result.used_ai);
+            println!(
+                "quality: {} -> {} ({:+})",
+                result.quality_delta.before.score,
+                result.quality_delta.after.score,
+                result.quality_delta.score_delta
+            );
+            if !result.quality_delta.resolved_gaps.is_empty() {
+                println!(
+                    "resolved_gaps: {}",
+                    result.quality_delta.resolved_gaps.join(", ")
+                );
+            }
             println!("\n{}", result.revised_prompt);
             if !result.rationale.is_empty() {
                 println!("\nrationale:");

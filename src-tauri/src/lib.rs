@@ -4,7 +4,7 @@ use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -97,7 +97,17 @@ pub struct ImproveResult {
     pub revised_prompt: String,
     pub rationale: Vec<String>,
     pub checklist: Vec<String>,
+    pub quality_delta: QualityDelta,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualityDelta {
+    pub before: PromptQuality,
+    pub after: PromptQuality,
+    pub score_delta: i16,
+    pub resolved_gaps: Vec<String>,
+    pub remaining_gaps: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -393,16 +403,19 @@ pub async fn improve_prompt_inner(
                         return Ok(ImproveResult {
                             provider: "glm".to_string(),
                             used_ai: true,
+                            quality_delta: quality_delta(&prompt, &revised),
                             revised_prompt: revised,
                             rationale,
                             checklist,
                             warnings: Vec::new(),
                         });
                     }
+                    let revised = content.trim().to_string();
                     return Ok(ImproveResult {
                         provider: "glm".to_string(),
                         used_ai: true,
-                        revised_prompt: content.trim().to_string(),
+                        quality_delta: quality_delta(&prompt, &revised),
+                        revised_prompt: revised,
                         rationale: vec![
                             "GLM returned non-JSON text; preserved the model output.".to_string()
                         ],
@@ -1301,6 +1314,26 @@ fn assess_prompt_quality(text: &str, risk_flags: &[String]) -> PromptQuality {
     }
 }
 
+fn quality_delta(original: &str, revised: &str) -> QualityDelta {
+    let before = assess_prompt_quality(original, &detect_risks(original));
+    let after = assess_prompt_quality(revised, &detect_risks(revised));
+    let remaining = after.missing.iter().cloned().collect::<BTreeSet<_>>();
+    let resolved_gaps = before
+        .missing
+        .iter()
+        .filter(|gap| !remaining.contains(*gap))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    QualityDelta {
+        score_delta: after.score as i16 - before.score as i16,
+        remaining_gaps: after.missing.clone(),
+        before,
+        after,
+        resolved_gaps,
+    }
+}
+
 fn contains_any(haystack: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| haystack.contains(needle))
 }
@@ -1672,6 +1705,7 @@ fn local_improvement(prompt: &str, context: Option<&str>, warnings: Vec<String>)
     ImproveResult {
         provider: "local-rules".to_string(),
         used_ai: false,
+        quality_delta: quality_delta(prompt, &revised),
         revised_prompt: revised,
         rationale: vec![
             "목표와 성공 기준을 분리해 에이전트가 산출물을 놓치지 않게 했습니다.".to_string(),
@@ -1773,6 +1807,19 @@ mod tests {
         let result = local_improvement("Fix the failing parser test.", None, Vec::new());
         assert!(result.revised_prompt.contains("목표:"));
         assert!(result.revised_prompt.contains("완료 전 실제 명령"));
+    }
+
+    #[test]
+    fn local_improvement_reports_quality_delta() {
+        let result = local_improvement("make better", None, Vec::new());
+
+        assert!(result.quality_delta.score_delta > 0);
+        assert_eq!(result.quality_delta.before.band, "weak");
+        assert!(result.quality_delta.after.score >= 80);
+        assert!(result
+            .quality_delta
+            .resolved_gaps
+            .contains(&"verification".to_string()));
     }
 
     #[test]

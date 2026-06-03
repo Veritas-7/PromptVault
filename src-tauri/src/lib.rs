@@ -283,12 +283,15 @@ enum PreviewSort {
 
 impl PreviewSort {
     fn from_option(value: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
-        match value.map(str::trim).filter(|value| !value.is_empty()) {
-            None => Ok(Self::Latest),
-            Some("latest") => Ok(Self::Latest),
-            Some("quality_asc" | "quality-asc" | "weakest") => Ok(Self::QualityAsc),
-            Some("quality_desc" | "quality-desc" | "strongest") => Ok(Self::QualityDesc),
-            Some(other) => Err(format!(
+        let Some(value) = value else {
+            return Ok(Self::Latest);
+        };
+        match value.trim() {
+            "" => Err("preview sort requires a non-empty value".into()),
+            "latest" => Ok(Self::Latest),
+            "quality_asc" | "quality-asc" | "weakest" => Ok(Self::QualityAsc),
+            "quality_desc" | "quality-desc" | "strongest" => Ok(Self::QualityDesc),
+            other => Err(format!(
                 "preview sort must be one of latest, quality-asc, quality-desc; got {other}"
             )
             .into()),
@@ -2028,6 +2031,16 @@ mod tests {
         assert!(err
             .to_string()
             .contains("preview sort must be one of latest, quality-asc, quality-desc"));
+    }
+
+    #[test]
+    fn preview_sort_rejects_empty_values() {
+        let err = PreviewSort::from_option(Some("  "))
+            .expect_err("empty preview sort should fail closed");
+
+        assert!(err
+            .to_string()
+            .contains("preview sort requires a non-empty value"));
     }
 
     #[test]

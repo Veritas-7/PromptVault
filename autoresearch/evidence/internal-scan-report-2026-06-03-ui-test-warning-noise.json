@@ -1,0 +1,34 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "1e32d33",
+  "code_commit": "d26df46",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "package.json",
+      "observed": "npm run test:ui emitted Node ExperimentalWarning output for every check run because the helper tests use --experimental-transform-types."
+    }
+  ],
+  "change": {
+    "summary": "Added --disable-warning=ExperimentalWarning to the UI helper test script while keeping the same Node transformer and test files.",
+    "files": [
+      "package.json"
+    ]
+  },
+  "verification": [
+    {
+      "command": "npm run test:ui",
+      "result": "PASS: 9 Node UI helper tests passed and the output did not include ExperimentalWarning."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: 9 quiet UI helper tests, Vite build, 31 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "No test files or application behavior changed.",
+    "The TypeScript transform remains explicit in the test command.",
+    "The full check gate still runs the UI tests before build and Rust checks."
+  ]
+}

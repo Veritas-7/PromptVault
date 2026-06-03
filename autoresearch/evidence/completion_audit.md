@@ -36,7 +36,7 @@ Date: 2026-06-03
 | Deterministic local improve | `ImproveRequest.force_local`; CLI `improve --local`; bypasses GLM and returns local-rules without warnings | PASS |
 | Deterministic batch repair | CLI `repair --json`; weakest-first scan plus local-rules recommendations; no Markdown export; capped at 10 repairs | PASS |
 | Rust lint gate | `cargo clippy --all-targets --all-features -- -D warnings` passes with no warnings | PASS |
-| One-command local quality gate | `npm run check` runs UI helper tests, frontend build, Rust tests, and strict clippy | PASS |
+| One-command local quality gate | `npm run check` runs quiet UI helper tests, frontend build, Rust tests, and strict clippy | PASS |
 | GLM from `secrets.env` as fallback-capable AI path | Reads `GLM_API_KEY`/`GLM_API_KEY_2`, `GLM_CODING_ENDPOINT`, `GLM_CODING_MODEL`; ignores blank API key values; defaults blank model values; normalizes base/blank endpoints; falls back locally on 429 or invalid empty `revised_prompt` content | PASS |
 | Codex SDK considered | `research/external_sources.json` and strategy doc cite official Codex SDK README and defer direct SDK invocation for safety | PASS_WITH_NOTE |
 | CLI-Anything-inspired strong CLI | `promptvault-cli` supports `sources`, `scan`, `improve`, and `--json` summaries | PASS |
@@ -94,8 +94,8 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run test:ui`: PASS, 9 Node UI helper tests passed.
-- `npm run check`: PASS, 9 UI helper tests passed, Vite production build completed, 31 library tests plus 13 CLI tests passed, and strict clippy passed.
+- `npm run test:ui`: PASS, 9 Node UI helper tests passed without `ExperimentalWarning` output.
+- `npm run check`: PASS, 9 quiet UI helper tests passed, Vite production build completed, 31 library tests plus 13 CLI tests passed, and strict clippy passed.
 - UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
 - `cargo test`: PASS, 31 library tests plus 13 CLI tests passed.

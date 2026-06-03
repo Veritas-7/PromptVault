@@ -1,0 +1,27 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "d132140",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "run_scan",
+      "observed": "CLI and UI rejected zero scan limits, but run_scan itself did not have a zero-limit guard."
+    }
+  ],
+  "observed_weaknesses": [
+    "Direct Tauri/API callers could still request limit: 0 and get a successful no-op scan.",
+    "The backend boundary was less strict than the CLI and UI boundaries."
+  ],
+  "selected_candidate": {
+    "name": "API scan limit zero rejection",
+    "reason": "Align run_scan with CLI/UI positive scan limit semantics.",
+    "success_metric": "run_scan returns an error for limit: Some(0), and full local checks still pass."
+  },
+  "safety_controls": [
+    "The change is limited to src-tauri/src/lib.rs.",
+    "The new guard runs before source traversal.",
+    "A focused unit test covers the API guard.",
+    "npm run check was rerun after the change."
+  ]
+}

@@ -149,10 +149,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         "improve" => {
             let json = take_flag(&mut args, "--json");
+            let local = take_flag(&mut args, "--local");
             let prompt = collect_prompt_arg(args)?;
             let result = improve_prompt_inner(ImproveRequest {
                 prompt,
                 context: None,
+                force_local: if local { Some(true) } else { None },
             })
             .await?;
             if json {
@@ -241,7 +243,7 @@ fn json_prompt_preview<'a>(
 
 fn print_help() {
     println!(
-        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] --prompt TEXT\n  improve [--json] < prompt.txt"
+        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt"
     );
 }
 

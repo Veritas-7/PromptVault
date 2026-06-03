@@ -89,6 +89,7 @@ pub struct ScanResult {
 pub struct ImproveRequest {
     pub prompt: String,
     pub context: Option<String>,
+    pub force_local: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -409,6 +410,14 @@ pub async fn improve_prompt_inner(
             vec![
                 "Empty prompt; local fallback returned the improvement checklist only.".to_string(),
             ],
+        ));
+    }
+
+    if request.force_local.unwrap_or(false) {
+        return Ok(local_improvement(
+            &prompt,
+            request.context.as_deref(),
+            Vec::new(),
         ));
     }
 
@@ -1895,6 +1904,22 @@ mod tests {
             .quality_delta
             .resolved_gaps
             .contains(&"verification".to_string()));
+    }
+
+    #[tokio::test]
+    async fn improve_prompt_inner_can_force_local_provider() {
+        let result = improve_prompt_inner(ImproveRequest {
+            prompt: "make better".to_string(),
+            context: None,
+            force_local: Some(true),
+        })
+        .await
+        .expect("force local improvement");
+
+        assert_eq!(result.provider, "local-rules");
+        assert!(!result.used_ai);
+        assert!(result.warnings.is_empty());
+        assert!(result.quality_delta.score_delta > 0);
     }
 
     #[test]

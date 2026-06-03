@@ -1,4 +1,8 @@
-use promptvault_lib::{improve_prompt_inner, run_scan, source_specs, ImproveRequest, ScanOptions};
+use promptvault_lib::{
+    improve_prompt_inner, run_scan, source_specs, ImproveRequest, PromptRecord, ScanOptions,
+};
+
+const MAX_JSON_PROMPT_PREVIEW: usize = 25;
 
 #[tokio::main]
 async fn main() {
@@ -52,6 +56,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "scan" => {
             let json = take_flag(&mut args, "--json");
             let include_markdown = take_flag(&mut args, "--include-markdown");
+            let include_prompts = take_flag(&mut args, "--include-prompts");
             let no_export = take_flag(&mut args, "--no-export");
             let mut limit = None;
             let mut output_path = None;
@@ -106,16 +111,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 },
             })?;
             if json {
+                let mut warnings = result.warnings.clone();
+                let prompts = json_prompt_preview(&result.prompts, include_prompts, &mut warnings);
                 let summary = serde_json::json!({
-                    "generated_at": result.generated_at,
-                    "output_path": result.output_path,
-                    "stats": result.stats,
+                    "generated_at": &result.generated_at,
+                    "output_path": &result.output_path,
+                    "stats": &result.stats,
                     "returned_prompt_count": result.returned_prompt_count,
+                    "prompt_stdout_count": prompts.len(),
                     "prompts_truncated": result.prompts_truncated,
-                    "preview_sort": result.preview_sort,
+                    "preview_sort": &result.preview_sort,
                     "markdown_included": result.markdown_included,
                     "markdown_written": result.markdown_written,
-                    "warnings": result.warnings
+                    "warnings": warnings,
+                    "prompts": prompts
                 });
                 println!("{}", serde_json::to_string_pretty(&summary)?);
                 return Ok(());
@@ -214,8 +223,63 @@ fn take_flag(args: &mut Vec<String>, flag: &str) -> bool {
     found
 }
 
+fn json_prompt_preview<'a>(
+    prompts: &'a [PromptRecord],
+    include_prompts: bool,
+    warnings: &mut Vec<String>,
+) -> Vec<&'a PromptRecord> {
+    if !include_prompts {
+        return Vec::new();
+    }
+    if prompts.len() > MAX_JSON_PROMPT_PREVIEW {
+        warnings.push(format!(
+            "Prompt stdout preview capped at {MAX_JSON_PROMPT_PREVIEW}; lower --preview-limit for exact stdout previews."
+        ));
+    }
+    prompts.iter().take(MAX_JSON_PROMPT_PREVIEW).collect()
+}
+
 fn print_help() {
     println!(
-        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-markdown] [--no-export] [--json]\n  improve [--json] --prompt TEXT\n  improve [--json] < prompt.txt"
+        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] --prompt TEXT\n  improve [--json] < prompt.txt"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn json_prompt_preview_is_opt_in_and_capped() {
+        let prompts = (0..30)
+            .map(|idx| PromptRecord {
+                id: idx.to_string(),
+                source: "test".to_string(),
+                session_id: idx.to_string(),
+                path: "/tmp/test.jsonl".to_string(),
+                timestamp: None,
+                cwd: None,
+                text: format!("prompt {idx}"),
+                word_count: 2,
+                char_count: 8,
+                hash: idx.to_string(),
+                risk_flags: Vec::new(),
+                quality: promptvault_lib::PromptQuality {
+                    score: 50,
+                    band: "weak".to_string(),
+                    missing: Vec::new(),
+                    suggestions: Vec::new(),
+                },
+            })
+            .collect::<Vec<_>>();
+
+        let mut warnings = Vec::new();
+        assert!(json_prompt_preview(&prompts, false, &mut warnings).is_empty());
+        assert!(warnings.is_empty());
+
+        let preview = json_prompt_preview(&prompts, true, &mut warnings);
+        assert_eq!(preview.len(), MAX_JSON_PROMPT_PREVIEW);
+        assert_eq!(preview[0].text, "prompt 0");
+        assert_eq!(warnings.len(), 1);
+    }
 }

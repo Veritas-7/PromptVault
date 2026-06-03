@@ -1,0 +1,29 @@
+{
+  "schema": "promptvault-autoresearch-internal-scan-v1",
+  "generated_at": "2026-06-03T21:26:27+0900",
+  "iteration": "repair-redaction-docs",
+  "base_commit": "3360cfaab7189df7c3a803b97f5132f60f91584e",
+  "status": "pass",
+  "candidate": {
+    "problem": "README.md and docs/CLI.md still described repair JSON as returning prompt/recommendation pairs without documenting that prompt records are redacted.",
+    "risk": "Operators could misunderstand stdout JSON safety boundaries after the repair JSON redaction change.",
+    "decision": "Document redacted stdout prompt previews and redacted repair prompt/recommendation pairs while preserving the Markdown export distinction."
+  },
+  "verification": {
+    "commands": [
+      "rg -n \"Stdout prompt previews are capped at 25 records and redacted|deterministic redacted prompt/recommendation pairs\" README.md",
+      "rg -n \"Stdout prompt records are redacted|returns redacted prompt/recommendation pairs\" docs/CLI.md",
+      "git diff --check"
+    ],
+    "status": "passed",
+    "evidence": "The README and CLI docs contain the redaction wording, and the diff whitespace check passed."
+  },
+  "changed_paths": [
+    "README.md",
+    "docs/CLI.md",
+    "autoresearch/evidence/completion_audit.md",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-repair-redaction-docs.json",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-repair-redaction-docs.md",
+    "autoresearch/evidence/iteration-2026-06-03-repair-redaction-docs.md"
+  ]
+}

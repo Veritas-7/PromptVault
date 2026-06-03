@@ -52,7 +52,7 @@ cargo run --bin promptvault-cli -- improve --local --json --prompt "make better"
 cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
 ```
 
-Omit `--limit` for a full scan. Use `--source ID` to verify one source without scanning the whole history. In limited scans, `total_files` and source `files_seen` count visited files only, not every matching file in the source root. Use `--no-export` when an agent only needs JSON stats and should not create a large Markdown file. Use `--weakest-first` or `--preview-sort quality-asc` when the preview should prioritize the weakest prompts for repair. Source summaries include average prompt quality and weak-prompt counts so agents can prioritize noisy stores first. The scan command writes prompt bodies to the Markdown output path by default and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N --include-prompts` only when an agent or test needs a bounded prompt preview in the JSON result. Stdout prompt previews are capped at 25 records.
+Omit `--limit` for a full scan. Use `--source ID` to verify one source without scanning the whole history. In limited scans, `total_files` and source `files_seen` count visited files only, not every matching file in the source root. Use `--no-export` when an agent only needs JSON stats and should not create a large Markdown file. Use `--weakest-first` or `--preview-sort quality-asc` when the preview should prioritize the weakest prompts for repair. Source summaries include average prompt quality and weak-prompt counts so agents can prioritize noisy stores first. The scan command writes prompt bodies to the Markdown output path by default and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N --include-prompts` only when an agent or test needs a bounded prompt preview in the JSON result. Stdout prompt previews are capped at 25 records and redacted for token/key/private-key risk patterns.
 
 The Tauri UI runs full exports but receives only a latest-prompt preview over IPC, so the large Markdown file remains on disk instead of being serialized into the frontend.
 
@@ -70,7 +70,7 @@ Used keys:
 - `GLM_CODING_ENDPOINT`
 - `GLM_CODING_MODEL`
 
-If GLM is missing, rate-limited, or unavailable, PromptVault falls back to local prompt-improvement rules. Use `improve --local` when automation needs deterministic offline recommendations. Use `repair --json --count N>0` to scan weakest prompts and return deterministic prompt/recommendation pairs; repair batches are capped at 10 records. Both GLM and local recommendations report prompt-quality before/after scores, score delta, resolved gaps, and remaining gaps.
+If GLM is missing, rate-limited, or unavailable, PromptVault falls back to local prompt-improvement rules. Use `improve --local` when automation needs deterministic offline recommendations. Use `repair --json --count N>0` to scan weakest prompts and return deterministic redacted prompt/recommendation pairs; repair batches are capped at 10 records. Both GLM and local recommendations report prompt-quality before/after scores, score delta, resolved gaps, and remaining gaps.
 
 ## Verification
 

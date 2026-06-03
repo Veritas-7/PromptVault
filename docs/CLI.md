@@ -33,11 +33,12 @@ cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [-
 - `--json` prints machine-readable summaries for agents. `scan --json` still writes prompt bodies to the Markdown output path rather than dumping them to stdout.
 - CLI scan results return zero prompt bodies by default. Use `--preview-limit N --include-prompts` for an explicit bounded prompt preview in stdout JSON.
 - `--include-prompts` is capped at 25 prompt records in stdout even if `--preview-limit` is higher.
+- Stdout prompt records are redacted for token/key/private-key risk patterns when prompt text is explicitly included.
 - `--include-markdown` includes the Markdown body in the returned `ScanResult`; omit it for safer/leaner agent automation.
 - `improve` reads one prompt and returns provider, revised prompt, rationale, quality before/after delta, resolved gaps, remaining gaps, and warnings.
 - `improve` requires a non-empty prompt from `--prompt` or stdin and exits non-zero for empty or flag-like `--prompt` values.
 - `improve --local` bypasses GLM and uses deterministic local prompt-improvement rules for reproducible smoke tests and offline repair queues.
-- `repair` scans weakest prompts, runs deterministic local improvement for each one, writes no Markdown export, and returns prompt/recommendation pairs. Repair batches are capped at 10 records.
+- `repair` scans weakest prompts, runs deterministic local improvement for each one, writes no Markdown export, and returns redacted prompt/recommendation pairs. Repair batches are capped at 10 records.
 
 ## Agent-Native Design Notes
 

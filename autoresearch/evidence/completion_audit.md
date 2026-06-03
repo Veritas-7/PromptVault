@@ -46,6 +46,7 @@ Date: 2026-06-03
 | Deterministic local improve | `ImproveRequest.force_local`; CLI `improve --local`; bypasses GLM and returns local-rules without warnings | PASS |
 | Deterministic batch repair | CLI `repair --json`; weakest-first scan plus local-rules recommendations; no Markdown export; capped at 10 repairs | PASS |
 | Repair JSON prompt redaction | CLI `repair --json`; repair entries emit redacted prompt records so risky prompt text is not echoed raw | PASS |
+| Repair redaction documentation | `README.md` and `docs/CLI.md` state stdout prompt previews and repair JSON prompt records are redacted, while Markdown exports remain explicit disk outputs | PASS |
 | Rust lint gate | `cargo clippy --all-targets --all-features -- -D warnings` passes with no warnings | PASS |
 | One-command local quality gate | `npm run check` runs quiet UI helper tests, frontend build, Rust tests, and strict clippy | PASS |
 | GLM from `secrets.env` as fallback-capable AI path | Reads `GLM_API_KEY`/`GLM_API_KEY_2`, `GLM_CODING_ENDPOINT`, `GLM_CODING_MODEL`; ignores blank API key values; defaults blank model values; normalizes base/blank endpoints; falls back locally on 429 or invalid empty `revised_prompt` content | PASS |
@@ -149,6 +150,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - Deterministic local improve smoke: PASS, `improve --local --json --prompt "make better"` returned `provider=local-rules`, `used_ai=false`, `warnings=[]`, and `quality_delta.score_delta=64`.
 - Batch repair smoke: PASS, `repair --json --limit 100 --count 3` returned `provider=local-rules`, `preview_sort=quality_asc`, `scanned_prompt_count=100`, `returned_prompt_count=3`, `repair_count=3`, `markdown_written=false`, `output_path=null`, and first repair prompt was `36 · weak` with `score_delta=64`.
 - Repair JSON redaction coverage: PASS, RED `cargo test repair_json_entry_redacts_prompt_text` first failed before the repair JSON entry helper existed, GREEN passed after repair entries reused the redacted prompt-record path.
+- Repair redaction docs: PASS, `README.md` and `docs/CLI.md` now describe redacted stdout prompt previews and redacted repair prompt/recommendation pairs.
 - Batch repair cap smoke: PASS, `repair --json --limit 100 --count 99` returned `returned_prompt_count=10`, `repair_count=10`, `markdown_written=false`, `output_path=null`, and one cap warning.
 - CLI unknown-command smoke: PASS, `scna` exited 1, printed help, and wrote `promptvault-cli error: unknown command: scna` to stderr.
 - CLI help smoke: PASS, `--help` exited 0, printed help, and wrote no stderr.

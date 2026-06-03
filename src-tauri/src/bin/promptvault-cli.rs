@@ -481,7 +481,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n\nRules:\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n\nRules:\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10."
 }
 
 #[cfg(test)]
@@ -553,6 +553,7 @@ mod tests {
         assert!(help.contains("--count N>0"));
         assert!(help.contains("--output cannot be combined with --no-export"));
         assert!(help.contains("--preview-sort or --weakest-first"));
+        assert!(help.contains("repair --count is capped at 10"));
     }
 
     #[test]

@@ -1,0 +1,44 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "fb70114",
+  "code_commit": "f9cf72c",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src-tauri/src/lib.rs",
+      "observed": "collect_from_source appended file-level parse errors to SourceSummary.notes, but the successful run_scan branch left the source status as ok and did not add a scan warning."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib source_notes_are_promoted_to_partial_warning",
+    "result": "FAILED before implementation because promote_source_notes_to_warning did not exist."
+  },
+  "change": {
+    "summary": "Added promote_source_notes_to_warning and call it after successful source collection so skipped-file notes become partial source status and scan warnings.",
+    "test_added": "source_notes_are_promoted_to_partial_warning"
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib source_notes_are_promoted_to_partial_warning",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib jsonl_lines_propagates_read_errors",
+      "result": "PASS"
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: Vite build, 29 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "Started with a failing status/warning promotion test.",
+    "Kept valid parsed prompts instead of discarding a whole source on one skipped file.",
+    "Used the existing ScanResult.warnings and SourceSummary.status surfaces."
+  ]
+}

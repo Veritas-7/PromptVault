@@ -1,0 +1,31 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "b878f67",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src/App.tsx runScan",
+      "observed": "The UI converted limit input with Number(limit) and sent it directly to scan_prompts."
+    },
+    {
+      "surface": "limit input",
+      "observed": "The input declared min 100 and max 100000, but click-time parsing did not enforce positive whole-number bounds before IPC."
+    }
+  ],
+  "observed_weaknesses": [
+    "Invalid limit values could reach the Tauri boundary instead of producing an immediate UI error.",
+    "The UI minimum did not align with the backend/CLI positive limit behavior."
+  ],
+  "selected_candidate": {
+    "name": "UI scan limit validation",
+    "reason": "Fail fast in the user-facing control before IPC and keep frontend/backend limit semantics aligned.",
+    "success_metric": "TypeScript build and full check pass after adding client-side positive whole-number validation."
+  },
+  "safety_controls": [
+    "The change is limited to src/App.tsx.",
+    "The scan limit remains optional when the field is empty.",
+    "Error formatting was normalized without changing scan result rendering.",
+    "npm run build and npm run check were rerun."
+  ]
+}

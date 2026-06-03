@@ -1,0 +1,27 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "2d2dbf2",
+  "worktree_status_before_iteration": "clean",
+  "baseline": {
+    "command": "cargo run --quiet --bin promptvault-cli -- scna",
+    "exit_code": 0,
+    "stdout_first_line": "PromptVault CLI",
+    "stderr": ""
+  },
+  "observed_weaknesses": [
+    "A misspelled CLI command printed help and exited 0.",
+    "Agent automation could mistake an unknown command typo for a successful run.",
+    "Explicit help commands needed to stay successful while unknown commands failed closed."
+  ],
+  "selected_candidate": {
+    "name": "unknown command fail-closed",
+    "reason": "Make CLI automation safer by returning non-zero for unknown commands while preserving explicit help behavior.",
+    "success_metric": "scna exits 1 with an unknown-command error; --help exits 0."
+  },
+  "safety_controls": [
+    "No existing command behavior changed.",
+    "help, -h, --help, and no-argument help remain supported.",
+    "npm run check was rerun after the change."
+  ]
+}

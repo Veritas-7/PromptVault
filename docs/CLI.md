@@ -18,6 +18,8 @@ cargo run --bin promptvault-cli -- repair [--source ID] [--limit N] [--count N] 
 ## Contract
 
 - `sources` prints discovered source IDs, labels, status, and paths.
+- `help`, `--help`, and no-argument invocation print help and exit 0.
+- Unknown commands print help plus an error and exit non-zero.
 - `scan` writes a Markdown export and prints only summary metadata, not prompt bodies.
 - `scan --limit N` is for smoke tests; omit `--limit` for a full scan.
 - `scan --source ID` restricts scanning to one source ID from `sources`; repeat it or pass comma-separated IDs for multi-source smoke tests.
@@ -45,6 +47,7 @@ CLI-Anything's useful lesson for PromptVault is not to wrap everything in a GUI-
 ## Verification Commands
 
 ```bash
+npm run check
 cargo check
 npm run build
 cargo run --bin promptvault-cli -- sources
@@ -59,4 +62,5 @@ cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-
 cargo run --bin promptvault-cli -- improve --json --prompt "make better"
 cargo run --bin promptvault-cli -- improve --local --json --prompt "make better"
 cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
+set +e; cargo run --bin promptvault-cli -- scna; test "$?" -ne 0; set -e
 ```

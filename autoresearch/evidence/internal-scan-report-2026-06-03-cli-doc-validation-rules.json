@@ -1,0 +1,23 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "db7bc91",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "docs/CLI.md",
+      "observed": "The CLI guide still documented --limit, --count, and --preview-limit as generic N/non-negative options and omitted newer fail-closed source/output/preview-sort rules."
+    }
+  ],
+  "selected_candidate": {
+    "name": "CLI guide validation rule refresh",
+    "reason": "Make docs/CLI.md match current promptvault-cli --help and validation behavior.",
+    "success_metric": "Docs mention positive --limit/--count, non-negative --preview-limit, unknown source id failures, output/no-export conflict, preview sort exclusivity, and CLI tests remain green."
+  },
+  "safety_controls": [
+    "Only docs/CLI.md and autoresearch evidence files are changed.",
+    "Current CLI help was inspected before editing.",
+    "cargo test --bin promptvault-cli was rerun.",
+    "git diff --check was rerun."
+  ]
+}

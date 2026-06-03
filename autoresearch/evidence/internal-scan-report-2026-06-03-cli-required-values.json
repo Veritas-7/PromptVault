@@ -1,0 +1,44 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "bc56e61",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "command": "scan --limit 10 --no-export --json --source",
+      "exit_code": 0,
+      "observed": "scanned 10 prompts across default sources"
+    },
+    {
+      "command": "scan --limit 10 --no-export --json --output",
+      "exit_code": 0,
+      "observed": "ignored output value and returned output_path=null"
+    },
+    {
+      "command": "scan --limit 10 --no-export --json --preview-sort",
+      "exit_code": 0,
+      "observed": "defaulted preview_sort=latest"
+    },
+    {
+      "command": "repair --limit 10 --count 1 --json --source",
+      "exit_code": 0,
+      "observed": "repaired one prompt across default sources"
+    }
+  ],
+  "observed_weaknesses": [
+    "Missing --source values silently widened scans to all sources.",
+    "Missing --output values were silently ignored.",
+    "Missing --preview-sort values silently defaulted to latest.",
+    "Missing repair --source values silently widened repair scope."
+  ],
+  "selected_candidate": {
+    "name": "required value parsing for CLI options",
+    "reason": "Prevent missing values from silently widening scan or repair scope.",
+    "success_metric": "Missing --source, --output, --preview-sort, and repair --source exit non-zero; valid --source scan still exits 0."
+  },
+  "safety_controls": [
+    "Valid --source scan behavior was smoke-tested.",
+    "The change is limited to CLI parsing.",
+    "npm run check was rerun after the change."
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "a0d5e66",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "run_scan source selection",
+      "observed": "After API source-id validation was added, selected_source_specs still returned unknown-source warnings that run_scan could no longer need at runtime."
+    }
+  ],
+  "selected_candidate": {
+    "name": "Source selection responsibility cleanup",
+    "reason": "Keep source-id validation in validate_source_ids and make selected_source_specs only select known source specs.",
+    "success_metric": "Selection helper test remains green, unknown source API guard remains green, and full local checks still pass."
+  },
+  "safety_controls": [
+    "The change is limited to src-tauri/src/lib.rs.",
+    "run_scan still validates source ids before selecting sources.",
+    "The unknown-source API guard test was rerun.",
+    "npm run check was rerun after the change."
+  ]
+}

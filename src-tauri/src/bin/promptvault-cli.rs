@@ -64,6 +64,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let mut output_path = None;
             let mut preview_limit = Some(0);
             let mut preview_sort = None;
+            let mut preview_sort_source = None;
             let mut source_ids = Vec::new();
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
@@ -78,10 +79,21 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         preview_limit = Some(parse_usize_arg(iter.next(), "--preview-limit")?);
                     }
                     "--preview-sort" => {
-                        preview_sort = Some(parse_preview_sort_arg(iter.next())?);
+                        let value = parse_preview_sort_arg(iter.next())?;
+                        set_preview_sort(
+                            &mut preview_sort,
+                            &mut preview_sort_source,
+                            "--preview-sort",
+                            value,
+                        )?;
                     }
                     "--weakest-first" => {
-                        preview_sort = Some("quality-asc".to_string());
+                        set_preview_sort(
+                            &mut preview_sort,
+                            &mut preview_sort_source,
+                            "--weakest-first",
+                            "quality-asc".to_string(),
+                        )?;
                     }
                     "--source" => {
                         source_ids.extend(parse_source_ids_arg(iter.next())?);
@@ -387,6 +399,20 @@ fn validate_scan_output_options(
     Ok(())
 }
 
+fn set_preview_sort(
+    preview_sort: &mut Option<String>,
+    preview_sort_source: &mut Option<&'static str>,
+    source: &'static str,
+    value: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(existing) = preview_sort_source {
+        return Err(format!("{source} cannot be combined with {existing}").into());
+    }
+    *preview_sort = Some(value);
+    *preview_sort_source = Some(source);
+    Ok(())
+}
+
 fn collect_prompt_arg(args: Vec<String>) -> Result<String, Box<dyn std::error::Error>> {
     let prompt = if args.is_empty() {
         let mut buf = String::new();
@@ -606,5 +632,31 @@ mod tests {
         assert!(validate_scan_output_options(&None, true).is_ok());
         assert!(validate_scan_output_options(&Some("/tmp/out.md".to_string()), false).is_ok());
         assert!(validate_scan_output_options(&Some("/tmp/out.md".to_string()), true).is_err());
+    }
+
+    #[test]
+    fn set_preview_sort_rejects_multiple_sort_options() {
+        let mut preview_sort = None;
+        let mut preview_sort_source = None;
+
+        set_preview_sort(
+            &mut preview_sort,
+            &mut preview_sort_source,
+            "--weakest-first",
+            "quality-asc".to_string(),
+        )
+        .expect("first sort option");
+        assert_eq!(preview_sort, Some("quality-asc".to_string()));
+
+        let err = set_preview_sort(
+            &mut preview_sort,
+            &mut preview_sort_source,
+            "--preview-sort",
+            "latest".to_string(),
+        )
+        .expect_err("second sort option should fail");
+        assert!(err
+            .to_string()
+            .contains("--preview-sort cannot be combined with --weakest-first"));
     }
 }

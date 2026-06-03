@@ -234,7 +234,7 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
     let generated_at = Utc::now().to_rfc3339();
     let should_render_markdown = write_markdown || include_markdown;
     let markdown = if should_render_markdown {
-        render_markdown(&generated_at, &stats, &prompts)
+        render_markdown(&generated_at, &stats, &prompts, &warnings)
     } else {
         String::new()
     };
@@ -1650,7 +1650,12 @@ fn stop_words() -> HashSet<&'static str> {
     .collect()
 }
 
-fn render_markdown(generated_at: &str, stats: &ScanStats, prompts: &[PromptRecord]) -> String {
+fn render_markdown(
+    generated_at: &str,
+    stats: &ScanStats,
+    prompts: &[PromptRecord],
+    warnings: &[String],
+) -> String {
     let mut md = String::new();
     md.push_str("# PromptVault Export\n\n");
     md.push_str(&format!("- Generated: `{generated_at}`\n"));
@@ -1668,6 +1673,14 @@ fn render_markdown(generated_at: &str, stats: &ScanStats, prompts: &[PromptRecor
         "- Weak prompts: `{}`\n\n",
         stats.weak_prompt_count
     ));
+
+    if !warnings.is_empty() {
+        md.push_str("## Warnings\n\n");
+        for warning in warnings {
+            md.push_str(&format!("- {}\n", warning));
+        }
+        md.push('\n');
+    }
 
     md.push_str("## Source Coverage\n\n");
     md.push_str("| Source | Status | Files | Prompts | Avg Quality | Weak | Path |\n");
@@ -2292,12 +2305,23 @@ mod tests {
             }],
         );
 
-        let markdown = render_markdown("2026-06-03T00:00:00Z", &stats, &[]);
+        let markdown = render_markdown("2026-06-03T00:00:00Z", &stats, &[], &[]);
 
         assert!(
             markdown.contains("| Source | Status | Files | Prompts | Avg Quality | Weak | Path |")
         );
         assert!(markdown.contains("| Test Source | ok | 4 | 7 | 42.5 | 3 | `/tmp/test-source` |"));
+    }
+
+    #[test]
+    fn markdown_export_includes_scan_warnings() {
+        let stats = build_stats(&[], Vec::new());
+        let warnings = vec!["Scan stopped at configured limit of 1 prompts.".to_string()];
+
+        let markdown = render_markdown("2026-06-03T00:00:00Z", &stats, &[], &warnings);
+
+        assert!(markdown.contains("## Warnings"));
+        assert!(markdown.contains("- Scan stopped at configured limit of 1 prompts."));
     }
 
     #[test]

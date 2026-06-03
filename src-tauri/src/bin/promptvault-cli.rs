@@ -206,7 +206,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
                     "--count" => {
-                        count = parse_usize_arg(iter.next(), "--count")?;
+                        count = parse_positive_usize_arg(iter.next(), "--count")?;
                     }
                     "--limit" => {
                         limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
@@ -581,6 +581,7 @@ mod tests {
             5
         );
         assert!(parse_positive_usize_arg(Some("0".to_string()), "--limit").is_err());
+        assert!(parse_positive_usize_arg(Some("0".to_string()), "--count").is_err());
         assert!(parse_positive_usize_arg(Some("nope".to_string()), "--limit").is_err());
     }
 

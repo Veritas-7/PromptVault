@@ -1,0 +1,34 @@
+{
+  "schema": "promptvault-autoresearch-internal-scan-v1",
+  "generated_at": "2026-06-03T20:37:04+0900",
+  "iteration": "nested-message-content",
+  "code_commit": "9eb6d06b5996e5445d20dfd84d6542a9720658c2",
+  "status": "pass",
+  "candidate": {
+    "problem": "text_from_value handled nested message.content inside array items, but object-shaped payloads with {\"message\":{\"content\":...}} returned an empty prompt and were silently skipped by push_record.",
+    "risk": "Prompt logs that wrap user text under a nested message object can be undercounted or lost, especially in source formats that pass whole message objects into the shared text extractor.",
+    "decision": "Add a narrow extractor path for object-shaped message.content and preserve the existing direct string key behavior."
+  },
+  "red": {
+    "command": "cargo test text_from_value_extracts_nested_message_content_object",
+    "status": "failed_as_expected",
+    "evidence": "The new test failed with left empty string and right the expected nested message prompt."
+  },
+  "green": {
+    "command": "cargo test text_from_value_extracts_nested_message_content_object",
+    "status": "passed",
+    "evidence": "The focused test passed after text_from_value read message.content from object-shaped payloads."
+  },
+  "full_verification": {
+    "command": "npm run check",
+    "status": "passed",
+    "evidence": "10 UI helper tests passed, Vite build passed, 33 Rust library tests passed, 13 CLI tests passed, doc-tests passed, and strict clippy passed."
+  },
+  "changed_paths": [
+    "src-tauri/src/lib.rs",
+    "autoresearch/evidence/completion_audit.md",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-nested-message-content.json",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-nested-message-content.md",
+    "autoresearch/evidence/iteration-2026-06-03-nested-message-content.md"
+  ]
+}

@@ -22,6 +22,7 @@ Date: 2026-06-03
 | Markdown warning preservation | Markdown exports include `ScanResult.warnings` so limited or partial scans remain self-describing | PASS |
 | Source-specific smoke scans | `ScanOptions.source_ids`; CLI `scan --source ID`; Antigravity DB source smoke scans 2 prompts without full-history scan | PASS |
 | JSONL read error safety | `jsonl_lines`; invalid UTF-8/read errors propagate instead of silently truncating a source file | PASS |
+| Nested message content extraction | `text_from_value`; object-shaped `{ "message": { "content": ... } }` prompt payloads are extracted instead of dropped | PASS |
 | Partial source warning safety | File-level parse notes and source walk errors promote the source to `partial` and surface as scan warnings | PASS |
 | Numeric option safety | invalid `--limit`, `--preview-limit`, and repair `--count` exit non-zero instead of silently removing/defaulting caps | PASS |
 | Required option value safety | missing values and empty source ID components exit non-zero instead of widening/defaulting scope | PASS |
@@ -95,10 +96,11 @@ cargo run --quiet --bin promptvault-cli -- --help
 
 - `npm run build`: PASS, Vite production build completed.
 - `npm run test:ui`: PASS, 10 Node UI helper tests passed without `ExperimentalWarning` output.
-- `npm run check`: PASS, 10 quiet UI helper tests passed, Vite production build completed, 32 library tests plus 13 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, 10 quiet UI helper tests passed, Vite production build completed, 33 library tests plus 13 CLI tests passed, and strict clippy passed.
 - UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 32 library tests plus 13 CLI tests passed.
+- `cargo test`: PASS, 33 library tests plus 13 CLI tests passed.
+- Nested message content extraction: PASS, RED `cargo test text_from_value_extracts_nested_message_content_object` first failed with `left: ""`, GREEN passed after `text_from_value` extracted object-shaped `message.content` payloads.
 - CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty and flag-like prompt rejection, numeric argument validation, required value validation, empty source component rejection, repair count cap documentation, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.

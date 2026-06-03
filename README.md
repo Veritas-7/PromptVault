@@ -15,6 +15,7 @@ It extracts user-authored prompts, strips known injected context blocks, writes 
 - `~/.gemini/antigravity/brain`
 - `~/.gemini/antigravity-ide/brain`
 - `~/.gemini/antigravity-cli/history.jsonl`
+- `~/.gemini/antigravity-cli/conversations`
 - `~/.gemini/tmp/wj/chats`
 
 See [docs/SOURCE_DISCOVERY.md](docs/SOURCE_DISCOVERY.md) for parser details.
@@ -40,11 +41,12 @@ cargo run --bin promptvault-cli -- sources
 cargo run --bin promptvault-cli -- sources --json
 cargo run --bin promptvault-cli -- scan --output ~/Documents/PromptVault/all-prompts.md
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md --json
+cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
 cargo run --bin promptvault-cli -- improve --prompt "Fix the failing parser test and verify it."
 ```
 
-Omit `--limit` for a full scan. The scan command writes prompt bodies to the Markdown output path and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N` only when an agent or test needs a bounded prompt preview in the JSON result.
+Omit `--limit` for a full scan. Use `--source ID` to verify one source without scanning the whole history. The scan command writes prompt bodies to the Markdown output path and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N` only when an agent or test needs a bounded prompt preview in the JSON result.
 
 The Tauri UI runs full exports but receives only a latest-prompt preview over IPC, so the large Markdown file remains on disk instead of being serialized into the frontend.
 
@@ -73,6 +75,7 @@ cargo check
 cargo test
 cargo run --bin promptvault-cli -- sources --json
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md --json
+cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
 ```
 

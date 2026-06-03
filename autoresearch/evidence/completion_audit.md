@@ -17,6 +17,7 @@ Date: 2026-06-03
 | Full local session scan | Current release CLI exported 155,484 prompts from 27,608 files in 1m45s | PASS |
 | Frequency views | `ScanStats.top_words`, `top_phrases`, `repeated_prompts`; UI Frequency panel | PASS |
 | Large-history UI safety | `ScanOptions.preview_limit`, `include_markdown`; UI requests latest 1,000 prompts and omits Markdown over IPC | PASS |
+| Source-specific smoke scans | `ScanOptions.source_ids`; CLI `scan --source ID`; Antigravity DB source smoke scans 2 prompts without full-history scan | PASS |
 | Prompt quality scoring | `PromptQuality`, `ScanStats.average_quality`, `weak_prompt_count`, `top_quality_gaps`; UI quality metrics and suggestions | PASS |
 | Prompt improvement app | UI selected-prompt panel plus `improve_prompt` Tauri command | PASS |
 | GLM from `secrets.env` as fallback-capable AI path | Reads `GLM_API_KEY`/`GLM_API_KEY_2`, `GLM_CODING_ENDPOINT`, `GLM_CODING_MODEL`; normalizes base endpoint; falls back locally on 429 | PASS |
@@ -33,6 +34,8 @@ cargo check
 cargo test
 cargo run --quiet --bin promptvault-cli -- sources --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-json-smoke.md --json
+cargo run --quiet --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --preview-limit 0 --output /tmp/promptvault-source-filter-antigravity-db.md --json
+cargo run --quiet --bin promptvault-cli -- scan --source missing-source --preview-limit 0 --output /tmp/promptvault-source-filter-missing.md --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview-five.md --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --output /tmp/promptvault-quality-smoke.md --json
 cargo build --release --bin promptvault-cli
@@ -45,9 +48,11 @@ VITE_PORT=5174 VITE_HMR_PORT=5175 npm run dev
 
 - `npm run build`: PASS, Vite production build completed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 8 tests passed.
+- `cargo test`: PASS, 9 tests passed.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
+- Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
+- Unknown-source smoke: PASS, `--source missing-source` returned no source summaries and warning `Unknown source id requested: missing-source`.
 - Preview-payload scan: PASS, default CLI JSON returned `returned_prompt_count=0`, bounded preview returned `returned_prompt_count=5`.
 - Prompt quality smoke: PASS, 100-prompt smoke reported `average_quality=71.6`, `weak_prompt_count=16`, and top quality gaps `constraints`, `verification`, `output_format`, `action_verb`, `context`.
 - Antigravity DB source: PASS, full release scan reported `files_seen=2`, `prompts_found=2`, status `ok`, notes `[]`.

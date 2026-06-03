@@ -105,6 +105,7 @@ pub struct ScanOptions {
     pub output_path: Option<String>,
     pub preview_limit: Option<usize>,
     pub include_markdown: Option<bool>,
+    pub source_ids: Option<Vec<String>>,
 }
 
 impl Default for ScanOptions {
@@ -114,6 +115,7 @@ impl Default for ScanOptions {
             output_path: None,
             preview_limit: None,
             include_markdown: None,
+            source_ids: None,
         }
     }
 }
@@ -158,8 +160,10 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
     let mut warnings = Vec::new();
     let mut prompts = Vec::new();
     let mut summaries = Vec::new();
+    let (sources, mut source_warnings) = selected_source_specs(options.source_ids.as_deref());
+    warnings.append(&mut source_warnings);
 
-    for source in source_specs() {
+    for source in sources {
         let mut summary = SourceSummary {
             id: source.id.to_string(),
             label: source.label.to_string(),
@@ -251,6 +255,45 @@ fn response_prompts(prompts: &[PromptRecord], preview_limit: Option<usize>) -> V
             prompts[start..].to_vec()
         }
     }
+}
+
+fn selected_source_specs(source_ids: Option<&[String]>) -> (Vec<SourceSpec>, Vec<String>) {
+    let sources = source_specs();
+    let Some(requested) = source_ids else {
+        return (sources, Vec::new());
+    };
+    if requested.is_empty() {
+        return (sources, Vec::new());
+    }
+
+    let requested = requested
+        .iter()
+        .map(|id| id.trim())
+        .filter(|id| !id.is_empty())
+        .collect::<HashSet<_>>();
+    if requested.is_empty() {
+        return (sources, Vec::new());
+    }
+    let mut found = HashSet::new();
+    let selected = sources
+        .into_iter()
+        .filter(|source| {
+            if requested.contains(source.id) {
+                found.insert(source.id);
+                true
+            } else {
+                false
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let mut warnings = requested
+        .difference(&found)
+        .map(|id| format!("Unknown source id requested: {id}"))
+        .collect::<Vec<_>>();
+    warnings.sort();
+
+    (selected, warnings)
 }
 
 pub async fn improve_prompt_inner(
@@ -1728,6 +1771,21 @@ mod tests {
         );
         assert!(response_prompts(&prompts, Some(0)).is_empty());
         assert_eq!(response_prompts(&prompts, None).len(), 3);
+    }
+
+    #[test]
+    fn selects_requested_sources_and_warns_for_unknown_ids() {
+        let (selected, warnings) = selected_source_specs(Some(&[
+            "antigravity-cli-conversation-db".to_string(),
+            "missing-source".to_string(),
+        ]));
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].id, "antigravity-cli-conversation-db");
+        assert_eq!(
+            warnings,
+            vec!["Unknown source id requested: missing-source".to_string()]
+        );
     }
 
     #[test]

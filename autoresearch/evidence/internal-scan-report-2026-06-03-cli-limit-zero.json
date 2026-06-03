@@ -1,0 +1,33 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "8eda37d",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "command": "scan --source codex --limit 0 --preview-limit 0 --no-export --json",
+      "exit_code": 0,
+      "observed": "returned empty scan JSON with warning: Scan stopped at configured limit of 0 prompts."
+    },
+    {
+      "command": "repair --source codex --limit 0 --count 1 --json",
+      "exit_code": 0,
+      "observed": "returned empty repair JSON with warning: Scan stopped at configured limit of 0 prompts."
+    }
+  ],
+  "observed_weaknesses": [
+    "The CLI accepted --limit 0 for scan and repair.",
+    "A zero limit produced successful no-op output that can hide operator mistakes."
+  ],
+  "selected_candidate": {
+    "name": "CLI positive limit enforcement",
+    "reason": "Keep --limit meaningful while preserving --preview-limit 0 for stdout suppression.",
+    "success_metric": "scan and repair --limit 0 exit non-zero; scan --limit 1 --preview-limit 0 still exits 0."
+  },
+  "safety_controls": [
+    "The change is limited to promptvault-cli.rs.",
+    "--preview-limit and --count keep the existing non-negative parser.",
+    "A valid scan with --preview-limit 0 was smoke-tested.",
+    "npm run check was rerun after the change."
+  ]
+}

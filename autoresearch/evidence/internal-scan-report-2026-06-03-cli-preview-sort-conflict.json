@@ -1,0 +1,33 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "f8dcd59",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "command": "scan --source codex --limit 1 --preview-limit 0 --no-export --weakest-first --preview-sort latest --json",
+      "exit_code": 0,
+      "observed": "returned JSON with preview_sort latest"
+    },
+    {
+      "command": "scan --source codex --limit 1 --preview-limit 0 --no-export --preview-sort quality-desc --weakest-first --json",
+      "exit_code": 0,
+      "observed": "returned JSON with preview_sort quality_asc"
+    }
+  ],
+  "observed_weaknesses": [
+    "The CLI accepted multiple preview sort selectors in one scan.",
+    "The last sort option silently won, making command intent order-dependent."
+  ],
+  "selected_candidate": {
+    "name": "CLI preview sort conflict rejection",
+    "reason": "Treat --weakest-first as a preview sort selector and reject duplicate sort configuration.",
+    "success_metric": "Both duplicate sort orders exit non-zero; a single --weakest-first scan still succeeds."
+  },
+  "safety_controls": [
+    "The change is limited to promptvault-cli.rs.",
+    "Single sort options still work.",
+    "Both conflicting argument orders were smoke-tested.",
+    "npm run check was rerun after the change."
+  ]
+}

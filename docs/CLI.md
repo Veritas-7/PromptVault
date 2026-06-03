@@ -23,6 +23,7 @@ cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [-
 - Unknown commands print help plus an error and exit non-zero.
 - `scan` writes a Markdown export and prints only summary metadata, not prompt bodies.
 - `scan --limit N>0` is for smoke tests; omit `--limit` for a full scan.
+- In limited scans, `total_files` and each source `files_seen` count visited files only; they are not an inventory of every matching file in the source root.
 - `--limit` and `repair --count` require positive integers. `--preview-limit` accepts non-negative integers so `0` can suppress previews.
 - Value-taking options such as `--source`, `--output`, and `--preview-sort` require explicit values and exit non-zero when missing.
 - `scan --source ID` restricts scanning to one source ID from `sources`; repeat it or pass comma-separated IDs for multi-source smoke tests. Unknown or empty explicit source IDs exit non-zero.

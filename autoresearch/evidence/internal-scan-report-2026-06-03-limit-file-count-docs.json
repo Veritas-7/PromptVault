@@ -1,0 +1,36 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "2463fdf",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "README.md",
+      "observed": "The quick CLI guidance explained limited scans but did not say that total_files counts only visited files when a prompt limit stops traversal."
+    },
+    {
+      "surface": "docs/CLI.md",
+      "observed": "The behavior list documented scan limits but did not define limited-scan file counters."
+    }
+  ],
+  "selected_candidate": {
+    "name": "Limited scan file-count documentation",
+    "reason": "The lazy file-walk improvement changed limited-scan counters from total matching files to visited files, so operator-facing docs should define the JSON and summary semantics.",
+    "success_metric": "README.md and docs/CLI.md both state that limited scans report visited file counts, not an inventory of every matching file."
+  },
+  "verification": [
+    {
+      "command": "rg -n \"visited files only|not every matching file\" README.md docs/CLI.md",
+      "result": "PASS: Both docs contain the new limited-scan counter semantics."
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS: No whitespace errors."
+    }
+  ],
+  "safety_controls": [
+    "Documentation-only change.",
+    "Historical evidence files were not rewritten.",
+    "No source, tests, or runtime hooks were changed."
+  ]
+}

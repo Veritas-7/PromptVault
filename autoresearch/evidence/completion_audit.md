@@ -37,7 +37,7 @@ Date: 2026-06-03
 | Deterministic batch repair | CLI `repair --json`; weakest-first scan plus local-rules recommendations; no Markdown export; capped at 10 repairs | PASS |
 | Rust lint gate | `cargo clippy --all-targets --all-features -- -D warnings` passes with no warnings | PASS |
 | One-command local quality gate | `npm run check` runs frontend build, Rust tests, and strict clippy | PASS |
-| GLM from `secrets.env` as fallback-capable AI path | Reads `GLM_API_KEY`/`GLM_API_KEY_2`, `GLM_CODING_ENDPOINT`, `GLM_CODING_MODEL`; normalizes base endpoint; falls back locally on 429 or invalid empty `revised_prompt` content | PASS |
+| GLM from `secrets.env` as fallback-capable AI path | Reads `GLM_API_KEY`/`GLM_API_KEY_2`, `GLM_CODING_ENDPOINT`, `GLM_CODING_MODEL`; normalizes base/blank endpoints; falls back locally on 429 or invalid empty `revised_prompt` content | PASS |
 | Codex SDK considered | `research/external_sources.json` and strategy doc cite official Codex SDK README and defer direct SDK invocation for safety | PASS_WITH_NOTE |
 | CLI-Anything-inspired strong CLI | `promptvault-cli` supports `sources`, `scan`, `improve`, and `--json` summaries | PASS |
 | CLI unknown command safety | explicit help exits 0; unknown commands exit non-zero with an error | PASS |
@@ -136,6 +136,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - GitHub remote: PASS, `origin/main` pushed to private repo `Veritas-7/PromptVault`.
 - GLM improve smoke: fallback path PASS; live GLM returned `429 Too Many Requests`, then local rules returned a recommendation.
 - GLM content parser: PASS, JSON content with empty `revised_prompt` is rejected so the caller can use local fallback.
+- GLM endpoint normalization: PASS, blank `GLM_CODING_ENDPOINT` resolves to the default BigModel chat completions endpoint.
 
 ## Residual Risks
 

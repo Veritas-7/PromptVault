@@ -1,0 +1,44 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "f4d1b98",
+  "code_commit": "819db5e",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src-tauri/src/lib.rs",
+      "observed": "normalize_chat_endpoint(\"   \") produced /chat/completions, which would force a malformed request instead of using the default endpoint."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib normalizes_glm_base_endpoint",
+    "result": "FAILED before implementation because blank input normalized to /chat/completions."
+  },
+  "change": {
+    "summary": "Introduced DEFAULT_GLM_CHAT_ENDPOINT and return it when GLM_CODING_ENDPOINT is blank.",
+    "test_extended": "normalizes_glm_base_endpoint"
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib normalizes_glm_base_endpoint",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib glm_content_parser_rejects_empty_revised_prompt",
+      "result": "PASS"
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: Vite build, 29 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "No live GLM call was required for endpoint normalization coverage.",
+    "Existing non-empty endpoint normalization behavior is preserved.",
+    "Blank endpoint input now fails safe to the documented default."
+  ]
+}

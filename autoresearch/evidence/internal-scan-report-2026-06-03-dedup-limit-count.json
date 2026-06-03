@@ -1,0 +1,51 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "775ed86",
+  "code_commit": "ea20e93",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src-tauri/src/lib.rs",
+      "observed": "Limited scans stopped after raw parsed prompt count, before same-source duplicate prompts were removed."
+    },
+    {
+      "risk": "A limited scan could return fewer unique prompts than requested when duplicate records appeared before later unique prompt records."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib collect_from_source_applies_limit_after_deduping_prompts",
+    "result": "FAILED before implementation because the second unique prompt path was not collected."
+  },
+  "change": {
+    "summary": "collect_from_source now tracks same-source (source, hash) keys and only counts unique prompt records toward the remaining limit.",
+    "test_added": "collect_from_source_applies_limit_after_deduping_prompts"
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib collect_from_source_applies_limit_after_deduping_prompts",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib collect_from_source_stops_file_walk_after_limit",
+      "result": "PASS"
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: Vite build, 24 library tests, 13 CLI tests, and strict clippy passed."
+    },
+    {
+      "command": "find /tmp -maxdepth 1 -type d \\( -name 'promptvault-dedup-limit-*' -o -name 'promptvault-limit-walk-*' \\) -print",
+      "result": "PASS: no temp test directories remained."
+    }
+  ],
+  "safety_controls": [
+    "Started with a failing regression test.",
+    "Kept the implementation scoped to source collection and its unit test.",
+    "Ran full project check before committing the evidence."
+  ]
+}

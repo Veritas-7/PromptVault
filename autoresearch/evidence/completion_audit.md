@@ -87,9 +87,9 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run check`: PASS, Vite production build completed, 23 library tests plus 13 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, Vite production build completed, 24 library tests plus 13 CLI tests passed, and strict clippy passed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 23 library tests plus 13 CLI tests passed.
+- `cargo test`: PASS, 24 library tests plus 13 CLI tests passed.
 - CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty prompt rejection, numeric argument validation, required value validation, repair count cap documentation, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.

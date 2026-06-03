@@ -24,6 +24,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     match command.as_str() {
         "sources" => {
             let json = take_flag(&mut args, "--json");
+            reject_extra_args(&args, "sources")?;
             if json {
                 let rows = source_specs()
                     .into_iter()
@@ -300,6 +301,13 @@ fn is_help_command(command: &str) -> bool {
     matches!(command, "help" | "-h" | "--help")
 }
 
+fn reject_extra_args(args: &[String], command: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(arg) = args.first() {
+        return Err(format!("unknown {command} argument: {arg}").into());
+    }
+    Ok(())
+}
+
 fn parse_usize_arg(value: Option<String>, flag: &str) -> Result<usize, Box<dyn std::error::Error>> {
     let value = value.ok_or_else(|| format!("{flag} requires a value"))?;
     value
@@ -461,6 +469,15 @@ mod tests {
         assert!(is_help_command("-h"));
         assert!(is_help_command("--help"));
         assert!(!is_help_command("scna"));
+    }
+
+    #[test]
+    fn reject_extra_args_reports_first_unknown_argument() {
+        assert!(reject_extra_args(&[], "sources").is_ok());
+        let err = reject_extra_args(&["--bogus".to_string()], "sources").expect_err("unknown arg");
+        assert!(err
+            .to_string()
+            .contains("unknown sources argument: --bogus"));
     }
 
     #[test]

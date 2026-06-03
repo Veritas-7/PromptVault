@@ -12,10 +12,10 @@ import {
   Sparkles,
 } from "lucide-react";
 import "./App.css";
+import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
 import type { ImproveResult, PromptRecord, ScanResult } from "./types";
 
 type ScanState = "idle" | "scanning" | "ready" | "failed";
-type PreviewMode = "latest" | "weakest";
 const PREVIEW_LIMIT = 1000;
 const MAX_SCAN_LIMIT = 100000;
 
@@ -48,6 +48,7 @@ function App() {
   const [improvement, setImprovement] = useState<ImproveResult | null>(null);
 
   const prompts = result?.prompts ?? [];
+  const promptListMode = effectivePromptListMode(result?.preview_sort, previewMode);
   const filteredPrompts = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const matches = needle
@@ -60,9 +61,9 @@ function App() {
         })
       : prompts;
 
-    if (previewMode === "weakest") return matches.slice(0, 200);
+    if (promptListMode === "weakest") return matches.slice(0, 200);
     return matches.slice(-200).reverse();
-  }, [previewMode, prompts, query]);
+  }, [promptListMode, prompts, query]);
 
   const selectedPrompt = useMemo(() => {
     return prompts.find((prompt) => prompt.id === selectedId) ?? filteredPrompts[0] ?? null;
@@ -85,13 +86,14 @@ function App() {
         options: {
           limit: parsedLimit,
           preview_limit: PREVIEW_LIMIT,
-          preview_sort: previewMode === "weakest" ? "quality_asc" : "latest",
+          preview_sort: previewSortForMode(previewMode),
           include_markdown: false,
         },
       });
+      const loadedMode = effectivePromptListMode(next.preview_sort, previewMode);
       setResult(next);
       setSelectedId(
-        (previewMode === "weakest"
+        (loadedMode === "weakest"
           ? next.prompts[0]
           : next.prompts[next.prompts.length - 1]
         )?.id ?? null,

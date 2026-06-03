@@ -18,6 +18,7 @@ Date: 2026-06-03
 | Full local session scan | Current release CLI exported 155,484 prompts from 27,608 files in 1m45s | PASS |
 | Frequency views | `ScanStats.top_words`, `top_phrases`, `repeated_prompts`; UI Frequency panel | PASS |
 | Large-history UI safety | `ScanOptions.preview_limit`, `include_markdown`; UI requests latest 1,000 prompts and omits Markdown over IPC | PASS |
+| Scan warning visibility | `ScanResult.warnings`; UI renders backend scan warnings as a warning notice instead of hiding them | PASS |
 | Source-specific smoke scans | `ScanOptions.source_ids`; CLI `scan --source ID`; Antigravity DB source smoke scans 2 prompts without full-history scan | PASS |
 | Numeric option safety | invalid `--limit`, `--preview-limit`, and repair `--count` exit non-zero instead of silently removing/defaulting caps | PASS |
 | Required option value safety | missing values for `--source`, `--output`, and `--preview-sort` exit non-zero instead of widening/defaulting scope | PASS |
@@ -89,6 +90,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 
 - `npm run build`: PASS, Vite production build completed.
 - `npm run check`: PASS, Vite production build completed, 24 library tests plus 13 CLI tests passed, and strict clippy passed.
+- UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
 - `cargo test`: PASS, 24 library tests plus 13 CLI tests passed.
 - CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty and flag-like prompt rejection, numeric argument validation, required value validation, repair count cap documentation, and sources extra-arg rejection.

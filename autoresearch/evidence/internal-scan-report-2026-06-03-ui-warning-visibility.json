@@ -1,0 +1,44 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "915c089",
+  "code_commit": "c96108f",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src/App.tsx",
+      "observed": "The UI displayed scan output and preview counts but did not render ScanResult.warnings, so configured-limit warnings were hidden from users."
+    }
+  ],
+  "selected_candidate": {
+    "name": "UI scan warning visibility",
+    "reason": "Backend warnings are actionable status for limited scans and partial source reads, so the frontend should surface them.",
+    "success_metric": "App renders result.warnings with the existing notice pattern and full project check passes."
+  },
+  "change": {
+    "summary": "Added a warning notice below the scan output notice and styled it as a warning variant.",
+    "files_changed": [
+      "src/App.tsx",
+      "src/App.css"
+    ]
+  },
+  "verification": [
+    {
+      "command": "rg -n \"notice warning|result\\.warnings|warnings\\.join\" src/App.tsx src/App.css",
+      "result": "PASS: warning rendering and styling are present."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: Vite build, 24 library tests, 13 CLI tests, and strict clippy passed."
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS: no whitespace errors before commit."
+    }
+  ],
+  "safety_controls": [
+    "Used the existing notice layout instead of adding a new visual pattern.",
+    "No backend behavior changed.",
+    "Full project check passed after the frontend change."
+  ]
+}

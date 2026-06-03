@@ -1,0 +1,22 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "c84b0ce",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "README.md",
+      "observed": "README described repair as --count N while the current CLI requires a positive count and caps repair batches at 10."
+    }
+  ],
+  "selected_candidate": {
+    "name": "README repair count precision",
+    "reason": "Keep README wording aligned with CLI validation and docs/CLI.md.",
+    "success_metric": "README uses --count N>0 and still mentions the cap."
+  },
+  "safety_controls": [
+    "Only README.md and autoresearch evidence files are changed.",
+    "docs/CLI.md and README.md were searched for repair count wording.",
+    "git diff --check was rerun."
+  ]
+}

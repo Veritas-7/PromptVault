@@ -423,7 +423,7 @@ fn collect_prompt_arg(args: Vec<String>) -> Result<String, Box<dyn std::error::E
         let mut prompt = None;
         while let Some(arg) = iter.next() {
             match arg.as_str() {
-                "--prompt" => prompt = iter.next(),
+                "--prompt" => prompt = Some(parse_required_arg(iter.next(), "--prompt")?),
                 other => return Err(format!("unknown improve argument: {other}").into()),
             }
         }
@@ -569,6 +569,7 @@ mod tests {
     fn collect_prompt_arg_rejects_empty_prompt_flag() {
         assert!(collect_prompt_arg(vec!["--prompt".to_string(), "".to_string()]).is_err());
         assert!(collect_prompt_arg(vec!["--prompt".to_string(), "  ".to_string()]).is_err());
+        assert!(collect_prompt_arg(vec!["--prompt".to_string(), "--bogus".to_string()]).is_err());
         assert_eq!(
             collect_prompt_arg(vec!["--prompt".to_string(), "make better".to_string()])
                 .expect("non-empty prompt"),

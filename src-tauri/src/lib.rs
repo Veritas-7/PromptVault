@@ -14,6 +14,7 @@ use walkdir::WalkDir;
 const APP_DIR_NAME: &str = "PromptVault";
 const SECRET_ENV_PATH: &str = "/Users/wj/Ai/System/70_Governance/🔐 Secrets/secrets.env";
 const DEFAULT_GLM_CHAT_ENDPOINT: &str = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
+const DEFAULT_GLM_MODEL: &str = "glm-4.6";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptRecord {
@@ -440,10 +441,7 @@ pub async fn improve_prompt_inner(
             .cloned()
             .unwrap_or_else(|| DEFAULT_GLM_CHAT_ENDPOINT.to_string()),
     );
-    let model = env
-        .get("GLM_CODING_MODEL")
-        .cloned()
-        .unwrap_or_else(|| "glm-4.6".to_string());
+    let model = glm_model_from_env(&env);
 
     if let Some(api_key) = key {
         let system = "You improve developer prompts. Return concise Korean guidance. Preserve user intent, make scope, context, constraints, success criteria, and verification explicit. Do not add unsupported facts.";
@@ -1921,6 +1919,10 @@ fn glm_api_key_from_env(env: &HashMap<String, String>) -> Option<String> {
     non_empty_env_value(env, "GLM_API_KEY").or_else(|| non_empty_env_value(env, "GLM_API_KEY_2"))
 }
 
+fn glm_model_from_env(env: &HashMap<String, String>) -> String {
+    non_empty_env_value(env, "GLM_CODING_MODEL").unwrap_or_else(|| DEFAULT_GLM_MODEL.to_string())
+}
+
 fn normalize_chat_endpoint(endpoint: &str) -> String {
     let trimmed = endpoint.trim().trim_end_matches('/');
     if trimmed.is_empty() {
@@ -2012,6 +2014,14 @@ mod tests {
         env.insert("GLM_API_KEY_2".to_string(), "secondary-key".to_string());
 
         assert_eq!(glm_api_key_from_env(&env).as_deref(), Some("secondary-key"));
+    }
+
+    #[test]
+    fn glm_model_selection_ignores_blank_model() {
+        let mut env = HashMap::new();
+        env.insert("GLM_CODING_MODEL".to_string(), "   ".to_string());
+
+        assert_eq!(glm_model_from_env(&env), "glm-4.6");
     }
 
     #[tokio::test]

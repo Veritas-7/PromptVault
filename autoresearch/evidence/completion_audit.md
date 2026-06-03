@@ -9,6 +9,7 @@ Date: 2026-06-03
 | Tauri + TypeScript web app | `src/App.tsx`, `src/App.css`, `src-tauri/src/lib.rs`, `src-tauri/tauri.conf.json` | PASS |
 | Source folder under `10_Projects` | `/Users/wj/Ai/System/10_Projects/PromptVault` | PASS |
 | Own source repo boundary | Nested `.git` initialized in PromptVault | PASS |
+| Private GitHub repo 1:1 | `https://github.com/Veritas-7/PromptVault`, verified private with `gh repo view` | PASS |
 | Find Claude Code, Antigravity, Codex session stores | `docs/SOURCE_DISCOVERY.md`; CLI `sources --json` returned all configured roots | PASS |
 | Extract only user prompts | Parsers filter user-role/user-input records; Codex injected `AGENTS.md` and `<environment_context>` blocks are stripped | PASS |
 | Single Markdown export | `/Users/wj/Documents/PromptVault/promptvault-export-2026-06-03-152155.md` | PASS |
@@ -45,6 +46,7 @@ VITE_PORT=5174 VITE_HMR_PORT=5175 npm run dev
 - Full release scan: PASS, 155,473 prompts from 27,599 files, output `352M`, UTF-8 Markdown text.
 - Tauri production build: PASS, produced `src-tauri/target/release/bundle/macos/promptvault.app` and `src-tauri/target/release/bundle/dmg/promptvault_0.1.0_aarch64.dmg`.
 - Dev server smoke: PASS, `http://localhost:5174/` returned HTTP 200. Existing CareVault server occupied default port 1420, so PromptVault was started with `VITE_PORT=5174`.
+- GitHub remote: PASS, `origin/main` pushed to private repo `Veritas-7/PromptVault`.
 - GLM improve smoke: fallback path PASS; live GLM returned `429 Too Many Requests`, then local rules returned a recommendation.
 
 ## Residual Risks

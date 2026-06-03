@@ -170,7 +170,7 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
         return Err("output path cannot be used when markdown export is disabled".into());
     }
     let mut warnings = Vec::new();
-    let preview_sort = PreviewSort::from_option(options.preview_sort.as_deref(), &mut warnings);
+    let preview_sort = PreviewSort::from_option(options.preview_sort.as_deref())?;
     let mut prompts = Vec::new();
     let mut summaries = Vec::new();
     let (sources, mut source_warnings) = selected_source_specs(options.source_ids.as_deref());
@@ -281,18 +281,16 @@ enum PreviewSort {
 }
 
 impl PreviewSort {
-    fn from_option(value: Option<&str>, warnings: &mut Vec<String>) -> Self {
+    fn from_option(value: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
         match value.map(str::trim).filter(|value| !value.is_empty()) {
-            None => Self::Latest,
-            Some("latest") => Self::Latest,
-            Some("quality_asc" | "quality-asc" | "weakest") => Self::QualityAsc,
-            Some("quality_desc" | "quality-desc" | "strongest") => Self::QualityDesc,
-            Some(other) => {
-                warnings.push(format!(
-                    "Unknown preview sort requested: {other}; used latest."
-                ));
-                Self::Latest
-            }
+            None => Ok(Self::Latest),
+            Some("latest") => Ok(Self::Latest),
+            Some("quality_asc" | "quality-asc" | "weakest") => Ok(Self::QualityAsc),
+            Some("quality_desc" | "quality-desc" | "strongest") => Ok(Self::QualityDesc),
+            Some(other) => Err(format!(
+                "preview sort must be one of latest, quality-asc, quality-desc; got {other}"
+            )
+            .into()),
         }
     }
 
@@ -1981,6 +1979,22 @@ mod tests {
         assert!(err
             .to_string()
             .contains("output path cannot be used when markdown export is disabled"));
+    }
+
+    #[test]
+    fn run_scan_rejects_unknown_preview_sort() {
+        let err = run_scan(ScanOptions {
+            preview_sort: Some("nonsense".to_string()),
+            include_markdown: Some(false),
+            write_markdown: Some(false),
+            source_ids: Some(vec!["missing-source".to_string()]),
+            ..Default::default()
+        })
+        .expect_err("unknown preview sort should fail closed");
+
+        assert!(err
+            .to_string()
+            .contains("preview sort must be one of latest, quality-asc, quality-desc"));
     }
 
     #[test]

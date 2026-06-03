@@ -1,0 +1,28 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "fb2d4be",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "run_scan",
+      "observed": "CLI rejected unknown source ids, but run_scan accepted source_ids: Some([\"missing-source\"]) and returned an empty successful scan with a warning."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib run_scan_rejects_unknown_source_ids",
+    "result": "FAILED before implementation because run_scan returned Ok with warnings instead of an error."
+  },
+  "selected_candidate": {
+    "name": "API source id validation",
+    "reason": "Align the run_scan API boundary with CLI source id validation.",
+    "success_metric": "run_scan returns an error for unknown source ids, the existing selection helper behavior remains covered, and full local checks still pass."
+  },
+  "safety_controls": [
+    "The change is limited to src-tauri/src/lib.rs.",
+    "The new guard runs before source traversal.",
+    "Unknown id ordering is stable through BTreeSet collection.",
+    "Focused API, helper, and CLI source-id tests were rerun.",
+    "npm run check was rerun after the change."
+  ]
+}

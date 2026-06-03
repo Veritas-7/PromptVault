@@ -1,0 +1,28 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "4f268a0",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "run_scan",
+      "observed": "API output_path: Some(\"  \") was not validated before other scan option checks, while the CLI rejects empty --output values."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib run_scan_rejects_empty_output_path",
+    "result": "FAILED before implementation because run_scan did not return the expected empty-output-path error."
+  },
+  "selected_candidate": {
+    "name": "API empty output path validation",
+    "reason": "Align run_scan output path validation with CLI required-value safety and avoid blank path filesystem behavior.",
+    "success_metric": "Blank output_path values return an error before source validation, export conflict validation remains green, and full local checks still pass."
+  },
+  "safety_controls": [
+    "The change is limited to src-tauri/src/lib.rs.",
+    "The new guard runs before export conflict and source validation.",
+    "Focused API output path tests were rerun.",
+    "Focused CLI required-value parser test was rerun.",
+    "npm run check was rerun after the change."
+  ]
+}

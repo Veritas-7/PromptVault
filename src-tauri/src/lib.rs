@@ -1905,10 +1905,12 @@ fn default_markdown_path() -> PathBuf {
 
 fn local_improvement(prompt: &str, context: Option<&str>, warnings: Vec<String>) -> ImproveResult {
     let mut revised = String::new();
+    let redacted_prompt = redact_sensitive_text(prompt);
+    let goal = first_sentence(&redacted_prompt);
     revised.push_str("목표:\n");
     revised.push_str("- ");
     revised.push_str(
-        first_sentence(prompt)
+        goal
             .as_deref()
             .unwrap_or("해결하려는 작업을 명확히 수행한다."),
     );
@@ -2064,6 +2066,23 @@ mod tests {
             .quality_delta
             .resolved_gaps
             .contains(&"verification".to_string()));
+    }
+
+    #[test]
+    fn local_improvement_redacts_risky_original_sentence() {
+        let synthetic_token = format!("sk-{}", "A".repeat(60));
+        let result = local_improvement(
+            &format!("Fix parser handling for {synthetic_token}"),
+            None,
+            Vec::new(),
+        );
+
+        assert!(!result.revised_prompt.contains(&synthetic_token));
+        assert!(
+            result
+                .revised_prompt
+                .contains("[REDACTED_LONG_BASE64_LIKE_TOKEN]")
+        );
     }
 
     #[test]

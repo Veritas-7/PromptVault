@@ -26,7 +26,7 @@ Date: 2026-06-03
 | Numeric option safety | invalid `--limit`, `--preview-limit`, and repair `--count` exit non-zero instead of silently removing/defaulting caps | PASS |
 | Required option value safety | missing values and empty source ID components exit non-zero instead of widening/defaulting scope | PASS |
 | No-export stats scan | `ScanOptions.write_markdown`; CLI `scan --no-export`; full no-export scan writes no Markdown file | PASS |
-| Weak-first repair queue | `ScanOptions.preview_sort`; CLI `--weakest-first`; UI `Weakest` mode; bounded preview can return lowest-quality prompts first | PASS |
+| Weak-first repair queue | `ScanOptions.preview_sort`; CLI `--weakest-first`; UI `Weakest` mode; bounded preview can return lowest-quality prompts first; loaded UI prompt order follows the backend preview sort until a new scan runs | PASS |
 | Source-level quality triage | `SourceSummary.average_quality`, `weak_prompt_count`; CLI JSON, Markdown source table, and UI source panel expose source quality | PASS |
 | Explicit stdout prompt preview | CLI `--include-prompts`; prompt bodies remain omitted by default and opt-in stdout previews are capped at 25 records | PASS |
 | Prompt quality scoring | `PromptQuality`, `ScanStats.average_quality`, `weak_prompt_count`, `top_quality_gaps`; UI quality metrics and suggestions | PASS |
@@ -36,7 +36,7 @@ Date: 2026-06-03
 | Deterministic local improve | `ImproveRequest.force_local`; CLI `improve --local`; bypasses GLM and returns local-rules without warnings | PASS |
 | Deterministic batch repair | CLI `repair --json`; weakest-first scan plus local-rules recommendations; no Markdown export; capped at 10 repairs | PASS |
 | Rust lint gate | `cargo clippy --all-targets --all-features -- -D warnings` passes with no warnings | PASS |
-| One-command local quality gate | `npm run check` runs frontend build, Rust tests, and strict clippy | PASS |
+| One-command local quality gate | `npm run check` runs UI helper tests, frontend build, Rust tests, and strict clippy | PASS |
 | GLM from `secrets.env` as fallback-capable AI path | Reads `GLM_API_KEY`/`GLM_API_KEY_2`, `GLM_CODING_ENDPOINT`, `GLM_CODING_MODEL`; ignores blank API key values; defaults blank model values; normalizes base/blank endpoints; falls back locally on 429 or invalid empty `revised_prompt` content | PASS |
 | Codex SDK considered | `research/external_sources.json` and strategy doc cite official Codex SDK README and defer direct SDK invocation for safety | PASS_WITH_NOTE |
 | CLI-Anything-inspired strong CLI | `promptvault-cli` supports `sources`, `scan`, `improve`, and `--json` summaries | PASS |
@@ -48,6 +48,7 @@ Date: 2026-06-03
 
 ```bash
 npm run build
+npm run test:ui
 npm run check
 cargo check
 cargo test
@@ -93,7 +94,8 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run check`: PASS, Vite production build completed, 31 library tests plus 13 CLI tests passed, and strict clippy passed.
+- `npm run test:ui`: PASS, 3 Node UI helper tests passed.
+- `npm run check`: PASS, UI helper tests passed, Vite production build completed, 31 library tests plus 13 CLI tests passed, and strict clippy passed.
 - UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
 - `cargo test`: PASS, 31 library tests plus 13 CLI tests passed.
@@ -110,6 +112,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - No-export full scan: PASS, current release CLI scanned 155,484 prompts from 27,608 files in 1m31s with `output_path=null`, `markdown_written=false`, `markdown_included=false`, `warnings=[]`, and no `/tmp/promptvault-no-export-full.md` file created.
 - Preview-payload scan: PASS, default CLI JSON returned `returned_prompt_count=0`, bounded preview returned `returned_prompt_count=5`.
 - Weak-first preview smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --no-export --json` returned `preview_sort=quality_asc`, `returned_prompt_count=5`, `markdown_written=false`, and `output_path=null`.
+- UI preview-mode consistency test: PASS, loaded prompt display mode follows `ScanResult.preview_sort` while scan requests still follow the pending Latest/Weakest control.
 - Source-level quality smoke: PASS, `scan --limit 100 --preview-limit 0 --no-export --json` returned first source `average_quality=71.6`, `weak_prompt_count=16`, and all source summaries included both fields.
 - Markdown source-quality contract test: PASS, source coverage export includes `Avg Quality` and `Weak` columns plus source row quality values.
 - Explicit prompt stdout smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json` returned `prompt_stdout_count=5`; first prompt quality was `36 · weak` with gaps `specific_goal`, `context`, `constraints`, `verification`, `output_format`.

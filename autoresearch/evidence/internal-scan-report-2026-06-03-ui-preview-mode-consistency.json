@@ -1,0 +1,41 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "e5c8499",
+  "code_commit": "1baaa07",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src/App.tsx",
+      "observed": "The prompt list sorted from the current PreviewMode control even after a scan result was loaded, so switching Latest/Weakest after a scan could display a different order from the backend preview_sort summary."
+    }
+  ],
+  "red_test": {
+    "command": "node --experimental-transform-types --test tests/previewMode.test.ts",
+    "result": "FAILED before implementation because previewMode.ts did not exist."
+  },
+  "change": {
+    "summary": "Added preview-mode helpers, made loaded prompt display mode follow ScanResult.preview_sort, kept scan requests tied to the pending control, and added the helper test to npm run check.",
+    "files": [
+      "src/previewMode.ts",
+      "src/App.tsx",
+      "tests/previewMode.test.ts",
+      "package.json"
+    ]
+  },
+  "verification": [
+    {
+      "command": "npm run test:ui",
+      "result": "PASS: 3 Node UI helper tests passed."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: UI helper tests, Vite build, 31 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "No new npm dependency was added.",
+    "The test file stays outside src so the app TypeScript build does not require Node type declarations.",
+    "The pending Latest/Weakest control still controls the next scan request."
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "bbadc4a",
+  "code_commit": "b032d65",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src-tauri/src/lib.rs",
+      "observed": "improve_prompt_inner selected GLM_API_KEY before checking whether the value was blank, so a blank primary key prevented fallback to GLM_API_KEY_2."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib glm_api_key_selection_ignores_blank_primary_key",
+    "result": "FAILED before implementation because glm_api_key_from_env was missing and the old inline lookup had no blank-value filtering path."
+  },
+  "change": {
+    "summary": "Added non-empty environment value selection and routed GLM API key lookup through a helper that ignores blank GLM_API_KEY before trying GLM_API_KEY_2.",
+    "test_added": "glm_api_key_selection_ignores_blank_primary_key"
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib glm_api_key_selection_ignores_blank_primary_key",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib normalizes_glm_base_endpoint",
+      "result": "PASS"
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: Vite build, 30 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "No live GLM call was required for API key selection coverage.",
+    "Existing GLM_API_KEY priority is preserved when the primary value is non-empty.",
+    "Blank primary key values now fail safe to a secondary key or the existing local fallback path."
+  ]
+}

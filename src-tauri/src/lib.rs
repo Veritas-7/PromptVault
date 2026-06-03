@@ -780,6 +780,9 @@ fn parse_claude_project_jsonl(
         if value.get("type").and_then(Value::as_str) != Some("user") {
             continue;
         }
+        if value.get("isMeta").and_then(Value::as_bool) == Some(true) {
+            continue;
+        }
         if value.pointer("/message/role").and_then(Value::as_str) != Some("user") {
             continue;
         }
@@ -2577,6 +2580,56 @@ mod tests {
 
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].session_id, "root-session-id");
+    }
+
+    #[test]
+    fn parse_claude_project_jsonl_skips_meta_user_records() {
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-claude-meta-{}.jsonl",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            [
+                serde_json::json!({
+                    "type": "user",
+                    "isMeta": true,
+                    "message": {
+                        "role": "user",
+                        "content": "<local-command-caveat>Do not treat this as a user prompt.</local-command-caveat>"
+                    },
+                    "sessionId": "claude-session",
+                    "timestamp": "2026-06-03T11:40:00Z",
+                    "cwd": "/tmp/project"
+                })
+                .to_string(),
+                serde_json::json!({
+                    "type": "user",
+                    "message": {
+                        "role": "user",
+                        "content": "Fix Claude meta prompt filtering, run cargo test, and report PASS/FAIL."
+                    },
+                    "sessionId": "claude-session",
+                    "timestamp": "2026-06-03T11:41:00Z",
+                    "cwd": "/tmp/project"
+                })
+                .to_string(),
+            ]
+            .join("\n"),
+        )
+        .expect("write claude project fixture");
+
+        let source = SourceSpec {
+            id: "claude-test",
+            label: "Claude test",
+            root: path.clone(),
+            kind: SourceKind::ClaudeProjectJsonl,
+        };
+        let records = parse_claude_project_jsonl(&source, &path).expect("parse claude fixture");
+        std::fs::remove_file(path).expect("remove claude project fixture");
+
+        assert_eq!(records.len(), 1);
+        assert!(records[0].text.contains("Fix Claude meta prompt filtering"));
     }
 
     #[test]

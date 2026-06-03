@@ -1,0 +1,42 @@
+{
+  "schema": "promptvault-autoresearch-internal-scan-v1",
+  "generated_at": "2026-06-03T21:30:32+0900",
+  "iteration": "local-recommendation-redaction",
+  "code_commit": "ee07e5142e05714213577f0252d1ab21e5717322",
+  "status": "pass",
+  "candidate": {
+    "problem": "local_improvement copied the first sentence of the original prompt into revised_prompt.",
+    "risk": "Repair JSON and local improve output could still echo risky prompt text through the deterministic recommendation, even when the prompt record itself was redacted.",
+    "decision": "Derive the local recommendation goal line from redacted prompt text."
+  },
+  "red": {
+    "command": "cargo test local_improvement_redacts_risky_original_sentence",
+    "status": "failed_as_expected",
+    "evidence": "The new test failed because revised_prompt still contained the raw synthetic token."
+  },
+  "green": {
+    "command": "cargo test local_improvement_redacts_risky_original_sentence",
+    "status": "passed",
+    "evidence": "The focused test passed after local_improvement used redacted prompt text for the copied goal line."
+  },
+  "full_verification": {
+    "command": "npm run check",
+    "status": "passed",
+    "evidence": "10 UI helper tests passed, Vite build passed, 42 Rust library tests passed, 15 CLI tests passed, doc-tests passed, and strict clippy passed."
+  },
+  "staged_checks": {
+    "commands": [
+      "git diff --cached --check",
+      "gitleaks protect --staged --verbose"
+    ],
+    "status": "passed",
+    "evidence": "gitleaks scanned staged code and found no leaks."
+  },
+  "changed_paths": [
+    "src-tauri/src/lib.rs",
+    "autoresearch/evidence/completion_audit.md",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-local-recommendation-redaction.json",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-local-recommendation-redaction.md",
+    "autoresearch/evidence/iteration-2026-06-03-local-recommendation-redaction.md"
+  ]
+}

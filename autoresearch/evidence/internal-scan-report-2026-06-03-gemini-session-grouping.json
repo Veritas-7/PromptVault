@@ -1,0 +1,39 @@
+{
+  "schema": "promptvault-autoresearch-internal-scan-v1",
+  "generated_at": "2026-06-03T20:40:22+0900",
+  "iteration": "gemini-session-grouping",
+  "code_commit": "b517991ef2f27b28f39efa5e89f156340f316191",
+  "status": "pass",
+  "local_evidence": {
+    "source_root": "/Users/wj/.gemini/tmp/wj/chats",
+    "observed_shape": "Gemini tmp chat files contain a top-level sessionId and per-message id fields.",
+    "example": "session-2026-04-21T09-18-cc5794a8.json starts with sessionId and messages[0].id."
+  },
+  "candidate": {
+    "problem": "parse_gemini_tmp_chat passed each message object directly into push_record, so extract_session_id selected the per-message id as session_id.",
+    "risk": "Gemini prompt records were grouped by message ID instead of chat session, weakening repeated-prompt and session-level analysis.",
+    "decision": "Preserve the top-level sessionId in the message metadata passed to push_record while leaving message timestamps and text extraction unchanged."
+  },
+  "red": {
+    "command": "cargo test parse_gemini_tmp_chat_uses_top_level_session_id",
+    "status": "failed_as_expected",
+    "evidence": "The new test failed with left message-id and right root-session-id."
+  },
+  "green": {
+    "command": "cargo test parse_gemini_tmp_chat_uses_top_level_session_id",
+    "status": "passed",
+    "evidence": "The focused test passed after the parser injected top-level sessionId into per-message metadata."
+  },
+  "full_verification": {
+    "command": "npm run check",
+    "status": "passed",
+    "evidence": "10 UI helper tests passed, Vite build passed, 34 Rust library tests passed, 13 CLI tests passed, doc-tests passed, and strict clippy passed."
+  },
+  "changed_paths": [
+    "src-tauri/src/lib.rs",
+    "autoresearch/evidence/completion_audit.md",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-gemini-session-grouping.json",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-gemini-session-grouping.md",
+    "autoresearch/evidence/iteration-2026-06-03-gemini-session-grouping.md"
+  ]
+}

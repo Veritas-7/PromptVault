@@ -1178,7 +1178,9 @@ fn text_from_value(value: Option<&Value>) -> String {
         Some(Value::Array(items)) => items
             .iter()
             .filter_map(|item| {
-                if let Some(text) = item.as_str() {
+                if item.get("type").and_then(Value::as_str) == Some("tool_result") {
+                    None
+                } else if let Some(text) = item.as_str() {
                     Some(text.to_string())
                 } else if let Some(text) = item.get("text").and_then(Value::as_str) {
                     Some(text.to_string())
@@ -2630,6 +2632,66 @@ mod tests {
 
         assert_eq!(records.len(), 1);
         assert!(records[0].text.contains("Fix Claude meta prompt filtering"));
+    }
+
+    #[test]
+    fn parse_claude_project_jsonl_skips_tool_result_blocks() {
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-claude-tool-result-{}.jsonl",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            [
+                serde_json::json!({
+                    "type": "user",
+                    "message": {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "call_test",
+                                "content": "Tool output should not be treated as a user prompt."
+                            }
+                        ]
+                    },
+                    "sessionId": "claude-session",
+                    "timestamp": "2026-06-03T11:42:00Z",
+                    "cwd": "/tmp/project"
+                })
+                .to_string(),
+                serde_json::json!({
+                    "type": "user",
+                    "message": {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Fix Claude tool result filtering, run cargo test, and report PASS/FAIL."
+                            }
+                        ]
+                    },
+                    "sessionId": "claude-session",
+                    "timestamp": "2026-06-03T11:43:00Z",
+                    "cwd": "/tmp/project"
+                })
+                .to_string(),
+            ]
+            .join("\n"),
+        )
+        .expect("write claude tool result fixture");
+
+        let source = SourceSpec {
+            id: "claude-test",
+            label: "Claude test",
+            root: path.clone(),
+            kind: SourceKind::ClaudeProjectJsonl,
+        };
+        let records = parse_claude_project_jsonl(&source, &path).expect("parse claude fixture");
+        std::fs::remove_file(path).expect("remove claude tool result fixture");
+
+        assert_eq!(records.len(), 1);
+        assert!(records[0].text.contains("Fix Claude tool result filtering"));
     }
 
     #[test]

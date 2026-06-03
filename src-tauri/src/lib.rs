@@ -159,6 +159,9 @@ async fn improve_prompt(request: ImproveRequest) -> Result<ImproveResult, String
 }
 
 pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("scan limit requires a positive integer".into());
+    }
     let limit = options.limit.unwrap_or(usize::MAX);
     let preview_limit = options.preview_limit;
     let include_markdown = options.include_markdown.unwrap_or(true);
@@ -1947,6 +1950,21 @@ mod tests {
             response_prompts(&prompts, None, PreviewSort::Latest).len(),
             3
         );
+    }
+
+    #[test]
+    fn run_scan_rejects_zero_limit() {
+        let err = run_scan(ScanOptions {
+            limit: Some(0),
+            include_markdown: Some(false),
+            write_markdown: Some(false),
+            ..Default::default()
+        })
+        .expect_err("zero scan limit should fail closed");
+
+        assert!(err
+            .to_string()
+            .contains("scan limit requires a positive integer"));
     }
 
     #[test]

@@ -1,0 +1,48 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "23459d9",
+  "code_commit": "a9e7273",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src-tauri/src/lib.rs",
+      "observed": "improve_prompt_inner used GLM_CODING_MODEL directly when present, so a blank configured model would be sent in the GLM request body instead of defaulting to glm-4.6."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib glm_model_selection_ignores_blank_model",
+    "result": "FAILED before implementation because glm_model_from_env was missing and the old inline lookup did not filter blank values."
+  },
+  "change": {
+    "summary": "Added DEFAULT_GLM_MODEL and routed model selection through a helper that ignores blank GLM_CODING_MODEL values.",
+    "test_added": "glm_model_selection_ignores_blank_model"
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib glm_model_selection_ignores_blank_model",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib glm_api_key_selection_ignores_blank_primary_key",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib normalizes_glm_base_endpoint",
+      "result": "PASS"
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: Vite build, 31 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "No live GLM call was required for model selection coverage.",
+    "Existing non-empty GLM_CODING_MODEL values are preserved.",
+    "Blank model values now fail safe to the documented default model."
+  ]
+}

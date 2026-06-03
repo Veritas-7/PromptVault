@@ -1,0 +1,44 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "2a22c22",
+  "code_commit": "bf29761",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src-tauri/src/lib.rs",
+      "observed": "A successful GLM JSON response with revised_prompt set to whitespace could return an empty AI recommendation with used_ai=true."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib glm_content_parser_rejects_empty_revised_prompt",
+    "result": "FAILED before implementation because glm_improvement_from_content did not exist and empty revised_prompt was not a distinct parser contract."
+  },
+  "change": {
+    "summary": "Extracted GLM content parsing into glm_improvement_from_content and reject JSON content with missing or empty revised_prompt so improve_prompt_inner falls back locally.",
+    "test_added": "glm_content_parser_rejects_empty_revised_prompt"
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib glm_content_parser_rejects_empty_revised_prompt",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib local_improvement_reports_quality_delta",
+      "result": "PASS"
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: Vite build, 28 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "No live GLM call was required for the parser regression test.",
+    "Non-JSON GLM text remains preserved when non-empty.",
+    "Invalid empty JSON recommendations now use the existing local fallback path."
+  ]
+}

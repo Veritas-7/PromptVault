@@ -1,0 +1,27 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "d8b7788",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "run_scan",
+      "observed": "CLI rejected --output with --no-export, but run_scan accepted output_path with write_markdown: false and returned a successful ScanResult with a warning."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib run_scan_rejects_output_path_when_export_disabled",
+    "result": "FAILED before implementation because run_scan returned Ok with output_path: None and warnings instead of an error."
+  },
+  "selected_candidate": {
+    "name": "API scan export conflict rejection",
+    "reason": "Align the run_scan API boundary with CLI export flag validation.",
+    "success_metric": "run_scan returns an error when output_path is provided while markdown export is disabled, and full local checks still pass."
+  },
+  "safety_controls": [
+    "The change is limited to src-tauri/src/lib.rs.",
+    "The new guard runs before source traversal and markdown rendering.",
+    "A focused unit test covers the API guard.",
+    "npm run check was rerun after the change."
+  ]
+}

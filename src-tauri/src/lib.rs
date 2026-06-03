@@ -1187,6 +1187,13 @@ fn text_from_value(value: Option<&Value>) -> String {
                     return text.to_string();
                 }
             }
+            if let Some(text) = map
+                .get("message")
+                .and_then(|message| message.get("content"))
+                .and_then(Value::as_str)
+            {
+                return text.to_string();
+            }
             String::new()
         }
         _ => String::new(),
@@ -2508,6 +2515,20 @@ mod tests {
         assert!(err
             .to_string()
             .contains("stream did not contain valid UTF-8"));
+    }
+
+    #[test]
+    fn text_from_value_extracts_nested_message_content_object() {
+        let value = serde_json::json!({
+            "message": {
+                "content": "Fix nested message prompt parsing, run cargo test, and report PASS/FAIL."
+            }
+        });
+
+        assert_eq!(
+            text_from_value(Some(&value)),
+            "Fix nested message prompt parsing, run cargo test, and report PASS/FAIL."
+        );
     }
 
     #[test]

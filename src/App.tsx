@@ -17,6 +17,24 @@ import type { ImproveResult, PromptRecord, ScanResult } from "./types";
 type ScanState = "idle" | "scanning" | "ready" | "failed";
 type PreviewMode = "latest" | "weakest";
 const PREVIEW_LIMIT = 1000;
+const MAX_SCAN_LIMIT = 100000;
+
+function parseLimitInput(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error("Limit must be a positive whole number.");
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > MAX_SCAN_LIMIT) {
+    throw new Error(`Limit must be between 1 and ${MAX_SCAN_LIMIT}.`);
+  }
+  return parsed;
+}
+
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 function App() {
   const [scanState, setScanState] = useState<ScanState>("idle");
@@ -51,11 +69,18 @@ function App() {
   }, [filteredPrompts, prompts, selectedId]);
 
   async function runScan() {
-    setScanState("scanning");
     setError(null);
     setImprovement(null);
+    let parsedLimit: number | undefined;
     try {
-      const parsedLimit = limit.trim() ? Number(limit) : undefined;
+      parsedLimit = parseLimitInput(limit);
+    } catch (err) {
+      setError(errorText(err));
+      setScanState("failed");
+      return;
+    }
+    setScanState("scanning");
+    try {
       const next = await invoke<ScanResult>("scan_prompts", {
         options: {
           limit: parsedLimit,
@@ -73,7 +98,7 @@ function App() {
       );
       setScanState("ready");
     } catch (err) {
-      setError(String(err));
+      setError(errorText(err));
       setScanState("failed");
     }
   }
@@ -91,7 +116,7 @@ function App() {
       });
       setImprovement(next);
     } catch (err) {
-      setError(String(err));
+      setError(errorText(err));
     } finally {
       setImproving(false);
     }
@@ -124,8 +149,8 @@ function App() {
           <label className="limit-control">
             <span>Limit</span>
             <input
-              min={100}
-              max={100000}
+              min={1}
+              max={MAX_SCAN_LIMIT}
               step={100}
               type="number"
               placeholder="All"

@@ -25,6 +25,7 @@ Date: 2026-06-03
 | Prompt quality scoring | `PromptQuality`, `ScanStats.average_quality`, `weak_prompt_count`, `top_quality_gaps`; UI quality metrics and suggestions | PASS |
 | Prompt improvement app | UI selected-prompt panel plus `improve_prompt` Tauri command | PASS |
 | Measurable improvement delta | `QualityDelta`; CLI/UI expose before score, after score, score delta, resolved gaps, and remaining gaps | PASS |
+| Improve empty input safety | CLI `improve` rejects empty `--prompt`, empty stdin, and no-arg stdin EOF with non-zero exit | PASS |
 | Deterministic local improve | `ImproveRequest.force_local`; CLI `improve --local`; bypasses GLM and returns local-rules without warnings | PASS |
 | Deterministic batch repair | CLI `repair --json`; weakest-first scan plus local-rules recommendations; no Markdown export; capped at 10 repairs | PASS |
 | Rust lint gate | `cargo clippy --all-targets --all-features -- -D warnings` passes with no warnings | PASS |
@@ -53,6 +54,9 @@ cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 0 --no-export --json > /tmp/promptvault-source-quality.json
 cargo run --quiet --bin promptvault-cli -- improve --json --prompt "make better"
+set +e; cargo run --quiet --bin promptvault-cli -- improve --json --prompt ""; test "$?" -ne 0; set -e
+set +e; printf "" | cargo run --quiet --bin promptvault-cli -- improve --json; test "$?" -ne 0; set -e
+set +e; cargo run --quiet --bin promptvault-cli -- improve --json; test "$?" -ne 0; set -e
 cargo run --quiet --bin promptvault-cli -- improve --local --json --prompt "make better"
 cargo run --quiet --bin promptvault-cli -- repair --json --limit 100 --count 3
 cargo run --quiet --bin promptvault-cli -- repair --json --limit 100 --count 99
@@ -71,10 +75,10 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run check`: PASS, Vite production build completed, 14 library tests plus 3 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, Vite production build completed, 14 library tests plus 4 CLI tests passed, and strict clippy passed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 14 library tests plus 3 CLI tests passed.
-- CLI unit tests: PASS, 3 CLI tests passed including explicit help command recognition.
+- `cargo test`: PASS, 14 library tests plus 4 CLI tests passed.
+- CLI unit tests: PASS, 4 CLI tests passed including explicit help command recognition and empty prompt rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
@@ -90,6 +94,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - Stdout cap smoke: PASS, `--preview-limit 30 --include-prompts` returned `returned_prompt_count=30`, `prompt_stdout_count=25`, `prompts_len=25`, and one cap warning.
 - Prompt quality smoke: PASS, 100-prompt smoke reported `average_quality=71.6`, `weak_prompt_count=16`, and top quality gaps `constraints`, `verification`, `output_format`, `action_verb`, `context`.
 - Improvement delta smoke: PASS, `improve --json --prompt "make better"` returned `quality_delta.score_delta=64`, `before.score=36`, `after.score=100`, and resolved gaps `specific_goal`, `context`, `constraints`, `verification`, `output_format`.
+- Empty improve smoke: PASS, empty `--prompt`, empty stdin, and no-arg stdin EOF all exited 1 with `promptvault-cli error: improve requires a non-empty prompt`.
 - Deterministic local improve smoke: PASS, `improve --local --json --prompt "make better"` returned `provider=local-rules`, `used_ai=false`, `warnings=[]`, and `quality_delta.score_delta=64`.
 - Batch repair smoke: PASS, `repair --json --limit 100 --count 3` returned `provider=local-rules`, `preview_sort=quality_asc`, `scanned_prompt_count=100`, `returned_prompt_count=3`, `repair_count=3`, `markdown_written=false`, `output_path=null`, and first repair prompt was `36 · weak` with `score_delta=64`.
 - Batch repair cap smoke: PASS, `repair --json --limit 100 --count 99` returned `returned_prompt_count=10`, `repair_count=10`, `markdown_written=false`, `output_path=null`, and one cap warning.

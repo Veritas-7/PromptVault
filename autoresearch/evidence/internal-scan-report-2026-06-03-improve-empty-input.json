@@ -1,0 +1,41 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "26519b2",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "command": "cargo run --quiet --bin promptvault-cli -- improve --json",
+      "exit_code": 0,
+      "stdout_first_line": "{",
+      "stderr": ""
+    },
+    {
+      "command": "printf '' | cargo run --quiet --bin promptvault-cli -- improve --json",
+      "exit_code": 0,
+      "stdout_first_line": "{",
+      "stderr": ""
+    },
+    {
+      "command": "cargo run --quiet --bin promptvault-cli -- improve --json --prompt ''",
+      "exit_code": 0,
+      "stdout_first_line": "{",
+      "stderr": ""
+    }
+  ],
+  "observed_weaknesses": [
+    "CLI improve accepted an empty --prompt value.",
+    "CLI improve accepted empty stdin.",
+    "A no-prompt improve request looked successful to automation."
+  ],
+  "selected_candidate": {
+    "name": "improve empty input fail-closed",
+    "reason": "Make prompt improvement automation reject missing prompt bodies instead of returning a synthetic recommendation.",
+    "success_metric": "empty --prompt and empty stdin exit non-zero; non-empty local improve still exits 0."
+  },
+  "safety_controls": [
+    "Non-empty prompt behavior was smoke-tested after the change.",
+    "The change is limited to CLI argument validation.",
+    "npm run check was rerun after the change."
+  ]
+}

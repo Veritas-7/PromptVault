@@ -628,6 +628,7 @@ fn collect_from_source(
     }
 
     let mut prompts = Vec::new();
+    let mut seen_keys = HashSet::new();
     for file in matching_source_files(&source.root, source.kind) {
         if prompts.len() >= remaining {
             break;
@@ -649,7 +650,17 @@ fn collect_from_source(
         };
 
         match found {
-            Ok(mut records) => prompts.append(&mut records),
+            Ok(records) => {
+                for record in records {
+                    let key = (record.source.clone(), record.hash.clone());
+                    if seen_keys.insert(key) {
+                        prompts.push(record);
+                    }
+                    if prompts.len() >= remaining {
+                        break;
+                    }
+                }
+            }
             Err(err) => summary
                 .notes
                 .push(format!("Skipped {}: {}", file.display(), err)),
@@ -2157,6 +2168,58 @@ mod tests {
         assert_eq!(summary.files_seen, 1);
 
         std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn collect_from_source_applies_limit_after_deduping_prompts() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-dedup-limit-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+
+        let duplicate = r#"{"type":"response_item","payload":{"role":"user","content":[{"text":"Fix duplicate prompt handling, run cargo test, and report markdown output."}]}}"#;
+        std::fs::write(
+            root.join("001.jsonl"),
+            format!("{duplicate}\n{duplicate}\n"),
+        )
+        .expect("write duplicate prompt file");
+        std::fs::write(
+            root.join("002.jsonl"),
+            r#"{"type":"response_item","payload":{"role":"user","content":[{"text":"Fix the second unique prompt path, run cargo test, and report markdown output."}]}}"#,
+        )
+        .expect("write unique prompt file");
+
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+        let mut summary = SourceSummary {
+            id: source.id.to_string(),
+            label: source.label.to_string(),
+            root_path: source.root.display().to_string(),
+            files_seen: 0,
+            prompts_found: 0,
+            average_quality: 0.0,
+            weak_prompt_count: 0,
+            status: "ok".to_string(),
+            notes: Vec::new(),
+        };
+
+        let prompts = collect_from_source(&source, &mut summary, 2).expect("collect source");
+        let files_seen = summary.files_seen;
+        std::fs::remove_dir_all(root).expect("remove temp root");
+
+        assert_eq!(prompts.len(), 2);
+        assert!(prompts
+            .iter()
+            .any(|prompt| prompt.text.contains("second unique prompt path")));
+        assert_eq!(files_seen, 2);
     }
 
     #[test]

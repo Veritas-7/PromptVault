@@ -71,27 +71,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         limit = Some(parse_usize_arg(iter.next(), "--limit")?);
                     }
                     "--output" => {
-                        output_path = iter.next();
+                        output_path = Some(parse_required_arg(iter.next(), "--output")?);
                     }
                     "--preview-limit" => {
                         preview_limit = Some(parse_usize_arg(iter.next(), "--preview-limit")?);
                     }
                     "--preview-sort" => {
-                        preview_sort = iter.next();
+                        preview_sort = Some(parse_required_arg(iter.next(), "--preview-sort")?);
                     }
                     "--weakest-first" => {
                         preview_sort = Some("quality-asc".to_string());
                     }
                     "--source" => {
-                        if let Some(value) = iter.next() {
-                            source_ids.extend(
-                                value
-                                    .split(',')
-                                    .map(str::trim)
-                                    .filter(|id| !id.is_empty())
-                                    .map(str::to_string),
-                            );
-                        }
+                        source_ids.extend(parse_source_ids_arg(iter.next())?);
                     }
                     other => {
                         return Err(format!("unknown scan argument: {other}").into());
@@ -206,15 +198,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         limit = Some(parse_usize_arg(iter.next(), "--limit")?);
                     }
                     "--source" => {
-                        if let Some(value) = iter.next() {
-                            source_ids.extend(
-                                value
-                                    .split(',')
-                                    .map(str::trim)
-                                    .filter(|id| !id.is_empty())
-                                    .map(str::to_string),
-                            );
-                        }
+                        source_ids.extend(parse_source_ids_arg(iter.next())?);
                     }
                     other => return Err(format!("unknown repair argument: {other}").into()),
                 }
@@ -321,6 +305,31 @@ fn parse_usize_arg(value: Option<String>, flag: &str) -> Result<usize, Box<dyn s
     value
         .parse::<usize>()
         .map_err(|_| format!("{flag} requires a non-negative integer").into())
+}
+
+fn parse_required_arg(
+    value: Option<String>,
+    flag: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let value = value.ok_or_else(|| format!("{flag} requires a value"))?;
+    if value.trim().is_empty() || value.starts_with("--") {
+        return Err(format!("{flag} requires a value").into());
+    }
+    Ok(value)
+}
+
+fn parse_source_ids_arg(value: Option<String>) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let value = parse_required_arg(value, "--source")?;
+    let ids = value
+        .split(',')
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if ids.is_empty() {
+        return Err("--source requires at least one source id".into());
+    }
+    Ok(ids)
 }
 
 fn collect_prompt_arg(args: Vec<String>) -> Result<String, Box<dyn std::error::Error>> {
@@ -473,5 +482,27 @@ mod tests {
         );
         assert!(parse_usize_arg(None, "--limit").is_err());
         assert!(parse_usize_arg(Some("nope".to_string()), "--limit").is_err());
+    }
+
+    #[test]
+    fn parse_required_args_reject_missing_flag_like_or_empty_values() {
+        assert_eq!(
+            parse_required_arg(Some("/tmp/out.md".to_string()), "--output").expect("path"),
+            "/tmp/out.md"
+        );
+        assert!(parse_required_arg(None, "--output").is_err());
+        assert!(parse_required_arg(Some("".to_string()), "--output").is_err());
+        assert!(parse_required_arg(Some("--limit".to_string()), "--output").is_err());
+    }
+
+    #[test]
+    fn parse_source_ids_rejects_empty_values() {
+        assert_eq!(
+            parse_source_ids_arg(Some("codex, claude-projects".to_string())).expect("source ids"),
+            vec!["codex".to_string(), "claude-projects".to_string()]
+        );
+        assert!(parse_source_ids_arg(None).is_err());
+        assert!(parse_source_ids_arg(Some(",".to_string())).is_err());
+        assert!(parse_source_ids_arg(Some("--limit".to_string())).is_err());
     }
 }

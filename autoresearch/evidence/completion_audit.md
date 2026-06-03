@@ -87,14 +87,14 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run check`: PASS, Vite production build completed, 22 library tests plus 13 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, Vite production build completed, 23 library tests plus 13 CLI tests passed, and strict clippy passed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 22 library tests plus 13 CLI tests passed.
+- `cargo test`: PASS, 23 library tests plus 13 CLI tests passed.
 - CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty prompt rejection, numeric argument validation, required value validation, repair count cap documentation, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Sources extra-arg smoke: PASS, `sources --bogus` and `sources --json --bogus` both exited 1 with `unknown sources argument: --bogus`; valid `sources --json` still returned 11 roots.
-- Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
+- Smoke scan: PASS, 100 prompts from 92 visited files, no injected-context markers, with the configured-limit warning.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
 - Unknown-source smoke: PASS, `--source missing-source` exited 1 with `unknown source id: missing-source`.
 - Numeric option smoke: PASS, invalid `--limit`, `--preview-limit`, and repair `--count` each exited 1 with the expected non-negative integer error; valid `--limit 10 --preview-limit 0` scan exited 0.

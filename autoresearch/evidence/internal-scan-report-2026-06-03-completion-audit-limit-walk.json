@@ -1,0 +1,26 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "e4f8b3a",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "autoresearch/evidence/completion_audit.md",
+      "observed": "The aggregate audit still reported the old limited-scan file count and 22 library tests after the lazy file-walk improvement."
+    }
+  ],
+  "current_smoke": {
+    "command": "cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 0 --no-export --json",
+    "result": "Returned total_prompts=100, total_files=92, source codex files_seen=92, and the configured-limit warning."
+  },
+  "selected_candidate": {
+    "name": "Completion audit limit-walk refresh",
+    "reason": "Keep aggregate evidence aligned with the latest scan limit performance behavior and test count.",
+    "success_metric": "completion_audit.md reports 23 library tests and 100 prompts from 92 visited files."
+  },
+  "safety_controls": [
+    "Only autoresearch evidence files are changed.",
+    "A current limit-100 no-export smoke was rerun before editing.",
+    "git diff --check was rerun."
+  ]
+}

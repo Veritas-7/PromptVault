@@ -477,9 +477,11 @@ fn bounded_count(requested: usize, max: usize, label: &str, warnings: &mut Vec<S
 }
 
 fn print_help() {
-    println!(
-        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID] [--limit N] [--count N]"
-    );
+    println!("{}", help_text());
+}
+
+fn help_text() -> &'static str {
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n\nRules:\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first."
 }
 
 #[cfg(test)]
@@ -542,6 +544,15 @@ mod tests {
         assert!(is_help_command("-h"));
         assert!(is_help_command("--help"));
         assert!(!is_help_command("scna"));
+    }
+
+    #[test]
+    fn help_text_documents_cli_validation_rules() {
+        let help = help_text();
+        assert!(help.contains("--limit N>0"));
+        assert!(help.contains("--count N>0"));
+        assert!(help.contains("--output cannot be combined with --no-export"));
+        assert!(help.contains("--preview-sort or --weakest-first"));
     }
 
     #[test]

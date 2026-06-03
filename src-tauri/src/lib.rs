@@ -434,10 +434,7 @@ pub async fn improve_prompt_inner(
     }
 
     let env = read_secret_env(Path::new(SECRET_ENV_PATH)).unwrap_or_default();
-    let key = env
-        .get("GLM_API_KEY")
-        .or_else(|| env.get("GLM_API_KEY_2"))
-        .cloned();
+    let key = glm_api_key_from_env(&env);
     let endpoint = normalize_chat_endpoint(
         &env.get("GLM_CODING_ENDPOINT")
             .cloned()
@@ -1913,6 +1910,17 @@ fn read_secret_env(path: &Path) -> Result<HashMap<String, String>, Box<dyn std::
     Ok(env)
 }
 
+fn non_empty_env_value(env: &HashMap<String, String>, key: &str) -> Option<String> {
+    env.get(key)
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn glm_api_key_from_env(env: &HashMap<String, String>) -> Option<String> {
+    non_empty_env_value(env, "GLM_API_KEY").or_else(|| non_empty_env_value(env, "GLM_API_KEY_2"))
+}
+
 fn normalize_chat_endpoint(endpoint: &str) -> String {
     let trimmed = endpoint.trim().trim_end_matches('/');
     if trimmed.is_empty() {
@@ -1995,6 +2003,15 @@ mod tests {
         let content = r#"{"revised_prompt":"   ","rationale":["ok"],"checklist":["verify"]}"#;
 
         assert!(glm_improvement_from_content("make better", content).is_none());
+    }
+
+    #[test]
+    fn glm_api_key_selection_ignores_blank_primary_key() {
+        let mut env = HashMap::new();
+        env.insert("GLM_API_KEY".to_string(), "   ".to_string());
+        env.insert("GLM_API_KEY_2".to_string(), "secondary-key".to_string());
+
+        assert_eq!(glm_api_key_from_env(&env).as_deref(), Some("secondary-key"));
     }
 
     #[tokio::test]

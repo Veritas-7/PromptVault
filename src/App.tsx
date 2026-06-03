@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import "./App.css";
+import { activeImprovementForSelection } from "./improvementSelection";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
 import { selectedPromptForView } from "./selection";
 import type { ImproveResult, PromptRecord, ScanResult } from "./types";
@@ -47,6 +48,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [improving, setImproving] = useState(false);
   const [improvement, setImprovement] = useState<ImproveResult | null>(null);
+  const [improvementPromptId, setImprovementPromptId] = useState<string | null>(null);
 
   const prompts = result?.prompts ?? [];
   const promptListMode = effectivePromptListMode(result?.preview_sort, previewMode);
@@ -69,10 +71,16 @@ function App() {
   const selectedPrompt = useMemo(() => {
     return selectedPromptForView(filteredPrompts, selectedId);
   }, [filteredPrompts, selectedId]);
+  const activeImprovement = activeImprovementForSelection(
+    improvement,
+    improvementPromptId,
+    selectedPrompt?.id ?? null,
+  );
 
   async function runScan() {
     setError(null);
     setImprovement(null);
+    setImprovementPromptId(null);
     let parsedLimit: number | undefined;
     try {
       parsedLimit = parseLimitInput(limit);
@@ -118,6 +126,7 @@ function App() {
         },
       });
       setImprovement(next);
+      setImprovementPromptId(prompt.id);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -335,45 +344,45 @@ function App() {
         <section className="panel improve-panel">
           <div className="panel-heading">
             <h2>Recommendation</h2>
-            <span>{improvement?.provider ?? "local/GLM"}</span>
+            <span>{activeImprovement?.provider ?? "local/GLM"}</span>
           </div>
-          {improvement ? (
+          {activeImprovement ? (
             <>
               <div className="quality-delta">
                 <strong>
-                  {improvement.quality_delta.before.score}
+                  {activeImprovement.quality_delta.before.score}
                   {" -> "}
-                  {improvement.quality_delta.after.score}
+                  {activeImprovement.quality_delta.after.score}
                   <span>
-                    {improvement.quality_delta.score_delta >= 0 ? "+" : ""}
-                    {improvement.quality_delta.score_delta}
+                    {activeImprovement.quality_delta.score_delta >= 0 ? "+" : ""}
+                    {activeImprovement.quality_delta.score_delta}
                   </span>
                 </strong>
-                {improvement.quality_delta.resolved_gaps.length ? (
+                {activeImprovement.quality_delta.resolved_gaps.length ? (
                   <p>
                     Resolved:{" "}
-                    {improvement.quality_delta.resolved_gaps
+                    {activeImprovement.quality_delta.resolved_gaps
                       .slice(0, 4)
                       .join(", ")}
                   </p>
                 ) : (
                   <p>
                     Remaining:{" "}
-                    {improvement.quality_delta.remaining_gaps
+                    {activeImprovement.quality_delta.remaining_gaps
                       .slice(0, 4)
                       .join(", ") || "none"}
                   </p>
                 )}
               </div>
-              <pre className="prompt-text revised">{improvement.revised_prompt}</pre>
+              <pre className="prompt-text revised">{activeImprovement.revised_prompt}</pre>
               <div className="advice">
-                {improvement.rationale.map((item) => (
+                {activeImprovement.rationale.map((item) => (
                   <p key={item}>{item}</p>
                 ))}
               </div>
-              {improvement.warnings.length ? (
+              {activeImprovement.warnings.length ? (
                 <div className="warning-list">
-                  {improvement.warnings.map((warning) => (
+                  {activeImprovement.warnings.map((warning) => (
                     <p key={warning}>{warning}</p>
                   ))}
                 </div>

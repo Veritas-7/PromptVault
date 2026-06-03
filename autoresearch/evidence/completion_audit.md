@@ -20,6 +20,7 @@ Date: 2026-06-03
 | Source-specific smoke scans | `ScanOptions.source_ids`; CLI `scan --source ID`; Antigravity DB source smoke scans 2 prompts without full-history scan | PASS |
 | No-export stats scan | `ScanOptions.write_markdown`; CLI `scan --no-export`; full no-export scan writes no Markdown file | PASS |
 | Weak-first repair queue | `ScanOptions.preview_sort`; CLI `--weakest-first`; UI `Weakest` mode; bounded preview can return lowest-quality prompts first | PASS |
+| Source-level quality triage | `SourceSummary.average_quality`, `weak_prompt_count`; CLI JSON, Markdown source table, and UI source panel expose source quality | PASS |
 | Explicit stdout prompt preview | CLI `--include-prompts`; prompt bodies remain omitted by default and opt-in stdout previews are capped at 25 records | PASS |
 | Prompt quality scoring | `PromptQuality`, `ScanStats.average_quality`, `weak_prompt_count`, `top_quality_gaps`; UI quality metrics and suggestions | PASS |
 | Prompt improvement app | UI selected-prompt panel plus `improve_prompt` Tauri command | PASS |
@@ -46,6 +47,7 @@ cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --output /tmp/promptvault-quality-smoke.md --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
+cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 0 --no-export --json > /tmp/promptvault-source-quality.json
 cargo run --quiet --bin promptvault-cli -- improve --json --prompt "make better"
 cargo run --quiet --bin promptvault-cli -- improve --local --json --prompt "make better"
 cargo run --quiet --bin promptvault-cli -- repair --json --limit 100 --count 3
@@ -63,7 +65,7 @@ git diff --check
 
 - `npm run build`: PASS, Vite production build completed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 12 library tests plus 2 CLI tests passed.
+- `cargo test`: PASS, 13 library tests plus 2 CLI tests passed.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
@@ -71,6 +73,7 @@ git diff --check
 - No-export full scan: PASS, current release CLI scanned 155,484 prompts from 27,608 files in 1m31s with `output_path=null`, `markdown_written=false`, `markdown_included=false`, `warnings=[]`, and no `/tmp/promptvault-no-export-full.md` file created.
 - Preview-payload scan: PASS, default CLI JSON returned `returned_prompt_count=0`, bounded preview returned `returned_prompt_count=5`.
 - Weak-first preview smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --no-export --json` returned `preview_sort=quality_asc`, `returned_prompt_count=5`, `markdown_written=false`, and `output_path=null`.
+- Source-level quality smoke: PASS, `scan --limit 100 --preview-limit 0 --no-export --json` returned first source `average_quality=71.6`, `weak_prompt_count=16`, and all source summaries included both fields.
 - Explicit prompt stdout smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json` returned `prompt_stdout_count=5`; first prompt quality was `36 · weak` with gaps `specific_goal`, `context`, `constraints`, `verification`, `output_format`.
 - Default stdout safety smoke: PASS, the same scan without `--include-prompts` returned `prompt_stdout_count=0` and `prompts_len=0`.
 - Stdout cap smoke: PASS, `--preview-limit 30 --include-prompts` returned `returned_prompt_count=30`, `prompt_stdout_count=25`, `prompts_len=25`, and one cap warning.
@@ -88,6 +91,7 @@ git diff --check
 - Diff whitespace gate: PASS, `git diff --check`.
 - Playwright render smoke: PASS, `Agent prompt intelligence` loaded, `Recommendation` panel rendered, 5 panels were present, and `bodyWidth=viewportWidth=1440`.
 - Weakest-mode render smoke: PASS, `Latest` and `Weakest` controls rendered, clicking `Weakest` activated that mode, and `bodyWidth=viewportWidth=1440`.
+- Source-quality render smoke: PASS, mocked scan rendered `Q 55.5 · Weak 1` in the source panel and `bodyWidth=viewportWidth=1440`.
 - GitHub remote: PASS, `origin/main` pushed to private repo `Veritas-7/PromptVault`.
 - GLM improve smoke: fallback path PASS; live GLM returned `429 Too Many Requests`, then local rules returned a recommendation.
 

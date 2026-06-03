@@ -21,6 +21,7 @@ cargo run --bin promptvault-cli -- repair [--source ID] [--limit N] [--count N] 
 - `scan` writes a Markdown export and prints only summary metadata, not prompt bodies.
 - `scan --limit N` is for smoke tests; omit `--limit` for a full scan.
 - `scan --source ID` restricts scanning to one source ID from `sources`; repeat it or pass comma-separated IDs for multi-source smoke tests.
+- Scan JSON and Markdown source summaries include `average_quality` and `weak_prompt_count` for each source.
 - `scan --no-export` skips Markdown rendering/writing when `--include-markdown` is not set; use it for fast JSON-only stats.
 - `scan --preview-sort quality-asc` returns the weakest bounded preview first; `--weakest-first` is the same shortcut.
 - `--json` prints machine-readable summaries for agents. `scan --json` still writes prompt bodies to the Markdown output path rather than dumping them to stdout.

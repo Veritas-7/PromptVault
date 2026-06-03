@@ -1,0 +1,36 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "ce76e57",
+  "worktree_status_before_iteration": "clean",
+  "scan_scope": [
+    "src-tauri/src/lib.rs",
+    "src/types.ts",
+    "src/App.tsx",
+    "src/App.css",
+    "README.md",
+    "docs/CLI.md",
+    "docs/PROMPT_BEST_PRACTICES.md",
+    "autoresearch/evidence/completion_audit.md"
+  ],
+  "observed_strengths": [
+    "PromptVault reports global average quality and weak-prompt counts.",
+    "PromptVault can preview weakest prompts and repair them deterministically.",
+    "Source summaries already expose files and prompts found for each store."
+  ],
+  "observed_weaknesses": [
+    "Source summaries did not identify which source had low-quality prompt history.",
+    "Agents had to infer noisy stores from individual prompt previews instead of per-source triage metrics.",
+    "The UI source panel showed prompt counts but not source-level repair priority."
+  ],
+  "selected_candidate": {
+    "name": "source-level quality triage",
+    "reason": "Add average quality and weak-prompt counts to every source summary so CLI, Markdown, and UI can prioritize noisy prompt stores.",
+    "success_metric": "scan --limit 100 --preview-limit 0 --no-export --json returns source summaries with average_quality and weak_prompt_count, and the UI renders the source-quality text."
+  },
+  "safety_controls": [
+    "No prompt bodies are added to source summaries.",
+    "The smoke scan uses --no-export and --preview-limit 0.",
+    "UI render verification uses a mocked scan result rather than exposing local prompt content."
+  ]
+}

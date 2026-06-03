@@ -9,6 +9,8 @@ export interface SourceSummary {
   root_path: string;
   files_seen: number;
   prompts_found: number;
+  average_quality: number;
+  weak_prompt_count: number;
   status: string;
   notes: string[];
 }

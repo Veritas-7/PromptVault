@@ -45,6 +45,8 @@ pub struct SourceSummary {
     pub root_path: String,
     pub files_seen: usize,
     pub prompts_found: usize,
+    pub average_quality: f64,
+    pub weak_prompt_count: usize,
     pub status: String,
     pub notes: Vec<String>,
 }
@@ -189,6 +191,8 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
             root_path: source.root.display().to_string(),
             files_seen: 0,
             prompts_found: 0,
+            average_quality: 0.0,
+            weak_prompt_count: 0,
             status: "missing".to_string(),
             notes: Vec::new(),
         };
@@ -205,6 +209,7 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
         match collect_from_source(&source, &mut summary, limit.saturating_sub(prompts.len())) {
             Ok(mut found) => {
                 summary.prompts_found = found.len();
+                summarize_source_quality(&mut summary, &found);
                 prompts.append(&mut found);
             }
             Err(err) => {
@@ -1462,6 +1467,14 @@ fn average_quality(prompts: &[PromptRecord]) -> f64 {
     total as f64 / prompts.len() as f64
 }
 
+fn summarize_source_quality(summary: &mut SourceSummary, prompts: &[PromptRecord]) {
+    summary.average_quality = average_quality(prompts);
+    summary.weak_prompt_count = prompts
+        .iter()
+        .filter(|prompt| prompt.quality.band == "weak")
+        .count();
+}
+
 fn top_words(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
     let stop = stop_words();
     let mut counts: HashMap<String, usize> = HashMap::new();
@@ -1640,15 +1653,17 @@ fn render_markdown(generated_at: &str, stats: &ScanStats, prompts: &[PromptRecor
     ));
 
     md.push_str("## Source Coverage\n\n");
-    md.push_str("| Source | Status | Files | Prompts | Path |\n");
-    md.push_str("|---|---:|---:|---:|---|\n");
+    md.push_str("| Source | Status | Files | Prompts | Avg Quality | Weak | Path |\n");
+    md.push_str("|---|---:|---:|---:|---:|---:|---|\n");
     for source in &stats.source_summaries {
         md.push_str(&format!(
-            "| {} | {} | {} | {} | `{}` |\n",
+            "| {} | {} | {} | {} | {:.1} | {} | `{}` |\n",
             escape_table(&source.label),
             source.status,
             source.files_seen,
             source.prompts_found,
+            source.average_quality,
+            source.weak_prompt_count,
             escape_table(&source.root_path)
         ));
     }
@@ -1987,6 +2002,33 @@ mod tests {
         assert!(weak.score < strong.score);
         assert!(weak.missing.contains(&"specific_goal".to_string()));
         assert!(weak.missing.contains(&"verification".to_string()));
+    }
+
+    #[test]
+    fn source_summary_reports_quality_triage() {
+        let prompts = vec![
+            record("make better"),
+            record(
+                "Fix src-tauri/src/lib.rs parser error, preserve files, run cargo test, and report Markdown output.",
+            ),
+        ];
+        let mut summary = SourceSummary {
+            id: "test-source".to_string(),
+            label: "Test Source".to_string(),
+            root_path: "/tmp/test-source".to_string(),
+            files_seen: 2,
+            prompts_found: prompts.len(),
+            average_quality: 0.0,
+            weak_prompt_count: 0,
+            status: "ok".to_string(),
+            notes: Vec::new(),
+        };
+
+        summarize_source_quality(&mut summary, &prompts);
+
+        assert_eq!(summary.weak_prompt_count, 1);
+        assert!(summary.average_quality > 0.0);
+        assert!(summary.average_quality < 100.0);
     }
 
     #[test]

@@ -186,6 +186,9 @@ function App() {
                 <div>
                   <strong>{source.label}</strong>
                   <span>{source.root_path}</span>
+                  <span className="source-meta">
+                    Q {source.average_quality.toFixed(1)} · Weak {source.weak_prompt_count}
+                  </span>
                 </div>
                 <div className={`status ${source.status}`}>
                   {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}

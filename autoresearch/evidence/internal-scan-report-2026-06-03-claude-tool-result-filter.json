@@ -1,0 +1,39 @@
+{
+  "schema": "promptvault-autoresearch-internal-scan-v1",
+  "generated_at": "2026-06-03T20:47:45+0900",
+  "iteration": "claude-tool-result-filter",
+  "code_commit": "712a6d20d6e914974d8c344ceedd0b66561994b7",
+  "status": "pass",
+  "local_evidence": {
+    "source_root": "/Users/wj/.claude/projects",
+    "observed_shape": "Claude project JSONL files can contain message.role=user records whose content array contains type=tool_result items.",
+    "example": "/Users/wj/.claude/projects/-Users-wj--aihub-runtime-workers-glm-G1/79b61ef6-e596-4ce2-9b89-22ac59836b9f.jsonl includes user-role tool_result content."
+  },
+  "candidate": {
+    "problem": "text_from_value extracted string content from array items without excluding tool_result blocks.",
+    "risk": "Tool outputs could be counted as user-authored prompts, polluting prompt frequency, quality gaps, and repair queues.",
+    "decision": "Ignore array items whose type is tool_result before extracting text/content fields."
+  },
+  "red": {
+    "command": "cargo test parse_claude_project_jsonl_skips_tool_result_blocks",
+    "status": "failed_as_expected",
+    "evidence": "The new test failed with 2 records instead of the expected 1."
+  },
+  "green": {
+    "command": "cargo test parse_claude_project_jsonl_skips_tool_result_blocks",
+    "status": "passed",
+    "evidence": "The focused test passed after text_from_value skipped type=tool_result array items."
+  },
+  "full_verification": {
+    "command": "npm run check",
+    "status": "passed",
+    "evidence": "10 UI helper tests passed, Vite build passed, 36 Rust library tests passed, 13 CLI tests passed, doc-tests passed, and strict clippy passed."
+  },
+  "changed_paths": [
+    "src-tauri/src/lib.rs",
+    "autoresearch/evidence/completion_audit.md",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-claude-tool-result-filter.json",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-claude-tool-result-filter.md",
+    "autoresearch/evidence/iteration-2026-06-03-claude-tool-result-filter.md"
+  ]
+}

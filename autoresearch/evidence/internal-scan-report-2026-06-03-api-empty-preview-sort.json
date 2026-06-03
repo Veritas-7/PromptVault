@@ -1,0 +1,28 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "5bde8c9",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "PreviewSort::from_option",
+      "observed": "API preview_sort: Some(\"  \") was accepted and interpreted as latest, while the CLI rejects empty preview-sort flag values."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib preview_sort_rejects_empty_values",
+    "result": "FAILED before implementation because PreviewSort::from_option(Some(\"  \")) returned Ok(Latest)."
+  },
+  "selected_candidate": {
+    "name": "API empty preview sort validation",
+    "reason": "Distinguish omitted preview sort from an explicitly blank invalid value.",
+    "success_metric": "Blank preview sort values return an error, omitted preview sort still defaults to latest, unknown preview sort validation remains green, and full local checks still pass."
+  },
+  "safety_controls": [
+    "The change is limited to src-tauri/src/lib.rs.",
+    "None still defaults to latest.",
+    "Only Some(blank) is newly rejected.",
+    "Focused parser and API preview-sort tests were rerun.",
+    "npm run check was rerun after the change."
+  ]
+}

@@ -25,7 +25,7 @@ cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [-
 - `scan --limit N>0` is for smoke tests; omit `--limit` for a full scan.
 - In limited scans, `total_files` and each source `files_seen` count visited files only; they are not an inventory of every matching file in the source root.
 - `--limit` and `repair --count` require positive integers. `--preview-limit` accepts non-negative integers so `0` can suppress previews.
-- Value-taking options such as `--source`, `--output`, and `--preview-sort` require explicit values and exit non-zero when missing.
+- Value-taking options such as `--source`, `--output`, `--preview-sort`, and `improve --prompt` require explicit non-flag values and exit non-zero when missing.
 - `scan --source ID` restricts scanning to one source ID from `sources`; repeat it or pass comma-separated IDs for multi-source smoke tests. Unknown or empty explicit source IDs exit non-zero.
 - Scan JSON and Markdown source summaries include `average_quality` and `weak_prompt_count` for each source.
 - `scan --no-export` skips Markdown rendering/writing when `--include-markdown` is not set; use it for fast JSON-only stats. `--output` cannot be combined with `--no-export`.
@@ -35,7 +35,7 @@ cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [-
 - `--include-prompts` is capped at 25 prompt records in stdout even if `--preview-limit` is higher.
 - `--include-markdown` includes the Markdown body in the returned `ScanResult`; omit it for safer/leaner agent automation.
 - `improve` reads one prompt and returns provider, revised prompt, rationale, quality before/after delta, resolved gaps, remaining gaps, and warnings.
-- `improve` requires a non-empty prompt from `--prompt` or stdin and exits non-zero for empty input.
+- `improve` requires a non-empty prompt from `--prompt` or stdin and exits non-zero for empty or flag-like `--prompt` values.
 - `improve --local` bypasses GLM and uses deterministic local prompt-improvement rules for reproducible smoke tests and offline repair queues.
 - `repair` scans weakest prompts, runs deterministic local improvement for each one, writes no Markdown export, and returns prompt/recommendation pairs. Repair batches are capped at 10 records.
 

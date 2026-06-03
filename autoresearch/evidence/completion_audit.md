@@ -28,7 +28,7 @@ Date: 2026-06-03
 | Prompt quality scoring | `PromptQuality`, `ScanStats.average_quality`, `weak_prompt_count`, `top_quality_gaps`; UI quality metrics and suggestions | PASS |
 | Prompt improvement app | UI selected-prompt panel plus `improve_prompt` Tauri command | PASS |
 | Measurable improvement delta | `QualityDelta`; CLI/UI expose before score, after score, score delta, resolved gaps, and remaining gaps | PASS |
-| Improve empty input safety | CLI `improve` rejects empty `--prompt`, empty stdin, and no-arg stdin EOF with non-zero exit | PASS |
+| Improve prompt value safety | CLI `improve` rejects empty `--prompt`, flag-like `--prompt`, empty stdin, and no-arg stdin EOF with non-zero exit | PASS |
 | Deterministic local improve | `ImproveRequest.force_local`; CLI `improve --local`; bypasses GLM and returns local-rules without warnings | PASS |
 | Deterministic batch repair | CLI `repair --json`; weakest-first scan plus local-rules recommendations; no Markdown export; capped at 10 repairs | PASS |
 | Rust lint gate | `cargo clippy --all-targets --all-features -- -D warnings` passes with no warnings | PASS |
@@ -60,6 +60,7 @@ cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 0 --no-export --json > /tmp/promptvault-source-quality.json
 cargo run --quiet --bin promptvault-cli -- improve --json --prompt "make better"
 set +e; cargo run --quiet --bin promptvault-cli -- improve --json --prompt ""; test "$?" -ne 0; set -e
+set +e; cargo run --quiet --bin promptvault-cli -- improve --prompt --bogus; test "$?" -ne 0; set -e
 set +e; printf "" | cargo run --quiet --bin promptvault-cli -- improve --json; test "$?" -ne 0; set -e
 set +e; cargo run --quiet --bin promptvault-cli -- improve --json; test "$?" -ne 0; set -e
 cargo run --quiet --bin promptvault-cli -- improve --local --json --prompt "make better"

@@ -1,0 +1,36 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "bf95f1e",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "docs/CLI.md",
+      "observed": "The CLI guide described required values for scan options but did not include improve --prompt after the prompt parser adopted the same fail-closed rule."
+    },
+    {
+      "surface": "autoresearch/evidence/completion_audit.md",
+      "observed": "The aggregate audit result mentioned flag-like prompt rejection, but the command list did not include the improve --prompt --bogus smoke."
+    }
+  ],
+  "selected_candidate": {
+    "name": "Improve prompt validation doc alignment",
+    "reason": "Keep operator docs and aggregate evidence aligned with the latest improve --prompt parser behavior.",
+    "success_metric": "docs/CLI.md defines flag-like --prompt rejection and completion_audit.md lists the smoke command."
+  },
+  "verification": [
+    {
+      "command": "rg -n -- \"flag-like|improve --prompt|--prompt --bogus|Improve prompt value safety|explicit non-flag\" docs/CLI.md autoresearch/evidence/completion_audit.md",
+      "result": "PASS: CLI docs and completion audit contain the updated prompt-value rule and smoke command."
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS: no whitespace errors."
+    }
+  ],
+  "safety_controls": [
+    "Documentation-only change.",
+    "No source, tests, or runtime hooks were changed.",
+    "Historical per-iteration evidence was not rewritten."
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "24f1d06",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "command": "--help",
+      "exit_code": 0,
+      "observed": "help still documented --limit N and --count N, without the new positive-value and conflict rules"
+    }
+  ],
+  "observed_weaknesses": [
+    "CLI help lagged behind the parser's stricter validation rules.",
+    "Operators could not see that --output conflicts with --no-export or that preview sort selectors are mutually exclusive."
+  ],
+  "selected_candidate": {
+    "name": "CLI help validation documentation",
+    "reason": "Keep user-facing command help aligned with fail-closed parser behavior.",
+    "success_metric": "--help prints positive limit/count rules, output/no-export conflict, and preview sort exclusivity."
+  },
+  "safety_controls": [
+    "The change is limited to promptvault-cli.rs.",
+    "Help text was factored into a testable function.",
+    "Actual --help output was smoke-tested.",
+    "npm run check was rerun after the change."
+  ]
+}

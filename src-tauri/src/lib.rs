@@ -628,13 +628,11 @@ fn collect_from_source(
     }
 
     let mut prompts = Vec::new();
-    let files = collect_files(&source.root, source.kind);
-    summary.files_seen = files.len();
-
-    for file in files {
+    for file in matching_source_files(&source.root, source.kind) {
         if prompts.len() >= remaining {
             break;
         }
+        summary.files_seen += 1;
         let found = match source.kind {
             SourceKind::CodexJsonl => parse_codex_jsonl(source, &file),
             SourceKind::ClaudeProjectJsonl => parse_claude_project_jsonl(source, &file),
@@ -660,45 +658,49 @@ fn collect_from_source(
     Ok(prompts)
 }
 
-fn collect_files(root: &Path, kind: SourceKind) -> Vec<PathBuf> {
+fn matching_source_files(root: &Path, kind: SourceKind) -> Box<dyn Iterator<Item = PathBuf> + '_> {
     if root.is_file() {
-        return vec![root.to_path_buf()];
+        return Box::new(std::iter::once(root.to_path_buf()));
     }
 
-    let mut files = Vec::new();
-    for entry in WalkDir::new(root)
-        .follow_links(false)
-        .into_iter()
-        .filter_map(Result::ok)
-    {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let path_str = path.to_string_lossy();
-        let matches = match kind {
-            SourceKind::CodexJsonl
-            | SourceKind::ClaudeProjectJsonl
-            | SourceKind::ClaudeTranscriptJsonl
-            | SourceKind::ClaudeHistoryJsonl
-            | SourceKind::AntigravityHistoryJsonl => {
-                path.extension().is_some_and(|ext| ext == "jsonl")
-            }
-            SourceKind::AntigravityTranscriptJsonl => {
-                path_str.ends_with("/.system_generated/logs/transcript.jsonl")
-                    || path_str.ends_with("/.system_generated/logs/transcript_full.jsonl")
-            }
-            SourceKind::AntigravityConversationSqlite => {
-                path.extension().is_some_and(|ext| ext == "db")
-            }
-            SourceKind::GeminiTmpChatJson => path.extension().is_some_and(|ext| ext == "json"),
-        };
-        if matches {
-            files.push(path.to_path_buf());
-        }
+    Box::new(
+        WalkDir::new(root)
+            .follow_links(false)
+            .sort_by_file_name()
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter_map(move |entry| {
+                let path = entry.path();
+                if source_file_matches(path, kind) {
+                    Some(path.to_path_buf())
+                } else {
+                    None
+                }
+            }),
+    )
+}
+
+fn source_file_matches(path: &Path, kind: SourceKind) -> bool {
+    if !path.is_file() {
+        return false;
     }
-    files.sort();
-    files
+
+    let path_str = path.to_string_lossy();
+    match kind {
+        SourceKind::CodexJsonl
+        | SourceKind::ClaudeProjectJsonl
+        | SourceKind::ClaudeTranscriptJsonl
+        | SourceKind::ClaudeHistoryJsonl
+        | SourceKind::AntigravityHistoryJsonl => path.extension().is_some_and(|ext| ext == "jsonl"),
+        SourceKind::AntigravityTranscriptJsonl => {
+            path_str.ends_with("/.system_generated/logs/transcript.jsonl")
+                || path_str.ends_with("/.system_generated/logs/transcript_full.jsonl")
+        }
+        SourceKind::AntigravityConversationSqlite => {
+            path.extension().is_some_and(|ext| ext == "db")
+        }
+        SourceKind::GeminiTmpChatJson => path.extension().is_some_and(|ext| ext == "json"),
+    }
 }
 
 fn parse_codex_jsonl(
@@ -2109,6 +2111,52 @@ mod tests {
             selected.iter().map(|source| source.id).collect::<Vec<_>>(),
             vec!["codex", "antigravity-cli-conversation-db"]
         );
+    }
+
+    #[test]
+    fn collect_from_source_stops_file_walk_after_limit() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-limit-walk-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+
+        std::fs::write(
+            root.join("001.jsonl"),
+            r#"{"type":"response_item","payload":{"role":"user","content":[{"text":"Fix parser performance, run cargo test, and report markdown output."}]}}"#,
+        )
+        .expect("write prompt file");
+        for idx in 2..=5 {
+            std::fs::write(root.join(format!("{idx:03}.jsonl")), "\n").expect("write extra file");
+        }
+
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+        let mut summary = SourceSummary {
+            id: source.id.to_string(),
+            label: source.label.to_string(),
+            root_path: source.root.display().to_string(),
+            files_seen: 0,
+            prompts_found: 0,
+            average_quality: 0.0,
+            weak_prompt_count: 0,
+            status: "ok".to_string(),
+            notes: Vec::new(),
+        };
+
+        let prompts = collect_from_source(&source, &mut summary, 1).expect("collect source");
+
+        assert_eq!(prompts.len(), 1);
+        assert_eq!(summary.files_seen, 1);
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
     }
 
     #[test]

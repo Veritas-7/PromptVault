@@ -1,0 +1,47 @@
+{
+  "schema": "promptvault-autoresearch-internal-scan-v1",
+  "generated_at": "2026-06-03T21:23:41+0900",
+  "iteration": "repair-json-redaction",
+  "code_commit": "f5caaa2506a4bedeab55474ced4549fda4a3db2a",
+  "status": "pass",
+  "candidate": {
+    "problem": "repair --json embedded the original PromptRecord directly in each repair entry.",
+    "risk": "Opt-in repair JSON could echo risky prompt text even after scan prompt previews gained redaction.",
+    "decision": "Build repair entries through a shared redacted prompt-record helper."
+  },
+  "red": {
+    "command": "cargo test repair_json_entry_redacts_prompt_text",
+    "status": "failed_as_expected",
+    "evidence": "The new test failed because the repair JSON entry helper did not exist yet."
+  },
+  "green": {
+    "command": "cargo test repair_json_entry_redacts_prompt_text",
+    "status": "passed",
+    "evidence": "The focused test passed after repair JSON prompt records used the shared redaction path."
+  },
+  "full_verification": {
+    "command": "npm run check",
+    "status": "passed",
+    "evidence": "10 UI helper tests passed, Vite build passed, 41 Rust library tests passed, 15 CLI tests passed, doc-tests passed, and strict clippy passed."
+  },
+  "format_verification": {
+    "command": "rustfmt --edition 2021 --check src/bin/promptvault-cli.rs",
+    "status": "passed",
+    "evidence": "The touched CLI file matched rustfmt output."
+  },
+  "staged_checks": {
+    "commands": [
+      "git diff --cached --check",
+      "gitleaks protect --staged --verbose"
+    ],
+    "status": "passed",
+    "evidence": "gitleaks scanned staged code and found no leaks."
+  },
+  "changed_paths": [
+    "src-tauri/src/bin/promptvault-cli.rs",
+    "autoresearch/evidence/completion_audit.md",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-repair-json-redaction.json",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-repair-json-redaction.md",
+    "autoresearch/evidence/iteration-2026-06-03-repair-json-redaction.md"
+  ]
+}

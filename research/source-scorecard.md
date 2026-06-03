@@ -13,5 +13,6 @@ Date: 2026-06-03
 | Antigravity `.gemini/antigravity/brain` | High | Local transcript schema confirmed | Implemented |
 | Antigravity `.gemini/antigravity-ide/brain` | High | Local transcript schema confirmed | Implemented |
 | Antigravity `.gemini/antigravity-cli/history.jsonl` | High | Local history schema confirmed | Implemented |
+| Antigravity conversations SQLite | Medium | Local `steps` schema confirmed; `step_type=14` payload contains user input as protobuf strings; read-only parser adds 2 local prompts | Implemented |
 | Gemini tmp chats | Medium | Local JSON chat files confirmed | Implemented |
-| Antigravity conversations SQLite | Low | Tables found, but prompt payload is encoded/protobuf-like | Deferred |
+| Antigravity raw `.pb` files | Low | Many files exist locally, but no stable schema is verified for separating user prompts from model/tool payloads | Deferred |

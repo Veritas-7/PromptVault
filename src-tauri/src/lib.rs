@@ -1,5 +1,6 @@
 use chrono::{Local, TimeZone, Utc};
 use regex::Regex;
+use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -133,6 +134,7 @@ enum SourceKind {
     ClaudeHistoryJsonl,
     AntigravityTranscriptJsonl,
     AntigravityHistoryJsonl,
+    AntigravityConversationSqlite,
     GeminiTmpChatJson,
 }
 
@@ -436,6 +438,12 @@ pub fn source_specs() -> Vec<SourceSpec> {
             kind: SourceKind::AntigravityHistoryJsonl,
         },
         SourceSpec {
+            id: "antigravity-cli-conversation-db",
+            label: "Antigravity conversation DB",
+            root: home.join(".gemini/antigravity-cli/conversations"),
+            kind: SourceKind::AntigravityConversationSqlite,
+        },
+        SourceSpec {
             id: "gemini-tmp-chat",
             label: "Gemini temporary chats",
             root: home.join(".gemini/tmp/wj/chats"),
@@ -470,6 +478,9 @@ fn collect_from_source(
                 parse_antigravity_transcript_jsonl(source, &file)
             }
             SourceKind::AntigravityHistoryJsonl => parse_antigravity_history_jsonl(source, &file),
+            SourceKind::AntigravityConversationSqlite => {
+                parse_antigravity_conversation_sqlite(source, &file)
+            }
             SourceKind::GeminiTmpChatJson => parse_gemini_tmp_chat(source, &file),
         };
 
@@ -510,6 +521,9 @@ fn collect_files(root: &Path, kind: SourceKind) -> Vec<PathBuf> {
             SourceKind::AntigravityTranscriptJsonl => {
                 path_str.ends_with("/.system_generated/logs/transcript.jsonl")
                     || path_str.ends_with("/.system_generated/logs/transcript_full.jsonl")
+            }
+            SourceKind::AntigravityConversationSqlite => {
+                path.extension().is_some_and(|ext| ext == "db")
             }
             SourceKind::GeminiTmpChatJson => path.extension().is_some_and(|ext| ext == "json"),
         };
@@ -646,6 +660,40 @@ fn parse_antigravity_history_jsonl(
     Ok(records)
 }
 
+fn parse_antigravity_conversation_sqlite(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let mut stmt =
+        conn.prepare("SELECT idx, step_payload FROM steps WHERE step_type = 14 ORDER BY idx")?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+    })?;
+
+    let conversation_id = path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown-antigravity-conversation")
+        .to_string();
+    let mut records = Vec::new();
+
+    for row in rows {
+        let (idx, payload) = row?;
+        let strings = protobuf_strings(&payload);
+        if let Some(text) = best_prompt_candidate(&strings) {
+            let cwd = best_workspace_candidate(&strings);
+            let value = serde_json::json!({
+                "conversation_id": conversation_id,
+                "idx": idx,
+            });
+            push_record(&mut records, source, path, &value, cwd, text);
+        }
+    }
+
+    Ok(records)
+}
+
 fn parse_gemini_tmp_chat(
     source: &SourceSpec,
     path: &Path,
@@ -668,6 +716,186 @@ fn parse_gemini_tmp_chat(
         }
     }
     Ok(records)
+}
+
+fn protobuf_strings(bytes: &[u8]) -> Vec<String> {
+    let mut out = Vec::new();
+    collect_protobuf_strings(bytes, 0, &mut out);
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn collect_protobuf_strings(bytes: &[u8], depth: usize, out: &mut Vec<String>) {
+    if depth > 8 || bytes.is_empty() || bytes.len() > 2_000_000 {
+        return;
+    }
+
+    let mut index = 0;
+    while index < bytes.len() {
+        let Some(key) = read_varint(bytes, &mut index) else {
+            break;
+        };
+        let wire = key & 0b111;
+        match wire {
+            0 => {
+                if read_varint(bytes, &mut index).is_none() {
+                    break;
+                }
+            }
+            1 => {
+                if !skip_bytes(bytes, &mut index, 8) {
+                    break;
+                }
+            }
+            2 => {
+                let Some(len) = read_varint(bytes, &mut index).map(|value| value as usize) else {
+                    break;
+                };
+                if index + len > bytes.len() {
+                    break;
+                }
+                let slice = &bytes[index..index + len];
+                if let Ok(text) = std::str::from_utf8(slice) {
+                    let normalized = normalize_prompt_text(text);
+                    if is_human_readable_blob_string(&normalized) {
+                        out.push(normalized);
+                    }
+                }
+                collect_protobuf_strings(slice, depth + 1, out);
+                index += len;
+            }
+            5 => {
+                if !skip_bytes(bytes, &mut index, 4) {
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
+}
+
+fn read_varint(bytes: &[u8], index: &mut usize) -> Option<u64> {
+    let mut value = 0_u64;
+    let mut shift = 0;
+    while *index < bytes.len() && shift < 64 {
+        let byte = bytes[*index];
+        *index += 1;
+        value |= ((byte & 0x7f) as u64) << shift;
+        if byte & 0x80 == 0 {
+            return Some(value);
+        }
+        shift += 7;
+    }
+    None
+}
+
+fn skip_bytes(bytes: &[u8], index: &mut usize, count: usize) -> bool {
+    if *index + count > bytes.len() {
+        return false;
+    }
+    *index += count;
+    true
+}
+
+fn best_prompt_candidate(strings: &[String]) -> Option<String> {
+    strings
+        .iter()
+        .filter(|text| is_prompt_candidate(text))
+        .max_by_key(|text| prompt_candidate_score(text))
+        .cloned()
+}
+
+fn best_workspace_candidate(strings: &[String]) -> Option<String> {
+    strings
+        .iter()
+        .find(|text| {
+            text.starts_with("/Users/")
+                && !text.contains("/.gemini/")
+                && !text.contains("/Library/")
+                && text.chars().count() < 512
+        })
+        .cloned()
+}
+
+fn is_human_readable_blob_string(text: &str) -> bool {
+    let chars = text.chars().count();
+    if !(3..=20_000).contains(&chars) {
+        return false;
+    }
+    let printable = text
+        .chars()
+        .filter(|ch| !ch.is_control() || matches!(ch, '\n' | '\r' | '\t'))
+        .count();
+    printable * 100 / chars.max(1) >= 95
+}
+
+fn is_prompt_candidate(text: &str) -> bool {
+    let trimmed = text.trim();
+    let chars = trimmed.chars().count();
+    if chars < 3 {
+        return false;
+    }
+    if looks_like_uuid(trimmed)
+        || looks_like_identifier(trimmed)
+        || trimmed.starts_with('/')
+        || trimmed.starts_with("bot-")
+        || trimmed == "sessionID"
+        || trimmed.contains("(*)")
+        || trimmed.contains("/.gemini/")
+    {
+        return false;
+    }
+    true
+}
+
+fn prompt_candidate_score(text: &str) -> usize {
+    let mut score = text.chars().count().min(10_000);
+    if text.chars().any(char::is_whitespace) {
+        score += 1_000;
+    }
+    if contains_any(
+        &text.to_lowercase(),
+        &[
+            "reply",
+            "write",
+            "fix",
+            "build",
+            "create",
+            "analyze",
+            "user request",
+            "검토",
+            "작성",
+            "수정",
+            "구현",
+        ],
+    ) {
+        score += 1_000;
+    }
+    score
+}
+
+fn looks_like_uuid(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    if bytes.len() != 36 {
+        return false;
+    }
+    for (idx, byte) in bytes.iter().enumerate() {
+        let is_dash = matches!(idx, 8 | 13 | 18 | 23) && *byte == b'-';
+        let is_hex = byte.is_ascii_hexdigit();
+        if !is_dash && !is_hex {
+            return false;
+        }
+    }
+    true
+}
+
+fn looks_like_identifier(text: &str) -> bool {
+    let chars = text.chars().count();
+    chars >= 20
+        && text
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
 }
 
 fn push_record(
@@ -1518,6 +1746,85 @@ mod tests {
     }
 
     #[test]
+    fn parses_antigravity_conversation_db_user_steps() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-antigravity-test-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let conn = Connection::open(&db_path).expect("open test db");
+        conn.execute(
+            "CREATE TABLE steps (
+                idx integer,
+                step_type integer NOT NULL DEFAULT 0,
+                status integer NOT NULL DEFAULT 0,
+                has_subtrajectory numeric NOT NULL DEFAULT false,
+                metadata blob,
+                error_details blob,
+                permissions blob,
+                task_details blob,
+                render_info blob,
+                step_payload blob,
+                step_format integer NOT NULL DEFAULT 0,
+                PRIMARY KEY (idx)
+            )",
+            [],
+        )
+        .expect("create steps table");
+
+        let user_payload = pb_message(
+            19,
+            &[
+                pb_string(1, "000b17f0-0396-4964-84b1-9494dbb1b499"),
+                pb_string(
+                    2,
+                    "Fix src-tauri/src/lib.rs, preserve user files, run cargo test, and report PASS/FAIL in Markdown.",
+                ),
+                pb_string(11, "/Users/wj/Ai/System/10_Projects/PromptVault"),
+            ]
+            .concat(),
+        );
+        let model_payload = pb_message(
+            20,
+            &[pb_string(
+                1,
+                "This is model output and must not be collected.",
+            )]
+            .concat(),
+        );
+
+        conn.execute(
+            "INSERT INTO steps (idx, step_type, status, step_payload) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![0_i64, 14_i64, 3_i64, user_payload],
+        )
+        .expect("insert user step");
+        conn.execute(
+            "INSERT INTO steps (idx, step_type, status, step_payload) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![1_i64, 15_i64, 3_i64, model_payload],
+        )
+        .expect("insert model step");
+        drop(conn);
+
+        let source = SourceSpec {
+            id: "antigravity-test-db",
+            label: "Antigravity test DB",
+            root: db_path.clone(),
+            kind: SourceKind::AntigravityConversationSqlite,
+        };
+        let records =
+            parse_antigravity_conversation_sqlite(&source, &db_path).expect("parse test db");
+
+        assert_eq!(records.len(), 1);
+        assert!(records[0].text.contains("Fix src-tauri/src/lib.rs"));
+        assert_eq!(
+            records[0].cwd.as_deref(),
+            Some("/Users/wj/Ai/System/10_Projects/PromptVault")
+        );
+
+        std::fs::remove_file(&db_path).expect("remove test db");
+    }
+
+    #[test]
     fn normalizes_glm_base_endpoint() {
         assert_eq!(
             normalize_chat_endpoint("https://api.z.ai/api/coding/paas/v4"),
@@ -1544,5 +1851,39 @@ mod tests {
             risk_flags: Vec::new(),
             quality: assess_prompt_quality(id, &[]),
         }
+    }
+
+    fn pb_string(field: u64, value: &str) -> Vec<u8> {
+        let mut out = pb_key(field, 2);
+        out.extend(pb_varint(value.len() as u64));
+        out.extend(value.as_bytes());
+        out
+    }
+
+    fn pb_message(field: u64, value: &[u8]) -> Vec<u8> {
+        let mut out = pb_key(field, 2);
+        out.extend(pb_varint(value.len() as u64));
+        out.extend(value);
+        out
+    }
+
+    fn pb_key(field: u64, wire: u64) -> Vec<u8> {
+        pb_varint((field << 3) | wire)
+    }
+
+    fn pb_varint(mut value: u64) -> Vec<u8> {
+        let mut out = Vec::new();
+        loop {
+            let mut byte = (value & 0x7f) as u8;
+            value >>= 7;
+            if value != 0 {
+                byte |= 0x80;
+            }
+            out.push(byte);
+            if value == 0 {
+                break;
+            }
+        }
+        out
     }
 }

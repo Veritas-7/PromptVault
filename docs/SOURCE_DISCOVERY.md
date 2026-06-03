@@ -17,6 +17,7 @@ PromptVault is local-first. It reads local session files from Claude Code, Googl
 | Antigravity IDE transcripts | `~/.gemini/antigravity/brain/**/.system_generated/logs/transcript*.jsonl` | same transcript parser |
 | Antigravity IDE alt transcripts | `~/.gemini/antigravity-ide/brain/**/.system_generated/logs/transcript*.jsonl` | same transcript parser |
 | Antigravity prompt history | `~/.gemini/antigravity-cli/history.jsonl` | `display` field plus workspace/conversation metadata |
+| Antigravity conversation DB | `~/.gemini/antigravity-cli/conversations/*.db` | read-only SQLite `steps` rows where `step_type=14`; protobuf payload strings filtered for user prompts |
 | Gemini temporary chats | `~/.gemini/tmp/wj/chats/*.json` | `messages[]` entries where `type=user` or `human` |
 
 ## Cleaning Rules
@@ -37,4 +38,5 @@ The Markdown contains source coverage, frequent words, frequent prompt-start phr
 
 - Claude's official directory documentation states that `~/.claude` stores transcripts, prompt history, file snapshots, caches, and logs.
 - The Codex SDK README states that Codex threads are persisted in `~/.codex/sessions`.
-- Antigravity stores agent transcript material under `.gemini/antigravity*` brain folders on this machine; PromptVault treats database blobs as future work and relies on decoded transcript/history files first.
+- Antigravity stores agent transcript material under `.gemini/antigravity*` brain folders on this machine. PromptVault now also reads CLI conversation SQLite databases when the `steps` schema is present and extracts only `step_type=14` user-input payloads.
+- Antigravity raw `.pb` conversation files remain evidence-only until a stable schema or stronger local A/B fixture distinguishes user prompts from model/tool output without heuristics.

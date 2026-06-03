@@ -24,6 +24,22 @@
     "adoption": "Adopted for ~/.gemini/antigravity* source discovery."
   },
   {
+    "title": "Google Antigravity hooks documentation",
+    "url": "https://antigravity.google/docs/hooks?app=antigravity",
+    "checked_at": "2026-06-03",
+    "authority": "official",
+    "relevance": "Documents hook payload fields including conversationId, workspacePaths, transcriptPath, and artifactDirectoryPath.",
+    "adoption": "Kept transcriptPath as the stable primary Antigravity surface; used DB decoding only after local same-machine validation."
+  },
+  {
+    "title": "Diagnosing and Recovering Lost Chat History in Antigravity",
+    "url": "https://antigravitylab.net/en/articles/antigravity/antigravity-chat-history-lost-recovery-guide",
+    "checked_at": "2026-06-03",
+    "authority": "community troubleshooting guide",
+    "relevance": "Describes Antigravity history loss modes, SQLite state inspection, and the need to treat editor chat history as volatile local state.",
+    "adoption": "Adopted as risk framing for read-only SQLite parsing and for keeping raw protobuf files fail-closed."
+  },
+  {
     "title": "HKUDS CLI-Anything GitHub repository",
     "url": "https://github.com/HKUDS/CLI-Anything",
     "checked_at": "2026-06-03",

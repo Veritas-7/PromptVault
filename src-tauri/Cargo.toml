@@ -26,6 +26,7 @@ chrono = { version = "0.4", features = ["serde"] }
 dirs = "6"
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 sha2 = "0.10"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 walkdir = "2"

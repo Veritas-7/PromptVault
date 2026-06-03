@@ -182,6 +182,13 @@ function App() {
         </section>
       ) : null}
 
+      {result?.warnings.length ? (
+        <section className="notice warning">
+          <AlertTriangle size={18} />
+          <span>{result.warnings.join(" ")}</span>
+        </section>
+      ) : null}
+
       <section className="metrics">
         <Metric icon={<ClipboardList size={18} />} label="Prompts" value={result?.stats.total_prompts ?? 0} />
         <Metric icon={<Search size={18} />} label="Preview" value={result?.returned_prompt_count ?? 0} />

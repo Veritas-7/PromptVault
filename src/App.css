@@ -176,6 +176,12 @@ h3 {
   color: #803c29;
 }
 
+.notice.warning {
+  background: #fff8e6;
+  border-color: #e1c46f;
+  color: #6f5115;
+}
+
 .metrics {
   display: grid;
   gap: 12px;

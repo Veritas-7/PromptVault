@@ -1,0 +1,37 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "resumed_thread_id": "019e8bcb-66b7-7443-a79d-46fd3686eadc",
+  "head_before_code_commit": "17640f1a28535bb18c20c380cb7503e32c3e6d8d",
+  "code_commit": "cf5e34394a93b478d44524546d6052d6eb21996f",
+  "resumed_uncommitted_change": [
+    "src-tauri/src/lib.rs"
+  ],
+  "baseline": [
+    {
+      "surface": "improve_prompt_inner external GLM route",
+      "observed": "Before the guard, prompt or context text with risk-pattern content could proceed toward the external GLM improvement path. Earlier slices redacted stdout and local recommendations, but the external routing boundary still needed a fail-closed preflight."
+    }
+  ],
+  "change": {
+    "summary": "Added a risk-pattern guard before GLM configuration is read, returns local fallback with non-secret warning labels, and redacts risky context before local recommendation text is assembled.",
+    "files": [
+      "src-tauri/src/lib.rs"
+    ]
+  },
+  "verification": [
+    {
+      "command": "cargo test \"risky_\"",
+      "result": "PASS: 4 focused tests passed, including risky prompt/context external-block coverage and local prompt/context redaction coverage."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: 10 UI helper tests, Vite build, 45 Rust library tests, 15 CLI tests, doc-tests, and strict clippy passed."
+    },
+    {
+      "command": "git diff --cached --check && gitleaks protect --staged --no-banner --redact",
+      "result": "PASS before code commit cf5e343."
+    }
+  ],
+  "decision": "Keep. PromptVault now avoids sending risky prompt/context text to the external GLM improve path and keeps local fallback output redacted."
+}

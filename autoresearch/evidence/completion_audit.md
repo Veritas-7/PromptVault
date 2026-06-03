@@ -47,6 +47,7 @@ Date: 2026-06-03
 | Deterministic batch repair | CLI `repair --json`; weakest-first scan plus local-rules recommendations; no Markdown export; capped at 10 repairs | PASS |
 | Repair JSON prompt redaction | CLI `repair --json`; repair entries emit redacted prompt records so risky prompt text is not echoed raw | PASS |
 | Local recommendation goal redaction | `local_improvement`; deterministic recommendations redact risky original prompt text before copying it into the goal line | PASS |
+| External improve risk block | `improve_prompt_inner` blocks prompt/context risk-pattern text before external GLM routing and falls back locally with non-secret warning labels | PASS |
 | Repair redaction documentation | `README.md` and `docs/CLI.md` state stdout prompt previews and repair JSON prompt records are redacted, while Markdown exports remain explicit disk outputs | PASS |
 | Rust lint gate | `cargo clippy --all-targets --all-features -- -D warnings` passes with no warnings | PASS |
 | One-command local quality gate | `npm run check` runs quiet UI helper tests, frontend build, Rust tests, and strict clippy | PASS |
@@ -108,10 +109,10 @@ cargo run --quiet --bin promptvault-cli -- --help
 
 - `npm run build`: PASS, Vite production build completed.
 - `npm run test:ui`: PASS, 10 Node UI helper tests passed without `ExperimentalWarning` output.
-- `npm run check`: PASS, 10 quiet UI helper tests passed, Vite production build completed, 42 library tests plus 15 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, 10 quiet UI helper tests passed, Vite production build completed, 45 library tests plus 15 CLI tests passed, and strict clippy passed.
 - UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 42 library tests plus 15 CLI tests passed.
+- `cargo test`: PASS, 45 library tests plus 15 CLI tests passed.
 - Nested message content extraction: PASS, RED `cargo test text_from_value_extracts_nested_message_content_object` first failed with `left: ""`, GREEN passed after `text_from_value` extracted object-shaped `message.content` payloads.
 - Gemini session grouping: PASS, RED `cargo test parse_gemini_tmp_chat_uses_top_level_session_id` first failed with `left: "message-id"` and `right: "root-session-id"`, GREEN passed after the Gemini parser preserved the top-level chat `sessionId` in record metadata.
 - Claude meta user filtering: PASS, RED `cargo test parse_claude_project_jsonl_skips_meta_user_records` first failed with 2 records instead of 1, GREEN passed after `parse_claude_project_jsonl` skipped `isMeta=true` user-shaped records.
@@ -152,6 +153,8 @@ cargo run --quiet --bin promptvault-cli -- --help
 - Batch repair smoke: PASS, `repair --json --limit 100 --count 3` returned `provider=local-rules`, `preview_sort=quality_asc`, `scanned_prompt_count=100`, `returned_prompt_count=3`, `repair_count=3`, `markdown_written=false`, `output_path=null`, and first repair prompt was `36 · weak` with `score_delta=64`.
 - Repair JSON redaction coverage: PASS, RED `cargo test repair_json_entry_redacts_prompt_text` first failed before the repair JSON entry helper existed, GREEN passed after repair entries reused the redacted prompt-record path.
 - Local recommendation redaction coverage: PASS, RED `cargo test local_improvement_redacts_risky_original_sentence` first showed raw risky text copied into `revised_prompt`, GREEN passed after `local_improvement` derived its goal line from redacted prompt text.
+- External improve risk block coverage: PASS, resumed from an interrupted RED/GREEN slice, then fresh `cargo test "risky_"` passed 4 focused tests including risky prompt blocking, risky context blocking, local goal redaction, and local context redaction.
+- External improve full gate: PASS, `npm run check` passed 10 UI helper tests, Vite build, 45 Rust library tests, 15 CLI tests, doc-tests, and strict clippy.
 - Repair redaction docs: PASS, `README.md` and `docs/CLI.md` now describe redacted stdout prompt previews and redacted repair prompt/recommendation pairs.
 - Batch repair cap smoke: PASS, `repair --json --limit 100 --count 99` returned `returned_prompt_count=10`, `repair_count=10`, `markdown_written=false`, `output_path=null`, and one cap warning.
 - CLI unknown-command smoke: PASS, `scna` exited 1, printed help, and wrote `promptvault-cli error: unknown command: scna` to stderr.

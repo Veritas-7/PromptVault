@@ -78,7 +78,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         preview_limit = Some(parse_usize_arg(iter.next(), "--preview-limit")?);
                     }
                     "--preview-sort" => {
-                        preview_sort = Some(parse_required_arg(iter.next(), "--preview-sort")?);
+                        preview_sort = Some(parse_preview_sort_arg(iter.next())?);
                     }
                     "--weakest-first" => {
                         preview_sort = Some("quality-asc".to_string());
@@ -340,6 +340,19 @@ fn parse_source_ids_arg(value: Option<String>) -> Result<Vec<String>, Box<dyn st
     Ok(ids)
 }
 
+fn parse_preview_sort_arg(value: Option<String>) -> Result<String, Box<dyn std::error::Error>> {
+    let value = parse_required_arg(value, "--preview-sort")?;
+    match value.trim() {
+        "latest" => Ok("latest".to_string()),
+        "quality-asc" | "quality_asc" | "weakest" => Ok("quality-asc".to_string()),
+        "quality-desc" | "quality_desc" | "strongest" => Ok("quality-desc".to_string()),
+        other => Err(format!(
+            "--preview-sort must be one of latest, quality-asc, quality-desc; got {other}"
+        )
+        .into()),
+    }
+}
+
 fn collect_prompt_arg(args: Vec<String>) -> Result<String, Box<dyn std::error::Error>> {
     let prompt = if args.is_empty() {
         let mut buf = String::new();
@@ -521,5 +534,24 @@ mod tests {
         assert!(parse_source_ids_arg(None).is_err());
         assert!(parse_source_ids_arg(Some(",".to_string())).is_err());
         assert!(parse_source_ids_arg(Some("--limit".to_string())).is_err());
+    }
+
+    #[test]
+    fn parse_preview_sort_rejects_unknown_values() {
+        assert_eq!(
+            parse_preview_sort_arg(Some("latest".to_string())).expect("latest"),
+            "latest"
+        );
+        assert_eq!(
+            parse_preview_sort_arg(Some("quality_asc".to_string())).expect("underscore alias"),
+            "quality-asc"
+        );
+        assert_eq!(
+            parse_preview_sort_arg(Some("strongest".to_string())).expect("strongest alias"),
+            "quality-desc"
+        );
+        assert!(parse_preview_sort_arg(None).is_err());
+        assert!(parse_preview_sort_arg(Some("nonsense".to_string())).is_err());
+        assert!(parse_preview_sort_arg(Some("--limit".to_string())).is_err());
     }
 }

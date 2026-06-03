@@ -1,0 +1,33 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "ca894d6",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "command": "repair --source codex --limit 1 --count 0 --json",
+      "exit_code": 0,
+      "observed": "returned JSON with scanned_prompt_count 1, returned_prompt_count 0, and repair_count 0"
+    },
+    {
+      "command": "repair --source codex --limit 1 --count 1 --json",
+      "exit_code": 0,
+      "observed": "returned JSON with repair_count 1"
+    }
+  ],
+  "observed_weaknesses": [
+    "The CLI accepted an explicit repair count of zero.",
+    "The command scanned prompts but returned a successful no-op repair result."
+  ],
+  "selected_candidate": {
+    "name": "CLI positive repair count enforcement",
+    "reason": "Make explicit repair count requests meaningful while preserving the existing max-count cap.",
+    "success_metric": "repair --count 0 exits non-zero; repair --count 1 still exits 0."
+  },
+  "safety_controls": [
+    "The change is limited to promptvault-cli.rs.",
+    "The repair max-count cap remains unchanged.",
+    "A valid repair count smoke test was rerun.",
+    "npm run check was rerun after the change."
+  ]
+}

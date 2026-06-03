@@ -357,13 +357,16 @@ fn validate_source_ids(source_ids: Option<&[String]>) -> Result<(), Box<dyn std:
     let Some(requested) = source_ids else {
         return Ok(());
     };
+    if requested.is_empty() {
+        return Err("source ids require at least one source id".into());
+    }
     let requested = requested
         .iter()
         .map(|id| id.trim())
         .filter(|id| !id.is_empty())
         .collect::<BTreeSet<_>>();
     if requested.is_empty() {
-        return Ok(());
+        return Err("source ids require at least one source id".into());
     }
 
     let known = source_specs()
@@ -2040,6 +2043,24 @@ mod tests {
         assert!(err
             .to_string()
             .contains("unknown source id: missing-source"));
+    }
+
+    #[test]
+    fn run_scan_rejects_empty_source_ids() {
+        for source_ids in [Vec::new(), vec![" ".to_string()]] {
+            let err = run_scan(ScanOptions {
+                limit: Some(1),
+                include_markdown: Some(false),
+                write_markdown: Some(false),
+                source_ids: Some(source_ids),
+                ..Default::default()
+            })
+            .expect_err("empty source ids should fail closed");
+
+            assert!(err
+                .to_string()
+                .contains("source ids require at least one source id"));
+        }
     }
 
     #[test]

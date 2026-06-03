@@ -76,6 +76,7 @@ If GLM is missing, rate-limited, or unavailable, PromptVault falls back to local
 
 ```bash
 npm run build
+npm run check
 cd src-tauri
 cargo check
 cargo test

@@ -1,0 +1,20 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "74aa789",
+  "worktree_status_before_iteration": "clean",
+  "observed_weaknesses": [
+    "AutoResearch iterations had to remember separate frontend build, Rust test, and strict clippy commands.",
+    "The package scripts did not expose a single local quality gate."
+  ],
+  "selected_candidate": {
+    "name": "npm run check",
+    "reason": "Give future agents one repo-level command for the common local quality gate.",
+    "success_metric": "npm run check exits 0 after running npm build, cargo test, and strict clippy."
+  },
+  "safety_controls": [
+    "No dependencies changed.",
+    "The script composes already-passing commands.",
+    "The script does not run packaging or write prompt exports."
+  ]
+}

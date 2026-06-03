@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test:ui": "node --experimental-transform-types --test tests/*.test.ts",
+    "test:ui": "node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/*.test.ts",
     "check": "npm run test:ui && npm run build && cd src-tauri && cargo test && cargo clippy --all-targets --all-features -- -D warnings",
     "preview": "vite preview",
     "tauri": "tauri"

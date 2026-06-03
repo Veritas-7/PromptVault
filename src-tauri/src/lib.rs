@@ -434,6 +434,14 @@ pub async fn improve_prompt_inner(
         ));
     }
 
+    if let Some(warning) = external_improve_block_reason(&prompt, request.context.as_deref()) {
+        return Ok(local_improvement(
+            &prompt,
+            request.context.as_deref(),
+            vec![warning],
+        ));
+    }
+
     let env = read_secret_env(Path::new(SECRET_ENV_PATH)).unwrap_or_default();
     let key = glm_api_key_from_env(&env);
     let endpoint = normalize_chat_endpoint(
@@ -523,6 +531,29 @@ pub async fn improve_prompt_inner(
         request.context.as_deref(),
         vec!["GLM_API_KEY/GLM_API_KEY_2 was not available; used local fallback.".to_string()],
     ))
+}
+
+fn external_improve_block_reason(prompt: &str, context: Option<&str>) -> Option<String> {
+    let flags = detect_risks(prompt)
+        .into_iter()
+        .chain(
+            context
+                .filter(|value| !value.trim().is_empty())
+                .map(detect_risks)
+                .unwrap_or_default(),
+        )
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    if flags.is_empty() {
+        None
+    } else {
+        Some(format!(
+            "Prompt/context contains risk-pattern text ({}); used local fallback instead of external GLM.",
+            flags.join(", ")
+        ))
+    }
 }
 
 fn glm_improvement_from_content(prompt: &str, content: &str) -> Option<ImproveResult> {
@@ -1915,7 +1946,10 @@ fn local_improvement(prompt: &str, context: Option<&str>, warnings: Vec<String>)
             .unwrap_or("해결하려는 작업을 명확히 수행한다."),
     );
     revised.push_str("\n\n맥락:\n");
-    if let Some(context) = context.filter(|value| !value.trim().is_empty()) {
+    let redacted_context = context
+        .filter(|value| !value.trim().is_empty())
+        .map(redact_sensitive_text);
+    if let Some(context) = redacted_context.as_deref() {
         revised.push_str("- ");
         revised.push_str(context.trim());
         revised.push('\n');
@@ -2074,6 +2108,49 @@ mod tests {
         let result = local_improvement(
             &format!("Fix parser handling for {synthetic_token}"),
             None,
+            Vec::new(),
+        );
+
+        assert!(!result.revised_prompt.contains(&synthetic_token));
+        assert!(
+            result
+                .revised_prompt
+                .contains("[REDACTED_LONG_BASE64_LIKE_TOKEN]")
+        );
+    }
+
+    #[test]
+    fn external_improve_block_reason_flags_risky_prompt() {
+        let synthetic_token = format!("sk-{}", "A".repeat(60));
+        let warning = external_improve_block_reason(
+            &format!("Fix parser handling for {synthetic_token}"),
+            None,
+        )
+        .expect("risky prompt should block external improve");
+
+        assert!(warning.contains("risk-pattern text"));
+        assert!(!warning.contains(&synthetic_token));
+    }
+
+    #[test]
+    fn external_improve_block_reason_flags_risky_context() {
+        let synthetic_token = format!("sk-{}", "A".repeat(60));
+        let warning = external_improve_block_reason(
+            "Fix parser handling.",
+            Some(&format!("workspace token {synthetic_token}")),
+        )
+        .expect("risky context should block external improve");
+
+        assert!(warning.contains("risk-pattern text"));
+        assert!(!warning.contains(&synthetic_token));
+    }
+
+    #[test]
+    fn local_improvement_redacts_risky_context() {
+        let synthetic_token = format!("sk-{}", "A".repeat(60));
+        let result = local_improvement(
+            "Fix parser handling.",
+            Some(&format!("workspace token {synthetic_token}")),
             Vec::new(),
         );
 

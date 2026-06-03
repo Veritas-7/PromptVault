@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-03 21:40 KST
+Updated: 2026-06-03 21:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019e8bcb-66b7-7443-a79d-46fd3686eadc`
 
-## Current Slice
+## Previous Slice
 
 External improve risk block.
 
@@ -57,7 +57,45 @@ If interrupted again:
 
 ## Remaining
 
-- If `git status` still shows docs/evidence or `working.md` changes, commit and
-  push them after verification.
-- If the worktree is clean and `origin/main` matches `HEAD`, this slice has no
-  remaining work.
+The external improve risk block slice was committed and pushed at:
+
+- `cf5e34394a93b478d44524546d6052d6eb21996f`
+- `2c925efd34210b5963189bb6cb4c6b290657b4d0`
+
+## Current Slice
+
+Full-dir gitleaks generated-artifact hygiene.
+
+Fresh status before this slice:
+
+- Branch: `main`
+- Local/remote: clean at `2c925efd34210b5963189bb6cb4c6b290657b4d0`
+- Baseline issue: `gitleaks dir . --no-banner --redact` failed only on ignored
+  generated `src-tauri/target/**/libmuda*.rmeta` metadata files.
+
+Change in progress:
+
+- Add `.gitleaks.toml` extending default rules.
+- Allowlist only generated `src-tauri/target/(debug|release)/deps/libmuda-*.rmeta`.
+- Add evidence under `autoresearch/evidence/`.
+- Update `completion_audit.md`.
+
+Verification so far:
+
+- Temporary config scan:
+  `gitleaks dir . --no-banner --redact --config /tmp/promptvault-gitleaks-test.toml`
+  scanned about 839 MB and found no leaks.
+- In-repo config scan:
+  `gitleaks dir . --no-banner --redact`
+  scanned about 839 MB and found no leaks.
+- Full project check:
+  `npm run check`
+  passed UI 10, Vite build, Rust lib 45, CLI 15, doc-tests, and clippy.
+
+Resume state:
+
+- If `git status` still shows `.gitleaks.toml`, evidence, audit, or this
+  `working.md` update as uncommitted, stage only those paths, run staged
+  whitespace and gitleaks checks, then commit/push the docs/config slice.
+- If the worktree is clean and `HEAD...origin/main` returns `0 0`, this slice
+  has no remaining work.

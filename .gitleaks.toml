@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Ignore generated Tauri/Rust muda metadata false positives"
+paths = [
+  '''^src-tauri/target/(debug|release)/deps/libmuda-[a-f0-9]+\.rmeta$''',
+]

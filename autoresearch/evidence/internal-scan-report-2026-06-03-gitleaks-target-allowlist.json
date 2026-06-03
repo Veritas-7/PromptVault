@@ -1,0 +1,31 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "2c925efd34210b5963189bb6cb4c6b290657b4d0",
+  "baseline": {
+    "command": "gitleaks dir . --no-banner --redact",
+    "result": "FAILED: 3 generic-api-key findings, all in ignored generated src-tauri/target/**/libmuda*.rmeta files."
+  },
+  "change": {
+    "summary": "Added a narrow .gitleaks.toml default-extension allowlist for generated Tauri/Rust muda metadata false positives.",
+    "files": [
+      ".gitleaks.toml"
+    ],
+    "allowlisted_path_regex": "^src-tauri/target/(debug|release)/deps/libmuda-[a-f0-9]+\\.rmeta$"
+  },
+  "verification": [
+    {
+      "command": "gitleaks dir . --no-banner --redact --config /tmp/promptvault-gitleaks-test.toml",
+      "result": "PASS: temporary config scanned about 839 MB and found no leaks."
+    },
+    {
+      "command": "gitleaks dir . --no-banner --redact",
+      "result": "PASS: in-repo .gitleaks.toml config scanned about 839 MB and found no leaks."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: 10 UI tests, Vite build, 45 Rust library tests, 15 CLI tests, doc-tests, and strict clippy passed."
+    }
+  ],
+  "decision": "Keep. The allowlist is restricted to ignored generated libmuda metadata files and does not weaken tracked commit-range scanning."
+}

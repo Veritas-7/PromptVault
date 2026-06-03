@@ -48,6 +48,7 @@ Date: 2026-06-03
 | Repair JSON prompt redaction | CLI `repair --json`; repair entries emit redacted prompt records so risky prompt text is not echoed raw | PASS |
 | Local recommendation goal redaction | `local_improvement`; deterministic recommendations redact risky original prompt text before copying it into the goal line | PASS |
 | External improve risk block | `improve_prompt_inner` blocks prompt/context risk-pattern text before external GLM routing and falls back locally with non-secret warning labels | PASS |
+| Full-dir gitleaks generated-artifact hygiene | `.gitleaks.toml` extends defaults and allowlists only generated `src-tauri/target/**/libmuda*.rmeta` metadata false positives; tracked commit-range scans still run normally | PASS |
 | Repair redaction documentation | `README.md` and `docs/CLI.md` state stdout prompt previews and repair JSON prompt records are redacted, while Markdown exports remain explicit disk outputs | PASS |
 | Rust lint gate | `cargo clippy --all-targets --all-features -- -D warnings` passes with no warnings | PASS |
 | One-command local quality gate | `npm run check` runs quiet UI helper tests, frontend build, Rust tests, and strict clippy | PASS |
@@ -155,6 +156,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - Local recommendation redaction coverage: PASS, RED `cargo test local_improvement_redacts_risky_original_sentence` first showed raw risky text copied into `revised_prompt`, GREEN passed after `local_improvement` derived its goal line from redacted prompt text.
 - External improve risk block coverage: PASS, resumed from an interrupted RED/GREEN slice, then fresh `cargo test "risky_"` passed 4 focused tests including risky prompt blocking, risky context blocking, local goal redaction, and local context redaction.
 - External improve full gate: PASS, `npm run check` passed 10 UI helper tests, Vite build, 45 Rust library tests, 15 CLI tests, doc-tests, and strict clippy.
+- Full-dir gitleaks generated-artifact hygiene: PASS, RED `gitleaks dir . --no-banner --redact` found 3 findings in ignored `src-tauri/target/**/libmuda*.rmeta`; GREEN with `.gitleaks.toml` scanned about 839 MB and found no leaks.
 - Repair redaction docs: PASS, `README.md` and `docs/CLI.md` now describe redacted stdout prompt previews and redacted repair prompt/recommendation pairs.
 - Batch repair cap smoke: PASS, `repair --json --limit 100 --count 99` returned `returned_prompt_count=10`, `repair_count=10`, `markdown_written=false`, `output_path=null`, and one cap warning.
 - CLI unknown-command smoke: PASS, `scna` exited 1, printed help, and wrote `promptvault-cli error: unknown command: scna` to stderr.
@@ -179,5 +181,6 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Residual Risks
 
 - The full Markdown export is large (`364M`) on this machine. The default release CLI export completes, the Tauri UI receives only a latest-prompt preview over IPC, and CLI automation can now use `--no-export` for stats-only scans.
+- Full-dir secret scans intentionally skip only generated Tauri/Rust `libmuda*.rmeta` metadata under ignored `src-tauri/target/`. Git commit-range scans are still required before GitHub-bound pushes.
 - Antigravity raw `.pb` conversation files are still deferred because no stable local schema has been verified for separating user prompts from model/tool output. SQLite `conversations/*.db` is implemented only for the confirmed `steps.step_type=14` user-input lane.
 - Direct Codex SDK prompt rewriting is documented but not enabled by default, because the official SDK is agent/workflow oriented and prompt rewriting is safer through a narrow chat-completion path.

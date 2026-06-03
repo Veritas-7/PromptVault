@@ -650,6 +650,13 @@ fn collect_from_source(
         if prompts.len() >= remaining {
             break;
         }
+        let file = match file {
+            Ok(file) => file,
+            Err(err) => {
+                summary.notes.push(format!("Skipped walk entry: {err}"));
+                continue;
+            }
+        };
         summary.files_seen += 1;
         let found = match source.kind {
             SourceKind::CodexJsonl => parse_codex_jsonl(source, &file),
@@ -686,9 +693,12 @@ fn collect_from_source(
     Ok(prompts)
 }
 
-fn matching_source_files(root: &Path, kind: SourceKind) -> Box<dyn Iterator<Item = PathBuf> + '_> {
+fn matching_source_files(
+    root: &Path,
+    kind: SourceKind,
+) -> Box<dyn Iterator<Item = Result<PathBuf, walkdir::Error>> + '_> {
     if root.is_file() {
-        return Box::new(std::iter::once(root.to_path_buf()));
+        return Box::new(std::iter::once(Ok(root.to_path_buf())));
     }
 
     Box::new(
@@ -696,14 +706,16 @@ fn matching_source_files(root: &Path, kind: SourceKind) -> Box<dyn Iterator<Item
             .follow_links(false)
             .sort_by_file_name()
             .into_iter()
-            .filter_map(Result::ok)
             .filter_map(move |entry| {
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(err) => return Some(Err(err)),
+                };
                 let path = entry.path();
-                if source_file_matches(path, kind) {
-                    Some(path.to_path_buf())
-                } else {
-                    None
+                if !source_file_matches(path, kind) {
+                    return None;
                 }
+                Some(Ok(path.to_path_buf()))
             }),
     )
 }
@@ -2317,6 +2329,57 @@ mod tests {
             .iter()
             .any(|prompt| prompt.text.contains("second unique prompt path")));
         assert_eq!(files_seen, 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn collect_from_source_reports_walk_errors() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-walk-error-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let blocked = root.join("000-blocked");
+        std::fs::create_dir_all(&blocked).expect("create blocked dir");
+        std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o000))
+            .expect("block traversal");
+
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+        let mut summary = SourceSummary {
+            id: source.id.to_string(),
+            label: source.label.to_string(),
+            root_path: source.root.display().to_string(),
+            files_seen: 0,
+            prompts_found: 0,
+            average_quality: 0.0,
+            weak_prompt_count: 0,
+            status: "ok".to_string(),
+            notes: Vec::new(),
+        };
+
+        let result = collect_from_source(&source, &mut summary, 1);
+        std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o700))
+            .expect("restore traversal");
+        std::fs::remove_dir_all(root).expect("remove temp root");
+        result.expect("collect source");
+
+        assert!(
+            summary
+                .notes
+                .iter()
+                .any(|note| note.contains("Skipped walk entry")),
+            "expected walk error note, got {:?}",
+            summary.notes
+        );
     }
 
     #[test]

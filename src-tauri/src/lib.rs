@@ -1123,11 +1123,14 @@ fn push_record(
 fn jsonl_lines(path: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
-    Ok(reader
-        .lines()
-        .map_while(Result::ok)
-        .filter(|line| !line.trim().is_empty())
-        .collect())
+    let mut lines = Vec::new();
+    for line in reader.lines() {
+        let line = line?;
+        if !line.trim().is_empty() {
+            lines.push(line);
+        }
+    }
+    Ok(lines)
 }
 
 fn text_from_value(value: Option<&Value>) -> String {
@@ -2322,6 +2325,27 @@ mod tests {
 
         assert!(markdown.contains("## Warnings"));
         assert!(markdown.contains("- Scan stopped at configured limit of 1 prompts."));
+    }
+
+    #[test]
+    fn jsonl_lines_propagates_read_errors() {
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-invalid-jsonl-{}.jsonl",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            b"{\"type\":\"response_item\",\"payload\":{\"role\":\"user\"}}\n\xff\n",
+        )
+        .expect("write invalid jsonl fixture");
+
+        let result = jsonl_lines(&path);
+        std::fs::remove_file(path).expect("remove invalid jsonl fixture");
+
+        let err = result.expect_err("invalid UTF-8 should fail closed");
+        assert!(err
+            .to_string()
+            .contains("stream did not contain valid UTF-8"));
     }
 
     #[test]

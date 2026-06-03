@@ -27,6 +27,7 @@ Date: 2026-06-03
 | Measurable improvement delta | `QualityDelta`; CLI/UI expose before score, after score, score delta, resolved gaps, and remaining gaps | PASS |
 | Deterministic local improve | `ImproveRequest.force_local`; CLI `improve --local`; bypasses GLM and returns local-rules without warnings | PASS |
 | Deterministic batch repair | CLI `repair --json`; weakest-first scan plus local-rules recommendations; no Markdown export; capped at 10 repairs | PASS |
+| Rust lint gate | `cargo clippy --all-targets --all-features -- -D warnings` passes with no warnings | PASS |
 | GLM from `secrets.env` as fallback-capable AI path | Reads `GLM_API_KEY`/`GLM_API_KEY_2`, `GLM_CODING_ENDPOINT`, `GLM_CODING_MODEL`; normalizes base endpoint; falls back locally on 429 | PASS |
 | Codex SDK considered | `research/external_sources.json` and strategy doc cite official Codex SDK README and defer direct SDK invocation for safety | PASS_WITH_NOTE |
 | CLI-Anything-inspired strong CLI | `promptvault-cli` supports `sources`, `scan`, `improve`, and `--json` summaries | PASS |
@@ -52,6 +53,7 @@ cargo run --quiet --bin promptvault-cli -- improve --json --prompt "make better"
 cargo run --quiet --bin promptvault-cli -- improve --local --json --prompt "make better"
 cargo run --quiet --bin promptvault-cli -- repair --json --limit 100 --count 3
 cargo run --quiet --bin promptvault-cli -- repair --json --limit 100 --count 99
+cargo clippy --all-targets --all-features -- -D warnings
 cargo build --release --bin promptvault-cli
 ./target/release/promptvault-cli scan --no-export --json > /tmp/promptvault-no-export-full.json
 ./target/release/promptvault-cli scan --output /tmp/promptvault-antigravity-db-full.md --json
@@ -66,6 +68,7 @@ git diff --check
 - `npm run build`: PASS, Vite production build completed.
 - `cargo check`: PASS.
 - `cargo test`: PASS, 13 library tests plus 2 CLI tests passed.
+- `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.

@@ -114,7 +114,7 @@ pub struct QualityDelta {
     pub remaining_gaps: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ScanOptions {
     pub limit: Option<usize>,
     pub output_path: Option<String>,
@@ -123,20 +123,6 @@ pub struct ScanOptions {
     pub include_markdown: Option<bool>,
     pub write_markdown: Option<bool>,
     pub source_ids: Option<Vec<String>>,
-}
-
-impl Default for ScanOptions {
-    fn default() -> Self {
-        Self {
-            limit: None,
-            output_path: None,
-            preview_limit: None,
-            preview_sort: None,
-            include_markdown: None,
-            write_markdown: None,
-            source_ids: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -1107,7 +1093,7 @@ fn jsonl_lines(path: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let reader = BufReader::new(file);
     Ok(reader
         .lines()
-        .filter_map(Result::ok)
+        .map_while(Result::ok)
         .filter(|line| !line.trim().is_empty())
         .collect())
 }
@@ -1124,11 +1110,10 @@ fn text_from_value(value: Option<&Value>) -> String {
                     Some(text.to_string())
                 } else if let Some(text) = item.get("content").and_then(Value::as_str) {
                     Some(text.to_string())
-                } else if let Some(text) = item.pointer("/message/content").and_then(Value::as_str)
-                {
-                    Some(text.to_string())
                 } else {
-                    None
+                    item.pointer("/message/content")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
                 }
             })
             .collect::<Vec<_>>()
@@ -1495,7 +1480,7 @@ fn top_phrases(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
     for prompt in prompts {
         for sentence in prompt
             .text
-            .split(|c| matches!(c, '.' | '?' | '!' | '\n' | ';' | '。' | '？' | '！'))
+            .split(['.', '?', '!', '\n', ';', '。', '？', '！'])
             .map(str::trim)
             .filter(|sentence| sentence.chars().count() >= 12)
         {
@@ -1818,7 +1803,7 @@ fn local_improvement(prompt: &str, context: Option<&str>, warnings: Vec<String>)
 
 fn first_sentence(prompt: &str) -> Option<String> {
     prompt
-        .split(|c| matches!(c, '.' | '?' | '!' | '\n' | '。' | '？' | '！'))
+        .split(['.', '?', '!', '\n', '。', '？', '！'])
         .map(str::trim)
         .find(|line| !line.is_empty())
         .map(|line| line.chars().take(180).collect())

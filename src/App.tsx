@@ -15,6 +15,7 @@ import "./App.css";
 import type { ImproveResult, PromptRecord, ScanResult } from "./types";
 
 type ScanState = "idle" | "scanning" | "ready" | "failed";
+const PREVIEW_LIMIT = 1000;
 
 function App() {
   const [scanState, setScanState] = useState<ScanState>("idle");
@@ -53,7 +54,11 @@ function App() {
     try {
       const parsedLimit = limit.trim() ? Number(limit) : undefined;
       const next = await invoke<ScanResult>("scan_prompts", {
-        options: { limit: parsedLimit },
+        options: {
+          limit: parsedLimit,
+          preview_limit: PREVIEW_LIMIT,
+          include_markdown: false,
+        },
       });
       setResult(next);
       setSelectedId(next.prompts[next.prompts.length - 1]?.id ?? null);
@@ -120,12 +125,16 @@ function App() {
       {result ? (
         <section className="notice">
           <FileText size={18} />
-          <span>{result.output_path}</span>
+          <span>
+            {result.output_path} · preview {result.returned_prompt_count.toLocaleString()} /{" "}
+            {result.stats.total_prompts.toLocaleString()}
+          </span>
         </section>
       ) : null}
 
       <section className="metrics">
         <Metric icon={<ClipboardList size={18} />} label="Prompts" value={result?.stats.total_prompts ?? 0} />
+        <Metric icon={<Search size={18} />} label="Preview" value={result?.returned_prompt_count ?? 0} />
         <Metric icon={<FileText size={18} />} label="Files" value={result?.stats.total_files ?? 0} />
         <Metric icon={<Brain size={18} />} label="Words" value={result?.stats.total_words ?? 0} />
         <Metric
@@ -174,6 +183,13 @@ function App() {
         <section className="panel prompt-list-panel">
           <div className="panel-heading">
             <h2>Prompts</h2>
+            <span>
+              {result
+                ? `${result.returned_prompt_count.toLocaleString()} loaded${
+                    result.prompts_truncated ? " · latest preview" : ""
+                  }`
+                : "not loaded"}
+            </span>
             <div className="searchbox">
               <Search size={16} />
               <input

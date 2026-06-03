@@ -51,8 +51,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         "scan" => {
             let json = take_flag(&mut args, "--json");
+            let include_markdown = take_flag(&mut args, "--include-markdown");
             let mut limit = None;
             let mut output_path = None;
+            let mut preview_limit = Some(0);
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
@@ -62,17 +64,28 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     "--output" => {
                         output_path = iter.next();
                     }
+                    "--preview-limit" => {
+                        preview_limit = iter.next().and_then(|value| value.parse::<usize>().ok());
+                    }
                     other => {
                         return Err(format!("unknown scan argument: {other}").into());
                     }
                 }
             }
-            let result = run_scan(ScanOptions { limit, output_path })?;
+            let result = run_scan(ScanOptions {
+                limit,
+                output_path,
+                preview_limit,
+                include_markdown: Some(include_markdown),
+            })?;
             if json {
                 let summary = serde_json::json!({
                     "generated_at": result.generated_at,
                     "output_path": result.output_path,
                     "stats": result.stats,
+                    "returned_prompt_count": result.returned_prompt_count,
+                    "prompts_truncated": result.prompts_truncated,
+                    "markdown_included": result.markdown_included,
                     "warnings": result.warnings
                 });
                 println!("{}", serde_json::to_string_pretty(&summary)?);
@@ -81,6 +94,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("PromptVault scan complete");
             println!("output: {}", result.output_path);
             println!("prompts: {}", result.stats.total_prompts);
+            println!("returned_prompts: {}", result.returned_prompt_count);
             println!("files: {}", result.stats.total_files);
             println!("avg_words: {:.1}", result.stats.average_words);
             if !result.warnings.is_empty() {
@@ -156,6 +170,6 @@ fn take_flag(args: &mut Vec<String>, flag: &str) -> bool {
 
 fn print_help() {
     println!(
-        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--limit N] [--output PATH] [--json]\n  improve [--json] --prompt TEXT\n  improve [--json] < prompt.txt"
+        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--limit N] [--output PATH] [--preview-limit N] [--include-markdown] [--json]\n  improve [--json] --prompt TEXT\n  improve [--json] < prompt.txt"
     );
 }

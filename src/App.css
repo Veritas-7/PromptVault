@@ -153,7 +153,7 @@ h3 {
 .metrics {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .metric {
@@ -220,6 +220,7 @@ h3 {
   align-items: center;
   border-bottom: 1px solid #e5ebe3;
   display: flex;
+  gap: 12px;
   justify-content: space-between;
   min-height: 50px;
   padding: 0 14px;
@@ -338,6 +339,15 @@ h3 {
   height: 34px;
   padding: 0 8px;
   width: min(210px, 48%);
+}
+
+.prompt-list-panel .panel-heading > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.prompt-list-panel .searchbox {
+  flex: 0 0 min(210px, 42%);
 }
 
 .searchbox input {

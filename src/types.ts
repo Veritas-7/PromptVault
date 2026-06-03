@@ -44,6 +44,9 @@ export interface ScanResult {
   markdown: string;
   stats: ScanStats;
   prompts: PromptRecord[];
+  returned_prompt_count: number;
+  prompts_truncated: boolean;
+  markdown_included: boolean;
   warnings: string[];
 }
 

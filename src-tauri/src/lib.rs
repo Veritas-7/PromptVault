@@ -64,6 +64,9 @@ pub struct ScanResult {
     pub markdown: String,
     pub stats: ScanStats,
     pub prompts: Vec<PromptRecord>,
+    pub returned_prompt_count: usize,
+    pub prompts_truncated: bool,
+    pub markdown_included: bool,
     pub warnings: Vec<String>,
 }
 
@@ -87,6 +90,19 @@ pub struct ImproveResult {
 pub struct ScanOptions {
     pub limit: Option<usize>,
     pub output_path: Option<String>,
+    pub preview_limit: Option<usize>,
+    pub include_markdown: Option<bool>,
+}
+
+impl Default for ScanOptions {
+    fn default() -> Self {
+        Self {
+            limit: None,
+            output_path: None,
+            preview_limit: None,
+            include_markdown: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -110,10 +126,7 @@ enum SourceKind {
 
 #[tauri::command]
 fn scan_prompts(options: Option<ScanOptions>) -> Result<ScanResult, String> {
-    let opts = options.unwrap_or(ScanOptions {
-        limit: None,
-        output_path: None,
-    });
+    let opts = options.unwrap_or_default();
     run_scan(opts).map_err(|err| err.to_string())
 }
 
@@ -126,6 +139,8 @@ async fn improve_prompt(request: ImproveRequest) -> Result<ImproveResult, String
 
 pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::Error>> {
     let limit = options.limit.unwrap_or(usize::MAX);
+    let preview_limit = options.preview_limit;
+    let include_markdown = options.include_markdown.unwrap_or(true);
     let mut warnings = Vec::new();
     let mut prompts = Vec::new();
     let mut summaries = Vec::new();
@@ -191,14 +206,37 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
     }
     fs::write(&output_path, &markdown)?;
 
+    let response_prompts = response_prompts(&prompts, preview_limit);
+    let returned_prompt_count = response_prompts.len();
+    let prompts_truncated = returned_prompt_count < prompts.len();
+    let response_markdown = if include_markdown {
+        markdown
+    } else {
+        String::new()
+    };
+
     Ok(ScanResult {
         generated_at,
         output_path: output_path.display().to_string(),
-        markdown,
+        markdown: response_markdown,
         stats,
-        prompts,
+        prompts: response_prompts,
+        returned_prompt_count,
+        prompts_truncated,
+        markdown_included: include_markdown,
         warnings,
     })
+}
+
+fn response_prompts(prompts: &[PromptRecord], preview_limit: Option<usize>) -> Vec<PromptRecord> {
+    match preview_limit {
+        None => prompts.to_vec(),
+        Some(0) => Vec::new(),
+        Some(limit) => {
+            let start = prompts.len().saturating_sub(limit);
+            prompts[start..].to_vec()
+        }
+    }
 }
 
 pub async fn improve_prompt_inner(
@@ -1236,6 +1274,21 @@ mod tests {
     }
 
     #[test]
+    fn response_prompt_preview_returns_latest_records() {
+        let prompts = vec![record("a"), record("b"), record("c")];
+        let preview = response_prompts(&prompts, Some(2));
+        assert_eq!(
+            preview
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["b", "c"]
+        );
+        assert!(response_prompts(&prompts, Some(0)).is_empty());
+        assert_eq!(response_prompts(&prompts, None).len(), 3);
+    }
+
+    #[test]
     fn normalizes_glm_base_endpoint() {
         assert_eq!(
             normalize_chat_endpoint("https://api.z.ai/api/coding/paas/v4"),
@@ -1245,5 +1298,21 @@ mod tests {
             normalize_chat_endpoint("https://api.z.ai/api/coding/paas/v4/chat/completions"),
             "https://api.z.ai/api/coding/paas/v4/chat/completions"
         );
+    }
+
+    fn record(id: &str) -> PromptRecord {
+        PromptRecord {
+            id: id.to_string(),
+            source: "test".to_string(),
+            session_id: id.to_string(),
+            path: "/tmp/test.jsonl".to_string(),
+            timestamp: Some(id.to_string()),
+            cwd: None,
+            text: id.to_string(),
+            word_count: 1,
+            char_count: 1,
+            hash: id.to_string(),
+            risk_flags: Vec::new(),
+        }
     }
 }

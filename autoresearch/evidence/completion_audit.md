@@ -38,6 +38,7 @@ Date: 2026-06-03
 | Explicit stdout prompt preview | CLI `--include-prompts`; prompt bodies remain omitted by default and opt-in stdout previews are capped at 25 records | PASS |
 | Risky stdout prompt redaction | CLI JSON `--include-prompts` redacts risk-pattern text in prompt previews while preserving risk flags and non-preview scan data | PASS |
 | Key-value secret redaction | `redact_sensitive_text`; key/value patterns such as `api_key=<value>` redact the value, not just the key prefix | PASS |
+| Private-key block redaction | `redact_sensitive_text`; private key BEGIN/body/END blocks redact as one marker instead of leaving body or footer text visible | PASS |
 | Prompt quality scoring | `PromptQuality`, `ScanStats.average_quality`, `weak_prompt_count`, `top_quality_gaps`; UI quality metrics and suggestions | PASS |
 | Prompt improvement app | UI selected-prompt panel plus `improve_prompt` Tauri command; selected detail stays within the active filtered prompt list; recommendations display only for the prompt that produced them; starting a new improvement clears stale recommendation output | PASS |
 | Measurable improvement delta | `QualityDelta`; CLI/UI expose before score, after score, score delta, resolved gaps, and remaining gaps | PASS |
@@ -104,10 +105,10 @@ cargo run --quiet --bin promptvault-cli -- --help
 
 - `npm run build`: PASS, Vite production build completed.
 - `npm run test:ui`: PASS, 10 Node UI helper tests passed without `ExperimentalWarning` output.
-- `npm run check`: PASS, 10 quiet UI helper tests passed, Vite production build completed, 40 library tests plus 14 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, 10 quiet UI helper tests passed, Vite production build completed, 41 library tests plus 14 CLI tests passed, and strict clippy passed.
 - UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 40 library tests plus 14 CLI tests passed.
+- `cargo test`: PASS, 41 library tests plus 14 CLI tests passed.
 - Nested message content extraction: PASS, RED `cargo test text_from_value_extracts_nested_message_content_object` first failed with `left: ""`, GREEN passed after `text_from_value` extracted object-shaped `message.content` payloads.
 - Gemini session grouping: PASS, RED `cargo test parse_gemini_tmp_chat_uses_top_level_session_id` first failed with `left: "message-id"` and `right: "root-session-id"`, GREEN passed after the Gemini parser preserved the top-level chat `sessionId` in record metadata.
 - Claude meta user filtering: PASS, RED `cargo test parse_claude_project_jsonl_skips_meta_user_records` first failed with 2 records instead of 1, GREEN passed after `parse_claude_project_jsonl` skipped `isMeta=true` user-shaped records.
@@ -115,7 +116,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - Claude command wrapper filtering: PASS, RED `cargo test parse_claude_project_jsonl_skips_command_wrapper_records` first failed with 2 records instead of 1, GREEN passed after `strip_injected_context` dropped command wrapper records; post-fix Claude projects weakest scan returned `containsCommandWrapper=false`.
 - Claude local-command output filtering: PASS, RED `cargo test parse_claude_project_jsonl_skips_local_command_output_records` first failed with 2 records instead of 1, GREEN passed after `strip_injected_context` dropped `<local-command-...>` wrappers; post-fix Claude projects weakest scan returned `containsLocalCommand=false`.
 - Command-only history filtering: PASS, RED `cargo test parse_claude_history_jsonl_skips_command_only_records` first failed with 2 records instead of 1, GREEN passed after `strip_injected_context` dropped slash command-only entries; post-fix Claude history weakest scan returned `commandOnlyCount=0`.
-- CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty and flag-like prompt rejection, numeric argument validation, required value validation, empty source component rejection, repair count cap documentation, and sources extra-arg rejection.
+- CLI unit tests: PASS, 14 CLI tests passed including explicit help command recognition, empty and flag-like prompt rejection, numeric argument validation, required value validation, empty source component rejection, repair count cap documentation, JSON prompt preview redaction, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Sources extra-arg smoke: PASS, `sources --bogus` and `sources --json --bogus` both exited 1 with `unknown sources argument: --bogus`; valid `sources --json` still returned 11 roots.
@@ -140,6 +141,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - Stdout cap smoke: PASS, `--preview-limit 30 --include-prompts` returned `returned_prompt_count=30`, `prompt_stdout_count=25`, `prompts_len=25`, and one cap warning.
 - Risky stdout redaction smoke: PASS, Claude history `--include-prompts` preview returned `containsRawSkToken=false`, `containsRedaction=true`, and preserved the expected configured-limit warning.
 - Key-value redaction coverage: PASS, RED `cargo test redact_sensitive_text_redacts_key_value_pairs` first left the secret value after the redaction marker, GREEN passed after `possible_api_key` matched the optional value segment.
+- Private-key block redaction coverage: PASS, RED `cargo test redact_sensitive_text_redacts_private_key_blocks` first left the key body and footer after the redaction marker, GREEN passed after `private_key` matched the full BEGIN/body/END block.
 - Prompt quality smoke: PASS, 100-prompt smoke reported `average_quality=71.6`, `weak_prompt_count=16`, and top quality gaps `constraints`, `verification`, `output_format`, `action_verb`, `context`.
 - Improvement delta smoke: PASS, `improve --json --prompt "make better"` returned `quality_delta.score_delta=64`, `before.score=36`, `after.score=100`, and resolved gaps `specific_goal`, `context`, `constraints`, `verification`, `output_format`.
 - Empty improve smoke: PASS, empty `--prompt`, empty stdin, and no-arg stdin EOF all exited 1 with `promptvault-cli error: improve requires a non-empty prompt`.

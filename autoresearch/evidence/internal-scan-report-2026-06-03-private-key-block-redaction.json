@@ -1,0 +1,42 @@
+{
+  "schema": "promptvault-autoresearch-internal-scan-v1",
+  "generated_at": "2026-06-03T21:18:26+0900",
+  "iteration": "private-key-block-redaction",
+  "code_commit": "0c5b265267af574acd49cd71328b85555bf0902f",
+  "status": "pass",
+  "candidate": {
+    "problem": "The private_key regex matched only the block header, so redaction could leave body and footer text visible.",
+    "risk": "Private key material could remain in opt-in prompt previews after a partial redaction marker.",
+    "decision": "Extend private_key to match the full BEGIN/body/END block using dot-all non-greedy matching."
+  },
+  "red": {
+    "command": "cargo test redact_sensitive_text_redacts_private_key_blocks",
+    "status": "failed_as_expected",
+    "evidence": "The new test failed because the body and footer remained after [REDACTED_PRIVATE_KEY]."
+  },
+  "green": {
+    "command": "cargo test redact_sensitive_text_redacts_private_key_blocks",
+    "status": "passed",
+    "evidence": "The focused test passed after the private_key regex matched the full block."
+  },
+  "full_verification": {
+    "command": "npm run check",
+    "status": "passed",
+    "evidence": "10 UI helper tests passed, Vite build passed, 41 Rust library tests passed, 14 CLI tests passed, doc-tests passed, and strict clippy passed."
+  },
+  "staged_checks": {
+    "commands": [
+      "git diff --cached --check",
+      "gitleaks protect --staged --verbose"
+    ],
+    "status": "passed",
+    "evidence": "gitleaks scanned staged code and found no leaks."
+  },
+  "changed_paths": [
+    "src-tauri/src/lib.rs",
+    "autoresearch/evidence/completion_audit.md",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-private-key-block-redaction.json",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-private-key-block-redaction.md",
+    "autoresearch/evidence/iteration-2026-06-03-private-key-block-redaction.md"
+  ]
+}

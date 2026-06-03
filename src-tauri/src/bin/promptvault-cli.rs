@@ -247,10 +247,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     force_local: Some(true),
                 })
                 .await?;
-                repairs.push(serde_json::json!({
-                    "prompt": prompt,
-                    "recommendation": recommendation
-                }));
+                repairs.push(repair_json_entry(
+                    prompt,
+                    serde_json::to_value(&recommendation)?,
+                ));
             }
 
             if json {
@@ -465,12 +465,24 @@ fn json_prompt_preview(
     prompts
         .iter()
         .take(MAX_JSON_PROMPT_PREVIEW)
-        .map(|prompt| {
-            let mut prompt = prompt.clone();
-            prompt.text = redact_sensitive_text(&prompt.text);
-            prompt
-        })
+        .map(redacted_prompt_record)
         .collect()
+}
+
+fn redacted_prompt_record(prompt: &PromptRecord) -> PromptRecord {
+    let mut prompt = prompt.clone();
+    prompt.text = redact_sensitive_text(&prompt.text);
+    prompt
+}
+
+fn repair_json_entry(
+    prompt: &PromptRecord,
+    recommendation: serde_json::Value,
+) -> serde_json::Value {
+    serde_json::json!({
+        "prompt": redacted_prompt_record(prompt),
+        "recommendation": recommendation
+    })
 }
 
 fn bounded_count(requested: usize, max: usize, label: &str, warnings: &mut Vec<String>) -> usize {
@@ -558,6 +570,45 @@ mod tests {
 
         assert_eq!(preview.len(), 1);
         assert_eq!(preview[0].text, "[REDACTED_LONG_BASE64_LIKE_TOKEN]");
+    }
+
+    #[test]
+    fn repair_json_entry_redacts_prompt_text() {
+        let synthetic_token = format!("sk-{}", "A".repeat(60));
+        let prompt = PromptRecord {
+            id: "secret".to_string(),
+            source: "test".to_string(),
+            session_id: "secret".to_string(),
+            path: "/tmp/test.jsonl".to_string(),
+            timestamp: None,
+            cwd: None,
+            text: synthetic_token.clone(),
+            word_count: 1,
+            char_count: 80,
+            hash: "secret".to_string(),
+            risk_flags: vec!["long_base64_like_token".to_string()],
+            quality: promptvault_lib::PromptQuality {
+                score: 10,
+                band: "weak".to_string(),
+                missing: Vec::new(),
+                suggestions: Vec::new(),
+            },
+        };
+
+        let entry = repair_json_entry(
+            &prompt,
+            serde_json::json!({
+                "revised_prompt": "safe prompt"
+            }),
+        );
+
+        assert_eq!(
+            entry
+                .pointer("/prompt/text")
+                .and_then(serde_json::Value::as_str),
+            Some("[REDACTED_LONG_BASE64_LIKE_TOKEN]")
+        );
+        assert_eq!(prompt.text, synthetic_token);
     }
 
     #[test]

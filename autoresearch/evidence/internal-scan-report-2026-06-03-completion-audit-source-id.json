@@ -1,0 +1,27 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "38244b5",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "autoresearch/evidence/completion_audit.md",
+      "observed": "The aggregate audit still said --source missing-source returned an empty successful scan with an unknown-source warning."
+    }
+  ],
+  "current_smoke": {
+    "command": "cargo run --quiet --bin promptvault-cli -- scan --source missing-source --limit 1 --preview-limit 0 --no-export --json",
+    "result": "Exited 1 with promptvault-cli error: unknown source id: missing-source."
+  },
+  "selected_candidate": {
+    "name": "Completion audit source-id refresh",
+    "reason": "Keep current aggregate evidence aligned with the new fail-closed source-id behavior.",
+    "success_metric": "completion_audit.md documents the current unknown-source non-zero smoke and current test counts."
+  },
+  "safety_controls": [
+    "Only autoresearch evidence files are changed.",
+    "Historical iteration evidence is preserved.",
+    "A current unknown-source smoke was rerun before editing the aggregate audit.",
+    "The updated audit was searched for stale unknown-source warning text."
+  ]
+}

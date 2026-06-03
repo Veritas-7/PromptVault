@@ -52,7 +52,7 @@ set +e; cargo run --quiet --bin promptvault-cli -- sources --bogus; test "$?" -n
 set +e; cargo run --quiet --bin promptvault-cli -- sources --json --bogus; test "$?" -ne 0; set -e
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-json-smoke.md --json
 cargo run --quiet --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --preview-limit 0 --output /tmp/promptvault-source-filter-antigravity-db.md --json
-cargo run --quiet --bin promptvault-cli -- scan --source missing-source --preview-limit 0 --output /tmp/promptvault-source-filter-missing.md --json
+set +e; cargo run --quiet --bin promptvault-cli -- scan --source missing-source --limit 1 --preview-limit 0 --no-export --json; test "$?" -ne 0; set -e
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview-five.md --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --output /tmp/promptvault-quality-smoke.md --json
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
@@ -87,16 +87,16 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run check`: PASS, Vite production build completed, 14 library tests plus 8 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, Vite production build completed, 22 library tests plus 13 CLI tests passed, and strict clippy passed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 14 library tests plus 8 CLI tests passed.
-- CLI unit tests: PASS, 8 CLI tests passed including explicit help command recognition, empty prompt rejection, numeric argument validation, required value validation, and sources extra-arg rejection.
+- `cargo test`: PASS, 22 library tests plus 13 CLI tests passed.
+- CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty prompt rejection, numeric argument validation, required value validation, repair count cap documentation, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Sources extra-arg smoke: PASS, `sources --bogus` and `sources --json --bogus` both exited 1 with `unknown sources argument: --bogus`; valid `sources --json` still returned 11 roots.
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
-- Unknown-source smoke: PASS, `--source missing-source` returned no source summaries and warning `Unknown source id requested: missing-source`.
+- Unknown-source smoke: PASS, `--source missing-source` exited 1 with `unknown source id: missing-source`.
 - Numeric option smoke: PASS, invalid `--limit`, `--preview-limit`, and repair `--count` each exited 1 with the expected non-negative integer error; valid `--limit 10 --preview-limit 0` scan exited 0.
 - Required value smoke: PASS, missing scan `--source`, `--output`, `--preview-sort`, and repair `--source` each exited 1; valid `--source codex --limit 1` scan exited 0.
 - No-export full scan: PASS, current release CLI scanned 155,484 prompts from 27,608 files in 1m31s with `output_path=null`, `markdown_written=false`, `markdown_included=false`, `warnings=[]`, and no `/tmp/promptvault-no-export-full.md` file created.

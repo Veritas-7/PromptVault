@@ -1,0 +1,45 @@
+{
+  "schema": "promptvault-autoresearch-internal-scan-v1",
+  "generated_at": "2026-06-03T21:02:27+0900",
+  "iteration": "risky-preview-redaction",
+  "code_commit": "1a9392cb61229f8c605d0606ed5fb20a594e9fbf",
+  "status": "pass",
+  "local_evidence": {
+    "source": "Small Claude history weakest scan",
+    "observed_risk": "CLI JSON preview with --include-prompts could print a long key-like token from prompt history.",
+    "post_fix": "The same preview class returned containsRawSkToken=false and containsRedaction=true."
+  },
+  "candidate": {
+    "problem": "json_prompt_preview returned borrowed PromptRecord values, so opt-in stdout previews emitted risky prompt text verbatim.",
+    "risk": "Even local-first prompt scans can leak sensitive prompt text into shell logs when --include-prompts is used.",
+    "decision": "Clone preview records and redact risk-pattern text only in the CLI JSON prompt preview."
+  },
+  "red": {
+    "command": "cargo test json_prompt_preview_redacts_long_token_text",
+    "status": "failed_as_expected",
+    "evidence": "The new test failed because preview text contained the synthetic long token instead of the redaction marker."
+  },
+  "green": {
+    "command": "cargo test json_prompt_preview_redacts_long_token_text",
+    "status": "passed",
+    "evidence": "The focused test passed after CLI preview records cloned and redacted their text field."
+  },
+  "full_verification": {
+    "command": "npm run check",
+    "status": "passed",
+    "evidence": "10 UI helper tests passed, Vite build passed, 38 Rust library tests passed, 14 CLI tests passed, doc-tests passed, and strict clippy passed."
+  },
+  "post_fix_smoke": {
+    "command": "cargo run --quiet --bin promptvault-cli -- scan --source claude-code-history --limit 60 --preview-limit 10 --weakest-first --include-prompts --no-export --json",
+    "status": "passed",
+    "evidence": "containsRawSkToken=false, containsRedaction=true, and the configured-limit warning was present."
+  },
+  "changed_paths": [
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/bin/promptvault-cli.rs",
+    "autoresearch/evidence/completion_audit.md",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-risky-preview-redaction.json",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-risky-preview-redaction.md",
+    "autoresearch/evidence/iteration-2026-06-03-risky-preview-redaction.md"
+  ]
+}

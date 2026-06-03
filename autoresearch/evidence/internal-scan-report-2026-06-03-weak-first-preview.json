@@ -1,0 +1,41 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "6980520",
+  "worktree_status_before_iteration": "clean",
+  "scan_scope": [
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/bin/promptvault-cli.rs",
+    "src/types.ts",
+    "src/App.tsx",
+    "src/App.css",
+    "docs/CLI.md",
+    "docs/PROMPT_BEST_PRACTICES.md",
+    "README.md",
+    "autoresearch/evidence/completion_audit.md"
+  ],
+  "observed_strengths": [
+    "PromptVault can score prompt quality and report improvement deltas.",
+    "The scan response already supports bounded previews so UI and CLI automation do not need full prompt bodies.",
+    "The UI already shows prompt quality pills and selected-prompt suggestions."
+  ],
+  "observed_weaknesses": [
+    "Bounded previews were latest-first only, so weak prompts could be absent from the visible repair queue.",
+    "The UI had no mode to prioritize the lowest-quality prompts after a scan.",
+    "The CLI had no stable option to request a weakest-first preview sort."
+  ],
+  "selected_candidate": {
+    "name": "weak-first preview triage",
+    "reason": "Make the repair queue operational by letting users and agents load weakest prompts first without changing full-scan stats or Markdown export behavior.",
+    "success_metric": "A bounded no-export scan with --weakest-first returns preview_sort=quality_asc, five returned prompts, markdown_written=false, and output_path=null."
+  },
+  "expected_local_gate": {
+    "command": "cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json",
+    "required_fields": [
+      "preview_sort=quality_asc",
+      "returned_prompt_count=5",
+      "markdown_written=false",
+      "output_path=null"
+    ]
+  }
+}

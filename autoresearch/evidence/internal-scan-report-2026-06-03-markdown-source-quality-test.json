@@ -1,0 +1,20 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "a10ccb3",
+  "worktree_status_before_iteration": "clean",
+  "observed_weaknesses": [
+    "Source-level quality fields were implemented and rendered, but the Markdown source table contract did not have a dedicated regression test.",
+    "A future edit could remove the Avg Quality or Weak columns while Rust tests still passed through broader scan coverage."
+  ],
+  "selected_candidate": {
+    "name": "Markdown source-quality contract test",
+    "reason": "Pin the source coverage export format that agents and reports can consume.",
+    "success_metric": "cargo test includes a passing markdown_source_coverage_includes_quality_triage test."
+  },
+  "safety_controls": [
+    "No production behavior changed.",
+    "The test uses synthetic source summary data only.",
+    "clippy was rerun after adding the test."
+  ]
+}

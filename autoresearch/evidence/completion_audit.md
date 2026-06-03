@@ -67,7 +67,7 @@ git diff --check
 
 - `npm run build`: PASS, Vite production build completed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 13 library tests plus 2 CLI tests passed.
+- `cargo test`: PASS, 14 library tests plus 2 CLI tests passed.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
@@ -77,6 +77,7 @@ git diff --check
 - Preview-payload scan: PASS, default CLI JSON returned `returned_prompt_count=0`, bounded preview returned `returned_prompt_count=5`.
 - Weak-first preview smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --no-export --json` returned `preview_sort=quality_asc`, `returned_prompt_count=5`, `markdown_written=false`, and `output_path=null`.
 - Source-level quality smoke: PASS, `scan --limit 100 --preview-limit 0 --no-export --json` returned first source `average_quality=71.6`, `weak_prompt_count=16`, and all source summaries included both fields.
+- Markdown source-quality contract test: PASS, source coverage export includes `Avg Quality` and `Weak` columns plus source row quality values.
 - Explicit prompt stdout smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json` returned `prompt_stdout_count=5`; first prompt quality was `36 · weak` with gaps `specific_goal`, `context`, `constraints`, `verification`, `output_format`.
 - Default stdout safety smoke: PASS, the same scan without `--include-prompts` returned `prompt_stdout_count=0` and `prompts_len=0`.
 - Stdout cap smoke: PASS, `--preview-limit 30 --include-prompts` returned `returned_prompt_count=30`, `prompt_stdout_count=25`, `prompts_len=25`, and one cap warning.

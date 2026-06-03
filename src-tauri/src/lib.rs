@@ -1255,6 +1255,9 @@ fn strip_injected_context(text: &str) -> String {
     if candidate.starts_with("<local-command-") && candidate.contains("</local-command-") {
         return String::new();
     }
+    if is_command_only_prompt(candidate) {
+        return String::new();
+    }
 
     loop {
         let trimmed = candidate.trim_start();
@@ -1269,6 +1272,17 @@ fn strip_injected_context(text: &str) -> String {
     }
 
     candidate.trim().to_string()
+}
+
+fn is_command_only_prompt(text: &str) -> bool {
+    let trimmed = text.trim();
+    let Some(command) = trimmed.strip_prefix('/') else {
+        return false;
+    };
+    !command.is_empty()
+        && command
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
 }
 
 fn extract_timestamp(value: &Value) -> Option<String> {
@@ -2813,6 +2827,47 @@ mod tests {
         assert!(records[0]
             .text
             .contains("Fix Claude local command output filtering"));
+    }
+
+    #[test]
+    fn parse_claude_history_jsonl_skips_command_only_records() {
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-claude-history-command-{}.jsonl",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            [
+                serde_json::json!({
+                    "display": "/clear",
+                    "timestamp": "2026-06-03T11:48:00Z",
+                    "project": "/tmp/project",
+                    "sessionId": "claude-history"
+                })
+                .to_string(),
+                serde_json::json!({
+                    "display": "/sdd 모델 조사해줘",
+                    "timestamp": "2026-06-03T11:49:00Z",
+                    "project": "/tmp/project",
+                    "sessionId": "claude-history"
+                })
+                .to_string(),
+            ]
+            .join("\n"),
+        )
+        .expect("write claude history fixture");
+
+        let source = SourceSpec {
+            id: "claude-history-test",
+            label: "Claude history test",
+            root: path.clone(),
+            kind: SourceKind::ClaudeHistoryJsonl,
+        };
+        let records = parse_claude_history_jsonl(&source, &path).expect("parse history fixture");
+        std::fs::remove_file(path).expect("remove claude history fixture");
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].text, "/sdd 모델 조사해줘");
     }
 
     #[test]

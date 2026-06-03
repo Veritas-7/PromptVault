@@ -1675,7 +1675,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
         vec![
             (
                 "possible_api_key",
-                Regex::new(r"(?i)(api[_-]?key|secret|token|password)\s*[:=]")
+                Regex::new(r"(?i)(api[_-]?key|secret|token|password)\s*[:=](\s*\S+)?")
                     .expect("api key regex"),
             ),
             (
@@ -2868,6 +2868,15 @@ mod tests {
 
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].text, "/sdd 모델 조사해줘");
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_key_value_pairs() {
+        let text = format!("api_key={}", "short-secret-value");
+        assert_eq!(
+            redact_sensitive_text(&text),
+            "[REDACTED_POSSIBLE_API_KEY]"
+        );
     }
 
     #[test]

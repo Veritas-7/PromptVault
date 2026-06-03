@@ -12,6 +12,7 @@ cargo run --bin promptvault-cli -- scan [--source ID] [--limit N] [--output PATH
 cargo run --bin promptvault-cli -- improve [--local] --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve [--local] --json --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve [--local] < prompt.txt
+cargo run --bin promptvault-cli -- repair [--source ID] [--limit N] [--count N] --json
 ```
 
 ## Contract
@@ -28,6 +29,7 @@ cargo run --bin promptvault-cli -- improve [--local] < prompt.txt
 - `--include-markdown` includes the Markdown body in the returned `ScanResult`; omit it for safer/leaner agent automation.
 - `improve` reads one prompt and returns provider, revised prompt, rationale, quality before/after delta, resolved gaps, remaining gaps, and warnings.
 - `improve --local` bypasses GLM and uses deterministic local prompt-improvement rules for reproducible smoke tests and offline repair queues.
+- `repair` scans weakest prompts, runs deterministic local improvement for each one, writes no Markdown export, and returns prompt/recommendation pairs. Repair batches are capped at 10 records.
 
 ## Agent-Native Design Notes
 
@@ -55,4 +57,5 @@ cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-sm
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
 cargo run --bin promptvault-cli -- improve --json --prompt "make better"
 cargo run --bin promptvault-cli -- improve --local --json --prompt "make better"
+cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
 ```

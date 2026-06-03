@@ -1,0 +1,45 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "1dca96c",
+  "worktree_status_before_iteration": "clean",
+  "scan_scope": [
+    "src-tauri/src/bin/promptvault-cli.rs",
+    "docs/CLI.md",
+    "docs/PROMPT_BEST_PRACTICES.md",
+    "README.md",
+    "autoresearch/evidence/completion_audit.md"
+  ],
+  "observed_strengths": [
+    "PromptVault can request weakest-first bounded previews.",
+    "CLI scan can explicitly include a capped prompt stdout preview.",
+    "CLI improve can force deterministic local-rules recommendations."
+  ],
+  "observed_weaknesses": [
+    "The repair queue still required callers to manually pipe scan results into separate improve calls.",
+    "There was no single command that selected weak prompts and returned local repair suggestions.",
+    "Batch repair needed a cap because it necessarily returns prompt bodies and revised prompts."
+  ],
+  "selected_candidate": {
+    "name": "deterministic batch repair command",
+    "reason": "Combine weakest-first scan and local-rules improvement into one capped no-export CLI command for AutoResearch repair loops.",
+    "success_metric": "repair --json --limit 100 --count 3 returns three local-rules prompt/recommendation pairs, no Markdown export, and first repair starts from a weak prompt."
+  },
+  "safety_controls": [
+    "Repair always uses no-export scan options.",
+    "Repair uses deterministic local-rules provider.",
+    "Repair batches are capped at 10 records."
+  ],
+  "expected_local_gate": {
+    "command": "cargo run --quiet --bin promptvault-cli -- repair --json --limit 100 --count 3",
+    "required_fields": [
+      "provider=local-rules",
+      "preview_sort=quality_asc",
+      "repair_count=3",
+      "markdown_written=false",
+      "output_path=null",
+      "repairs[0].prompt.quality.band=weak",
+      "repairs[0].recommendation.provider=local-rules"
+    ]
+  }
+}

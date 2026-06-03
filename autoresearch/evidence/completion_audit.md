@@ -25,6 +25,7 @@ Date: 2026-06-03
 | Prompt improvement app | UI selected-prompt panel plus `improve_prompt` Tauri command | PASS |
 | Measurable improvement delta | `QualityDelta`; CLI/UI expose before score, after score, score delta, resolved gaps, and remaining gaps | PASS |
 | Deterministic local improve | `ImproveRequest.force_local`; CLI `improve --local`; bypasses GLM and returns local-rules without warnings | PASS |
+| Deterministic batch repair | CLI `repair --json`; weakest-first scan plus local-rules recommendations; no Markdown export; capped at 10 repairs | PASS |
 | GLM from `secrets.env` as fallback-capable AI path | Reads `GLM_API_KEY`/`GLM_API_KEY_2`, `GLM_CODING_ENDPOINT`, `GLM_CODING_MODEL`; normalizes base endpoint; falls back locally on 429 | PASS |
 | Codex SDK considered | `research/external_sources.json` and strategy doc cite official Codex SDK README and defer direct SDK invocation for safety | PASS_WITH_NOTE |
 | CLI-Anything-inspired strong CLI | `promptvault-cli` supports `sources`, `scan`, `improve`, and `--json` summaries | PASS |
@@ -47,18 +48,22 @@ cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --
 cargo run --quiet --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
 cargo run --quiet --bin promptvault-cli -- improve --json --prompt "make better"
 cargo run --quiet --bin promptvault-cli -- improve --local --json --prompt "make better"
+cargo run --quiet --bin promptvault-cli -- repair --json --limit 100 --count 3
+cargo run --quiet --bin promptvault-cli -- repair --json --limit 100 --count 99
 cargo build --release --bin promptvault-cli
 ./target/release/promptvault-cli scan --no-export --json > /tmp/promptvault-no-export-full.json
 ./target/release/promptvault-cli scan --output /tmp/promptvault-antigravity-db-full.md --json
 npm run tauri build
 VITE_PORT=5174 VITE_HMR_PORT=5175 npm run dev
+curl -I --max-time 5 http://localhost:5174/
+git diff --check
 ```
 
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 12 library tests plus 1 CLI test passed.
+- `cargo test`: PASS, 12 library tests plus 2 CLI tests passed.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Smoke scan: PASS, 100 prompts from 24,703 files, no injected-context markers.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
@@ -72,12 +77,15 @@ VITE_PORT=5174 VITE_HMR_PORT=5175 npm run dev
 - Prompt quality smoke: PASS, 100-prompt smoke reported `average_quality=71.6`, `weak_prompt_count=16`, and top quality gaps `constraints`, `verification`, `output_format`, `action_verb`, `context`.
 - Improvement delta smoke: PASS, `improve --json --prompt "make better"` returned `quality_delta.score_delta=64`, `before.score=36`, `after.score=100`, and resolved gaps `specific_goal`, `context`, `constraints`, `verification`, `output_format`.
 - Deterministic local improve smoke: PASS, `improve --local --json --prompt "make better"` returned `provider=local-rules`, `used_ai=false`, `warnings=[]`, and `quality_delta.score_delta=64`.
+- Batch repair smoke: PASS, `repair --json --limit 100 --count 3` returned `provider=local-rules`, `preview_sort=quality_asc`, `scanned_prompt_count=100`, `returned_prompt_count=3`, `repair_count=3`, `markdown_written=false`, `output_path=null`, and first repair prompt was `36 · weak` with `score_delta=64`.
+- Batch repair cap smoke: PASS, `repair --json --limit 100 --count 99` returned `returned_prompt_count=10`, `repair_count=10`, `markdown_written=false`, `output_path=null`, and one cap warning.
 - Antigravity DB source: PASS, full release scan reported `files_seen=2`, `prompts_found=2`, status `ok`, notes `[]`.
 - Full release scan: PASS, current code exported 155,484 prompts from 27,608 files to `/tmp/promptvault-antigravity-db-full.md`, output `364M`, UTF-8 Markdown text.
 - Full release scan response payload: PASS, `returned_prompt_count=0`, `prompts_truncated=true`, `markdown_included=false`.
 - Full release quality distribution: PASS, `average_quality=66.49`, `weak_prompt_count=61,243`, and top quality gaps `constraints`, `verification`, `output_format`, `action_verb`, `context`.
 - Tauri production build: PASS, produced `src-tauri/target/release/bundle/macos/promptvault.app` and `src-tauri/target/release/bundle/dmg/promptvault_0.1.0_aarch64.dmg`.
 - Dev server smoke: PASS, `http://localhost:5174/` returned HTTP 200. Existing CareVault server occupied default port 1420, so PromptVault was started with `VITE_PORT=5174`.
+- Diff whitespace gate: PASS, `git diff --check`.
 - Playwright render smoke: PASS, `Agent prompt intelligence` loaded, `Recommendation` panel rendered, 5 panels were present, and `bodyWidth=viewportWidth=1440`.
 - Weakest-mode render smoke: PASS, `Latest` and `Weakest` controls rendered, clicking `Weakest` activated that mode, and `bodyWidth=viewportWidth=1440`.
 - GitHub remote: PASS, `origin/main` pushed to private repo `Veritas-7/PromptVault`.

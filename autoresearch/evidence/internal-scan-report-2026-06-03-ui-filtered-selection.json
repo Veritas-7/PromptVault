@@ -1,0 +1,40 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "2822d84",
+  "code_commit": "b739695",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src/App.tsx",
+      "observed": "selectedPrompt searched all loaded prompts before falling back to the filtered list, so the detail panel could continue showing a prompt hidden by the current search filter."
+    }
+  ],
+  "red_test": {
+    "command": "npm run test:ui",
+    "result": "FAILED before implementation because src/selection.ts did not exist."
+  },
+  "change": {
+    "summary": "Added selectedPromptForView and routed the detail panel selection through the currently visible filtered prompt list.",
+    "files": [
+      "src/selection.ts",
+      "src/App.tsx",
+      "tests/selection.test.ts"
+    ]
+  },
+  "verification": [
+    {
+      "command": "npm run test:ui",
+      "result": "PASS: 6 Node UI helper tests passed."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: 6 UI helper tests, Vite build, 31 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "No new npm dependency was added.",
+    "Selection is preserved when the selected prompt remains visible.",
+    "Selection returns empty when no prompts match the current filter."
+  ]
+}

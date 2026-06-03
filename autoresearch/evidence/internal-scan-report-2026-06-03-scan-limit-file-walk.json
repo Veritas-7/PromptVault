@@ -1,0 +1,28 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "05f6770",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "collect_from_source",
+      "observed": "collect_from_source built the full matching file list before applying the prompt limit, so a limit of 1 still counted every matching file in the source."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib collect_from_source_stops_file_walk_after_limit",
+    "result": "FAILED before implementation because summary.files_seen was 5 instead of 1."
+  },
+  "selected_candidate": {
+    "name": "Lazy source file walk for limited scans",
+    "reason": "Make smoke-test limits reduce file traversal work instead of only limiting parsed prompt output.",
+    "success_metric": "remaining=1 stops after one prompt file in a temp source, real codex --limit 1 reports files_seen=1, and full local checks still pass."
+  },
+  "safety_controls": [
+    "The change is limited to src-tauri/src/lib.rs.",
+    "WalkDir uses sort_by_file_name for deterministic traversal.",
+    "Full scans still walk every matching file.",
+    "Focused RED/GREEN tests and a real codex --limit 1 smoke were run.",
+    "npm run check was rerun after the change."
+  ]
+}

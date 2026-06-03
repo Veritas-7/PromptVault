@@ -1,0 +1,31 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "595f6c0",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "improve_prompt_inner",
+      "observed": "Empty prompt returned Ok(local_improvement(...)) with warning: Empty prompt; local fallback returned the improvement checklist only."
+    },
+    {
+      "surface": "promptvault-cli improve",
+      "observed": "The CLI already rejected empty prompts before calling improve_prompt_inner."
+    }
+  ],
+  "observed_weaknesses": [
+    "The backend/Tauri API boundary still treated empty improve input as a successful improvement result.",
+    "Direct callers could receive a checklist-style success response for an invalid prompt."
+  ],
+  "selected_candidate": {
+    "name": "API empty improve rejection",
+    "reason": "Align the backend improvement API with the CLI fail-closed behavior.",
+    "success_metric": "improve_prompt_inner returns an error for empty or whitespace prompts; force-local non-empty improvement still succeeds."
+  },
+  "safety_controls": [
+    "The change is limited to src-tauri/src/lib.rs.",
+    "A new async unit test covers empty prompt rejection.",
+    "The existing force-local happy path was rerun.",
+    "npm run check was rerun after the change."
+  ]
+}

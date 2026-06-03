@@ -485,37 +485,17 @@ pub async fn improve_prompt_inner(
                     .pointer("/choices/0/message/content")
                     .and_then(Value::as_str)
                 {
-                    if let Ok(parsed) = serde_json::from_str::<Value>(content) {
-                        let revised = parsed
-                            .get("revised_prompt")
-                            .and_then(Value::as_str)
-                            .unwrap_or(content)
-                            .trim()
-                            .to_string();
-                        let rationale = string_array(parsed.get("rationale"));
-                        let checklist = string_array(parsed.get("checklist"));
-                        return Ok(ImproveResult {
-                            provider: "glm".to_string(),
-                            used_ai: true,
-                            quality_delta: quality_delta(&prompt, &revised),
-                            revised_prompt: revised,
-                            rationale,
-                            checklist,
-                            warnings: Vec::new(),
-                        });
+                    if let Some(result) = glm_improvement_from_content(&prompt, content) {
+                        return Ok(result);
                     }
-                    let revised = content.trim().to_string();
-                    return Ok(ImproveResult {
-                        provider: "glm".to_string(),
-                        used_ai: true,
-                        quality_delta: quality_delta(&prompt, &revised),
-                        revised_prompt: revised,
-                        rationale: vec![
-                            "GLM returned non-JSON text; preserved the model output.".to_string()
+                    return Ok(local_improvement(
+                        &prompt,
+                        request.context.as_deref(),
+                        vec![
+                            "GLM response did not include a non-empty revised_prompt; used local fallback."
+                                .to_string(),
                         ],
-                        checklist: prompt_checklist(),
-                        warnings: Vec::new(),
-                    });
+                    ));
                 }
             }
             Ok(response) => {
@@ -545,6 +525,44 @@ pub async fn improve_prompt_inner(
         request.context.as_deref(),
         vec!["GLM_API_KEY/GLM_API_KEY_2 was not available; used local fallback.".to_string()],
     ))
+}
+
+fn glm_improvement_from_content(prompt: &str, content: &str) -> Option<ImproveResult> {
+    if let Ok(parsed) = serde_json::from_str::<Value>(content) {
+        let revised = parsed
+            .get("revised_prompt")
+            .and_then(Value::as_str)?
+            .trim()
+            .to_string();
+        if revised.is_empty() {
+            return None;
+        }
+        let rationale = string_array(parsed.get("rationale"));
+        let checklist = string_array(parsed.get("checklist"));
+        return Some(ImproveResult {
+            provider: "glm".to_string(),
+            used_ai: true,
+            quality_delta: quality_delta(prompt, &revised),
+            revised_prompt: revised,
+            rationale,
+            checklist,
+            warnings: Vec::new(),
+        });
+    }
+
+    let revised = content.trim().to_string();
+    if revised.is_empty() {
+        return None;
+    }
+    Some(ImproveResult {
+        provider: "glm".to_string(),
+        used_ai: true,
+        quality_delta: quality_delta(prompt, &revised),
+        revised_prompt: revised,
+        rationale: vec!["GLM returned non-JSON text; preserved the model output.".to_string()],
+        checklist: prompt_checklist(),
+        warnings: Vec::new(),
+    })
 }
 
 pub fn source_specs() -> Vec<SourceSpec> {
@@ -1952,6 +1970,13 @@ mod tests {
             .quality_delta
             .resolved_gaps
             .contains(&"verification".to_string()));
+    }
+
+    #[test]
+    fn glm_content_parser_rejects_empty_revised_prompt() {
+        let content = r#"{"revised_prompt":"   ","rationale":["ok"],"checklist":["verify"]}"#;
+
+        assert!(glm_improvement_from_content("make better", content).is_none());
     }
 
     #[tokio::test]

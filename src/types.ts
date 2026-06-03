@@ -57,6 +57,7 @@ export interface ScanResult {
   prompts: PromptRecord[];
   returned_prompt_count: number;
   prompts_truncated: boolean;
+  preview_sort: string;
   markdown_included: boolean;
   markdown_written: boolean;
   warnings: string[];

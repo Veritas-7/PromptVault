@@ -15,6 +15,7 @@ import "./App.css";
 import type { ImproveResult, PromptRecord, ScanResult } from "./types";
 
 type ScanState = "idle" | "scanning" | "ready" | "failed";
+type PreviewMode = "latest" | "weakest";
 const PREVIEW_LIMIT = 1000;
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState("");
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("latest");
   const [error, setError] = useState<string | null>(null);
   const [improving, setImproving] = useState(false);
   const [improvement, setImprovement] = useState<ImproveResult | null>(null);
@@ -30,18 +32,19 @@ function App() {
   const prompts = result?.prompts ?? [];
   const filteredPrompts = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return prompts.slice(-200).reverse();
-    return prompts
-      .filter((prompt) => {
-        return (
-          prompt.text.toLowerCase().includes(needle) ||
-          prompt.source.toLowerCase().includes(needle) ||
-          (prompt.cwd ?? "").toLowerCase().includes(needle)
-        );
-      })
-      .slice(-200)
-      .reverse();
-  }, [prompts, query]);
+    const matches = needle
+      ? prompts.filter((prompt) => {
+          return (
+            prompt.text.toLowerCase().includes(needle) ||
+            prompt.source.toLowerCase().includes(needle) ||
+            (prompt.cwd ?? "").toLowerCase().includes(needle)
+          );
+        })
+      : prompts;
+
+    if (previewMode === "weakest") return matches.slice(0, 200);
+    return matches.slice(-200).reverse();
+  }, [previewMode, prompts, query]);
 
   const selectedPrompt = useMemo(() => {
     return prompts.find((prompt) => prompt.id === selectedId) ?? filteredPrompts[0] ?? null;
@@ -57,11 +60,17 @@ function App() {
         options: {
           limit: parsedLimit,
           preview_limit: PREVIEW_LIMIT,
+          preview_sort: previewMode === "weakest" ? "quality_asc" : "latest",
           include_markdown: false,
         },
       });
       setResult(next);
-      setSelectedId(next.prompts[next.prompts.length - 1]?.id ?? null);
+      setSelectedId(
+        (previewMode === "weakest"
+          ? next.prompts[0]
+          : next.prompts[next.prompts.length - 1]
+        )?.id ?? null,
+      );
       setScanState("ready");
     } catch (err) {
       setError(String(err));
@@ -96,6 +105,22 @@ function App() {
           <h1>Agent prompt intelligence</h1>
         </div>
         <div className="actions">
+          <div className="segmented" aria-label="Preview mode" role="group">
+            <button
+              className={previewMode === "latest" ? "active" : ""}
+              onClick={() => setPreviewMode("latest")}
+              type="button"
+            >
+              Latest
+            </button>
+            <button
+              className={previewMode === "weakest" ? "active" : ""}
+              onClick={() => setPreviewMode("weakest")}
+              type="button"
+            >
+              Weakest
+            </button>
+          </div>
           <label className="limit-control">
             <span>Limit</span>
             <input
@@ -192,7 +217,11 @@ function App() {
             <span>
               {result
                 ? `${result.returned_prompt_count.toLocaleString()} loaded${
-                    result.prompts_truncated ? " · latest preview" : ""
+                    result.prompts_truncated
+                      ? result.preview_sort === "quality_asc"
+                        ? " · weakest preview"
+                        : " · latest preview"
+                      : ""
                   }`
                 : "not loaded"}
             </span>

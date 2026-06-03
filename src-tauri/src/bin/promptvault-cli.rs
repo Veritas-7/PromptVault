@@ -56,6 +56,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let mut limit = None;
             let mut output_path = None;
             let mut preview_limit = Some(0);
+            let mut preview_sort = None;
             let mut source_ids = Vec::new();
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
@@ -68,6 +69,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     "--preview-limit" => {
                         preview_limit = iter.next().and_then(|value| value.parse::<usize>().ok());
+                    }
+                    "--preview-sort" => {
+                        preview_sort = iter.next();
+                    }
+                    "--weakest-first" => {
+                        preview_sort = Some("quality-asc".to_string());
                     }
                     "--source" => {
                         if let Some(value) = iter.next() {
@@ -89,6 +96,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 limit,
                 output_path,
                 preview_limit,
+                preview_sort,
                 include_markdown: Some(include_markdown),
                 write_markdown: Some(!no_export),
                 source_ids: if source_ids.is_empty() {
@@ -104,6 +112,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     "stats": result.stats,
                     "returned_prompt_count": result.returned_prompt_count,
                     "prompts_truncated": result.prompts_truncated,
+                    "preview_sort": result.preview_sort,
                     "markdown_included": result.markdown_included,
                     "markdown_written": result.markdown_written,
                     "warnings": result.warnings
@@ -119,6 +128,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("markdown_written: {}", result.markdown_written);
             println!("prompts: {}", result.stats.total_prompts);
             println!("returned_prompts: {}", result.returned_prompt_count);
+            println!("preview_sort: {}", result.preview_sort);
             println!("files: {}", result.stats.total_files);
             println!("avg_words: {:.1}", result.stats.average_words);
             if !result.warnings.is_empty() {
@@ -206,6 +216,6 @@ fn take_flag(args: &mut Vec<String>, flag: &str) -> bool {
 
 fn print_help() {
     println!(
-        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--include-markdown] [--no-export] [--json]\n  improve [--json] --prompt TEXT\n  improve [--json] < prompt.txt"
+        "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-markdown] [--no-export] [--json]\n  improve [--json] --prompt TEXT\n  improve [--json] < prompt.txt"
     );
 }

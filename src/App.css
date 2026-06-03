@@ -108,6 +108,32 @@ h3 {
   gap: 10px;
 }
 
+.segmented {
+  align-items: center;
+  background: #e9efe7;
+  border: 1px solid #c9d3cb;
+  border-radius: 8px;
+  display: inline-flex;
+  height: 38px;
+  overflow: hidden;
+}
+
+.segmented button {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: #536158;
+  height: 100%;
+  min-height: 0;
+  padding: 0 11px;
+}
+
+.segmented button.active {
+  background: #213629;
+  color: #f7fbf6;
+  font-weight: 720;
+}
+
 .limit-control {
   color: #516157;
   display: grid;

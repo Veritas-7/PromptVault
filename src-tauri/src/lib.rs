@@ -79,6 +79,7 @@ pub struct ScanResult {
     pub prompts: Vec<PromptRecord>,
     pub returned_prompt_count: usize,
     pub prompts_truncated: bool,
+    pub preview_sort: String,
     pub markdown_included: bool,
     pub markdown_written: bool,
     pub warnings: Vec<String>,
@@ -115,6 +116,7 @@ pub struct ScanOptions {
     pub limit: Option<usize>,
     pub output_path: Option<String>,
     pub preview_limit: Option<usize>,
+    pub preview_sort: Option<String>,
     pub include_markdown: Option<bool>,
     pub write_markdown: Option<bool>,
     pub source_ids: Option<Vec<String>>,
@@ -126,6 +128,7 @@ impl Default for ScanOptions {
             limit: None,
             output_path: None,
             preview_limit: None,
+            preview_sort: None,
             include_markdown: None,
             write_markdown: None,
             source_ids: None,
@@ -172,6 +175,7 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
     let include_markdown = options.include_markdown.unwrap_or(true);
     let write_markdown = options.write_markdown.unwrap_or(true);
     let mut warnings = Vec::new();
+    let preview_sort = PreviewSort::from_option(options.preview_sort.as_deref(), &mut warnings);
     let mut prompts = Vec::new();
     let mut summaries = Vec::new();
     let (sources, mut source_warnings) = selected_source_specs(options.source_ids.as_deref());
@@ -250,7 +254,7 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
         fs::write(path, &markdown)?;
     }
 
-    let response_prompts = response_prompts(&prompts, preview_limit);
+    let response_prompts = response_prompts(&prompts, preview_limit, preview_sort);
     let returned_prompt_count = response_prompts.len();
     let prompts_truncated = returned_prompt_count < prompts.len();
     let response_markdown = if include_markdown {
@@ -267,19 +271,90 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
         prompts: response_prompts,
         returned_prompt_count,
         prompts_truncated,
+        preview_sort: preview_sort.as_str().to_string(),
         markdown_included: include_markdown,
         markdown_written: write_markdown,
         warnings,
     })
 }
 
-fn response_prompts(prompts: &[PromptRecord], preview_limit: Option<usize>) -> Vec<PromptRecord> {
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum PreviewSort {
+    Latest,
+    QualityAsc,
+    QualityDesc,
+}
+
+impl PreviewSort {
+    fn from_option(value: Option<&str>, warnings: &mut Vec<String>) -> Self {
+        match value.map(str::trim).filter(|value| !value.is_empty()) {
+            None => Self::Latest,
+            Some("latest") => Self::Latest,
+            Some("quality_asc" | "quality-asc" | "weakest") => Self::QualityAsc,
+            Some("quality_desc" | "quality-desc" | "strongest") => Self::QualityDesc,
+            Some(other) => {
+                warnings.push(format!(
+                    "Unknown preview sort requested: {other}; used latest."
+                ));
+                Self::Latest
+            }
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Latest => "latest",
+            Self::QualityAsc => "quality_asc",
+            Self::QualityDesc => "quality_desc",
+        }
+    }
+}
+
+fn response_prompts(
+    prompts: &[PromptRecord],
+    preview_limit: Option<usize>,
+    preview_sort: PreviewSort,
+) -> Vec<PromptRecord> {
+    let limit = preview_limit.unwrap_or(prompts.len());
+    if limit == 0 {
+        return Vec::new();
+    }
+
     match preview_limit {
-        None => prompts.to_vec(),
-        Some(0) => Vec::new(),
-        Some(limit) => {
+        None if preview_sort == PreviewSort::Latest => prompts.to_vec(),
+        Some(_) if preview_sort == PreviewSort::Latest => {
             let start = prompts.len().saturating_sub(limit);
             prompts[start..].to_vec()
+        }
+        _ => {
+            let mut out = prompts.to_vec();
+            out.sort_by(|a, b| match preview_sort {
+                PreviewSort::Latest => std::cmp::Ordering::Equal,
+                PreviewSort::QualityAsc => a
+                    .quality
+                    .score
+                    .cmp(&b.quality.score)
+                    .then_with(|| b.quality.missing.len().cmp(&a.quality.missing.len()))
+                    .then_with(|| {
+                        b.timestamp
+                            .as_deref()
+                            .unwrap_or("")
+                            .cmp(a.timestamp.as_deref().unwrap_or(""))
+                    }),
+                PreviewSort::QualityDesc => b
+                    .quality
+                    .score
+                    .cmp(&a.quality.score)
+                    .then_with(|| a.quality.missing.len().cmp(&b.quality.missing.len()))
+                    .then_with(|| {
+                        b.timestamp
+                            .as_deref()
+                            .unwrap_or("")
+                            .cmp(a.timestamp.as_deref().unwrap_or(""))
+                    }),
+            });
+            out.truncate(limit);
+            out
         }
     }
 }
@@ -1825,7 +1900,7 @@ mod tests {
     #[test]
     fn response_prompt_preview_returns_latest_records() {
         let prompts = vec![record("a"), record("b"), record("c")];
-        let preview = response_prompts(&prompts, Some(2));
+        let preview = response_prompts(&prompts, Some(2), PreviewSort::Latest);
         assert_eq!(
             preview
                 .iter()
@@ -1833,8 +1908,30 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["b", "c"]
         );
-        assert!(response_prompts(&prompts, Some(0)).is_empty());
-        assert_eq!(response_prompts(&prompts, None).len(), 3);
+        assert!(response_prompts(&prompts, Some(0), PreviewSort::Latest).is_empty());
+        assert_eq!(
+            response_prompts(&prompts, None, PreviewSort::Latest).len(),
+            3
+        );
+    }
+
+    #[test]
+    fn response_prompt_preview_can_return_weakest_records() {
+        let prompts = vec![
+            record("Fix src-tauri/src/lib.rs parser error, preserve files, run cargo test, and report Markdown output."),
+            record("make better"),
+            record("Fix the failing test in src/App.tsx and run npm test."),
+        ];
+
+        let preview = response_prompts(&prompts, Some(2), PreviewSort::QualityAsc);
+        let scores = preview
+            .iter()
+            .map(|item| item.quality.score)
+            .collect::<Vec<_>>();
+
+        assert_eq!(preview[0].text, "make better");
+        assert_eq!(scores.len(), 2);
+        assert!(scores[0] <= scores[1]);
     }
 
     #[test]

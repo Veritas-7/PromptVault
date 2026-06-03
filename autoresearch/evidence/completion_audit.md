@@ -21,7 +21,7 @@ Date: 2026-06-03
 | Scan warning visibility | `ScanResult.warnings`; UI renders backend scan warnings as a warning notice instead of hiding them | PASS |
 | Source-specific smoke scans | `ScanOptions.source_ids`; CLI `scan --source ID`; Antigravity DB source smoke scans 2 prompts without full-history scan | PASS |
 | Numeric option safety | invalid `--limit`, `--preview-limit`, and repair `--count` exit non-zero instead of silently removing/defaulting caps | PASS |
-| Required option value safety | missing values for `--source`, `--output`, and `--preview-sort` exit non-zero instead of widening/defaulting scope | PASS |
+| Required option value safety | missing values and empty source ID components exit non-zero instead of widening/defaulting scope | PASS |
 | No-export stats scan | `ScanOptions.write_markdown`; CLI `scan --no-export`; full no-export scan writes no Markdown file | PASS |
 | Weak-first repair queue | `ScanOptions.preview_sort`; CLI `--weakest-first`; UI `Weakest` mode; bounded preview can return lowest-quality prompts first | PASS |
 | Source-level quality triage | `SourceSummary.average_quality`, `weak_prompt_count`; CLI JSON, Markdown source table, and UI source panel expose source quality | PASS |
@@ -71,6 +71,7 @@ set +e; cargo run --quiet --bin promptvault-cli -- scan --source antigravity-cli
 set +e; cargo run --quiet --bin promptvault-cli -- scan --limit 10 --preview-limit nope --no-export --json; test "$?" -ne 0; set -e
 set +e; cargo run --quiet --bin promptvault-cli -- repair --limit 10 --count nope --json; test "$?" -ne 0; set -e
 set +e; cargo run --quiet --bin promptvault-cli -- scan --limit 10 --no-export --json --source; test "$?" -ne 0; set -e
+set +e; cargo run --quiet --bin promptvault-cli -- scan --source codex, --limit 1 --no-export --json; test "$?" -ne 0; set -e
 set +e; cargo run --quiet --bin promptvault-cli -- scan --limit 10 --no-export --json --output; test "$?" -ne 0; set -e
 set +e; cargo run --quiet --bin promptvault-cli -- scan --limit 10 --no-export --json --preview-sort; test "$?" -ne 0; set -e
 set +e; cargo run --quiet --bin promptvault-cli -- repair --limit 10 --count 1 --json --source; test "$?" -ne 0; set -e
@@ -89,11 +90,11 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run check`: PASS, Vite production build completed, 24 library tests plus 13 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, Vite production build completed, 25 library tests plus 13 CLI tests passed, and strict clippy passed.
 - UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 24 library tests plus 13 CLI tests passed.
-- CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty and flag-like prompt rejection, numeric argument validation, required value validation, repair count cap documentation, and sources extra-arg rejection.
+- `cargo test`: PASS, 25 library tests plus 13 CLI tests passed.
+- CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty and flag-like prompt rejection, numeric argument validation, required value validation, empty source component rejection, repair count cap documentation, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Sources extra-arg smoke: PASS, `sources --bogus` and `sources --json --bogus` both exited 1 with `unknown sources argument: --bogus`; valid `sources --json` still returned 11 roots.
@@ -101,7 +102,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
 - Unknown-source smoke: PASS, `--source missing-source` exited 1 with `unknown source id: missing-source`.
 - Numeric option smoke: PASS, invalid `--limit`, `--preview-limit`, and repair `--count` each exited 1 with the expected non-negative integer error; valid `--limit 10 --preview-limit 0` scan exited 0.
-- Required value smoke: PASS, missing scan `--source`, `--output`, `--preview-sort`, repair `--source`, and flag-like improve `--prompt` values each exited 1; valid `--source codex --limit 1` scan exited 0.
+- Required value smoke: PASS, missing scan `--source`, `--output`, `--preview-sort`, empty source component `--source codex,`, repair `--source`, and flag-like improve `--prompt` values each exited 1; valid `--source codex --limit 1` scan exited 0.
 - No-export full scan: PASS, current release CLI scanned 155,484 prompts from 27,608 files in 1m31s with `output_path=null`, `markdown_written=false`, `markdown_included=false`, `warnings=[]`, and no `/tmp/promptvault-no-export-full.md` file created.
 - Preview-payload scan: PASS, default CLI JSON returned `returned_prompt_count=0`, bounded preview returned `returned_prompt_count=5`.
 - Weak-first preview smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --no-export --json` returned `preview_sort=quality_asc`, `returned_prompt_count=5`, `markdown_written=false`, and `output_path=null`.

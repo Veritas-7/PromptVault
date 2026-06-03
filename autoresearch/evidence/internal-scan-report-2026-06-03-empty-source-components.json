@@ -1,0 +1,61 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "c8a0b7e",
+  "code_commit": "e968658",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src-tauri/src/bin/promptvault-cli.rs",
+      "observed": "parse_source_ids_arg filtered empty comma-separated components, so --source codex, silently scanned codex."
+    },
+    {
+      "surface": "src-tauri/src/lib.rs",
+      "observed": "validate_source_ids filtered empty API entries, so [\"codex\", \" \"] was accepted."
+    }
+  ],
+  "red_tests": [
+    {
+      "command": "cargo test --bin promptvault-cli parse_source_ids_rejects_empty_values",
+      "result": "FAILED before implementation because --source codex, was accepted."
+    },
+    {
+      "command": "cargo test --lib validate_source_ids_rejects_mixed_empty_source_ids",
+      "result": "FAILED before implementation because mixed empty API source IDs were accepted."
+    }
+  ],
+  "change": {
+    "summary": "CLI and API source ID validation now reject mixed empty components while preserving the existing all-empty error.",
+    "tests_added_or_extended": [
+      "validate_source_ids_rejects_mixed_empty_source_ids",
+      "parse_source_ids_rejects_empty_values"
+    ]
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib validate_source_ids_rejects_mixed_empty_source_ids",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --bin promptvault-cli parse_source_ids_rejects_empty_values",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo run --quiet --bin promptvault-cli -- scan --source codex, --limit 1 --no-export --json",
+      "result": "PASS: exited 1 with '--source cannot include empty values'."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: Vite build, 25 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "Started with failing CLI and API validation tests.",
+    "Kept the change scoped to source ID parsing and validation.",
+    "Ran a real CLI smoke before the full quality gate."
+  ]
+}

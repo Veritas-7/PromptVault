@@ -91,6 +91,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+            validate_scan_output_options(&output_path, no_export)?;
             let result = run_scan(ScanOptions {
                 limit,
                 output_path,
@@ -376,6 +377,16 @@ fn parse_preview_sort_arg(value: Option<String>) -> Result<String, Box<dyn std::
     }
 }
 
+fn validate_scan_output_options(
+    output_path: &Option<String>,
+    no_export: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if no_export && output_path.is_some() {
+        return Err("--output cannot be used with --no-export".into());
+    }
+    Ok(())
+}
+
 fn collect_prompt_arg(args: Vec<String>) -> Result<String, Box<dyn std::error::Error>> {
     let prompt = if args.is_empty() {
         let mut buf = String::new();
@@ -588,5 +599,12 @@ mod tests {
         assert!(parse_preview_sort_arg(None).is_err());
         assert!(parse_preview_sort_arg(Some("nonsense".to_string())).is_err());
         assert!(parse_preview_sort_arg(Some("--limit".to_string())).is_err());
+    }
+
+    #[test]
+    fn validate_scan_output_options_rejects_no_export_output() {
+        assert!(validate_scan_output_options(&None, true).is_ok());
+        assert!(validate_scan_output_options(&Some("/tmp/out.md".to_string()), false).is_ok());
+        assert!(validate_scan_output_options(&Some("/tmp/out.md".to_string()), true).is_err());
     }
 }

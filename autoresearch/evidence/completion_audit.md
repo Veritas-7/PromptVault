@@ -19,6 +19,7 @@ Date: 2026-06-03
 | Frequency views | `ScanStats.top_words`, `top_phrases`, `repeated_prompts`; UI Frequency panel | PASS |
 | Large-history UI safety | `ScanOptions.preview_limit`, `include_markdown`; UI requests latest 1,000 prompts and omits Markdown over IPC | PASS |
 | Scan warning visibility | `ScanResult.warnings`; UI renders backend scan warnings as a warning notice instead of hiding them | PASS |
+| Markdown warning preservation | Markdown exports include `ScanResult.warnings` so limited or partial scans remain self-describing | PASS |
 | Source-specific smoke scans | `ScanOptions.source_ids`; CLI `scan --source ID`; Antigravity DB source smoke scans 2 prompts without full-history scan | PASS |
 | Numeric option safety | invalid `--limit`, `--preview-limit`, and repair `--count` exit non-zero instead of silently removing/defaulting caps | PASS |
 | Required option value safety | missing values and empty source ID components exit non-zero instead of widening/defaulting scope | PASS |
@@ -90,15 +91,16 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run check`: PASS, Vite production build completed, 25 library tests plus 13 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, Vite production build completed, 26 library tests plus 13 CLI tests passed, and strict clippy passed.
 - UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 25 library tests plus 13 CLI tests passed.
+- `cargo test`: PASS, 26 library tests plus 13 CLI tests passed.
 - CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty and flag-like prompt rejection, numeric argument validation, required value validation, empty source component rejection, repair count cap documentation, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Sources extra-arg smoke: PASS, `sources --bogus` and `sources --json --bogus` both exited 1 with `unknown sources argument: --bogus`; valid `sources --json` still returned 11 roots.
 - Smoke scan: PASS, 100 prompts from 92 visited files, no injected-context markers, with the configured-limit warning.
+- Markdown warning smoke: PASS, limited `--source codex --limit 1` export wrote `## Warnings` and `Scan stopped at configured limit of 1 prompts.` to `/tmp/promptvault-warning-export.md`.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
 - Unknown-source smoke: PASS, `--source missing-source` exited 1 with `unknown source id: missing-source`.
 - Numeric option smoke: PASS, invalid `--limit`, `--preview-limit`, and repair `--count` each exited 1 with the expected non-negative integer error; valid `--limit 10 --preview-limit 0` scan exited 0.

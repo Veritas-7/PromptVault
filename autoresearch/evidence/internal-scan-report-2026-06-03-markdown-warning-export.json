@@ -1,0 +1,51 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "91fac7b",
+  "code_commit": "0f6a429",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src-tauri/src/lib.rs",
+      "observed": "run_scan returned warnings in JSON/stdout, but render_markdown did not include them in saved Markdown exports."
+    },
+    {
+      "risk": "A limited or partial scan export could be read later without the warning that the result was intentionally bounded or partially degraded."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib markdown_export_includes_scan_warnings",
+    "result": "FAILED before implementation with a render_markdown arity compile error because warnings were not part of the renderer contract."
+  },
+  "change": {
+    "summary": "render_markdown now accepts scan warnings and writes a Warnings section when warnings are present.",
+    "test_added": "markdown_export_includes_scan_warnings"
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib markdown_export_includes_scan_warnings",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib markdown_source_coverage_includes_quality_triage",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo run --quiet --bin promptvault-cli -- scan --source codex --limit 1 --preview-limit 0 --output /tmp/promptvault-warning-export.md --json",
+      "result": "PASS: Markdown file contained ## Warnings and the configured-limit warning."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: Vite build, 26 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "Started with a renderer contract test.",
+    "Kept the behavior additive: Markdown gets warnings only when warnings exist.",
+    "Removed the temporary smoke export after verification."
+  ]
+}

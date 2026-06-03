@@ -910,6 +910,10 @@ fn parse_gemini_tmp_chat(
     File::open(path)?.read_to_string(&mut buf)?;
     let value: Value = serde_json::from_str(&buf)?;
     let mut records = Vec::new();
+    let session_id = value
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     if let Some(messages) = value.get("messages").and_then(Value::as_array) {
         for message in messages {
             let kind = message
@@ -920,7 +924,11 @@ fn parse_gemini_tmp_chat(
                 continue;
             }
             let text = text_from_value(message.get("content"));
-            push_record(&mut records, source, path, message, None, text);
+            let mut metadata = message.clone();
+            if let (Some(session_id), Some(object)) = (&session_id, metadata.as_object_mut()) {
+                object.insert("sessionId".to_string(), Value::String(session_id.clone()));
+            }
+            push_record(&mut records, source, path, &metadata, None, text);
         }
     }
     Ok(records)
@@ -2529,6 +2537,46 @@ mod tests {
             text_from_value(Some(&value)),
             "Fix nested message prompt parsing, run cargo test, and report PASS/FAIL."
         );
+    }
+
+    #[test]
+    fn parse_gemini_tmp_chat_uses_top_level_session_id() {
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-gemini-session-{}.json",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            serde_json::json!({
+                "sessionId": "root-session-id",
+                "messages": [
+                    {
+                        "id": "message-id",
+                        "timestamp": "2026-06-03T11:37:00Z",
+                        "type": "user",
+                        "content": [
+                            {
+                                "text": "Fix Gemini session grouping, run cargo test, and report PASS/FAIL."
+                            }
+                        ]
+                    }
+                ]
+            })
+            .to_string(),
+        )
+        .expect("write gemini chat fixture");
+
+        let source = SourceSpec {
+            id: "gemini-test",
+            label: "Gemini test",
+            root: path.clone(),
+            kind: SourceKind::GeminiTmpChatJson,
+        };
+        let records = parse_gemini_tmp_chat(&source, &path).expect("parse gemini fixture");
+        std::fs::remove_file(path).expect("remove gemini chat fixture");
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].session_id, "root-session-id");
     }
 
     #[test]

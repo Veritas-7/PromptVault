@@ -27,6 +27,7 @@ Date: 2026-06-03
 | Claude meta user filtering | `parse_claude_project_jsonl`; `isMeta=true` user-shaped records such as local-command caveats are skipped instead of counted as user-authored prompts | PASS |
 | Claude tool-result filtering | `text_from_value`; Claude `tool_result` blocks inside user-role message arrays are ignored instead of counted as user prompts | PASS |
 | Claude command wrapper filtering | `strip_injected_context`; Claude command wrapper records such as `<command-name>/clear</command-name>` are dropped instead of entering weak-prompt previews | PASS |
+| Claude local-command output filtering | `strip_injected_context`; `<local-command-stdout>`/similar local command wrapper records are dropped instead of entering weak-prompt previews | PASS |
 | Partial source warning safety | File-level parse notes and source walk errors promote the source to `partial` and surface as scan warnings | PASS |
 | Numeric option safety | invalid `--limit`, `--preview-limit`, and repair `--count` exit non-zero instead of silently removing/defaulting caps | PASS |
 | Required option value safety | missing values and empty source ID components exit non-zero instead of widening/defaulting scope | PASS |
@@ -100,15 +101,16 @@ cargo run --quiet --bin promptvault-cli -- --help
 
 - `npm run build`: PASS, Vite production build completed.
 - `npm run test:ui`: PASS, 10 Node UI helper tests passed without `ExperimentalWarning` output.
-- `npm run check`: PASS, 10 quiet UI helper tests passed, Vite production build completed, 37 library tests plus 13 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, 10 quiet UI helper tests passed, Vite production build completed, 38 library tests plus 13 CLI tests passed, and strict clippy passed.
 - UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 37 library tests plus 13 CLI tests passed.
+- `cargo test`: PASS, 38 library tests plus 13 CLI tests passed.
 - Nested message content extraction: PASS, RED `cargo test text_from_value_extracts_nested_message_content_object` first failed with `left: ""`, GREEN passed after `text_from_value` extracted object-shaped `message.content` payloads.
 - Gemini session grouping: PASS, RED `cargo test parse_gemini_tmp_chat_uses_top_level_session_id` first failed with `left: "message-id"` and `right: "root-session-id"`, GREEN passed after the Gemini parser preserved the top-level chat `sessionId` in record metadata.
 - Claude meta user filtering: PASS, RED `cargo test parse_claude_project_jsonl_skips_meta_user_records` first failed with 2 records instead of 1, GREEN passed after `parse_claude_project_jsonl` skipped `isMeta=true` user-shaped records.
 - Claude tool-result filtering: PASS, RED `cargo test parse_claude_project_jsonl_skips_tool_result_blocks` first failed with 2 records instead of 1, GREEN passed after `text_from_value` ignored `type=tool_result` array items.
 - Claude command wrapper filtering: PASS, RED `cargo test parse_claude_project_jsonl_skips_command_wrapper_records` first failed with 2 records instead of 1, GREEN passed after `strip_injected_context` dropped command wrapper records; post-fix Claude projects weakest scan returned `containsCommandWrapper=false`.
+- Claude local-command output filtering: PASS, RED `cargo test parse_claude_project_jsonl_skips_local_command_output_records` first failed with 2 records instead of 1, GREEN passed after `strip_injected_context` dropped `<local-command-...>` wrappers; post-fix Claude projects weakest scan returned `containsLocalCommand=false`.
 - CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty and flag-like prompt rejection, numeric argument validation, required value validation, empty source component rejection, repair count cap documentation, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.

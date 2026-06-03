@@ -1,0 +1,44 @@
+{
+  "schema": "promptvault-autoresearch-internal-scan-v1",
+  "generated_at": "2026-06-03T20:55:19+0900",
+  "iteration": "claude-local-command-filter",
+  "code_commit": "7c4bf24168587a812a250dda476c2029d75fba14",
+  "status": "pass",
+  "local_evidence": {
+    "source": "Small Claude projects weakest scan after command wrapper filtering",
+    "before": "Weakest preview still included <local-command-stdout>Set model to ...</local-command-stdout>.",
+    "after": "Post-fix scan with --source claude-code-projects --limit 80 --preview-limit 10 --weakest-first --include-prompts --no-export --json returned containsLocalCommand=false and containsCommandWrapper=false."
+  },
+  "candidate": {
+    "problem": "Claude local-command stdout/stderr wrappers were shaped as user-role message content and survived prompt extraction.",
+    "risk": "Command output events polluted weak-prompt previews and repair queues.",
+    "decision": "Drop text that starts with <local-command- and has a local-command closing tag in strip_injected_context."
+  },
+  "red": {
+    "command": "cargo test parse_claude_project_jsonl_skips_local_command_output_records",
+    "status": "failed_as_expected",
+    "evidence": "The new test failed with 2 records instead of the expected 1."
+  },
+  "green": {
+    "command": "cargo test parse_claude_project_jsonl_skips_local_command_output_records",
+    "status": "passed",
+    "evidence": "The focused test passed after local-command wrapper records were stripped to empty text."
+  },
+  "full_verification": {
+    "command": "npm run check",
+    "status": "passed",
+    "evidence": "10 UI helper tests passed, Vite build passed, 38 Rust library tests passed, 13 CLI tests passed, doc-tests passed, and strict clippy passed."
+  },
+  "post_fix_smoke": {
+    "command": "cargo run --quiet --bin promptvault-cli -- scan --source claude-code-projects --limit 80 --preview-limit 10 --weakest-first --include-prompts --no-export --json",
+    "status": "passed",
+    "evidence": "containsLocalCommand=false and containsCommandWrapper=false; scan stopped at configured limit of 80 prompts as expected."
+  },
+  "changed_paths": [
+    "src-tauri/src/lib.rs",
+    "autoresearch/evidence/completion_audit.md",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-claude-local-command-filter.json",
+    "autoresearch/evidence/internal-scan-report-2026-06-03-claude-local-command-filter.md",
+    "autoresearch/evidence/iteration-2026-06-03-claude-local-command-filter.md"
+  ]
+}

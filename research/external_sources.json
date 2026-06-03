@@ -1,0 +1,90 @@
+[
+  {
+    "title": "Claude Code .claude directory documentation",
+    "url": "https://code.claude.com/docs/en/claude-directory",
+    "checked_at": "2026-06-03",
+    "authority": "official",
+    "relevance": "Documents Claude Code transcript and prompt-history locations used by PromptVault source discovery.",
+    "adoption": "Adopted"
+  },
+  {
+    "title": "OpenAI Codex TypeScript SDK README",
+    "url": "https://github.com/openai/codex/blob/main/sdk/typescript/README.md",
+    "checked_at": "2026-06-03",
+    "authority": "official GitHub",
+    "relevance": "Confirms @openai/codex-sdk threading, structured output, env controls, and ~/.codex/sessions persistence.",
+    "adoption": "Documented; direct SDK invocation deferred because prompt improvement is not a coding-agent task."
+  },
+  {
+    "title": "Google Antigravity settings and hooks docs",
+    "url": "https://antigravity.google/docs/ide-settings",
+    "checked_at": "2026-06-03",
+    "authority": "official",
+    "relevance": "Documents Antigravity local app data scope and hook transcriptPath surface.",
+    "adoption": "Adopted for ~/.gemini/antigravity* source discovery."
+  },
+  {
+    "title": "HKUDS CLI-Anything GitHub repository",
+    "url": "https://github.com/HKUDS/CLI-Anything",
+    "checked_at": "2026-06-03",
+    "authority": "official GitHub",
+    "relevance": "Agent-native CLI reference emphasizing self-describing commands, structured output, docs, and tests.",
+    "adoption": "Adopted for promptvault-cli sources/scan/improve commands and machine-readable --json summaries."
+  },
+  {
+    "title": "CLI-Anything project summary",
+    "url": "https://evermx.com/open-source/cli-anything-transform-software-agent-native-cli",
+    "checked_at": "2026-06-03",
+    "authority": "community summary of GitHub project",
+    "relevance": "Motivates structured JSON output, documented CLI commands, and generated skill/tool discoverability.",
+    "adoption": "Partially adopted for promptvault-cli command shape."
+  },
+  {
+    "title": "Understanding Prompt Management in GitHub Repositories",
+    "url": "https://arxiv.org/abs/2509.12421",
+    "checked_at": "2026-06-03",
+    "authority": "peer-reviewed/arXiv",
+    "relevance": "Finds prompt formatting inconsistency, duplication, readability, and spelling issues across 24,800 prompts.",
+    "adoption": "Adopted as analytics targets: frequency, repetition, source coverage, and maintainability checklist."
+  },
+  {
+    "title": "The Prompt Report: A Systematic Survey of Prompting Techniques",
+    "url": "https://arxiv.org/abs/2406.06608",
+    "checked_at": "2026-06-03",
+    "authority": "survey paper",
+    "relevance": "Provides broad taxonomy of prompt techniques and warns against one-size-fits-all magic phrases.",
+    "adoption": "Adopted as principle: app recommends structure, examples, grounding, and evals rather than magic wording."
+  },
+  {
+    "title": "A Systematic Survey of Automatic Prompt Optimization Techniques",
+    "url": "https://arxiv.org/abs/2502.16923",
+    "checked_at": "2026-06-03",
+    "authority": "survey paper",
+    "relevance": "Frames prompt optimization as measurable, iterative, and task dependent.",
+    "adoption": "Adopted as roadmap for future A/B scoring, not fully implemented in v0.1."
+  },
+  {
+    "title": "OpenAI prompt engineering guide",
+    "url": "https://platform.openai.com/docs/guides/prompt-engineering",
+    "checked_at": "2026-06-03",
+    "authority": "official",
+    "relevance": "Supports roles, examples, structured outputs, and explicit instructions.",
+    "adoption": "Adopted in improvement checklist and GLM JSON response format."
+  },
+  {
+    "title": "Anthropic Claude prompting best practices",
+    "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices",
+    "checked_at": "2026-06-03",
+    "authority": "official",
+    "relevance": "Supports clear/direct prompts, examples, XML/structured sections, and agentic-system guidance.",
+    "adoption": "Adopted in prompt structuring guidance."
+  },
+  {
+    "title": "Azure OpenAI prompt engineering techniques",
+    "url": "https://learn.microsoft.com/en-us/azure/ai-foundry/openai/concepts/prompt-engineering",
+    "checked_at": "2026-06-03",
+    "authority": "official",
+    "relevance": "Emphasizes grounding, few-shot examples, and response validation.",
+    "adoption": "Adopted in docs and completion-audit requirement."
+  }
+]

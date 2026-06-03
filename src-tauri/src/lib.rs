@@ -1,0 +1,1249 @@
+use chrono::{Local, TimeZone, Utc};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, Read};
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+use walkdir::WalkDir;
+
+const APP_DIR_NAME: &str = "PromptVault";
+const SECRET_ENV_PATH: &str = "/Users/wj/Ai/System/70_Governance/🔐 Secrets/secrets.env";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PromptRecord {
+    pub id: String,
+    pub source: String,
+    pub session_id: String,
+    pub path: String,
+    pub timestamp: Option<String>,
+    pub cwd: Option<String>,
+    pub text: String,
+    pub word_count: usize,
+    pub char_count: usize,
+    pub hash: String,
+    pub risk_flags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceSummary {
+    pub id: String,
+    pub label: String,
+    pub root_path: String,
+    pub files_seen: usize,
+    pub prompts_found: usize,
+    pub status: String,
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FrequencyItem {
+    pub text: String,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanStats {
+    pub total_prompts: usize,
+    pub total_files: usize,
+    pub total_words: usize,
+    pub average_words: f64,
+    pub top_words: Vec<FrequencyItem>,
+    pub top_phrases: Vec<FrequencyItem>,
+    pub repeated_prompts: Vec<FrequencyItem>,
+    pub source_summaries: Vec<SourceSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanResult {
+    pub generated_at: String,
+    pub output_path: String,
+    pub markdown: String,
+    pub stats: ScanStats,
+    pub prompts: Vec<PromptRecord>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImproveRequest {
+    pub prompt: String,
+    pub context: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImproveResult {
+    pub provider: String,
+    pub used_ai: bool,
+    pub revised_prompt: String,
+    pub rationale: Vec<String>,
+    pub checklist: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanOptions {
+    pub limit: Option<usize>,
+    pub output_path: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceSpec {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub root: PathBuf,
+    kind: SourceKind,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SourceKind {
+    CodexJsonl,
+    ClaudeProjectJsonl,
+    ClaudeTranscriptJsonl,
+    ClaudeHistoryJsonl,
+    AntigravityTranscriptJsonl,
+    AntigravityHistoryJsonl,
+    GeminiTmpChatJson,
+}
+
+#[tauri::command]
+fn scan_prompts(options: Option<ScanOptions>) -> Result<ScanResult, String> {
+    let opts = options.unwrap_or(ScanOptions {
+        limit: None,
+        output_path: None,
+    });
+    run_scan(opts).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+async fn improve_prompt(request: ImproveRequest) -> Result<ImproveResult, String> {
+    improve_prompt_inner(request)
+        .await
+        .map_err(|err| err.to_string())
+}
+
+pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::Error>> {
+    let limit = options.limit.unwrap_or(usize::MAX);
+    let mut warnings = Vec::new();
+    let mut prompts = Vec::new();
+    let mut summaries = Vec::new();
+
+    for source in source_specs() {
+        let mut summary = SourceSummary {
+            id: source.id.to_string(),
+            label: source.label.to_string(),
+            root_path: source.root.display().to_string(),
+            files_seen: 0,
+            prompts_found: 0,
+            status: "missing".to_string(),
+            notes: Vec::new(),
+        };
+
+        if !source.root.exists() {
+            summary
+                .notes
+                .push("Path was not present on this machine.".to_string());
+            summaries.push(summary);
+            continue;
+        }
+
+        summary.status = "ok".to_string();
+        match collect_from_source(&source, &mut summary, limit.saturating_sub(prompts.len())) {
+            Ok(mut found) => {
+                summary.prompts_found = found.len();
+                prompts.append(&mut found);
+            }
+            Err(err) => {
+                summary.status = "partial".to_string();
+                summary.notes.push(err.to_string());
+                warnings.push(format!("{}: {}", source.label, err));
+            }
+        }
+        summaries.push(summary);
+
+        if limit != usize::MAX && prompts.len() >= limit {
+            warnings.push(format!(
+                "Scan stopped at configured limit of {limit} prompts."
+            ));
+            break;
+        }
+    }
+
+    prompts.sort_by(|a, b| {
+        let at = a.timestamp.as_deref().unwrap_or("");
+        let bt = b.timestamp.as_deref().unwrap_or("");
+        at.cmp(bt).then_with(|| a.source.cmp(&b.source))
+    });
+    prompts.dedup_by(|a, b| a.hash == b.hash && a.source == b.source);
+
+    let stats = build_stats(&prompts, summaries);
+    let generated_at = Utc::now().to_rfc3339();
+    let markdown = render_markdown(&generated_at, &stats, &prompts);
+    let output_path = options
+        .output_path
+        .map(PathBuf::from)
+        .unwrap_or_else(default_markdown_path);
+
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&output_path, &markdown)?;
+
+    Ok(ScanResult {
+        generated_at,
+        output_path: output_path.display().to_string(),
+        markdown,
+        stats,
+        prompts,
+        warnings,
+    })
+}
+
+pub async fn improve_prompt_inner(
+    request: ImproveRequest,
+) -> Result<ImproveResult, Box<dyn std::error::Error>> {
+    let prompt = request.prompt.trim().to_string();
+    if prompt.is_empty() {
+        return Ok(local_improvement(
+            "",
+            request.context.as_deref(),
+            vec![
+                "Empty prompt; local fallback returned the improvement checklist only.".to_string(),
+            ],
+        ));
+    }
+
+    let env = read_secret_env(Path::new(SECRET_ENV_PATH)).unwrap_or_default();
+    let key = env
+        .get("GLM_API_KEY")
+        .or_else(|| env.get("GLM_API_KEY_2"))
+        .cloned();
+    let endpoint =
+        normalize_chat_endpoint(&env.get("GLM_CODING_ENDPOINT").cloned().unwrap_or_else(|| {
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions".to_string()
+        }));
+    let model = env
+        .get("GLM_CODING_MODEL")
+        .cloned()
+        .unwrap_or_else(|| "glm-4.6".to_string());
+
+    if let Some(api_key) = key {
+        let system = "You improve developer prompts. Return concise Korean guidance. Preserve user intent, make scope, context, constraints, success criteria, and verification explicit. Do not add unsupported facts.";
+        let mut user = String::new();
+        if let Some(context) = request
+            .context
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            user.push_str("Context:\n");
+            user.push_str(context.trim());
+            user.push_str("\n\n");
+        }
+        user.push_str("Original prompt:\n");
+        user.push_str(&prompt);
+        user.push_str("\n\nReturn JSON with keys revised_prompt, rationale, checklist.");
+
+        let body = serde_json::json!({
+            "model": model,
+            "messages": [
+                { "role": "system", "content": system },
+                { "role": "user", "content": user }
+            ],
+            "temperature": 0.2,
+            "response_format": { "type": "json_object" }
+        });
+
+        let client = reqwest::Client::new();
+        match client
+            .post(endpoint)
+            .bearer_auth(api_key)
+            .json(&body)
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => {
+                let value: Value = response.json().await?;
+                if let Some(content) = value
+                    .pointer("/choices/0/message/content")
+                    .and_then(Value::as_str)
+                {
+                    if let Ok(parsed) = serde_json::from_str::<Value>(content) {
+                        let revised = parsed
+                            .get("revised_prompt")
+                            .and_then(Value::as_str)
+                            .unwrap_or(content)
+                            .trim()
+                            .to_string();
+                        let rationale = string_array(parsed.get("rationale"));
+                        let checklist = string_array(parsed.get("checklist"));
+                        return Ok(ImproveResult {
+                            provider: "glm".to_string(),
+                            used_ai: true,
+                            revised_prompt: revised,
+                            rationale,
+                            checklist,
+                            warnings: Vec::new(),
+                        });
+                    }
+                    return Ok(ImproveResult {
+                        provider: "glm".to_string(),
+                        used_ai: true,
+                        revised_prompt: content.trim().to_string(),
+                        rationale: vec![
+                            "GLM returned non-JSON text; preserved the model output.".to_string()
+                        ],
+                        checklist: prompt_checklist(),
+                        warnings: Vec::new(),
+                    });
+                }
+            }
+            Ok(response) => {
+                let warning = format!(
+                    "GLM returned HTTP {}; used local fallback.",
+                    response.status()
+                );
+                return Ok(local_improvement(
+                    &prompt,
+                    request.context.as_deref(),
+                    vec![warning],
+                ));
+            }
+            Err(err) => {
+                let warning = format!("GLM request failed: {err}; used local fallback.");
+                return Ok(local_improvement(
+                    &prompt,
+                    request.context.as_deref(),
+                    vec![warning],
+                ));
+            }
+        }
+    }
+
+    Ok(local_improvement(
+        &prompt,
+        request.context.as_deref(),
+        vec!["GLM_API_KEY/GLM_API_KEY_2 was not available; used local fallback.".to_string()],
+    ))
+}
+
+pub fn source_specs() -> Vec<SourceSpec> {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/Users/wj"));
+    vec![
+        SourceSpec {
+            id: "codex",
+            label: "Codex",
+            root: home.join(".codex/sessions"),
+            kind: SourceKind::CodexJsonl,
+        },
+        SourceSpec {
+            id: "codex-cx",
+            label: "Codex CX",
+            root: home.join(".codex-cx/sessions"),
+            kind: SourceKind::CodexJsonl,
+        },
+        SourceSpec {
+            id: "claude-code-projects",
+            label: "Claude Code projects",
+            root: home.join(".claude/projects"),
+            kind: SourceKind::ClaudeProjectJsonl,
+        },
+        SourceSpec {
+            id: "claude-code-transcripts",
+            label: "Claude transcripts",
+            root: home.join(".claude/transcripts"),
+            kind: SourceKind::ClaudeTranscriptJsonl,
+        },
+        SourceSpec {
+            id: "claude-code-history",
+            label: "Claude prompt history",
+            root: home.join(".claude/history.jsonl"),
+            kind: SourceKind::ClaudeHistoryJsonl,
+        },
+        SourceSpec {
+            id: "antigravity-cli-transcripts",
+            label: "Antigravity CLI transcripts",
+            root: home.join(".gemini/antigravity-cli/brain"),
+            kind: SourceKind::AntigravityTranscriptJsonl,
+        },
+        SourceSpec {
+            id: "antigravity-ide-transcripts",
+            label: "Antigravity IDE transcripts",
+            root: home.join(".gemini/antigravity/brain"),
+            kind: SourceKind::AntigravityTranscriptJsonl,
+        },
+        SourceSpec {
+            id: "antigravity-ide-alt-transcripts",
+            label: "Antigravity IDE alt transcripts",
+            root: home.join(".gemini/antigravity-ide/brain"),
+            kind: SourceKind::AntigravityTranscriptJsonl,
+        },
+        SourceSpec {
+            id: "antigravity-cli-history",
+            label: "Antigravity prompt history",
+            root: home.join(".gemini/antigravity-cli/history.jsonl"),
+            kind: SourceKind::AntigravityHistoryJsonl,
+        },
+        SourceSpec {
+            id: "gemini-tmp-chat",
+            label: "Gemini temporary chats",
+            root: home.join(".gemini/tmp/wj/chats"),
+            kind: SourceKind::GeminiTmpChatJson,
+        },
+    ]
+}
+
+fn collect_from_source(
+    source: &SourceSpec,
+    summary: &mut SourceSummary,
+    remaining: usize,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    if remaining == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut prompts = Vec::new();
+    let files = collect_files(&source.root, source.kind);
+    summary.files_seen = files.len();
+
+    for file in files {
+        if prompts.len() >= remaining {
+            break;
+        }
+        let found = match source.kind {
+            SourceKind::CodexJsonl => parse_codex_jsonl(source, &file),
+            SourceKind::ClaudeProjectJsonl => parse_claude_project_jsonl(source, &file),
+            SourceKind::ClaudeTranscriptJsonl => parse_claude_transcript_jsonl(source, &file),
+            SourceKind::ClaudeHistoryJsonl => parse_claude_history_jsonl(source, &file),
+            SourceKind::AntigravityTranscriptJsonl => {
+                parse_antigravity_transcript_jsonl(source, &file)
+            }
+            SourceKind::AntigravityHistoryJsonl => parse_antigravity_history_jsonl(source, &file),
+            SourceKind::GeminiTmpChatJson => parse_gemini_tmp_chat(source, &file),
+        };
+
+        match found {
+            Ok(mut records) => prompts.append(&mut records),
+            Err(err) => summary
+                .notes
+                .push(format!("Skipped {}: {}", file.display(), err)),
+        }
+    }
+    Ok(prompts)
+}
+
+fn collect_files(root: &Path, kind: SourceKind) -> Vec<PathBuf> {
+    if root.is_file() {
+        return vec![root.to_path_buf()];
+    }
+
+    let mut files = Vec::new();
+    for entry in WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let path_str = path.to_string_lossy();
+        let matches = match kind {
+            SourceKind::CodexJsonl
+            | SourceKind::ClaudeProjectJsonl
+            | SourceKind::ClaudeTranscriptJsonl
+            | SourceKind::ClaudeHistoryJsonl
+            | SourceKind::AntigravityHistoryJsonl => {
+                path.extension().is_some_and(|ext| ext == "jsonl")
+            }
+            SourceKind::AntigravityTranscriptJsonl => {
+                path_str.ends_with("/.system_generated/logs/transcript.jsonl")
+                    || path_str.ends_with("/.system_generated/logs/transcript_full.jsonl")
+            }
+            SourceKind::GeminiTmpChatJson => path.extension().is_some_and(|ext| ext == "json"),
+        };
+        if matches {
+            files.push(path.to_path_buf());
+        }
+    }
+    files.sort();
+    files
+}
+
+fn parse_codex_jsonl(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut records = Vec::new();
+    let mut cwd: Option<String> = None;
+    for line in jsonl_lines(path)? {
+        let value: Value = serde_json::from_str(&line)?;
+        if value.get("type").and_then(Value::as_str) == Some("turn_context") {
+            cwd = value
+                .pointer("/payload/cwd")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            continue;
+        }
+        if value.get("type").and_then(Value::as_str) != Some("response_item") {
+            continue;
+        }
+        if value.pointer("/payload/role").and_then(Value::as_str) != Some("user") {
+            continue;
+        }
+        let text = text_from_value(value.pointer("/payload/content"));
+        push_record(&mut records, source, path, &value, cwd.clone(), text);
+    }
+    Ok(records)
+}
+
+fn parse_claude_project_jsonl(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut records = Vec::new();
+    for line in jsonl_lines(path)? {
+        let value: Value = serde_json::from_str(&line)?;
+        if value.get("type").and_then(Value::as_str) != Some("user") {
+            continue;
+        }
+        if value.pointer("/message/role").and_then(Value::as_str) != Some("user") {
+            continue;
+        }
+        let text = text_from_value(value.pointer("/message/content"));
+        let cwd = value.get("cwd").and_then(Value::as_str).map(str::to_string);
+        push_record(&mut records, source, path, &value, cwd, text);
+    }
+    Ok(records)
+}
+
+fn parse_claude_transcript_jsonl(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut records = Vec::new();
+    for line in jsonl_lines(path)? {
+        let value: Value = serde_json::from_str(&line)?;
+        let kind = value
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if !matches!(kind, "human" | "user" | "prompt") {
+            continue;
+        }
+        let text = text_from_value(value.get("content"));
+        push_record(&mut records, source, path, &value, None, text);
+    }
+    Ok(records)
+}
+
+fn parse_claude_history_jsonl(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut records = Vec::new();
+    for line in jsonl_lines(path)? {
+        let value: Value = serde_json::from_str(&line)?;
+        let text = text_from_value(value.get("display"));
+        let cwd = value
+            .get("project")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        push_record(&mut records, source, path, &value, cwd, text);
+    }
+    Ok(records)
+}
+
+fn parse_antigravity_transcript_jsonl(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut records = Vec::new();
+    for line in jsonl_lines(path)? {
+        let value: Value = serde_json::from_str(&line)?;
+        let src = value
+            .get("source")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let kind = value
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if src != "USER_EXPLICIT" && kind != "USER_INPUT" {
+            continue;
+        }
+        let text = text_from_value(value.get("content"));
+        push_record(&mut records, source, path, &value, None, text);
+    }
+    Ok(records)
+}
+
+fn parse_antigravity_history_jsonl(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut records = Vec::new();
+    for line in jsonl_lines(path)? {
+        let value: Value = serde_json::from_str(&line)?;
+        let text = text_from_value(value.get("display"));
+        let cwd = value
+            .get("workspace")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        push_record(&mut records, source, path, &value, cwd, text);
+    }
+    Ok(records)
+}
+
+fn parse_gemini_tmp_chat(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut buf = String::new();
+    File::open(path)?.read_to_string(&mut buf)?;
+    let value: Value = serde_json::from_str(&buf)?;
+    let mut records = Vec::new();
+    if let Some(messages) = value.get("messages").and_then(Value::as_array) {
+        for message in messages {
+            let kind = message
+                .get("type")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if !matches!(kind, "user" | "human") {
+                continue;
+            }
+            let text = text_from_value(message.get("content"));
+            push_record(&mut records, source, path, message, None, text);
+        }
+    }
+    Ok(records)
+}
+
+fn push_record(
+    records: &mut Vec<PromptRecord>,
+    source: &SourceSpec,
+    path: &Path,
+    value: &Value,
+    cwd: Option<String>,
+    text: String,
+) {
+    let text = normalize_prompt_text(&strip_injected_context(&text));
+    if text.is_empty() {
+        return;
+    }
+
+    let timestamp = extract_timestamp(value);
+    let session_id = extract_session_id(value)
+        .or_else(|| {
+            path.file_stem()
+                .and_then(|name| name.to_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| "unknown-session".to_string());
+    let hash = hash_text(&format!("{}:{}:{}", source.id, session_id, text));
+    let words = count_words(&text);
+    let risk_flags = detect_risks(&text);
+
+    records.push(PromptRecord {
+        id: hash.chars().take(16).collect(),
+        source: source.label.to_string(),
+        session_id,
+        path: path.display().to_string(),
+        timestamp,
+        cwd,
+        text: text.clone(),
+        word_count: words,
+        char_count: text.chars().count(),
+        hash,
+        risk_flags,
+    });
+}
+
+fn jsonl_lines(path: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+    Ok(reader
+        .lines()
+        .filter_map(Result::ok)
+        .filter(|line| !line.trim().is_empty())
+        .collect())
+}
+
+fn text_from_value(value: Option<&Value>) -> String {
+    match value {
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(|item| {
+                if let Some(text) = item.as_str() {
+                    Some(text.to_string())
+                } else if let Some(text) = item.get("text").and_then(Value::as_str) {
+                    Some(text.to_string())
+                } else if let Some(text) = item.get("content").and_then(Value::as_str) {
+                    Some(text.to_string())
+                } else if let Some(text) = item.pointer("/message/content").and_then(Value::as_str)
+                {
+                    Some(text.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Some(Value::Object(map)) => {
+            for key in ["text", "content", "display", "message", "prompt"] {
+                if let Some(text) = map.get(key).and_then(Value::as_str) {
+                    return text.to_string();
+                }
+            }
+            String::new()
+        }
+        _ => String::new(),
+    }
+}
+
+fn normalize_prompt_text(text: &str) -> String {
+    let sanitized = text
+        .chars()
+        .map(|ch| {
+            if ch == '\n' || ch == '\r' || ch == '\t' || !ch.is_control() {
+                ch
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>();
+
+    sanitized
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn strip_injected_context(text: &str) -> String {
+    let mut candidate = text.trim_start();
+
+    if candidate.starts_with("# AGENTS.md instructions for ") {
+        if let Some(index) = candidate.find("</environment_context>") {
+            candidate = &candidate[index + "</environment_context>".len()..];
+        } else if let Some(index) = candidate.find("</INSTRUCTIONS>") {
+            candidate = &candidate[index + "</INSTRUCTIONS>".len()..];
+        } else {
+            return String::new();
+        }
+    }
+
+    loop {
+        let trimmed = candidate.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("<environment_context>") {
+            if let Some(index) = rest.find("</environment_context>") {
+                candidate = &rest[index + "</environment_context>".len()..];
+                continue;
+            }
+        }
+        candidate = trimmed;
+        break;
+    }
+
+    candidate.trim().to_string()
+}
+
+fn extract_timestamp(value: &Value) -> Option<String> {
+    for key in ["timestamp", "created_at", "time", "started_at"] {
+        if let Some(text) = value.get(key).and_then(Value::as_str) {
+            return Some(text.to_string());
+        }
+        if let Some(num) = value.get(key).and_then(Value::as_i64) {
+            return Some(format_epoch(num));
+        }
+        if let Some(num) = value.get(key).and_then(Value::as_u64) {
+            return Some(format_epoch(num as i64));
+        }
+    }
+    value
+        .pointer("/payload/started_at")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
+fn format_epoch(value: i64) -> String {
+    let seconds = if value > 10_000_000_000 {
+        value / 1000
+    } else {
+        value
+    };
+    Utc.timestamp_opt(seconds, 0)
+        .single()
+        .map(|dt| dt.to_rfc3339())
+        .unwrap_or_else(|| value.to_string())
+}
+
+fn extract_session_id(value: &Value) -> Option<String> {
+    for key in [
+        "sessionId",
+        "session_id",
+        "conversationId",
+        "conversation_id",
+        "id",
+    ] {
+        if let Some(text) = value.get(key).and_then(Value::as_str) {
+            return Some(text.to_string());
+        }
+    }
+    value
+        .pointer("/payload/turn_id")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
+fn hash_text(value: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(value.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+fn count_words(text: &str) -> usize {
+    word_regex().find_iter(text).count()
+}
+
+fn detect_risks(text: &str) -> Vec<String> {
+    let mut flags = Vec::new();
+    for (label, regex) in risk_regexes() {
+        if regex.is_match(text) {
+            flags.push(label.to_string());
+        }
+    }
+    flags
+}
+
+fn build_stats(prompts: &[PromptRecord], source_summaries: Vec<SourceSummary>) -> ScanStats {
+    let total_words = prompts.iter().map(|prompt| prompt.word_count).sum();
+    let average_words = if prompts.is_empty() {
+        0.0
+    } else {
+        total_words as f64 / prompts.len() as f64
+    };
+
+    ScanStats {
+        total_prompts: prompts.len(),
+        total_files: source_summaries
+            .iter()
+            .map(|source| source.files_seen)
+            .sum(),
+        total_words,
+        average_words,
+        top_words: top_words(prompts, 40),
+        top_phrases: top_phrases(prompts, 30),
+        repeated_prompts: repeated_prompts(prompts, 20),
+        source_summaries,
+    }
+}
+
+fn top_words(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
+    let stop = stop_words();
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for prompt in prompts {
+        for mat in word_regex().find_iter(&prompt.text.to_lowercase()) {
+            let token = mat.as_str().trim_matches(|c: char| c == '_' || c == '-');
+            if token.chars().count() < 2 || stop.contains(token) {
+                continue;
+            }
+            *counts.entry(token.to_string()).or_default() += 1;
+        }
+    }
+    rank_counts(counts, limit)
+}
+
+fn top_phrases(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for prompt in prompts {
+        for sentence in prompt
+            .text
+            .split(|c| matches!(c, '.' | '?' | '!' | '\n' | ';' | '。' | '？' | '！'))
+            .map(str::trim)
+            .filter(|sentence| sentence.chars().count() >= 12)
+        {
+            let phrase = sentence
+                .split_whitespace()
+                .take(14)
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_lowercase();
+            if phrase.chars().count() >= 12 {
+                *counts.entry(phrase).or_default() += 1;
+            }
+        }
+    }
+    rank_counts(counts, limit)
+}
+
+fn repeated_prompts(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for prompt in prompts {
+        let normalized = prompt.text.to_lowercase();
+        let short = normalized
+            .chars()
+            .take(180)
+            .collect::<String>()
+            .replace('\n', " ");
+        *counts.entry(short).or_default() += 1;
+    }
+    rank_counts(counts, limit)
+        .into_iter()
+        .filter(|item| item.count > 1)
+        .collect()
+}
+
+fn rank_counts(counts: HashMap<String, usize>, limit: usize) -> Vec<FrequencyItem> {
+    let mut items = counts
+        .into_iter()
+        .map(|(text, count)| FrequencyItem { text, count })
+        .collect::<Vec<_>>();
+    items.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.text.cmp(&b.text)));
+    items.truncate(limit);
+    items
+}
+
+fn word_regex() -> &'static Regex {
+    static WORD_REGEX: OnceLock<Regex> = OnceLock::new();
+    WORD_REGEX
+        .get_or_init(|| Regex::new(r"[A-Za-z가-힣0-9][A-Za-z가-힣0-9_\-']*").expect("word regex"))
+}
+
+fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
+    static RISK_REGEXES: OnceLock<Vec<(&'static str, Regex)>> = OnceLock::new();
+    RISK_REGEXES.get_or_init(|| {
+        vec![
+            (
+                "possible_api_key",
+                Regex::new(r"(?i)(api[_-]?key|secret|token|password)\s*[:=]")
+                    .expect("api key regex"),
+            ),
+            (
+                "private_key",
+                Regex::new(r"-----BEGIN [A-Z ]*PRIVATE KEY-----").expect("private key regex"),
+            ),
+            (
+                "long_base64_like_token",
+                Regex::new(r"[A-Za-z0-9_\-]{48,}").expect("token regex"),
+            ),
+        ]
+    })
+}
+
+fn stop_words() -> HashSet<&'static str> {
+    [
+        "the",
+        "and",
+        "for",
+        "that",
+        "with",
+        "this",
+        "from",
+        "you",
+        "are",
+        "was",
+        "were",
+        "have",
+        "has",
+        "had",
+        "not",
+        "but",
+        "all",
+        "can",
+        "will",
+        "your",
+        "into",
+        "then",
+        "than",
+        "just",
+        "내",
+        "너",
+        "너는",
+        "이",
+        "그",
+        "저",
+        "것",
+        "수",
+        "좀",
+        "더",
+        "및",
+        "에서",
+        "으로",
+        "하고",
+        "하게",
+        "하면",
+        "되는",
+        "위해",
+        "대한",
+        "그리고",
+        "있는",
+        "없는",
+        "다시",
+        "전체",
+        "파일",
+    ]
+    .into_iter()
+    .collect()
+}
+
+fn render_markdown(generated_at: &str, stats: &ScanStats, prompts: &[PromptRecord]) -> String {
+    let mut md = String::new();
+    md.push_str("# PromptVault Export\n\n");
+    md.push_str(&format!("- Generated: `{generated_at}`\n"));
+    md.push_str(&format!("- Total prompts: `{}`\n", stats.total_prompts));
+    md.push_str(&format!("- Total files scanned: `{}`\n", stats.total_files));
+    md.push_str(&format!(
+        "- Average words per prompt: `{:.1}`\n\n",
+        stats.average_words
+    ));
+
+    md.push_str("## Source Coverage\n\n");
+    md.push_str("| Source | Status | Files | Prompts | Path |\n");
+    md.push_str("|---|---:|---:|---:|---|\n");
+    for source in &stats.source_summaries {
+        md.push_str(&format!(
+            "| {} | {} | {} | {} | `{}` |\n",
+            escape_table(&source.label),
+            source.status,
+            source.files_seen,
+            source.prompts_found,
+            escape_table(&source.root_path)
+        ));
+    }
+
+    md.push_str("\n## Frequent Words\n\n");
+    for item in &stats.top_words {
+        md.push_str(&format!("- `{}`: {}\n", item.text, item.count));
+    }
+
+    md.push_str("\n## Frequent Phrases\n\n");
+    for item in &stats.top_phrases {
+        md.push_str(&format!("- {} ({})\n", item.text, item.count));
+    }
+
+    md.push_str("\n## Repeated Prompt Starts\n\n");
+    if stats.repeated_prompts.is_empty() {
+        md.push_str("- No exact repeated prompt starts found in this scan.\n");
+    } else {
+        for item in &stats.repeated_prompts {
+            md.push_str(&format!("- {} ({})\n", item.text, item.count));
+        }
+    }
+
+    md.push_str("\n## Prompt Improvement Principles\n\n");
+    for item in prompt_checklist() {
+        md.push_str(&format!("- {item}\n"));
+    }
+
+    md.push_str("\n## User Prompts\n\n");
+    let mut grouped: BTreeMap<&str, Vec<&PromptRecord>> = BTreeMap::new();
+    for prompt in prompts {
+        grouped.entry(&prompt.source).or_default().push(prompt);
+    }
+    for (source, entries) in grouped {
+        md.push_str(&format!("### {source}\n\n"));
+        for prompt in entries {
+            md.push_str(&format!(
+                "#### {} · {}\n\n",
+                prompt.timestamp.as_deref().unwrap_or("unknown-time"),
+                prompt.id
+            ));
+            md.push_str(&format!(
+                "- Session: `{}`\n",
+                escape_inline(&prompt.session_id)
+            ));
+            if let Some(cwd) = &prompt.cwd {
+                md.push_str(&format!("- Workspace: `{}`\n", escape_inline(cwd)));
+            }
+            md.push_str(&format!(
+                "- Source file: `{}`\n",
+                escape_inline(&prompt.path)
+            ));
+            if !prompt.risk_flags.is_empty() {
+                md.push_str(&format!(
+                    "- Risk flags: `{}`\n",
+                    prompt.risk_flags.join(", ")
+                ));
+            }
+            md.push_str("\n```text\n");
+            md.push_str(&prompt.text);
+            md.push_str("\n```\n\n");
+        }
+    }
+    md
+}
+
+fn prompt_checklist() -> Vec<String> {
+    vec![
+        "목표 산출물과 성공 기준을 한 문장으로 먼저 고정한다.".to_string(),
+        "읽기 전용 조사, 파일 편집, 테스트 실행, 배포/푸시 권한을 분리해서 명시한다.".to_string(),
+        "필수 입력 경로, 금지 경로, 기존 사용자 변경 보존 조건을 함께 적는다.".to_string(),
+        "검증 명령과 PASS/FAIL 기준을 프롬프트 안에 포함한다.".to_string(),
+        "외부 연구나 최신 문서가 필요한 경우 날짜와 출처 저장 위치를 요구한다.".to_string(),
+        "긴 작업은 체크리스트와 완료 감사표를 요구해 대리 지표에 속지 않게 한다.".to_string(),
+    ]
+}
+
+fn escape_table(value: &str) -> String {
+    value.replace('|', "\\|")
+}
+
+fn escape_inline(value: &str) -> String {
+    value.replace('`', "'")
+}
+
+fn default_markdown_path() -> PathBuf {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/Users/wj"));
+    let stamp = Local::now().format("%Y-%m-%d-%H%M%S").to_string();
+    home.join("Documents")
+        .join(APP_DIR_NAME)
+        .join(format!("promptvault-export-{stamp}.md"))
+}
+
+fn local_improvement(prompt: &str, context: Option<&str>, warnings: Vec<String>) -> ImproveResult {
+    let mut revised = String::new();
+    revised.push_str("목표:\n");
+    revised.push_str("- ");
+    revised.push_str(
+        first_sentence(prompt)
+            .as_deref()
+            .unwrap_or("해결하려는 작업을 명확히 수행한다."),
+    );
+    revised.push_str("\n\n맥락:\n");
+    if let Some(context) = context.filter(|value| !value.trim().is_empty()) {
+        revised.push_str("- ");
+        revised.push_str(context.trim());
+        revised.push('\n');
+    } else {
+        revised.push_str("- 관련 repo/path, 현재 오류, 이미 시도한 방법을 확인한 뒤 진행한다.\n");
+    }
+    revised.push_str("\n요구사항:\n");
+    revised.push_str("- 사용자 원본 파일과 기존 변경을 보존한다.\n");
+    revised.push_str("- 필요한 최신 문서나 외부 근거는 출처와 날짜를 남긴다.\n");
+    revised.push_str("- 구현은 작은 단위로 진행하고, 변경 파일을 명시한다.\n");
+    revised.push_str("- 완료 전 실제 명령으로 빌드/테스트/검증한다.\n");
+    revised.push_str("\n완료 보고:\n");
+    revised.push_str("- 변경 요약, 검증 결과, 남은 리스크를 짧게 보고한다.");
+
+    ImproveResult {
+        provider: "local-rules".to_string(),
+        used_ai: false,
+        revised_prompt: revised,
+        rationale: vec![
+            "목표와 성공 기준을 분리해 에이전트가 산출물을 놓치지 않게 했습니다.".to_string(),
+            "권한/보존/검증 조건을 명시해 기존 소스와 비밀정보 리스크를 낮췄습니다.".to_string(),
+            "완료 보고 형식을 고정해 결과 검토 비용을 줄였습니다.".to_string(),
+        ],
+        checklist: prompt_checklist(),
+        warnings,
+    }
+}
+
+fn first_sentence(prompt: &str) -> Option<String> {
+    prompt
+        .split(|c| matches!(c, '.' | '?' | '!' | '\n' | '。' | '？' | '！'))
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(|line| line.chars().take(180).collect())
+}
+
+fn read_secret_env(path: &Path) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
+    let mut buf = String::new();
+    File::open(path)?.read_to_string(&mut buf)?;
+    let mut env = HashMap::new();
+    for line in buf.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((key, value)) = line.split_once('=') {
+            env.insert(
+                key.trim().to_string(),
+                value
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_string(),
+            );
+        }
+    }
+    Ok(env)
+}
+
+fn normalize_chat_endpoint(endpoint: &str) -> String {
+    let trimmed = endpoint.trim().trim_end_matches('/');
+    if trimmed.ends_with("/chat/completions") {
+        trimmed.to_string()
+    } else {
+        format!("{trimmed}/chat/completions")
+    }
+}
+
+fn string_array(value: Option<&Value>) -> Vec<String> {
+    match value {
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect(),
+        Some(Value::String(text)) => vec![text.to_string()],
+        _ => Vec::new(),
+    }
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![scan_prompts, improve_prompt])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strips_codex_injected_context() {
+        let text = "# AGENTS.md instructions for /tmp\n<INSTRUCTIONS>\npolicy\n</INSTRUCTIONS>\n<environment_context>\n  <cwd>/tmp</cwd>\n</environment_context>\nBuild the app and run tests.";
+        assert_eq!(strip_injected_context(text), "Build the app and run tests.");
+    }
+
+    #[test]
+    fn drops_context_only_record() {
+        let text = "# AGENTS.md instructions for /tmp\n<INSTRUCTIONS>\npolicy\n</INSTRUCTIONS>";
+        assert_eq!(strip_injected_context(text), "");
+    }
+
+    #[test]
+    fn normalizes_control_characters() {
+        assert_eq!(
+            normalize_prompt_text("alpha\u{0}beta\n\ngamma"),
+            "alpha beta\ngamma"
+        );
+    }
+
+    #[test]
+    fn local_improvement_keeps_verification_section() {
+        let result = local_improvement("Fix the failing parser test.", None, Vec::new());
+        assert!(result.revised_prompt.contains("목표:"));
+        assert!(result.revised_prompt.contains("완료 전 실제 명령"));
+    }
+
+    #[test]
+    fn normalizes_glm_base_endpoint() {
+        assert_eq!(
+            normalize_chat_endpoint("https://api.z.ai/api/coding/paas/v4"),
+            "https://api.z.ai/api/coding/paas/v4/chat/completions"
+        );
+        assert_eq!(
+            normalize_chat_endpoint("https://api.z.ai/api/coding/paas/v4/chat/completions"),
+            "https://api.z.ai/api/coding/paas/v4/chat/completions"
+        );
+    }
+}

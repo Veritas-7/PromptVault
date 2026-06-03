@@ -1,0 +1,57 @@
+export interface FrequencyItem {
+  text: string;
+  count: number;
+}
+
+export interface SourceSummary {
+  id: string;
+  label: string;
+  root_path: string;
+  files_seen: number;
+  prompts_found: number;
+  status: string;
+  notes: string[];
+}
+
+export interface PromptRecord {
+  id: string;
+  source: string;
+  session_id: string;
+  path: string;
+  timestamp?: string | null;
+  cwd?: string | null;
+  text: string;
+  word_count: number;
+  char_count: number;
+  hash: string;
+  risk_flags: string[];
+}
+
+export interface ScanStats {
+  total_prompts: number;
+  total_files: number;
+  total_words: number;
+  average_words: number;
+  top_words: FrequencyItem[];
+  top_phrases: FrequencyItem[];
+  repeated_prompts: FrequencyItem[];
+  source_summaries: SourceSummary[];
+}
+
+export interface ScanResult {
+  generated_at: string;
+  output_path: string;
+  markdown: string;
+  stats: ScanStats;
+  prompts: PromptRecord[];
+  warnings: string[];
+}
+
+export interface ImproveResult {
+  provider: string;
+  used_ai: boolean;
+  revised_prompt: string;
+  rationale: string[];
+  checklist: string[];
+  warnings: string[];
+}

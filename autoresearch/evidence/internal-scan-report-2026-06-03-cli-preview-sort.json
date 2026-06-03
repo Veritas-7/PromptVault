@@ -1,0 +1,33 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "066e27f",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "command": "scan --source codex --limit 1 --preview-sort nonsense --preview-limit 0 --no-export --json",
+      "exit_code": 0,
+      "observed": "returned JSON with preview_sort latest and warning: Unknown preview sort requested: nonsense; used latest."
+    },
+    {
+      "command": "scan --source codex --limit 1 --preview-sort quality_asc --preview-limit 1 --no-export --json",
+      "exit_code": 0,
+      "observed": "returned JSON with preview_sort quality_asc"
+    }
+  ],
+  "observed_weaknesses": [
+    "The CLI treated an invalid explicit --preview-sort value as a successful scan.",
+    "Automation could misspell a sort value and still receive exit code 0."
+  ],
+  "selected_candidate": {
+    "name": "CLI preview-sort value rejection",
+    "reason": "Keep CLI option parsing fail-closed for explicit user input while preserving library fallback behavior for API callers.",
+    "success_metric": "Invalid --preview-sort exits non-zero; quality_asc alias and documented quality-asc values still work."
+  },
+  "safety_controls": [
+    "The change is limited to promptvault-cli.rs.",
+    "Existing underscore and weakest/strongest aliases are normalized for backward compatibility.",
+    "The library PreviewSort fallback remains unchanged.",
+    "npm run check was rerun after the change."
+  ]
+}

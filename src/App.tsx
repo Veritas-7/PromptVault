@@ -12,7 +12,10 @@ import {
   Sparkles,
 } from "lucide-react";
 import "./App.css";
-import { activeImprovementForSelection } from "./improvementSelection";
+import {
+  activeImprovementForSelection,
+  improvementRequestStarted,
+} from "./improvementSelection";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
 import { selectedPromptForView } from "./selection";
 import type { ImproveResult, PromptRecord, ScanResult } from "./types";
@@ -118,6 +121,9 @@ function App() {
     if (!prompt) return;
     setImproving(true);
     setError(null);
+    const started = improvementRequestStarted<ImproveResult>(prompt.id);
+    setImprovement(started.improvement);
+    setImprovementPromptId(started.improvementPromptId);
     try {
       const next = await invoke<ImproveResult>("improve_prompt", {
         request: {

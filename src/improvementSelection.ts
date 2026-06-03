@@ -6,3 +6,13 @@ export function activeImprovementForSelection<T>(
   if (!improvement || !improvementPromptId || !selectedPromptId) return null;
   return improvementPromptId === selectedPromptId ? improvement : null;
 }
+
+export function improvementRequestStarted<T>(promptId: string): {
+  improvement: T | null;
+  improvementPromptId: string;
+} {
+  return {
+    improvement: null,
+    improvementPromptId: promptId,
+  };
+}

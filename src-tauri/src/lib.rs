@@ -2017,6 +2017,31 @@ mod tests {
     }
 
     #[test]
+    fn markdown_source_coverage_includes_quality_triage() {
+        let stats = build_stats(
+            &[],
+            vec![SourceSummary {
+                id: "test-source".to_string(),
+                label: "Test Source".to_string(),
+                root_path: "/tmp/test-source".to_string(),
+                files_seen: 4,
+                prompts_found: 7,
+                average_quality: 42.5,
+                weak_prompt_count: 3,
+                status: "ok".to_string(),
+                notes: Vec::new(),
+            }],
+        );
+
+        let markdown = render_markdown("2026-06-03T00:00:00Z", &stats, &[]);
+
+        assert!(
+            markdown.contains("| Source | Status | Files | Prompts | Avg Quality | Weak | Path |")
+        );
+        assert!(markdown.contains("| Test Source | ok | 4 | 7 | 42.5 | 3 | `/tmp/test-source` |"));
+    }
+
+    #[test]
     fn parses_antigravity_conversation_db_user_steps() {
         let db_path = std::env::temp_dir().join(format!(
             "promptvault-antigravity-test-{}.db",

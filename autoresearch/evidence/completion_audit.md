@@ -30,7 +30,7 @@ Date: 2026-06-03
 | Source-level quality triage | `SourceSummary.average_quality`, `weak_prompt_count`; CLI JSON, Markdown source table, and UI source panel expose source quality | PASS |
 | Explicit stdout prompt preview | CLI `--include-prompts`; prompt bodies remain omitted by default and opt-in stdout previews are capped at 25 records | PASS |
 | Prompt quality scoring | `PromptQuality`, `ScanStats.average_quality`, `weak_prompt_count`, `top_quality_gaps`; UI quality metrics and suggestions | PASS |
-| Prompt improvement app | UI selected-prompt panel plus `improve_prompt` Tauri command; selected detail stays within the active filtered prompt list | PASS |
+| Prompt improvement app | UI selected-prompt panel plus `improve_prompt` Tauri command; selected detail stays within the active filtered prompt list; recommendations display only for the prompt that produced them | PASS |
 | Measurable improvement delta | `QualityDelta`; CLI/UI expose before score, after score, score delta, resolved gaps, and remaining gaps | PASS |
 | Improve prompt value safety | CLI `improve` rejects empty `--prompt`, flag-like `--prompt`, empty stdin, and no-arg stdin EOF with non-zero exit | PASS |
 | Deterministic local improve | `ImproveRequest.force_local`; CLI `improve --local`; bypasses GLM and returns local-rules without warnings | PASS |
@@ -94,8 +94,8 @@ cargo run --quiet --bin promptvault-cli -- --help
 ## Observed Results
 
 - `npm run build`: PASS, Vite production build completed.
-- `npm run test:ui`: PASS, 6 Node UI helper tests passed.
-- `npm run check`: PASS, 6 UI helper tests passed, Vite production build completed, 31 library tests plus 13 CLI tests passed, and strict clippy passed.
+- `npm run test:ui`: PASS, 9 Node UI helper tests passed.
+- `npm run check`: PASS, 9 UI helper tests passed, Vite production build completed, 31 library tests plus 13 CLI tests passed, and strict clippy passed.
 - UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
 - `cargo test`: PASS, 31 library tests plus 13 CLI tests passed.
@@ -114,6 +114,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - Weak-first preview smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --no-export --json` returned `preview_sort=quality_asc`, `returned_prompt_count=5`, `markdown_written=false`, and `output_path=null`.
 - UI preview-mode consistency test: PASS, loaded prompt display mode follows `ScanResult.preview_sort` while scan requests still follow the pending Latest/Weakest control.
 - UI filtered-selection consistency test: PASS, selected detail falls back to the first visible filtered prompt when the previous selection is hidden by search.
+- UI recommendation ownership test: PASS, recommendation output is hidden when the current selection no longer matches the prompt that produced the improvement.
 - Source-level quality smoke: PASS, `scan --limit 100 --preview-limit 0 --no-export --json` returned first source `average_quality=71.6`, `weak_prompt_count=16`, and all source summaries included both fields.
 - Markdown source-quality contract test: PASS, source coverage export includes `Avg Quality` and `Weak` columns plus source row quality values.
 - Explicit prompt stdout smoke: PASS, `scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json` returned `prompt_stdout_count=5`; first prompt quality was `36 · weak` with gaps `specific_goal`, `context`, `constraints`, `verification`, `output_format`.

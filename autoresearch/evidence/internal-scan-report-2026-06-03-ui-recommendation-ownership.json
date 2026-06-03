@@ -1,0 +1,40 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "75a03a1",
+  "code_commit": "f09a27a",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src/App.tsx",
+      "observed": "The recommendation panel rendered the last improvement result without tracking which prompt produced it, so selection changes caused by filtering could leave a stale recommendation visible."
+    }
+  ],
+  "red_test": {
+    "command": "npm run test:ui",
+    "result": "FAILED before implementation because src/improvementSelection.ts did not exist."
+  },
+  "change": {
+    "summary": "Added activeImprovementForSelection, tracked improvementPromptId, and rendered recommendation content only when it matches the current selected prompt.",
+    "files": [
+      "src/improvementSelection.ts",
+      "src/App.tsx",
+      "tests/improvementSelection.test.ts"
+    ]
+  },
+  "verification": [
+    {
+      "command": "npm run test:ui",
+      "result": "PASS: 9 Node UI helper tests passed."
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: 9 UI helper tests, Vite build, 31 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "No new npm dependency was added.",
+    "Recommendations are preserved when the same prompt remains selected.",
+    "Stale recommendations are hidden when the selected prompt changes."
+  ]
+}

@@ -22,7 +22,7 @@ Date: 2026-06-03
 | Markdown warning preservation | Markdown exports include `ScanResult.warnings` so limited or partial scans remain self-describing | PASS |
 | Source-specific smoke scans | `ScanOptions.source_ids`; CLI `scan --source ID`; Antigravity DB source smoke scans 2 prompts without full-history scan | PASS |
 | JSONL read error safety | `jsonl_lines`; invalid UTF-8/read errors propagate instead of silently truncating a source file | PASS |
-| Partial source warning safety | File-level parse notes promote the source to `partial` and surface as scan warnings | PASS |
+| Partial source warning safety | File-level parse notes and source walk errors promote the source to `partial` and surface as scan warnings | PASS |
 | Numeric option safety | invalid `--limit`, `--preview-limit`, and repair `--count` exit non-zero instead of silently removing/defaulting caps | PASS |
 | Required option value safety | missing values and empty source ID components exit non-zero instead of widening/defaulting scope | PASS |
 | No-export stats scan | `ScanOptions.write_markdown`; CLI `scan --no-export`; full no-export scan writes no Markdown file | PASS |
@@ -95,16 +95,17 @@ cargo run --quiet --bin promptvault-cli -- --help
 
 - `npm run build`: PASS, Vite production build completed.
 - `npm run test:ui`: PASS, 9 Node UI helper tests passed without `ExperimentalWarning` output.
-- `npm run check`: PASS, 9 quiet UI helper tests passed, Vite production build completed, 31 library tests plus 13 CLI tests passed, and strict clippy passed.
+- `npm run check`: PASS, 9 quiet UI helper tests passed, Vite production build completed, 32 library tests plus 13 CLI tests passed, and strict clippy passed.
 - UI warning notice: PASS, `ScanResult.warnings` renders through the existing notice pattern with a warning variant.
 - `cargo check`: PASS.
-- `cargo test`: PASS, 31 library tests plus 13 CLI tests passed.
+- `cargo test`: PASS, 32 library tests plus 13 CLI tests passed.
 - CLI unit tests: PASS, 13 CLI tests passed including explicit help command recognition, empty and flag-like prompt rejection, numeric argument validation, required value validation, empty source component rejection, repair count cap documentation, and sources extra-arg rejection.
 - `cargo clippy --all-targets --all-features -- -D warnings`: PASS.
 - `sources --json`: PASS, 11 source roots reported, including `antigravity-cli-conversation-db`.
 - Sources extra-arg smoke: PASS, `sources --bogus` and `sources --json --bogus` both exited 1 with `unknown sources argument: --bogus`; valid `sources --json` still returned 11 roots.
 - Smoke scan: PASS, 100 prompts from 92 visited files, no injected-context markers, with the configured-limit warning.
 - Markdown warning smoke: PASS, limited `--source codex --limit 1` export wrote `## Warnings` and `Scan stopped at configured limit of 1 prompts.` to `/tmp/promptvault-warning-export.md`.
+- Source walk error test: PASS, unreadable traversal entries are recorded as source notes instead of being silently dropped.
 - Source-filter smoke: PASS, `--source antigravity-cli-conversation-db` scanned only that source and returned `total_prompts=2`, `total_files=2`, source summary status `ok`, and `warnings=[]`.
 - Unknown-source smoke: PASS, `--source missing-source` exited 1 with `unknown source id: missing-source`.
 - Numeric option smoke: PASS, invalid `--limit`, `--preview-limit`, and repair `--count` each exited 1 with the expected non-negative integer error; valid `--limit 10 --preview-limit 0` scan exited 0.

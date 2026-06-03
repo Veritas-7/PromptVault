@@ -1,0 +1,44 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "4157774",
+  "code_commit": "548e29c",
+  "worktree_status_before_iteration": "clean",
+  "baseline": [
+    {
+      "surface": "src-tauri/src/lib.rs",
+      "observed": "matching_source_files used filter_map(Result::ok), so WalkDir traversal errors were silently dropped before collect_from_source could record a source note."
+    }
+  ],
+  "red_test": {
+    "command": "cargo test --lib collect_from_source_reports_walk_errors",
+    "result": "FAILED before implementation because summary.notes was empty for an unreadable traversal entry."
+  },
+  "change": {
+    "summary": "matching_source_files now yields Result<PathBuf, walkdir::Error> lazily, and collect_from_source records walk errors as source notes.",
+    "test_added": "collect_from_source_reports_walk_errors"
+  },
+  "verification": [
+    {
+      "command": "cargo fmt --all",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib collect_from_source_reports_walk_errors",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --lib collect_from_source_stops_file_walk_after_limit",
+      "result": "PASS"
+    },
+    {
+      "command": "npm run check",
+      "result": "PASS: 9 quiet UI helper tests, Vite build, 32 library tests, 13 CLI tests, and strict clippy passed."
+    }
+  ],
+  "safety_controls": [
+    "The source file iterator remains lazy.",
+    "The prior scan limit file-walk regression still passes.",
+    "Traversal errors are recorded as notes so existing partial-warning promotion can surface them."
+  ]
+}

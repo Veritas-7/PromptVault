@@ -9,9 +9,9 @@ cargo run --bin promptvault-cli -- sources
 cargo run --bin promptvault-cli -- sources --json
 cargo run --bin promptvault-cli -- scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export]
 cargo run --bin promptvault-cli -- scan [--source ID] [--limit N] [--output PATH] [--preview-limit N] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] --json
-cargo run --bin promptvault-cli -- improve --prompt "TEXT"
-cargo run --bin promptvault-cli -- improve --json --prompt "TEXT"
-cargo run --bin promptvault-cli -- improve < prompt.txt
+cargo run --bin promptvault-cli -- improve [--local] --prompt "TEXT"
+cargo run --bin promptvault-cli -- improve [--local] --json --prompt "TEXT"
+cargo run --bin promptvault-cli -- improve [--local] < prompt.txt
 ```
 
 ## Contract
@@ -27,6 +27,7 @@ cargo run --bin promptvault-cli -- improve < prompt.txt
 - `--include-prompts` is capped at 25 prompt records in stdout even if `--preview-limit` is higher.
 - `--include-markdown` includes the Markdown body in the returned `ScanResult`; omit it for safer/leaner agent automation.
 - `improve` reads one prompt and returns provider, revised prompt, rationale, quality before/after delta, resolved gaps, remaining gaps, and warnings.
+- `improve --local` bypasses GLM and uses deterministic local prompt-improvement rules for reproducible smoke tests and offline repair queues.
 
 ## Agent-Native Design Notes
 
@@ -53,4 +54,5 @@ cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.json.md --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
 cargo run --bin promptvault-cli -- improve --json --prompt "make better"
+cargo run --bin promptvault-cli -- improve --local --json --prompt "make better"
 ```

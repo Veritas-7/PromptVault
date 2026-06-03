@@ -64,7 +64,7 @@ PromptVault's local fallback rewrites prompts into:
 - Verification
 - Completion report
 
-The GLM-backed AI path uses the same rubric and asks for strict JSON with `revised_prompt`, `rationale`, and `checklist`.
+The GLM-backed AI path uses the same rubric and asks for strict JSON with `revised_prompt`, `rationale`, and `checklist`. Use CLI `improve --local` when an evaluation needs deterministic recommendations that do not depend on model availability or rate limits.
 
 ## PromptVault Quality Score
 

@@ -1,0 +1,38 @@
+{
+  "date": "2026-06-03",
+  "repo": "/Users/wj/Ai/System/10_Projects/PromptVault",
+  "head_before_iteration": "1665864",
+  "worktree_status_before_iteration": "clean",
+  "scan_scope": [
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/bin/promptvault-cli.rs",
+    "docs/CLI.md",
+    "docs/PROMPT_BEST_PRACTICES.md",
+    "README.md",
+    "autoresearch/evidence/completion_audit.md"
+  ],
+  "observed_strengths": [
+    "PromptVault reports quality deltas for both GLM and local recommendations.",
+    "The weak-first CLI repair queue can now expose bounded prompt bodies through an explicit opt-in.",
+    "The local fallback is deterministic and testable."
+  ],
+  "observed_weaknesses": [
+    "CLI improve still preferred GLM whenever keys were present, so smoke tests could depend on network availability or rate limits.",
+    "Previous live GLM smoke observed a 429 and then fallback, which made deterministic evaluation indirect.",
+    "Batch repair queue automation needs an explicit local provider path rather than relying on accidental GLM failure."
+  ],
+  "selected_candidate": {
+    "name": "deterministic local improve flag",
+    "reason": "Allow agents to force local-rules recommendations for reproducible offline repair queue evaluation.",
+    "success_metric": "improve --local --json --prompt \"make better\" returns provider=local-rules, used_ai=false, warnings=[], and a positive quality_delta."
+  },
+  "expected_local_gate": {
+    "command": "cargo run --quiet --bin promptvault-cli -- improve --local --json --prompt \"make better\"",
+    "required_fields": [
+      "provider=local-rules",
+      "used_ai=false",
+      "warnings=[]",
+      "quality_delta.score_delta=64"
+    ]
+  }
+}

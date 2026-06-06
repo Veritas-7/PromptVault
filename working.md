@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 09:37 KST
+Updated: 2026-06-06 09:44 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -178,6 +178,23 @@ stability, performance, and maintainability, then record evidence here.
 - Browser diagnostics after QA:
   - Console output only showed Vite connection logs.
   - Browser error collector returned `No browser errors`.
+- Final post-commit cmux check on the same `surface:11`:
+  - Browser title: `PromptVault`.
+  - URL: `http://127.0.0.1:5173/`.
+  - Ran limit `10` scan from the UI.
+  - Observed DB notice:
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 362 · new 0 · updated 10`.
+  - Observed export:
+    `/Users/wj/Documents/PromptVault/promptvault-export-2026-06-06-094325.md`.
+  - Observed metrics: `Prompts 10`, `Files 8`, `Quality 64.4`,
+    `Weak 6`, `DB Stored 362`, `Dates 18`.
+  - Console still only showed Vite connection logs.
+  - Browser error collector returned `No browser errors`.
+- Code slice committed and pushed:
+  `6fb14662d6627c507b5af458554b8656a0eae3d9`
+  (`feat: persist prompt scans to sqlite`).
+- After push, `git rev-list --left-right --count HEAD...origin/main` returned
+  `0 0`.
 
 ## Changes
 
@@ -234,7 +251,7 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Next Steps
 
-1. Stage only explicit changed paths, run staged whitespace/secret checks, then
-   commit and push this slice.
-2. Add an incremental/full-import planner for the 32G Codex session store.
-3. Add UI progress/cancel state for long scans.
+1. Add an incremental/full-import planner for the 32G Codex session store.
+2. Add UI progress/cancel state for long scans.
+3. Consider a background indexing worker so first-run historical import can
+   continue without blocking the browser UI.

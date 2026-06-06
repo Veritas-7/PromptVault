@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 10:05 KST
+Updated: 2026-06-06 10:08 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -317,6 +317,11 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check`: passed after the import-batch slice. This covered UI tests
   10 passed, TypeScript/Vite build, Rust lib 50 passed, CLI 15 passed,
   doc-tests, and clippy with `-D warnings`.
+- Import-batch slice committed and pushed:
+  `e12da1f82b2ad4bf2308b543c62ce43d8ab36471`
+  (`feat: add resumable import batches`).
+- After push, `git rev-list --left-right --count HEAD...origin/main` returned
+  `0 0`.
 
 ## Issues
 
@@ -341,8 +346,6 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Next Steps
 
-1. Stage only explicit import-batch slice paths, run staged whitespace/secret
-   checks, then commit and push this slice.
-2. Add UI progress/cancel state for long scans and continuous import batches.
-3. Consider a background indexing worker so first-run historical import can
+1. Add UI progress/cancel state for long scans and continuous import batches.
+2. Consider a background indexing worker so first-run historical import can
    continue without blocking the browser UI.

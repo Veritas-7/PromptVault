@@ -22,6 +22,7 @@ export function storedFacetSummaryText(
   activeFilterCount: number,
   result: StoredFacetSummaryResult | null,
 ): string {
+  const activeFilterText = countLabel(activeFilterCount, "filter");
   if (result) {
     const sourceCount = countLabel(result.sources.length, "source");
     const dateCount = countLabel(result.dates.length, "date");
@@ -31,8 +32,8 @@ export function storedFacetSummaryText(
   if (state === "loading") return "loading stored facets";
   if (state === "failed") {
     return activeFilterCount
-      ? `facet refresh failed, ${activeFilterCount.toLocaleString()} filters active`
+      ? `facet refresh failed, ${activeFilterText} active`
       : "stored facets unavailable";
   }
-  return activeFilterCount ? `${activeFilterCount.toLocaleString()} filters active` : "all stored prompts";
+  return activeFilterCount ? `${activeFilterText} active` : "all stored prompts";
 }

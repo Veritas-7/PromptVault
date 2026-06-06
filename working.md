@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 00:17 KST
+Updated: 2026-06-07 00:20 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -2725,9 +2725,35 @@ stability, performance, and maintainability, then record evidence here.
   frontend returned `200`, bridge `/api/health` returned `ok:true`,
   `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
+- Continued with the next small Stored Vault active-filter copy slice.
+- Added a RED focused UI test baseline for Stored Vault facet summary text:
+  the no-data failed/ready path previously produced `1 filters active` when a
+  single stored filter was active.
+- Updated the Stored Vault facet summary helper to reuse count-label formatting
+  for active filter counts in both ready and failed no-data states.
+- `npm run test:ui -- tests/storedFacetStatus.test.ts` passed after the fix;
+  due the package script glob this ran the full UI helper suite and reported
+  121 passing tests.
+- `npm run build` passed after this Stored Facet active-filter pluralization
+  slice and refreshed the static frontend bundle used by `127.0.0.1:5173`.
+- `npm run check` passed after this Stored Facet active-filter pluralization
+  slice: UI tests 121 passed, TypeScript/Vite build passed, Rust lib 64
+  passed, CLI 15 passed, doc-tests passed, and clippy passed with
+  `-D warnings`.
+- cmux direct QA remained blocked after this Stored Facet active-filter
+  pluralization slice: frontend returned `200`, bridge `/api/health` returned
+  `ok:true`, `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
 
 ## Changes
 
+- `src/storedFacetStatus.ts`: applies existing count-label formatting to
+  active stored-filter counts in ready and failed Stored Vault facet summary
+  fallback copy.
+- `tests/storedFacetStatus.test.ts`: covers singular and plural active-filter
+  fallback copy for failed and ready no-data states.
+- `working.md`: records the Stored Facet active-filter pluralization slice and
+  the still blocked cmux direct QA state.
 - `src/sourceStatusA11y.ts`: adds count-label formatting for Import Plan source
   file counts and Sources panel prompt-count labels.
 - `tests/sourceStatusA11y.test.ts`: covers singular source file and prompt
@@ -3078,9 +3104,9 @@ stability, performance, and maintainability, then record evidence here.
 ## Issues
 
 - Direct single-browser cmux QA remains blocked for the existing PromptVault
-  `surface:9`: after the Import Progress and Source Status pluralization
-  slices, frontend health returned `200`, bridge `/api/health` returned
-  `ok:true`, and `cmux ping` returned `PONG`, but
+  `surface:9`: after the Import Progress, Source Status, and Stored Facet
+  active-filter pluralization slices, frontend health returned `200`, bridge
+  `/api/health` returned `ok:true`, and `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`. No
   cmux restart, app kill, or second browser was attempted.
 - Unlimited full scan over `~/.codex/sessions` is not practical from the

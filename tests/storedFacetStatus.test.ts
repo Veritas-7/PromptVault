@@ -42,7 +42,13 @@ test("stored facet summary distinguishes loading and failed states without data"
   assert.equal(storedFacetSummaryText("loading", 0, null), "loading stored facets");
   assert.equal(storedFacetSummaryText("failed", 0, null), "stored facets unavailable");
   assert.equal(
+    storedFacetSummaryText("failed", 1, null),
+    "facet refresh failed, 1 filter active",
+  );
+  assert.equal(
     storedFacetSummaryText("failed", 2, null),
     "facet refresh failed, 2 filters active",
   );
+  assert.equal(storedFacetSummaryText("ready", 1, null), "1 filter active");
+  assert.equal(storedFacetSummaryText("ready", 2, null), "2 filters active");
 });

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 21:35 KST
+Updated: 2026-06-06 21:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,23 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui`: 96 tests passed after adding Stored Vault preview reload
+  and pending-preview notice coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  preview-mode slice.
+- `npm run check`: passed after this preview-mode slice. This covered UI tests
+  96 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- Real cmux preview-mode QA on the existing `surface:9`: reloaded
+  `http://127.0.0.1:5173/?preview-mode-refresh=20260606a`, clicked
+  `Load Stored`, confirmed Latest baseline, clicked `Weakest`, and verified
+  Stored Vault results refreshed to `1,000 loaded · weakest preview` without a
+  stale-preview notice.
+- The same cmux sweep ran a limit-1 scan, then clicked `Weakest` and verified
+  the loaded scan result stayed at one row while the new pending-preview notice
+  explained it was still showing the latest preview.
+- Browser diagnostics on the same `surface:9` returned `No console entries`
+  and `No browser errors`.
 - `npm run test:ui`: 94 tests passed after adding Plan source action label
   coverage.
 - `npm run build`: TypeScript and Vite production build passed after the
@@ -2108,9 +2125,45 @@ stability, performance, and maintainability, then record evidence here.
   - Verified the disabled empty source exposes
     `Import queue selection for Antigravity IDE alt transcripts source empty: 0 files, 0 B. No matching prompt files were found.`
   - Final diagnostics returned `No console entries` and `No browser errors`.
+- Continued with the next thin slice: keep Latest/Weakest preview mode state
+  honest after results are already loaded.
+- A same-surface Stored Vault QA run on `surface:9` reproduced the mismatch:
+  after `Load Stored` in Latest mode, clicking `Weakest` made the segmented
+  control active while the prompt list still showed
+  `1,000 loaded · latest preview` and no status notice explained the stale
+  loaded rows.
+- Added result-origin state so Stored Vault results auto-refresh when switching
+  preview mode, while scan-origin results keep the loaded list and show a
+  pending-preview status notice until the user scans or loads stored prompts
+  again.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?preview-mode-refresh=20260606a`.
+  - Clicked `Load Stored` in Latest mode and observed
+    `1,000 loaded · latest preview` with `Latest` pressed.
+  - Clicked `Weakest` and observed the Stored Vault reload to
+    `1,000 loaded · weakest preview`, `Weakest` pressed, no stale-preview
+    notice, and weak low-score rows at the top.
+  - Set scan limit to `1`, clicked `Scan`, observed the expected
+    `Scan stopped at configured limit of 1 prompts.` notice and one loaded row.
+  - Clicked `Weakest` after that scan-origin Latest result and observed the
+    pending-preview notice:
+    `Weakest preview is selected. Run Scan or Load Stored to refresh the loaded prompt list; it is still showing the latest preview.`
+  - Browser diagnostics returned `No console entries` and `No browser errors`.
+- `npm run check` passed after this preview-mode slice: UI tests 96 passed,
+  TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests
+  passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
+- `src/previewMode.ts`: adds result-origin typing, Stored Vault reload
+  decision logic, and pending-preview notice copy for loaded-result mode
+  mismatches.
+- `src/App.tsx`: tracks whether the current prompt result came from Scan or
+  Stored Vault, auto-refreshes Stored results on Latest/Weakest changes, and
+  renders a polite status notice when scan-origin rows are stale relative to
+  the selected preview mode.
+- `tests/previewMode.test.ts`: covers Stored Vault preview reload decisions
+  and pending-preview notice copy.
 - `src/sourceStatusA11y.ts`: adds `planSourceSelectionLabel()` for Import Plan
   source checkbox names that include availability, file count, size, and notes.
 - `src/App.tsx`: applies source selection `aria-label` values to Import Plan
@@ -2525,6 +2578,12 @@ stability, performance, and maintainability, then record evidence here.
   workspace:5`, `cmux focus-pane --workspace workspace:5 --pane pane:10`,
   `surface:9` DOM eval, console diagnostics, and browser-error diagnostics all
   returned normally.
+- During preview-mode QA, cmux initially appeared visually focused on the
+  `암관리` workspace even though the target PromptVault `surface:9` still
+  existed. Short surface-specific `eval`, `click`, `console list`, and
+  `errors list` commands recovered without restarting cmux or opening another
+  browser. One long async eval timed out after firing the intended scan click;
+  short follow-up evals captured the real rendered state.
 
 ## Research
 

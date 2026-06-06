@@ -49,7 +49,14 @@ import {
 import { ALERT_NOTICE_PROPS, STATUS_NOTICE_PROPS } from "./noticeA11y";
 import { refreshGlobalErrorAfterSuccess } from "./panelRefresh";
 import { planFailureText, planUnavailableText, type PlanRunState } from "./planStatus";
-import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
+import {
+  effectivePromptListMode,
+  pendingPreviewModeNotice,
+  previewSortForMode,
+  shouldReloadStoredPreview,
+  type PreviewMode,
+  type PromptResultOrigin,
+} from "./previewMode";
 import {
   promptListEmptyText,
   recommendationEmptyText,
@@ -184,6 +191,7 @@ function App() {
   const [importEventsResult, setImportEventsResult] = useState<ImportEventsResult | null>(null);
   const [storedFacetsResult, setStoredFacetsResult] = useState<StoredPromptFacetsResult | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [resultOrigin, setResultOrigin] = useState<PromptResultOrigin | null>(null);
   const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
   const [scanStopFailure, setScanStopFailure] = useState<ScanStopFailure | null>(null);
   const [scanFailureErrorText, setScanFailureErrorText] = useState<string | null>(null);
@@ -256,6 +264,13 @@ function App() {
     return selectedPromptForView(filteredPrompts, selectedId);
   }, [filteredPrompts, selectedId]);
   const hasPromptResult = result !== null;
+  const previewModePendingMessage = pendingPreviewModeNotice(
+    result?.preview_sort,
+    previewMode,
+    hasPromptResult,
+  );
+  const showPreviewModePendingMessage =
+    previewModePendingMessage !== null && !(resultOrigin === "stored" && isStoredLoadRunning);
   const sourceSummaries = result?.stats.source_summaries ?? [];
   const sourceSummariesEmptyMessage = sourceSummariesEmptyText(hasPromptResult);
   const promptListEmptyMessage = promptListEmptyText(hasPromptResult, query);
@@ -563,6 +578,7 @@ function App() {
       const loadedMode = effectivePromptListMode(next.preview_sort, previewMode);
       setError(null);
       setResult(next);
+      setResultOrigin("scan");
       setSelectedId(
         (loadedMode === "weakest"
           ? next.prompts[0]
@@ -605,7 +621,10 @@ function App() {
     }
   }
 
-  async function runLoadStored(filters: StoredPromptFilters = storedFilters) {
+  async function runLoadStored(
+    filters: StoredPromptFilters = storedFilters,
+    requestedPreviewMode: PreviewMode = previewMode,
+  ) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setImprovement(null);
@@ -618,10 +637,11 @@ function App() {
     setStoredLoadState("loading");
     try {
       const next = await loadStoredPrompts({
-        ...storedPromptLoadOptions(filters, previewMode, PREVIEW_LIMIT),
+        ...storedPromptLoadOptions(filters, requestedPreviewMode, PREVIEW_LIMIT),
       });
-      const loadedMode = effectivePromptListMode(next.preview_sort, previewMode);
+      const loadedMode = effectivePromptListMode(next.preview_sort, requestedPreviewMode);
       setResult(next);
+      setResultOrigin("stored");
       setSelectedId(
         (loadedMode === "weakest"
           ? next.prompts[0]
@@ -693,8 +713,17 @@ function App() {
 
   function changePreviewMode(nextPreviewMode: PreviewMode) {
     if (nextPreviewMode === previewMode) return;
+    const reloadStoredPreview = shouldReloadStoredPreview(
+      resultOrigin,
+      result !== null,
+      previewMode,
+      nextPreviewMode,
+    );
     setPreviewMode(nextPreviewMode);
     clearImprovementPromptContext();
+    if (reloadStoredPreview) {
+      void runLoadStored(storedFilters, nextPreviewMode);
+    }
   }
 
   function updatePromptFilter(value: string) {
@@ -830,6 +859,13 @@ function App() {
         <section className="notice browser-mode" {...STATUS_NOTICE_PROPS}>
           <ShieldCheck size={18} />
           <span>{BROWSER_BRIDGE_NOTICE}</span>
+        </section>
+      ) : null}
+
+      {showPreviewModePendingMessage ? (
+        <section className="notice secondary" data-preview-mode-pending="true" {...STATUS_NOTICE_PROPS}>
+          <Search size={18} />
+          <span>{previewModePendingMessage}</span>
         </section>
       ) : null}
 

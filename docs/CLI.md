@@ -24,7 +24,7 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174]
 - `sources` accepts only `--json`; unknown extra arguments exit non-zero.
 - `plan` inventories matching source files, byte totals, large-file counts, and newest modified timestamps without reading prompt bodies.
 - `plan --source ID` restricts planning to one source ID from `sources`; repeat it or pass comma-separated IDs for multiple sources.
-- `import-batch --source ID` reads the next resumable file slice for one source, persists prompts, and stores that source's cursor in SQLite `import_states`.
+- `import-batch --source ID` reads the next resumable file slice for one source, persists prompts, stores that source's cursor in SQLite `import_states`, and appends a persistent activity row to `import_events`.
 - `import-batch --reset` restarts the cursor for that source before importing the requested slice.
 - `help`, `--help`, and no-argument invocation print help and exit 0.
 - Unknown commands print help plus an error and exit non-zero.
@@ -47,7 +47,7 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174]
 - `improve` requires a non-empty prompt from `--prompt` or stdin and exits non-zero for empty or flag-like `--prompt` values.
 - `improve --local` bypasses GLM and uses deterministic local prompt-improvement rules for reproducible smoke tests and offline repair queues.
 - `repair` scans weakest prompts, runs deterministic local improvement for each one, writes no Markdown export, and returns redacted prompt/recommendation pairs. Repair batches are capped at 10 records.
-- `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/improve`, `/api/plan`, `/api/import-batch`, and `/api/import-states` on the requested local address.
+- `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, and `/api/import-events` on the requested local address.
 
 ## Agent-Native Design Notes
 

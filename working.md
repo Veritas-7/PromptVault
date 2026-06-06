@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 10:43 KST
+Updated: 2026-06-06 10:59 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -488,6 +488,43 @@ stability, performance, and maintainability, then record evidence here.
   cursors.
 - Real cmux saved import progress load/refresh flow on `surface:11`: passed
   with no console entries or browser errors.
+- Continued with the next thin slice: persistent import activity audit log.
+- Added a SQLite `import_events` table. Every `import-batch` now appends an
+  audit row with source, root path, batch start, files processed, prompts found,
+  total progress, completion state, and warnings.
+- Added Tauri command and browser bridge route `/api/import-events`.
+- Added browser UI `Recent Import Activity` panel that loads from the
+  persistent DB on app startup and refreshes after single, continuous, or queued
+  imports.
+- `npm run test:ui`: 18 tests passed after adding import event helpers.
+- `cd src-tauri && cargo test import_events`: 2 focused tests passed.
+- `npm run build`: TypeScript and Vite production build passed.
+- `npm run check`: passed after the import activity slice. This covered UI
+  tests 18 passed, TypeScript/Vite build, Rust lib 54 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- `cd src-tauri && cargo build --bin promptvault-cli`: passed before restarting
+  the browser bridge.
+- Restarted `promptvault-bridge` on `127.0.0.1:5174`; `promptvault-static`
+  stayed on `127.0.0.1:5173`.
+- Real bridge `/api/import-events` smoke before UI import returned
+  `events: []` and `total_events: 0`.
+- Real cmux UI test on the existing PromptVault browser surface:
+  - Used the visible cmux app browser at `http://127.0.0.1:5173/`.
+  - Confirmed `Recent Import Activity` initially showed `Total Events 0`.
+  - Clicked `Plan`.
+  - Clicked `Gemini temporary chats` -> `Import Batch`.
+  - Observed saved cursor progress update from `76 / 144` to `81 / 144`.
+  - Observed import summary `5 files · 5 prompts`, `Status Resumable`,
+    DB stored `459`, new `0`, updated `5`.
+  - Observed `Recent Import Activity` update to `Total Events 1` with
+    `Gemini temporary chats`, `5 files · 5 prompts`, `81 / 144 · resumable`,
+    and `no warnings`.
+- Real bridge `/api/import-states` after UI click returned processed files
+  `94 / 157`, imported prompts `104`, and Gemini cursor `81 / 144`.
+- Real bridge `/api/import-events` after UI click returned one event:
+  `id=1`, `source_id=gemini-tmp-chat`, `batch_start_index=76`,
+  `batch_file_count=5`, `batch_prompt_count=5`, `processed_files=81`,
+  `total_files=144`, `completed=false`, `warnings=[]`.
 
 ## Issues
 
@@ -504,6 +541,10 @@ stability, performance, and maintainability, then record evidence here.
   limit and reported the expected limit warning.
 - GLM improvement path hit HTTP 429 during manual QA; local fallback worked.
 - `antigravity-ide-alt-transcripts` had zero matching files on this machine.
+- During the import activity slice, `cmux browser surface:11 console list` and
+  `cmux browser surface:11 errors list` timed out even after the page rendered.
+  The visible cmux app browser and DB/API paths were verified directly; no stale
+  helper process remained after cleanup.
 
 ## Research
 
@@ -517,5 +558,6 @@ stability, performance, and maintainability, then record evidence here.
    can continue after the browser tab is closed.
 2. Add scan-run cancellation/progress for unrestricted full scans, separate
    from the safer resumable import-batch path.
-3. Add a persistent worker/event log view so historical import activity can be
-   audited across app restarts, not just summarized by the latest cursor.
+3. Recover or replace the cmux CLI browser diagnostics path for console/error
+   collection; accessibility-based cmux UI verification worked when CLI
+   diagnostics timed out.

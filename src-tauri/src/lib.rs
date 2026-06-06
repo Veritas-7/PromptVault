@@ -18,6 +18,8 @@ const DEFAULT_GLM_MODEL: &str = "glm-4.6";
 const LARGE_SOURCE_FILE_COUNT: usize = 10_000;
 const LARGE_SOURCE_BYTES: u64 = 5 * 1024 * 1024 * 1024;
 const LARGE_FILE_BYTES: u64 = 50 * 1024 * 1024;
+const DEFAULT_IMPORT_EVENT_LIMIT: usize = 20;
+const MAX_IMPORT_EVENT_LIMIT: usize = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptRecord {
@@ -171,6 +173,30 @@ pub struct ImportStatesResult {
     pub imported_prompt_count: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportEvent {
+    pub id: i64,
+    pub generated_at: String,
+    pub source_id: String,
+    pub source_label: String,
+    pub root_path: String,
+    pub batch_start_index: usize,
+    pub batch_file_count: usize,
+    pub batch_prompt_count: usize,
+    pub processed_files: usize,
+    pub total_files: usize,
+    pub completed: bool,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportEventsResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub events: Vec<ImportEvent>,
+    pub total_events: usize,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ScanPlanOptions {
     pub source_ids: Option<Vec<String>>,
@@ -188,6 +214,12 @@ pub struct ImportBatchOptions {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ImportStatesOptions {
     pub database_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ImportEventsOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -270,6 +302,11 @@ fn import_batch(options: ImportBatchOptions) -> Result<ImportBatchResult, String
 #[tauri::command]
 fn list_import_states(options: Option<ImportStatesOptions>) -> Result<ImportStatesResult, String> {
     run_list_import_states(options.unwrap_or_default()).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn list_import_events(options: Option<ImportEventsOptions>) -> Result<ImportEventsResult, String> {
+    run_list_import_events(options.unwrap_or_default()).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -482,6 +519,35 @@ pub fn run_list_import_states(
     ))
 }
 
+pub fn run_list_import_events(
+    options: ImportEventsOptions,
+) -> Result<ImportEventsResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("import event limit requires a positive integer".into());
+    }
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_IMPORT_EVENT_LIMIT)
+        .min(MAX_IMPORT_EVENT_LIMIT);
+    let conn = open_promptvault_database(&database_path)?;
+    let (events, total_events) = read_import_events(&conn, limit)?;
+    Ok(ImportEventsResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        events,
+        total_events,
+    })
+}
+
 fn run_import_batch_for_source(
     database_path: &Path,
     source: SourceSpec,
@@ -566,6 +632,15 @@ fn run_import_batch_for_source(
         updated_at: generated_at.clone(),
     };
     upsert_import_state(&conn, &state)?;
+    insert_import_event(
+        &conn,
+        &generated_at,
+        &state,
+        batch_start_index,
+        batch_candidates.len(),
+        prompts.len(),
+        &warnings,
+    )?;
 
     let response_prompts = response_prompts(&prompts, preview_limit, PreviewSort::Latest);
     Ok(ImportBatchResult {
@@ -2328,6 +2403,24 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             completed INTEGER NOT NULL,
             updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS import_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            generated_at TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            source_label TEXT NOT NULL,
+            root_path TEXT NOT NULL,
+            batch_start_index INTEGER NOT NULL,
+            batch_file_count INTEGER NOT NULL,
+            batch_prompt_count INTEGER NOT NULL,
+            processed_files INTEGER NOT NULL,
+            total_files INTEGER NOT NULL,
+            completed INTEGER NOT NULL,
+            warnings_json TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_import_events_generated_at
+            ON import_events(generated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_import_events_source
+            ON import_events(source_id, generated_at DESC);
         ",
     )?;
     Ok(())
@@ -2398,10 +2491,7 @@ fn import_states_result(
         completed_sources: states.iter().filter(|state| state.completed).count(),
         total_files: states.iter().map(|state| state.total_files).sum(),
         processed_files: states.iter().map(|state| state.processed_files).sum(),
-        imported_prompt_count: states
-            .iter()
-            .map(|state| state.imported_prompt_count)
-            .sum(),
+        imported_prompt_count: states.iter().map(|state| state.imported_prompt_count).sum(),
         states,
     }
 }
@@ -2439,6 +2529,76 @@ fn upsert_import_state(
         ],
     )?;
     Ok(())
+}
+
+fn insert_import_event(
+    conn: &Connection,
+    generated_at: &str,
+    state: &ImportState,
+    batch_start_index: usize,
+    batch_file_count: usize,
+    batch_prompt_count: usize,
+    warnings: &[String],
+) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute(
+        "INSERT INTO import_events (
+            generated_at, source_id, source_label, root_path, batch_start_index,
+            batch_file_count, batch_prompt_count, processed_files, total_files,
+            completed, warnings_json
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        rusqlite::params![
+            generated_at,
+            &state.source_id,
+            &state.source_label,
+            &state.root_path,
+            batch_start_index as i64,
+            batch_file_count as i64,
+            batch_prompt_count as i64,
+            state.processed_files as i64,
+            state.total_files as i64,
+            if state.completed { 1_i64 } else { 0_i64 },
+            serde_json::to_string(warnings)?,
+        ],
+    )?;
+    Ok(())
+}
+
+fn read_import_events(
+    conn: &Connection,
+    limit: usize,
+) -> Result<(Vec<ImportEvent>, usize), Box<dyn std::error::Error>> {
+    let total_events = conn.query_row("SELECT COUNT(*) FROM import_events", [], |row| {
+        row.get::<_, i64>(0)
+    })? as usize;
+    let mut stmt = conn.prepare(
+        "SELECT id, generated_at, source_id, source_label, root_path,
+            batch_start_index, batch_file_count, batch_prompt_count,
+            processed_files, total_files, completed, warnings_json
+         FROM import_events
+         ORDER BY id DESC
+         LIMIT ?1",
+    )?;
+    let events = stmt
+        .query_map([limit as i64], |row| {
+            let warnings_json: String = row.get(11)?;
+            let warnings = serde_json::from_str::<Vec<String>>(&warnings_json).unwrap_or_default();
+            Ok(ImportEvent {
+                id: row.get(0)?,
+                generated_at: row.get(1)?,
+                source_id: row.get(2)?,
+                source_label: row.get(3)?,
+                root_path: row.get(4)?,
+                batch_start_index: row.get::<_, i64>(5)? as usize,
+                batch_file_count: row.get::<_, i64>(6)? as usize,
+                batch_prompt_count: row.get::<_, i64>(7)? as usize,
+                processed_files: row.get::<_, i64>(8)? as usize,
+                total_files: row.get::<_, i64>(9)? as usize,
+                completed: row.get::<_, i64>(10)? != 0,
+                warnings,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok((events, total_events))
 }
 
 fn persist_scan_result(
@@ -2954,6 +3114,7 @@ pub fn run() {
             plan_scan,
             import_batch,
             list_import_states,
+            list_import_events,
             improve_prompt
         ])
         .run(tauri::generate_context!())
@@ -3494,6 +3655,84 @@ mod tests {
         assert_eq!(result.imported_prompt_count, 10);
         assert_eq!(result.states[0].source_id, "source-a");
         assert_eq!(result.states[1].source_id, "source-b");
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn list_import_events_returns_empty_snapshot_for_new_database() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-import-events-empty-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let db_path = root.join("promptvault.sqlite");
+
+        let result = run_list_import_events(ImportEventsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: None,
+        })
+        .expect("list empty import events");
+
+        assert_eq!(result.database_path, db_path.display().to_string());
+        assert_eq!(result.events.len(), 0);
+        assert_eq!(result.total_events, 0);
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn import_batch_records_persistent_import_events() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-import-events-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        for idx in 1..=2 {
+            std::fs::write(
+                root.join(format!("{idx:03}.jsonl")),
+                format!(
+                    "{{\"type\":\"response_item\",\"payload\":{{\"role\":\"user\",\"content\":[{{\"text\":\"Record import event {idx}, persist audit history, and verify the PromptVault database.\"}}]}}}}\n"
+                ),
+            )
+            .expect("write prompt file");
+        }
+        let db_path = root.join("promptvault.sqlite");
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        run_import_batch_for_source(&db_path, source.clone(), 1, true, Some(10))
+            .expect("first import batch");
+        run_import_batch_for_source(&db_path, source, 1, false, Some(10))
+            .expect("second import batch");
+
+        let result = run_list_import_events(ImportEventsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(1),
+        })
+        .expect("list import events");
+
+        assert_eq!(result.total_events, 2);
+        assert_eq!(result.events.len(), 1);
+        let latest = &result.events[0];
+        assert_eq!(latest.source_id, "test-codex");
+        assert_eq!(latest.source_label, "Test Codex");
+        assert_eq!(latest.batch_start_index, 1);
+        assert_eq!(latest.batch_file_count, 1);
+        assert_eq!(latest.batch_prompt_count, 1);
+        assert_eq!(latest.processed_files, 2);
+        assert_eq!(latest.total_files, 2);
+        assert!(latest.completed);
+        assert!(latest.warnings.is_empty());
 
         std::fs::remove_dir_all(root).expect("remove temp root");
     }

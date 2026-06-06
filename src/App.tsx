@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import "./App.css";
 import { BROWSER_BRIDGE_NOTICE } from "./browserBridge";
+import { importEventBatchSummary, importEventStatusLabel } from "./importEvents";
 import {
   activeImprovementForSelection,
   improvementRequestStarted,
@@ -30,6 +31,7 @@ import {
   importBatch,
   improvePrompt,
   isBrowserQaMode,
+  listImportEvents,
   listImportStates,
   planScan,
   scanPrompts,
@@ -37,6 +39,7 @@ import {
 import { selectedPromptForView } from "./selection";
 import type {
   ImportBatchResult,
+  ImportEventsResult,
   ImportState,
   ImportStatesResult,
   ImproveResult,
@@ -48,6 +51,7 @@ import type {
 type ScanState = "idle" | "scanning" | "ready" | "failed";
 type PlanState = "idle" | "planning" | "ready" | "failed";
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
+type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
 const MAX_SCAN_LIMIT = 100000;
 const IMPORT_BATCH_FILES = 5;
@@ -98,6 +102,7 @@ function App() {
   const [planState, setPlanState] = useState<PlanState>("idle");
   const [importState, setImportState] = useState<ImportRunState>("idle");
   const [importStatesState, setImportStatesState] = useState<ImportStatesState>("idle");
+  const [importEventsState, setImportEventsState] = useState<ImportEventsState>("idle");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -107,6 +112,7 @@ function App() {
   const [plan, setPlan] = useState<ScanPlan | null>(null);
   const [importResult, setImportResult] = useState<ImportBatchResult | null>(null);
   const [importStatesResult, setImportStatesResult] = useState<ImportStatesResult | null>(null);
+  const [importEventsResult, setImportEventsResult] = useState<ImportEventsResult | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -154,6 +160,7 @@ function App() {
 
   useEffect(() => {
     void refreshImportStates();
+    void refreshImportEvents();
   }, []);
 
   async function refreshImportStates({ quiet = false }: { quiet?: boolean } = {}) {
@@ -164,6 +171,18 @@ function App() {
       setImportStatesState("ready");
     } catch (err) {
       setImportStatesState("failed");
+      if (!quiet) setError(errorText(err));
+    }
+  }
+
+  async function refreshImportEvents({ quiet = false }: { quiet?: boolean } = {}) {
+    if (!quiet) setImportEventsState("loading");
+    try {
+      const next = await listImportEvents({ limit: 20 });
+      setImportEventsResult(next);
+      setImportEventsState("ready");
+    } catch (err) {
+      setImportEventsState("failed");
       if (!quiet) setError(errorText(err));
     }
   }
@@ -222,6 +241,7 @@ function App() {
       setStopRequested(false);
       importStopRequestedRef.current = false;
       await refreshImportStates({ quiet: true });
+      await refreshImportEvents({ quiet: true });
     }
   }
 
@@ -257,6 +277,7 @@ function App() {
       setStopRequested(false);
       importStopRequestedRef.current = false;
       await refreshImportStates({ quiet: true });
+      await refreshImportEvents({ quiet: true });
     }
   }
 
@@ -492,6 +513,64 @@ function App() {
         <section className="notice warning">
           <AlertTriangle size={18} />
           <span>{plan.warnings.join(" ")}</span>
+        </section>
+      ) : null}
+
+      {importEventsResult || importEventsState === "loading" ? (
+        <section className="panel import-activity-panel">
+          <div className="panel-heading">
+            <h2>Recent Import Activity</h2>
+            <button
+              className="inline-action"
+              data-refresh-import-events="true"
+              disabled={importEventsState === "loading" || isImportRunning}
+              onClick={() => refreshImportEvents()}
+              type="button"
+            >
+              <RefreshCw size={15} />
+              {importEventsState === "loading" ? "Loading" : "Refresh"}
+            </button>
+          </div>
+          {importEventsResult ? (
+            <>
+              <div className="import-activity-summary">
+                <div>
+                  <span>Total Events</span>
+                  <strong>{importEventsResult.total_events.toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span>Database</span>
+                  <strong>{importEventsResult.database_path}</strong>
+                </div>
+              </div>
+              {importEventsResult.events.length ? (
+                <div className="import-activity-list">
+                  {importEventsResult.events.map((event) => (
+                    <div className="import-activity-row" key={event.id}>
+                      <div>
+                        <strong>{event.source_label}</strong>
+                        <span>{new Date(event.generated_at).toLocaleString()}</span>
+                      </div>
+                      <span>{importEventBatchSummary(event)}</span>
+                      <span>
+                        {event.processed_files.toLocaleString()} / {event.total_files.toLocaleString()} ·{" "}
+                        {importEventStatusLabel(event)}
+                      </span>
+                      <span>
+                        {event.warnings.length
+                          ? `${event.warnings.length.toLocaleString()} warnings`
+                          : "no warnings"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty compact">No import activity recorded yet.</div>
+              )}
+            </>
+          ) : (
+            <div className="empty compact">Loading import activity.</div>
+          )}
         </section>
       ) : null}
 

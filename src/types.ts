@@ -124,6 +124,28 @@ export interface ImportStatesResult {
   imported_prompt_count: number;
 }
 
+export interface ImportEvent {
+  id: number;
+  generated_at: string;
+  source_id: string;
+  source_label: string;
+  root_path: string;
+  batch_start_index: number;
+  batch_file_count: number;
+  batch_prompt_count: number;
+  processed_files: number;
+  total_files: number;
+  completed: boolean;
+  warnings: string[];
+}
+
+export interface ImportEventsResult {
+  generated_at: string;
+  database_path: string;
+  events: ImportEvent[];
+  total_events: number;
+}
+
 export interface ImportBatchResult {
   generated_at: string;
   source: SourcePlan;

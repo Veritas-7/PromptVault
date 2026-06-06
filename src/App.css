@@ -246,10 +246,21 @@ h3 {
   padding: 14px;
 }
 
+.import-activity-panel {
+  gap: 12px;
+  padding: 14px;
+}
+
 .saved-import-summary {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.import-activity-summary {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(130px, 0.3fr) minmax(240px, 1fr);
 }
 
 .saved-import-summary div {
@@ -262,13 +273,26 @@ h3 {
   padding: 12px;
 }
 
+.import-activity-summary div {
+  background: #f8faf7;
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-height: 62px;
+  padding: 12px;
+}
+
 .saved-import-summary span,
-.saved-import-row span {
+.saved-import-row span,
+.import-activity-summary span,
+.import-activity-row span {
   color: #68766b;
   font-size: 12px;
 }
 
-.saved-import-summary strong {
+.saved-import-summary strong,
+.import-activity-summary strong {
   color: #18251d;
   font-size: 16px;
   overflow-wrap: anywhere;
@@ -281,11 +305,30 @@ h3 {
   padding-top: 10px;
 }
 
+.import-activity-list {
+  border-top: 1px solid #e5ebe4;
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  padding-top: 10px;
+}
+
 .saved-import-row {
   align-items: center;
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(180px, 1fr) minmax(140px, 0.8fr) auto;
+}
+
+.import-activity-row {
+  align-items: center;
+  border-bottom: 1px solid #edf2ec;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, auto) minmax(140px, auto) minmax(96px, auto);
+  min-height: 52px;
+  padding-bottom: 8px;
 }
 
 .saved-import-row div {
@@ -294,7 +337,21 @@ h3 {
   min-width: 0;
 }
 
+.import-activity-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
 .saved-import-row strong {
+  color: #1c2a21;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-activity-row strong {
   color: #1c2a21;
   font-size: 13px;
   overflow: hidden;
@@ -887,7 +944,9 @@ h3 {
     grid-template-columns: 1fr;
   }
 
-  .saved-import-row {
+  .saved-import-row,
+  .import-activity-row,
+  .import-activity-summary {
     align-items: stretch;
     grid-template-columns: 1fr;
   }

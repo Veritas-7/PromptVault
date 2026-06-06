@@ -4,6 +4,7 @@ import {
   Brain,
   CheckCircle2,
   ClipboardList,
+  Database,
   FileText,
   Play,
   RefreshCw,
@@ -33,6 +34,7 @@ import {
   isBrowserQaMode,
   listImportEvents,
   listImportStates,
+  loadStoredPrompts,
   planScan,
   scanPrompts,
 } from "./promptVaultApi";
@@ -321,6 +323,31 @@ function App() {
     }
   }
 
+  async function runLoadStored() {
+    setError(null);
+    setImprovement(null);
+    setImprovementPromptId(null);
+    setScanState("scanning");
+    try {
+      const next = await loadStoredPrompts({
+        limit: PREVIEW_LIMIT,
+        preview_sort: previewSortForMode(previewMode),
+      });
+      const loadedMode = effectivePromptListMode(next.preview_sort, previewMode);
+      setResult(next);
+      setSelectedId(
+        (loadedMode === "weakest"
+          ? next.prompts[0]
+          : next.prompts[next.prompts.length - 1]
+        )?.id ?? null,
+      );
+      setScanState("ready");
+    } catch (err) {
+      setError(errorText(err));
+      setScanState("failed");
+    }
+  }
+
   async function runImprove(prompt: PromptRecord | null) {
     if (!prompt) return;
     setImproving(true);
@@ -386,6 +413,16 @@ function App() {
           >
             <RefreshCw size={18} />
             {scanState === "scanning" ? "Scanning" : "Scan"}
+          </button>
+          <button
+            className="secondary-action"
+            data-load-stored-prompts="true"
+            disabled={scanState === "scanning" || isImportRunning}
+            onClick={runLoadStored}
+            type="button"
+          >
+            <Database size={18} />
+            {scanState === "scanning" ? "Loading" : "Load Stored"}
           </button>
           <button
             className="secondary-action"
@@ -899,7 +936,7 @@ function App() {
               <pre className="prompt-text">{selectedPrompt.text}</pre>
             </>
           ) : (
-            <div className="empty">Run a scan to load prompts.</div>
+            <div className="empty">Run a scan or load stored prompts.</div>
           )}
         </section>
 

@@ -36,6 +36,13 @@ export interface ImportEventsOptions {
   limit?: number;
 }
 
+export interface StoredPromptsOptions {
+  database_path?: string;
+  limit?: number;
+  query?: string;
+  preview_sort?: string;
+}
+
 export interface ImprovePromptRequest {
   prompt: string;
   context?: string | null;
@@ -67,6 +74,13 @@ export async function listImportEvents(options: ImportEventsOptions = {}): Promi
     return invoke<ImportEventsResult>("list_import_events", { options });
   }
   return postBridge<ImportEventsResult>("/api/import-events", { options });
+}
+
+export async function loadStoredPrompts(options: StoredPromptsOptions = {}): Promise<ScanResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ScanResult>("load_stored_prompts", { options });
+  }
+  return postBridge<ScanResult>("/api/prompts", { options });
 }
 
 export async function scanPrompts(options: ScanPromptOptions): Promise<ScanResult> {

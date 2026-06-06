@@ -20,6 +20,8 @@ const LARGE_SOURCE_BYTES: u64 = 5 * 1024 * 1024 * 1024;
 const LARGE_FILE_BYTES: u64 = 50 * 1024 * 1024;
 const DEFAULT_IMPORT_EVENT_LIMIT: usize = 20;
 const MAX_IMPORT_EVENT_LIMIT: usize = 100;
+const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
+const MAX_STORED_PROMPT_LIMIT: usize = 1_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptRecord {
@@ -222,6 +224,14 @@ pub struct ImportEventsOptions {
     pub limit: Option<usize>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StoredPromptsOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub query: Option<String>,
+    pub preview_sort: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImproveRequest {
     pub prompt: String,
@@ -307,6 +317,11 @@ fn list_import_states(options: Option<ImportStatesOptions>) -> Result<ImportStat
 #[tauri::command]
 fn list_import_events(options: Option<ImportEventsOptions>) -> Result<ImportEventsResult, String> {
     run_list_import_events(options.unwrap_or_default()).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn load_stored_prompts(options: Option<StoredPromptsOptions>) -> Result<ScanResult, String> {
+    run_load_stored_prompts(options.unwrap_or_default()).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -545,6 +560,49 @@ pub fn run_list_import_events(
         database_path: database_path.display().to_string(),
         events,
         total_events,
+    })
+}
+
+pub fn run_load_stored_prompts(
+    options: StoredPromptsOptions,
+) -> Result<ScanResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("stored prompt limit requires a positive integer".into());
+    }
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_STORED_PROMPT_LIMIT)
+        .min(MAX_STORED_PROMPT_LIMIT);
+    let preview_sort = PreviewSort::from_option(options.preview_sort.as_deref())?;
+    let query = options.query.unwrap_or_default();
+    let conn = open_promptvault_database(&database_path)?;
+    let prompts = read_stored_prompts(&conn, limit, query.trim(), preview_sort)?;
+    let total_matches = count_stored_prompt_matches(&conn, query.trim())?;
+    let stats = build_stats(&prompts, stored_source_summaries(&prompts));
+    let persistence = prompt_database_stats(&conn, &database_path, 0, 0)?;
+    let returned_prompt_count = prompts.len();
+    Ok(ScanResult {
+        generated_at,
+        output_path: None,
+        markdown: String::new(),
+        stats,
+        prompts,
+        returned_prompt_count,
+        prompts_truncated: total_matches > returned_prompt_count,
+        preview_sort: preview_sort.as_str().to_string(),
+        markdown_included: false,
+        markdown_written: false,
+        persistence: Some(persistence),
+        warnings: Vec::new(),
     })
 }
 
@@ -2601,6 +2659,167 @@ fn read_import_events(
     Ok((events, total_events))
 }
 
+struct StoredPromptRow {
+    id: String,
+    hash: String,
+    source: String,
+    session_id: String,
+    path: String,
+    timestamp: Option<String>,
+    cwd: Option<String>,
+    text: String,
+    word_count: usize,
+    char_count: usize,
+    risk_flags_json: String,
+    quality_json: String,
+}
+
+fn read_stored_prompts(
+    conn: &Connection,
+    limit: usize,
+    query: &str,
+    preview_sort: PreviewSort,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let order_by = match preview_sort {
+        PreviewSort::Latest => "COALESCE(timestamp, last_seen_at, first_seen_at, '') DESC, id DESC",
+        PreviewSort::QualityAsc => {
+            "quality_score ASC, prompt_date DESC, COALESCE(timestamp, last_seen_at, '') DESC"
+        }
+        PreviewSort::QualityDesc => {
+            "quality_score DESC, prompt_date DESC, COALESCE(timestamp, last_seen_at, '') DESC"
+        }
+    };
+    let sql = format!(
+        "SELECT id, hash, source, session_id, source_path, timestamp, cwd, text,
+            word_count, char_count, risk_flags_json, quality_json
+         FROM prompts
+         WHERE (?1 = ''
+            OR LOWER(text) LIKE ?2
+            OR LOWER(source) LIKE ?2
+            OR LOWER(COALESCE(cwd, '')) LIKE ?2
+            OR prompt_date LIKE ?2)
+         ORDER BY {order_by}
+         LIMIT ?3"
+    );
+    let query_lower = query.to_lowercase();
+    let like = format!("%{query_lower}%");
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(rusqlite::params![query_lower, like, limit as i64], |row| {
+            Ok(StoredPromptRow {
+                id: row.get(0)?,
+                hash: row.get(1)?,
+                source: row.get(2)?,
+                session_id: row.get(3)?,
+                path: row.get(4)?,
+                timestamp: row.get(5)?,
+                cwd: row.get(6)?,
+                text: row.get(7)?,
+                word_count: row.get::<_, i64>(8)? as usize,
+                char_count: row.get::<_, i64>(9)? as usize,
+                risk_flags_json: row.get(10)?,
+                quality_json: row.get(11)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(PromptRecord {
+                id: row.id,
+                source: row.source,
+                session_id: row.session_id,
+                path: row.path,
+                timestamp: row.timestamp,
+                cwd: row.cwd,
+                text: row.text,
+                word_count: row.word_count,
+                char_count: row.char_count,
+                hash: row.hash,
+                risk_flags: serde_json::from_str(&row.risk_flags_json)?,
+                quality: serde_json::from_str(&row.quality_json)?,
+            })
+        })
+        .collect()
+}
+
+fn count_stored_prompt_matches(
+    conn: &Connection,
+    query: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let query_lower = query.to_lowercase();
+    let like = format!("%{query_lower}%");
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM prompts
+         WHERE (?1 = ''
+            OR LOWER(text) LIKE ?2
+            OR LOWER(source) LIKE ?2
+            OR LOWER(COALESCE(cwd, '')) LIKE ?2
+            OR prompt_date LIKE ?2)",
+        rusqlite::params![query_lower, like],
+        |row| row.get(0),
+    )?;
+    Ok(count as usize)
+}
+
+fn stored_source_summaries(prompts: &[PromptRecord]) -> Vec<SourceSummary> {
+    let mut by_source = BTreeMap::<String, Vec<&PromptRecord>>::new();
+    for prompt in prompts {
+        by_source
+            .entry(prompt.source.clone())
+            .or_default()
+            .push(prompt);
+    }
+    by_source
+        .into_iter()
+        .map(|(source, items)| {
+            let unique_paths = items
+                .iter()
+                .map(|prompt| prompt.path.as_str())
+                .collect::<BTreeSet<_>>()
+                .len();
+            let mut summary = SourceSummary {
+                id: source.clone(),
+                label: source,
+                root_path: "stored prompt vault".to_string(),
+                files_seen: unique_paths,
+                prompts_found: items.len(),
+                average_quality: 0.0,
+                weak_prompt_count: 0,
+                status: "stored".to_string(),
+                notes: Vec::new(),
+            };
+            let source_prompts = items.into_iter().cloned().collect::<Vec<_>>();
+            summarize_source_quality(&mut summary, &source_prompts);
+            summary
+        })
+        .collect()
+}
+
+fn prompt_database_stats(
+    conn: &Connection,
+    database_path: &Path,
+    inserted_prompt_count: usize,
+    updated_prompt_count: usize,
+) -> Result<PersistStats, Box<dyn std::error::Error>> {
+    let stored_prompt_count: i64 =
+        conn.query_row("SELECT COUNT(*) FROM prompts", [], |row| row.get(0))?;
+    let date_count: i64 = conn.query_row(
+        "SELECT COUNT(DISTINCT prompt_date) FROM prompts",
+        [],
+        |row| row.get(0),
+    )?;
+
+    Ok(PersistStats {
+        database_path: database_path.display().to_string(),
+        stored_prompt_count: stored_prompt_count as usize,
+        inserted_prompt_count,
+        updated_prompt_count,
+        date_count: date_count as usize,
+    })
+}
+
 fn persist_scan_result(
     database_path: &Path,
     generated_at: &str,
@@ -2706,21 +2925,12 @@ fn persist_scan_result(
     }
     tx.commit()?;
 
-    let stored_prompt_count: i64 =
-        conn.query_row("SELECT COUNT(*) FROM prompts", [], |row| row.get(0))?;
-    let date_count: i64 = conn.query_row(
-        "SELECT COUNT(DISTINCT prompt_date) FROM prompts",
-        [],
-        |row| row.get(0),
-    )?;
-
-    Ok(PersistStats {
-        database_path: database_path.display().to_string(),
-        stored_prompt_count: stored_prompt_count as usize,
+    prompt_database_stats(
+        &conn,
+        database_path,
         inserted_prompt_count,
         updated_prompt_count,
-        date_count: date_count as usize,
-    })
+    )
 }
 
 fn rank_counts(counts: HashMap<String, usize>, limit: usize) -> Vec<FrequencyItem> {
@@ -3115,6 +3325,7 @@ pub fn run() {
             import_batch,
             list_import_states,
             list_import_events,
+            load_stored_prompts,
             improve_prompt
         ])
         .run(tauri::generate_context!())
@@ -4486,6 +4697,74 @@ mod tests {
         assert_eq!(stored_date, "2026-06-06");
 
         std::fs::remove_file(db_path).expect("remove persisted db");
+    }
+
+    #[test]
+    fn load_stored_prompts_returns_empty_for_new_database() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-load-empty-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let db_path = root.join("promptvault.sqlite");
+
+        let result = run_load_stored_prompts(StoredPromptsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(25),
+            query: None,
+            preview_sort: None,
+        })
+        .expect("load empty prompt vault");
+
+        assert_eq!(result.returned_prompt_count, 0);
+        assert_eq!(result.stats.total_prompts, 0);
+        assert_eq!(
+            result.persistence.expect("persistence").stored_prompt_count,
+            0
+        );
+
+        std::fs::remove_dir_all(root).expect("remove load empty root");
+    }
+
+    #[test]
+    fn load_stored_prompts_filters_persisted_rows() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-load-stored-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create load stored root");
+        let db_path = root.join("promptvault.sqlite");
+        let prompts = vec![
+            dated_record("stored-alpha", "2026-06-05T00:00:00Z"),
+            dated_record("stored-needle", "2026-06-06T00:00:00Z"),
+        ];
+        let stats = build_stats(&prompts, Vec::new());
+        persist_scan_result(&db_path, "2026-06-06T00:01:00Z", &prompts, &stats, &[])
+            .expect("persist prompt vault");
+
+        let result = run_load_stored_prompts(StoredPromptsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(10),
+            query: Some("needle".to_string()),
+            preview_sort: Some("quality-asc".to_string()),
+        })
+        .expect("load stored prompts");
+
+        assert_eq!(result.returned_prompt_count, 1);
+        assert_eq!(result.prompts[0].id, "stored-needle");
+        assert_eq!(result.stats.total_prompts, 1);
+        assert_eq!(result.stats.prompts_by_date[0].text, "2026-06-06");
+        assert_eq!(
+            result.persistence.expect("persistence").stored_prompt_count,
+            2
+        );
+
+        std::fs::remove_dir_all(root).expect("remove load stored root");
     }
 
     fn record(id: &str) -> PromptRecord {

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 10:59 KST
+Updated: 2026-06-06 11:11 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -525,6 +525,35 @@ stability, performance, and maintainability, then record evidence here.
   `id=1`, `source_id=gemini-tmp-chat`, `batch_start_index=76`,
   `batch_file_count=5`, `batch_prompt_count=5`, `processed_files=81`,
   `total_files=144`, `completed=false`, `warnings=[]`.
+- Continued with the next thin slice: load stored prompts from the permanent
+  SQLite DB without re-scanning source files.
+- Added Tauri command and browser bridge route `/api/prompts`.
+- Added `Load Stored` button in the browser UI. It loads persisted prompts into
+  the existing prompt list, metrics, sources, frequency, date, repeated-prompt,
+  quality-gap, selection, and Improve flows.
+- `cd src-tauri && cargo test load_stored_prompts`: 2 focused tests passed.
+- `npm run check`: passed after the stored prompt loader slice. This covered UI
+  tests 18 passed, TypeScript/Vite build, Rust lib 56 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- `cd src-tauri && cargo build --bin promptvault-cli`: passed before restarting
+  the browser bridge.
+- Real bridge `/api/prompts` smoke returned persisted prompt data from
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`: `stored_prompt_count`
+  `459`, `date_count` `20`, and a latest prompt preview.
+- Real cmux UI test on the existing PromptVault browser surface:
+  - Reloaded `http://127.0.0.1:5173/`.
+  - Confirmed the new `Load Stored` button rendered.
+  - Clicked `Load Stored`.
+  - Observed DB notice:
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 459 · new 0 · updated 0`.
+  - Observed metrics from the persistent DB: `Prompts 459`, `Preview 459`,
+    `Files 307`, `Words 92314`, `Quality 74.9`, `Weak 126`,
+    `DB Stored 459`, `Dates 20`.
+  - Observed source summaries from the vault, including `Codex 200`,
+    `Gemini temporary chats 117`, `Claude prompt history 20`, and
+    `Antigravity conversation DB 10`.
+  - Observed prompt list rows loaded from persisted DB, including weak Codex and
+    Claude prompt rows, ready for selection and improvement.
 
 ## Issues
 
@@ -556,8 +585,11 @@ stability, performance, and maintainability, then record evidence here.
 
 1. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
-2. Add scan-run cancellation/progress for unrestricted full scans, separate
+2. Add date/source filters for the stored prompt vault so the user can jump
+   directly to a day, source, or workspace without relying only on client-side
+   filtering.
+3. Add scan-run cancellation/progress for unrestricted full scans, separate
    from the safer resumable import-batch path.
-3. Recover or replace the cmux CLI browser diagnostics path for console/error
+4. Recover or replace the cmux CLI browser diagnostics path for console/error
    collection; accessibility-based cmux UI verification worked when CLI
    diagnostics timed out.

@@ -275,8 +275,18 @@ function App() {
     previewModePendingMessage !== null && !(resultOrigin === "stored" && isStoredLoadRunning);
   const sourceSummaries = result?.stats.source_summaries ?? [];
   const sourceSummariesEmptyMessage = sourceSummariesEmptyText(hasPromptResult);
-  const promptListEmptyMessage = promptListEmptyText(hasPromptResult, query);
-  const selectedPromptEmptyMessage = selectedPromptEmptyText(hasPromptResult, query);
+  const storedFilterCount = activeStoredPromptFilterCount(storedFilters);
+  const activeResultStoredFilterCount = resultOrigin === "stored" ? storedFilterCount : 0;
+  const promptListEmptyMessage = promptListEmptyText(
+    hasPromptResult,
+    query,
+    activeResultStoredFilterCount,
+  );
+  const selectedPromptEmptyMessage = selectedPromptEmptyText(
+    hasPromptResult,
+    query,
+    activeResultStoredFilterCount,
+  );
   const activeImportSource = useMemo(() => {
     return plan?.sources.find((source) => source.id === activeImportSourceId) ?? null;
   }, [activeImportSourceId, plan]);
@@ -318,8 +328,8 @@ function App() {
     selectedPrompt !== null,
     hasPromptResult,
     query,
+    activeResultStoredFilterCount,
   );
-  const storedFilterCount = activeStoredPromptFilterCount(storedFilters);
   const storedLoadFailureMessage = storedLoadFailureText(storedLoadState, storedFilterCount);
   const storedSourceSuggestions = useMemo(() => {
     const sourceLabels = storedFacetsResult?.sources.map((source) => source.text)

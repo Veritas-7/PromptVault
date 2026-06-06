@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 21:56 KST
+Updated: 2026-06-06 22:16 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,25 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui -- tests/promptEmptyState.test.ts`: passed; due the
+  package script glob this ran the UI suite and reported 101 passing tests,
+  including the new stored-filter empty-state coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  stored-filter empty-copy slice.
+- `npm run check`: passed after the stored-filter empty-copy slice. This
+  covered UI tests 101 passed, TypeScript/Vite build, Rust lib 64 passed, CLI
+  15 passed, doc-tests, and clippy with `-D warnings`.
+- Headless production-bundle Stored Vault no-match QA against the existing
+  local frontend/backend: loaded
+  `http://127.0.0.1:5173/?stored-empty-copy=20260606a`, entered
+  `nonexistent-keyboard-flow-token-20260606`, pressed Enter, observed
+  `/api/prompts` return 0 prompts, and verified the prompt list, Selected
+  panel, and Recommendation panel showed stored-filter-specific empty text.
+  Console and page-error collectors were empty.
+- Response-synchronized headless keyboard-Apply QA showed Enter on the Stored
+  Vault Text input posts `/api/prompts` with `query:"cmux"` and returns 1,000
+  prompts; Apply with the nonexistent token posts `/api/prompts` with that
+  token and returns 0 prompts.
 - `npm run test:ui`: 98 tests passed after adding Stored Vault Reset and
   Improve action label coverage.
 - `npm run build`: TypeScript and Vite production build passed after the
@@ -2191,6 +2210,34 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this disabled-control label slice: UI tests 98
   passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
   doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make Stored Vault no-match results
+  explain that active Stored Vault filters are the reason no prompts are
+  visible.
+- Attempted to resume cmux keyboard-Apply QA on the existing `surface:9`, but
+  stateful cmux commands (`tree`, `list-workspaces`, `workspace-action`,
+  `browser --surface surface:9 url/eval`) timed out even though `cmux ping`
+  returned `PONG`. Computer Use showed the visible cmux window was focused on
+  another workspace (`블로그`/WriteFlow), and direct workspace-row clicks did
+  not retarget to `프롬프트`. Hidden macOS Open dialogs titled `열기` were found
+  and dismissed with AppleScript `AXPress` on their `취소` controls, without
+  restarting or killing cmux, but stateful cmux RPCs remained blocked.
+- Because the single cmux PromptVault browser could not be re-focused without
+  a cmux restart, the Stored Vault keyboard flow was verified headlessly
+  against the existing local frontend/backend only. The first timing-sensitive
+  script was inconclusive, then a response-synchronized Playwright run proved:
+  Enter on the Stored Vault Text input posts `/api/prompts` with
+  `{"query":"cmux"}` and returns 1,000 prompts; Apply with a nonexistent token
+  posts `/api/prompts` with that token and returns 0 prompts.
+- Added stored-filter-aware empty-state copy for zero-result stored loads:
+  prompt list now says `No stored prompts match the current Stored Vault
+  filters.`, Selected says `No prompt matches the current Stored Vault
+  filters.`, and Recommendation says `Adjust or reset Stored Vault filters
+  before improving.`
+- Production-bundle headless QA after `npm run build` verified the new
+  zero-result Stored Vault messages with no console entries and no page errors.
+- `npm run check` passed after this stored-empty-copy slice: UI tests 101
+  passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2201,6 +2248,14 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx`: applies the new Reset and Improve `aria-label` values.
 - `tests/storedFilters.test.ts` and `tests/improvementSelection.test.ts`:
   cover the new disabled/action label copy.
+- `src/promptEmptyState.ts`: now accepts an active Stored Vault filter count so
+  zero-result stored loads distinguish stored-filter misses from an empty
+  unfiltered result.
+- `src/App.tsx`: passes Stored Vault filter context into prompt, selected, and
+  recommendation empty-state copy only when the current result came from
+  Stored Vault.
+- `tests/promptEmptyState.test.ts`: covers stored-filter misses for the prompt
+  list, Selected panel, and Recommendation panel.
 - `src/previewMode.ts`: adds result-origin typing, Stored Vault reload
   decision logic, and pending-preview notice copy for loaded-result mode
   mismatches.
@@ -2448,6 +2503,14 @@ stability, performance, and maintainability, then record evidence here.
   re-targeting the existing PromptVault `surface:9`, cmux browser CLI commands
   worked and diagnostics returned clean. Treat Computer Use app state as the
   currently focused cmux workspace, not proof of the target PromptVault surface.
+- During the stored-empty-copy slice, cmux stateful RPCs stayed blocked after
+  hidden `열기` Open dialogs were dismissed with AppleScript `AXPress` on
+  `취소`. `cmux ping` still returned `PONG`, but `list-workspaces`,
+  `workspace-action --action focus`, `tree`, and `browser --surface surface:9`
+  commands timed out. No cmux restart, app kill, or extra browser was used.
+  Treat the Playwright no-match verification as local app evidence only; the
+  same flow still needs same-surface cmux confirmation after cmux control
+  recovers or the user explicitly approves a cmux restart.
 - During the facet slice, `cmux browser --surface surface:9 get url` reported
   the correct PromptVault URL while `snapshot` briefly reported `about:blank`.
   `focus-webview` returned `invalid_state: WebView is not in a window`;

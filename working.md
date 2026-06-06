@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 20:52 KST
+Updated: 2026-06-06 20:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -2264,6 +2264,13 @@ stability, performance, and maintainability, then record evidence here.
   advanced the Gemini cursor by exactly one batch from `86 / 144` to
   `91 / 144`. The same `surface:9` was reloaded afterward and diagnostics
   returned clean.
+- After the row-action-label push, `git status`, `HEAD...origin/main`,
+  backend health, frontend `HTTP/1.0 200 OK`, and `cmux browser console list`
+  all returned clean, but repeated `cmux browser errors list` and short
+  `surface:9` eval calls timed out. Computer Use showed cmux was blocked by a
+  macOS Open dialog titled `열기`. Cancel/Escape attempts did not dismiss it
+  reliably, so no cmux restart or extra browser was attempted. Treat this as a
+  cmux modal diagnostic blocker, not as app evidence.
 
 ## Research
 

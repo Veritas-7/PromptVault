@@ -4,6 +4,7 @@ import {
   importProgressDisplay,
   importProgressPercent,
   importStateProgressPercent,
+  importProgressValueText,
   importStopNoticeText,
   importRunFailureText,
   importStatusLabel,
@@ -147,6 +148,11 @@ test("import progress display falls back to active source metadata", () => {
     sourceLabel: "Plan source",
     totalFiles: 12,
   });
+});
+
+test("import progress value text mirrors processed file counts", () => {
+  assert.equal(importProgressValueText(86, 144), "86 of 144 files");
+  assert.equal(importProgressValueText(1_200, 2_000), "1,200 of 2,000 files");
 });
 
 test("import status explains continuous stop requests", () => {

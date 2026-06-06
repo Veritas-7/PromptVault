@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 20:43 KST
+Updated: 2026-06-06 20:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -422,6 +422,25 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui`: 79 tests passed after adding import progress value text
+  coverage.
+- `npm run build`: TypeScript and Vite production build passed after labeling
+  import progress bars.
+- Real cmux accessibility QA on the existing `surface:9`: reloaded
+  `http://127.0.0.1:5173/?progress-a11y=20260606b`, clicked `Plan`, and
+  verified saved import progress bars expose source-specific `aria-label`
+  values plus file-count `aria-valuetext` values such as
+  `Gemini temporary chats import progress` and `86 of 144 files`.
+- Real cmux active-import QA on the existing `surface:9`: clicked
+  `Run Until Done` for `Gemini temporary chats`, clicked `Stop`, and observed
+  the active import progress bar expose `aria-label="Gemini temporary chats import progress"`
+  and `aria-valuetext="91 of 144 files"` with `value="63"`.
+- After reloading the same surface to
+  `http://127.0.0.1:5173/?progress-a11y-clean=20260606b`, diagnostics returned
+  `No console entries` and `No browser errors`.
+- `npm run check`: passed after this progress accessibility slice. This covered
+  UI tests 79 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 - `npm run test:ui`: 10 tests passed.
 - `npm run build`: TypeScript and Vite production build passed.
 - `cd src-tauri && cargo test`: Rust lib 47 tests passed; CLI 15 tests
@@ -1806,9 +1825,39 @@ stability, performance, and maintainability, then record evidence here.
   - After clicking `Weakest`, observed Weakest `aria-pressed="true"` and
     Latest `aria-pressed="false"`.
   - Final diagnostics returned `No console entries` and `No browser errors`.
+- Continued with the next thin slice: expose accessible names and value text
+  for saved and active import progress bars.
+- Added a shared import progress value-text helper so screen readers hear the
+  same processed/total file counts shown visually.
+- Labeled each saved import cursor progress bar with its source name and added
+  file-count `aria-valuetext`; also labeled the active Incremental Import
+  progress bar with the active source label.
+- `npm run test:ui && npm run build` passed after this progress-a11y slice:
+  UI tests 79 passed and the production Vite bundle built successfully.
+- `npm run check` passed after this slice: UI tests 79 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?progress-a11y=20260606b` on the same
+    PromptVault browser surface.
+  - Clicked `Plan` and observed saved import progress bars with source-specific
+    labels and value text, including `Gemini temporary chats import progress`
+    and `86 of 144 files`.
+  - Briefly clicked `Run Until Done` for `Gemini temporary chats`, clicked
+    `Stop`, and observed the active import progress bar with
+    `Gemini temporary chats import progress`, `91 of 144 files`, and
+    `value="63"`.
+  - Reloaded the same surface to clear the stopped state; final diagnostics
+    returned `No console entries` and `No browser errors`.
 
 ## Changes
 
+- `src/importProgress.ts`: adds `importProgressValueText()` for processed/total
+  file-count progress value text.
+- `src/App.tsx`: adds source-specific `aria-label` and file-count
+  `aria-valuetext` attributes to saved import cursor progress bars and the
+  active Incremental Import progress bar.
+- `tests/importProgress.test.ts`: covers comma-formatted progress value text.
 - `src/actionLocks.ts`: added shared top-level and import-action busy lock
   helpers.
 - `src-tauri/src/lib.rs`: added progress registry, progress command, active
@@ -2173,6 +2222,10 @@ stability, performance, and maintainability, then record evidence here.
 - During pressed-state QA, one long async `cmux browser eval` timed out after
   firing the intended clicks. Short follow-up evals confirmed the actual DOM
   state on the same `surface:9`; final diagnostics returned clean.
+- During progress-a11y QA, the real `Run Until Done`/`Stop` verification
+  advanced the Gemini cursor by exactly one batch from `86 / 144` to
+  `91 / 144`. The same `surface:9` was reloaded afterward and diagnostics
+  returned clean.
 
 ## Research
 

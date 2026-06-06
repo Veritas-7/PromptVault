@@ -32,6 +32,7 @@ import {
 import {
   importProgressDisplay,
   importStateProgressPercent,
+  importProgressValueText,
   importRunFailureText,
   importStopNoticeText,
   importStatusLabel,
@@ -1034,7 +1035,12 @@ function App() {
                         <strong>{state.source_label}</strong>
                         <span>{state.updated_at}</span>
                       </div>
-                      <progress value={importStateProgressPercent(state)} max={100} />
+                      <progress
+                        aria-label={`${state.source_label} import progress`}
+                        aria-valuetext={importProgressValueText(state.processed_files, state.total_files)}
+                        value={importStateProgressPercent(state)}
+                        max={100}
+                      />
                       <span>
                         {state.processed_files.toLocaleString()} / {state.total_files.toLocaleString()}
                         {state.completed ? " · complete" : " · resumable"}
@@ -1325,7 +1331,15 @@ function App() {
             </div>
           ) : null}
           <div className="import-progress" aria-live="polite">
-            <progress value={currentImportProgress.percent} max={100} />
+            <progress
+              aria-label={`${currentImportProgress.sourceLabel} import progress`}
+              aria-valuetext={importProgressValueText(
+                currentImportProgress.processedFiles,
+                currentImportProgress.totalFiles,
+              )}
+              value={currentImportProgress.percent}
+              max={100}
+            />
             <span>{currentImportProgress.percent}%</span>
           </div>
           <div className="import-summary">

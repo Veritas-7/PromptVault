@@ -25,6 +25,10 @@ export function importStateProgressPercent(state: ImportState | null): number {
   return Math.max(0, Math.min(100, Math.round(ratio * 100)));
 }
 
+export function importProgressValueText(processedFiles: number, totalFiles: number): string {
+  return `${processedFiles.toLocaleString()} of ${totalFiles.toLocaleString()} files`;
+}
+
 export function importProgressDisplay(
   result: ImportBatchResult | null,
   savedState: ImportState | null,

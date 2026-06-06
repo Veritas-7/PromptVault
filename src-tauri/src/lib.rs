@@ -159,6 +159,18 @@ pub struct ImportBatchResult {
     pub warnings: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportStatesResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub states: Vec<ImportState>,
+    pub total_sources: usize,
+    pub completed_sources: usize,
+    pub total_files: usize,
+    pub processed_files: usize,
+    pub imported_prompt_count: usize,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ScanPlanOptions {
     pub source_ids: Option<Vec<String>>,
@@ -170,6 +182,11 @@ pub struct ImportBatchOptions {
     pub file_batch_size: Option<usize>,
     pub reset: Option<bool>,
     pub preview_limit: Option<usize>,
+    pub database_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ImportStatesOptions {
     pub database_path: Option<String>,
 }
 
@@ -248,6 +265,11 @@ fn plan_scan(options: Option<ScanPlanOptions>) -> Result<ScanPlan, String> {
 #[tauri::command]
 fn import_batch(options: ImportBatchOptions) -> Result<ImportBatchResult, String> {
     run_import_batch(options).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn list_import_states(options: Option<ImportStatesOptions>) -> Result<ImportStatesResult, String> {
+    run_list_import_states(options.unwrap_or_default()).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -437,6 +459,27 @@ pub fn run_import_batch(
         options.reset.unwrap_or(false),
         options.preview_limit,
     )
+}
+
+pub fn run_list_import_states(
+    options: ImportStatesOptions,
+) -> Result<ImportStatesResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let conn = open_promptvault_database(&database_path)?;
+    let states = read_import_states(&conn)?;
+    Ok(import_states_result(
+        generated_at,
+        database_path.display().to_string(),
+        states,
+    ))
 }
 
 fn run_import_batch_for_source(
@@ -2317,6 +2360,52 @@ fn read_import_state(
     }))
 }
 
+fn read_import_states(conn: &Connection) -> Result<Vec<ImportState>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT source_id, source_label, root_path, total_files, total_bytes,
+            next_file_index, processed_files, imported_prompt_count, completed, updated_at
+         FROM import_states
+         ORDER BY completed ASC, updated_at DESC, source_label ASC",
+    )?;
+    let states = stmt
+        .query_map([], |row| {
+            Ok(ImportState {
+                source_id: row.get(0)?,
+                source_label: row.get(1)?,
+                root_path: row.get(2)?,
+                total_files: row.get::<_, i64>(3)? as usize,
+                total_bytes: row.get::<_, i64>(4)? as u64,
+                next_file_index: row.get::<_, i64>(5)? as usize,
+                processed_files: row.get::<_, i64>(6)? as usize,
+                imported_prompt_count: row.get::<_, i64>(7)? as usize,
+                completed: row.get::<_, i64>(8)? != 0,
+                updated_at: row.get(9)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(states)
+}
+
+fn import_states_result(
+    generated_at: String,
+    database_path: String,
+    states: Vec<ImportState>,
+) -> ImportStatesResult {
+    ImportStatesResult {
+        generated_at,
+        database_path,
+        total_sources: states.len(),
+        completed_sources: states.iter().filter(|state| state.completed).count(),
+        total_files: states.iter().map(|state| state.total_files).sum(),
+        processed_files: states.iter().map(|state| state.processed_files).sum(),
+        imported_prompt_count: states
+            .iter()
+            .map(|state| state.imported_prompt_count)
+            .sum(),
+        states,
+    }
+}
+
 fn upsert_import_state(
     conn: &Connection,
     state: &ImportState,
@@ -2864,6 +2953,7 @@ pub fn run() {
             scan_prompts,
             plan_scan,
             import_batch,
+            list_import_states,
             improve_prompt
         ])
         .run(tauri::generate_context!())
@@ -3316,6 +3406,94 @@ mod tests {
             .expect("read prompt count");
         assert_eq!(next_file_index, 2);
         assert_eq!(stored_prompts, 2);
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn list_import_states_returns_empty_snapshot_for_new_database() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-import-states-empty-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let db_path = root.join("promptvault.sqlite");
+
+        let result = run_list_import_states(ImportStatesOptions {
+            database_path: Some(db_path.display().to_string()),
+        })
+        .expect("list empty import states");
+
+        assert_eq!(result.database_path, db_path.display().to_string());
+        assert_eq!(result.states.len(), 0);
+        assert_eq!(result.total_sources, 0);
+        assert_eq!(result.completed_sources, 0);
+        assert_eq!(result.total_files, 0);
+        assert_eq!(result.processed_files, 0);
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn list_import_states_summarizes_saved_cursors() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-import-states-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        let db_path = root.join("promptvault.sqlite");
+        let conn = open_promptvault_database(&db_path).expect("open import db");
+        upsert_import_state(
+            &conn,
+            &ImportState {
+                source_id: "source-a".to_string(),
+                source_label: "Source A".to_string(),
+                root_path: root.display().to_string(),
+                total_files: 10,
+                total_bytes: 100,
+                next_file_index: 4,
+                processed_files: 4,
+                imported_prompt_count: 7,
+                completed: false,
+                updated_at: "2026-06-06T00:00:00Z".to_string(),
+            },
+        )
+        .expect("upsert source a");
+        upsert_import_state(
+            &conn,
+            &ImportState {
+                source_id: "source-b".to_string(),
+                source_label: "Source B".to_string(),
+                root_path: root.display().to_string(),
+                total_files: 2,
+                total_bytes: 20,
+                next_file_index: 2,
+                processed_files: 2,
+                imported_prompt_count: 3,
+                completed: true,
+                updated_at: "2026-06-06T00:01:00Z".to_string(),
+            },
+        )
+        .expect("upsert source b");
+        drop(conn);
+
+        let result = run_list_import_states(ImportStatesOptions {
+            database_path: Some(db_path.display().to_string()),
+        })
+        .expect("list import states");
+
+        assert_eq!(result.total_sources, 2);
+        assert_eq!(result.completed_sources, 1);
+        assert_eq!(result.total_files, 12);
+        assert_eq!(result.processed_files, 6);
+        assert_eq!(result.imported_prompt_count, 10);
+        assert_eq!(result.states[0].source_id, "source-a");
+        assert_eq!(result.states[1].source_id, "source-b");
 
         std::fs::remove_dir_all(root).expect("remove temp root");
     }

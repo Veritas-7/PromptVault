@@ -77,7 +77,7 @@ cd src-tauri
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 ```
 
-The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/improve`, `/api/plan`, and `/api/import-batch` endpoints so cmux or another in-app browser can exercise the same scan, planning, improvement, and resumable import code paths without Tauri IPC.
+The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/improve`, `/api/plan`, `/api/import-batch`, and `/api/import-states` endpoints so cmux or another in-app browser can exercise the same scan, planning, improvement, resumable import, and saved cursor code paths without Tauri IPC.
 
 ## AI Recommendation Path
 

@@ -113,6 +113,17 @@ export interface ImportState {
   updated_at: string;
 }
 
+export interface ImportStatesResult {
+  generated_at: string;
+  database_path: string;
+  states: ImportState[];
+  total_sources: number;
+  completed_sources: number;
+  total_files: number;
+  processed_files: number;
+  imported_prompt_count: number;
+}
+
 export interface ImportBatchResult {
   generated_at: string;
   source: SourcePlan;

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { bridgeEndpoint, hasTauriInvoke } from "./browserBridge";
-import type { ImportBatchResult, ImproveResult, ScanPlan, ScanResult } from "./types";
+import type { ImportBatchResult, ImportStatesResult, ImproveResult, ScanPlan, ScanResult } from "./types";
 
 export interface ScanPromptOptions {
   limit?: number;
@@ -20,6 +20,10 @@ export interface ImportBatchOptions {
   preview_limit?: number;
 }
 
+export interface ImportStatesOptions {
+  database_path?: string;
+}
+
 export interface ImprovePromptRequest {
   prompt: string;
   context?: string | null;
@@ -37,6 +41,13 @@ export async function importBatch(options: ImportBatchOptions): Promise<ImportBa
     return invoke<ImportBatchResult>("import_batch", { options });
   }
   return postBridge<ImportBatchResult>("/api/import-batch", { options });
+}
+
+export async function listImportStates(options: ImportStatesOptions = {}): Promise<ImportStatesResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ImportStatesResult>("list_import_states", { options });
+  }
+  return postBridge<ImportStatesResult>("/api/import-states", { options });
 }
 
 export async function scanPrompts(options: ScanPromptOptions): Promise<ScanResult> {

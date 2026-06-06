@@ -241,6 +241,73 @@ h3 {
   font-weight: 760;
 }
 
+.saved-import-panel {
+  gap: 12px;
+  padding: 14px;
+}
+
+.saved-import-summary {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.saved-import-summary div {
+  background: #f8faf7;
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-height: 68px;
+  padding: 12px;
+}
+
+.saved-import-summary span,
+.saved-import-row span {
+  color: #68766b;
+  font-size: 12px;
+}
+
+.saved-import-summary strong {
+  color: #18251d;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.saved-import-list {
+  border-top: 1px solid #e5ebe4;
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.saved-import-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 0.8fr) auto;
+}
+
+.saved-import-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.saved-import-row strong {
+  color: #1c2a21;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-import-row progress {
+  accent-color: #213629;
+  height: 11px;
+  width: 100%;
+}
+
 .workspace,
 .prompt-grid {
   display: grid;
@@ -817,6 +884,11 @@ h3 {
   }
 
   .plan-source-row {
+    grid-template-columns: 1fr;
+  }
+
+  .saved-import-row {
+    align-items: stretch;
     grid-template-columns: 1fr;
   }
 

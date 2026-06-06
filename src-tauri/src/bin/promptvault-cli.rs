@@ -1,7 +1,7 @@
 use promptvault_lib::{
     build_scan_plan, default_database_path, improve_prompt_inner, redact_sensitive_text,
-    run_import_batch, run_scan, source_specs, ImportBatchOptions, ImproveRequest, PromptRecord,
-    ScanOptions, ScanPlanOptions,
+    run_import_batch, run_list_import_states, run_scan, source_specs, ImportBatchOptions,
+    ImportStatesOptions, ImproveRequest, PromptRecord, ScanOptions, ScanPlanOptions,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -618,7 +618,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including saved import cursors."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -644,6 +644,11 @@ struct PlanBridgePayload {
 #[derive(serde::Deserialize)]
 struct ImportBatchBridgePayload {
     options: ImportBatchOptions,
+}
+
+#[derive(serde::Deserialize)]
+struct ImportStatesBridgePayload {
+    options: Option<ImportStatesOptions>,
 }
 
 #[derive(serde::Deserialize)]
@@ -708,6 +713,11 @@ fn handle_bridge_client(mut stream: TcpStream) -> Result<(), Box<dyn std::error:
         ("POST", "/api/import-batch") => {
             let payload = serde_json::from_str::<ImportBatchBridgePayload>(&request.body)?;
             let result = run_import_batch(payload.options)?;
+            write_json_response(&mut stream, 200, &result)
+        }
+        ("POST", "/api/import-states") => {
+            let payload = serde_json::from_str::<ImportStatesBridgePayload>(&request.body)?;
+            let result = run_list_import_states(payload.options.unwrap_or_default())?;
             write_json_response(&mut stream, 200, &result)
         }
         ("POST", "/api/scan") => {

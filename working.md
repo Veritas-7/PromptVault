@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 10:33 KST
+Updated: 2026-06-06 10:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -286,6 +286,33 @@ stability, performance, and maintainability, then record evidence here.
     `antigravity-ide-transcripts|3|3|12|1`.
   - Browser console returned `No console entries`.
   - Browser error collector returned `No browser errors`.
+- Continued with the next thin slice: saved import cursor visibility on initial
+  app load.
+- Added a backend import-state snapshot API that reads every persisted SQLite
+  cursor from `import_states`, aggregates source/file/prompt totals, and exposes
+  it through Tauri and browser bridge `/api/import-states`.
+- Added a `Saved Import Progress` UI panel that loads on app start, shows the
+  database path, completed source count, processed file totals, imported prompt
+  totals, per-source progress bars, and resumable/complete labels.
+- The saved cursor panel refreshes after import-batch, continuous import, and
+  selected-source queue runs. It also has a direct `Refresh` button.
+- Real bridge evidence after rebuilding `promptvault-cli` and restarting the
+  existing `promptvault-bridge` tmux session:
+  - `curl http://127.0.0.1:5174/api/health` returned
+    `{"database_path":"/Users/wj/Documents/PromptVault/promptvault.sqlite","ok":true}`.
+  - `POST /api/import-states` returned `sources 3`, `completed 2`,
+    `processed 89`, `total 157`, with `gemini-tmp-chat` resumable at `76 / 144`
+    and two Antigravity sources complete.
+- Real cmux click QA on the same `surface:11` after rebuilding `dist`:
+  - Reloaded `http://127.0.0.1:5173/`.
+  - Observed `Saved Import Progress`, `Sources 2 / 3`, `Files 89 / 157`,
+    `Imported Prompts 99`, DB path
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite`, `Gemini temporary
+    chats 76 / 144 · resumable`, and two complete Antigravity rows.
+  - Clicked `Refresh`; observed the button enter `Loading` and then return to
+    `Refresh` with the same persisted cursor totals.
+  - Browser console returned `No console entries`.
+  - Browser error collector returned `No browser errors`.
 
 ## Changes
 
@@ -333,6 +360,16 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx` and `src/App.css`: added source checkboxes, selected-source
   queue action, queue progress display, and queue-aware stop/status handling.
 - `README.md`: documented selected-source browser queue imports.
+- `src-tauri/src/lib.rs`: added `ImportStatesResult`, `ImportStatesOptions`,
+  `run_list_import_states`, all-cursor DB query helpers, Tauri
+  `list_import_states`, and tests for empty/summarized cursor snapshots.
+- `src-tauri/src/bin/promptvault-cli.rs`: added bridge payload and route for
+  `/api/import-states`, and updated CLI help text for saved cursor endpoints.
+- `src/promptVaultApi.ts` and `src/types.ts`: added `listImportStates` API and
+  `ImportStatesResult` type.
+- `src/App.tsx` and `src/App.css`: added saved import progress panel, startup
+  import-state load, direct refresh, and post-import snapshot refresh.
+- `README.md` and `docs/CLI.md`: documented `/api/import-states`.
 
 ## Tests
 
@@ -436,6 +473,21 @@ stability, performance, and maintainability, then record evidence here.
   `http://127.0.0.1:5173/`;
   browser console returned `No console entries`;
   browser errors returned `No browser errors`.
+- `npm run test:ui`: 16 tests passed after adding saved import panel UI.
+- `npm run build`: TypeScript and Vite production build passed after adding the
+  saved import panel.
+- `cd src-tauri && cargo test list_import_states`: 2 focused tests passed.
+- `npm run check`: passed after the saved import-state slice. This covered UI
+  tests 16 passed, TypeScript/Vite build, Rust lib 52 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- `cd src-tauri && cargo build --bin promptvault-cli`: passed before restarting
+  the browser bridge.
+- Restarted only the existing `promptvault-bridge` tmux session; the static
+  server remained the existing `promptvault-static` session.
+- Real bridge `/api/import-states` smoke: passed and returned 3 saved source
+  cursors.
+- Real cmux saved import progress load/refresh flow on `surface:11`: passed
+  with no console entries or browser errors.
 
 ## Issues
 
@@ -465,5 +517,5 @@ stability, performance, and maintainability, then record evidence here.
    can continue after the browser tab is closed.
 2. Add scan-run cancellation/progress for unrestricted full scans, separate
    from the safer resumable import-batch path.
-3. Add persisted import-state visibility on initial app load so users can see
-   saved source cursors before starting a new batch.
+3. Add a persistent worker/event log view so historical import activity can be
+   audited across app restarts, not just summarized by the latest cursor.

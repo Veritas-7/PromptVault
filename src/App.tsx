@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Brain,
@@ -26,12 +26,28 @@ import {
 } from "./importProgress";
 import { selectedQueueSourceIds, toggleSourceSelection } from "./importQueue";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
-import { importBatch, improvePrompt, isBrowserQaMode, planScan, scanPrompts } from "./promptVaultApi";
+import {
+  importBatch,
+  improvePrompt,
+  isBrowserQaMode,
+  listImportStates,
+  planScan,
+  scanPrompts,
+} from "./promptVaultApi";
 import { selectedPromptForView } from "./selection";
-import type { ImportBatchResult, ImproveResult, PromptRecord, ScanPlan, ScanResult } from "./types";
+import type {
+  ImportBatchResult,
+  ImportState,
+  ImportStatesResult,
+  ImproveResult,
+  PromptRecord,
+  ScanPlan,
+  ScanResult,
+} from "./types";
 
 type ScanState = "idle" | "scanning" | "ready" | "failed";
 type PlanState = "idle" | "planning" | "ready" | "failed";
+type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
 const MAX_SCAN_LIMIT = 100000;
 const IMPORT_BATCH_FILES = 5;
@@ -60,6 +76,11 @@ function waitForNextImportBatch(): Promise<void> {
   });
 }
 
+function importStateProgressPercent(state: ImportState): number {
+  if (state.total_files === 0) return state.completed ? 100 : 0;
+  return Math.max(0, Math.min(100, Math.round((state.processed_files / state.total_files) * 100)));
+}
+
 function formatBytes(bytes: number): string {
   const units = ["B", "KiB", "MiB", "GiB", "TiB"];
   let value = bytes;
@@ -76,6 +97,7 @@ function App() {
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [planState, setPlanState] = useState<PlanState>("idle");
   const [importState, setImportState] = useState<ImportRunState>("idle");
+  const [importStatesState, setImportStatesState] = useState<ImportStatesState>("idle");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -84,6 +106,7 @@ function App() {
   const [stopRequested, setStopRequested] = useState(false);
   const [plan, setPlan] = useState<ScanPlan | null>(null);
   const [importResult, setImportResult] = useState<ImportBatchResult | null>(null);
+  const [importStatesResult, setImportStatesResult] = useState<ImportStatesResult | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -128,6 +151,22 @@ function App() {
     improvementPromptId,
     selectedPrompt?.id ?? null,
   );
+
+  useEffect(() => {
+    void refreshImportStates();
+  }, []);
+
+  async function refreshImportStates({ quiet = false }: { quiet?: boolean } = {}) {
+    if (!quiet) setImportStatesState("loading");
+    try {
+      const next = await listImportStates();
+      setImportStatesResult(next);
+      setImportStatesState("ready");
+    } catch (err) {
+      setImportStatesState("failed");
+      if (!quiet) setError(errorText(err));
+    }
+  }
 
   async function runPlan() {
     setError(null);
@@ -182,6 +221,7 @@ function App() {
     } finally {
       setStopRequested(false);
       importStopRequestedRef.current = false;
+      await refreshImportStates({ quiet: true });
     }
   }
 
@@ -216,6 +256,7 @@ function App() {
     } finally {
       setStopRequested(false);
       importStopRequestedRef.current = false;
+      await refreshImportStates({ quiet: true });
     }
   }
 
@@ -348,6 +389,73 @@ function App() {
         <section className="notice browser-mode">
           <ShieldCheck size={18} />
           <span>{BROWSER_BRIDGE_NOTICE}</span>
+        </section>
+      ) : null}
+
+      {importStatesResult || importStatesState === "loading" ? (
+        <section className="panel saved-import-panel">
+          <div className="panel-heading">
+            <h2>Saved Import Progress</h2>
+            <button
+              className="inline-action"
+              data-refresh-import-states="true"
+              disabled={importStatesState === "loading" || isImportRunning}
+              onClick={() => refreshImportStates()}
+              type="button"
+            >
+              <RefreshCw size={15} />
+              {importStatesState === "loading" ? "Loading" : "Refresh"}
+            </button>
+          </div>
+          {importStatesResult ? (
+            <>
+              <div className="saved-import-summary">
+                <div>
+                  <span>Sources</span>
+                  <strong>
+                    {importStatesResult.completed_sources.toLocaleString()} /{" "}
+                    {importStatesResult.total_sources.toLocaleString()}
+                  </strong>
+                </div>
+                <div>
+                  <span>Files</span>
+                  <strong>
+                    {importStatesResult.processed_files.toLocaleString()} /{" "}
+                    {importStatesResult.total_files.toLocaleString()}
+                  </strong>
+                </div>
+                <div>
+                  <span>Imported Prompts</span>
+                  <strong>{importStatesResult.imported_prompt_count.toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span>Database</span>
+                  <strong>{importStatesResult.database_path}</strong>
+                </div>
+              </div>
+              {importStatesResult.states.length ? (
+                <div className="saved-import-list">
+                  {importStatesResult.states.slice(0, 8).map((state) => (
+                    <div className="saved-import-row" key={state.source_id}>
+                      <div>
+                        <strong>{state.source_label}</strong>
+                        <span>{state.updated_at}</span>
+                      </div>
+                      <progress value={importStateProgressPercent(state)} max={100} />
+                      <span>
+                        {state.processed_files.toLocaleString()} / {state.total_files.toLocaleString()}
+                        {state.completed ? " · complete" : " · resumable"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty compact">No saved import cursors yet.</div>
+              )}
+            </>
+          ) : (
+            <div className="empty compact">Loading saved import cursors.</div>
+          )}
         </section>
       ) : null}
 

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 18:03 KST
+Updated: 2026-06-06 18:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1108,6 +1108,33 @@ stability, performance, and maintainability, then record evidence here.
   - Reloaded the same surface afterward to remove the test-only fetch counter.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: add endpoint-level duplicate refresh
+  claims for secondary refresh controls.
+- Found that manual Saved Import Progress and Recent Import Activity refreshes
+  were disabled after React state updates, but same-render duplicate clicks
+  could still start duplicate `/api/import-states` or `/api/import-events`
+  requests. Stored facet refresh also now uses the same endpoint-level guard for
+  quiet automatic refreshes.
+- Added independent refresh claim refs for stored facets, import states, and
+  import events. Each refresh function now synchronously rejects overlapping
+  calls to its own endpoint and releases the claim in `finally`.
+- `npm run test:ui` passed after this refresh-claim slice with 27 tests.
+- `npm run check` passed after this refresh-claim slice: UI tests 27 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?refresh-claim=20260606a`.
+  - Installed a page-local fetch counter for `/api/import-states` and
+    `/api/import-events`, opened Plan, then triggered each refresh button twice
+    in the same render turn.
+  - Observed `counts: { states: 1, events: 1 }`, proving the duplicate manual
+    refresh starts were rejected per endpoint while both first refreshes
+    completed.
+  - Reloaded the same surface afterward to remove the test-only fetch counter.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1138,6 +1165,8 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx`: adds a function-level exclusive action claim around
   user-started long-running handlers so duplicate starts are rejected before
   React rerenders disabled states.
+- `src/App.tsx`: adds endpoint-level refresh claims for stored facets, saved
+  import progress, and recent import activity refresh calls.
 - `src/actionLocks.ts`: includes `improvementRunning` in top-level and import
   write locks, and now exposes small exclusive action claim helpers.
 - `tests/actionLocks.test.ts`: added coverage for top-level locks and import
@@ -1219,6 +1248,9 @@ stability, performance, and maintainability, then record evidence here.
   `0`). The reliable same-surface proof used direct DOM `button.click()` twice,
   which exercised the app handler in one render turn and measured one
   `/api/plan` call.
+- During refresh-claim QA, direct DOM `button.click()` twice was again the
+  reliable way to exercise same-render duplicate starts on `surface:9`; the
+  measured counters showed one request per refresh endpoint.
 
 ## Research
 
@@ -1236,5 +1268,5 @@ stability, performance, and maintainability, then record evidence here.
    background scan after browser reload.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
-5. Consider adding focused tests around manual refresh buttons if future QA
-   shows duplicate refresh requests are user-visible or expensive.
+5. Consider whether stored facets should show an explicit refresh status if
+   future UI work exposes a manual stored-facet refresh control.

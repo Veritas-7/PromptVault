@@ -165,6 +165,9 @@ function App() {
   const importStopRequestedRef = useRef(false);
   const scanRunIdRef = useRef<string | null>(null);
   const topLevelActionClaimRef = useRef(false);
+  const storedFacetsRefreshClaimRef = useRef(false);
+  const importStatesRefreshClaimRef = useRef(false);
+  const importEventsRefreshClaimRef = useRef(false);
   const isImportRunning = importState === "importing";
   const isScanRunning = scanState === "scanning" || scanState === "canceling";
   const isStoredLoadRunning = storedLoadState === "loading";
@@ -279,6 +282,7 @@ function App() {
   }, [isScanRunning, scanState]);
 
   async function refreshStoredFacets({ quiet = false }: { quiet?: boolean } = {}) {
+    if (!claimExclusiveAction(storedFacetsRefreshClaimRef)) return;
     if (!quiet) setStoredFacetsState("loading");
     try {
       const next = await listStoredPromptFacets();
@@ -287,10 +291,13 @@ function App() {
     } catch (err) {
       setStoredFacetsState("failed");
       if (!quiet) setError(errorText(err));
+    } finally {
+      releaseExclusiveAction(storedFacetsRefreshClaimRef);
     }
   }
 
   async function refreshImportStates({ quiet = false }: { quiet?: boolean } = {}) {
+    if (!claimExclusiveAction(importStatesRefreshClaimRef)) return;
     if (!quiet) setImportStatesState("loading");
     try {
       const next = await listImportStates();
@@ -299,10 +306,13 @@ function App() {
     } catch (err) {
       setImportStatesState("failed");
       if (!quiet) setError(errorText(err));
+    } finally {
+      releaseExclusiveAction(importStatesRefreshClaimRef);
     }
   }
 
   async function refreshImportEvents({ quiet = false }: { quiet?: boolean } = {}) {
+    if (!claimExclusiveAction(importEventsRefreshClaimRef)) return;
     if (!quiet) setImportEventsState("loading");
     try {
       const next = await listImportEvents({ limit: 20 });
@@ -311,6 +321,8 @@ function App() {
     } catch (err) {
       setImportEventsState("failed");
       if (!quiet) setError(errorText(err));
+    } finally {
+      releaseExclusiveAction(importEventsRefreshClaimRef);
     }
   }
 

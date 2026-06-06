@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 23:53 KST
+Updated: 2026-06-07 00:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -2641,6 +2641,33 @@ stability, performance, and maintainability, then record evidence here.
   slice: frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health`
   returned `ok:true`, `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
+- Tried to recover the existing PromptVault cmux workspace/surface without
+  restarting cmux or opening another browser. Computer Use still showed the
+  visible cmux window on `working.md` with Worklog Tracker at
+  `http://127.0.0.1:1432/`. AX click, coordinate click, double-click on the
+  existing `프롬프트` workspace row, the titlebar Focus Back button, and
+  `timeout 6 cmux select-workspace --workspace workspace:5` did not switch to
+  PromptVault. Read-only cmux probes such as `current-workspace`,
+  `list-workspaces`, `tree --workspace workspace:5`,
+  `surface-health --workspace workspace:5`, and `surface:9` title all timed
+  out with exit `124`.
+- Continued with the next low-risk visible-copy slice: make the Stored Vault
+  facet summary pluralize source/date/workspace counts correctly.
+- Added tested Stored Vault facet summary copy so live summaries now show
+  `1 source, 1 date, 1 workspace` for singular counts while keeping plural
+  forms for zero or multiple counts.
+- `npm run test:ui -- tests/storedFacetStatus.test.ts` passed after this
+  Stored Vault facet-summary slice; due the package script glob this ran the
+  full UI helper suite and reported 119 passing tests.
+- `npm run build` passed after this Stored Vault facet-summary slice and
+  refreshed the static frontend bundle used by `127.0.0.1:5173`.
+- `npm run check` passed after this Stored Vault facet-summary slice: UI tests
+  119 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- cmux direct QA remained blocked after this Stored Vault facet-summary slice:
+  frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health` returned
+  `ok:true`, `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
 
 ## Changes
 
@@ -2963,6 +2990,11 @@ stability, performance, and maintainability, then record evidence here.
   label.
 - `tests/importRefreshState.test.ts`: covers lower-case failed labels and the
   blank-label fallback while keeping loading copy unchanged.
+- `src/storedFacetStatus.ts`: adds a small count-label helper so Stored Vault
+  facet summaries use singular copy for one source/date/workspace and plural
+  copy otherwise.
+- `tests/storedFacetStatus.test.ts`: covers singular and mixed zero/plural
+  Stored Vault facet summary counts.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -3261,6 +3293,14 @@ stability, performance, and maintainability, then record evidence here.
   still timed out with exit `124`. The slice is verified by focused UI helper
   tests plus the full project gate until safe same-surface cmux control
   recovers.
+- During the Stored Vault facet-summary slice, cmux app health and both
+  PromptVault services remained green, but the existing PromptVault workspace
+  still could not be recovered safely. Computer Use stayed on `working.md` /
+  Worklog Tracker after AX click, coordinate click, double-click, Focus Back,
+  and `select-workspace --workspace workspace:5` attempts. `current-workspace`,
+  `list-workspaces`, `tree`, `surface-health`, and direct `surface:9` title
+  probes all timed out with exit `124`. No cmux restart, app kill, or second
+  browser was used.
 
 ## Completion Audit Snapshot - 2026-06-06 23:49 KST
 

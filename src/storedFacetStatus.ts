@@ -13,13 +13,20 @@ export function storedFacetsFailureText(state: StoredFacetsState): string | null
     : null;
 }
 
+function countLabel(count: number, singular: string): string {
+  return `${count.toLocaleString()} ${count === 1 ? singular : `${singular}s`}`;
+}
+
 export function storedFacetSummaryText(
   state: StoredFacetsState,
   activeFilterCount: number,
   result: StoredFacetSummaryResult | null,
 ): string {
   if (result) {
-    return `${result.total_prompts.toLocaleString()} stored, ${result.sources.length.toLocaleString()} sources, ${result.dates.length.toLocaleString()} dates, ${result.workspaces.length.toLocaleString()} workspaces`;
+    const sourceCount = countLabel(result.sources.length, "source");
+    const dateCount = countLabel(result.dates.length, "date");
+    const workspaceCount = countLabel(result.workspaces.length, "workspace");
+    return `${result.total_prompts.toLocaleString()} stored, ${sourceCount}, ${dateCount}, ${workspaceCount}`;
   }
   if (state === "loading") return "loading stored facets";
   if (state === "failed") {

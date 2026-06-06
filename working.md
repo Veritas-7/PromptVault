@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 00:14 KST
+Updated: 2026-06-07 00:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -2707,9 +2707,33 @@ stability, performance, and maintainability, then record evidence here.
   slice: frontend returned `200`, bridge `/api/health` returned `ok:true`,
   `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
+- Continued with the next small source-status accessibility copy slice.
+- Added a RED focused UI test baseline for source status labels: singular
+  counts previously produced `1 files` in Import Plan source context and
+  `1 prompts found` in source summary context.
+- Updated source status label helpers so Import Plan row labels and Sources
+  panel status labels use singular `file` and `prompt` when the count is one.
+- `npm run test:ui -- tests/sourceStatusA11y.test.ts` passed after the fix;
+  due the package script glob this ran the full UI helper suite and reported
+  121 passing tests.
+- `npm run build` passed after this Source Status pluralization slice and
+  refreshed the static frontend bundle used by `127.0.0.1:5173`.
+- `npm run check` passed after this Source Status pluralization slice: UI tests
+  121 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- cmux direct QA remained blocked after this Source Status pluralization slice:
+  frontend returned `200`, bridge `/api/health` returned `ok:true`,
+  `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
 
 ## Changes
 
+- `src/sourceStatusA11y.ts`: adds count-label formatting for Import Plan source
+  file counts and Sources panel prompt-count labels.
+- `tests/sourceStatusA11y.test.ts`: covers singular source file and prompt
+  counts while preserving plural and empty-source label coverage.
+- `working.md`: records the Source Status pluralization slice and the still
+  blocked cmux direct QA state.
 - `src/importProgress.ts`: adds a small count-label helper and applies it to
   active import batch summaries, fallback batch-size text, processed/total file
   value text, and queue stopped-source progress copy.
@@ -3054,10 +3078,11 @@ stability, performance, and maintainability, then record evidence here.
 ## Issues
 
 - Direct single-browser cmux QA remains blocked for the existing PromptVault
-  `surface:9`: after this Import Progress pluralization slice, frontend health
-  returned `200`, bridge `/api/health` returned `ok:true`, and `cmux ping`
-  returned `PONG`, but `timeout 6 cmux browser --surface surface:9 get title`
-  exited `124`. No cmux restart, app kill, or second browser was attempted.
+  `surface:9`: after the Import Progress and Source Status pluralization
+  slices, frontend health returned `200`, bridge `/api/health` returned
+  `ok:true`, and `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`. No
+  cmux restart, app kill, or second browser was attempted.
 - Unlimited full scan over `~/.codex/sessions` is not practical from the
   browser UI. The plan path confirms the current Codex source alone has
   `25,097` matching files and about `32.3 GiB` of JSONL. The browser Scan

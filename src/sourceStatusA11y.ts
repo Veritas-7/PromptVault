@@ -17,6 +17,10 @@ function sourceStatusName(status: string): string {
   }
 }
 
+function countLabel(count: number, singular: string): string {
+  return `${count.toLocaleString()} ${count === 1 ? singular : `${singular}s`}`;
+}
+
 export function planSourceStatusLabel(
   sourceLabel: string,
   status: string,
@@ -25,7 +29,7 @@ export function planSourceStatusLabel(
   notes: string[] = [],
 ): string {
   const noteText = notes.length ? `. ${notes.join(" ")}` : "";
-  return `${sourceLabel} source ${sourceStatusName(status)}: ${fileCount.toLocaleString()} files, ${byteText}${noteText}`;
+  return `${sourceLabel} source ${sourceStatusName(status)}: ${countLabel(fileCount, "file")}, ${byteText}${noteText}`;
 }
 
 export function planSourceSelectionLabel(
@@ -78,5 +82,5 @@ export function sourceSummaryStatusLabel(
   status: string,
   promptCount: number,
 ): string {
-  return `${sourceLabel} source ${sourceStatusName(status)}: ${promptCount.toLocaleString()} prompts found`;
+  return `${sourceLabel} source ${sourceStatusName(status)}: ${countLabel(promptCount, "prompt")} found`;
 }

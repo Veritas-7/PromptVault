@@ -24,6 +24,10 @@ test("plan source status labels include availability, file count, and size", () 
     planSourceStatusLabel("Codex", "ok", 25105, "32.8 GiB"),
     "Codex source available: 25,105 files, 32.8 GiB",
   );
+  assert.equal(
+    planSourceStatusLabel("Small source", "ok", 1, "8 KiB"),
+    "Small source source available: 1 file, 8 KiB",
+  );
 });
 
 test("plan source status labels include empty-source notes", () => {
@@ -112,6 +116,10 @@ test("source summary status labels include stored prompt counts", () => {
   assert.equal(
     sourceSummaryStatusLabel("Codex", "stored", 925),
     "Codex source stored: 925 prompts found",
+  );
+  assert.equal(
+    sourceSummaryStatusLabel("Small source", "stored", 1),
+    "Small source source stored: 1 prompt found",
   );
 });
 

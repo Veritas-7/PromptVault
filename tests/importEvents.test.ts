@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { importEventBatchSummary, importEventStatusLabel } from "../src/importEvents.ts";
+import {
+  importEventBatchSummary,
+  importEventStatusLabel,
+  importEventWarningSummary,
+} from "../src/importEvents.ts";
 import type { ImportEvent } from "../src/types.ts";
 
 function event(overrides: Partial<ImportEvent> = {}): ImportEvent {
@@ -32,4 +36,18 @@ test("import event batch summary formats files and prompts", () => {
     importEventBatchSummary(event({ batch_file_count: 1234, batch_prompt_count: 5678 })),
     "1,234 files · 5,678 prompts",
   );
+  assert.equal(
+    importEventBatchSummary(event({ batch_file_count: 1, batch_prompt_count: 1 })),
+    "1 file · 1 prompt",
+  );
+  assert.equal(
+    importEventBatchSummary(event({ batch_file_count: 0, batch_prompt_count: 0 })),
+    "0 files · 0 prompts",
+  );
+});
+
+test("import event warning summary formats zero, singular, and plural counts", () => {
+  assert.equal(importEventWarningSummary(event({ warnings: [] })), "no warnings");
+  assert.equal(importEventWarningSummary(event({ warnings: ["one"] })), "1 warning");
+  assert.equal(importEventWarningSummary(event({ warnings: ["one", "two"] })), "2 warnings");
 });

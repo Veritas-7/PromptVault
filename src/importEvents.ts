@@ -6,6 +6,14 @@ export function importEventStatusLabel(event: ImportEvent): string {
   return "resumable";
 }
 
+function countLabel(count: number, singular: string): string {
+  return `${count.toLocaleString()} ${count === 1 ? singular : `${singular}s`}`;
+}
+
 export function importEventBatchSummary(event: ImportEvent): string {
-  return `${event.batch_file_count.toLocaleString()} files · ${event.batch_prompt_count.toLocaleString()} prompts`;
+  return `${countLabel(event.batch_file_count, "file")} · ${countLabel(event.batch_prompt_count, "prompt")}`;
+}
+
+export function importEventWarningSummary(event: ImportEvent): string {
+  return event.warnings.length ? countLabel(event.warnings.length, "warning") : "no warnings";
 }

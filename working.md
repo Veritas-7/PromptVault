@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 00:03 KST
+Updated: 2026-06-07 00:08 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -2668,6 +2668,24 @@ stability, performance, and maintainability, then record evidence here.
   frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health` returned
   `ok:true`, `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
+- Continued with the next low-risk visible-copy slice: make Recent Import
+  Activity batch and warning summaries pluralize file/prompt/warning counts
+  correctly.
+- Added tested Recent Import Activity summary copy so rows now show
+  `1 file · 1 prompt` and `1 warning` for singular counts while preserving
+  `0 files`, `0 prompts`, `no warnings`, and plural forms.
+- `npm run test:ui -- tests/importEvents.test.ts` passed after this Recent
+  Import Activity summary slice; due the package script glob this ran the full
+  UI helper suite and reported 120 passing tests.
+- `npm run build` passed after this Recent Import Activity summary slice and
+  refreshed the static frontend bundle used by `127.0.0.1:5173`.
+- `npm run check` passed after this Recent Import Activity summary slice: UI
+  tests 120 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
+  passed, doc-tests passed, and clippy passed with `-D warnings`.
+- cmux direct QA remained blocked after this Recent Import Activity summary
+  slice: frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health`
+  returned `ok:true`, `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
 
 ## Changes
 
@@ -2995,6 +3013,12 @@ stability, performance, and maintainability, then record evidence here.
   copy otherwise.
 - `tests/storedFacetStatus.test.ts`: covers singular and mixed zero/plural
   Stored Vault facet summary counts.
+- `src/importEvents.ts`: adds shared count-label formatting for import event
+  batch summaries and a new warning summary helper.
+- `src/App.tsx`: uses the import event warning summary helper in Recent Import
+  Activity rows instead of an inline plural-only warning string.
+- `tests/importEvents.test.ts`: covers singular, zero, and plural file,
+  prompt, and warning counts.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -3301,6 +3325,11 @@ stability, performance, and maintainability, then record evidence here.
   `list-workspaces`, `tree`, `surface-health`, and direct `surface:9` title
   probes all timed out with exit `124`. No cmux restart, app kill, or second
   browser was used.
+- During the Recent Import Activity summary slice, cmux app health and both
+  PromptVault services remained green, but direct `surface:9` title probing
+  still timed out with exit `124`. The slice is verified by focused UI helper
+  tests plus the full project gate until safe same-surface cmux control
+  recovers.
 
 ## Completion Audit Snapshot - 2026-06-06 23:49 KST
 

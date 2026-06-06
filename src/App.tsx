@@ -22,7 +22,7 @@ import {
 } from "./actionLocks";
 import { frequencyEmptyText, sourceSummariesEmptyText } from "./analysisEmptyState";
 import { BROWSER_BRIDGE_NOTICE } from "./browserBridge";
-import { importEventBatchSummary, importEventStatusLabel } from "./importEvents";
+import { importEventBatchSummary, importEventStatusLabel, importEventWarningSummary } from "./importEvents";
 import {
   activeImprovementForSelection,
   improvementActionLabel,
@@ -1241,11 +1241,7 @@ function App() {
                         {event.processed_files.toLocaleString()} / {event.total_files.toLocaleString()} ·{" "}
                         {importEventStatusLabel(event)}
                       </span>
-                      <span>
-                        {event.warnings.length
-                          ? `${event.warnings.length.toLocaleString()} warnings`
-                          : "no warnings"}
-                      </span>
+                      <span>{importEventWarningSummary(event)}</span>
                     </div>
                   ))}
                 </div>

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 18:06 KST
+Updated: 2026-06-06 18:15 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1135,6 +1135,33 @@ stability, performance, and maintainability, then record evidence here.
   - Reloaded the same surface afterward to remove the test-only fetch counter.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: make Stored Vault filters directly
+  actionable from their own panel.
+- Found a UX gap: users could edit Stored Vault filters but had to use the
+  distant top-bar `Load Stored` button to apply them. The first cmux check also
+  showed that the original form submit path did not trigger through the
+  `Return` key name on this WKWebView surface.
+- Converted the Stored Vault filter grid into a submit form, added a local
+  `Apply` button, stable data selectors for all four filter inputs, and an
+  explicit Enter key handler that calls `runLoadStored`.
+- `npm run test:ui` passed after this filter-apply slice with 27 tests.
+- `npm run check` passed after this filter-apply slice: UI tests 27 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?stored-filter-apply=20260606b`.
+  - Installed a page-local `/api/prompts` fetch counter, filled the Stored Vault
+    Text filter with `cmux`, focused the input, and pressed `Enter`.
+  - Observed `/api/prompts` call count `1`; after the request completed, the
+    prompt list showed `200` rows and the query value remained `cmux`.
+  - Clicked Reset and Apply, then re-ran an Apply-only completion check with a
+    response-completion counter. Observed completed prompt loads `1`, rows
+    `200`, and Apply enabled again after completion.
+  - Reloaded the same surface afterward to remove test-only fetch counters.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1167,6 +1194,8 @@ stability, performance, and maintainability, then record evidence here.
   React rerenders disabled states.
 - `src/App.tsx`: adds endpoint-level refresh claims for stored facets, saved
   import progress, and recent import activity refresh calls.
+- `src/App.tsx`: makes the Stored Vault filter panel a form with a local Apply
+  action, Enter key handling, and stable filter QA selectors.
 - `src/actionLocks.ts`: includes `improvementRunning` in top-level and import
   write locks, and now exposes small exclusive action claim helpers.
 - `tests/actionLocks.test.ts`: added coverage for top-level locks and import
@@ -1251,6 +1280,9 @@ stability, performance, and maintainability, then record evidence here.
 - During refresh-claim QA, direct DOM `button.click()` twice was again the
   reliable way to exercise same-render duplicate starts on `surface:9`; the
   measured counters showed one request per refresh endpoint.
+- During filter-apply QA, `cmux browser press ... Return` did not trigger the
+  new Enter handler on this WKWebView surface, while `press ... Enter` did.
+  Future keyboard QA should use `Enter` for this surface.
 
 ## Research
 
@@ -1270,3 +1302,5 @@ stability, performance, and maintainability, then record evidence here.
    secondary UI flows before moving to larger background indexing work.
 5. Consider whether stored facets should show an explicit refresh status if
    future UI work exposes a manual stored-facet refresh control.
+6. Continue reviewing filter/search empty states now that Stored Vault filters
+   can be applied locally from the panel.

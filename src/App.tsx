@@ -670,10 +670,24 @@ function App() {
           <h2>Stored Vault</h2>
           <span>{storedFacetSummary}</span>
         </div>
-        <div className="stored-filter-grid">
+        <form
+          className="stored-filter-grid"
+          data-stored-filter-form="true"
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && event.target instanceof HTMLInputElement) {
+              event.preventDefault();
+              void runLoadStored();
+            }
+          }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void runLoadStored();
+          }}
+        >
           <label className="stored-filter-control">
             <span>Text</span>
             <input
+              data-stored-filter-query="true"
               disabled={isTopLevelActionLocked}
               value={storedFilters.query}
               placeholder="cmux, source, workspace"
@@ -683,6 +697,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Source</span>
             <input
+              data-stored-filter-source="true"
               disabled={isTopLevelActionLocked}
               list="stored-source-options"
               value={storedFilters.source}
@@ -693,6 +708,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Date</span>
             <input
+              data-stored-filter-date="true"
               disabled={isTopLevelActionLocked}
               list="stored-date-options"
               value={storedFilters.date}
@@ -703,6 +719,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Workspace</span>
             <input
+              data-stored-filter-workspace="true"
               disabled={isTopLevelActionLocked}
               list="stored-workspace-options"
               value={storedFilters.workspace}
@@ -712,13 +729,23 @@ function App() {
           </label>
           <button
             className="inline-action"
+            data-apply-stored-filters="true"
+            disabled={isTopLevelActionLocked}
+            type="submit"
+          >
+            <Database size={15} />
+            Apply
+          </button>
+          <button
+            className="inline-action"
+            data-reset-stored-filters="true"
             disabled={!storedFilterCount || isTopLevelActionLocked}
             onClick={resetStoredFilters}
             type="button"
           >
             Reset
           </button>
-        </div>
+        </form>
         <datalist id="stored-source-options">
           {storedSourceSuggestions.map((source) => (
             <option key={source} value={source} />

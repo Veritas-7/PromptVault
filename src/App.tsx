@@ -63,7 +63,7 @@ import {
   recommendationEmptyText,
   selectedPromptEmptyText,
 } from "./promptEmptyState";
-import { promptRowAriaLabel } from "./promptRowA11y";
+import { promptRowAriaLabel, selectedPromptMetaLabel } from "./promptRowA11y";
 import {
   cancelScan,
   importBatch,
@@ -1665,7 +1665,11 @@ function App() {
           </div>
           {selectedPrompt ? (
             <>
-              <div className="selected-meta">
+              <div
+                aria-label={selectedPromptMetaLabel(selectedPrompt)}
+                className="selected-meta"
+                role="group"
+              >
                 <span>{selectedPrompt.source}</span>
                 <span>{selectedPrompt.timestamp ?? "unknown time"}</span>
                 <span>{selectedPrompt.cwd ?? "unknown workspace"}</span>

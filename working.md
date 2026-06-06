@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 22:16 KST
+Updated: 2026-06-06 22:28 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,28 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- Same-surface cmux Stored Vault no-match QA after cmux recovery: used the
+  existing PromptVault `surface:9`, applied
+  `nonexistent-keyboard-flow-token-20260606` through the Stored Vault Text
+  filter with `Enter`, and verified `0` rows plus the stored-filter-specific
+  prompt list, Selected, and Recommendation copy. Console diagnostics returned
+  `No console entries`; browser-error diagnostics returned `No browser errors`.
+- Same-surface cmux Stored Vault Reset recovery QA: clicked Reset on
+  `surface:9`, observed filters cleared, prompt rows restored to `200`, Reset
+  disabled with `No stored filters to reset`, and diagnostics remained clean.
+- `npm run test:ui`: 103 tests passed after adding Selected metadata
+  accessible-label coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  Selected metadata accessibility change.
+- Real cmux Selected metadata QA on the existing `surface:9`: loaded
+  `http://127.0.0.1:5173/?selected-meta-a11y=20260606a`, clicked
+  `Load Stored`, and verified `.selected-meta[role="group"]` exposes
+  `aria-label="Selected prompt metadata: Codex, 2026-06-02T18:47:33.443Z, /Users/wj, quality 56 weak"`.
+  Console diagnostics returned `No console entries`; browser-error diagnostics
+  returned `No browser errors`.
+- `npm run check`: passed after the Selected metadata accessibility slice.
+  This covered UI tests 103 passed, TypeScript/Vite build, Rust lib 64 passed,
+  CLI 15 passed, doc-tests, and clippy with `-D warnings`.
 - `npm run test:ui -- tests/promptEmptyState.test.ts`: passed; due the
   package script glob this ran the UI suite and reported 101 passing tests,
   including the new stored-filter empty-state coverage.
@@ -2238,6 +2260,34 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this stored-empty-copy slice: UI tests 101
   passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
   doc-tests passed, and clippy passed with `-D warnings`.
+- Recovered same-surface cmux control without restarting or killing cmux:
+  hidden macOS Open dialogs titled `열기` were dismissed via AppleScript
+  `AXPress` on `취소`, `workspace:5` was selected, and existing `pane:10` was
+  focused. `cmux browser --surface surface:9` `wait`, `get title`, console,
+  and browser-error diagnostics then returned normally.
+- Re-ran the Stored Vault no-match flow on the existing PromptVault
+  `surface:9`: entered `nonexistent-keyboard-flow-token-20260606` in the
+  Stored Vault Text filter, pressed `Enter`, and observed `0` rows plus the
+  stored-filter-specific prompt list, Selected, and Recommendation empty-state
+  copy. Console and browser-error diagnostics returned clean.
+- Verified Stored Vault recovery on the same `surface:9`: clicked `Reset`,
+  observed stored filters cleared, the prompt list restored to `200` rows, and
+  Reset returned to `No stored filters to reset` with clean diagnostics.
+- Continued with the next thin slice: make Selected prompt metadata readable
+  to assistive technology without changing the visible chip layout.
+- Same-surface Selected panel QA found that `.selected-meta` visual chips were
+  visually separated, but raw accessible text concatenated values like
+  `Codex2026-06-02T18:47:33.443Z/Users/wj56 · weak`.
+- Added a grouped Selected metadata accessible label:
+  `Selected prompt metadata: Codex, 2026-06-02T18:47:33.443Z, /Users/wj, quality 56 weak`.
+  The visible chips stay unchanged.
+- Real cmux QA on the existing `surface:9` after rebuilding: loaded
+  `http://127.0.0.1:5173/?selected-meta-a11y=20260606a`, clicked
+  `Load Stored`, and verified `.selected-meta` exposes `role="group"` and the
+  separated `aria-label`. Console and browser-error diagnostics returned clean.
+- `npm run check` passed after this selected metadata accessibility slice: UI
+  tests 103 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
+  passed, doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2289,6 +2339,13 @@ stability, performance, and maintainability, then record evidence here.
   index and visible-row total.
 - `tests/promptRowA11y.test.ts`: covers duplicate prompt text, whitespace
   compaction, long prompt clipping, and missing timestamps.
+- `src/promptRowA11y.ts`: adds `selectedPromptMetaLabel()` so Selected panel
+  metadata has one separated accessible label even when visual chips concatenate
+  in raw text extraction.
+- `src/App.tsx`: applies `role="group"` and the Selected metadata
+  `aria-label` to `.selected-meta`.
+- `tests/promptRowA11y.test.ts`: covers Selected metadata labels for normal
+  records and missing timestamp/workspace values.
 - `src/App.tsx`: adds panel-specific accessible labels to Saved Import
   Progress and Recent Import Activity refresh buttons.
 - `src/App.tsx`: adds source-specific accessible labels to each Import Plan
@@ -2503,14 +2560,15 @@ stability, performance, and maintainability, then record evidence here.
   re-targeting the existing PromptVault `surface:9`, cmux browser CLI commands
   worked and diagnostics returned clean. Treat Computer Use app state as the
   currently focused cmux workspace, not proof of the target PromptVault surface.
-- During the stored-empty-copy slice, cmux stateful RPCs stayed blocked after
-  hidden `열기` Open dialogs were dismissed with AppleScript `AXPress` on
-  `취소`. `cmux ping` still returned `PONG`, but `list-workspaces`,
-  `workspace-action --action focus`, `tree`, and `browser --surface surface:9`
-  commands timed out. No cmux restart, app kill, or extra browser was used.
-  Treat the Playwright no-match verification as local app evidence only; the
-  same flow still needs same-surface cmux confirmation after cmux control
-  recovers or the user explicitly approves a cmux restart.
+- During the stored-empty-copy slice, cmux stateful RPCs initially stayed
+  blocked after hidden `열기` Open dialogs were dismissed with AppleScript
+  `AXPress` on `취소`. `cmux ping` still returned `PONG`, but
+  `list-workspaces`, `workspace-action --action focus`, `tree`, and
+  `browser --surface surface:9` commands timed out. No cmux restart, app kill,
+  or extra browser was used. Later, after selecting `workspace:5` and focusing
+  existing `pane:10`, same-surface `surface:9` commands recovered and the
+  Stored Vault no-match and Reset recovery flows were verified directly in
+  cmux.
 - During the facet slice, `cmux browser --surface surface:9 get url` reported
   the correct PromptVault URL while `snapshot` briefly reported `about:blank`.
   `focus-webview` returned `invalid_state: WebView is not in a window`;
@@ -2709,8 +2767,9 @@ stability, performance, and maintainability, then record evidence here.
 
 1. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
-2. Recover or harden the cmux browser diagnostics workflow for cases where the
-   active visible workspace differs from the target PromptVault surface.
+2. Harden the cmux browser diagnostics workflow for cases where the active
+   visible workspace differs from the target PromptVault surface or a hidden
+   macOS Open dialog blocks stateful RPCs.
 3. Consider making progress telemetry durable enough to reconnect to an active
    background scan after browser reload.
 4. Continue looking for remaining request-overlap or double-click hazards in

@@ -18,3 +18,9 @@ export function promptRowAriaLabel(prompt: PromptRecord, index: number, total: n
   const timestamp = prompt.timestamp?.trim() || "unknown time";
   return `${position}: ${prompt.source}, ${timestamp}, ${prompt.word_count} words, quality ${prompt.quality.score} ${prompt.quality.band}, ${clippedPromptSnippet(prompt.text)}`;
 }
+
+export function selectedPromptMetaLabel(prompt: PromptRecord): string {
+  const timestamp = prompt.timestamp?.trim() || "unknown time";
+  const workspace = prompt.cwd?.trim() || "unknown workspace";
+  return `Selected prompt metadata: ${prompt.source}, ${timestamp}, ${workspace}, quality ${prompt.quality.score} ${prompt.quality.band}`;
+}

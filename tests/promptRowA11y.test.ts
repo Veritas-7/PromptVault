@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { promptRowAriaLabel } from "../src/promptRowA11y.ts";
+import { promptRowAriaLabel, selectedPromptMetaLabel } from "../src/promptRowA11y.ts";
 import type { PromptRecord } from "../src/types.ts";
 
 function promptRecord(overrides: Partial<PromptRecord> = {}): PromptRecord {
@@ -54,5 +54,19 @@ test("prompt row labels handle missing timestamps and empty prompts", () => {
   assert.equal(
     promptRowAriaLabel(promptRecord({ timestamp: null, text: "   ", word_count: 0 }), 0, 1),
     "Prompt 1 of 1: Codex, unknown time, 0 words, quality 36 weak, empty prompt",
+  );
+});
+
+test("selected prompt metadata label separates visual chips", () => {
+  assert.equal(
+    selectedPromptMetaLabel(promptRecord()),
+    "Selected prompt metadata: Codex, 2026-06-06T12:00:00Z, /Users/wj, quality 36 weak",
+  );
+});
+
+test("selected prompt metadata label handles missing values", () => {
+  assert.equal(
+    selectedPromptMetaLabel(promptRecord({ cwd: null, timestamp: null })),
+    "Selected prompt metadata: Codex, unknown time, unknown workspace, quality 36 weak",
   );
 });

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 17:03 KST
+Updated: 2026-06-06 17:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -885,17 +885,59 @@ stability, performance, and maintainability, then record evidence here.
   - The visible UI still showed Stored Vault `1,690`, saved import progress,
     the DB notice with `stored 1,690 · new 0 · updated 0`, and the canceled
     scan warnings.
+- Continued with the next thin slice: file discovery counts inside scan
+  progress telemetry.
+- Added `source_files_discovered` to the Rust/TypeScript scan progress
+  contract so active scans can report matching files as `WalkDir` discovers
+  them, before `source_file_count` is finalized.
+- Updated the UI progress notice to show discovery movement while file totals
+  are still unknown, for example:
+  `Codex: discovering files · 10 found · 0 prompts · source 1 / 11 · limit 100,000`.
+- Updated `README.md` to describe active scan progress with discovery counts.
+- Added focused Rust coverage:
+  - `cargo test scan_progress_run_reports_active_progress_and_missing_runs`
+  - `cargo test collect_from_source_reports_discovered_files_in_progress`
+- `npm run check` passed after the discovery telemetry slice: UI tests
+  24 passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI
+  15 passed, doc-tests passed, and clippy passed with `-D warnings`.
+- `cd src-tauri && cargo build --bin promptvault-cli`: passed before bridge
+  restart.
+- Restarted only the `promptvault-bridge` tmux session on
+  `127.0.0.1:5174`; did not stop, restart, or replace cmux. Static server and
+  existing cmux browser stayed in place.
+- Real bridge discovery progress smoke passed:
+  - Started a large Codex scan with `persist_on_cancel:false`.
+  - `/api/scan/progress` returned active progress with
+    `source_files_discovered: 1550`, `source_file_count:null`, source
+    `Codex`, and limit `100000`.
+  - `/api/scan/cancel` returned `canceled:true`.
+  - The scan returned `Canceled scan was not stored in the vault.`
+  - A later progress poll returned inactive progress with
+    `source_files_discovered: 0`.
+- Real cmux discovery progress QA on the existing `surface:9`:
+  - Confirmed `workspace:5` still had exactly one PromptVault browser surface
+    and did not create another browser.
+  - Reused `surface:9` with a cache-busted PromptVault URL.
+  - Set Limit `100000`, clicked `Scan`, observed the progress notice
+    `Codex: discovering files · 10 found · 0 prompts · source 1 / 11 · limit 100,000`,
+    clicked `Stop`, and observed the not-stored cancellation warning.
+  - Verified the stored vault count stayed `1690` through
+    `/api/prompt-facets` after cancellation.
+  - Browser console returned `No console entries`; browser errors returned
+    `No browser errors`.
 
 ## Changes
 
 - `src-tauri/src/lib.rs`: added progress registry, progress command, active
-  scan updates, and focused backend coverage.
+  scan updates, discovery counts, and focused backend coverage.
 - `src-tauri/src/bin/promptvault-cli.rs`: added bridge route
   `/api/scan/progress` and updated CLI help text.
 - `src/types.ts` and `src/promptVaultApi.ts`: added scan progress types and
-  frontend API wrapper.
-- `src/App.tsx` and `src/App.css`: added scan-progress polling and notice UI.
-- `README.md` and `docs/CLI.md`: documented the new bridge endpoint.
+  frontend API wrapper; `src/types.ts` now includes discovery count data.
+- `src/App.tsx` and `src/App.css`: added scan-progress polling and notice UI;
+  the notice now reports discovered files while file totals are pending.
+- `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
+  discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
 
 ## Issues
@@ -940,6 +982,9 @@ stability, performance, and maintainability, then record evidence here.
 - Scan progress telemetry is currently active-run, in-memory state only. It is
   enough for a running browser scan notice, but it is not a durable background
   worker and does not survive process restart or browser tab closure.
+- Discovery counts are best-effort active progress telemetry. They show matching
+  files found during the current `WalkDir` pass, then reset to zero after the
+  run is removed from the active progress registry.
 - During the progress telemetry cmux QA, `goto -> wait -> eval` on `surface:9`
   was reliable, but separate `snapshot`, `fill`, `console list`, and
   `errors list` commands intermittently attached to `about:blank` or timed out
@@ -959,5 +1004,5 @@ stability, performance, and maintainability, then record evidence here.
    can continue after the browser tab is closed.
 2. Recover or harden the cmux browser diagnostics workflow for cases where the
    active visible workspace differs from the target PromptVault surface.
-3. Consider deeper scan discovery telemetry during `WalkDir` collection so the
-   progress notice can update before the per-source file count is known.
+3. Consider making progress telemetry durable enough to reconnect to an active
+   background scan after browser reload.

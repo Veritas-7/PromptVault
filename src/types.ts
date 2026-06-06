@@ -90,6 +90,7 @@ export interface ScanProgress {
   source_count: number;
   files_seen: number;
   source_files_seen: number;
+  source_files_discovered: number;
   source_file_count: number | null;
   prompts_found: number;
   limit: number | null;

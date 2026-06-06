@@ -161,6 +161,7 @@ pub struct ScanProgress {
     pub source_count: usize,
     pub files_seen: usize,
     pub source_files_seen: usize,
+    pub source_files_discovered: usize,
     pub source_file_count: Option<usize>,
     pub prompts_found: usize,
     pub limit: Option<usize>,
@@ -460,6 +461,7 @@ fn inactive_scan_progress(run_id: String) -> ScanProgress {
         source_count: 0,
         files_seen: 0,
         source_files_seen: 0,
+        source_files_discovered: 0,
         source_file_count: None,
         prompts_found: 0,
         limit: None,
@@ -484,6 +486,7 @@ fn start_scan_progress(run_id: Option<&str>, source_count: usize, limit: usize) 
                 source_count,
                 files_seen: 0,
                 source_files_seen: 0,
+                source_files_discovered: 0,
                 source_file_count: None,
                 prompts_found: 0,
                 limit: if limit == usize::MAX {
@@ -637,6 +640,7 @@ fn run_scan_with_cancel(
             progress.source_index = source_index + 1;
             progress.source_count = source_count;
             progress.source_files_seen = 0;
+            progress.source_files_discovered = 0;
             progress.source_file_count = None;
         });
         let mut summary = SourceSummary {
@@ -1538,7 +1542,7 @@ fn collect_from_source(
         return Ok(Vec::new());
     }
 
-    let files = matching_source_files_with_cancel(&source.root, source.kind, cancel_flag)
+    let files = matching_source_files_with_cancel(&source.root, source.kind, cancel_flag, run_id)
         .into_iter()
         .filter_map(|file| match file {
             Ok(path) => Some(SourceFileCandidate {
@@ -1559,6 +1563,7 @@ fn collect_from_source(
         })
         .collect::<Vec<_>>();
     update_scan_progress(run_id, |progress| {
+        progress.source_files_discovered = files.len();
         progress.source_file_count = Some(files.len());
     });
     collect_from_candidates(
@@ -1641,8 +1646,9 @@ fn matching_source_files_with_cancel(
     root: &Path,
     kind: SourceKind,
     cancel_flag: Option<&ScanCancelFlag>,
+    run_id: Option<&str>,
 ) -> Vec<Result<PathBuf, walkdir::Error>> {
-    matching_source_file_candidates_with_cancel(root, kind, cancel_flag)
+    matching_source_file_candidates_with_cancel(root, kind, cancel_flag, run_id)
         .into_iter()
         .map(|candidate| candidate.map(|candidate| candidate.path))
         .collect()
@@ -1659,15 +1665,19 @@ fn matching_source_file_candidates(
     root: &Path,
     kind: SourceKind,
 ) -> Vec<Result<SourceFileCandidate, walkdir::Error>> {
-    matching_source_file_candidates_with_cancel(root, kind, None)
+    matching_source_file_candidates_with_cancel(root, kind, None, None)
 }
 
 fn matching_source_file_candidates_with_cancel(
     root: &Path,
     kind: SourceKind,
     cancel_flag: Option<&ScanCancelFlag>,
+    run_id: Option<&str>,
 ) -> Vec<Result<SourceFileCandidate, walkdir::Error>> {
     if root.is_file() {
+        update_scan_progress(run_id, |progress| {
+            progress.source_files_discovered = 1;
+        });
         return vec![Ok(file_candidate(root))];
     }
 
@@ -1687,8 +1697,17 @@ fn matching_source_file_candidates_with_cancel(
         let path = entry.path();
         if source_file_matches(path, kind) {
             paths.push(file_candidate(path));
+            if paths.len() <= 10 || paths.len() % 50 == 0 {
+                let discovered = paths.len();
+                update_scan_progress(run_id, |progress| {
+                    progress.source_files_discovered = discovered;
+                });
+            }
         }
     }
+    update_scan_progress(run_id, |progress| {
+        progress.source_files_discovered = paths.len();
+    });
     paths.sort_by(|a, b| {
         b.modified_ms
             .cmp(&a.modified_ms)
@@ -4064,6 +4083,7 @@ mod tests {
             progress.source_file_count = Some(50);
             progress.files_seen = 7;
             progress.source_files_seen = 7;
+            progress.source_files_discovered = 9;
             progress.prompts_found = 12;
         });
 
@@ -4077,6 +4097,7 @@ mod tests {
         assert_eq!(progress.source_count, 3);
         assert_eq!(progress.source_file_count, Some(50));
         assert_eq!(progress.files_seen, 7);
+        assert_eq!(progress.source_files_discovered, 9);
         assert_eq!(progress.prompts_found, 12);
         assert_eq!(progress.limit, Some(25));
 
@@ -4089,6 +4110,77 @@ mod tests {
         assert_eq!(inactive.run_id, run_id);
         assert!(!inactive.active);
         assert_eq!(inactive.files_seen, 0);
+        assert_eq!(inactive.source_files_discovered, 0);
+    }
+
+    #[test]
+    fn collect_from_source_reports_discovered_files_in_progress() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-discovery-progress-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create discovery root");
+        std::fs::write(
+            root.join("001.jsonl"),
+            r#"{"type":"response_item","payload":{"role":"user","content":[{"text":"Add discovery progress telemetry, run cargo test, and report evidence."}]}}"#,
+        )
+        .expect("write first prompt file");
+        std::fs::write(
+            root.join("002.jsonl"),
+            r#"{"type":"response_item","payload":{"role":"user","content":[{"text":"Verify discovered file counts in the scan progress UI and backend."}]}}"#,
+        )
+        .expect("write second prompt file");
+
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+        let mut summary = SourceSummary {
+            id: source.id.to_string(),
+            label: source.label.to_string(),
+            root_path: source.root.display().to_string(),
+            files_seen: 0,
+            prompts_found: 0,
+            average_quality: 0.0,
+            weak_prompt_count: 0,
+            status: "ok".to_string(),
+            notes: Vec::new(),
+        };
+        let run_id = format!(
+            "test-discovery-progress-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        );
+
+        start_scan_progress(Some(&run_id), 1, 10);
+        update_scan_progress(Some(&run_id), |progress| {
+            progress.source_id = Some(source.id.to_string());
+            progress.source_label = Some(source.label.to_string());
+            progress.source_index = 1;
+            progress.source_count = 1;
+        });
+
+        let prompts = collect_from_source(&source, &mut summary, 10, None, Some(&run_id), 0)
+            .expect("collect source with progress");
+        let progress = scan_progress_run(ScanProgressOptions {
+            run_id: run_id.clone(),
+        })
+        .expect("read progress");
+
+        remove_scan_progress(&run_id);
+        std::fs::remove_dir_all(root).expect("remove discovery root");
+
+        assert_eq!(prompts.len(), 2);
+        assert_eq!(progress.source_files_discovered, 2);
+        assert_eq!(progress.source_file_count, Some(2));
+        assert_eq!(progress.source_files_seen, 2);
     }
 
     #[test]

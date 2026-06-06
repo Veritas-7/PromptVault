@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  planSourceSelectionLabel,
   planSourceStatusLabel,
   sourceSummaryStatusLabel,
 } from "../src/sourceStatusA11y.ts";
@@ -18,6 +19,22 @@ test("plan source status labels include empty-source notes", () => {
       "No matching prompt files were found.",
     ]),
     "Antigravity IDE alt transcripts source empty: 0 files, 0 B. No matching prompt files were found.",
+  );
+});
+
+test("plan source selection labels include source status context", () => {
+  assert.equal(
+    planSourceSelectionLabel("Codex", "ok", 25105, "32.8 GiB"),
+    "Import queue selection for Codex source available: 25,105 files, 32.8 GiB",
+  );
+});
+
+test("plan source selection labels include disabled empty-source reason", () => {
+  assert.equal(
+    planSourceSelectionLabel("Antigravity IDE alt transcripts", "empty", 0, "0 B", [
+      "No matching prompt files were found.",
+    ]),
+    "Import queue selection for Antigravity IDE alt transcripts source empty: 0 files, 0 B. No matching prompt files were found.",
   );
 });
 

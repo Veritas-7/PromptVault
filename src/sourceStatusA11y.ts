@@ -26,6 +26,22 @@ export function planSourceStatusLabel(
   return `${sourceLabel} source ${sourceStatusName(status)}: ${fileCount.toLocaleString()} files, ${byteText}${noteText}`;
 }
 
+export function planSourceSelectionLabel(
+  sourceLabel: string,
+  status: string,
+  fileCount: number,
+  byteText: string,
+  notes: string[] = [],
+): string {
+  return `Import queue selection for ${planSourceStatusLabel(
+    sourceLabel,
+    status,
+    fileCount,
+    byteText,
+    notes,
+  )}`;
+}
+
 export function sourceSummaryStatusLabel(
   sourceLabel: string,
   status: string,

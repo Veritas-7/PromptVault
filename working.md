@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 21:24 KST
+Updated: 2026-06-06 21:28 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -422,6 +422,22 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui`: 92 tests passed after adding Import Plan source checkbox
+  label coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  source-selection label change.
+- `npm run check`: passed after this source-selection label slice. This covered
+  UI tests 92 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- Real cmux source checkbox label QA on the existing `surface:9`: reloaded
+  `http://127.0.0.1:5173/?source-select-labels=20260606b`, clicked `Plan`,
+  and verified all 11 source checkboxes have explicit `aria-label` values.
+- The same cmux sweep verified `codex` exposes
+  `Import queue selection for Codex source available: 25,105 files, 32.8 GiB`
+  and the disabled empty source exposes
+  `Import queue selection for Antigravity IDE alt transcripts source empty: 0 files, 0 B. No matching prompt files were found.`
+- Browser diagnostics on the same `surface:9` returned `No console entries`
+  and `No browser errors`.
 - `npm run test:ui`: 90 tests passed after adding source status badge label
   coverage.
 - `npm run build`: TypeScript and Vite production build passed after the
@@ -2040,9 +2056,40 @@ stability, performance, and maintainability, then record evidence here.
     `Antigravity IDE alt transcripts source empty: 0 files, 0 B. No matching prompt files were found.`,
     and `Codex source stored: 925 prompts found`.
   - Final diagnostics returned `No console entries` and `No browser errors`.
+- Continued with the next thin slice: make Import Plan source checkboxes
+  announce their source availability and disabled empty-source reason.
+- A real cmux Plan checkbox sweep showed source checkboxes had no explicit
+  `aria-label`; enabled sources exposed only names such as `Codex`, and the
+  disabled empty source exposed only `Antigravity IDE alt transcripts` even
+  though the row separately said no matching prompt files were found.
+- Added source selection labels derived from the same Plan source status label,
+  preserving the visible row label while making the checkbox name include
+  availability, file count, size, and notes.
+- `npm run test:ui` passed after this source-selection label slice: UI tests
+  92 passed, including new selection-label coverage.
+- `npm run build` passed after this slice.
+- `npm run check` passed after this slice: UI tests 92 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?source-select-labels=20260606b` on the
+    same PromptVault browser surface.
+  - Clicked `Plan` and verified all 11 source checkboxes had `aria-label`
+    values.
+  - Verified `codex` exposes
+    `Import queue selection for Codex source available: 25,105 files, 32.8 GiB`.
+  - Verified the disabled empty source exposes
+    `Import queue selection for Antigravity IDE alt transcripts source empty: 0 files, 0 B. No matching prompt files were found.`
+  - Final diagnostics returned `No console entries` and `No browser errors`.
 
 ## Changes
 
+- `src/sourceStatusA11y.ts`: adds `planSourceSelectionLabel()` for Import Plan
+  source checkbox names that include availability, file count, size, and notes.
+- `src/App.tsx`: applies source selection `aria-label` values to Import Plan
+  source checkboxes.
+- `tests/sourceStatusA11y.test.ts`: covers enabled and disabled empty-source
+  selection labels.
 - `src/sourceStatusA11y.ts`: adds helper labels for Plan source file/size
   status and Sources panel prompt-count status.
 - `src/App.tsx`: applies status badge `aria-label` values in the Import Plan

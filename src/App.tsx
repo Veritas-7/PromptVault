@@ -79,6 +79,7 @@ import {
 } from "./scanStatus";
 import { selectedPromptForView } from "./selection";
 import {
+  planSourceSelectionLabel,
   planSourceStatusLabel,
   sourceSummaryStatusLabel,
 } from "./sourceStatusA11y";
@@ -1248,6 +1249,13 @@ function App() {
                     <div className="plan-source-main">
                       <label className="source-select">
                         <input
+                          aria-label={planSourceSelectionLabel(
+                            source.label,
+                            source.status,
+                            source.file_count,
+                            formatBytes(source.byte_count),
+                            source.notes,
+                          )}
                           checked={selectedImportSourceIds.includes(source.id)}
                           data-select-source-id={source.id}
                           disabled={isImportActionLocked || source.file_count === 0}

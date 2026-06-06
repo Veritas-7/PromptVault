@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 20:17 KST
+Updated: 2026-06-06 20:21 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1694,6 +1694,25 @@ stability, performance, and maintainability, then record evidence here.
     cleared, and `Prompts` remained `not loaded` without starting a scan.
   - Reloaded the same `surface:9` and confirmed `No console entries` and
     `No browser errors`.
+- Continued with the next thin slice: improve Saved Import Progress database
+  path readability in narrow summary cards.
+- Found in the visible cmux pane that the long SQLite path in the Saved Import
+  Progress summary was forced into the same narrow card grid as numeric
+  metrics and wrapped awkwardly mid-segment.
+- Added a path-card class for database summary cells and made the Saved Import
+  Progress database card span the full summary row with smaller path text.
+- `npm run check` passed after this visual slice: UI tests 72 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux visual QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?path-card-wrap=20260606a` on the same
+    PromptVault browser surface.
+  - DOM geometry showed `.saved-import-summary .summary-path-card` with
+    `grid-column: 1 / -1`, path width `982`, regular card width `188.390625`,
+    font size `13px`, and line height `16.9px`.
+  - Computer Use confirmed the visible PromptVault pane showed the Saved Import
+    Progress database path in a dedicated full-width row.
+  - Final diagnostics returned `No console entries` and `No browser errors`.
 
 ## Changes
 
@@ -1819,6 +1838,9 @@ stability, performance, and maintainability, then record evidence here.
   scan failure warning/global error when Limit changes after a failed scan.
 - `tests/scanStatus.test.ts`: covers matching-error cleanup, unrelated error
   preservation, and no-prior-result fallback to idle.
+- `src/App.tsx`: adds a path-card class to database summary cells.
+- `src/App.css`: makes the Saved Import Progress database path span the full
+  summary row and uses smaller line-height-controlled path text.
 - `src/scanStatus.ts`: adds scan failure copy for first-run and stale-results
   failures, plus scan Stop failure copy.
 - `src/App.tsx`: shows a scan retry warning when a scan fails and clears stale
@@ -2018,6 +2040,10 @@ stability, performance, and maintainability, then record evidence here.
   the existing PromptVault browser had loaded the target URL. All verification
   then used the existing `surface:9`; the clean reload and final diagnostics
   returned clean.
+- During path-card-wrap QA, Computer Use was initially focused on workspace 3
+  even though `surface:9` DOM checks hit PromptVault correctly. Selecting the
+  existing `프롬프트` workspace 5 row confirmed the same existing browser pane
+  visually; no new browser was opened.
 
 ## Research
 

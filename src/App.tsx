@@ -998,7 +998,7 @@ function App() {
                   <span>Imported Prompts</span>
                   <strong>{importStatesResult.imported_prompt_count.toLocaleString()}</strong>
                 </div>
-                <div>
+                <div className="summary-path-card">
                   <span>Database</span>
                   <strong>{importStatesResult.database_path}</strong>
                 </div>
@@ -1094,7 +1094,7 @@ function App() {
                   <span>Total Events</span>
                   <strong>{importEventsResult.total_events.toLocaleString()}</strong>
                 </div>
-                <div>
+                <div className="summary-path-card">
                   <span>Database</span>
                   <strong>{importEventsResult.database_path}</strong>
                 </div>

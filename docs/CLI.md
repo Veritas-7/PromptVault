@@ -1,6 +1,6 @@
 # PromptVault CLI
 
-PromptVault ships a Rust CLI binary for agent-native use. It is intentionally non-destructive: commands read source sessions and write an explicit Markdown export.
+PromptVault ships a Rust CLI binary for agent-native use. It is intentionally non-destructive: commands read source sessions, persist prompt records to the default SQLite database, and optionally write an explicit Markdown export.
 
 ## Commands
 
@@ -13,6 +13,7 @@ cargo run --bin promptvault-cli -- improve [--local] --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve [--local] --json --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve [--local] < prompt.txt
 cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [--count N>0] --json
+cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174]
 ```
 
 ## Contract
@@ -21,6 +22,7 @@ cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [-
 - `sources` accepts only `--json`; unknown extra arguments exit non-zero.
 - `help`, `--help`, and no-argument invocation print help and exit 0.
 - Unknown commands print help plus an error and exit non-zero.
+- `scan` persists prompt records to `~/Documents/PromptVault/promptvault.sqlite` by default.
 - `scan` writes a Markdown export and prints only summary metadata, not prompt bodies.
 - `scan --limit N>0` is for smoke tests; omit `--limit` for a full scan.
 - In limited scans, `total_files` and each source `files_seen` count visited files only; they are not an inventory of every matching file in the source root.
@@ -39,6 +41,7 @@ cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [-
 - `improve` requires a non-empty prompt from `--prompt` or stdin and exits non-zero for empty or flag-like `--prompt` values.
 - `improve --local` bypasses GLM and uses deterministic local prompt-improvement rules for reproducible smoke tests and offline repair queues.
 - `repair` scans weakest prompts, runs deterministic local improvement for each one, writes no Markdown export, and returns redacted prompt/recommendation pairs. Repair batches are capped at 10 records.
+- `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, and `/api/improve` on the requested local address.
 
 ## Agent-Native Design Notes
 
@@ -70,6 +73,8 @@ cargo run --bin promptvault-cli -- improve --json --prompt "make better"
 cargo run --bin promptvault-cli -- improve --local --json --prompt "make better"
 set +e; cargo run --bin promptvault-cli -- improve --json --prompt ""; test "$?" -ne 0; set -e
 cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
+cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
+curl http://127.0.0.1:5174/api/health
 set +e; cargo run --bin promptvault-cli -- scan --source missing-source --limit 1 --preview-limit 0 --no-export --json; test "$?" -ne 0; set -e
 set +e; cargo run --bin promptvault-cli -- scan --limit nope --no-export --json; test "$?" -ne 0; set -e
 set +e; cargo run --bin promptvault-cli -- scan --limit 0 --no-export --json; test "$?" -ne 0; set -e

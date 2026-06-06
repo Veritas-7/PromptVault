@@ -1,7 +1,9 @@
 use promptvault_lib::{
-    improve_prompt_inner, redact_sensitive_text, run_scan, source_specs, ImproveRequest,
-    PromptRecord, ScanOptions,
+    default_database_path, improve_prompt_inner, redact_sensitive_text, run_scan, source_specs,
+    ImproveRequest, PromptRecord, ScanOptions,
 };
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
 
 const MAX_JSON_PROMPT_PREVIEW: usize = 25;
 const MAX_REPAIR_COUNT: usize = 10;
@@ -117,6 +119,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     Some(source_ids)
                 },
+                ..Default::default()
             })?;
             if json {
                 let mut warnings = result.warnings.clone();
@@ -131,6 +134,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     "preview_sort": &result.preview_sort,
                     "markdown_included": result.markdown_included,
                     "markdown_written": result.markdown_written,
+                    "persistence": &result.persistence,
                     "warnings": warnings,
                     "prompts": prompts
                 });
@@ -146,6 +150,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("prompts: {}", result.stats.total_prompts);
             println!("returned_prompts: {}", result.returned_prompt_count);
             println!("preview_sort: {}", result.preview_sort);
+            if let Some(persistence) = &result.persistence {
+                println!("database: {}", persistence.database_path);
+                println!("stored_prompts: {}", persistence.stored_prompt_count);
+                println!("inserted_prompts: {}", persistence.inserted_prompt_count);
+                println!("updated_prompts: {}", persistence.updated_prompt_count);
+                println!("date_count: {}", persistence.date_count);
+            }
             println!("files: {}", result.stats.total_files);
             println!("avg_words: {:.1}", result.stats.average_words);
             if !result.warnings.is_empty() {
@@ -232,6 +243,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     Some(source_ids)
                 },
+                ..Default::default()
             })?;
             warnings.extend(scan.warnings.clone());
 
@@ -301,6 +313,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{revised}");
                 }
             }
+        }
+        "serve" => {
+            let mut addr = "127.0.0.1:5174".to_string();
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--addr" => addr = parse_required_arg(iter.next(), "--addr")?,
+                    other => return Err(format!("unknown serve argument: {other}").into()),
+                }
+            }
+            serve_bridge(&addr)?;
         }
         command if is_help_command(command) => print_help(),
         other => {
@@ -501,7 +524,157 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n\nRules:\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA."
+}
+
+#[derive(serde::Deserialize)]
+struct ScanBridgePayload {
+    options: Option<ScanOptions>,
+}
+
+#[derive(serde::Deserialize)]
+struct ImproveBridgePayload {
+    request: ImproveRequest,
+}
+
+struct HttpRequest {
+    method: String,
+    path: String,
+    body: String,
+}
+
+fn serve_bridge(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind(addr)?;
+    println!("PromptVault browser bridge listening on http://{addr}");
+    println!("database: {}", default_database_path().display());
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                std::thread::spawn(move || {
+                    if let Err(err) = handle_bridge_client(stream) {
+                        eprintln!("promptvault bridge request error: {err}");
+                    }
+                });
+            }
+            Err(err) => eprintln!("promptvault bridge accept error: {err}"),
+        }
+    }
+    Ok(())
+}
+
+fn handle_bridge_client(mut stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+    let request = read_http_request(&stream)?;
+    if request.method == "OPTIONS" {
+        return write_response(&mut stream, 204, "text/plain", "");
+    }
+
+    let path = request
+        .path
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(request.path.as_str());
+    match (request.method.as_str(), path) {
+        ("GET", "/api/health") => {
+            let body = serde_json::json!({
+                "ok": true,
+                "database_path": default_database_path().display().to_string()
+            });
+            write_json_response(&mut stream, 200, &body)
+        }
+        ("POST", "/api/scan") => {
+            let payload = serde_json::from_str::<ScanBridgePayload>(&request.body)?;
+            let result = run_scan(payload.options.unwrap_or_default())?;
+            write_json_response(&mut stream, 200, &result)
+        }
+        ("POST", "/api/improve") => {
+            let payload = serde_json::from_str::<ImproveBridgePayload>(&request.body)?;
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            let result = runtime.block_on(improve_prompt_inner(payload.request))?;
+            write_json_response(&mut stream, 200, &result)
+        }
+        _ => write_response(&mut stream, 404, "text/plain", "Not found"),
+    }
+}
+
+fn read_http_request(stream: &TcpStream) -> Result<HttpRequest, Box<dyn std::error::Error>> {
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut request_line = String::new();
+    reader.read_line(&mut request_line)?;
+    let mut parts = request_line.split_whitespace();
+    let method = parts.next().unwrap_or_default().to_string();
+    let path = parts.next().unwrap_or_default().to_string();
+    if method.is_empty() || path.is_empty() {
+        return Err("invalid HTTP request line".into());
+    }
+
+    let mut content_length = 0usize;
+    loop {
+        let mut line = String::new();
+        reader.read_line(&mut line)?;
+        let trimmed = line.trim_end();
+        if trimmed.is_empty() {
+            break;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            if key.eq_ignore_ascii_case("content-length") {
+                content_length = value.trim().parse()?;
+            }
+        }
+    }
+
+    let mut body = vec![0_u8; content_length];
+    if content_length > 0 {
+        reader.read_exact(&mut body)?;
+    }
+
+    Ok(HttpRequest {
+        method,
+        path,
+        body: String::from_utf8(body)?,
+    })
+}
+
+fn write_json_response<T: serde::Serialize>(
+    stream: &mut TcpStream,
+    status: u16,
+    value: &T,
+) -> Result<(), Box<dyn std::error::Error>> {
+    write_response(
+        stream,
+        status,
+        "application/json",
+        &serde_json::to_string(value)?,
+    )
+}
+
+fn write_response(
+    stream: &mut TcpStream,
+    status: u16,
+    content_type: &str,
+    body: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let reason = match status {
+        200 => "OK",
+        204 => "No Content",
+        404 => "Not Found",
+        _ => "OK",
+    };
+    write!(
+        stream,
+        "HTTP/1.1 {status} {reason}\r\n\
+         Content-Type: {content_type}; charset=utf-8\r\n\
+         Content-Length: {}\r\n\
+         Access-Control-Allow-Origin: *\r\n\
+         Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n\
+         Access-Control-Allow-Headers: Content-Type\r\n\
+         Connection: close\r\n\r\n{}",
+        body.len(),
+        body
+    )?;
+    stream.flush()?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -643,6 +816,8 @@ mod tests {
         assert!(help.contains("--output cannot be combined with --no-export"));
         assert!(help.contains("--preview-sort or --weakest-first"));
         assert!(help.contains("repair --count is capped at 10"));
+        assert!(help.contains("serve [--addr 127.0.0.1:5174]"));
+        assert!(help.contains("browser-bridge endpoints"));
     }
 
     #[test]

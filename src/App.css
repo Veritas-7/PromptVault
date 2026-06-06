@@ -182,6 +182,18 @@ h3 {
   color: #6f5115;
 }
 
+.notice.browser-mode {
+  background: #edf4ff;
+  border-color: #b7c9e5;
+  color: #27496f;
+}
+
+.notice.secondary {
+  background: #f8faf7;
+  border-color: #dce5da;
+  color: #536158;
+}
+
 .metrics {
   display: grid;
   gap: 12px;

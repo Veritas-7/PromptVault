@@ -1,8 +1,8 @@
 # PromptVault
 
-PromptVault is a local-first Tauri + React + TypeScript workbench for collecting user prompts from local Claude Code, Google Antigravity, and Codex chat/session stores.
+PromptVault is a local-first Tauri + React + TypeScript workbench for collecting user prompts from local Claude Code, Google Antigravity, Codex CLI, and Codex app/session stores.
 
-It extracts user-authored prompts, strips known injected context blocks, writes one Markdown export, shows frequent words/phrases/repeated prompt starts, and recommends stronger development-agent prompts through GLM when available or a deterministic local fallback.
+It extracts user-authored prompts, strips known injected context blocks, persists prompts to a permanent SQLite database, writes Markdown exports, shows daily/source/frequency/quality analytics, and recommends stronger development-agent prompts through GLM when available or a deterministic local fallback.
 
 ## Source Roots
 
@@ -19,6 +19,16 @@ It extracts user-authored prompts, strips known injected context blocks, writes 
 - `~/.gemini/tmp/wj/chats`
 
 See [docs/SOURCE_DISCOVERY.md](docs/SOURCE_DISCOVERY.md) for parser details.
+
+## Permanent Database
+
+Scans persist by default to:
+
+```text
+~/Documents/PromptVault/promptvault.sqlite
+```
+
+The database stores scan runs, prompt records, source summaries, first/last seen timestamps, quality scores, and ISO prompt dates. Re-running a scan upserts by stable prompt ID, so existing prompt records are updated instead of duplicated.
 
 ## Development
 
@@ -50,11 +60,22 @@ cargo run --bin promptvault-cli -- improve --prompt "Fix the failing parser test
 cargo run --bin promptvault-cli -- improve --json --prompt "make better"
 cargo run --bin promptvault-cli -- improve --local --json --prompt "make better"
 cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
+cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 ```
 
 Omit `--limit` for a full scan. Use `--source ID` to verify one source without scanning the whole history. In limited scans, `total_files` and source `files_seen` count visited files only, not every matching file in the source root. Use `--no-export` when an agent only needs JSON stats and should not create a large Markdown file. Use `--weakest-first` or `--preview-sort quality-asc` when the preview should prioritize the weakest prompts for repair. Source summaries include average prompt quality and weak-prompt counts so agents can prioritize noisy stores first. The scan command writes prompt bodies to the Markdown output path by default and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N --include-prompts` only when an agent or test needs a bounded prompt preview in the JSON result. Stdout prompt previews are capped at 25 records and redacted for token/key/private-key risk patterns.
 
 The Tauri UI runs full exports but receives only a latest-prompt preview over IPC, so the large Markdown file remains on disk instead of being serialized into the frontend.
+
+For browser-only QA, run the local bridge alongside Vite:
+
+```bash
+npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+cd src-tauri
+cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
+```
+
+The browser bridge exposes local-only `/api/scan`, `/api/improve`, and `/api/health` endpoints so cmux or another in-app browser can exercise the same scan/improve code paths without Tauri IPC.
 
 ## AI Recommendation Path
 
@@ -87,6 +108,7 @@ cargo run --bin promptvault-cli -- scan --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
+curl http://127.0.0.1:5174/api/health
 ```
 
 ## Docs

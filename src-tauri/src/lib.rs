@@ -71,7 +71,17 @@ pub struct ScanStats {
     pub top_phrases: Vec<FrequencyItem>,
     pub repeated_prompts: Vec<FrequencyItem>,
     pub top_quality_gaps: Vec<FrequencyItem>,
+    pub prompts_by_date: Vec<FrequencyItem>,
     pub source_summaries: Vec<SourceSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistStats {
+    pub database_path: String,
+    pub stored_prompt_count: usize,
+    pub inserted_prompt_count: usize,
+    pub updated_prompt_count: usize,
+    pub date_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,6 +96,7 @@ pub struct ScanResult {
     pub preview_sort: String,
     pub markdown_included: bool,
     pub markdown_written: bool,
+    pub persistence: Option<PersistStats>,
     pub warnings: Vec<String>,
 }
 
@@ -125,6 +136,8 @@ pub struct ScanOptions {
     pub include_markdown: Option<bool>,
     pub write_markdown: Option<bool>,
     pub source_ids: Option<Vec<String>>,
+    pub persist: Option<bool>,
+    pub database_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -168,8 +181,12 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
     let preview_limit = options.preview_limit;
     let include_markdown = options.include_markdown.unwrap_or(true);
     let write_markdown = options.write_markdown.unwrap_or(true);
+    let persist = options.persist.unwrap_or(true);
     if matches!(options.output_path.as_deref(), Some(path) if path.trim().is_empty()) {
         return Err("output path requires a non-empty value".into());
+    }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
     }
     if !write_markdown && options.output_path.is_some() {
         return Err("output path cannot be used when markdown export is disabled".into());
@@ -255,6 +272,23 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
         fs::write(path, &markdown)?;
     }
 
+    let persistence = if persist {
+        let database_path = options
+            .database_path
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or_else(default_database_path);
+        Some(persist_scan_result(
+            &database_path,
+            &generated_at,
+            &prompts,
+            &stats,
+            &warnings,
+        )?)
+    } else {
+        None
+    };
+
     let response_prompts = response_prompts(&prompts, preview_limit, preview_sort);
     let returned_prompt_count = response_prompts.len();
     let prompts_truncated = returned_prompt_count < prompts.len();
@@ -275,6 +309,7 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
         preview_sort: preview_sort.as_str().to_string(),
         markdown_included: include_markdown,
         markdown_written: write_markdown,
+        persistence,
         warnings,
     })
 }
@@ -724,31 +759,37 @@ fn collect_from_source(
     Ok(prompts)
 }
 
-fn matching_source_files(
-    root: &Path,
-    kind: SourceKind,
-) -> Box<dyn Iterator<Item = Result<PathBuf, walkdir::Error>> + '_> {
+fn matching_source_files(root: &Path, kind: SourceKind) -> Vec<Result<PathBuf, walkdir::Error>> {
     if root.is_file() {
-        return Box::new(std::iter::once(Ok(root.to_path_buf())));
+        return vec![Ok(root.to_path_buf())];
     }
 
-    Box::new(
-        WalkDir::new(root)
-            .follow_links(false)
-            .sort_by_file_name()
-            .into_iter()
-            .filter_map(move |entry| {
-                let entry = match entry {
-                    Ok(entry) => entry,
-                    Err(err) => return Some(Err(err)),
-                };
-                let path = entry.path();
-                if !source_file_matches(path, kind) {
-                    return None;
-                }
-                Some(Ok(path.to_path_buf()))
-            }),
-    )
+    let mut paths = Vec::new();
+    let mut errors = Vec::new();
+    for entry in WalkDir::new(root).follow_links(false) {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                errors.push(err);
+                continue;
+            }
+        };
+        let path = entry.path();
+        if source_file_matches(path, kind) {
+            paths.push(path.to_path_buf());
+        }
+    }
+    paths.sort_by(|a, b| {
+        file_sort_key(b)
+            .cmp(&file_sort_key(a))
+            .then_with(|| b.cmp(a))
+    });
+
+    paths
+        .into_iter()
+        .map(Ok)
+        .chain(errors.into_iter().map(Err))
+        .collect()
 }
 
 fn source_file_matches(path: &Path, kind: SourceKind) -> bool {
@@ -772,6 +813,15 @@ fn source_file_matches(path: &Path, kind: SourceKind) -> bool {
         }
         SourceKind::GeminiTmpChatJson => path.extension().is_some_and(|ext| ext == "json"),
     }
+}
+
+fn file_sort_key(path: &Path) -> u128 {
+    path.metadata()
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0)
 }
 
 fn parse_codex_jsonl(
@@ -1388,7 +1438,9 @@ pub fn redact_sensitive_text(text: &str) -> String {
     let mut redacted = text.to_string();
     for (label, regex) in risk_regexes() {
         let replacement = format!("[REDACTED_{}]", label.to_ascii_uppercase());
-        redacted = regex.replace_all(&redacted, replacement.as_str()).to_string();
+        redacted = regex
+            .replace_all(&redacted, replacement.as_str())
+            .to_string();
     }
     redacted
 }
@@ -1584,6 +1636,7 @@ fn build_stats(prompts: &[PromptRecord], source_summaries: Vec<SourceSummary>) -
         top_phrases: top_phrases(prompts, 30),
         repeated_prompts: repeated_prompts(prompts, 20),
         top_quality_gaps: top_quality_gaps(prompts, 20),
+        prompts_by_date: prompts_by_date(prompts, 40),
         source_summaries,
     }
 }
@@ -1684,6 +1737,214 @@ fn top_quality_gaps(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem
     rank_counts(counts, limit)
 }
 
+fn prompts_by_date(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for prompt in prompts {
+        *counts
+            .entry(prompt_date(prompt.timestamp.as_deref()))
+            .or_default() += 1;
+    }
+    let mut items = counts
+        .into_iter()
+        .map(|(text, count)| FrequencyItem { text, count })
+        .collect::<Vec<_>>();
+    items.sort_by(|a, b| b.text.cmp(&a.text));
+    items.truncate(limit);
+    items
+}
+
+fn prompt_date(timestamp: Option<&str>) -> String {
+    let Some(timestamp) = timestamp.map(str::trim).filter(|value| !value.is_empty()) else {
+        return "unknown-date".to_string();
+    };
+    if timestamp.len() >= 10 {
+        let date = &timestamp[..10];
+        if date.chars().enumerate().all(|(idx, ch)| {
+            (matches!(idx, 4 | 7) && ch == '-') || (!matches!(idx, 4 | 7) && ch.is_ascii_digit())
+        }) {
+            return date.to_string();
+        }
+    }
+    "unknown-date".to_string()
+}
+
+fn persist_scan_result(
+    database_path: &Path,
+    generated_at: &str,
+    prompts: &[PromptRecord],
+    stats: &ScanStats,
+    warnings: &[String],
+) -> Result<PersistStats, Box<dyn std::error::Error>> {
+    if let Some(parent) = database_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut conn = Connection::open(database_path)?;
+    conn.execute_batch(
+        "
+        PRAGMA journal_mode = WAL;
+        PRAGMA foreign_keys = ON;
+        CREATE TABLE IF NOT EXISTS scan_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            generated_at TEXT NOT NULL,
+            total_prompts INTEGER NOT NULL,
+            total_files INTEGER NOT NULL,
+            average_quality REAL NOT NULL,
+            weak_prompt_count INTEGER NOT NULL,
+            warnings_json TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS prompts (
+            id TEXT PRIMARY KEY,
+            hash TEXT NOT NULL,
+            source TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            timestamp TEXT,
+            prompt_date TEXT NOT NULL,
+            cwd TEXT,
+            text TEXT NOT NULL,
+            word_count INTEGER NOT NULL,
+            char_count INTEGER NOT NULL,
+            risk_flags_json TEXT NOT NULL,
+            quality_json TEXT NOT NULL,
+            quality_score INTEGER NOT NULL,
+            quality_band TEXT NOT NULL,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_prompts_date ON prompts(prompt_date);
+        CREATE INDEX IF NOT EXISTS idx_prompts_source ON prompts(source);
+        CREATE INDEX IF NOT EXISTS idx_prompts_quality ON prompts(quality_score);
+        CREATE TABLE IF NOT EXISTS source_summaries (
+            scan_run_id INTEGER NOT NULL,
+            source_id TEXT NOT NULL,
+            label TEXT NOT NULL,
+            root_path TEXT NOT NULL,
+            files_seen INTEGER NOT NULL,
+            prompts_found INTEGER NOT NULL,
+            average_quality REAL NOT NULL,
+            weak_prompt_count INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            notes_json TEXT NOT NULL,
+            FOREIGN KEY(scan_run_id) REFERENCES scan_runs(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_source_summaries_run ON source_summaries(scan_run_id);
+        ",
+    )?;
+
+    let tx = conn.transaction()?;
+    tx.execute(
+        "INSERT INTO scan_runs (
+            generated_at, total_prompts, total_files, average_quality,
+            weak_prompt_count, warnings_json
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params![
+            generated_at,
+            stats.total_prompts as i64,
+            stats.total_files as i64,
+            stats.average_quality,
+            stats.weak_prompt_count as i64,
+            serde_json::to_string(warnings)?,
+        ],
+    )?;
+    let scan_run_id = tx.last_insert_rowid();
+
+    for source in &stats.source_summaries {
+        tx.execute(
+            "INSERT INTO source_summaries (
+                scan_run_id, source_id, label, root_path, files_seen, prompts_found,
+                average_quality, weak_prompt_count, status, notes_json
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                scan_run_id,
+                source.id,
+                source.label,
+                source.root_path,
+                source.files_seen as i64,
+                source.prompts_found as i64,
+                source.average_quality,
+                source.weak_prompt_count as i64,
+                source.status,
+                serde_json::to_string(&source.notes)?,
+            ],
+        )?;
+    }
+
+    let mut inserted_prompt_count = 0usize;
+    let mut updated_prompt_count = 0usize;
+    for prompt in prompts {
+        let exists: i64 = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM prompts WHERE id = ?1)",
+            [&prompt.id],
+            |row| row.get(0),
+        )?;
+        if exists == 0 {
+            inserted_prompt_count += 1;
+        } else {
+            updated_prompt_count += 1;
+        }
+
+        tx.execute(
+            "INSERT INTO prompts (
+                id, hash, source, session_id, source_path, timestamp, prompt_date, cwd,
+                text, word_count, char_count, risk_flags_json, quality_json,
+                quality_score, quality_band, first_seen_at, last_seen_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?16)
+            ON CONFLICT(id) DO UPDATE SET
+                hash = excluded.hash,
+                source = excluded.source,
+                session_id = excluded.session_id,
+                source_path = excluded.source_path,
+                timestamp = excluded.timestamp,
+                prompt_date = excluded.prompt_date,
+                cwd = excluded.cwd,
+                text = excluded.text,
+                word_count = excluded.word_count,
+                char_count = excluded.char_count,
+                risk_flags_json = excluded.risk_flags_json,
+                quality_json = excluded.quality_json,
+                quality_score = excluded.quality_score,
+                quality_band = excluded.quality_band,
+                last_seen_at = excluded.last_seen_at",
+            rusqlite::params![
+                &prompt.id,
+                &prompt.hash,
+                &prompt.source,
+                &prompt.session_id,
+                &prompt.path,
+                prompt.timestamp.as_deref(),
+                prompt_date(prompt.timestamp.as_deref()),
+                prompt.cwd.as_deref(),
+                &prompt.text,
+                prompt.word_count as i64,
+                prompt.char_count as i64,
+                serde_json::to_string(&prompt.risk_flags)?,
+                serde_json::to_string(&prompt.quality)?,
+                prompt.quality.score as i64,
+                &prompt.quality.band,
+                generated_at,
+            ],
+        )?;
+    }
+    tx.commit()?;
+
+    let stored_prompt_count: i64 =
+        conn.query_row("SELECT COUNT(*) FROM prompts", [], |row| row.get(0))?;
+    let date_count: i64 = conn.query_row(
+        "SELECT COUNT(DISTINCT prompt_date) FROM prompts",
+        [],
+        |row| row.get(0),
+    )?;
+
+    Ok(PersistStats {
+        database_path: database_path.display().to_string(),
+        stored_prompt_count: stored_prompt_count as usize,
+        inserted_prompt_count,
+        updated_prompt_count,
+        date_count: date_count as usize,
+    })
+}
+
 fn rank_counts(counts: HashMap<String, usize>, limit: usize) -> Vec<FrequencyItem> {
     let mut items = counts
         .into_iter()
@@ -1711,8 +1972,10 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             ),
             (
                 "private_key",
-                Regex::new(r"(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----")
-                    .expect("private key regex"),
+                Regex::new(
+                    r"(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
+                )
+                .expect("private key regex"),
             ),
             (
                 "long_base64_like_token",
@@ -1845,6 +2108,15 @@ fn render_markdown(
         }
     }
 
+    md.push_str("\n## Prompts By Date\n\n");
+    if stats.prompts_by_date.is_empty() {
+        md.push_str("- No dated prompts found in this scan.\n");
+    } else {
+        for item in &stats.prompts_by_date {
+            md.push_str(&format!("- `{}`: {}\n", item.text, item.count));
+        }
+    }
+
     md.push_str("\n## Frequent Quality Gaps\n\n");
     if stats.top_quality_gaps.is_empty() {
         md.push_str("- No quality gaps found in this scan.\n");
@@ -1934,6 +2206,13 @@ fn default_markdown_path() -> PathBuf {
         .join(format!("promptvault-export-{stamp}.md"))
 }
 
+pub fn default_database_path() -> PathBuf {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/Users/wj"));
+    home.join("Documents")
+        .join(APP_DIR_NAME)
+        .join("promptvault.sqlite")
+}
+
 fn local_improvement(prompt: &str, context: Option<&str>, warnings: Vec<String>) -> ImproveResult {
     let mut revised = String::new();
     let redacted_prompt = redact_sensitive_text(prompt);
@@ -1941,8 +2220,7 @@ fn local_improvement(prompt: &str, context: Option<&str>, warnings: Vec<String>)
     revised.push_str("목표:\n");
     revised.push_str("- ");
     revised.push_str(
-        goal
-            .as_deref()
+        goal.as_deref()
             .unwrap_or("해결하려는 작업을 명확히 수행한다."),
     );
     revised.push_str("\n\n맥락:\n");
@@ -2112,11 +2390,9 @@ mod tests {
         );
 
         assert!(!result.revised_prompt.contains(&synthetic_token));
-        assert!(
-            result
-                .revised_prompt
-                .contains("[REDACTED_LONG_BASE64_LIKE_TOKEN]")
-        );
+        assert!(result
+            .revised_prompt
+            .contains("[REDACTED_LONG_BASE64_LIKE_TOKEN]"));
     }
 
     #[test]
@@ -2155,11 +2431,9 @@ mod tests {
         );
 
         assert!(!result.revised_prompt.contains(&synthetic_token));
-        assert!(
-            result
-                .revised_prompt
-                .contains("[REDACTED_LONG_BASE64_LIKE_TOKEN]")
-        );
+        assert!(result
+            .revised_prompt
+            .contains("[REDACTED_LONG_BASE64_LIKE_TOKEN]"));
     }
 
     #[test]
@@ -2394,14 +2668,14 @@ mod tests {
         ));
         std::fs::create_dir_all(&root).expect("create temp root");
 
+        for idx in 1..=4 {
+            std::fs::write(root.join(format!("{idx:03}.jsonl")), "\n").expect("write extra file");
+        }
         std::fs::write(
-            root.join("001.jsonl"),
+            root.join("999.jsonl"),
             r#"{"type":"response_item","payload":{"role":"user","content":[{"text":"Fix parser performance, run cargo test, and report markdown output."}]}}"#,
         )
         .expect("write prompt file");
-        for idx in 2..=5 {
-            std::fs::write(root.join(format!("{idx:03}.jsonl")), "\n").expect("write extra file");
-        }
 
         let source = SourceSpec {
             id: "test-codex",
@@ -2970,10 +3244,7 @@ mod tests {
     #[test]
     fn redact_sensitive_text_redacts_key_value_pairs() {
         let text = format!("api_key={}", "short-secret-value");
-        assert_eq!(
-            redact_sensitive_text(&text),
-            "[REDACTED_POSSIBLE_API_KEY]"
-        );
+        assert_eq!(redact_sensitive_text(&text), "[REDACTED_POSSIBLE_API_KEY]");
     }
 
     #[test]
@@ -3082,6 +3353,61 @@ mod tests {
         );
     }
 
+    #[test]
+    fn prompts_by_date_counts_iso_dates() {
+        let prompts = vec![
+            dated_record("a", "2026-06-05T12:00:00Z"),
+            dated_record("b", "2026-06-05T13:00:00Z"),
+            dated_record("c", "2026-06-06T09:00:00+09:00"),
+            record("unknown"),
+        ];
+
+        let dates = prompts_by_date(&prompts, 10);
+
+        assert_eq!(dates[0].text, "unknown-date");
+        assert!(dates
+            .iter()
+            .any(|item| item.text == "2026-06-05" && item.count == 2));
+        assert!(dates
+            .iter()
+            .any(|item| item.text == "2026-06-06" && item.count == 1));
+    }
+
+    #[test]
+    fn persist_scan_result_upserts_prompt_records() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-persist-test-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let prompts = vec![dated_record("persist-a", "2026-06-06T00:00:00Z")];
+        let stats = build_stats(&prompts, Vec::new());
+
+        let first = persist_scan_result(&db_path, "2026-06-06T00:01:00Z", &prompts, &stats, &[])
+            .expect("persist first scan");
+        let second = persist_scan_result(&db_path, "2026-06-06T00:02:00Z", &prompts, &stats, &[])
+            .expect("persist second scan");
+
+        assert_eq!(first.inserted_prompt_count, 1);
+        assert_eq!(first.updated_prompt_count, 0);
+        assert_eq!(second.inserted_prompt_count, 0);
+        assert_eq!(second.updated_prompt_count, 1);
+        assert_eq!(second.stored_prompt_count, 1);
+        assert_eq!(second.date_count, 1);
+
+        let conn = Connection::open(&db_path).expect("open persisted db");
+        let stored_date: String = conn
+            .query_row(
+                "SELECT prompt_date FROM prompts WHERE id = 'persist-a'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read persisted date");
+        assert_eq!(stored_date, "2026-06-06");
+
+        std::fs::remove_file(db_path).expect("remove persisted db");
+    }
+
     fn record(id: &str) -> PromptRecord {
         PromptRecord {
             id: id.to_string(),
@@ -3097,6 +3423,18 @@ mod tests {
             risk_flags: Vec::new(),
             quality: assess_prompt_quality(id, &[]),
         }
+    }
+
+    fn dated_record(id: &str, timestamp: &str) -> PromptRecord {
+        let mut record = record(id);
+        record.timestamp = Some(timestamp.to_string());
+        record.text = format!(
+            "Fix {id} in src-tauri/src/lib.rs, preserve files, run cargo test, and report Markdown output."
+        );
+        record.word_count = count_words(&record.text);
+        record.char_count = record.text.chars().count();
+        record.quality = assess_prompt_quality(&record.text, &[]);
+        record
     }
 
     fn pb_string(field: u64, value: &str) -> Vec<u8> {

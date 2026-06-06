@@ -48,7 +48,16 @@ export interface ScanStats {
   top_phrases: FrequencyItem[];
   repeated_prompts: FrequencyItem[];
   top_quality_gaps: FrequencyItem[];
+  prompts_by_date: FrequencyItem[];
   source_summaries: SourceSummary[];
+}
+
+export interface PersistStats {
+  database_path: string;
+  stored_prompt_count: number;
+  inserted_prompt_count: number;
+  updated_prompt_count: number;
+  date_count: number;
 }
 
 export interface ScanResult {
@@ -62,6 +71,7 @@ export interface ScanResult {
   preview_sort: string;
   markdown_included: boolean;
   markdown_written: boolean;
+  persistence: PersistStats | null;
   warnings: string[];
 }
 

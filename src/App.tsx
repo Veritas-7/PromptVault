@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import {
   AlertTriangle,
   Brain,
@@ -12,11 +11,13 @@ import {
   Sparkles,
 } from "lucide-react";
 import "./App.css";
+import { BROWSER_BRIDGE_NOTICE } from "./browserBridge";
 import {
   activeImprovementForSelection,
   improvementRequestStarted,
 } from "./improvementSelection";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
+import { improvePrompt, isBrowserQaMode, scanPrompts } from "./promptVaultApi";
 import { selectedPromptForView } from "./selection";
 import type { ImproveResult, PromptRecord, ScanResult } from "./types";
 
@@ -42,6 +43,7 @@ function errorText(err: unknown): string {
 }
 
 function App() {
+  const browserQaMode = isBrowserQaMode();
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -94,13 +96,11 @@ function App() {
     }
     setScanState("scanning");
     try {
-      const next = await invoke<ScanResult>("scan_prompts", {
-        options: {
-          limit: parsedLimit,
-          preview_limit: PREVIEW_LIMIT,
-          preview_sort: previewSortForMode(previewMode),
-          include_markdown: false,
-        },
+      const next = await scanPrompts({
+        limit: parsedLimit,
+        preview_limit: PREVIEW_LIMIT,
+        preview_sort: previewSortForMode(previewMode),
+        include_markdown: false,
       });
       const loadedMode = effectivePromptListMode(next.preview_sort, previewMode);
       setResult(next);
@@ -125,11 +125,9 @@ function App() {
     setImprovement(started.improvement);
     setImprovementPromptId(started.improvementPromptId);
     try {
-      const next = await invoke<ImproveResult>("improve_prompt", {
-        request: {
-          prompt: prompt.text,
-          context: `${prompt.source} · ${prompt.cwd ?? "unknown workspace"}`,
-        },
+      const next = await improvePrompt({
+        prompt: prompt.text,
+        context: `${prompt.source} · ${prompt.cwd ?? "unknown workspace"}`,
       });
       setImprovement(next);
       setImprovementPromptId(prompt.id);
@@ -176,7 +174,7 @@ function App() {
               onChange={(event) => setLimit(event.currentTarget.value)}
             />
           </label>
-          <button className="primary" disabled={scanState === "scanning"} onClick={runScan}>
+          <button className="primary" disabled={scanState === "scanning"} onClick={runScan} type="button">
             <RefreshCw size={18} />
             {scanState === "scanning" ? "Scanning" : "Scan"}
           </button>
@@ -190,11 +188,30 @@ function App() {
         </section>
       ) : null}
 
+      {browserQaMode ? (
+        <section className="notice browser-mode">
+          <ShieldCheck size={18} />
+          <span>{BROWSER_BRIDGE_NOTICE}</span>
+        </section>
+      ) : null}
+
       {result ? (
         <section className="notice">
           <FileText size={18} />
           <span>
-            {result.output_path ?? "no export"} · preview {result.returned_prompt_count.toLocaleString()} /{" "}
+            {result.persistence?.database_path ?? "database not updated"} · stored{" "}
+            {(result.persistence?.stored_prompt_count ?? 0).toLocaleString()} · new{" "}
+            {(result.persistence?.inserted_prompt_count ?? 0).toLocaleString()} · updated{" "}
+            {(result.persistence?.updated_prompt_count ?? 0).toLocaleString()}
+          </span>
+        </section>
+      ) : null}
+
+      {result?.output_path ? (
+        <section className="notice secondary">
+          <FileText size={18} />
+          <span>
+            Export {result.output_path} · preview {result.returned_prompt_count.toLocaleString()} /{" "}
             {result.stats.total_prompts.toLocaleString()}
           </span>
         </section>
@@ -221,6 +238,16 @@ function App() {
           icon={<AlertTriangle size={18} />}
           label="Weak"
           value={result?.stats.weak_prompt_count ?? 0}
+        />
+        <Metric
+          icon={<ShieldCheck size={18} />}
+          label="DB Stored"
+          value={result?.persistence?.stored_prompt_count ?? 0}
+        />
+        <Metric
+          icon={<FileText size={18} />}
+          label="Dates"
+          value={result?.persistence?.date_count ?? 0}
         />
       </section>
 
@@ -258,6 +285,7 @@ function App() {
             <FrequencyColumn title="Words" items={result?.stats.top_words ?? []} />
             <FrequencyColumn title="Phrases" items={result?.stats.top_phrases ?? []} />
             <FrequencyColumn title="Repeats" items={result?.stats.repeated_prompts ?? []} />
+            <FrequencyColumn title="Dates" items={result?.stats.prompts_by_date ?? []} />
             <FrequencyColumn title="Quality gaps" items={result?.stats.top_quality_gaps ?? []} />
           </div>
         </section>
@@ -296,6 +324,7 @@ function App() {
                   setSelectedId(prompt.id);
                   setImprovement(null);
                 }}
+                type="button"
               >
                 <span className="prompt-meta">
                   {prompt.source} · {prompt.word_count} words
@@ -318,7 +347,7 @@ function App() {
         <section className="panel detail-panel">
           <div className="panel-heading">
             <h2>Selected</h2>
-            <button disabled={!selectedPrompt || improving} onClick={() => runImprove(selectedPrompt)}>
+            <button disabled={!selectedPrompt || improving} onClick={() => runImprove(selectedPrompt)} type="button">
               <Sparkles size={17} />
               {improving ? "Improving" : "Improve"}
             </button>

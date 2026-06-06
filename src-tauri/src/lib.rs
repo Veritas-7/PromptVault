@@ -26,6 +26,7 @@ const MAX_STORED_PROMPT_LIMIT: usize = 1_000;
 const DEFAULT_STORED_FACET_LIMIT: usize = 50;
 const MAX_STORED_FACET_LIMIT: usize = 200;
 const SCAN_CANCELED_WARNING: &str = "Scan canceled by user request; returning partial results.";
+const SCAN_CANCELED_NOT_PERSISTED_WARNING: &str = "Canceled scan was not stored in the vault.";
 
 type ScanCancelFlag = Arc<AtomicBool>;
 
@@ -302,6 +303,7 @@ pub struct ScanOptions {
     pub write_markdown: Option<bool>,
     pub source_ids: Option<Vec<String>>,
     pub persist: Option<bool>,
+    pub persist_on_cancel: Option<bool>,
     pub database_path: Option<String>,
     pub run_id: Option<String>,
 }
@@ -430,6 +432,16 @@ fn push_scan_canceled_warning(warnings: &mut Vec<String>) {
     }
 }
 
+fn scan_was_canceled(warnings: &[String]) -> bool {
+    warnings
+        .iter()
+        .any(|warning| warning == SCAN_CANCELED_WARNING)
+}
+
+fn should_persist_scan_result(persist: bool, persist_on_cancel: bool, warnings: &[String]) -> bool {
+    persist && (persist_on_cancel || !scan_was_canceled(warnings))
+}
+
 pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::Error>> {
     let run_id = normalized_scan_run_id(options.run_id.as_deref())?;
     let cancel_flag = register_scan_run(run_id.as_deref())?;
@@ -472,6 +484,7 @@ fn run_scan_with_cancel(
     let include_markdown = options.include_markdown.unwrap_or(true);
     let write_markdown = options.write_markdown.unwrap_or(true);
     let persist = options.persist.unwrap_or(true);
+    let persist_on_cancel = options.persist_on_cancel.unwrap_or(true);
     if matches!(options.output_path.as_deref(), Some(path) if path.trim().is_empty()) {
         return Err("output path requires a non-empty value".into());
     }
@@ -580,7 +593,12 @@ fn run_scan_with_cancel(
         fs::write(path, &markdown)?;
     }
 
-    let persistence = if persist {
+    let should_persist = should_persist_scan_result(persist, persist_on_cancel, &warnings);
+    if persist && !should_persist {
+        warnings.push(SCAN_CANCELED_NOT_PERSISTED_WARNING.to_string());
+    }
+
+    let persistence = if should_persist {
         let database_path = options
             .database_path
             .as_deref()
@@ -3848,6 +3866,17 @@ mod tests {
 
         assert_eq!(result.run_id, "missing-scan-run");
         assert!(!result.canceled);
+    }
+
+    #[test]
+    fn should_persist_scan_result_honors_canceled_scan_policy() {
+        let canceled_warnings = vec![SCAN_CANCELED_WARNING.to_string()];
+        let normal_warnings = vec!["Scan stopped at configured limit of 10 prompts.".to_string()];
+
+        assert!(should_persist_scan_result(true, true, &canceled_warnings));
+        assert!(!should_persist_scan_result(true, false, &canceled_warnings));
+        assert!(should_persist_scan_result(true, false, &normal_warnings));
+        assert!(!should_persist_scan_result(false, true, &normal_warnings));
     }
 
     #[test]

@@ -195,6 +195,12 @@ function App() {
       : storedFilterCount
         ? `${storedFilterCount} filters active`
         : "all stored prompts";
+  const displayDatabasePath =
+    result?.persistence?.database_path ?? storedFacetsResult?.database_path ?? "database not updated";
+  const displayStoredPromptCount =
+    result?.persistence?.stored_prompt_count ?? storedFacetsResult?.total_prompts ?? 0;
+  const displayStoredDateCount =
+    result?.persistence?.date_count ?? storedFacetsResult?.dates.length ?? 0;
 
   useEffect(() => {
     void refreshStoredFacets();
@@ -360,6 +366,7 @@ function App() {
         preview_limit: PREVIEW_LIMIT,
         preview_sort: previewSortForMode(previewMode),
         include_markdown: false,
+        persist_on_cancel: false,
         run_id: runId,
       });
       const loadedMode = effectivePromptListMode(next.preview_sort, previewMode);
@@ -686,8 +693,7 @@ function App() {
         <section className="notice">
           <FileText size={18} />
           <span>
-            {result.persistence?.database_path ?? "database not updated"} · stored{" "}
-            {(result.persistence?.stored_prompt_count ?? 0).toLocaleString()} · new{" "}
+            {displayDatabasePath} · stored {displayStoredPromptCount.toLocaleString()} · new{" "}
             {(result.persistence?.inserted_prompt_count ?? 0).toLocaleString()} · updated{" "}
             {(result.persistence?.updated_prompt_count ?? 0).toLocaleString()}
           </span>
@@ -971,13 +977,9 @@ function App() {
         <Metric
           icon={<ShieldCheck size={18} />}
           label="DB Stored"
-          value={result?.persistence?.stored_prompt_count ?? 0}
+          value={displayStoredPromptCount}
         />
-        <Metric
-          icon={<FileText size={18} />}
-          label="Dates"
-          value={result?.persistence?.date_count ?? 0}
-        />
+        <Metric icon={<FileText size={18} />} label="Dates" value={displayStoredDateCount} />
       </section>
 
       <section className="workspace">

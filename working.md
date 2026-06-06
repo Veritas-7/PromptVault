@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 16:29 KST
+Updated: 2026-06-06 16:46 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -410,6 +410,15 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx`: added per-scan run IDs, canceling state, Stop button UI, and
   scan/load/plan disabling while a scan stop request is in flight.
 - `README.md` and `docs/CLI.md`: documented `/api/scan/cancel`.
+- `src-tauri/src/lib.rs`: added `persist_on_cancel` scan policy handling,
+  skipped persistence for canceled scans when requested, and added a focused
+  unit test for the canceled-scan persistence decision.
+- `src/promptVaultApi.ts`: exposed `persist_on_cancel` on browser scan options.
+- `src/App.tsx`: sends `persist_on_cancel:false` for browser scans and falls
+  back to stored facet counts when a non-writing scan returns
+  `persistence:null`, so DB Stored does not misleadingly display `0`.
+- `README.md`: documented that browser Stop returns partial results without
+  writing canceled partial scans to the permanent vault.
 
 ## Tests
 
@@ -735,6 +744,32 @@ stability, performance, and maintainability, then record evidence here.
 - Real cmux Stop-button QA on existing `surface:9`: passed with the
   cancellation warning visible, partial UI metrics rendered, Stop hidden after
   completion, `No console entries`, and `No browser errors`.
+- Initial combined `cargo test should_persist_scan_result_honors_canceled_scan_policy cancel_scan collect_from_source_stops_when_scan_cancel_requested`
+  command was invalid because Cargo accepts one test-name filter; reran the
+  focused Rust tests separately.
+- `cd src-tauri && cargo test should_persist_scan_result_honors_canceled_scan_policy`:
+  passed.
+- `cd src-tauri && cargo test cancel_scan`: 2 focused cancellation registry
+  tests passed.
+- `cd src-tauri && cargo test collect_from_source_stops_when_scan_cancel_requested`:
+  focused collection cancellation test passed.
+- `npm run test:ui`: 24 tests passed after adding the scan option.
+- First `npm run check` after the persistence-policy backend/API change passed:
+  UI tests 24 passed, TypeScript/Vite build, Rust lib 62 passed, CLI 15
+  passed, doc-tests, and clippy with `-D warnings`.
+- `cd src-tauri && cargo build --bin promptvault-cli`: passed before
+  restarting the browser bridge.
+- Real bridge `persist_on_cancel:false` cancellation smoke passed with stored
+  count unchanged at `1690`.
+- Real cmux Stop-button QA found the `DB Stored 0` fallback display issue for
+  `persistence:null`; fixed it in `src/App.tsx`.
+- Final `npm run check` after the display fix passed again: UI tests 24 passed,
+  TypeScript/Vite build, Rust lib 62 passed, CLI 15 passed, doc-tests, and
+  clippy with `-D warnings`.
+- Final real cmux Stop-button QA on existing `surface:9` passed: stopped scan
+  returned the not-stored warning, DB notice and metric showed stored `1,690`,
+  bridge `/api/prompt-facets` stayed at `1690`, console returned
+  `No console entries`, and errors returned `No browser errors`.
 - Continued with the next thin slice: real backend scan cancellation for
   explicit limited scans.
 - Added scan run IDs, a Rust cancellation registry, a Tauri `cancel_scan`
@@ -766,6 +801,37 @@ stability, performance, and maintainability, then record evidence here.
     `Preview 1000`, `Files 53`, `Words 556831`, `Quality 78.2`, `Weak 323`,
     `DB Stored 1690`, and `Dates 29`.
   - Confirmed the Stop button disappeared after completion.
+  - Browser console returned `No console entries`; browser errors returned
+    `No browser errors`.
+- Continued with the next thin slice: canceled browser scan persistence policy.
+- Added `persist_on_cancel:false` to browser scan requests. Completed browser
+  scans still persist normally, but stopped scans now return partial results
+  without writing those partial results into
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- Real bridge policy smoke:
+  - Before count from `/api/prompt-facets`: `1690`.
+  - Started a large Codex scan with `persist_on_cancel:false`, canceled it via
+    `/api/scan/cancel`, and observed `canceled:true`.
+  - Scan returned `persistence:null` and warnings
+    `Scan canceled by user request; returning partial results.` plus
+    `Canceled scan was not stored in the vault.`
+  - After count from `/api/prompt-facets`: `1690`.
+- Real cmux Stop-button policy QA on the existing `surface:9`:
+  - Confirmed `workspace:5` still had exactly one PromptVault browser surface
+    and did not create another browser.
+  - Reloaded the existing browser after `npm run build`.
+  - Filled Limit `100000`, clicked `Scan`, waited for
+    `[data-stop-scan="true"]`, clicked `Stop`, and observed the not-stored
+    warning.
+  - Verified the persistent vault count stayed `1690`.
+  - Found and fixed a UI display issue where `persistence:null` initially made
+    the DB Stored metric display `0`; the UI now falls back to stored facet
+    totals.
+  - Final HTML evidence showed DB notice
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 1,690 · new 0 · updated 0`,
+    warning `Scan canceled by user request; returning partial results. Canceled
+    scan was not stored in the vault.`, metric `DB Stored 1690`, and
+    `Dates 29`.
   - Browser console returned `No console entries`; browser errors returned
     `No browser errors`.
 
@@ -803,11 +869,11 @@ stability, performance, and maintainability, then record evidence here.
   browser as a workaround.
 - GLM still rate-limits with HTTP 429 in browser Improve tests; the local
   fallback continues to produce a usable recommendation and warning.
-- UI scan cancellation currently returns and persists partial scan results
-  because normal browser scans persist by default. The real Stop-button QA
-  increased `DB Stored` from `459` to `1690`. Decide whether canceled UI scans
-  should continue to persist partial progress or switch to a non-persisting
-  cancellation mode.
+- Browser Stop now returns partial scan results without writing canceled
+  partial results into the permanent SQLite vault. Completed browser scans still
+  persist normally. The prior partial-cancel QA already raised the vault to
+  `1690`, so future tests should use `/api/prompt-facets` before/after counts
+  when proving canceled scans do not grow the vault.
 
 ## Research
 
@@ -819,7 +885,6 @@ stability, performance, and maintainability, then record evidence here.
 
 1. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
-2. Add scan progress telemetry beyond the current running/canceling states and
-   decide whether canceled UI scans should persist partial results.
+2. Add scan progress telemetry beyond the current running/canceling states.
 3. Recover or harden the cmux browser diagnostics workflow for cases where the
    active visible workspace differs from the target PromptVault surface.

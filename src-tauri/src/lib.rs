@@ -130,9 +130,47 @@ pub struct ScanPlan {
     pub warnings: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportState {
+    pub source_id: String,
+    pub source_label: String,
+    pub root_path: String,
+    pub total_files: usize,
+    pub total_bytes: u64,
+    pub next_file_index: usize,
+    pub processed_files: usize,
+    pub imported_prompt_count: usize,
+    pub completed: bool,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportBatchResult {
+    pub generated_at: String,
+    pub source: SourcePlan,
+    pub state: ImportState,
+    pub batch_start_index: usize,
+    pub batch_file_count: usize,
+    pub batch_prompt_count: usize,
+    pub returned_prompt_count: usize,
+    pub prompts: Vec<PromptRecord>,
+    pub stats: ScanStats,
+    pub persistence: PersistStats,
+    pub warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ScanPlanOptions {
     pub source_ids: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ImportBatchOptions {
+    pub source_id: String,
+    pub file_batch_size: Option<usize>,
+    pub reset: Option<bool>,
+    pub preview_limit: Option<usize>,
+    pub database_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -205,6 +243,11 @@ fn scan_prompts(options: Option<ScanOptions>) -> Result<ScanResult, String> {
 fn plan_scan(options: Option<ScanPlanOptions>) -> Result<ScanPlan, String> {
     let opts = options.unwrap_or_default();
     build_scan_plan(opts).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn import_batch(options: ImportBatchOptions) -> Result<ImportBatchResult, String> {
+    run_import_batch(options).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -360,6 +403,141 @@ pub fn build_scan_plan(options: ScanPlanOptions) -> Result<ScanPlan, Box<dyn std
     let generated_at = Utc::now().to_rfc3339();
     let sources = selected_source_specs(options.source_ids.as_deref());
     Ok(build_scan_plan_for_sources(generated_at, sources))
+}
+
+pub fn run_import_batch(
+    options: ImportBatchOptions,
+) -> Result<ImportBatchResult, Box<dyn std::error::Error>> {
+    let source_id = options.source_id.trim();
+    if source_id.is_empty() {
+        return Err("import batch requires a source_id".into());
+    }
+    validate_source_ids(Some(&[source_id.to_string()]))?;
+    let file_batch_size = options.file_batch_size.unwrap_or(25);
+    if file_batch_size == 0 {
+        return Err("file_batch_size requires a positive integer".into());
+    }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let source = selected_source_specs(Some(&[source_id.to_string()]))
+        .into_iter()
+        .next()
+        .ok_or("unknown source id")?;
+
+    run_import_batch_for_source(
+        &database_path,
+        source,
+        file_batch_size,
+        options.reset.unwrap_or(false),
+        options.preview_limit,
+    )
+}
+
+fn run_import_batch_for_source(
+    database_path: &Path,
+    source: SourceSpec,
+    file_batch_size: usize,
+    reset: bool,
+    preview_limit: Option<usize>,
+) -> Result<ImportBatchResult, Box<dyn std::error::Error>> {
+    if file_batch_size == 0 {
+        return Err("file_batch_size requires a positive integer".into());
+    }
+    let generated_at = Utc::now().to_rfc3339();
+    let mut warnings = Vec::new();
+    let mut candidates = Vec::new();
+    for candidate in matching_source_file_candidates(&source.root, source.kind) {
+        match candidate {
+            Ok(candidate) => candidates.push(candidate),
+            Err(err) => warnings.push(format!("Skipped walk entry: {err}")),
+        }
+    }
+    let source_plan = source_plan_from_candidates(&source, &candidates, &warnings);
+    let total_files = candidates.len();
+    let total_bytes = candidates
+        .iter()
+        .map(|candidate| candidate.byte_count)
+        .sum::<u64>();
+
+    let conn = open_promptvault_database(database_path)?;
+    let previous_state = if reset {
+        None
+    } else {
+        read_import_state(&conn, source.id)?
+    };
+    let batch_start_index = previous_state
+        .as_ref()
+        .map(|state| state.next_file_index.min(total_files))
+        .unwrap_or(0);
+    let batch_end_index = batch_start_index
+        .saturating_add(file_batch_size)
+        .min(total_files);
+    let batch_candidates = &candidates[batch_start_index..batch_end_index];
+
+    let mut summary = SourceSummary {
+        id: source.id.to_string(),
+        label: source.label.to_string(),
+        root_path: source.root.display().to_string(),
+        files_seen: 0,
+        prompts_found: 0,
+        average_quality: 0.0,
+        weak_prompt_count: 0,
+        status: source_plan.status.clone(),
+        notes: source_plan.notes.clone(),
+    };
+    let mut prompts = collect_from_candidates(&source, &mut summary, batch_candidates, usize::MAX)?;
+    summary.prompts_found = prompts.len();
+    summarize_source_quality(&mut summary, &prompts);
+    promote_source_notes_to_warning(&source, &mut summary, &mut warnings);
+    prompts.sort_by(|a, b| {
+        let at = a.timestamp.as_deref().unwrap_or("");
+        let bt = b.timestamp.as_deref().unwrap_or("");
+        at.cmp(bt).then_with(|| a.source.cmp(&b.source))
+    });
+    prompts.dedup_by(|a, b| a.hash == b.hash && a.source == b.source);
+
+    let stats = build_stats(&prompts, vec![summary]);
+    let persistence =
+        persist_scan_result(database_path, &generated_at, &prompts, &stats, &warnings)?;
+    let imported_prompt_count = previous_state
+        .map(|state| state.imported_prompt_count)
+        .unwrap_or(0)
+        .saturating_add(prompts.len());
+    let completed = batch_end_index >= total_files;
+    let state = ImportState {
+        source_id: source.id.to_string(),
+        source_label: source.label.to_string(),
+        root_path: source.root.display().to_string(),
+        total_files,
+        total_bytes,
+        next_file_index: batch_end_index,
+        processed_files: batch_end_index,
+        imported_prompt_count,
+        completed,
+        updated_at: generated_at.clone(),
+    };
+    upsert_import_state(&conn, &state)?;
+
+    let response_prompts = response_prompts(&prompts, preview_limit, PreviewSort::Latest);
+    Ok(ImportBatchResult {
+        generated_at,
+        source: source_plan,
+        state,
+        batch_start_index,
+        batch_file_count: batch_candidates.len(),
+        batch_prompt_count: prompts.len(),
+        returned_prompt_count: response_prompts.len(),
+        prompts: response_prompts,
+        stats,
+        persistence,
+        warnings,
+    })
 }
 
 fn build_scan_plan_for_sources(generated_at: String, sources: Vec<SourceSpec>) -> ScanPlan {
@@ -810,34 +988,43 @@ fn collect_from_source(
         return Ok(Vec::new());
     }
 
+    let files = matching_source_files(&source.root, source.kind)
+        .into_iter()
+        .filter_map(|file| match file {
+            Ok(path) => Some(SourceFileCandidate {
+                byte_count: path.metadata().map(|metadata| metadata.len()).unwrap_or(0),
+                modified_ms: path
+                    .metadata()
+                    .and_then(|metadata| metadata.modified())
+                    .ok()
+                    .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|duration| duration.as_millis())
+                    .unwrap_or(0),
+                path,
+            }),
+            Err(err) => {
+                summary.notes.push(format!("Skipped walk entry: {err}"));
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    collect_from_candidates(source, summary, &files, remaining)
+}
+
+fn collect_from_candidates(
+    source: &SourceSpec,
+    summary: &mut SourceSummary,
+    files: &[SourceFileCandidate],
+    remaining: usize,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
     let mut prompts = Vec::new();
     let mut seen_keys = HashSet::new();
-    for file in matching_source_files(&source.root, source.kind) {
+    for file in files {
         if prompts.len() >= remaining {
             break;
         }
-        let file = match file {
-            Ok(file) => file,
-            Err(err) => {
-                summary.notes.push(format!("Skipped walk entry: {err}"));
-                continue;
-            }
-        };
         summary.files_seen += 1;
-        let found = match source.kind {
-            SourceKind::CodexJsonl => parse_codex_jsonl(source, &file),
-            SourceKind::ClaudeProjectJsonl => parse_claude_project_jsonl(source, &file),
-            SourceKind::ClaudeTranscriptJsonl => parse_claude_transcript_jsonl(source, &file),
-            SourceKind::ClaudeHistoryJsonl => parse_claude_history_jsonl(source, &file),
-            SourceKind::AntigravityTranscriptJsonl => {
-                parse_antigravity_transcript_jsonl(source, &file)
-            }
-            SourceKind::AntigravityHistoryJsonl => parse_antigravity_history_jsonl(source, &file),
-            SourceKind::AntigravityConversationSqlite => {
-                parse_antigravity_conversation_sqlite(source, &file)
-            }
-            SourceKind::GeminiTmpChatJson => parse_gemini_tmp_chat(source, &file),
-        };
+        let found = parse_source_file(source, &file.path);
 
         match found {
             Ok(records) => {
@@ -853,10 +1040,28 @@ fn collect_from_source(
             }
             Err(err) => summary
                 .notes
-                .push(format!("Skipped {}: {}", file.display(), err)),
+                .push(format!("Skipped {}: {}", file.path.display(), err)),
         }
     }
     Ok(prompts)
+}
+
+fn parse_source_file(
+    source: &SourceSpec,
+    file: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    match source.kind {
+        SourceKind::CodexJsonl => parse_codex_jsonl(source, file),
+        SourceKind::ClaudeProjectJsonl => parse_claude_project_jsonl(source, file),
+        SourceKind::ClaudeTranscriptJsonl => parse_claude_transcript_jsonl(source, file),
+        SourceKind::ClaudeHistoryJsonl => parse_claude_history_jsonl(source, file),
+        SourceKind::AntigravityTranscriptJsonl => parse_antigravity_transcript_jsonl(source, file),
+        SourceKind::AntigravityHistoryJsonl => parse_antigravity_history_jsonl(source, file),
+        SourceKind::AntigravityConversationSqlite => {
+            parse_antigravity_conversation_sqlite(source, file)
+        }
+        SourceKind::GeminiTmpChatJson => parse_gemini_tmp_chat(source, file),
+    }
 }
 
 fn matching_source_files(root: &Path, kind: SourceKind) -> Vec<Result<PathBuf, walkdir::Error>> {
@@ -986,6 +1191,48 @@ fn source_plan(source: &SourceSpec) -> SourcePlan {
             }
             Err(err) => plan.notes.push(format!("Skipped walk entry: {err}")),
         }
+    }
+    if newest_ms > 0 {
+        plan.newest_modified_at = timestamp_millis_to_rfc3339(newest_ms);
+    }
+    if plan.file_count == 0 && plan.status == "ok" {
+        plan.status = "empty".to_string();
+        plan.notes
+            .push("No matching prompt files were found.".to_string());
+    }
+    plan
+}
+
+fn source_plan_from_candidates(
+    source: &SourceSpec,
+    candidates: &[SourceFileCandidate],
+    notes: &[String],
+) -> SourcePlan {
+    let mut plan = SourcePlan {
+        id: source.id.to_string(),
+        label: source.label.to_string(),
+        root_path: source.root.display().to_string(),
+        status: if source.root.exists() {
+            "ok".to_string()
+        } else {
+            "missing".to_string()
+        },
+        file_count: candidates.len(),
+        byte_count: 0,
+        large_file_count: 0,
+        largest_file_bytes: 0,
+        newest_modified_at: None,
+        notes: notes.to_vec(),
+    };
+
+    let mut newest_ms = 0;
+    for candidate in candidates {
+        plan.byte_count = plan.byte_count.saturating_add(candidate.byte_count);
+        plan.largest_file_bytes = plan.largest_file_bytes.max(candidate.byte_count);
+        if candidate.byte_count >= LARGE_FILE_BYTES {
+            plan.large_file_count += 1;
+        }
+        newest_ms = newest_ms.max(candidate.modified_ms);
     }
     if newest_ms > 0 {
         plan.newest_modified_at = timestamp_millis_to_rfc3339(newest_ms);
@@ -1965,18 +2212,18 @@ fn prompt_date(timestamp: Option<&str>) -> String {
     "unknown-date".to_string()
 }
 
-fn persist_scan_result(
+fn open_promptvault_database(
     database_path: &Path,
-    generated_at: &str,
-    prompts: &[PromptRecord],
-    stats: &ScanStats,
-    warnings: &[String],
-) -> Result<PersistStats, Box<dyn std::error::Error>> {
+) -> Result<Connection, Box<dyn std::error::Error>> {
     if let Some(parent) = database_path.parent() {
         fs::create_dir_all(parent)?;
     }
+    let conn = Connection::open(database_path)?;
+    ensure_promptvault_schema(&conn)?;
+    Ok(conn)
+}
 
-    let mut conn = Connection::open(database_path)?;
+fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     conn.execute_batch(
         "
         PRAGMA journal_mode = WAL;
@@ -2026,8 +2273,93 @@ fn persist_scan_result(
             FOREIGN KEY(scan_run_id) REFERENCES scan_runs(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_source_summaries_run ON source_summaries(scan_run_id);
+        CREATE TABLE IF NOT EXISTS import_states (
+            source_id TEXT PRIMARY KEY,
+            source_label TEXT NOT NULL,
+            root_path TEXT NOT NULL,
+            total_files INTEGER NOT NULL,
+            total_bytes INTEGER NOT NULL,
+            next_file_index INTEGER NOT NULL,
+            processed_files INTEGER NOT NULL,
+            imported_prompt_count INTEGER NOT NULL,
+            completed INTEGER NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         ",
     )?;
+    Ok(())
+}
+
+fn read_import_state(
+    conn: &Connection,
+    source_id: &str,
+) -> Result<Option<ImportState>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT source_id, source_label, root_path, total_files, total_bytes,
+            next_file_index, processed_files, imported_prompt_count, completed, updated_at
+         FROM import_states WHERE source_id = ?1",
+    )?;
+    let mut rows = stmt.query([source_id])?;
+    let Some(row) = rows.next()? else {
+        return Ok(None);
+    };
+    Ok(Some(ImportState {
+        source_id: row.get(0)?,
+        source_label: row.get(1)?,
+        root_path: row.get(2)?,
+        total_files: row.get::<_, i64>(3)? as usize,
+        total_bytes: row.get::<_, i64>(4)? as u64,
+        next_file_index: row.get::<_, i64>(5)? as usize,
+        processed_files: row.get::<_, i64>(6)? as usize,
+        imported_prompt_count: row.get::<_, i64>(7)? as usize,
+        completed: row.get::<_, i64>(8)? != 0,
+        updated_at: row.get(9)?,
+    }))
+}
+
+fn upsert_import_state(
+    conn: &Connection,
+    state: &ImportState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute(
+        "INSERT INTO import_states (
+            source_id, source_label, root_path, total_files, total_bytes,
+            next_file_index, processed_files, imported_prompt_count, completed, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        ON CONFLICT(source_id) DO UPDATE SET
+            source_label = excluded.source_label,
+            root_path = excluded.root_path,
+            total_files = excluded.total_files,
+            total_bytes = excluded.total_bytes,
+            next_file_index = excluded.next_file_index,
+            processed_files = excluded.processed_files,
+            imported_prompt_count = excluded.imported_prompt_count,
+            completed = excluded.completed,
+            updated_at = excluded.updated_at",
+        rusqlite::params![
+            &state.source_id,
+            &state.source_label,
+            &state.root_path,
+            state.total_files as i64,
+            state.total_bytes as i64,
+            state.next_file_index as i64,
+            state.processed_files as i64,
+            state.imported_prompt_count as i64,
+            if state.completed { 1_i64 } else { 0_i64 },
+            &state.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+fn persist_scan_result(
+    database_path: &Path,
+    generated_at: &str,
+    prompts: &[PromptRecord],
+    stats: &ScanStats,
+    warnings: &[String],
+) -> Result<PersistStats, Box<dyn std::error::Error>> {
+    let mut conn = open_promptvault_database(database_path)?;
 
     let tx = conn.transaction()?;
     tx.execute(
@@ -2531,6 +2863,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             scan_prompts,
             plan_scan,
+            import_batch,
             improve_prompt
         ])
         .run(tauri::generate_context!())
@@ -2922,6 +3255,67 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.contains("large JSONL files may dominate scan time")));
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn import_batch_persists_resume_state() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-import-batch-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        for idx in 1..=3 {
+            std::fs::write(
+                root.join(format!("{idx:03}.jsonl")),
+                format!(
+                    "{{\"type\":\"response_item\",\"payload\":{{\"role\":\"user\",\"content\":[{{\"text\":\"Fix resumable import batch {idx}, preserve files, run cargo test, and report results.\"}}]}}}}\n"
+                ),
+            )
+            .expect("write prompt file");
+        }
+        let db_path = root.join("promptvault.sqlite");
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let first = run_import_batch_for_source(&db_path, source.clone(), 1, true, Some(10))
+            .expect("first import batch");
+        let second = run_import_batch_for_source(&db_path, source, 1, false, Some(10))
+            .expect("second import batch");
+
+        assert_eq!(first.batch_start_index, 0);
+        assert_eq!(first.batch_file_count, 1);
+        assert_eq!(first.batch_prompt_count, 1);
+        assert_eq!(first.state.processed_files, 1);
+        assert!(!first.state.completed);
+        assert_eq!(second.batch_start_index, 1);
+        assert_eq!(second.batch_file_count, 1);
+        assert_eq!(second.batch_prompt_count, 1);
+        assert_eq!(second.state.processed_files, 2);
+        assert_eq!(second.state.imported_prompt_count, 2);
+        assert!(!second.state.completed);
+
+        let conn = Connection::open(&db_path).expect("open import db");
+        let next_file_index: i64 = conn
+            .query_row(
+                "SELECT next_file_index FROM import_states WHERE source_id = 'test-codex'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read import state");
+        let stored_prompts: i64 = conn
+            .query_row("SELECT COUNT(*) FROM prompts", [], |row| row.get(0))
+            .expect("read prompt count");
+        assert_eq!(next_file_index, 2);
+        assert_eq!(stored_prompts, 2);
 
         std::fs::remove_dir_all(root).expect("remove temp root");
     }

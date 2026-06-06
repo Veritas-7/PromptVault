@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { bridgeEndpoint, hasTauriInvoke } from "./browserBridge";
-import type { ImproveResult, ScanPlan, ScanResult } from "./types";
+import type { ImportBatchResult, ImproveResult, ScanPlan, ScanResult } from "./types";
 
 export interface ScanPromptOptions {
   limit?: number;
@@ -13,6 +13,13 @@ export interface ScanPlanOptions {
   source_ids?: string[];
 }
 
+export interface ImportBatchOptions {
+  source_id: string;
+  file_batch_size?: number;
+  reset?: boolean;
+  preview_limit?: number;
+}
+
 export interface ImprovePromptRequest {
   prompt: string;
   context?: string | null;
@@ -23,6 +30,13 @@ export async function planScan(options: ScanPlanOptions = {}): Promise<ScanPlan>
     return invoke<ScanPlan>("plan_scan", { options });
   }
   return postBridge<ScanPlan>("/api/plan", { options });
+}
+
+export async function importBatch(options: ImportBatchOptions): Promise<ImportBatchResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ImportBatchResult>("import_batch", { options });
+  }
+  return postBridge<ImportBatchResult>("/api/import-batch", { options });
 }
 
 export async function scanPrompts(options: ScanPromptOptions): Promise<ScanResult> {

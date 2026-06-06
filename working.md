@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 09:55 KST
+Updated: 2026-06-06 10:05 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -216,6 +216,29 @@ stability, performance, and maintainability, then record evidence here.
     projects 1,722 · 714.2 MiB`, and the empty Antigravity alt source note.
   - Console output only showed Vite connection logs.
   - Browser error collector returned `No browser errors`.
+- Continued with the next thin slice: resumable per-source import batches.
+- Added a SQLite `import_states` cursor table and `import-batch` flow that
+  imports one source in file-count slices and advances `next_file_index`.
+- Real CLI import-batch evidence:
+  `cargo run --bin promptvault-cli -- import-batch --source antigravity-ide-transcripts --files 1 --reset --json`
+  returned `processed 1 / total 3`, `batch_files 1`, `batch_prompts 2`, and
+  `completed false`.
+- Verified DB cursor after CLI batch:
+  `antigravity-ide-transcripts|1|3|2|0`.
+- Added browser bridge `/api/import-batch`, restarted the bridge, and verified
+  the endpoint through the UI.
+- Real cmux click QA on the same `surface:11`:
+  - Reloaded `http://127.0.0.1:5173/`.
+  - Clicked `Plan`.
+  - Clicked the `Import Batch` button for `antigravity-ide-transcripts`.
+  - Observed `Incremental Import` panel showing `Processed 3 / 3`,
+    `2 files · 10 prompts`, and `Status Complete`.
+  - Observed DB notice:
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 362 · new 0 · updated 10`.
+  - Browser console returned `No console entries`.
+  - Browser error collector returned `No browser errors`.
+- Verified DB cursor after UI batch:
+  `antigravity-ide-transcripts|3|3|12|1`.
 
 ## Changes
 
@@ -238,6 +261,15 @@ stability, performance, and maintainability, then record evidence here.
 - `src/promptVaultApi.ts` and `src/types.ts`: added plan API/types.
 - `src/App.tsx` and `src/App.css`: added Plan button and Import Plan UI.
 - `README.md` and `docs/CLI.md`: documented `plan`.
+- `src-tauri/src/lib.rs`: added `ImportState`, `ImportBatchResult`,
+  `ImportBatchOptions`, `run_import_batch`, `import_states` schema, and resume
+  state tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: added `import-batch` command and
+  bridge `/api/import-batch`.
+- `src/promptVaultApi.ts` and `src/types.ts`: added import-batch API/types.
+- `src/App.tsx` and `src/App.css`: added per-source `Import Batch` buttons and
+  `Incremental Import` status panel.
+- `README.md` and `docs/CLI.md`: documented `import-batch`.
 
 ## Tests
 
@@ -274,6 +306,17 @@ stability, performance, and maintainability, then record evidence here.
   (`feat: add scan import planner`).
 - After push, `git rev-list --left-right --count HEAD...origin/main` returned
   `0 0`.
+- `npm run build`: passed after adding the import-batch UI.
+- `cd src-tauri && cargo test import_batch`: import state test passed.
+- `cd src-tauri && cargo test help_text_documents_cli_validation_rules`: CLI
+  help test passed.
+- Real CLI `import-batch` smoke on `antigravity-ide-transcripts`: passed and
+  wrote DB cursor state.
+- Real cmux `Import Batch` click QA on `surface:11`: passed with no console or
+  browser errors.
+- `npm run check`: passed after the import-batch slice. This covered UI tests
+  10 passed, TypeScript/Vite build, Rust lib 50 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 
 ## Issues
 
@@ -282,6 +325,9 @@ stability, performance, and maintainability, then record evidence here.
   and about `32.3 GiB` of JSONL. Future work should add resumable incremental
   import slices and a background queue before claiming exhaustive historical
   ingestion of the entire Codex store.
+- Import batching is now resumable per source, but the UI still runs one batch
+  per click. It does not yet have a continuous background queue, cancel control,
+  or multi-source scheduler.
 - Several limited source scans intentionally stopped at the configured prompt
   limit and reported the expected limit warning.
 - GLM improvement path hit HTTP 429 during manual QA; local fallback worked.
@@ -295,7 +341,8 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Next Steps
 
-1. Add resumable incremental import state for large stores using the plan output.
-2. Add UI progress/cancel state for long scans.
+1. Stage only explicit import-batch slice paths, run staged whitespace/secret
+   checks, then commit and push this slice.
+2. Add UI progress/cancel state for long scans and continuous import batches.
 3. Consider a background indexing worker so first-run historical import can
    continue without blocking the browser UI.

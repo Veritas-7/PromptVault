@@ -1,6 +1,7 @@
 use promptvault_lib::{
-    build_scan_plan, default_database_path, improve_prompt_inner, redact_sensitive_text, run_scan,
-    source_specs, ImproveRequest, PromptRecord, ScanOptions, ScanPlanOptions,
+    build_scan_plan, default_database_path, improve_prompt_inner, redact_sensitive_text,
+    run_import_batch, run_scan, source_specs, ImportBatchOptions, ImproveRequest, PromptRecord,
+    ScanOptions, ScanPlanOptions,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -209,6 +210,54 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     format_bytes(source.byte_count),
                     source.root_path
                 );
+            }
+        }
+        "import-batch" => {
+            let json = take_flag(&mut args, "--json");
+            let reset = take_flag(&mut args, "--reset");
+            let mut source_ids = Vec::new();
+            let mut file_batch_size = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--source" => {
+                        source_ids.extend(parse_source_ids_arg(iter.next())?);
+                    }
+                    "--files" => {
+                        file_batch_size = Some(parse_positive_usize_arg(iter.next(), "--files")?);
+                    }
+                    other => return Err(format!("unknown import-batch argument: {other}").into()),
+                }
+            }
+            if source_ids.len() != 1 {
+                return Err("import-batch requires exactly one --source ID".into());
+            }
+            let result = run_import_batch(ImportBatchOptions {
+                source_id: source_ids.remove(0),
+                file_batch_size,
+                reset: Some(reset),
+                preview_limit: Some(25),
+                database_path: None,
+            })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+            println!("PromptVault import batch");
+            println!("source: {}", result.state.source_label);
+            println!(
+                "files: {}..{} / {}",
+                result.batch_start_index, result.state.processed_files, result.state.total_files
+            );
+            println!("batch_files: {}", result.batch_file_count);
+            println!("batch_prompts: {}", result.batch_prompt_count);
+            println!("completed: {}", result.state.completed);
+            println!("stored_prompts: {}", result.persistence.stored_prompt_count);
+            if !result.warnings.is_empty() {
+                println!("warnings:");
+                for warning in result.warnings {
+                    println!("- {warning}");
+                }
             }
         }
         "improve" => {
@@ -569,7 +618,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -590,6 +639,11 @@ fn format_bytes(bytes: u64) -> String {
 #[derive(serde::Deserialize)]
 struct PlanBridgePayload {
     options: Option<ScanPlanOptions>,
+}
+
+#[derive(serde::Deserialize)]
+struct ImportBatchBridgePayload {
+    options: ImportBatchOptions,
 }
 
 #[derive(serde::Deserialize)]
@@ -649,6 +703,11 @@ fn handle_bridge_client(mut stream: TcpStream) -> Result<(), Box<dyn std::error:
         ("POST", "/api/plan") => {
             let payload = serde_json::from_str::<PlanBridgePayload>(&request.body)?;
             let result = build_scan_plan(payload.options.unwrap_or_default())?;
+            write_json_response(&mut stream, 200, &result)
+        }
+        ("POST", "/api/import-batch") => {
+            let payload = serde_json::from_str::<ImportBatchBridgePayload>(&request.body)?;
+            let result = run_import_batch(payload.options)?;
             write_json_response(&mut stream, 200, &result)
         }
         ("POST", "/api/scan") => {
@@ -883,6 +942,8 @@ mod tests {
         let help = help_text();
         assert!(help.contains("plan [--source ID[,ID...]] [--json]"));
         assert!(help.contains("plan inventories matching source files"));
+        assert!(help.contains("import-batch --source ID [--files N>0]"));
+        assert!(help.contains("import-batch persists one resumable source slice"));
         assert!(help.contains("--limit N>0"));
         assert!(help.contains("--count N>0"));
         assert!(help.contains("--output cannot be combined with --no-export"));

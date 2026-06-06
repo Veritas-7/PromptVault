@@ -17,14 +17,16 @@ import {
   improvementRequestStarted,
 } from "./improvementSelection";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
-import { improvePrompt, isBrowserQaMode, planScan, scanPrompts } from "./promptVaultApi";
+import { importBatch, improvePrompt, isBrowserQaMode, planScan, scanPrompts } from "./promptVaultApi";
 import { selectedPromptForView } from "./selection";
-import type { ImproveResult, PromptRecord, ScanPlan, ScanResult } from "./types";
+import type { ImportBatchResult, ImproveResult, PromptRecord, ScanPlan, ScanResult } from "./types";
 
 type ScanState = "idle" | "scanning" | "ready" | "failed";
 type PlanState = "idle" | "planning" | "ready" | "failed";
+type ImportState = "idle" | "importing" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
 const MAX_SCAN_LIMIT = 100000;
+const IMPORT_BATCH_FILES = 5;
 
 function parseLimitInput(value: string): number | undefined {
   const trimmed = value.trim();
@@ -58,7 +60,9 @@ function App() {
   const browserQaMode = isBrowserQaMode();
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [planState, setPlanState] = useState<PlanState>("idle");
+  const [importState, setImportState] = useState<ImportState>("idle");
   const [plan, setPlan] = useState<ScanPlan | null>(null);
+  const [importResult, setImportResult] = useState<ImportBatchResult | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -106,6 +110,23 @@ function App() {
     } catch (err) {
       setError(errorText(err));
       setPlanState("failed");
+    }
+  }
+
+  async function runImportBatch(sourceId: string) {
+    setError(null);
+    setImportState("importing");
+    try {
+      const next = await importBatch({
+        source_id: sourceId,
+        file_batch_size: IMPORT_BATCH_FILES,
+        preview_limit: 25,
+      });
+      setImportResult(next);
+      setImportState("ready");
+    } catch (err) {
+      setError(errorText(err));
+      setImportState("failed");
     }
   }
 
@@ -305,9 +326,70 @@ function App() {
                   {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
                   {source.file_count.toLocaleString()} · {formatBytes(source.byte_count)}
                 </div>
+                <div className="plan-source-actions">
+                  <button
+                    className="inline-action"
+                    data-import-source-id={source.id}
+                    disabled={importState === "importing" || source.file_count === 0}
+                    onClick={() => runImportBatch(source.id)}
+                    type="button"
+                  >
+                    <RefreshCw size={15} />
+                    {importState === "importing" ? "Importing" : "Import Batch"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
+        </section>
+      ) : null}
+
+      {importResult ? (
+        <section className="panel import-panel">
+          <div className="panel-heading">
+            <h2>Incremental Import</h2>
+            <span>{new Date(importResult.generated_at).toLocaleString()}</span>
+          </div>
+          <div className="import-summary">
+            <div>
+              <span>Source</span>
+              <strong>{importResult.state.source_label}</strong>
+            </div>
+            <div>
+              <span>Processed</span>
+              <strong>
+                {importResult.state.processed_files.toLocaleString()} /{" "}
+                {importResult.state.total_files.toLocaleString()}
+              </strong>
+            </div>
+            <div>
+              <span>Batch</span>
+              <strong>
+                {importResult.batch_file_count.toLocaleString()} files ·{" "}
+                {importResult.batch_prompt_count.toLocaleString()} prompts
+              </strong>
+            </div>
+            <div>
+              <span>Status</span>
+              <strong>{importResult.state.completed ? "Complete" : "Resumable"}</strong>
+            </div>
+          </div>
+          <div className="notice secondary">
+            <FileText size={18} />
+            <span>
+              {importResult.persistence.database_path} · stored{" "}
+              {importResult.persistence.stored_prompt_count.toLocaleString()} · new{" "}
+              {importResult.persistence.inserted_prompt_count.toLocaleString()} · updated{" "}
+              {importResult.persistence.updated_prompt_count.toLocaleString()}
+            </span>
+          </div>
+          {importResult.warnings.length ? (
+            <div className="warning-list">
+              {importResult.warnings.map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </div>
+          ) : null}
         </section>
       ) : null}
 

@@ -100,6 +100,33 @@ export interface ScanPlan {
   warnings: string[];
 }
 
+export interface ImportState {
+  source_id: string;
+  source_label: string;
+  root_path: string;
+  total_files: number;
+  total_bytes: number;
+  next_file_index: number;
+  processed_files: number;
+  imported_prompt_count: number;
+  completed: boolean;
+  updated_at: string;
+}
+
+export interface ImportBatchResult {
+  generated_at: string;
+  source: SourcePlan;
+  state: ImportState;
+  batch_start_index: number;
+  batch_file_count: number;
+  batch_prompt_count: number;
+  returned_prompt_count: number;
+  prompts: PromptRecord[];
+  stats: ScanStats;
+  persistence: PersistStats;
+  warnings: string[];
+}
+
 export interface ImproveResult {
   provider: string;
   used_ai: boolean;

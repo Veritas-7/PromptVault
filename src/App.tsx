@@ -25,6 +25,7 @@ import { BROWSER_BRIDGE_NOTICE } from "./browserBridge";
 import { importEventBatchSummary, importEventStatusLabel } from "./importEvents";
 import {
   activeImprovementForSelection,
+  improvementFailureText,
   improvementRequestStarted,
 } from "./improvementSelection";
 import {
@@ -174,6 +175,7 @@ function App() {
   const [improving, setImproving] = useState(false);
   const [improvement, setImprovement] = useState<ImproveResult | null>(null);
   const [improvementPromptId, setImprovementPromptId] = useState<string | null>(null);
+  const [improvementFailurePromptId, setImprovementFailurePromptId] = useState<string | null>(null);
   const importStopRequestedRef = useRef(false);
   const scanRunIdRef = useRef<string | null>(null);
   const topLevelActionClaimRef = useRef(false);
@@ -242,6 +244,10 @@ function App() {
   const activeImprovement = activeImprovementForSelection(
     improvement,
     improvementPromptId,
+    selectedPrompt?.id ?? null,
+  );
+  const improvementFailureMessage = improvementFailureText(
+    improvementFailurePromptId,
     selectedPrompt?.id ?? null,
   );
   const recommendationEmptyMessage = recommendationEmptyText(
@@ -480,6 +486,7 @@ function App() {
     setError(null);
     setImprovement(null);
     setImprovementPromptId(null);
+    setImprovementFailurePromptId(null);
     try {
       const parsedLimit = parseRequiredScanLimit(limit);
       const runId = createScanRunId();
@@ -533,6 +540,7 @@ function App() {
     setError(null);
     setImprovement(null);
     setImprovementPromptId(null);
+    setImprovementFailurePromptId(null);
     setStoredLoadState("loading");
     try {
       const next = await loadStoredPrompts({
@@ -576,6 +584,7 @@ function App() {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setImproving(true);
     setError(null);
+    setImprovementFailurePromptId(null);
     const started = improvementRequestStarted<ImproveResult>(prompt.id);
     setImprovement(started.improvement);
     setImprovementPromptId(started.improvementPromptId);
@@ -586,8 +595,10 @@ function App() {
       });
       setImprovement(next);
       setImprovementPromptId(prompt.id);
+      setImprovementFailurePromptId(null);
     } catch (err) {
       setError(errorText(err));
+      setImprovementFailurePromptId(prompt.id);
     } finally {
       setImproving(false);
       releaseExclusiveAction(topLevelActionClaimRef);
@@ -1412,6 +1423,12 @@ function App() {
             <h2>Recommendation</h2>
             <span>{activeImprovement?.provider ?? "local/GLM"}</span>
           </div>
+          {improvementFailureMessage ? (
+            <div className="notice warning panel-notice" data-improvement-run-error="true">
+              <AlertTriangle size={18} />
+              <span>{improvementFailureMessage}</span>
+            </div>
+          ) : null}
           {activeImprovement ? (
             <>
               <div className="quality-delta">

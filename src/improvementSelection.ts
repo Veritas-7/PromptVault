@@ -16,3 +16,11 @@ export function improvementRequestStarted<T>(promptId: string): {
     improvementPromptId: promptId,
   };
 }
+
+export function improvementFailureText(
+  failedPromptId: string | null,
+  selectedPromptId: string | null,
+): string | null {
+  if (!failedPromptId || failedPromptId !== selectedPromptId) return null;
+  return "Could not improve this prompt. Check the error above and retry.";
+}

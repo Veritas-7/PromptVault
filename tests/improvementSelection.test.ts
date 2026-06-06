@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   activeImprovementForSelection,
+  improvementFailureText,
   improvementRequestStarted,
 } from "../src/improvementSelection.ts";
 
@@ -26,4 +27,13 @@ test("starting an improvement clears the prior recommendation", () => {
     improvement: null,
     improvementPromptId: "prompt-a",
   });
+});
+
+test("improvement failure text is scoped to the selected prompt", () => {
+  assert.equal(
+    improvementFailureText("prompt-a", "prompt-a"),
+    "Could not improve this prompt. Check the error above and retry.",
+  );
+  assert.equal(improvementFailureText("prompt-a", "prompt-b"), null);
+  assert.equal(improvementFailureText(null, "prompt-a"), null);
 });

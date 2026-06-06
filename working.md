@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 18:59 KST
+Updated: 2026-06-06 19:05 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1388,6 +1388,33 @@ stability, performance, and maintainability, then record evidence here.
     `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 88,378 · new 0 · updated 0`.
   - Browser console and error diagnostics timed out once after recovery, then a
     retry returned `No console entries` and `No browser errors`.
+- Continued with the next thin slice: make failed Recommendation/Improve runs
+  visible inside the Recommendation panel.
+- Found that `/api/improve` failures left the Recommendation panel on the
+  generic selected-prompt empty state while only the global bridge error
+  explained the failure.
+- Added improvement failure copy coverage scoped to the selected prompt so
+  changing the visible prompt does not show a stale warning for another row.
+- `npm run test:ui` passed after this improve-failure slice with 50 tests.
+- `npm run check` passed after this improve-failure slice: UI tests 50 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?improve-failure=20260606a`.
+  - Clicked `Load Stored` and waited for 200 prompt rows.
+  - Installed a page-local fetch monkeypatch that rejected only `/api/improve`,
+    then clicked `Improve`.
+  - Observed the Recommendation panel warning
+    `Could not improve this prompt. Check the error above and retry.` while
+    the selected prompt and Improve button remained usable.
+  - Restored the original fetch in the same page and clicked `Improve` again.
+  - Observed recovery in-place: the warning and global error cleared, a
+    `local-rules` recommendation rendered, and the visible quality delta was
+    `56 -> 100 +44`.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1477,6 +1504,12 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx`: shows a Stored Vault in-panel warning when stored prompt loads
   fail.
 - `tests/storedLoadStatus.test.ts`: covers stored-load failure copy.
+- `src/improvementSelection.ts`: adds selected-prompt scoped improve failure
+  copy.
+- `src/App.tsx`: shows a Recommendation in-panel warning when the selected
+  prompt's improve request fails and clears it on scan, stored-load, retry, or
+  successful improvement.
+- `tests/improvementSelection.test.ts`: covers improve failure copy scoping.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1592,6 +1625,10 @@ stability, performance, and maintainability, then record evidence here.
   `input` event preserved the `cmux` filter for the filtered-failure proof.
   Console/errors diagnostics timed out once after recovery, then succeeded on
   retry with clean results.
+- During improve-failure QA, the page-local fetch monkeypatch affected only
+  `/api/improve` on the current `surface:9` page. Restoring `window.fetch` and
+  clicking `Improve` again recovered in-place without a page reload, and final
+  diagnostics returned `No console entries` and `No browser errors`.
 
 ## Research
 
@@ -1610,5 +1647,5 @@ stability, performance, and maintainability, then record evidence here.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
 5. Continue reviewing remaining empty and failure states in secondary panels,
-   especially scan/improve retry flows that still rely mostly on the
-   global error notice.
+   especially scan retry/cancel paths that still rely mostly on the global
+   error notice.

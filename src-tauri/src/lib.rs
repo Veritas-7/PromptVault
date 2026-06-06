@@ -229,6 +229,9 @@ pub struct StoredPromptsOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
     pub query: Option<String>,
+    pub source: Option<String>,
+    pub date: Option<String>,
+    pub workspace: Option<String>,
     pub preview_sort: Option<String>,
 }
 
@@ -584,9 +587,18 @@ pub fn run_load_stored_prompts(
         .min(MAX_STORED_PROMPT_LIMIT);
     let preview_sort = PreviewSort::from_option(options.preview_sort.as_deref())?;
     let query = options.query.unwrap_or_default();
+    let source = options.source.unwrap_or_default();
+    let date = options.date.unwrap_or_default();
+    let workspace = options.workspace.unwrap_or_default();
     let conn = open_promptvault_database(&database_path)?;
-    let prompts = read_stored_prompts(&conn, limit, query.trim(), preview_sort)?;
-    let total_matches = count_stored_prompt_matches(&conn, query.trim())?;
+    let filters = StoredPromptFilters {
+        query: query.trim(),
+        source: source.trim(),
+        date: date.trim(),
+        workspace: workspace.trim(),
+    };
+    let prompts = read_stored_prompts(&conn, limit, &filters, preview_sort)?;
+    let total_matches = count_stored_prompt_matches(&conn, &filters)?;
     let stats = build_stats(&prompts, stored_source_summaries(&prompts));
     let persistence = prompt_database_stats(&conn, &database_path, 0, 0)?;
     let returned_prompt_count = prompts.len();
@@ -2674,10 +2686,17 @@ struct StoredPromptRow {
     quality_json: String,
 }
 
+struct StoredPromptFilters<'a> {
+    query: &'a str,
+    source: &'a str,
+    date: &'a str,
+    workspace: &'a str,
+}
+
 fn read_stored_prompts(
     conn: &Connection,
     limit: usize,
-    query: &str,
+    filters: &StoredPromptFilters<'_>,
     preview_sort: PreviewSort,
 ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
     let order_by = match preview_sort {
@@ -2698,29 +2717,45 @@ fn read_stored_prompts(
             OR LOWER(source) LIKE ?2
             OR LOWER(COALESCE(cwd, '')) LIKE ?2
             OR prompt_date LIKE ?2)
+           AND (?3 = '' OR source = ?3)
+           AND (?4 = '' OR prompt_date = ?4)
+           AND (?5 = '' OR LOWER(COALESCE(cwd, '')) LIKE ?6)
          ORDER BY {order_by}
-         LIMIT ?3"
+         LIMIT ?7"
     );
-    let query_lower = query.to_lowercase();
+    let query_lower = filters.query.to_lowercase();
     let like = format!("%{query_lower}%");
+    let workspace_lower = filters.workspace.to_lowercase();
+    let workspace_like = format!("%{workspace_lower}%");
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
-        .query_map(rusqlite::params![query_lower, like, limit as i64], |row| {
-            Ok(StoredPromptRow {
-                id: row.get(0)?,
-                hash: row.get(1)?,
-                source: row.get(2)?,
-                session_id: row.get(3)?,
-                path: row.get(4)?,
-                timestamp: row.get(5)?,
-                cwd: row.get(6)?,
-                text: row.get(7)?,
-                word_count: row.get::<_, i64>(8)? as usize,
-                char_count: row.get::<_, i64>(9)? as usize,
-                risk_flags_json: row.get(10)?,
-                quality_json: row.get(11)?,
-            })
-        })?
+        .query_map(
+            rusqlite::params![
+                query_lower,
+                like,
+                filters.source,
+                filters.date,
+                workspace_lower,
+                workspace_like,
+                limit as i64,
+            ],
+            |row| {
+                Ok(StoredPromptRow {
+                    id: row.get(0)?,
+                    hash: row.get(1)?,
+                    source: row.get(2)?,
+                    session_id: row.get(3)?,
+                    path: row.get(4)?,
+                    timestamp: row.get(5)?,
+                    cwd: row.get(6)?,
+                    text: row.get(7)?,
+                    word_count: row.get::<_, i64>(8)? as usize,
+                    char_count: row.get::<_, i64>(9)? as usize,
+                    risk_flags_json: row.get(10)?,
+                    quality_json: row.get(11)?,
+                })
+            },
+        )?
         .collect::<Result<Vec<_>, _>>()?;
 
     rows.into_iter()
@@ -2745,10 +2780,12 @@ fn read_stored_prompts(
 
 fn count_stored_prompt_matches(
     conn: &Connection,
-    query: &str,
+    filters: &StoredPromptFilters<'_>,
 ) -> Result<usize, Box<dyn std::error::Error>> {
-    let query_lower = query.to_lowercase();
+    let query_lower = filters.query.to_lowercase();
     let like = format!("%{query_lower}%");
+    let workspace_lower = filters.workspace.to_lowercase();
+    let workspace_like = format!("%{workspace_lower}%");
     let count: i64 = conn.query_row(
         "SELECT COUNT(*)
          FROM prompts
@@ -2756,8 +2793,18 @@ fn count_stored_prompt_matches(
             OR LOWER(text) LIKE ?2
             OR LOWER(source) LIKE ?2
             OR LOWER(COALESCE(cwd, '')) LIKE ?2
-            OR prompt_date LIKE ?2)",
-        rusqlite::params![query_lower, like],
+            OR prompt_date LIKE ?2)
+           AND (?3 = '' OR source = ?3)
+           AND (?4 = '' OR prompt_date = ?4)
+           AND (?5 = '' OR LOWER(COALESCE(cwd, '')) LIKE ?6)",
+        rusqlite::params![
+            query_lower,
+            like,
+            filters.source,
+            filters.date,
+            workspace_lower,
+            workspace_like,
+        ],
         |row| row.get(0),
     )?;
     Ok(count as usize)
@@ -4714,6 +4761,9 @@ mod tests {
             database_path: Some(db_path.display().to_string()),
             limit: Some(25),
             query: None,
+            source: None,
+            date: None,
+            workspace: None,
             preview_sort: None,
         })
         .expect("load empty prompt vault");
@@ -4751,6 +4801,9 @@ mod tests {
             database_path: Some(db_path.display().to_string()),
             limit: Some(10),
             query: Some("needle".to_string()),
+            source: None,
+            date: None,
+            workspace: None,
             preview_sort: Some("quality-asc".to_string()),
         })
         .expect("load stored prompts");
@@ -4765,6 +4818,57 @@ mod tests {
         );
 
         std::fs::remove_dir_all(root).expect("remove load stored root");
+    }
+
+    #[test]
+    fn load_stored_prompts_filters_by_source_date_and_workspace() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-load-filtered-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create load filtered root");
+        let db_path = root.join("promptvault.sqlite");
+        let mut match_prompt = dated_record("stored-match", "2026-06-06T00:00:00Z");
+        match_prompt.source = "Codex".to_string();
+        match_prompt.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
+        let mut wrong_source = dated_record("stored-wrong-source", "2026-06-06T00:00:00Z");
+        wrong_source.source = "Claude".to_string();
+        wrong_source.cwd = match_prompt.cwd.clone();
+        let mut wrong_date = dated_record("stored-wrong-date", "2026-06-05T00:00:00Z");
+        wrong_date.source = "Codex".to_string();
+        wrong_date.cwd = match_prompt.cwd.clone();
+        let mut wrong_workspace = dated_record("stored-wrong-workspace", "2026-06-06T00:00:00Z");
+        wrong_workspace.source = "Codex".to_string();
+        wrong_workspace.cwd = Some("/tmp/OtherProject".to_string());
+        let prompts = vec![match_prompt, wrong_source, wrong_date, wrong_workspace];
+        let stats = build_stats(&prompts, Vec::new());
+        persist_scan_result(&db_path, "2026-06-06T00:01:00Z", &prompts, &stats, &[])
+            .expect("persist filtered prompt vault");
+
+        let result = run_load_stored_prompts(StoredPromptsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(10),
+            query: Some("src-tauri".to_string()),
+            source: Some("Codex".to_string()),
+            date: Some("2026-06-06".to_string()),
+            workspace: Some("promptvault".to_string()),
+            preview_sort: Some("latest".to_string()),
+        })
+        .expect("load source/date/workspace filtered prompts");
+
+        assert_eq!(result.returned_prompt_count, 1);
+        assert_eq!(result.prompts[0].id, "stored-match");
+        assert_eq!(result.stats.total_prompts, 1);
+        assert_eq!(result.stats.source_summaries[0].label, "Codex");
+        assert_eq!(
+            result.persistence.expect("persistence").stored_prompt_count,
+            4
+        );
+
+        std::fs::remove_dir_all(root).expect("remove load filtered root");
     }
 
     fn record(id: &str) -> PromptRecord {

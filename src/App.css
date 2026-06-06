@@ -22,7 +22,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -161,6 +162,37 @@ h3 {
   background: #fff;
   color: #213629;
   font-weight: 700;
+}
+
+.stored-filter-panel {
+  gap: 12px;
+  padding-bottom: 14px;
+}
+
+.stored-filter-grid {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(140px, 1fr)) auto;
+  padding: 0 14px;
+}
+
+.stored-filter-control {
+  color: #516157;
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+}
+
+.stored-filter-control input {
+  background: #f8faf7;
+  border: 1px solid #d8e1d6;
+  border-radius: 8px;
+  color: #17221b;
+  height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  width: 100%;
 }
 
 .notice {
@@ -919,6 +951,10 @@ h3 {
     grid-template-columns: 1fr;
   }
 
+  .stored-filter-grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
   .prompt-list {
     max-height: 320px;
   }
@@ -936,7 +972,8 @@ h3 {
   }
 
   .metrics,
-  .frequency-grid {
+  .frequency-grid,
+  .stored-filter-grid {
     grid-template-columns: 1fr;
   }
 

@@ -39,6 +39,11 @@ import {
   scanPrompts,
 } from "./promptVaultApi";
 import { selectedPromptForView } from "./selection";
+import {
+  activeStoredPromptFilterCount,
+  storedPromptLoadOptions,
+  type StoredPromptFilters,
+} from "./storedFilters";
 import type {
   ImportBatchResult,
   ImportEventsResult,
@@ -118,6 +123,12 @@ function App() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [storedFilters, setStoredFilters] = useState<StoredPromptFilters>({
+    date: "",
+    query: "",
+    source: "",
+    workspace: "",
+  });
   const [limit, setLimit] = useState("");
   const [previewMode, setPreviewMode] = useState<PreviewMode>("latest");
   const [error, setError] = useState<string | null>(null);
@@ -159,6 +170,15 @@ function App() {
     improvementPromptId,
     selectedPrompt?.id ?? null,
   );
+  const storedFilterCount = activeStoredPromptFilterCount(storedFilters);
+  const storedSourceSuggestions = useMemo(() => {
+    return [...new Set((result?.stats.source_summaries ?? []).map((source) => source.label))]
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+  }, [result?.stats.source_summaries]);
+  const storedDateSuggestions = useMemo(() => {
+    return (result?.stats.prompts_by_date ?? []).map((date) => date.text);
+  }, [result?.stats.prompts_by_date]);
 
   useEffect(() => {
     void refreshImportStates();
@@ -330,8 +350,7 @@ function App() {
     setScanState("scanning");
     try {
       const next = await loadStoredPrompts({
-        limit: PREVIEW_LIMIT,
-        preview_sort: previewSortForMode(previewMode),
+        ...storedPromptLoadOptions(storedFilters, previewMode, PREVIEW_LIMIT),
       });
       const loadedMode = effectivePromptListMode(next.preview_sort, previewMode);
       setResult(next);
@@ -346,6 +365,22 @@ function App() {
       setError(errorText(err));
       setScanState("failed");
     }
+  }
+
+  function updateStoredFilter(key: keyof StoredPromptFilters, value: string) {
+    setStoredFilters((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function resetStoredFilters() {
+    setStoredFilters({
+      date: "",
+      query: "",
+      source: "",
+      workspace: "",
+    });
   }
 
   async function runImprove(prompt: PromptRecord | null) {
@@ -449,6 +484,67 @@ function App() {
           <span>{BROWSER_BRIDGE_NOTICE}</span>
         </section>
       ) : null}
+
+      <section className="panel stored-filter-panel">
+        <div className="panel-heading">
+          <h2>Stored Vault</h2>
+          <span>{storedFilterCount ? `${storedFilterCount} filters active` : "all stored prompts"}</span>
+        </div>
+        <div className="stored-filter-grid">
+          <label className="stored-filter-control">
+            <span>Text</span>
+            <input
+              value={storedFilters.query}
+              placeholder="cmux, source, workspace"
+              onChange={(event) => updateStoredFilter("query", event.currentTarget.value)}
+            />
+          </label>
+          <label className="stored-filter-control">
+            <span>Source</span>
+            <input
+              list="stored-source-options"
+              value={storedFilters.source}
+              placeholder="Any source"
+              onChange={(event) => updateStoredFilter("source", event.currentTarget.value)}
+            />
+          </label>
+          <label className="stored-filter-control">
+            <span>Date</span>
+            <input
+              list="stored-date-options"
+              value={storedFilters.date}
+              placeholder="YYYY-MM-DD"
+              onChange={(event) => updateStoredFilter("date", event.currentTarget.value)}
+            />
+          </label>
+          <label className="stored-filter-control">
+            <span>Workspace</span>
+            <input
+              value={storedFilters.workspace}
+              placeholder="PromptVault"
+              onChange={(event) => updateStoredFilter("workspace", event.currentTarget.value)}
+            />
+          </label>
+          <button
+            className="inline-action"
+            disabled={!storedFilterCount || scanState === "scanning" || isImportRunning}
+            onClick={resetStoredFilters}
+            type="button"
+          >
+            Reset
+          </button>
+        </div>
+        <datalist id="stored-source-options">
+          {storedSourceSuggestions.map((source) => (
+            <option key={source} value={source} />
+          ))}
+        </datalist>
+        <datalist id="stored-date-options">
+          {storedDateSuggestions.map((date) => (
+            <option key={date} value={date} />
+          ))}
+        </datalist>
+      </section>
 
       {importStatesResult || importStatesState === "loading" ? (
         <section className="panel saved-import-panel">

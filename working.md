@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 11:11 KST
+Updated: 2026-06-06 15:49 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -370,6 +370,16 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx` and `src/App.css`: added saved import progress panel, startup
   import-state load, direct refresh, and post-import snapshot refresh.
 - `README.md` and `docs/CLI.md`: documented `/api/import-states`.
+- `src-tauri/src/lib.rs`: extended stored prompt loading with optional text,
+  source, date, and workspace filters; added Rust coverage for combined
+  source/date/workspace filtering.
+- `src/promptVaultApi.ts`: added stored prompt filter fields to the API
+  request type.
+- `src/storedFilters.ts` and `tests/storedFilters.test.ts`: added tested
+  option normalization for stored prompt loads.
+- `src/App.tsx` and `src/App.css`: added the stored-vault filter panel, reset
+  control, source/date suggestions from loaded results, and responsive layout.
+- `README.md`: documented filtered stored-prompt loading.
 
 ## Tests
 
@@ -554,6 +564,51 @@ stability, performance, and maintainability, then record evidence here.
     `Antigravity conversation DB 10`.
   - Observed prompt list rows loaded from persisted DB, including weak Codex and
     Claude prompt rows, ready for selection and improvement.
+- `npm run test:ui`: 21 tests passed after adding stored filter helpers.
+- `npm run build`: TypeScript and Vite production build passed after adding the
+  stored-vault filter UI.
+- `cd src-tauri && cargo test load_stored_prompts`: 3 focused tests passed,
+  including combined source/date/workspace filtering.
+- `npm run check`: passed after the stored filter slice. This covered UI tests
+  21 passed, TypeScript/Vite build, Rust lib 57 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- `cd src-tauri && cargo build --bin promptvault-cli`: passed before
+  restarting the browser bridge.
+- Continued with the next thin slice: source/date/workspace filters for the
+  permanent stored prompt vault.
+- Confirmed the current cmux workspace `workspace:5` has exactly one
+  PromptVault browser surface, now `surface:9`, at `http://127.0.0.1:5173/`.
+  Did not create another browser; avoided the separate WriteFlow browser in the
+  `블로그` workspace when Computer Use showed it as the active window.
+- Added stored-vault filter controls for text, exact source label, prompt date,
+  and workspace path. These filters are applied by `Load Stored`, so users can
+  review the permanent SQLite vault without re-scanning source files.
+- Restarted only the `promptvault-bridge` tmux session after rebuilding
+  `promptvault-cli`; left the existing `promptvault-static` server and cmux app
+  running.
+- Real bridge smoke before browser QA:
+  `/api/prompts` with `source=Codex`, `date=2026-06-06`, and
+  `workspace=/Users/wj` returned `3` prompts from `459` stored prompts.
+- Real cmux click/DOM QA on the same `surface:9`:
+  - Reloaded/navigated the existing PromptVault browser with a cache-busting
+    query and confirmed `.stored-filter-panel` rendered.
+  - Filled Source `Codex`, Date `2026-06-06`, Workspace `/Users/wj`, then
+    clicked `Load Stored`.
+  - Observed metrics `Prompts 3`, `Preview 3`, `Files 2`, `Quality 80.0`,
+    `Weak 0`, `DB Stored 459`, `Dates 20`; source list showed only `Codex`,
+    and Dates showed `2026-06-06: 3`.
+  - Clicked `Improve` on the selected filtered prompt. GLM returned HTTP 429,
+    the local fallback produced a recommendation with `100 -> 100`, `+0`,
+    and `Remaining: none`.
+  - Clicked `Reset`; confirmed Source/Date/Workspace inputs cleared and the
+    stored-vault header returned to `all stored prompts`.
+  - Clicked `Load Stored` after reset and observed `Prompts 459`.
+  - Filled Workspace `definitely-not-a-workspace`, clicked `Load Stored`, and
+    observed the empty-state path: `Prompts 0`, `Preview 0`, `DB Stored 459`,
+    selected panel prompt `Run a scan or load stored prompts.`, and
+    recommendation prompt `Select a prompt and run improvement.`
+  - Browser diagnostics after the empty-state test returned `No console
+    entries` and `No browser errors`.
 
 ## Issues
 
@@ -574,6 +629,13 @@ stability, performance, and maintainability, then record evidence here.
   `cmux browser surface:11 errors list` timed out even after the page rendered.
   The visible cmux app browser and DB/API paths were verified directly; no stale
   helper process remained after cleanup.
+- During the stored-filter slice, `cmux browser` diagnostics briefly timed out
+  while the active visible cmux workspace was `블로그`/WriteFlow. After
+  re-targeting the existing PromptVault `surface:9`, cmux browser CLI commands
+  worked and diagnostics returned clean. Treat Computer Use app state as the
+  currently focused cmux workspace, not proof of the target PromptVault surface.
+- GLM still rate-limits with HTTP 429 in browser Improve tests; the local
+  fallback continues to produce a usable recommendation and warning.
 
 ## Research
 
@@ -585,11 +647,9 @@ stability, performance, and maintainability, then record evidence here.
 
 1. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
-2. Add date/source filters for the stored prompt vault so the user can jump
-   directly to a day, source, or workspace without relying only on client-side
-   filtering.
+2. Add a full stored-vault facet endpoint for all source/date/workspace options
+   so filter suggestions are available before the first unfiltered load.
 3. Add scan-run cancellation/progress for unrestricted full scans, separate
    from the safer resumable import-batch path.
-4. Recover or replace the cmux CLI browser diagnostics path for console/error
-   collection; accessibility-based cmux UI verification worked when CLI
-   diagnostics timed out.
+4. Recover or harden the cmux browser diagnostics workflow for cases where the
+   active visible workspace differs from the target PromptVault surface.

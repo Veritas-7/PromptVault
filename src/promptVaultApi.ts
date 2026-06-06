@@ -40,6 +40,9 @@ export interface StoredPromptsOptions {
   database_path?: string;
   limit?: number;
   query?: string;
+  source?: string;
+  date?: string;
+  workspace?: string;
   preview_sort?: string;
 }
 

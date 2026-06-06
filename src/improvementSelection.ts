@@ -1,3 +1,5 @@
+import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
+
 export function activeImprovementForSelection<T>(
   improvement: T | null,
   improvementPromptId: string | null,
@@ -28,11 +30,12 @@ export function improvementFailureText(
 export function improvementActionLabel(
   hasSelectedPrompt: boolean,
   improving: boolean,
-  actionLocked: boolean,
+  lockState: ActionLockState,
 ): string {
   if (improving) return "Improving selected prompt";
   if (!hasSelectedPrompt) return "Select a prompt before improving";
-  if (actionLocked) return "Cannot improve selected prompt while another action is running";
+  const reason = activeActionLockReason(lockState);
+  if (reason) return `Cannot improve selected prompt while ${reason}`;
   return "Improve selected prompt";
 }
 

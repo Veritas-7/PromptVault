@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { ActionLockState } from "../src/actionLocks.ts";
 import {
   activeImprovementForSelection,
   improvementActionLabel,
@@ -9,6 +10,17 @@ import {
 } from "../src/improvementSelection.ts";
 
 const improvement = { revised_prompt: "better" };
+
+function lockState(overrides: Partial<ActionLockState> = {}): ActionLockState {
+  return {
+    importRunning: false,
+    improvementRunning: false,
+    planRunning: false,
+    scanRunning: false,
+    storedLoadRunning: false,
+    ...overrides,
+  };
+}
 
 test("active improvement is hidden when selection changed", () => {
   assert.equal(activeImprovementForSelection(improvement, "prompt-a", "prompt-b"), null);
@@ -41,13 +53,20 @@ test("improvement failure text is scoped to the selected prompt", () => {
 });
 
 test("improvement action label explains disabled and active states", () => {
-  assert.equal(improvementActionLabel(false, false, false), "Select a prompt before improving");
-  assert.equal(improvementActionLabel(true, true, true), "Improving selected prompt");
+  assert.equal(improvementActionLabel(false, false, lockState()), "Select a prompt before improving");
   assert.equal(
-    improvementActionLabel(true, false, true),
-    "Cannot improve selected prompt while another action is running",
+    improvementActionLabel(true, true, lockState({ improvementRunning: true })),
+    "Improving selected prompt",
   );
-  assert.equal(improvementActionLabel(true, false, false), "Improve selected prompt");
+  assert.equal(
+    improvementActionLabel(true, false, lockState({ scanRunning: true })),
+    "Cannot improve selected prompt while a scan is running",
+  );
+  assert.equal(
+    improvementActionLabel(true, false, lockState({ storedLoadRunning: true })),
+    "Cannot improve selected prompt while stored prompts are loading",
+  );
+  assert.equal(improvementActionLabel(true, false, lockState()), "Improve selected prompt");
 });
 
 test("selection change clears recommendation state and matching improve error", () => {

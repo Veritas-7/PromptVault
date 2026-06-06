@@ -1692,7 +1692,7 @@ function App() {
           <div className="panel-heading">
             <h2>Selected</h2>
             <button
-              aria-label={improvementActionLabel(selectedPrompt !== null, improving, isTopLevelActionLocked)}
+              aria-label={improvementActionLabel(selectedPrompt !== null, improving, actionLockState)}
               data-run-improve="true"
               disabled={!selectedPrompt || improving || isTopLevelActionLocked}
               onClick={() => runImprove(selectedPrompt)}

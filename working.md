@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 23:25 KST
+Updated: 2026-06-06 23:30 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -454,6 +454,27 @@ stability, performance, and maintainability, then record evidence here.
   `HTTP/1.0 200 OK`, bridge `/api/health` returned `ok:true`, but
   `timeout 8 cmux browser --surface surface:9 get title` exited `124`. No cmux
   app restart, kill, or second browser was used.
+- Safe cmux recovery attempts before the Improve lock-reason label slice did
+  not restore the existing PromptVault browser surface: Computer Use showed the
+  visible cmux window still on `working.md` with Worklog Tracker at
+  `127.0.0.1:1432`; AX click, coordinate click on the `프롬프트` workspace row,
+  Command-period, `cmux workspace select workspace:5`,
+  `cmux focus-pane --workspace workspace:5 --pane pane:10`, and
+  `cmux list-pane-surfaces --workspace workspace:5 --pane pane:10` all failed
+  to restore direct control or timed out. No cmux app restart, kill, or second
+  browser was used.
+- `npm run test:ui -- tests/improvementSelection.test.ts`: passed; due the
+  package script glob this ran the full UI helper suite and reported 115
+  passing tests, including the new Improve lock-reason label coverage.
+- `npm run build`: TypeScript and Vite production build passed and refreshed
+  the static frontend bundle for the Improve lock-reason label slice.
+- `npm run check`: passed after the Improve lock-reason label slice. This
+  covered UI tests 115 passed, TypeScript/Vite build, Rust lib 64 passed, CLI
+  15 passed, doc-tests, and clippy with `-D warnings`.
+- cmux direct QA remained blocked after the Improve lock-reason label slice:
+  frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health` returned
+  `ok:true`, `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
 - `npm run test:ui -- tests/storedFilters.test.ts`: passed; due the package
   script glob this ran the full UI helper suite and reported 113 passing tests,
   including the new Stored Vault Apply label coverage.
@@ -2521,6 +2542,16 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this Stored Vault filter input label slice: UI
   tests 115 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
   passed, doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make the Selected panel `Improve` button
+  explain the specific active lock reason instead of using generic
+  "another action" copy.
+- Added tested Improve action labels so locked states now announce examples like
+  `Cannot improve selected prompt while a scan is running` and
+  `Cannot improve selected prompt while stored prompts are loading`, while
+  preserving no-selection, running, and ready states.
+- `npm run check` passed after this Improve lock-reason label slice: UI tests
+  115 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2809,6 +2840,12 @@ stability, performance, and maintainability, then record evidence here.
   `[data-stored-filter-workspace=true]`.
 - `tests/storedFilters.test.ts`: covers text, source, date, workspace, and
   locked Stored Vault filter input labels.
+- `src/improvementSelection.ts`: now uses `activeActionLockReason()` so the
+  Selected panel Improve action names the specific blocking operation.
+- `src/App.tsx`: passes the full top-level `actionLockState` into
+  `improvementActionLabel()`.
+- `tests/improvementSelection.test.ts`: covers scan-running and
+  stored-load-running Improve lock labels.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -3082,6 +3119,12 @@ stability, performance, and maintainability, then record evidence here.
   probe timed out after 8 seconds. The slice is verified by focused UI helper
   tests plus the full project gate until safe same-surface cmux control
   recovers.
+- During the Improve lock-reason label slice, cmux app health and both
+  PromptVault services remained green, but Computer Use still showed workspace
+  2 `working.md`/Worklog Tracker instead of the existing PromptVault workspace.
+  Safe recovery attempts did not switch visible workspace 5 or restore
+  `surface:9` RPCs. This remains a cmux coordination/runtime blocker, not an
+  app health failure.
 
 ## Research
 

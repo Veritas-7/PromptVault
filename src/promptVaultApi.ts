@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { bridgeEndpoint, hasTauriInvoke } from "./browserBridge";
-import type { ImproveResult, ScanResult } from "./types";
+import type { ImproveResult, ScanPlan, ScanResult } from "./types";
 
 export interface ScanPromptOptions {
   limit?: number;
@@ -9,9 +9,20 @@ export interface ScanPromptOptions {
   include_markdown?: boolean;
 }
 
+export interface ScanPlanOptions {
+  source_ids?: string[];
+}
+
 export interface ImprovePromptRequest {
   prompt: string;
   context?: string | null;
+}
+
+export async function planScan(options: ScanPlanOptions = {}): Promise<ScanPlan> {
+  if (hasTauriInvoke()) {
+    return invoke<ScanPlan>("plan_scan", { options });
+  }
+  return postBridge<ScanPlan>("/api/plan", { options });
 }
 
 export async function scanPrompts(options: ScanPromptOptions): Promise<ScanResult> {

@@ -17,11 +17,12 @@ import {
   improvementRequestStarted,
 } from "./improvementSelection";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
-import { improvePrompt, isBrowserQaMode, scanPrompts } from "./promptVaultApi";
+import { improvePrompt, isBrowserQaMode, planScan, scanPrompts } from "./promptVaultApi";
 import { selectedPromptForView } from "./selection";
-import type { ImproveResult, PromptRecord, ScanResult } from "./types";
+import type { ImproveResult, PromptRecord, ScanPlan, ScanResult } from "./types";
 
 type ScanState = "idle" | "scanning" | "ready" | "failed";
+type PlanState = "idle" | "planning" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
 const MAX_SCAN_LIMIT = 100000;
 
@@ -42,9 +43,22 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function formatBytes(bytes: number): string {
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return unit === 0 ? `${bytes} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
+}
+
 function App() {
   const browserQaMode = isBrowserQaMode();
   const [scanState, setScanState] = useState<ScanState>("idle");
+  const [planState, setPlanState] = useState<PlanState>("idle");
+  const [plan, setPlan] = useState<ScanPlan | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -81,6 +95,19 @@ function App() {
     improvementPromptId,
     selectedPrompt?.id ?? null,
   );
+
+  async function runPlan() {
+    setError(null);
+    setPlanState("planning");
+    try {
+      const next = await planScan();
+      setPlan(next);
+      setPlanState("ready");
+    } catch (err) {
+      setError(errorText(err));
+      setPlanState("failed");
+    }
+  }
 
   async function runScan() {
     setError(null);
@@ -178,6 +205,15 @@ function App() {
             <RefreshCw size={18} />
             {scanState === "scanning" ? "Scanning" : "Scan"}
           </button>
+          <button
+            className="secondary-action"
+            disabled={planState === "planning" || scanState === "scanning"}
+            onClick={runPlan}
+            type="button"
+          >
+            <ClipboardList size={18} />
+            {planState === "planning" ? "Planning" : "Plan"}
+          </button>
         </div>
       </section>
 
@@ -221,6 +257,57 @@ function App() {
         <section className="notice warning">
           <AlertTriangle size={18} />
           <span>{result.warnings.join(" ")}</span>
+        </section>
+      ) : null}
+
+      {plan?.warnings.length ? (
+        <section className="notice warning">
+          <AlertTriangle size={18} />
+          <span>{plan.warnings.join(" ")}</span>
+        </section>
+      ) : null}
+
+      {plan ? (
+        <section className="panel plan-panel">
+          <div className="panel-heading">
+            <h2>Import Plan</h2>
+            <span>{new Date(plan.generated_at).toLocaleString()}</span>
+          </div>
+          <div className="plan-summary">
+            <div>
+              <span>Sources</span>
+              <strong>
+                {plan.available_sources} / {plan.total_sources}
+              </strong>
+            </div>
+            <div>
+              <span>Files</span>
+              <strong>{plan.total_files.toLocaleString()}</strong>
+            </div>
+            <div>
+              <span>Size</span>
+              <strong>{formatBytes(plan.total_bytes)}</strong>
+            </div>
+            <div>
+              <span>Large Files</span>
+              <strong>{plan.large_file_count.toLocaleString()}</strong>
+            </div>
+          </div>
+          <div className="plan-sources">
+            {plan.sources.map((source) => (
+              <div className="plan-source-row" key={source.id}>
+                <div>
+                  <strong>{source.label}</strong>
+                  <span>{source.root_path}</span>
+                  {source.notes.length ? <span className="source-meta">{source.notes.join(" ")}</span> : null}
+                </div>
+                <div className={`status ${source.status}`}>
+                  {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                  {source.file_count.toLocaleString()} · {formatBytes(source.byte_count)}
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
       ) : null}
 

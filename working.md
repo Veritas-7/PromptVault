@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 09:44 KST
+Updated: 2026-06-06 09:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -195,6 +195,27 @@ stability, performance, and maintainability, then record evidence here.
   (`feat: persist prompt scans to sqlite`).
 - After push, `git rev-list --left-right --count HEAD...origin/main` returned
   `0 0`.
+- Continued with the next thin slice: scan planning before unrestricted
+  historical imports.
+- Added a metadata-only import plan path that inventories matching source files
+  and bytes without reading prompt bodies.
+- Real Codex CLI plan evidence:
+  `cargo run --bin promptvault-cli -- plan --source codex --json`
+  returned `25,097` matching files, `34,710,445,142` bytes (`32.3 GiB`),
+  `81` large files, and explicit warnings to use a prompt limit or incremental
+  import slices before an unrestricted scan.
+- Added browser bridge `/api/plan` and verified it with curl against the live
+  local bridge.
+- Real cmux click QA on the same `surface:11`:
+  - Reloaded `http://127.0.0.1:5173/`.
+  - Confirmed the new `Plan` button rendered.
+  - Clicked `Plan`.
+  - Observed `Import Plan` panel with `Sources 11 / 11`, `Files 27,977`,
+    `Size 33.2 GiB`, and `Large Files 85`.
+  - Observed source rows including `Codex 25,097 · 32.3 GiB`, `Claude Code
+    projects 1,722 · 714.2 MiB`, and the empty Antigravity alt source note.
+  - Console output only showed Vite connection logs.
+  - Browser error collector returned `No browser errors`.
 
 ## Changes
 
@@ -210,6 +231,13 @@ stability, performance, and maintainability, then record evidence here.
   mode, DB persistence notices, date metrics, and scan/improve results.
 - `README.md`, `docs/CLI.md`, and `index.html`: documented persistence,
   browser bridge usage, and replaced the default Vite title.
+- `src-tauri/src/lib.rs`: added `ScanPlan`/`SourcePlan`, metadata-only source
+  inventory, large-source warnings, Tauri `plan_scan`, and plan tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: added `plan` command and bridge
+  `/api/plan`.
+- `src/promptVaultApi.ts` and `src/types.ts`: added plan API/types.
+- `src/App.tsx` and `src/App.css`: added Plan button and Import Plan UI.
+- `README.md` and `docs/CLI.md`: documented `plan`.
 
 ## Tests
 
@@ -230,14 +258,25 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check`: passed after final source/doc updates. This covered UI tests
   10 passed, TypeScript/Vite build, Rust lib 47 passed, CLI 15 passed,
   doc-tests, and clippy with `-D warnings`.
+- `npm run build`: passed after adding Import Plan UI.
+- `cd src-tauri && cargo test scan_plan`: 2 plan tests passed.
+- `cd src-tauri && cargo test help_text_documents_cli_validation_rules`: CLI
+  help test passed.
+- `cargo run --bin promptvault-cli -- plan --source codex --json`: passed and
+  produced the real Codex source volume warning.
+- `curl -X POST http://127.0.0.1:5174/api/plan`: passed against the live
+  bridge after restart.
+- `npm run check`: passed after the plan slice. This covered UI tests 10
+  passed, TypeScript/Vite build, Rust lib 49 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 
 ## Issues
 
-- Unlimited full scan over `~/.codex/sessions` is not yet practical. The
-  directory is about `32G`; a full scan over 28,517 candidate files was killed
-  after more than three minutes. Future work should add incremental indexing,
-  progress reporting, and a first-class full-import queue before claiming
-  exhaustive historical ingestion of the entire Codex store.
+- Unlimited full scan over `~/.codex/sessions` is not yet practical. The new
+  plan path confirms the current Codex source alone has `25,097` matching files
+  and about `32.3 GiB` of JSONL. Future work should add resumable incremental
+  import slices and a background queue before claiming exhaustive historical
+  ingestion of the entire Codex store.
 - Several limited source scans intentionally stopped at the configured prompt
   limit and reported the expected limit warning.
 - GLM improvement path hit HTTP 429 during manual QA; local fallback worked.
@@ -251,7 +290,9 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Next Steps
 
-1. Add an incremental/full-import planner for the 32G Codex session store.
-2. Add UI progress/cancel state for long scans.
-3. Consider a background indexing worker so first-run historical import can
+1. Stage only explicit plan-slice paths, run staged whitespace/secret checks,
+   then commit and push this slice.
+2. Add resumable incremental import state for large stores using the plan output.
+3. Add UI progress/cancel state for long scans.
+4. Consider a background indexing worker so first-run historical import can
    continue without blocking the browser UI.

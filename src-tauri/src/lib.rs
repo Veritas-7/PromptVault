@@ -15,6 +15,9 @@ const APP_DIR_NAME: &str = "PromptVault";
 const SECRET_ENV_PATH: &str = "/Users/wj/Ai/System/70_Governance/🔐 Secrets/secrets.env";
 const DEFAULT_GLM_CHAT_ENDPOINT: &str = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
 const DEFAULT_GLM_MODEL: &str = "glm-4.6";
+const LARGE_SOURCE_FILE_COUNT: usize = 10_000;
+const LARGE_SOURCE_BYTES: u64 = 5 * 1024 * 1024 * 1024;
+const LARGE_FILE_BYTES: u64 = 50 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptRecord {
@@ -101,6 +104,38 @@ pub struct ScanResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourcePlan {
+    pub id: String,
+    pub label: String,
+    pub root_path: String,
+    pub status: String,
+    pub file_count: usize,
+    pub byte_count: u64,
+    pub large_file_count: usize,
+    pub largest_file_bytes: u64,
+    pub newest_modified_at: Option<String>,
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanPlan {
+    pub generated_at: String,
+    pub total_sources: usize,
+    pub available_sources: usize,
+    pub total_files: usize,
+    pub total_bytes: u64,
+    pub large_file_count: usize,
+    pub largest_file_bytes: u64,
+    pub sources: Vec<SourcePlan>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ScanPlanOptions {
+    pub source_ids: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImproveRequest {
     pub prompt: String,
     pub context: Option<String>,
@@ -164,6 +199,12 @@ enum SourceKind {
 fn scan_prompts(options: Option<ScanOptions>) -> Result<ScanResult, String> {
     let opts = options.unwrap_or_default();
     run_scan(opts).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn plan_scan(options: Option<ScanPlanOptions>) -> Result<ScanPlan, String> {
+    let opts = options.unwrap_or_default();
+    build_scan_plan(opts).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -312,6 +353,65 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
         persistence,
         warnings,
     })
+}
+
+pub fn build_scan_plan(options: ScanPlanOptions) -> Result<ScanPlan, Box<dyn std::error::Error>> {
+    validate_source_ids(options.source_ids.as_deref())?;
+    let generated_at = Utc::now().to_rfc3339();
+    let sources = selected_source_specs(options.source_ids.as_deref());
+    Ok(build_scan_plan_for_sources(generated_at, sources))
+}
+
+fn build_scan_plan_for_sources(generated_at: String, sources: Vec<SourceSpec>) -> ScanPlan {
+    let total_sources = sources.len();
+    let mut plans = Vec::new();
+    let mut warnings = Vec::new();
+
+    for source in sources {
+        let plan = source_plan(&source);
+        if plan.file_count >= LARGE_SOURCE_FILE_COUNT || plan.byte_count >= LARGE_SOURCE_BYTES {
+            warnings.push(format!(
+                "{} has {} matching files and {}; use a prompt limit or run incremental import slices before an unrestricted scan.",
+                plan.label,
+                plan.file_count,
+                format_bytes(plan.byte_count)
+            ));
+        }
+        if plan.large_file_count > 0 {
+            warnings.push(format!(
+                "{} includes {} files larger than {}; large JSONL files may dominate scan time.",
+                plan.label,
+                plan.large_file_count,
+                format_bytes(LARGE_FILE_BYTES)
+            ));
+        }
+        plans.push(plan);
+    }
+
+    let available_sources = plans
+        .iter()
+        .filter(|source| source.status != "missing")
+        .count();
+    let total_files = plans.iter().map(|source| source.file_count).sum();
+    let total_bytes = plans.iter().map(|source| source.byte_count).sum();
+    let large_file_count = plans.iter().map(|source| source.large_file_count).sum();
+    let largest_file_bytes = plans
+        .iter()
+        .map(|source| source.largest_file_bytes)
+        .max()
+        .unwrap_or(0);
+
+    ScanPlan {
+        generated_at,
+        total_sources,
+        available_sources,
+        total_files,
+        total_bytes,
+        large_file_count,
+        largest_file_bytes,
+        sources: plans,
+        warnings,
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -760,8 +860,25 @@ fn collect_from_source(
 }
 
 fn matching_source_files(root: &Path, kind: SourceKind) -> Vec<Result<PathBuf, walkdir::Error>> {
+    matching_source_file_candidates(root, kind)
+        .into_iter()
+        .map(|candidate| candidate.map(|candidate| candidate.path))
+        .collect()
+}
+
+#[derive(Debug, Clone)]
+struct SourceFileCandidate {
+    path: PathBuf,
+    byte_count: u64,
+    modified_ms: u128,
+}
+
+fn matching_source_file_candidates(
+    root: &Path,
+    kind: SourceKind,
+) -> Vec<Result<SourceFileCandidate, walkdir::Error>> {
     if root.is_file() {
-        return vec![Ok(root.to_path_buf())];
+        return vec![Ok(file_candidate(root))];
     }
 
     let mut paths = Vec::new();
@@ -776,13 +893,13 @@ fn matching_source_files(root: &Path, kind: SourceKind) -> Vec<Result<PathBuf, w
         };
         let path = entry.path();
         if source_file_matches(path, kind) {
-            paths.push(path.to_path_buf());
+            paths.push(file_candidate(path));
         }
     }
     paths.sort_by(|a, b| {
-        file_sort_key(b)
-            .cmp(&file_sort_key(a))
-            .then_with(|| b.cmp(a))
+        b.modified_ms
+            .cmp(&a.modified_ms)
+            .then_with(|| b.path.cmp(&a.path))
     });
 
     paths
@@ -815,13 +932,93 @@ fn source_file_matches(path: &Path, kind: SourceKind) -> bool {
     }
 }
 
-fn file_sort_key(path: &Path) -> u128 {
-    path.metadata()
-        .and_then(|metadata| metadata.modified())
-        .ok()
-        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis())
-        .unwrap_or(0)
+fn file_candidate(path: &Path) -> SourceFileCandidate {
+    let metadata = path.metadata().ok();
+    SourceFileCandidate {
+        path: path.to_path_buf(),
+        byte_count: metadata
+            .as_ref()
+            .map(|metadata| metadata.len())
+            .unwrap_or(0),
+        modified_ms: metadata
+            .and_then(|metadata| metadata.modified().ok())
+            .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|duration| duration.as_millis())
+            .unwrap_or(0),
+    }
+}
+
+fn source_plan(source: &SourceSpec) -> SourcePlan {
+    let mut plan = SourcePlan {
+        id: source.id.to_string(),
+        label: source.label.to_string(),
+        root_path: source.root.display().to_string(),
+        status: if source.root.exists() {
+            "ok".to_string()
+        } else {
+            "missing".to_string()
+        },
+        file_count: 0,
+        byte_count: 0,
+        large_file_count: 0,
+        largest_file_bytes: 0,
+        newest_modified_at: None,
+        notes: Vec::new(),
+    };
+
+    if !source.root.exists() {
+        plan.notes
+            .push("Path was not present on this machine.".to_string());
+        return plan;
+    }
+
+    let mut newest_ms = 0;
+    for file in matching_source_file_candidates(&source.root, source.kind) {
+        match file {
+            Ok(candidate) => {
+                plan.file_count += 1;
+                plan.byte_count = plan.byte_count.saturating_add(candidate.byte_count);
+                plan.largest_file_bytes = plan.largest_file_bytes.max(candidate.byte_count);
+                if candidate.byte_count >= LARGE_FILE_BYTES {
+                    plan.large_file_count += 1;
+                }
+                newest_ms = newest_ms.max(candidate.modified_ms);
+            }
+            Err(err) => plan.notes.push(format!("Skipped walk entry: {err}")),
+        }
+    }
+    if newest_ms > 0 {
+        plan.newest_modified_at = timestamp_millis_to_rfc3339(newest_ms);
+    }
+    if plan.file_count == 0 && plan.status == "ok" {
+        plan.status = "empty".to_string();
+        plan.notes
+            .push("No matching prompt files were found.".to_string());
+    }
+    plan
+}
+
+fn timestamp_millis_to_rfc3339(millis: u128) -> Option<String> {
+    let seconds = i64::try_from(millis / 1000).ok()?;
+    let nanos = u32::try_from((millis % 1000) * 1_000_000).ok()?;
+    Utc.timestamp_opt(seconds, nanos)
+        .single()
+        .map(|value| value.to_rfc3339())
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} {}", UNITS[unit])
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
 }
 
 fn parse_codex_jsonl(
@@ -2331,7 +2528,11 @@ fn string_array(value: Option<&Value>) -> Vec<String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![scan_prompts, improve_prompt])
+        .invoke_handler(tauri::generate_handler![
+            scan_prompts,
+            plan_scan,
+            improve_prompt
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -2655,6 +2856,74 @@ mod tests {
             selected.iter().map(|source| source.id).collect::<Vec<_>>(),
             vec!["codex", "antigravity-cli-conversation-db"]
         );
+    }
+
+    #[test]
+    fn scan_plan_counts_matching_files_and_bytes() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-plan-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        std::fs::write(root.join("one.jsonl"), "one\n").expect("write one");
+        std::fs::write(root.join("two.jsonl"), "two\n").expect("write two");
+        std::fs::write(root.join("ignored.txt"), "ignored\n").expect("write ignored");
+
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let plan = build_scan_plan_for_sources("2026-06-06T00:00:00Z".to_string(), vec![source]);
+
+        assert_eq!(plan.total_sources, 1);
+        assert_eq!(plan.available_sources, 1);
+        assert_eq!(plan.total_files, 2);
+        assert_eq!(plan.total_bytes, 8);
+        assert!(plan.warnings.is_empty());
+        assert_eq!(plan.sources[0].status, "ok");
+        assert_eq!(plan.sources[0].file_count, 2);
+        assert_eq!(plan.sources[0].byte_count, 8);
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn scan_plan_warns_for_large_matching_files() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-plan-large-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        let file = std::fs::File::create(root.join("large.jsonl")).expect("create large file");
+        file.set_len(LARGE_FILE_BYTES).expect("make sparse file");
+
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let plan = build_scan_plan_for_sources("2026-06-06T00:00:00Z".to_string(), vec![source]);
+
+        assert_eq!(plan.total_files, 1);
+        assert_eq!(plan.large_file_count, 1);
+        assert_eq!(plan.largest_file_bytes, LARGE_FILE_BYTES);
+        assert!(plan
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("large JSONL files may dominate scan time")));
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
     }
 
     #[test]

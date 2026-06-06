@@ -1,6 +1,6 @@
 use promptvault_lib::{
-    default_database_path, improve_prompt_inner, redact_sensitive_text, run_scan, source_specs,
-    ImproveRequest, PromptRecord, ScanOptions,
+    build_scan_plan, default_database_path, improve_prompt_inner, redact_sensitive_text, run_scan,
+    source_specs, ImproveRequest, PromptRecord, ScanOptions, ScanPlanOptions,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -164,6 +164,51 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 for warning in result.warnings {
                     println!("- {warning}");
                 }
+            }
+        }
+        "plan" => {
+            let json = take_flag(&mut args, "--json");
+            let mut source_ids = Vec::new();
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--source" => {
+                        source_ids.extend(parse_source_ids_arg(iter.next())?);
+                    }
+                    other => return Err(format!("unknown plan argument: {other}").into()),
+                }
+            }
+            let plan = build_scan_plan(ScanPlanOptions {
+                source_ids: if source_ids.is_empty() {
+                    None
+                } else {
+                    Some(source_ids)
+                },
+            })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&plan)?);
+                return Ok(());
+            }
+            println!("PromptVault scan plan");
+            println!("sources: {}/{}", plan.available_sources, plan.total_sources);
+            println!("files: {}", plan.total_files);
+            println!("bytes: {}", format_bytes(plan.total_bytes));
+            println!("large_files: {}", plan.large_file_count);
+            if !plan.warnings.is_empty() {
+                println!("warnings:");
+                for warning in &plan.warnings {
+                    println!("- {warning}");
+                }
+            }
+            for source in &plan.sources {
+                println!(
+                    "{}\t{}\t{}\t{}\t{}",
+                    source.id,
+                    source.status,
+                    source.file_count,
+                    format_bytes(source.byte_count),
+                    source.root_path
+                );
             }
         }
         "improve" => {
@@ -524,7 +569,27 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA."
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} {}", UNITS[unit])
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct PlanBridgePayload {
+    options: Option<ScanPlanOptions>,
 }
 
 #[derive(serde::Deserialize)]
@@ -580,6 +645,11 @@ fn handle_bridge_client(mut stream: TcpStream) -> Result<(), Box<dyn std::error:
                 "database_path": default_database_path().display().to_string()
             });
             write_json_response(&mut stream, 200, &body)
+        }
+        ("POST", "/api/plan") => {
+            let payload = serde_json::from_str::<PlanBridgePayload>(&request.body)?;
+            let result = build_scan_plan(payload.options.unwrap_or_default())?;
+            write_json_response(&mut stream, 200, &result)
         }
         ("POST", "/api/scan") => {
             let payload = serde_json::from_str::<ScanBridgePayload>(&request.body)?;
@@ -811,6 +881,8 @@ mod tests {
     #[test]
     fn help_text_documents_cli_validation_rules() {
         let help = help_text();
+        assert!(help.contains("plan [--source ID[,ID...]] [--json]"));
+        assert!(help.contains("plan inventories matching source files"));
         assert!(help.contains("--limit N>0"));
         assert!(help.contains("--count N>0"));
         assert!(help.contains("--output cannot be combined with --no-export"));

@@ -75,6 +75,31 @@ export interface ScanResult {
   warnings: string[];
 }
 
+export interface SourcePlan {
+  id: string;
+  label: string;
+  root_path: string;
+  status: string;
+  file_count: number;
+  byte_count: number;
+  large_file_count: number;
+  largest_file_bytes: number;
+  newest_modified_at?: string | null;
+  notes: string[];
+}
+
+export interface ScanPlan {
+  generated_at: string;
+  total_sources: number;
+  available_sources: number;
+  total_files: number;
+  total_bytes: number;
+  large_file_count: number;
+  largest_file_bytes: number;
+  sources: SourcePlan[];
+  warnings: string[];
+}
+
 export interface ImproveResult {
   provider: string;
   used_ai: boolean;

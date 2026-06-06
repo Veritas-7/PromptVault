@@ -7,6 +7,7 @@ PromptVault ships a Rust CLI binary for agent-native use. It is intentionally no
 ```bash
 cargo run --bin promptvault-cli -- sources
 cargo run --bin promptvault-cli -- sources --json
+cargo run --bin promptvault-cli -- plan [--source ID[,ID...]] --json
 cargo run --bin promptvault-cli -- scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export]
 cargo run --bin promptvault-cli -- scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] --json
 cargo run --bin promptvault-cli -- improve [--local] --prompt "TEXT"
@@ -20,6 +21,8 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174]
 
 - `sources` prints discovered source IDs, labels, status, and paths.
 - `sources` accepts only `--json`; unknown extra arguments exit non-zero.
+- `plan` inventories matching source files, byte totals, large-file counts, and newest modified timestamps without reading prompt bodies.
+- `plan --source ID` restricts planning to one source ID from `sources`; repeat it or pass comma-separated IDs for multiple sources.
 - `help`, `--help`, and no-argument invocation print help and exit 0.
 - Unknown commands print help plus an error and exit non-zero.
 - `scan` persists prompt records to `~/Documents/PromptVault/promptvault.sqlite` by default.
@@ -61,6 +64,7 @@ cargo check
 npm run build
 cargo run --bin promptvault-cli -- sources
 cargo run --bin promptvault-cli -- sources --json
+cargo run --bin promptvault-cli -- plan --source codex --json
 set +e; cargo run --bin promptvault-cli -- sources --bogus; test "$?" -ne 0; set -e
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md
 cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 19:30 KST
+Updated: 2026-06-06 19:37 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1524,6 +1524,34 @@ stability, performance, and maintainability, then record evidence here.
     `Stopped importing Codex after the current batch. Run Until Done again to resume from the saved cursor.`
   - Restored the original fetch, reloaded the same `surface:9`, and confirmed
     the Plan button rendered with `No console entries` and `No browser errors`.
+- Continued with the next thin slice: clear stale global errors after successful
+  manual secondary-panel refreshes.
+- Found that stored facets, saved import progress, and recent import activity
+  refresh helpers could recover their panel state but leave a previous
+  user-visible global error in place after a successful manual retry.
+- Added refresh success policy coverage so manual refresh success clears stale
+  global errors, while quiet background refreshes preserve any existing error
+  from the main action that triggered them.
+- `npm run test:ui` passed after this refresh-error-clear slice with 62 tests.
+- `npm run check` passed after this refresh-error-clear slice: UI tests 62
+  passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?refresh-error-clear=20260606a`.
+  - Installed a page-local fetch monkeypatch that failed only
+    `/api/prompt-facets`, then clicked `Refresh Facets`.
+  - Observed both the Stored Vault panel warning
+    `Could not refresh stored facets. Filter suggestions may be stale.` and
+    the global error `forced facets failure`.
+  - Restored the original fetch and clicked `Refresh Facets` again.
+  - Observed recovery in-place: `88,378 stored, 10 sources, 50 dates, 50 workspaces`,
+    no Stored Vault panel warning, no global error, and button text
+    `Refresh Facets`.
+  - Reloaded the same `surface:9` to
+    `http://127.0.0.1:5173/?refresh-error-clear-clean=20260606a` and confirmed
+    `No console entries` and `No browser errors`.
 
 ## Changes
 
@@ -1639,6 +1667,13 @@ stability, performance, and maintainability, then record evidence here.
   panel without treating it as a failed import.
 - `tests/importProgress.test.ts`: covers continuous, queue, and non-stopped
   import stop notice cases.
+- `src/panelRefresh.ts`: adds a small refresh-success error policy helper for
+  manual versus quiet panel refreshes.
+- `src/App.tsx`: clears stale global errors on successful manual Stored Facets,
+  Saved Import Progress, and Recent Import Activity refreshes without clearing
+  errors during quiet background refreshes.
+- `tests/panelRefresh.test.ts`: covers manual refresh success clearing stale
+  global errors and quiet refresh success preserving existing errors.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1778,6 +1813,10 @@ stability, performance, and maintainability, then record evidence here.
   `/api/import-batch` on the current `surface:9` page and returned a fake
   partial Codex batch to avoid mutating the durable SQLite cursor. The original
   fetch was restored and the same surface was reloaded before final diagnostics.
+- During refresh-error-clear QA, the page-local fetch monkeypatch affected only
+  `/api/prompt-facets` on the current `surface:9` page. The same surface was
+  restored and reloaded before final diagnostics, and final console/browser
+  diagnostics were clean.
 
 ## Research
 
@@ -1796,4 +1835,4 @@ stability, performance, and maintainability, then record evidence here.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
 5. Continue reviewing remaining empty and failure states in secondary panels,
-   especially secondary refresh paths not yet covered by scoped warnings.
+   especially recovery paths that still rely only on a top-level global error.

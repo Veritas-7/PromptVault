@@ -42,6 +42,7 @@ import {
   selectedQueueSourceIds,
   toggleSourceSelection,
 } from "./importQueue";
+import { refreshGlobalErrorAfterSuccess } from "./panelRefresh";
 import { planFailureText, planUnavailableText, type PlanRunState } from "./planStatus";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
 import {
@@ -350,6 +351,7 @@ function App() {
       const next = await listStoredPromptFacets();
       setStoredFacetsResult(next);
       setStoredFacetsState("ready");
+      setError((current) => refreshGlobalErrorAfterSuccess(quiet, current));
     } catch (err) {
       setStoredFacetsState("failed");
       if (!quiet) setError(errorText(err));
@@ -365,6 +367,7 @@ function App() {
       const next = await listImportStates();
       setImportStatesResult(next);
       setImportStatesState("ready");
+      setError((current) => refreshGlobalErrorAfterSuccess(quiet, current));
     } catch (err) {
       setImportStatesState("failed");
       if (!quiet) setError(errorText(err));
@@ -380,6 +383,7 @@ function App() {
       const next = await listImportEvents({ limit: 20 });
       setImportEventsResult(next);
       setImportEventsState("ready");
+      setError((current) => refreshGlobalErrorAfterSuccess(quiet, current));
     } catch (err) {
       setImportEventsState("failed");
       if (!quiet) setError(errorText(err));

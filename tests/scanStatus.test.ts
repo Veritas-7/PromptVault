@@ -2,9 +2,63 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   scanLimitChangedAfterFailure,
+  scanProgressLabel,
   scanRunFailureText,
   scanStopFailureText,
 } from "../src/scanStatus.ts";
+import type { ScanProgress } from "../src/types.ts";
+
+function scanProgress(overrides: Partial<ScanProgress> = {}): ScanProgress {
+  return {
+    run_id: "scan-1",
+    active: true,
+    canceled: false,
+    source_id: "source-a",
+    source_label: "Source A",
+    source_index: 1,
+    source_count: 2,
+    files_seen: 1,
+    source_files_seen: 1,
+    source_files_discovered: 1,
+    source_file_count: 1,
+    prompts_found: 1,
+    limit: 10,
+    updated_at: "2026-06-07T00:00:00Z",
+    ...overrides,
+  };
+}
+
+test("scan progress label handles missing progress", () => {
+  assert.equal(scanProgressLabel(null), "Preparing scan progress.");
+});
+
+test("scan progress label pluralizes file and prompt counts", () => {
+  assert.equal(
+    scanProgressLabel(scanProgress()),
+    "Source A: 1 / 1 file · 1 prompt · source 1 / 2 · limit 10",
+  );
+  assert.equal(
+    scanProgressLabel(scanProgress({
+      source_files_seen: 2,
+      source_file_count: 3,
+      prompts_found: 4,
+      limit: null,
+    })),
+    "Source A: 2 / 3 files · 4 prompts · source 1 / 2",
+  );
+});
+
+test("scan progress label explains file discovery state", () => {
+  assert.equal(
+    scanProgressLabel(scanProgress({
+      source_file_count: null,
+      source_files_discovered: 1,
+      prompts_found: 1,
+      source_count: 0,
+    })),
+    "Source A: discovering files · 1 found · 1 prompt · source pending · limit 10",
+  );
+});
 
 test("scan failure text is hidden outside failed scans", () => {
   assert.equal(scanRunFailureText("idle", false), null);

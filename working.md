@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 00:20 KST
+Updated: 2026-06-07 00:25 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,20 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui -- tests/scanStatus.test.ts`: passed; due the package
+  script glob this ran the full UI helper suite and reported 124 passing tests,
+  including the new scan progress formatter coverage.
+- `npm run build`: TypeScript and Vite production build passed and refreshed
+  the static frontend bundle for the Scan Progress formatter slice.
+- `npm run check`: passed after the Scan Progress formatter slice. This
+  covered UI tests 124 passed, TypeScript/Vite build, Rust lib 64 passed, CLI
+  15 passed, doc-tests, and clippy with `-D warnings`.
+- `rg -n "toLocaleString\\(\\)} [a-zA-Z]+s|length\\.toLocaleString\\(\\)} [a-zA-Z]+s|\\} files|\\} prompts|\\} sources|\\} filters|\\} warnings" src tests --glob '!src-tauri/target/**'`:
+  returned no matches after the scan progress formatter fix.
+- cmux direct QA remained blocked during the Scan Progress formatter slice:
+  frontend returned `200`, bridge `/api/health` returned `ok:true`,
+  `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
 - `npm run test:ui -- tests/importProgress.test.ts`: passed; due the package
   script glob this ran the full UI helper suite and reported 114 passing tests,
   including the new Import Stop action label coverage.
@@ -2744,9 +2758,40 @@ stability, performance, and maintainability, then record evidence here.
   pluralization slice: frontend returned `200`, bridge `/api/health` returned
   `ok:true`, `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
+- Continued with the next small Scan Progress formatter pluralization slice.
+- Added a RED focused UI test baseline for scan progress strings: the previous
+  inline `App.tsx` formatter produced `1 / 1 files` and `1 prompts` in active
+  scan progress copy.
+- Moved scan progress label formatting into `src/scanStatus.ts` so the copy is
+  directly unit tested, then wired `src/App.tsx` to call the shared helper.
+- Updated scan progress copy to use singular `file` and `prompt` when counts
+  are exactly one while preserving plural and discovery-state copy.
+- `npm run test:ui -- tests/scanStatus.test.ts` passed after the fix; due the
+  package script glob this ran the full UI helper suite and reported 124
+  passing tests.
+- `npm run build` passed after this Scan Progress formatter slice and
+  refreshed the static frontend bundle used by `127.0.0.1:5173`.
+- `npm run check` passed after this Scan Progress formatter slice: UI tests
+  124 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- The remaining simple plural-only search returned no matches:
+  `rg -n "toLocaleString\\(\\)} [a-zA-Z]+s|length\\.toLocaleString\\(\\)} [a-zA-Z]+s|\\} files|\\} prompts|\\} sources|\\} filters|\\} warnings" src tests --glob '!src-tauri/target/**'`.
+- cmux direct QA remained blocked after this Scan Progress formatter slice:
+  frontend returned `200`, bridge `/api/health` returned `ok:true`,
+  `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
 
 ## Changes
 
+- `src/scanStatus.ts`: exports a tested `scanProgressLabel()` helper and uses
+  count-label formatting for known file totals and prompt counts.
+- `src/App.tsx`: imports the shared scan progress formatter instead of keeping
+  the inline plural-only formatter private to the component.
+- `tests/scanStatus.test.ts`: covers missing progress, singular/plural
+  file/prompt counts, and the file-discovery progress state.
+- `working.md`: records the Scan Progress formatter pluralization slice, the
+  no-remaining-simple-plural-candidates search, and the still blocked cmux
+  direct QA state.
 - `src/storedFacetStatus.ts`: applies existing count-label formatting to
   active stored-filter counts in ready and failed Stored Vault facet summary
   fallback copy.
@@ -3104,9 +3149,10 @@ stability, performance, and maintainability, then record evidence here.
 ## Issues
 
 - Direct single-browser cmux QA remains blocked for the existing PromptVault
-  `surface:9`: after the Import Progress, Source Status, and Stored Facet
-  active-filter pluralization slices, frontend health returned `200`, bridge
-  `/api/health` returned `ok:true`, and `cmux ping` returned `PONG`, but
+  `surface:9`: after the Import Progress, Source Status, Stored Facet
+  active-filter, and Scan Progress formatter pluralization slices, frontend
+  health returned `200`, bridge `/api/health` returned `ok:true`, and
+  `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`. No
   cmux restart, app kill, or second browser was attempted.
 - Unlimited full scan over `~/.codex/sessions` is not practical from the
@@ -3477,6 +3523,6 @@ Audit conclusion:
    secondary UI flows before moving to larger background indexing work.
 5. Continue reviewing remaining empty and failure states in secondary panels,
    especially recovery paths that still need scoped cleanup for global errors.
-6. Continue small copy/accessibility cleanup on remaining count labels such as
-   source status labels, active stored-filter counts, and scan progress strings
-   while direct cmux QA is unavailable.
+6. The simple plural-only `rg` search now returns no matches; continue broader
+   copy/accessibility cleanup only where real UI review or tests reveal another
+   issue while direct cmux QA is unavailable.

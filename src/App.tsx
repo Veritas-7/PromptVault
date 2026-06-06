@@ -81,6 +81,7 @@ import {
 import { MAX_SCAN_LIMIT, parseRequiredScanLimit } from "./scanLimit";
 import {
   scanLimitChangedAfterFailure,
+  scanProgressLabel,
   scanRunFailureText,
   scanStopFailureText,
   type ScanRunState,
@@ -156,21 +157,6 @@ function createScanRunId(): string {
     return `scan-${crypto.randomUUID()}`;
   }
   return `scan-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function scanProgressLabel(progress: ScanProgress | null): string {
-  if (!progress) return "Preparing scan progress.";
-  const source = progress.source_label ?? "Preparing source";
-  const fileTotal = progress.source_file_count === null
-    ? progress.source_files_discovered
-      ? `discovering files · ${progress.source_files_discovered.toLocaleString()} found`
-      : "discovering files"
-    : `${progress.source_files_seen.toLocaleString()} / ${progress.source_file_count.toLocaleString()} files`;
-  const sourcePosition = progress.source_count
-    ? `source ${progress.source_index.toLocaleString()} / ${progress.source_count.toLocaleString()}`
-    : "source pending";
-  const limit = progress.limit === null ? "" : ` · limit ${progress.limit.toLocaleString()}`;
-  return `${source}: ${fileTotal} · ${progress.prompts_found.toLocaleString()} prompts · ${sourcePosition}${limit}`;
 }
 
 function formatBytes(bytes: number): string {

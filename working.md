@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 00:08 KST
+Updated: 2026-06-07 00:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -2686,9 +2686,37 @@ stability, performance, and maintainability, then record evidence here.
   slice: frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health`
   returned `ok:true`, `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
+- Continued with the next low-risk import-progress copy slice while direct
+  cmux browser control remained blocked.
+- Added a RED focused UI test baseline for singular import progress strings:
+  the previous helper output produced `1 files · 1 prompts`,
+  `1 files per batch`, `1 of 1 files`, and
+  `1 of 1 sources completed`.
+- Updated import progress summary, fallback batch-size, processed/total file,
+  and queue-stop notice copy to use singular labels when the relevant count is
+  exactly one.
+- `npm run test:ui -- tests/importProgress.test.ts` passed after the fix; due
+  the package script glob this ran the full UI helper suite and reported 121
+  passing tests.
+- `npm run build` passed after this Import Progress pluralization slice and
+  refreshed the static frontend bundle used by `127.0.0.1:5173`.
+- `npm run check` passed after this Import Progress pluralization slice: UI
+  tests 121 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
+  passed, doc-tests passed, and clippy passed with `-D warnings`.
+- cmux direct QA remained blocked after this Import Progress pluralization
+  slice: frontend returned `200`, bridge `/api/health` returned `ok:true`,
+  `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
 
 ## Changes
 
+- `src/importProgress.ts`: adds a small count-label helper and applies it to
+  active import batch summaries, fallback batch-size text, processed/total file
+  value text, and queue stopped-source progress copy.
+- `tests/importProgress.test.ts`: covers singular/plural batch summaries,
+  fallback batch-size text, `1 of 1 file`, and `1 of 1 source completed`.
+- `working.md`: records the Import Progress pluralization slice and the still
+  blocked cmux direct QA state.
 - `src/storedFilters.ts`: adds `storedFilterResetLabel()` for Reset button
   disabled, locked, singular, and plural states.
 - `src/improvementSelection.ts`: adds `improvementActionLabel()` for Improve
@@ -3025,6 +3053,11 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Issues
 
+- Direct single-browser cmux QA remains blocked for the existing PromptVault
+  `surface:9`: after this Import Progress pluralization slice, frontend health
+  returned `200`, bridge `/api/health` returned `ok:true`, and `cmux ping`
+  returned `PONG`, but `timeout 6 cmux browser --surface surface:9 get title`
+  exited `124`. No cmux restart, app kill, or second browser was attempted.
 - Unlimited full scan over `~/.codex/sessions` is not practical from the
   browser UI. The plan path confirms the current Codex source alone has
   `25,097` matching files and about `32.3 GiB` of JSONL. The browser Scan
@@ -3393,3 +3426,6 @@ Audit conclusion:
    secondary UI flows before moving to larger background indexing work.
 5. Continue reviewing remaining empty and failure states in secondary panels,
    especially recovery paths that still need scoped cleanup for global errors.
+6. Continue small copy/accessibility cleanup on remaining count labels such as
+   source status labels, active stored-filter counts, and scan progress strings
+   while direct cmux QA is unavailable.

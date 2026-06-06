@@ -13,7 +13,13 @@ import {
 } from "../src/importProgress.ts";
 import type { ImportBatchResult, ImportState } from "../src/types.ts";
 
-function importResult(processedFiles: number, totalFiles: number, completed = false): ImportBatchResult {
+function importResult(
+  processedFiles: number,
+  totalFiles: number,
+  completed = false,
+  batchFileCount = 1,
+  batchPromptCount = 0,
+): ImportBatchResult {
   return {
     generated_at: "2026-06-06T00:00:00Z",
     source: {
@@ -41,8 +47,8 @@ function importResult(processedFiles: number, totalFiles: number, completed = fa
       updated_at: "2026-06-06T00:00:00Z",
     },
     batch_start_index: Math.max(0, processedFiles - 1),
-    batch_file_count: 1,
-    batch_prompt_count: 0,
+    batch_file_count: batchFileCount,
+    batch_prompt_count: batchPromptCount,
     returned_prompt_count: 0,
     prompts: [],
     stats: {
@@ -123,7 +129,7 @@ test("import progress display uses saved cursor before first batch result", () =
 
 test("import progress display prefers the latest batch result", () => {
   const display = importProgressDisplay(
-    importResult(86, 144),
+    importResult(86, 144, false, 1, 1),
     importState(81, 144, false, "Saved source"),
     "Plan source",
     144,
@@ -131,7 +137,7 @@ test("import progress display prefers the latest batch result", () => {
   );
 
   assert.deepEqual(display, {
-    batchSummary: "1 files · 0 prompts",
+    batchSummary: "1 file · 1 prompt",
     percent: 60,
     processedFiles: 86,
     sourceLabel: "Source A",
@@ -151,8 +157,14 @@ test("import progress display falls back to active source metadata", () => {
   });
 });
 
+test("import progress display pluralizes fallback batch size", () => {
+  assert.equal(importProgressDisplay(null, null, "Plan source", 12, 1).batchSummary, "1 file per batch");
+  assert.equal(importProgressDisplay(null, null, "Plan source", 12, 2).batchSummary, "2 files per batch");
+});
+
 test("import progress value text mirrors processed file counts", () => {
   assert.equal(importProgressValueText(86, 144), "86 of 144 files");
+  assert.equal(importProgressValueText(1, 1), "1 of 1 file");
   assert.equal(importProgressValueText(1_200, 2_000), "1,200 of 2,000 files");
 });
 
@@ -213,6 +225,10 @@ test("import stop notice explains partial queue resume path", () => {
   assert.equal(
     importStopNoticeText("stopped", "queue", null, 5, 3),
     "Import queue stopped after the current source. 3 of 3 sources completed. Run Selected again to continue.",
+  );
+  assert.equal(
+    importStopNoticeText("stopped", "queue", null, 1, 1),
+    "Import queue stopped after the current source. 1 of 1 source completed. Run Selected again to continue.",
   );
 });
 

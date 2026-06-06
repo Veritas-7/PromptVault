@@ -25,8 +25,12 @@ export function importStateProgressPercent(state: ImportState | null): number {
   return Math.max(0, Math.min(100, Math.round(ratio * 100)));
 }
 
+function countLabel(count: number, singular: string): string {
+  return `${count.toLocaleString()} ${count === 1 ? singular : `${singular}s`}`;
+}
+
 export function importProgressValueText(processedFiles: number, totalFiles: number): string {
-  return `${processedFiles.toLocaleString()} of ${totalFiles.toLocaleString()} files`;
+  return `${processedFiles.toLocaleString()} of ${countLabel(totalFiles, "file")}`;
 }
 
 export function importProgressDisplay(
@@ -47,8 +51,8 @@ export function importProgressDisplay(
     ? importProgressPercent(result)
     : importStateProgressPercent(savedState);
   const batchSummary = result
-    ? `${result.batch_file_count.toLocaleString()} files · ${result.batch_prompt_count.toLocaleString()} prompts`
-    : `${batchFileSize.toLocaleString()} files per batch`;
+    ? `${countLabel(result.batch_file_count, "file")} · ${countLabel(result.batch_prompt_count, "prompt")}`
+    : `${countLabel(batchFileSize, "file")} per batch`;
 
   return {
     batchSummary,
@@ -107,7 +111,7 @@ export function importStopNoticeText(
       Math.min(completedQueueSourceCount, queueLength),
     );
     const progressText = queueLength > 0
-      ? ` ${boundedCompletedSourceCount.toLocaleString()} of ${queueLength.toLocaleString()} sources completed.`
+      ? ` ${boundedCompletedSourceCount.toLocaleString()} of ${countLabel(queueLength, "source")} completed.`
       : "";
     return `Import queue stopped after the current source.${progressText} Run Selected again to continue.`;
   }

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 17:44 KST
+Updated: 2026-06-06 17:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1032,6 +1032,27 @@ stability, performance, and maintainability, then record evidence here.
   - Clicked `Stop`, observed `Canceled scan was not stored in the vault.`, and
     verified browser console returned `No console entries` and browser errors
     returned `No browser errors`.
+- Continued with the next thin slice: lock remaining side-effect controls
+  during active scan/import/stored-load work.
+- Found remaining overlap controls: Saved Import Progress refresh, Recent
+  Import Activity refresh, and `Improve` could still be clicked while a scan
+  was active.
+- These buttons now use the same top-level action lock, and the Improve button
+  has a stable `data-run-improve` selector for cmux QA.
+- `npm run check` passed after this side-effect lock slice: UI tests 26 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reused the single PromptVault browser and loaded build `index-BQK3hnM1.js`.
+  - A stale wait for `stored 1,690` timed out because the live persisted vault
+    count is now `88,378`; `/api/prompt-facets` confirmed `88378`.
+  - Started a new scan with Limit `100000` and waited for scan progress.
+  - While scan progress was visible, enabled counts were all `0` for
+    `[data-refresh-import-states="true"]`,
+    `[data-refresh-import-events="true"]`, and `[data-run-improve="true"]`.
+  - Clicked `Stop`, observed `Canceled scan was not stored in the vault.`, and
+    verified browser console returned `No console entries` and browser errors
+    returned `No browser errors`.
 
 ## Changes
 
@@ -1055,6 +1076,8 @@ stability, performance, and maintainability, then record evidence here.
   selectors for `Scan`, `Plan`, and `Limit`.
 - `src/App.tsx`: disables preview mode, Limit, and Stored Vault filter inputs
   while top-level scan/import/stored-load work is active.
+- `src/App.tsx`: disables saved import refresh, recent import activity refresh,
+  and Improve while top-level scan/import/stored-load work is active.
 - `tests/actionLocks.test.ts`: added coverage for top-level locks and import
   action locks, including the active-scan case.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
@@ -1120,6 +1143,10 @@ stability, performance, and maintainability, then record evidence here.
   text-selector click using `button:has-text("Plan")` raised a selector-engine
   JS exception. The stable path was to select `workspace:5`, focus existing
   `pane:10`, and use explicit data selectors on `surface:9`.
+- Stored vault count evidence changed during later real browser QA; the live
+  `/api/prompt-facets` count is now `88,378`, so future QA should avoid fixed
+  old count assertions and should read the current facet count before comparing
+  persistence behavior.
 
 ## Research
 

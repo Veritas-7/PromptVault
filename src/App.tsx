@@ -711,7 +711,7 @@ function App() {
             <button
               className="inline-action"
               data-refresh-import-states="true"
-              disabled={importStatesState === "loading" || isImportRunning || isStoredLoadRunning}
+              disabled={importStatesState === "loading" || isTopLevelActionLocked}
               onClick={() => refreshImportStates()}
               type="button"
             >
@@ -813,7 +813,7 @@ function App() {
             <button
               className="inline-action"
               data-refresh-import-events="true"
-              disabled={importEventsState === "loading" || isImportRunning || isStoredLoadRunning}
+              disabled={importEventsState === "loading" || isTopLevelActionLocked}
               onClick={() => refreshImportEvents()}
               type="button"
             >
@@ -1160,7 +1160,12 @@ function App() {
         <section className="panel detail-panel">
           <div className="panel-heading">
             <h2>Selected</h2>
-            <button disabled={!selectedPrompt || improving} onClick={() => runImprove(selectedPrompt)} type="button">
+            <button
+              data-run-improve="true"
+              disabled={!selectedPrompt || improving || isTopLevelActionLocked}
+              onClick={() => runImprove(selectedPrompt)}
+              type="button"
+            >
               <Sparkles size={17} />
               {improving ? "Improving" : "Improve"}
             </button>

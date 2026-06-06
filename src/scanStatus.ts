@@ -17,3 +17,30 @@ export function scanStopFailureText(failure: ScanStopFailure | null): string | n
   }
   return null;
 }
+
+export interface ScanFailureReset {
+  error: string | null;
+  failureErrorText: string | null;
+  state: ScanRunState;
+}
+
+export function scanLimitChangedAfterFailure(
+  state: ScanRunState,
+  currentError: string | null,
+  failureErrorText: string | null,
+  hasResult: boolean,
+): ScanFailureReset {
+  if (state !== "failed") {
+    return {
+      error: currentError,
+      failureErrorText,
+      state,
+    };
+  }
+
+  return {
+    error: currentError === failureErrorText ? null : currentError,
+    failureErrorText: null,
+    state: hasResult ? "ready" : "idle",
+  };
+}

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { scanRunFailureText, scanStopFailureText } from "../src/scanStatus.ts";
+import {
+  scanLimitChangedAfterFailure,
+  scanRunFailureText,
+  scanStopFailureText,
+} from "../src/scanStatus.ts";
 
 test("scan failure text is hidden outside failed scans", () => {
   assert.equal(scanRunFailureText("idle", false), null);
@@ -33,4 +37,33 @@ test("scan stop failure text explains failed stop requests", () => {
     "No active scan was found to stop. The scan may have already finished.",
   );
   assert.equal(scanStopFailureText(null), null);
+});
+
+test("scan limit changes clear matching scan errors", () => {
+  assert.deepEqual(scanLimitChangedAfterFailure("failed", "invalid limit", "invalid limit", true), {
+    error: null,
+    failureErrorText: null,
+    state: "ready",
+  });
+});
+
+test("scan limit changes preserve unrelated global errors", () => {
+  assert.deepEqual(scanLimitChangedAfterFailure("failed", "stored failed", "scan failed", true), {
+    error: "stored failed",
+    failureErrorText: null,
+    state: "ready",
+  });
+});
+
+test("scan limit changes return to idle without prior results", () => {
+  assert.deepEqual(scanLimitChangedAfterFailure("failed", null, "scan failed", false), {
+    error: null,
+    failureErrorText: null,
+    state: "idle",
+  });
+  assert.deepEqual(scanLimitChangedAfterFailure("ready", "scan failed", "scan failed", true), {
+    error: "scan failed",
+    failureErrorText: "scan failed",
+    state: "ready",
+  });
 });

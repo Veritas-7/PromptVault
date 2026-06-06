@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 20:11 KST
+Updated: 2026-06-06 20:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1669,6 +1669,31 @@ stability, performance, and maintainability, then record evidence here.
     the panel warning and matching top-level error cleared immediately.
   - Restored `window.fetch`, reloaded the same `surface:9`, and confirmed
     `No console entries` and `No browser errors`.
+- Continued with the next thin slice: clear stale Scan failure warnings when
+  the user edits the Limit field after a failed scan attempt.
+- Found that clicking `Scan` with an empty Limit showed the correct top-level
+  limit error and scan warning, but editing Limit did not clear that stale
+  recovery copy until another action ran.
+- Added scoped scan failure-error tracking so Limit edits clear only the
+  matching scan failure error, preserve unrelated global errors, and return the
+  scan state to `ready` when previous scan results are still visible or `idle`
+  when no result has been loaded.
+- `npm run test:ui` passed after this scan-limit-edit-clear slice with 72
+  tests.
+- `npm run check` passed after this slice: UI tests 72 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reused the existing PromptVault browser surface at
+    `http://127.0.0.1:5173/?scan-limit-edit-clear=20260606a`.
+  - Clicked `Scan` with an empty Limit and observed the top-level error
+    `Enter a scan limit before scanning...`, the scan warning
+    `Could not scan prompts...`, and `Prompts` still `not loaded`.
+  - Edited Limit to `10` using the native input setter plus an `input` event;
+    the Limit field updated, the top-level error cleared, the scan warning
+    cleared, and `Prompts` remained `not loaded` without starting a scan.
+  - Reloaded the same `surface:9` and confirmed `No console entries` and
+    `No browser errors`.
 
 ## Changes
 
@@ -1788,6 +1813,12 @@ stability, performance, and maintainability, then record evidence here.
   matching panel/global failure when filters change after a failed load.
 - `tests/storedLoadStatus.test.ts`: covers matching-error cleanup, unrelated
   error preservation, and no-prior-result fallback to idle.
+- `src/scanStatus.ts`: adds a helper for clearing failed Scan state after the
+  user edits Limit, scoped to the matching failure error.
+- `src/App.tsx`: tracks the Scan failure error text and clears the matching
+  scan failure warning/global error when Limit changes after a failed scan.
+- `tests/scanStatus.test.ts`: covers matching-error cleanup, unrelated error
+  preservation, and no-prior-result fallback to idle.
 - `src/scanStatus.ts`: adds scan failure copy for first-run and stale-results
   failures, plus scan Stop failure copy.
 - `src/App.tsx`: shows a scan retry warning when a scan fails and clears stale
@@ -1981,6 +2012,12 @@ stability, performance, and maintainability, then record evidence here.
 - During stored-load-edit-clear QA, the page-local fetch monkeypatch affected
   only `/api/prompts` on the current `surface:9` page and was restored before a
   clean same-surface reload. Final diagnostics returned clean.
+- During scan-limit-edit-clear QA, the first combined `goto && wait` command
+  on `surface:9` timed out while cmux was visibly focused on workspace 2.
+  Computer Use selected the existing `프롬프트` workspace 5 row, revealing that
+  the existing PromptVault browser had loaded the target URL. All verification
+  then used the existing `surface:9`; the clean reload and final diagnostics
+  returned clean.
 
 ## Research
 

@@ -66,6 +66,7 @@ import {
 } from "./promptVaultApi";
 import { MAX_SCAN_LIMIT, parseRequiredScanLimit } from "./scanLimit";
 import {
+  scanLimitChangedAfterFailure,
   scanRunFailureText,
   scanStopFailureText,
   type ScanRunState,
@@ -180,6 +181,7 @@ function App() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
   const [scanStopFailure, setScanStopFailure] = useState<ScanStopFailure | null>(null);
+  const [scanFailureErrorText, setScanFailureErrorText] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [storedFilters, setStoredFilters] = useState<StoredPromptFilters>(() =>
@@ -520,6 +522,7 @@ function App() {
   async function runScan() {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
+    setScanFailureErrorText(null);
     setScanStopFailure(null);
     setImprovement(null);
     setImprovementPromptId(null);
@@ -549,10 +552,13 @@ function App() {
         )?.id ?? null,
       );
       setScanState("ready");
+      setScanFailureErrorText(null);
       setScanStopFailure(null);
       await refreshStoredFacets({ quiet: true });
     } catch (err) {
-      setError(errorText(err));
+      const message = errorText(err);
+      setError(message);
+      setScanFailureErrorText(message);
       setScanState("failed");
       setScanStopFailure(null);
     } finally {
@@ -638,6 +644,21 @@ function App() {
     const nextFilters = emptyStoredPromptFilters();
     setStoredFilters(nextFilters);
     void runLoadStored(nextFilters);
+  }
+
+  function updateScanLimit(value: string) {
+    setLimit(value);
+    if (scanState === "failed") {
+      const next = scanLimitChangedAfterFailure(
+        scanState,
+        error,
+        scanFailureErrorText,
+        result !== null,
+      );
+      setError(next.error);
+      setScanFailureErrorText(next.failureErrorText);
+      setScanState(next.state);
+    }
   }
 
   function clearImprovementPromptContext() {
@@ -730,7 +751,7 @@ function App() {
               type="number"
               placeholder="Required"
               value={limit}
-              onChange={(event) => setLimit(event.currentTarget.value)}
+              onChange={(event) => updateScanLimit(event.currentTarget.value)}
             />
           </label>
           <button

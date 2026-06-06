@@ -38,6 +38,7 @@ import {
   listStoredPromptFacets,
   loadStoredPrompts,
   planScan,
+  scanProgress,
   scanPrompts,
 } from "./promptVaultApi";
 import { MAX_SCAN_LIMIT, parseRequiredScanLimit } from "./scanLimit";
@@ -55,6 +56,7 @@ import type {
   ImproveResult,
   PromptRecord,
   ScanPlan,
+  ScanProgress,
   ScanResult,
   StoredPromptFacetsResult,
 } from "./types";
@@ -67,6 +69,7 @@ type StoredFacetsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
 const IMPORT_BATCH_FILES = 5;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
+const SCAN_PROGRESS_POLL_MS = 300;
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -83,6 +86,19 @@ function createScanRunId(): string {
     return `scan-${crypto.randomUUID()}`;
   }
   return `scan-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function scanProgressLabel(progress: ScanProgress | null): string {
+  if (!progress) return "Preparing scan progress.";
+  const source = progress.source_label ?? "Preparing source";
+  const fileTotal = progress.source_file_count === null
+    ? "discovering files"
+    : `${progress.source_files_seen.toLocaleString()} / ${progress.source_file_count.toLocaleString()} files`;
+  const sourcePosition = progress.source_count
+    ? `source ${progress.source_index.toLocaleString()} / ${progress.source_count.toLocaleString()}`
+    : "source pending";
+  const limit = progress.limit === null ? "" : ` · limit ${progress.limit.toLocaleString()}`;
+  return `${source}: ${fileTotal} · ${progress.prompts_found.toLocaleString()} prompts · ${sourcePosition}${limit}`;
 }
 
 function importStateProgressPercent(state: ImportState): number {
@@ -121,6 +137,7 @@ function App() {
   const [importEventsResult, setImportEventsResult] = useState<ImportEventsResult | null>(null);
   const [storedFacetsResult, setStoredFacetsResult] = useState<StoredPromptFacetsResult | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [storedFilters, setStoredFilters] = useState<StoredPromptFilters>({
@@ -140,6 +157,7 @@ function App() {
   const isImportRunning = importState === "importing";
   const isScanRunning = scanState === "scanning" || scanState === "canceling";
   const canStopScan = scanRunIdRef.current !== null && isScanRunning;
+  const scanProgressText = scanProgressLabel(scanProgressInfo);
 
   const prompts = result?.prompts ?? [];
   const promptListMode = effectivePromptListMode(result?.preview_sort, previewMode);
@@ -207,6 +225,37 @@ function App() {
     void refreshImportStates();
     void refreshImportEvents();
   }, []);
+
+  useEffect(() => {
+    const runId = scanRunIdRef.current;
+    if (!isScanRunning || !runId) return;
+    const activeRunId = runId;
+    let stopped = false;
+    let timer: number | undefined;
+
+    async function pollScanProgress() {
+      try {
+        const progress = await scanProgress(activeRunId);
+        if (stopped) return;
+        setScanProgressInfo(progress);
+        if (progress.active) {
+          timer = window.setTimeout(pollScanProgress, SCAN_PROGRESS_POLL_MS);
+        }
+      } catch {
+        if (!stopped) {
+          timer = window.setTimeout(pollScanProgress, SCAN_PROGRESS_POLL_MS * 2);
+        }
+      }
+    }
+
+    void pollScanProgress();
+    return () => {
+      stopped = true;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [isScanRunning, scanState]);
 
   async function refreshStoredFacets({ quiet = false }: { quiet?: boolean } = {}) {
     if (!quiet) setStoredFacetsState("loading");
@@ -359,6 +408,7 @@ function App() {
     }
     const runId = createScanRunId();
     scanRunIdRef.current = runId;
+    setScanProgressInfo(null);
     setScanState("scanning");
     try {
       const next = await scanPrompts({
@@ -384,6 +434,7 @@ function App() {
       setScanState("failed");
     } finally {
       scanRunIdRef.current = null;
+      setScanProgressInfo(null);
     }
   }
 
@@ -552,6 +603,13 @@ function App() {
         <section className="notice browser-mode">
           <ShieldCheck size={18} />
           <span>{BROWSER_BRIDGE_NOTICE}</span>
+        </section>
+      ) : null}
+
+      {isScanRunning ? (
+        <section className="notice scan-progress" data-scan-progress="true">
+          <RefreshCw size={18} />
+          <span>{scanProgressText}</span>
         </section>
       ) : null}
 

@@ -77,7 +77,7 @@ cd src-tauri
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 ```
 
-The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, and `/api/import-events` endpoints so cmux or another in-app browser can exercise the same scan, scan cancellation, stored-prompt loading, stored facet summaries, planning, improvement, resumable import, saved cursor, and import activity code paths without Tauri IPC. The browser Stop control returns partial scan results for review but does not write canceled partial scans into the permanent SQLite vault; completed browser scans still persist normally.
+The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, and `/api/import-events` endpoints so cmux or another in-app browser can exercise the same scan, scan cancellation, active scan progress, stored-prompt loading, stored facet summaries, planning, improvement, resumable import, saved cursor, and import activity code paths without Tauri IPC. The browser Stop control returns partial scan results for review but does not write canceled partial scans into the permanent SQLite vault; completed browser scans still persist normally.
 
 ## AI Recommendation Path
 

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 16:46 KST
+Updated: 2026-06-06 17:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -834,6 +834,69 @@ stability, performance, and maintainability, then record evidence here.
     `Dates 29`.
   - Browser console returned `No console entries`; browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: active scan progress telemetry.
+- Added a Rust in-memory scan progress registry keyed by run ID. Active scans
+  now report source position, current source label, total/current files when
+  known, prompts found, configured limit, active/canceled state, and update
+  time.
+- Added Tauri `scan_progress` and browser bridge `/api/scan/progress`.
+- Added UI polling while a scan is running and a compact
+  `[data-scan-progress="true"]` notice, for example:
+  `Codex: discovering files · 0 prompts · source 1 / 11 · limit 100,000`.
+- Documented `/api/scan/progress` in `README.md` and `docs/CLI.md`.
+- `cd src-tauri && cargo test scan_progress_run_reports_active_progress_and_missing_runs`:
+  passed.
+- `cd src-tauri && cargo test help_text_documents_cli_validation_rules`:
+  passed.
+- `npm run test:ui`: 24 tests passed.
+- First `npm run check` after the telemetry patch failed on
+  `src/App.tsx(237,45)` because the progress poller passed a nullable run ID
+  into `scanProgress`. Fixed by capturing a non-null `activeRunId` before the
+  async poll function.
+- Final `npm run check` passed after the fix: UI tests 24 passed, TypeScript
+  and Vite production build passed, Rust lib 63 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Integration review found that progress records should use the same normalized
+  run ID as cancellation and cleanup. Patched the Rust scan path, reran
+  `cargo fmt`, reran the focused progress test, and reran `npm run check`;
+  all passed.
+- `cd src-tauri && cargo build --bin promptvault-cli`: passed before
+  restarting the bridge after the final Rust patch.
+- Restarted only the `promptvault-bridge` tmux session on
+  `127.0.0.1:5174`; did not stop, restart, or replace cmux.
+- Final bridge health after restart returned
+  `{"database_path":"/Users/wj/Documents/PromptVault/promptvault.sqlite","ok":true}`.
+- Real bridge progress smoke passed:
+  - Started a large Codex scan with `run_id` and `persist_on_cancel:false`.
+  - `/api/scan/progress` returned an active progress record with source
+    `Codex`, `source 1 / 1`, limit `100000`, and active `true`.
+  - `/api/scan/cancel` returned `canceled:true`.
+  - The scan returned `Canceled scan was not stored in the vault.`
+  - A later progress poll for the same run returned inactive default progress.
+- Real cmux progress QA on the existing `surface:9`:
+  - Confirmed `workspace:5` still had exactly one PromptVault browser surface
+    and did not create another browser.
+  - Reused `surface:9` with a cache-busted PromptVault URL.
+  - Set Limit `100000`, clicked `Scan`, observed the progress notice
+    `Codex: discovering files · 0 prompts · source 1 / 11 · limit 100,000`,
+    clicked `Stop`, and observed the not-stored cancellation warning.
+  - Verified the stored vault count stayed `1690` through
+    `/api/prompt-facets` after cancellation.
+  - The visible UI still showed Stored Vault `1,690`, saved import progress,
+    the DB notice with `stored 1,690 · new 0 · updated 0`, and the canceled
+    scan warnings.
+
+## Changes
+
+- `src-tauri/src/lib.rs`: added progress registry, progress command, active
+  scan updates, and focused backend coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`: added bridge route
+  `/api/scan/progress` and updated CLI help text.
+- `src/types.ts` and `src/promptVaultApi.ts`: added scan progress types and
+  frontend API wrapper.
+- `src/App.tsx` and `src/App.css`: added scan-progress polling and notice UI.
+- `README.md` and `docs/CLI.md`: documented the new bridge endpoint.
+- `working.md`: recorded this slice and verification evidence.
 
 ## Issues
 
@@ -874,6 +937,15 @@ stability, performance, and maintainability, then record evidence here.
   persist normally. The prior partial-cancel QA already raised the vault to
   `1690`, so future tests should use `/api/prompt-facets` before/after counts
   when proving canceled scans do not grow the vault.
+- Scan progress telemetry is currently active-run, in-memory state only. It is
+  enough for a running browser scan notice, but it is not a durable background
+  worker and does not survive process restart or browser tab closure.
+- During the progress telemetry cmux QA, `goto -> wait -> eval` on `surface:9`
+  was reliable, but separate `snapshot`, `fill`, `console list`, and
+  `errors list` commands intermittently attached to `about:blank` or timed out
+  even while `cmux tree` showed the correct PromptVault URL. The real UI flow,
+  bridge count, and cancellation warning were verified on the existing
+  `surface:9`; do not open a second browser as a workaround.
 
 ## Research
 
@@ -885,6 +957,7 @@ stability, performance, and maintainability, then record evidence here.
 
 1. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
-2. Add scan progress telemetry beyond the current running/canceling states.
-3. Recover or harden the cmux browser diagnostics workflow for cases where the
+2. Recover or harden the cmux browser diagnostics workflow for cases where the
    active visible workspace differs from the target PromptVault surface.
+3. Consider deeper scan discovery telemetry during `WalkDir` collection so the
+   progress notice can update before the per-source file count is known.

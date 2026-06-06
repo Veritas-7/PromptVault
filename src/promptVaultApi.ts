@@ -7,6 +7,7 @@ import type {
   ImportStatesResult,
   ImproveResult,
   ScanPlan,
+  ScanProgress,
   ScanResult,
   StoredPromptFacetsResult,
 } from "./types";
@@ -21,6 +22,10 @@ export interface ScanPromptOptions {
 }
 
 export interface CancelScanOptions {
+  run_id: string;
+}
+
+export interface ScanProgressOptions {
   run_id: string;
 }
 
@@ -121,6 +126,14 @@ export async function cancelScan(run_id: string): Promise<CancelScanResult> {
     return invoke<CancelScanResult>("cancel_scan", { options });
   }
   return postBridge<CancelScanResult>("/api/scan/cancel", { options });
+}
+
+export async function scanProgress(run_id: string): Promise<ScanProgress> {
+  const options: ScanProgressOptions = { run_id };
+  if (hasTauriInvoke()) {
+    return invoke<ScanProgress>("scan_progress", { options });
+  }
+  return postBridge<ScanProgress>("/api/scan/progress", { options });
 }
 
 export async function improvePrompt(request: ImprovePromptRequest): Promise<ImproveResult> {

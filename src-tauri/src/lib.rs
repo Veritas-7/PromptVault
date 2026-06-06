@@ -31,6 +31,7 @@ const SCAN_CANCELED_NOT_PERSISTED_WARNING: &str = "Canceled scan was not stored 
 type ScanCancelFlag = Arc<AtomicBool>;
 
 static SCAN_CANCEL_FLAGS: OnceLock<Mutex<HashMap<String, ScanCancelFlag>>> = OnceLock::new();
+static SCAN_PROGRESS: OnceLock<Mutex<HashMap<String, ScanProgress>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptRecord {
@@ -147,6 +148,23 @@ pub struct ScanPlan {
 pub struct CancelScanResult {
     pub run_id: String,
     pub canceled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanProgress {
+    pub run_id: String,
+    pub active: bool,
+    pub canceled: bool,
+    pub source_id: Option<String>,
+    pub source_label: Option<String>,
+    pub source_index: usize,
+    pub source_count: usize,
+    pub files_seen: usize,
+    pub source_files_seen: usize,
+    pub source_file_count: Option<usize>,
+    pub prompts_found: usize,
+    pub limit: Option<usize>,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -313,6 +331,11 @@ pub struct CancelScanOptions {
     pub run_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanProgressOptions {
+    pub run_id: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct SourceSpec {
     pub id: &'static str,
@@ -342,6 +365,11 @@ fn scan_prompts(options: Option<ScanOptions>) -> Result<ScanResult, String> {
 #[tauri::command]
 fn cancel_scan(options: CancelScanOptions) -> Result<CancelScanResult, String> {
     cancel_scan_run(options).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn scan_progress(options: ScanProgressOptions) -> Result<ScanProgress, String> {
+    scan_progress_run(options).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -388,6 +416,10 @@ fn scan_cancel_flags() -> &'static Mutex<HashMap<String, ScanCancelFlag>> {
     SCAN_CANCEL_FLAGS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+fn scan_progress_registry() -> &'static Mutex<HashMap<String, ScanProgress>> {
+    SCAN_PROGRESS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 fn normalized_scan_run_id(
     run_id: Option<&str>,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
@@ -415,6 +447,75 @@ fn register_scan_run(
     }
     flags.insert(run_id.to_string(), flag.clone());
     Ok(Some(flag))
+}
+
+fn inactive_scan_progress(run_id: String) -> ScanProgress {
+    ScanProgress {
+        run_id,
+        active: false,
+        canceled: false,
+        source_id: None,
+        source_label: None,
+        source_index: 0,
+        source_count: 0,
+        files_seen: 0,
+        source_files_seen: 0,
+        source_file_count: None,
+        prompts_found: 0,
+        limit: None,
+        updated_at: Utc::now().to_rfc3339(),
+    }
+}
+
+fn start_scan_progress(run_id: Option<&str>, source_count: usize, limit: usize) {
+    let Some(run_id) = run_id else {
+        return;
+    };
+    if let Ok(mut progress) = scan_progress_registry().lock() {
+        progress.insert(
+            run_id.to_string(),
+            ScanProgress {
+                run_id: run_id.to_string(),
+                active: true,
+                canceled: false,
+                source_id: None,
+                source_label: None,
+                source_index: 0,
+                source_count,
+                files_seen: 0,
+                source_files_seen: 0,
+                source_file_count: None,
+                prompts_found: 0,
+                limit: if limit == usize::MAX {
+                    None
+                } else {
+                    Some(limit)
+                },
+                updated_at: Utc::now().to_rfc3339(),
+            },
+        );
+    }
+}
+
+fn update_scan_progress<F>(run_id: Option<&str>, update: F)
+where
+    F: FnOnce(&mut ScanProgress),
+{
+    let Some(run_id) = run_id else {
+        return;
+    };
+    if let Ok(mut progress) = scan_progress_registry().lock() {
+        if let Some(progress) = progress.get_mut(run_id) {
+            update(progress);
+            progress.updated_at = Utc::now().to_rfc3339();
+        }
+    }
+}
+
+fn remove_scan_progress(run_id: &str) {
+    if let Ok(mut progress) = scan_progress_registry().lock() {
+        progress.remove(run_id);
+    }
 }
 
 fn scan_cancel_requested(cancel_flag: Option<&ScanCancelFlag>) -> bool {
@@ -451,6 +552,7 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
             .lock()
             .map_err(|_| "scan cancellation registry is unavailable")?
             .remove(&run_id);
+        remove_scan_progress(&run_id);
     }
     result
 }
@@ -466,10 +568,27 @@ pub fn cancel_scan_run(
         .get(&run_id)
         .map(|flag| {
             flag.store(true, Ordering::Relaxed);
+            update_scan_progress(Some(&run_id), |progress| {
+                progress.canceled = true;
+            });
             true
         })
         .unwrap_or(false);
     Ok(CancelScanResult { run_id, canceled })
+}
+
+pub fn scan_progress_run(
+    options: ScanProgressOptions,
+) -> Result<ScanProgress, Box<dyn std::error::Error>> {
+    let run_id = normalized_scan_run_id(Some(options.run_id.as_str()))?
+        .ok_or("scan run_id requires a non-empty value")?;
+    let progress = scan_progress_registry()
+        .lock()
+        .map_err(|_| "scan progress registry is unavailable")?
+        .get(&run_id)
+        .cloned()
+        .unwrap_or_else(|| inactive_scan_progress(run_id));
+    Ok(progress)
 }
 
 fn run_scan_with_cancel(
@@ -500,12 +619,26 @@ fn run_scan_with_cancel(
     let mut prompts = Vec::new();
     let mut summaries = Vec::new();
     let sources = selected_source_specs(options.source_ids.as_deref());
+    let source_count = sources.len();
+    let run_id = normalized_scan_run_id(options.run_id.as_deref())?;
+    start_scan_progress(run_id.as_deref(), source_count, limit);
 
-    for source in sources {
+    for (source_index, source) in sources.into_iter().enumerate() {
         if scan_cancel_requested(cancel_flag) {
+            update_scan_progress(run_id.as_deref(), |progress| {
+                progress.canceled = true;
+            });
             push_scan_canceled_warning(&mut warnings);
             break;
         }
+        update_scan_progress(run_id.as_deref(), |progress| {
+            progress.source_id = Some(source.id.to_string());
+            progress.source_label = Some(source.label.to_string());
+            progress.source_index = source_index + 1;
+            progress.source_count = source_count;
+            progress.source_files_seen = 0;
+            progress.source_file_count = None;
+        });
         let mut summary = SourceSummary {
             id: source.id.to_string(),
             label: source.label.to_string(),
@@ -532,6 +665,8 @@ fn run_scan_with_cancel(
             &mut summary,
             limit.saturating_sub(prompts.len()),
             cancel_flag,
+            run_id.as_deref(),
+            prompts.len(),
         ) {
             Ok(mut found) => {
                 summary.prompts_found = found.len();
@@ -550,6 +685,9 @@ fn run_scan_with_cancel(
             summary
                 .notes
                 .push("Scan canceled after the current file.".to_string());
+            update_scan_progress(run_id.as_deref(), |progress| {
+                progress.canceled = true;
+            });
             push_scan_canceled_warning(&mut warnings);
             summaries.push(summary);
             break;
@@ -883,8 +1021,15 @@ fn run_import_batch_for_source(
         status: source_plan.status.clone(),
         notes: source_plan.notes.clone(),
     };
-    let mut prompts =
-        collect_from_candidates(&source, &mut summary, batch_candidates, usize::MAX, None)?;
+    let mut prompts = collect_from_candidates(
+        &source,
+        &mut summary,
+        batch_candidates,
+        usize::MAX,
+        None,
+        None,
+        0,
+    )?;
     summary.prompts_found = prompts.len();
     summarize_source_quality(&mut summary, &prompts);
     promote_source_notes_to_warning(&source, &mut summary, &mut warnings);
@@ -1386,6 +1531,8 @@ fn collect_from_source(
     summary: &mut SourceSummary,
     remaining: usize,
     cancel_flag: Option<&ScanCancelFlag>,
+    run_id: Option<&str>,
+    prompt_offset: usize,
 ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
     if remaining == 0 {
         return Ok(Vec::new());
@@ -1411,7 +1558,18 @@ fn collect_from_source(
             }
         })
         .collect::<Vec<_>>();
-    collect_from_candidates(source, summary, &files, remaining, cancel_flag)
+    update_scan_progress(run_id, |progress| {
+        progress.source_file_count = Some(files.len());
+    });
+    collect_from_candidates(
+        source,
+        summary,
+        &files,
+        remaining,
+        cancel_flag,
+        run_id,
+        prompt_offset,
+    )
 }
 
 fn collect_from_candidates(
@@ -1420,6 +1578,8 @@ fn collect_from_candidates(
     files: &[SourceFileCandidate],
     remaining: usize,
     cancel_flag: Option<&ScanCancelFlag>,
+    run_id: Option<&str>,
+    prompt_offset: usize,
 ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
     let mut prompts = Vec::new();
     let mut seen_keys = HashSet::new();
@@ -1449,6 +1609,12 @@ fn collect_from_candidates(
                 .notes
                 .push(format!("Skipped {}: {}", file.path.display(), err)),
         }
+        update_scan_progress(run_id, |progress| {
+            progress.files_seen += 1;
+            progress.source_files_seen = summary.files_seen;
+            progress.prompts_found = prompt_offset + prompts.len();
+            progress.canceled = scan_cancel_requested(cancel_flag);
+        });
     }
     Ok(prompts)
 }
@@ -3629,6 +3795,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             scan_prompts,
             cancel_scan,
+            scan_progress,
             plan_scan,
             import_batch,
             list_import_states,
@@ -3877,6 +4044,51 @@ mod tests {
         assert!(!should_persist_scan_result(true, false, &canceled_warnings));
         assert!(should_persist_scan_result(true, false, &normal_warnings));
         assert!(!should_persist_scan_result(false, true, &normal_warnings));
+    }
+
+    #[test]
+    fn scan_progress_run_reports_active_progress_and_missing_runs() {
+        let run_id = format!(
+            "test-scan-progress-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        );
+
+        start_scan_progress(Some(&run_id), 3, 25);
+        update_scan_progress(Some(&run_id), |progress| {
+            progress.source_id = Some("codex".to_string());
+            progress.source_label = Some("Codex".to_string());
+            progress.source_index = 1;
+            progress.source_file_count = Some(50);
+            progress.files_seen = 7;
+            progress.source_files_seen = 7;
+            progress.prompts_found = 12;
+        });
+
+        let progress = scan_progress_run(ScanProgressOptions {
+            run_id: run_id.clone(),
+        })
+        .expect("read active progress");
+
+        assert!(progress.active);
+        assert_eq!(progress.source_label.as_deref(), Some("Codex"));
+        assert_eq!(progress.source_count, 3);
+        assert_eq!(progress.source_file_count, Some(50));
+        assert_eq!(progress.files_seen, 7);
+        assert_eq!(progress.prompts_found, 12);
+        assert_eq!(progress.limit, Some(25));
+
+        remove_scan_progress(&run_id);
+        let inactive = scan_progress_run(ScanProgressOptions {
+            run_id: run_id.clone(),
+        })
+        .expect("read inactive progress");
+
+        assert_eq!(inactive.run_id, run_id);
+        assert!(!inactive.active);
+        assert_eq!(inactive.files_seen, 0);
     }
 
     #[test]
@@ -4345,7 +4557,8 @@ mod tests {
             notes: Vec::new(),
         };
 
-        let prompts = collect_from_source(&source, &mut summary, 1, None).expect("collect source");
+        let prompts =
+            collect_from_source(&source, &mut summary, 1, None, None, 0).expect("collect source");
 
         assert_eq!(prompts.len(), 1);
         assert_eq!(summary.files_seen, 1);
@@ -4394,7 +4607,8 @@ mod tests {
             notes: Vec::new(),
         };
 
-        let prompts = collect_from_source(&source, &mut summary, 2, None).expect("collect source");
+        let prompts =
+            collect_from_source(&source, &mut summary, 2, None, None, 0).expect("collect source");
         let files_seen = summary.files_seen;
         std::fs::remove_dir_all(root).expect("remove temp root");
 
@@ -4440,7 +4654,7 @@ mod tests {
         };
         let cancel_flag = Arc::new(AtomicBool::new(true));
 
-        let prompts = collect_from_source(&source, &mut summary, 1, Some(&cancel_flag))
+        let prompts = collect_from_source(&source, &mut summary, 1, Some(&cancel_flag), None, 0)
             .expect("collect canceled source");
 
         assert!(prompts.is_empty());
@@ -4484,7 +4698,7 @@ mod tests {
             notes: Vec::new(),
         };
 
-        let result = collect_from_source(&source, &mut summary, 1, None);
+        let result = collect_from_source(&source, &mut summary, 1, None, None, 0);
         std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o700))
             .expect("restore traversal");
         std::fs::remove_dir_all(root).expect("remove temp root");

@@ -80,6 +80,22 @@ export interface CancelScanResult {
   canceled: boolean;
 }
 
+export interface ScanProgress {
+  run_id: string;
+  active: boolean;
+  canceled: boolean;
+  source_id: string | null;
+  source_label: string | null;
+  source_index: number;
+  source_count: number;
+  files_seen: number;
+  source_files_seen: number;
+  source_file_count: number | null;
+  prompts_found: number;
+  limit: number | null;
+  updated_at: string;
+}
+
 export interface SourcePlan {
   id: string;
   label: string;

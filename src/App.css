@@ -226,6 +226,12 @@ h3 {
   color: #27496f;
 }
 
+.notice.scan-progress {
+  background: #eef7ef;
+  border-color: #a9d5b2;
+  color: #285a34;
+}
+
 .notice.secondary {
   background: #f8faf7;
   border-color: #dce5da;

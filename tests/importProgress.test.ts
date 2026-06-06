@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  importProgressDisplay,
   importProgressPercent,
+  importStateProgressPercent,
   importStopNoticeText,
   importRunFailureText,
   importStatusLabel,
   type ImportRunState,
 } from "../src/importProgress.ts";
-import type { ImportBatchResult } from "../src/types.ts";
+import type { ImportBatchResult, ImportState } from "../src/types.ts";
 
 function importResult(processedFiles: number, totalFiles: number, completed = false): ImportBatchResult {
   return {
@@ -66,10 +68,85 @@ function importResult(processedFiles: number, totalFiles: number, completed = fa
   };
 }
 
+function importState(
+  processedFiles: number,
+  totalFiles: number,
+  completed = false,
+  sourceLabel = "Source A",
+): ImportState {
+  return {
+    source_id: "source-a",
+    source_label: sourceLabel,
+    root_path: "/tmp/source-a",
+    total_files: totalFiles,
+    total_bytes: 0,
+    next_file_index: processedFiles,
+    processed_files: processedFiles,
+    imported_prompt_count: 0,
+    completed,
+    updated_at: "2026-06-06T00:00:00Z",
+  };
+}
+
 test("import progress is bounded and rounded", () => {
   assert.equal(importProgressPercent(importResult(3, 10)), 30);
   assert.equal(importProgressPercent(importResult(15, 10)), 100);
   assert.equal(importProgressPercent(importResult(0, 0, true)), 100);
+});
+
+test("saved import progress is bounded and rounded", () => {
+  assert.equal(importStateProgressPercent(importState(81, 144)), 56);
+  assert.equal(importStateProgressPercent(importState(200, 144)), 100);
+  assert.equal(importStateProgressPercent(importState(0, 0, true)), 100);
+  assert.equal(importStateProgressPercent(null), 0);
+});
+
+test("import progress display uses saved cursor before first batch result", () => {
+  const display = importProgressDisplay(
+    null,
+    importState(81, 144, false, "Gemini temporary chats"),
+    "Gemini temporary chats",
+    144,
+    5,
+  );
+
+  assert.deepEqual(display, {
+    batchSummary: "5 files per batch",
+    percent: 56,
+    processedFiles: 81,
+    sourceLabel: "Gemini temporary chats",
+    totalFiles: 144,
+  });
+});
+
+test("import progress display prefers the latest batch result", () => {
+  const display = importProgressDisplay(
+    importResult(86, 144),
+    importState(81, 144, false, "Saved source"),
+    "Plan source",
+    144,
+    5,
+  );
+
+  assert.deepEqual(display, {
+    batchSummary: "1 files · 0 prompts",
+    percent: 60,
+    processedFiles: 86,
+    sourceLabel: "Source A",
+    totalFiles: 144,
+  });
+});
+
+test("import progress display falls back to active source metadata", () => {
+  const display = importProgressDisplay(null, null, "  Plan source  ", 12, 5);
+
+  assert.deepEqual(display, {
+    batchSummary: "5 files per batch",
+    percent: 0,
+    processedFiles: 0,
+    sourceLabel: "Plan source",
+    totalFiles: 12,
+  });
 });
 
 test("import status explains continuous stop requests", () => {

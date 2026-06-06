@@ -30,7 +30,8 @@ import {
   improvementSelectionChanged,
 } from "./improvementSelection";
 import {
-  importProgressPercent,
+  importProgressDisplay,
+  importStateProgressPercent,
   importRunFailureText,
   importStopNoticeText,
   importStatusLabel,
@@ -92,7 +93,6 @@ import {
 import type {
   ImportBatchResult,
   ImportEventsResult,
-  ImportState,
   ImportStatesResult,
   ImproveResult,
   PromptRecord,
@@ -140,11 +140,6 @@ function scanProgressLabel(progress: ScanProgress | null): string {
     : "source pending";
   const limit = progress.limit === null ? "" : ` · limit ${progress.limit.toLocaleString()}`;
   return `${source}: ${fileTotal} · ${progress.prompts_found.toLocaleString()} prompts · ${sourcePosition}${limit}`;
-}
-
-function importStateProgressPercent(state: ImportState): number {
-  if (state.total_files === 0) return state.completed ? 100 : 0;
-  return Math.max(0, Math.min(100, Math.round((state.processed_files / state.total_files) * 100)));
 }
 
 function formatBytes(bytes: number): string {
@@ -256,14 +251,25 @@ function App() {
   const activeImportSource = useMemo(() => {
     return plan?.sources.find((source) => source.id === activeImportSourceId) ?? null;
   }, [activeImportSourceId, plan]);
+  const activeImportSavedState = useMemo(() => {
+    if (!activeImportSourceId) return null;
+    return importStatesResult?.states.find((state) => state.source_id === activeImportSourceId) ?? null;
+  }, [activeImportSourceId, importStatesResult?.states]);
+  const currentImportProgress = importProgressDisplay(
+    importResult,
+    activeImportSavedState,
+    activeImportSource?.label ?? null,
+    activeImportSource?.file_count ?? 0,
+    IMPORT_BATCH_FILES,
+  );
   const importRunFailureMessage = importRunFailureText(
     importState,
-    importResult?.state.source_label ?? activeImportSource?.label ?? null,
+    currentImportProgress.sourceLabel,
   );
   const importStopNoticeMessage = importStopNoticeText(
     importState,
     importMode,
-    importResult?.state.source_label ?? activeImportSource?.label ?? null,
+    currentImportProgress.sourceLabel,
     completedQueueSourceCount,
     importQueueSourceIds.length,
   );
@@ -1298,28 +1304,24 @@ function App() {
             </div>
           ) : null}
           <div className="import-progress" aria-live="polite">
-            <progress value={importProgressPercent(importResult)} max={100} />
-            <span>{importProgressPercent(importResult)}%</span>
+            <progress value={currentImportProgress.percent} max={100} />
+            <span>{currentImportProgress.percent}%</span>
           </div>
           <div className="import-summary">
             <div>
               <span>Source</span>
-              <strong>{importResult?.state.source_label ?? activeImportSource?.label ?? "Selected source"}</strong>
+              <strong>{currentImportProgress.sourceLabel}</strong>
             </div>
             <div>
               <span>Processed</span>
               <strong>
-                {(importResult?.state.processed_files ?? 0).toLocaleString()} /{" "}
-                {(importResult?.state.total_files ?? activeImportSource?.file_count ?? 0).toLocaleString()}
+                {currentImportProgress.processedFiles.toLocaleString()} /{" "}
+                {currentImportProgress.totalFiles.toLocaleString()}
               </strong>
             </div>
             <div>
               <span>Batch</span>
-              <strong>
-                {importResult
-                  ? `${importResult.batch_file_count.toLocaleString()} files · ${importResult.batch_prompt_count.toLocaleString()} prompts`
-                  : `${IMPORT_BATCH_FILES.toLocaleString()} files per batch`}
-              </strong>
+              <strong>{currentImportProgress.batchSummary}</strong>
             </div>
             {importQueueSourceIds.length ? (
               <div>

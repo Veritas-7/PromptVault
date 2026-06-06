@@ -1,13 +1,58 @@
-import type { ImportBatchResult } from "./types";
+import type { ImportBatchResult, ImportState } from "./types";
 
 export type ImportRunState = "idle" | "importing" | "stopped" | "ready" | "failed";
 export type ImportRunMode = "single" | "continuous" | "queue";
+
+export interface ImportProgressDisplay {
+  batchSummary: string;
+  percent: number;
+  processedFiles: number;
+  sourceLabel: string;
+  totalFiles: number;
+}
 
 export function importProgressPercent(result: ImportBatchResult | null): number {
   if (!result) return 0;
   if (result.state.total_files === 0) return result.state.completed ? 100 : 0;
   const ratio = result.state.processed_files / result.state.total_files;
   return Math.max(0, Math.min(100, Math.round(ratio * 100)));
+}
+
+export function importStateProgressPercent(state: ImportState | null): number {
+  if (!state) return 0;
+  if (state.total_files === 0) return state.completed ? 100 : 0;
+  const ratio = state.processed_files / state.total_files;
+  return Math.max(0, Math.min(100, Math.round(ratio * 100)));
+}
+
+export function importProgressDisplay(
+  result: ImportBatchResult | null,
+  savedState: ImportState | null,
+  fallbackSourceLabel: string | null,
+  fallbackTotalFiles: number,
+  batchFileSize: number,
+): ImportProgressDisplay {
+  const state = result?.state ?? savedState;
+  const fallbackLabel = fallbackSourceLabel?.trim();
+  const sourceLabel = result?.state.source_label
+    ?? savedState?.source_label
+    ?? (fallbackLabel ? fallbackLabel : "Selected source");
+  const processedFiles = state?.processed_files ?? 0;
+  const totalFiles = state?.total_files ?? fallbackTotalFiles;
+  const percent = result
+    ? importProgressPercent(result)
+    : importStateProgressPercent(savedState);
+  const batchSummary = result
+    ? `${result.batch_file_count.toLocaleString()} files · ${result.batch_prompt_count.toLocaleString()} prompts`
+    : `${batchFileSize.toLocaleString()} files per batch`;
+
+  return {
+    batchSummary,
+    percent,
+    processedFiles,
+    sourceLabel,
+    totalFiles,
+  };
 }
 
 export function importStatusLabel(

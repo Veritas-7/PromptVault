@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 20:21 KST
+Updated: 2026-06-06 20:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1713,6 +1713,33 @@ stability, performance, and maintainability, then record evidence here.
   - Computer Use confirmed the visible PromptVault pane showed the Saved Import
     Progress database path in a dedicated full-width row.
   - Final diagnostics returned `No console entries` and `No browser errors`.
+- Continued with the next thin slice: use saved import cursors as the
+  Incremental Import panel's startup progress before the first batch response.
+- Found live saved cursor evidence from `/api/import-states`:
+  `gemini-tmp-chat` was resumable at `81 / 144`, which the app already knew
+  before a new `Run Until Done` response arrived.
+- Added a shared import progress display helper so the Incremental Import panel
+  shows saved cursor progress, processed file count, and source label while a
+  run is starting and no `ImportBatchResult` has arrived yet.
+- `npm run test:ui` passed after this import-progress-fallback slice with 76
+  tests.
+- `npm run check` passed after this slice: UI tests 76 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?import-progress-fallback=20260606a` on
+    the same PromptVault browser surface.
+  - Clicked `Plan`, then clicked `Run Until Done` for `Gemini temporary chats`.
+  - Immediately observed `56%`, `Processed 81 / 144`,
+    `Batch 5 files per batch`, and `Status Running` before the first batch
+    result arrived.
+  - Clicked `Stop`; after the current batch finished, observed `60%`,
+    `Processed 86 / 144`, `Batch 5 files · 5 prompts`, `Status Stopped`, and
+    the persisted DB notice
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 88,378 · new 0 · updated 5`.
+  - Verified `/api/import-states` cursor advanced only one batch to
+    `gemini-tmp-chat 86 / 144`.
+  - Final diagnostics returned `No console entries` and `No browser errors`.
 
 ## Changes
 
@@ -1841,6 +1868,13 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx`: adds a path-card class to database summary cells.
 - `src/App.css`: makes the Saved Import Progress database path span the full
   summary row and uses smaller line-height-controlled path text.
+- `src/importProgress.ts`: adds saved-cursor progress helpers and a display
+  model for startup import progress before the first batch result.
+- `src/App.tsx`: uses the active source's saved import cursor as the
+  Incremental Import panel fallback for progress percentage, processed file
+  count, total file count, and source label.
+- `tests/importProgress.test.ts`: covers saved cursor progress, result
+  precedence, and active-source fallback metadata.
 - `src/scanStatus.ts`: adds scan failure copy for first-run and stale-results
   failures, plus scan Stop failure copy.
 - `src/App.tsx`: shows a scan retry warning when a scan fails and clears stale
@@ -2044,6 +2078,10 @@ stability, performance, and maintainability, then record evidence here.
   even though `surface:9` DOM checks hit PromptVault correctly. Selecting the
   existing `프롬프트` workspace 5 row confirmed the same existing browser pane
   visually; no new browser was opened.
+- During import-progress-fallback QA, a same-surface navigation eval timed out
+  even though the page loaded. Short `wait`/`eval` commands then worked. The
+  real `Run Until Done`/`Stop` QA advanced the Gemini cursor by exactly one
+  batch from `81 / 144` to `86 / 144`.
 
 ## Research
 

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 17:30 KST
+Updated: 2026-06-06 17:41 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -978,9 +978,44 @@ stability, performance, and maintainability, then record evidence here.
 - Attempts to force a delayed `/api/prompts` response for exact intermediate
   button-label capture hit cmux JavaScript-result timeouts. Those attempts are
   recorded as cmux diagnostic limitations, not as successful UI evidence.
+- Continued with the next thin slice: lock import write actions while a scan
+  is running or canceling.
+- Found a UI state gap: after the Import Plan panel was already open, active
+  scans disabled top-level `Scan`, `Load Stored`, and `Plan`, but did not lock
+  the per-source import buttons, source checkboxes, or `Run Selected` queue
+  button.
+- Added shared action-lock helpers and focused UI tests so import write actions
+  are locked by scan, import, and stored-load work.
+- Added stable QA selectors for `Scan`, `Plan`, and `Limit` so cmux can drive
+  the core flow with CSS selectors instead of brittle text selectors.
+- `npm run test:ui` passed with 26 tests, including the new action-lock cases.
+- Final `npm run check` passed after the import-lock slice: UI tests 26 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Confirmed `workspace:5` still had exactly one PromptVault browser surface
+    and did not create another browser.
+  - Loaded the new Vite build `index-_ilfamsz.js` with a cache-busted
+    PromptVault URL.
+  - Clicked `Plan`, observed `Import Plan`, filled Limit `100000`, clicked
+    `Scan`, and observed `Scanning` plus `Stop`.
+  - While scan progress was visible, enabled counts were all `0` for:
+    `button[data-import-source-id]:enabled`,
+    `button[data-import-continuous-source-id]:enabled`,
+    `input[data-select-source-id]:enabled`, and
+    `button[data-import-selected="true"]:enabled`.
+  - Clicked `Stop`, observed `Canceled scan was not stored in the vault.`, and
+    verified browser console returned `No console entries` and browser errors
+    returned `No browser errors`.
+- Computer Use still showed the ambient `working.md`/Worklog workspace after
+  cmux CLI selected `workspace:5`, so Computer Use was not used as proof for
+  this PromptVault slice. The reliable proof came from cmux CLI against the
+  explicit `surface:9` browser.
 
 ## Changes
 
+- `src/actionLocks.ts`: added shared top-level and import-action busy lock
+  helpers.
 - `src-tauri/src/lib.rs`: added progress registry, progress command, active
   scan updates, discovery counts, and focused backend coverage.
 - `src-tauri/src/bin/promptvault-cli.rs`: added bridge route
@@ -994,6 +1029,11 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx`: separated stored prompt loading into `storedLoadState`, updated
   `Load Stored` loading text, and guarded scan, plan, import, reset, refresh,
   and queued import controls while stored prompts are loading.
+- `src/App.tsx`: now uses shared action-lock helpers, disables import write
+  actions while a scan is running or canceling, and exposes stable cmux QA
+  selectors for `Scan`, `Plan`, and `Limit`.
+- `tests/actionLocks.test.ts`: added coverage for top-level locks and import
+  action locks, including the active-scan case.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1053,6 +1093,10 @@ stability, performance, and maintainability, then record evidence here.
   button-text query hit JavaScript-result timeouts. The reliable evidence came
   from the same existing `surface:9` click flow, stored vault completion text,
   scan-progress count `0`, clean console/errors, and bridge vault count `1690`.
+- During import-lock QA, `cmux browser get value` timed out, and an early
+  text-selector click using `button:has-text("Plan")` raised a selector-engine
+  JS exception. The stable path was to select `workspace:5`, focus existing
+  `pane:10`, and use explicit data selectors on `surface:9`.
 
 ## Research
 

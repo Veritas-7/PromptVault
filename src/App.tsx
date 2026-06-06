@@ -14,6 +14,7 @@ import {
   StopCircle,
 } from "lucide-react";
 import "./App.css";
+import { importActionLocked, topLevelActionLocked } from "./actionLocks";
 import { BROWSER_BRIDGE_NOTICE } from "./browserBridge";
 import { importEventBatchSummary, importEventStatusLabel } from "./importEvents";
 import {
@@ -161,6 +162,13 @@ function App() {
   const isImportRunning = importState === "importing";
   const isScanRunning = scanState === "scanning" || scanState === "canceling";
   const isStoredLoadRunning = storedLoadState === "loading";
+  const actionLockState = {
+    importRunning: isImportRunning,
+    scanRunning: isScanRunning,
+    storedLoadRunning: isStoredLoadRunning,
+  };
+  const isTopLevelActionLocked = topLevelActionLocked(actionLockState);
+  const isImportActionLocked = importActionLocked(actionLockState);
   const canStopScan = scanRunIdRef.current !== null && isScanRunning;
   const scanProgressText = scanProgressLabel(scanProgressInfo);
 
@@ -546,6 +554,7 @@ function App() {
           <label className="limit-control">
             <span>Limit</span>
             <input
+              data-scan-limit="true"
               min={1}
               max={MAX_SCAN_LIMIT}
               step={100}
@@ -557,7 +566,8 @@ function App() {
           </label>
           <button
             className="primary"
-            disabled={isScanRunning || isImportRunning || isStoredLoadRunning}
+            data-run-scan="true"
+            disabled={isTopLevelActionLocked}
             onClick={runScan}
             type="button"
           >
@@ -579,7 +589,7 @@ function App() {
           <button
             className="secondary-action"
             data-load-stored-prompts="true"
-            disabled={isScanRunning || isImportRunning || isStoredLoadRunning}
+            disabled={isTopLevelActionLocked}
             onClick={runLoadStored}
             type="button"
           >
@@ -588,7 +598,8 @@ function App() {
           </button>
           <button
             className="secondary-action"
-            disabled={planState === "planning" || isScanRunning || isImportRunning || isStoredLoadRunning}
+            data-run-plan="true"
+            disabled={planState === "planning" || isTopLevelActionLocked}
             onClick={runPlan}
             type="button"
           >
@@ -662,7 +673,7 @@ function App() {
           </label>
           <button
             className="inline-action"
-            disabled={!storedFilterCount || isScanRunning || isImportRunning || isStoredLoadRunning}
+            disabled={!storedFilterCount || isTopLevelActionLocked}
             onClick={resetStoredFilters}
             type="button"
           >
@@ -877,7 +888,7 @@ function App() {
             <button
               className="inline-action"
               data-import-selected="true"
-              disabled={isImportRunning || isStoredLoadRunning || selectedImportQueueSourceIds.length === 0}
+              disabled={isImportActionLocked || selectedImportQueueSourceIds.length === 0}
               onClick={runSelectedImportQueue}
               type="button"
             >
@@ -893,7 +904,7 @@ function App() {
                     <input
                       checked={selectedImportSourceIds.includes(source.id)}
                       data-select-source-id={source.id}
-                      disabled={isImportRunning || isStoredLoadRunning || source.file_count === 0}
+                      disabled={isImportActionLocked || source.file_count === 0}
                       onChange={(event) => {
                         const checked = event.currentTarget.checked;
                         setSelectedImportSourceIds((current) =>
@@ -915,7 +926,7 @@ function App() {
                   <button
                     className="inline-action"
                     data-import-source-id={source.id}
-                    disabled={isImportRunning || isStoredLoadRunning || source.file_count === 0}
+                    disabled={isImportActionLocked || source.file_count === 0}
                     onClick={() => runImportBatch(source.id, "single")}
                     type="button"
                   >
@@ -927,7 +938,7 @@ function App() {
                   <button
                     className="inline-action"
                     data-import-continuous-source-id={source.id}
-                    disabled={isImportRunning || isStoredLoadRunning || source.file_count === 0}
+                    disabled={isImportActionLocked || source.file_count === 0}
                     onClick={() => runImportBatch(source.id, "continuous")}
                     type="button"
                   >

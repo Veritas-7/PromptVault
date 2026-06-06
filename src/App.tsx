@@ -44,6 +44,7 @@ import {
   selectedQueueSourceIds,
   toggleSourceSelection,
 } from "./importQueue";
+import { ALERT_NOTICE_PROPS, STATUS_NOTICE_PROPS } from "./noticeA11y";
 import { refreshGlobalErrorAfterSuccess } from "./panelRefresh";
 import { planFailureText, planUnavailableText, type PlanRunState } from "./planStatus";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
@@ -808,35 +809,35 @@ function App() {
       </section>
 
       {error ? (
-        <section className="notice error">
+        <section className="notice error" {...ALERT_NOTICE_PROPS}>
           <AlertTriangle size={18} />
           <span>{error}</span>
         </section>
       ) : null}
 
       {browserQaMode ? (
-        <section className="notice browser-mode">
+        <section className="notice browser-mode" {...STATUS_NOTICE_PROPS}>
           <ShieldCheck size={18} />
           <span>{BROWSER_BRIDGE_NOTICE}</span>
         </section>
       ) : null}
 
       {isScanRunning ? (
-        <section className="notice scan-progress" data-scan-progress="true">
+        <section className="notice scan-progress" data-scan-progress="true" {...STATUS_NOTICE_PROPS}>
           <RefreshCw size={18} />
           <span>{scanProgressText}</span>
         </section>
       ) : null}
 
       {scanRunFailureMessage ? (
-        <section className="notice warning" data-scan-run-error="true">
+        <section className="notice warning" data-scan-run-error="true" {...ALERT_NOTICE_PROPS}>
           <AlertTriangle size={18} />
           <span>{scanRunFailureMessage}</span>
         </section>
       ) : null}
 
       {scanStopFailureMessage ? (
-        <section className="notice warning" data-scan-stop-error="true">
+        <section className="notice warning" data-scan-stop-error="true" {...ALERT_NOTICE_PROPS}>
           <AlertTriangle size={18} />
           <span>{scanStopFailureMessage}</span>
         </section>
@@ -860,13 +861,21 @@ function App() {
           </div>
         </div>
         {storedFacetsFailureMessage ? (
-          <div className="notice warning panel-notice" data-stored-facets-refresh-error="true">
+          <div
+            className="notice warning panel-notice"
+            data-stored-facets-refresh-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
             <AlertTriangle size={18} />
             <span>{storedFacetsFailureMessage}</span>
           </div>
         ) : null}
         {storedLoadFailureMessage ? (
-          <div className="notice warning panel-notice" data-stored-load-error="true">
+          <div
+            className="notice warning panel-notice"
+            data-stored-load-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
             <AlertTriangle size={18} />
             <span>{storedLoadFailureMessage}</span>
           </div>
@@ -980,7 +989,11 @@ function App() {
             </button>
           </div>
           {importStatesFailureMessage ? (
-            <div className="notice warning panel-notice" data-import-states-refresh-error="true">
+            <div
+              className="notice warning panel-notice"
+              data-import-states-refresh-error="true"
+              {...ALERT_NOTICE_PROPS}
+            >
               <AlertTriangle size={18} />
               <span>{importStatesFailureMessage}</span>
             </div>
@@ -1040,7 +1053,7 @@ function App() {
       ) : null}
 
       {result ? (
-        <section className="notice">
+        <section className="notice" {...STATUS_NOTICE_PROPS}>
           <FileText size={18} />
           <span>
             {displayDatabasePath} · stored {displayStoredPromptCount.toLocaleString()} · new{" "}
@@ -1051,7 +1064,7 @@ function App() {
       ) : null}
 
       {result?.output_path ? (
-        <section className="notice secondary">
+        <section className="notice secondary" {...STATUS_NOTICE_PROPS}>
           <FileText size={18} />
           <span>
             Export {result.output_path} · preview {result.returned_prompt_count.toLocaleString()} /{" "}
@@ -1061,14 +1074,14 @@ function App() {
       ) : null}
 
       {result?.warnings.length ? (
-        <section className="notice warning">
+        <section className="notice warning" {...STATUS_NOTICE_PROPS}>
           <AlertTriangle size={18} />
           <span>{result.warnings.join(" ")}</span>
         </section>
       ) : null}
 
       {plan?.warnings.length ? (
-        <section className="notice warning">
+        <section className="notice warning" {...STATUS_NOTICE_PROPS}>
           <AlertTriangle size={18} />
           <span>{plan.warnings.join(" ")}</span>
         </section>
@@ -1090,7 +1103,11 @@ function App() {
             </button>
           </div>
           {importEventsFailureMessage ? (
-            <div className="notice warning panel-notice" data-import-events-refresh-error="true">
+            <div
+              className="notice warning panel-notice"
+              data-import-events-refresh-error="true"
+              {...ALERT_NOTICE_PROPS}
+            >
               <AlertTriangle size={18} />
               <span>{importEventsFailureMessage}</span>
             </div>
@@ -1165,7 +1182,7 @@ function App() {
             </div>
           </div>
           {planFailureMessage ? (
-            <div className="notice warning panel-notice" data-plan-run-error="true">
+            <div className="notice warning panel-notice" data-plan-run-error="true" {...ALERT_NOTICE_PROPS}>
               <AlertTriangle size={18} />
               <span>{planFailureMessage}</span>
             </div>
@@ -1294,13 +1311,13 @@ function App() {
             ) : null}
           </div>
           {importRunFailureMessage ? (
-            <div className="notice warning panel-notice" data-import-run-error="true">
+            <div className="notice warning panel-notice" data-import-run-error="true" {...ALERT_NOTICE_PROPS}>
               <AlertTriangle size={18} />
               <span>{importRunFailureMessage}</span>
             </div>
           ) : null}
           {importStopNoticeMessage ? (
-            <div className="notice warning panel-notice" data-import-stop-warning="true">
+            <div className="notice warning panel-notice" data-import-stop-warning="true" {...STATUS_NOTICE_PROPS}>
               <AlertTriangle size={18} />
               <span>{importStopNoticeMessage}</span>
             </div>
@@ -1343,7 +1360,7 @@ function App() {
             </div>
           </div>
           {importResult ? (
-            <div className="notice secondary">
+            <div className="notice secondary" {...STATUS_NOTICE_PROPS}>
               <FileText size={18} />
               <span>
                 {importResult.persistence.database_path} · stored{" "}
@@ -1557,7 +1574,11 @@ function App() {
             <span>{activeImprovement?.provider ?? "local/GLM"}</span>
           </div>
           {improvementFailureMessage ? (
-            <div className="notice warning panel-notice" data-improvement-run-error="true">
+            <div
+              className="notice warning panel-notice"
+              data-improvement-run-error="true"
+              {...ALERT_NOTICE_PROPS}
+            >
               <AlertTriangle size={18} />
               <span>{improvementFailureMessage}</span>
             </div>

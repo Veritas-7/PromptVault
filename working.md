@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 20:34 KST
+Updated: 2026-06-06 20:39 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1764,6 +1764,27 @@ stability, performance, and maintainability, then record evidence here.
     controls returned to enabled.
   - Restored `window.fetch`; final diagnostics returned `No console entries`
     and `No browser errors`.
+- Continued with the next thin slice: add accessible announcement semantics to
+  dynamic notice banners.
+- Found through the existing `surface:9` DOM that rendered `.notice` banners
+  had no `role` or `aria-live` attributes, so warnings and failures were
+  visually clear but weakly announced to assistive technology.
+- Added shared notice accessibility props: urgent failures use `role="alert"`;
+  non-urgent status, progress, persistence, export, and large-source warning
+  notices use `role="status"` with `aria-live="polite"`.
+- `npm run test:ui` passed after this notice-a11y slice with 78 tests.
+- `npm run check` passed after this slice: UI tests 78 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?notice-a11y=20260606a` on the same
+    PromptVault browser surface.
+  - Clicked `Plan` and observed the browser bridge notice plus large-source
+    plan warning with `role="status"` and `aria-live="polite"`.
+  - Clicked `Scan` with an empty Limit and observed the top-level scan error
+    plus scan failure warning with `role="alert"`.
+  - Reloaded the same surface to clear the intentional failure state; final
+    diagnostics returned `No console entries` and `No browser errors`.
 
 ## Changes
 
@@ -1906,6 +1927,12 @@ stability, performance, and maintainability, then record evidence here.
   discovery.
 - `tests/actionLocks.test.ts`: covers plan-running locks for top-level and
   import actions.
+- `src/noticeA11y.ts`: adds shared alert/status notice prop constants for
+  accessible dynamic banner announcements.
+- `src/App.tsx`: applies alert semantics to failure notices and polite status
+  semantics to browser-mode, progress, persistence, export, stop, and large
+  source notices.
+- `tests/noticeA11y.test.ts`: covers the alert/status notice prop contracts.
 - `src/scanStatus.ts`: adds scan failure copy for first-run and stale-results
   failures, plus scan Stop failure copy.
 - `src/App.tsx`: shows a scan retry warning when a scan fails and clears stale
@@ -2117,6 +2144,9 @@ stability, performance, and maintainability, then record evidence here.
   `/api/plan` on the current `surface:9` page. It was restored inside the same
   eval after the delayed Plan request completed, and final diagnostics returned
   clean.
+- During notice-a11y QA, the empty-Limit Scan click intentionally created a
+  top-level error and scan warning to verify `role="alert"`. The same surface
+  was reloaded afterward, and final console/browser diagnostics returned clean.
 
 ## Research
 

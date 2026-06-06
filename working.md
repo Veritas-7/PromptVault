@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 16:04 KST
+Updated: 2026-06-06 16:13 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -392,6 +392,14 @@ stability, performance, and maintainability, then record evidence here.
   backed by facet aggregates, Stored Vault facet summary text, workspace
   suggestions, and quiet facet refreshes after scan/import completion.
 - `README.md` and `docs/CLI.md`: documented `/api/prompt-facets`.
+- `src/scanLimit.ts`: moved browser scan-limit validation into a tested helper
+  and made browser Scan require an explicit positive limit before calling the
+  backend.
+- `tests/scanLimit.test.ts`: added coverage for blank, valid, invalid, and
+  oversized scan limits.
+- `src/App.tsx`: replaced the old inline scan-limit parser with the required
+  scan-limit helper and changed the Limit placeholder from `All` to `Required`
+  to prevent accidental full-store scans from the browser UI.
 
 ## Tests
 
@@ -674,14 +682,36 @@ stability, performance, and maintainability, then record evidence here.
 - Post-rebuild cmux smoke on `surface:9`: `.stored-filter-panel` rendered,
   header showed `459 stored, 10 sources, 20 dates, 10 workspaces`, console
   returned `No console entries`, and errors returned `No browser errors`.
+- Continued with the next thin slice: browser UI guard against accidental
+  unrestricted scans.
+- `npm run test:ui`: 24 tests passed after adding scan-limit helper coverage.
+- `npm run build`: TypeScript and Vite production build passed after replacing
+  the inline App scan parser.
+- `npm run check`: passed after the scan guard slice. This covered UI tests
+  24 passed, TypeScript/Vite build, Rust lib 58 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- Real cmux scan guard QA on the existing PromptVault `surface:9`:
+  - Confirmed `workspace:5` still had exactly one PromptVault browser surface
+    and did not create another browser.
+  - Reloaded the existing browser after the production build.
+  - Confirmed the Limit placeholder was `Required` and the value was blank.
+  - Clicked `Scan` with blank Limit and observed the error notice
+    `Enter a scan limit before scanning. Use Plan or resumable imports for large historical stores.`
+    while the button stayed `Scan`, proving the scan-running state was not
+    entered.
+  - Filled Limit `10`, clicked `Scan`, and observed metrics `Prompts 10`,
+    `Preview 10`, `Files 8`, `DB Stored 459`, `Dates 20`.
+  - Browser console returned `No console entries`; browser errors returned
+    `No browser errors`.
 
 ## Issues
 
-- Unlimited full scan over `~/.codex/sessions` is not yet practical. The new
-  plan path confirms the current Codex source alone has `25,097` matching files
-  and about `32.3 GiB` of JSONL. Future work should add resumable incremental
-  import slices and a background queue before claiming exhaustive historical
-  ingestion of the entire Codex store.
+- Unlimited full scan over `~/.codex/sessions` is not practical from the
+  browser UI. The plan path confirms the current Codex source alone has
+  `25,097` matching files and about `32.3 GiB` of JSONL. The browser Scan
+  button now requires an explicit positive limit before it calls the backend;
+  future work should add resumable background indexing before claiming
+  exhaustive historical ingestion of the entire Codex store.
 - Import batching is now resumable per source. The UI can run one source
   continuously, queue selected sources, and stop after the current batch. It
   does not yet have a durable background worker that continues after the browser
@@ -718,7 +748,7 @@ stability, performance, and maintainability, then record evidence here.
 
 1. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
-2. Add scan-run cancellation/progress for unrestricted full scans, separate
-   from the safer resumable import-batch path.
+2. Add scan-run cancellation/progress for explicit limited scans and keep
+   unbounded historical ingestion on the safer resumable import-batch path.
 3. Recover or harden the cmux browser diagnostics workflow for cases where the
    active visible workspace differs from the target PromptVault surface.

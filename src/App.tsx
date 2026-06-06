@@ -39,6 +39,7 @@ import {
   planScan,
   scanPrompts,
 } from "./promptVaultApi";
+import { MAX_SCAN_LIMIT, parseRequiredScanLimit } from "./scanLimit";
 import { selectedPromptForView } from "./selection";
 import {
   activeStoredPromptFilterCount,
@@ -63,22 +64,8 @@ type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 type StoredFacetsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
-const MAX_SCAN_LIMIT = 100000;
 const IMPORT_BATCH_FILES = 5;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
-
-function parseLimitInput(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (!/^\d+$/.test(trimmed)) {
-    throw new Error("Limit must be a positive whole number.");
-  }
-  const parsed = Number(trimmed);
-  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > MAX_SCAN_LIMIT) {
-    throw new Error(`Limit must be between 1 and ${MAX_SCAN_LIMIT}.`);
-  }
-  return parsed;
-}
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -345,9 +332,9 @@ function App() {
     setError(null);
     setImprovement(null);
     setImprovementPromptId(null);
-    let parsedLimit: number | undefined;
+    let parsedLimit: number;
     try {
-      parsedLimit = parseLimitInput(limit);
+      parsedLimit = parseRequiredScanLimit(limit);
     } catch (err) {
       setError(errorText(err));
       setScanState("failed");
@@ -469,7 +456,7 @@ function App() {
               max={MAX_SCAN_LIMIT}
               step={100}
               type="number"
-              placeholder="All"
+              placeholder="Required"
               value={limit}
               onChange={(event) => setLimit(event.currentTarget.value)}
             />

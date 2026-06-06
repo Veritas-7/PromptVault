@@ -29,6 +29,7 @@ import {
 import { selectedQueueSourceIds, toggleSourceSelection } from "./importQueue";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
 import {
+  cancelScan,
   importBatch,
   improvePrompt,
   isBrowserQaMode,
@@ -58,7 +59,7 @@ import type {
   StoredPromptFacetsResult,
 } from "./types";
 
-type ScanState = "idle" | "scanning" | "ready" | "failed";
+type ScanState = "idle" | "scanning" | "canceling" | "ready" | "failed";
 type PlanState = "idle" | "planning" | "ready" | "failed";
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
@@ -75,6 +76,13 @@ function waitForNextImportBatch(): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, CONTINUOUS_IMPORT_PAUSE_MS);
   });
+}
+
+function createScanRunId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `scan-${crypto.randomUUID()}`;
+  }
+  return `scan-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function importStateProgressPercent(state: ImportState): number {
@@ -128,7 +136,10 @@ function App() {
   const [improvement, setImprovement] = useState<ImproveResult | null>(null);
   const [improvementPromptId, setImprovementPromptId] = useState<string | null>(null);
   const importStopRequestedRef = useRef(false);
+  const scanRunIdRef = useRef<string | null>(null);
   const isImportRunning = importState === "importing";
+  const isScanRunning = scanState === "scanning" || scanState === "canceling";
+  const canStopScan = scanRunIdRef.current !== null && isScanRunning;
 
   const prompts = result?.prompts ?? [];
   const promptListMode = effectivePromptListMode(result?.preview_sort, previewMode);
@@ -340,6 +351,8 @@ function App() {
       setScanState("failed");
       return;
     }
+    const runId = createScanRunId();
+    scanRunIdRef.current = runId;
     setScanState("scanning");
     try {
       const next = await scanPrompts({
@@ -347,6 +360,7 @@ function App() {
         preview_limit: PREVIEW_LIMIT,
         preview_sort: previewSortForMode(previewMode),
         include_markdown: false,
+        run_id: runId,
       });
       const loadedMode = effectivePromptListMode(next.preview_sort, previewMode);
       setResult(next);
@@ -361,6 +375,22 @@ function App() {
     } catch (err) {
       setError(errorText(err));
       setScanState("failed");
+    } finally {
+      scanRunIdRef.current = null;
+    }
+  }
+
+  async function requestStopScan() {
+    const runId = scanRunIdRef.current;
+    if (!runId) return;
+    setScanState("canceling");
+    try {
+      const result = await cancelScan(runId);
+      if (!result.canceled) {
+        setError("No active scan was found to stop.");
+      }
+    } catch (err) {
+      setError(errorText(err));
     }
   }
 
@@ -463,26 +493,38 @@ function App() {
           </label>
           <button
             className="primary"
-            disabled={scanState === "scanning" || isImportRunning}
+            disabled={isScanRunning || isImportRunning}
             onClick={runScan}
             type="button"
           >
             <RefreshCw size={18} />
-            {scanState === "scanning" ? "Scanning" : "Scan"}
+            {scanState === "canceling" ? "Stopping" : scanState === "scanning" ? "Scanning" : "Scan"}
           </button>
+          {canStopScan ? (
+            <button
+              className="secondary-action stop-action"
+              data-stop-scan="true"
+              disabled={scanState === "canceling"}
+              onClick={requestStopScan}
+              type="button"
+            >
+              <StopCircle size={18} />
+              {scanState === "canceling" ? "Stopping" : "Stop"}
+            </button>
+          ) : null}
           <button
             className="secondary-action"
             data-load-stored-prompts="true"
-            disabled={scanState === "scanning" || isImportRunning}
+            disabled={isScanRunning || isImportRunning}
             onClick={runLoadStored}
             type="button"
           >
             <Database size={18} />
-            {scanState === "scanning" ? "Loading" : "Load Stored"}
+            {isScanRunning ? "Loading" : "Load Stored"}
           </button>
           <button
             className="secondary-action"
-            disabled={planState === "planning" || scanState === "scanning" || isImportRunning}
+            disabled={planState === "planning" || isScanRunning || isImportRunning}
             onClick={runPlan}
             type="button"
           >
@@ -549,7 +591,7 @@ function App() {
           </label>
           <button
             className="inline-action"
-            disabled={!storedFilterCount || scanState === "scanning" || isImportRunning}
+            disabled={!storedFilterCount || isScanRunning || isImportRunning}
             onClick={resetStoredFilters}
             type="button"
           >

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { bridgeEndpoint, hasTauriInvoke } from "./browserBridge";
 import type {
+  CancelScanResult,
   ImportBatchResult,
   ImportEventsResult,
   ImportStatesResult,
@@ -15,6 +16,11 @@ export interface ScanPromptOptions {
   preview_limit?: number;
   preview_sort?: string;
   include_markdown?: boolean;
+  run_id?: string;
+}
+
+export interface CancelScanOptions {
+  run_id: string;
 }
 
 export interface ScanPlanOptions {
@@ -106,6 +112,14 @@ export async function scanPrompts(options: ScanPromptOptions): Promise<ScanResul
     return invoke<ScanResult>("scan_prompts", { options });
   }
   return postBridge<ScanResult>("/api/scan", { options });
+}
+
+export async function cancelScan(run_id: string): Promise<CancelScanResult> {
+  const options: CancelScanOptions = { run_id };
+  if (hasTauriInvoke()) {
+    return invoke<CancelScanResult>("cancel_scan", { options });
+  }
+  return postBridge<CancelScanResult>("/api/scan/cancel", { options });
 }
 
 export async function improvePrompt(request: ImprovePromptRequest): Promise<ImproveResult> {

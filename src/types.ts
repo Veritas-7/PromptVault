@@ -75,6 +75,11 @@ export interface ScanResult {
   warnings: string[];
 }
 
+export interface CancelScanResult {
+  run_id: string;
+  canceled: boolean;
+}
+
 export interface SourcePlan {
   id: string;
   label: string;

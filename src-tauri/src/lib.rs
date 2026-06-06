@@ -8,7 +8,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use walkdir::WalkDir;
 
 const APP_DIR_NAME: &str = "PromptVault";
@@ -24,6 +25,11 @@ const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
 const MAX_STORED_PROMPT_LIMIT: usize = 1_000;
 const DEFAULT_STORED_FACET_LIMIT: usize = 50;
 const MAX_STORED_FACET_LIMIT: usize = 200;
+const SCAN_CANCELED_WARNING: &str = "Scan canceled by user request; returning partial results.";
+
+type ScanCancelFlag = Arc<AtomicBool>;
+
+static SCAN_CANCEL_FLAGS: OnceLock<Mutex<HashMap<String, ScanCancelFlag>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptRecord {
@@ -134,6 +140,12 @@ pub struct ScanPlan {
     pub largest_file_bytes: u64,
     pub sources: Vec<SourcePlan>,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CancelScanResult {
+    pub run_id: String,
+    pub canceled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -291,6 +303,12 @@ pub struct ScanOptions {
     pub source_ids: Option<Vec<String>>,
     pub persist: Option<bool>,
     pub database_path: Option<String>,
+    pub run_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CancelScanOptions {
+    pub run_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -317,6 +335,11 @@ enum SourceKind {
 fn scan_prompts(options: Option<ScanOptions>) -> Result<ScanResult, String> {
     let opts = options.unwrap_or_default();
     run_scan(opts).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn cancel_scan(options: CancelScanOptions) -> Result<CancelScanResult, String> {
+    cancel_scan_run(options).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -359,7 +382,88 @@ async fn improve_prompt(request: ImproveRequest) -> Result<ImproveResult, String
         .map_err(|err| err.to_string())
 }
 
+fn scan_cancel_flags() -> &'static Mutex<HashMap<String, ScanCancelFlag>> {
+    SCAN_CANCEL_FLAGS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn normalized_scan_run_id(
+    run_id: Option<&str>,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    match run_id {
+        Some(value) if value.trim().is_empty() => {
+            Err("scan run_id requires a non-empty value".into())
+        }
+        Some(value) => Ok(Some(value.trim().to_string())),
+        None => Ok(None),
+    }
+}
+
+fn register_scan_run(
+    run_id: Option<&str>,
+) -> Result<Option<ScanCancelFlag>, Box<dyn std::error::Error>> {
+    let Some(run_id) = run_id else {
+        return Ok(None);
+    };
+    let flag = Arc::new(AtomicBool::new(false));
+    let mut flags = scan_cancel_flags()
+        .lock()
+        .map_err(|_| "scan cancellation registry is unavailable")?;
+    if flags.contains_key(run_id) {
+        return Err(format!("scan run_id is already active: {run_id}").into());
+    }
+    flags.insert(run_id.to_string(), flag.clone());
+    Ok(Some(flag))
+}
+
+fn scan_cancel_requested(cancel_flag: Option<&ScanCancelFlag>) -> bool {
+    cancel_flag
+        .map(|flag| flag.load(Ordering::Relaxed))
+        .unwrap_or(false)
+}
+
+fn push_scan_canceled_warning(warnings: &mut Vec<String>) {
+    if !warnings
+        .iter()
+        .any(|warning| warning == SCAN_CANCELED_WARNING)
+    {
+        warnings.push(SCAN_CANCELED_WARNING.to_string());
+    }
+}
+
 pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::Error>> {
+    let run_id = normalized_scan_run_id(options.run_id.as_deref())?;
+    let cancel_flag = register_scan_run(run_id.as_deref())?;
+    let result = run_scan_with_cancel(options, cancel_flag.as_ref());
+    if let Some(run_id) = run_id {
+        scan_cancel_flags()
+            .lock()
+            .map_err(|_| "scan cancellation registry is unavailable")?
+            .remove(&run_id);
+    }
+    result
+}
+
+pub fn cancel_scan_run(
+    options: CancelScanOptions,
+) -> Result<CancelScanResult, Box<dyn std::error::Error>> {
+    let run_id = normalized_scan_run_id(Some(options.run_id.as_str()))?
+        .ok_or("scan run_id requires a non-empty value")?;
+    let canceled = scan_cancel_flags()
+        .lock()
+        .map_err(|_| "scan cancellation registry is unavailable")?
+        .get(&run_id)
+        .map(|flag| {
+            flag.store(true, Ordering::Relaxed);
+            true
+        })
+        .unwrap_or(false);
+    Ok(CancelScanResult { run_id, canceled })
+}
+
+fn run_scan_with_cancel(
+    options: ScanOptions,
+    cancel_flag: Option<&ScanCancelFlag>,
+) -> Result<ScanResult, Box<dyn std::error::Error>> {
     if matches!(options.limit, Some(0)) {
         return Err("scan limit requires a positive integer".into());
     }
@@ -385,6 +489,10 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
     let sources = selected_source_specs(options.source_ids.as_deref());
 
     for source in sources {
+        if scan_cancel_requested(cancel_flag) {
+            push_scan_canceled_warning(&mut warnings);
+            break;
+        }
         let mut summary = SourceSummary {
             id: source.id.to_string(),
             label: source.label.to_string(),
@@ -406,7 +514,12 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
         }
 
         summary.status = "ok".to_string();
-        match collect_from_source(&source, &mut summary, limit.saturating_sub(prompts.len())) {
+        match collect_from_source(
+            &source,
+            &mut summary,
+            limit.saturating_sub(prompts.len()),
+            cancel_flag,
+        ) {
             Ok(mut found) => {
                 summary.prompts_found = found.len();
                 summarize_source_quality(&mut summary, &found);
@@ -418,6 +531,15 @@ pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::
                 summary.notes.push(err.to_string());
                 warnings.push(format!("{}: {}", source.label, err));
             }
+        }
+        if scan_cancel_requested(cancel_flag) {
+            summary.status = "partial".to_string();
+            summary
+                .notes
+                .push("Scan canceled after the current file.".to_string());
+            push_scan_canceled_warning(&mut warnings);
+            summaries.push(summary);
+            break;
         }
         summaries.push(summary);
 
@@ -743,7 +865,8 @@ fn run_import_batch_for_source(
         status: source_plan.status.clone(),
         notes: source_plan.notes.clone(),
     };
-    let mut prompts = collect_from_candidates(&source, &mut summary, batch_candidates, usize::MAX)?;
+    let mut prompts =
+        collect_from_candidates(&source, &mut summary, batch_candidates, usize::MAX, None)?;
     summary.prompts_found = prompts.len();
     summarize_source_quality(&mut summary, &prompts);
     promote_source_notes_to_warning(&source, &mut summary, &mut warnings);
@@ -1244,12 +1367,13 @@ fn collect_from_source(
     source: &SourceSpec,
     summary: &mut SourceSummary,
     remaining: usize,
+    cancel_flag: Option<&ScanCancelFlag>,
 ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
     if remaining == 0 {
         return Ok(Vec::new());
     }
 
-    let files = matching_source_files(&source.root, source.kind)
+    let files = matching_source_files_with_cancel(&source.root, source.kind, cancel_flag)
         .into_iter()
         .filter_map(|file| match file {
             Ok(path) => Some(SourceFileCandidate {
@@ -1269,7 +1393,7 @@ fn collect_from_source(
             }
         })
         .collect::<Vec<_>>();
-    collect_from_candidates(source, summary, &files, remaining)
+    collect_from_candidates(source, summary, &files, remaining, cancel_flag)
 }
 
 fn collect_from_candidates(
@@ -1277,10 +1401,14 @@ fn collect_from_candidates(
     summary: &mut SourceSummary,
     files: &[SourceFileCandidate],
     remaining: usize,
+    cancel_flag: Option<&ScanCancelFlag>,
 ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
     let mut prompts = Vec::new();
     let mut seen_keys = HashSet::new();
     for file in files {
+        if scan_cancel_requested(cancel_flag) {
+            break;
+        }
         if prompts.len() >= remaining {
             break;
         }
@@ -1325,8 +1453,12 @@ fn parse_source_file(
     }
 }
 
-fn matching_source_files(root: &Path, kind: SourceKind) -> Vec<Result<PathBuf, walkdir::Error>> {
-    matching_source_file_candidates(root, kind)
+fn matching_source_files_with_cancel(
+    root: &Path,
+    kind: SourceKind,
+    cancel_flag: Option<&ScanCancelFlag>,
+) -> Vec<Result<PathBuf, walkdir::Error>> {
+    matching_source_file_candidates_with_cancel(root, kind, cancel_flag)
         .into_iter()
         .map(|candidate| candidate.map(|candidate| candidate.path))
         .collect()
@@ -1343,6 +1475,14 @@ fn matching_source_file_candidates(
     root: &Path,
     kind: SourceKind,
 ) -> Vec<Result<SourceFileCandidate, walkdir::Error>> {
+    matching_source_file_candidates_with_cancel(root, kind, None)
+}
+
+fn matching_source_file_candidates_with_cancel(
+    root: &Path,
+    kind: SourceKind,
+    cancel_flag: Option<&ScanCancelFlag>,
+) -> Vec<Result<SourceFileCandidate, walkdir::Error>> {
     if root.is_file() {
         return vec![Ok(file_candidate(root))];
     }
@@ -1350,6 +1490,9 @@ fn matching_source_file_candidates(
     let mut paths = Vec::new();
     let mut errors = Vec::new();
     for entry in WalkDir::new(root).follow_links(false) {
+        if scan_cancel_requested(cancel_flag) {
+            break;
+        }
         let entry = match entry {
             Ok(entry) => entry,
             Err(err) => {
@@ -3467,6 +3610,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             scan_prompts,
+            cancel_scan,
             plan_scan,
             import_batch,
             list_import_states,
@@ -3665,6 +3809,45 @@ mod tests {
         assert!(err
             .to_string()
             .contains("scan limit requires a positive integer"));
+    }
+
+    #[test]
+    fn cancel_scan_run_sets_active_cancel_flag() {
+        let run_id = format!(
+            "test-scan-cancel-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        );
+        let flag = register_scan_run(Some(&run_id))
+            .expect("register scan")
+            .expect("scan cancel flag");
+
+        let result = cancel_scan_run(CancelScanOptions {
+            run_id: run_id.clone(),
+        })
+        .expect("cancel scan");
+
+        assert_eq!(result.run_id, run_id);
+        assert!(result.canceled);
+        assert!(flag.load(Ordering::Relaxed));
+
+        scan_cancel_flags()
+            .lock()
+            .expect("scan registry")
+            .remove(&run_id);
+    }
+
+    #[test]
+    fn cancel_scan_run_reports_missing_active_run() {
+        let result = cancel_scan_run(CancelScanOptions {
+            run_id: "missing-scan-run".to_string(),
+        })
+        .expect("cancel missing scan");
+
+        assert_eq!(result.run_id, "missing-scan-run");
+        assert!(!result.canceled);
     }
 
     #[test]
@@ -4133,7 +4316,7 @@ mod tests {
             notes: Vec::new(),
         };
 
-        let prompts = collect_from_source(&source, &mut summary, 1).expect("collect source");
+        let prompts = collect_from_source(&source, &mut summary, 1, None).expect("collect source");
 
         assert_eq!(prompts.len(), 1);
         assert_eq!(summary.files_seen, 1);
@@ -4182,7 +4365,7 @@ mod tests {
             notes: Vec::new(),
         };
 
-        let prompts = collect_from_source(&source, &mut summary, 2).expect("collect source");
+        let prompts = collect_from_source(&source, &mut summary, 2, None).expect("collect source");
         let files_seen = summary.files_seen;
         std::fs::remove_dir_all(root).expect("remove temp root");
 
@@ -4191,6 +4374,50 @@ mod tests {
             .iter()
             .any(|prompt| prompt.text.contains("second unique prompt path")));
         assert_eq!(files_seen, 2);
+    }
+
+    #[test]
+    fn collect_from_source_stops_when_scan_cancel_requested() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-cancel-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create cancel root");
+        std::fs::write(
+            root.join("001.jsonl"),
+            r#"{"type":"response_item","payload":{"role":"user","content":[{"text":"Fix cancelable scan path, run cargo test, and report results."}]}}"#,
+        )
+        .expect("write cancel prompt file");
+
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+        let mut summary = SourceSummary {
+            id: source.id.to_string(),
+            label: source.label.to_string(),
+            root_path: source.root.display().to_string(),
+            files_seen: 0,
+            prompts_found: 0,
+            average_quality: 0.0,
+            weak_prompt_count: 0,
+            status: "ok".to_string(),
+            notes: Vec::new(),
+        };
+        let cancel_flag = Arc::new(AtomicBool::new(true));
+
+        let prompts = collect_from_source(&source, &mut summary, 1, Some(&cancel_flag))
+            .expect("collect canceled source");
+
+        assert!(prompts.is_empty());
+        assert_eq!(summary.files_seen, 0);
+
+        std::fs::remove_dir_all(root).expect("remove cancel root");
     }
 
     #[cfg(unix)]
@@ -4228,7 +4455,7 @@ mod tests {
             notes: Vec::new(),
         };
 
-        let result = collect_from_source(&source, &mut summary, 1);
+        let result = collect_from_source(&source, &mut summary, 1, None);
         std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o700))
             .expect("restore traversal");
         std::fs::remove_dir_all(root).expect("remove temp root");

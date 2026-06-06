@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 16:13 KST
+Updated: 2026-06-06 16:29 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -400,6 +400,16 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx`: replaced the old inline scan-limit parser with the required
   scan-limit helper and changed the Limit placeholder from `All` to `Required`
   to prevent accidental full-store scans from the browser UI.
+- `src-tauri/src/lib.rs`: added scan run cancellation registry helpers,
+  `CancelScanOptions`/`CancelScanResult`, `cancel_scan`, cancel-aware source
+  collection, cancel-aware file walking, and focused cancellation tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: added `/api/scan/cancel` bridge route,
+  bridge payload parsing, and help text for scan cancellation.
+- `src/promptVaultApi.ts` and `src/types.ts`: added scan `run_id` support and
+  typed `cancelScan` API.
+- `src/App.tsx`: added per-scan run IDs, canceling state, Stop button UI, and
+  scan/load/plan disabling while a scan stop request is in flight.
+- `README.md` and `docs/CLI.md`: documented `/api/scan/cancel`.
 
 ## Tests
 
@@ -703,15 +713,71 @@ stability, performance, and maintainability, then record evidence here.
     `Preview 10`, `Files 8`, `DB Stored 459`, `Dates 20`.
   - Browser console returned `No console entries`; browser errors returned
     `No browser errors`.
+- `cd src-tauri && cargo test cancel_scan`: 2 focused cancellation registry
+  tests passed.
+- `cd src-tauri && cargo test collect_from_source_stops_when_scan_cancel_requested`:
+  focused collection cancellation test passed.
+- `cd src-tauri && cargo test help_text_documents_cli_validation_rules`: CLI
+  help text test passed after documenting scan cancellation.
+- `npm run test:ui`: 24 tests passed.
+- `npm run build`: TypeScript and Vite production build passed.
+- `npm run check`: passed after the scan cancellation slice. This covered UI
+  tests 24 passed, TypeScript/Vite build, Rust lib 61 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- `cd src-tauri && cargo build --bin promptvault-cli`: passed before
+  restarting the browser bridge.
+- `POST /api/scan/cancel` missing-run bridge smoke returned
+  `{"run_id":"missing-run","canceled":false}`.
+- Real bridge cancellation smoke with persistence and markdown disabled:
+  cancel returned `canceled:true`; scan returned partial results with
+  `Scan canceled by user request; returning partial results.`, `prompts: 0`,
+  `files_seen: 0`, `markdown_written: false`, and `persistence: null`.
+- Real cmux Stop-button QA on existing `surface:9`: passed with the
+  cancellation warning visible, partial UI metrics rendered, Stop hidden after
+  completion, `No console entries`, and `No browser errors`.
+- Continued with the next thin slice: real backend scan cancellation for
+  explicit limited scans.
+- Added scan run IDs, a Rust cancellation registry, a Tauri `cancel_scan`
+  command, and browser bridge `/api/scan/cancel` so an active scan can be
+  stopped from the UI.
+- Made scan collection cancellation-aware across source iteration, file walks,
+  and file reads. Canceled scans return partial results with one warning:
+  `Scan canceled by user request; returning partial results.`
+- Added a browser `Stop` button that appears only while a scan is running or
+  canceling. It disables repeat scan/load/plan actions during cancellation and
+  sends the active run ID to the backend.
+- Rebuilt and restarted only the existing `promptvault-bridge` tmux session
+  after the Rust CLI change. Did not stop, restart, or replace cmux.
+- Bridge cancellation smoke:
+  - `/api/health` returned the expected SQLite DB path and `ok: true`.
+  - `/api/scan/cancel` for missing run `missing-run` returned
+    `{"run_id":"missing-run","canceled":false}`.
+  - A real bridge scan with `persist:false`, `write_markdown:false`,
+    `include_markdown:false`, source `codex`, and a large limit was canceled
+    immediately. Cancel returned `canceled:true`; the scan returned partial
+    results with the cancellation warning, no markdown, and no persistence.
+- Real cmux Stop-button QA on the existing `surface:9`:
+  - Confirmed `workspace:5` still had exactly one PromptVault browser surface
+    and did not create another browser.
+  - Reloaded the existing browser and filled Limit `100000`.
+  - Clicked `Scan`, waited for `[data-stop-scan="true"]`, clicked `Stop`, and
+    observed the backend cancellation warning in the UI.
+  - Observed final metrics after the partial canceled scan: `Prompts 1331`,
+    `Preview 1000`, `Files 53`, `Words 556831`, `Quality 78.2`, `Weak 323`,
+    `DB Stored 1690`, and `Dates 29`.
+  - Confirmed the Stop button disappeared after completion.
+  - Browser console returned `No console entries`; browser errors returned
+    `No browser errors`.
 
 ## Issues
 
 - Unlimited full scan over `~/.codex/sessions` is not practical from the
   browser UI. The plan path confirms the current Codex source alone has
   `25,097` matching files and about `32.3 GiB` of JSONL. The browser Scan
-  button now requires an explicit positive limit before it calls the backend;
-  future work should add resumable background indexing before claiming
-  exhaustive historical ingestion of the entire Codex store.
+  button now requires an explicit positive limit before it calls the backend,
+  and active limited scans can now be stopped. Future work should add resumable
+  background indexing before claiming exhaustive historical ingestion of the
+  entire Codex store.
 - Import batching is now resumable per source. The UI can run one source
   continuously, queue selected sources, and stop after the current batch. It
   does not yet have a durable background worker that continues after the browser
@@ -737,6 +803,11 @@ stability, performance, and maintainability, then record evidence here.
   browser as a workaround.
 - GLM still rate-limits with HTTP 429 in browser Improve tests; the local
   fallback continues to produce a usable recommendation and warning.
+- UI scan cancellation currently returns and persists partial scan results
+  because normal browser scans persist by default. The real Stop-button QA
+  increased `DB Stored` from `459` to `1690`. Decide whether canceled UI scans
+  should continue to persist partial progress or switch to a non-persisting
+  cancellation mode.
 
 ## Research
 
@@ -748,7 +819,7 @@ stability, performance, and maintainability, then record evidence here.
 
 1. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
-2. Add scan-run cancellation/progress for explicit limited scans and keep
-   unbounded historical ingestion on the safer resumable import-batch path.
+2. Add scan progress telemetry beyond the current running/canceling states and
+   decide whether canceled UI scans should persist partial results.
 3. Recover or harden the cmux browser diagnostics workflow for cases where the
    active visible workspace differs from the target PromptVault surface.

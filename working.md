@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 21:12 KST
+Updated: 2026-06-06 21:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -422,6 +422,20 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui`: 86 tests passed after adding selected import queue
+  action label coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  queue-action label change.
+- `npm run check`: passed after this queue-action label slice. This covered UI
+  tests 86 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- Real cmux queue-action label QA on the existing `surface:9`: reloaded
+  `http://127.0.0.1:5173/?queue-action-label=20260606a`, clicked `Plan`,
+  selected `codex` and `codex-cx`, and verified the button exposes
+  `aria-label="Run 2 selected import sources"` while the visible text remains
+  `Run Selected`.
+- Browser diagnostics on the same `surface:9` returned `No console entries`
+  and `No browser errors`.
 - `npm run test:ui`: 83 tests passed after adding prompt-row accessible label
   coverage.
 - `npm run build`: TypeScript and Vite production build passed after the
@@ -1963,9 +1977,36 @@ stability, performance, and maintainability, then record evidence here.
     distinct labels such as `Prompt 92 of 200`, `Prompt 94 of 200`, and
     `Prompt 195 of 200`.
   - Final diagnostics returned `No console entries` and `No browser errors`.
+- Continued with the next thin slice: make the selected-source import queue
+  action announce the selected count to assistive technology.
+- A real cmux Plan toolbar check selected `codex` and `codex-cx` and found
+  the visual toolbar text was `2 selectedRun Selected`, while the button had
+  no `aria-label` and exposed only the generic name `Run Selected`.
+- Added a queue action label helper that distinguishes zero-selection,
+  singular/plural selected-source, and running-queue states.
+- `npm run test:ui` passed after this queue-action label slice: UI tests
+  86 passed, including new label coverage.
+- `npm run build` passed after this slice.
+- `npm run check` passed after this slice: UI tests 86 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?queue-action-label=20260606a` on the same
+    PromptVault browser surface.
+  - Clicked `Plan`, selected `codex` and `codex-cx`, and verified the visible
+    button text stayed `Run Selected`.
+  - Verified the selected queue action exposes
+    `aria-label="Run 2 selected import sources"` and remains enabled.
+  - Final diagnostics returned `No console entries` and `No browser errors`.
 
 ## Changes
 
+- `src/importQueue.ts`: adds `importQueueActionLabel()` for zero-selection,
+  selected-count, and running queue labels.
+- `src/App.tsx`: applies a stateful `aria-label` to the Import Plan
+  `Run Selected` queue button.
+- `tests/importQueue.test.ts`: covers queue action labels for disabled,
+  singular/plural, and running states.
 - `src/promptRowA11y.ts`: adds a tested helper for concise, unique prompt-row
   accessible labels.
 - `src/App.tsx`: applies prompt-row `aria-label` values using the filtered row

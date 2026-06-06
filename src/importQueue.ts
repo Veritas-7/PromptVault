@@ -28,6 +28,18 @@ export function selectedQueueSourceIds(
   return selectedSourceIds.filter((sourceId) => availableSourceIds.has(sourceId));
 }
 
+export function importQueueActionLabel(selectedSourceCount: number, isRunning: boolean): string {
+  const boundedSelectedSourceCount = Math.max(0, selectedSourceCount);
+  const sourceText = boundedSelectedSourceCount === 1 ? "source" : "sources";
+  if (isRunning) {
+    return `Running import queue for ${boundedSelectedSourceCount.toLocaleString()} selected ${sourceText}`;
+  }
+  if (boundedSelectedSourceCount === 0) {
+    return "Select import sources before running queue";
+  }
+  return `Run ${boundedSelectedSourceCount.toLocaleString()} selected import ${sourceText}`;
+}
+
 export function importQueueFinalState(
   queueLength: number,
   completedSourceCount: number,

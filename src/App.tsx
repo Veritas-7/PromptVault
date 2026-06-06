@@ -41,6 +41,7 @@ import {
 } from "./importProgress";
 import { importRefreshFailureText, importRefreshUnavailableText } from "./importRefreshState";
 import {
+  importQueueActionLabel,
   importQueueFinalState,
   selectedQueueSourceIds,
   toggleSourceSelection,
@@ -1223,6 +1224,10 @@ function App() {
               <div className="plan-toolbar">
                 <span>{selectedImportQueueSourceIds.length.toLocaleString()} selected</span>
                 <button
+                  aria-label={importQueueActionLabel(
+                    selectedImportQueueSourceIds.length,
+                    isImportRunning && importMode === "queue",
+                  )}
                   className="inline-action"
                   data-import-selected="true"
                   disabled={isImportActionLocked || selectedImportQueueSourceIds.length === 0}

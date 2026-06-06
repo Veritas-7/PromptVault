@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  importQueueActionLabel,
   importQueueFinalState,
   selectedQueueSourceIds,
   toggleSourceSelection,
@@ -32,6 +33,19 @@ test("queue keeps selected order and skips unavailable sources", () => {
   const sources = [source("a", 10), source("b", 0), source("c", 2)];
 
   assert.deepEqual(selectedQueueSourceIds(["c", "b", "a", "missing"], sources), ["c", "a"]);
+});
+
+test("queue action label explains disabled zero-selection state", () => {
+  assert.equal(importQueueActionLabel(0, false), "Select import sources before running queue");
+});
+
+test("queue action label includes selected source count", () => {
+  assert.equal(importQueueActionLabel(1, false), "Run 1 selected import source");
+  assert.equal(importQueueActionLabel(2, false), "Run 2 selected import sources");
+});
+
+test("queue action label announces running queue state", () => {
+  assert.equal(importQueueActionLabel(3, true), "Running import queue for 3 selected sources");
 });
 
 test("queue final state treats stop after final source completion as ready", () => {

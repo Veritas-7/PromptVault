@@ -58,7 +58,12 @@ import {
   scanPrompts,
 } from "./promptVaultApi";
 import { MAX_SCAN_LIMIT, parseRequiredScanLimit } from "./scanLimit";
-import { scanRunFailureText, type ScanRunState } from "./scanStatus";
+import {
+  scanRunFailureText,
+  scanStopFailureText,
+  type ScanRunState,
+  type ScanStopFailure,
+} from "./scanStatus";
 import { selectedPromptForView } from "./selection";
 import { storedLoadFailureText, type StoredLoadState } from "./storedLoadStatus";
 import {
@@ -162,6 +167,7 @@ function App() {
   const [storedFacetsResult, setStoredFacetsResult] = useState<StoredPromptFacetsResult | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
+  const [scanStopFailure, setScanStopFailure] = useState<ScanStopFailure | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [storedFilters, setStoredFilters] = useState<StoredPromptFilters>({
@@ -197,6 +203,7 @@ function App() {
   const canStopScan = scanRunIdRef.current !== null && isScanRunning;
   const scanProgressText = scanProgressLabel(scanProgressInfo);
   const scanRunFailureMessage = scanRunFailureText(scanState, result !== null);
+  const scanStopFailureMessage = scanStopFailureText(scanStopFailure);
   const importStatesFailureMessage = importRefreshFailureText(
     importStatesState,
     "saved import progress",
@@ -486,6 +493,7 @@ function App() {
   async function runScan() {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
+    setScanStopFailure(null);
     setImprovement(null);
     setImprovementPromptId(null);
     setImprovementFailurePromptId(null);
@@ -504,6 +512,7 @@ function App() {
         run_id: runId,
       });
       const loadedMode = effectivePromptListMode(next.preview_sort, previewMode);
+      setError(null);
       setResult(next);
       setSelectedId(
         (loadedMode === "weakest"
@@ -512,10 +521,12 @@ function App() {
         )?.id ?? null,
       );
       setScanState("ready");
+      setScanStopFailure(null);
       await refreshStoredFacets({ quiet: true });
     } catch (err) {
       setError(errorText(err));
       setScanState("failed");
+      setScanStopFailure(null);
     } finally {
       scanRunIdRef.current = null;
       setScanProgressInfo(null);
@@ -526,14 +537,19 @@ function App() {
   async function requestStopScan() {
     const runId = scanRunIdRef.current;
     if (!runId) return;
+    setScanStopFailure(null);
     setScanState("canceling");
     try {
       const result = await cancelScan(runId);
       if (!result.canceled) {
         setError("No active scan was found to stop.");
+        setScanStopFailure("not_active");
+        setScanState("scanning");
       }
     } catch (err) {
       setError(errorText(err));
+      setScanStopFailure("request_failed");
+      setScanState("scanning");
     }
   }
 
@@ -543,6 +559,7 @@ function App() {
     setImprovement(null);
     setImprovementPromptId(null);
     setImprovementFailurePromptId(null);
+    setScanStopFailure(null);
     setScanState("idle");
     setStoredLoadState("loading");
     try {
@@ -718,6 +735,13 @@ function App() {
         <section className="notice warning" data-scan-run-error="true">
           <AlertTriangle size={18} />
           <span>{scanRunFailureMessage}</span>
+        </section>
+      ) : null}
+
+      {scanStopFailureMessage ? (
+        <section className="notice warning" data-scan-stop-error="true">
+          <AlertTriangle size={18} />
+          <span>{scanStopFailureMessage}</span>
         </section>
       ) : null}
 

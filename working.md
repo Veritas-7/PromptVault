@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 19:08 KST
+Updated: 2026-06-06 19:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1442,6 +1442,39 @@ stability, performance, and maintainability, then record evidence here.
     `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 88,378 · new 0 · updated 1`.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: make failed scan Stop requests visible
+  and retry-safe.
+- Found that `requestStopScan` failures only set the global error and left the
+  scan in `canceling`, which disabled the Stop button even though the scan was
+  still pending.
+- Added scan Stop failure copy coverage for failed cancel requests and missing
+  active-run responses.
+- Updated the Stop failure handler to show a scoped warning and return the UI
+  to `scanning` so Stop can be retried.
+- During the first cmux QA pass, the scoped warning cleared when the delayed
+  scan completed, but the global cancel error remained visible. Fixed the scan
+  success path to clear transient stop errors before setting the successful
+  result.
+- `npm run test:ui` passed after this scan-stop-failure slice with 54 tests.
+- `npm run check` passed after this scan-stop-failure slice: UI tests 54
+  passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?scan-stop-failure=20260606b`.
+  - Set Limit to `1`, installed a page-local fetch monkeypatch that delayed
+    `/api/scan` resolution and rejected only `/api/scan/cancel`, clicked
+    `Scan`, then clicked `Stop`.
+  - Observed the scoped Stop warning
+    `Could not stop the active scan. It is still running; check the error above or try Stop again.`
+    with `Stop` re-enabled and the scan still showing `Scanning`.
+  - Restored the original fetch and released the delayed scan response.
+  - Observed recovery in-place: the Stop warning and global error cleared, a
+    real limit-1 result loaded with 1 prompt row, and the DB notice showed
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 88,378 · new 0 · updated 1`.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1538,10 +1571,12 @@ stability, performance, and maintainability, then record evidence here.
   successful improvement.
 - `tests/improvementSelection.test.ts`: covers improve failure copy scoping.
 - `src/scanStatus.ts`: adds scan failure copy for first-run and stale-results
-  failures.
+  failures, plus scan Stop failure copy.
 - `src/App.tsx`: shows a scan retry warning when a scan fails and clears stale
-  scan failure state when stored prompts are loaded.
-- `tests/scanStatus.test.ts`: covers scan failure copy.
+  scan failure state when stored prompts are loaded; it now also shows a scoped
+  scan Stop warning, re-enables Stop after failed cancel requests, and clears
+  transient cancel errors after a successful scan result arrives.
+- `tests/scanStatus.test.ts`: covers scan failure and Stop failure copy.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1666,6 +1701,11 @@ stability, performance, and maintainability, then record evidence here.
   failed because of shell quoting for `cmux browser wait --function`; the real
   scan click had already fired, and the corrected wait command verified warning
   cleanup and the limit-1 result. Final diagnostics returned clean.
+- During scan-stop-failure QA, the page-local fetch monkeypatch delayed only
+  `/api/scan` resolution and rejected only `/api/scan/cancel` on the current
+  `surface:9` page. The first pass exposed a real stale global-error bug after
+  scan completion; after clearing errors on successful scan result, the retest
+  showed both scoped Stop warning and global error clearing correctly.
 
 ## Research
 
@@ -1684,5 +1724,5 @@ stability, performance, and maintainability, then record evidence here.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
 5. Continue reviewing remaining empty and failure states in secondary panels,
-   especially stop/cancel paths that still rely mostly on the global error
-   notice.
+   especially import queue stop/completion edge cases and any secondary refresh
+   paths not yet covered by scoped warnings.

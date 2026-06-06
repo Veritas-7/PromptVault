@@ -75,6 +75,7 @@ import { selectedPromptForView } from "./selection";
 import { storedLoadFailureText, type StoredLoadState } from "./storedLoadStatus";
 import {
   activeStoredPromptFilterCount,
+  emptyStoredPromptFilters,
   storedPromptLoadOptions,
   type StoredPromptFilters,
 } from "./storedFilters";
@@ -177,12 +178,9 @@ function App() {
   const [scanStopFailure, setScanStopFailure] = useState<ScanStopFailure | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [storedFilters, setStoredFilters] = useState<StoredPromptFilters>({
-    date: "",
-    query: "",
-    source: "",
-    workspace: "",
-  });
+  const [storedFilters, setStoredFilters] = useState<StoredPromptFilters>(() =>
+    emptyStoredPromptFilters(),
+  );
   const [limit, setLimit] = useState("");
   const [previewMode, setPreviewMode] = useState<PreviewMode>("latest");
   const [error, setError] = useState<string | null>(null);
@@ -578,7 +576,7 @@ function App() {
     }
   }
 
-  async function runLoadStored() {
+  async function runLoadStored(filters: StoredPromptFilters = storedFilters) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setImprovement(null);
@@ -590,7 +588,7 @@ function App() {
     setStoredLoadState("loading");
     try {
       const next = await loadStoredPrompts({
-        ...storedPromptLoadOptions(storedFilters, previewMode, PREVIEW_LIMIT),
+        ...storedPromptLoadOptions(filters, previewMode, PREVIEW_LIMIT),
       });
       const loadedMode = effectivePromptListMode(next.preview_sort, previewMode);
       setResult(next);
@@ -617,12 +615,9 @@ function App() {
   }
 
   function resetStoredFilters() {
-    setStoredFilters({
-      date: "",
-      query: "",
-      source: "",
-      workspace: "",
-    });
+    const nextFilters = emptyStoredPromptFilters();
+    setStoredFilters(nextFilters);
+    void runLoadStored(nextFilters);
   }
 
   function clearImprovementPromptContext() {
@@ -744,7 +739,7 @@ function App() {
             className="secondary-action"
             data-load-stored-prompts="true"
             disabled={isTopLevelActionLocked}
-            onClick={runLoadStored}
+            onClick={() => runLoadStored()}
             type="button"
           >
             <Database size={18} />

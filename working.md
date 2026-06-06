@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 19:57 KST
+Updated: 2026-06-06 20:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1610,6 +1610,36 @@ stability, performance, and maintainability, then record evidence here.
     the inline warning cleared, and the `Weakest` button became active.
   - Reloaded the same `surface:9` to clear the page-local monkeypatch and
     confirmed `No console entries` and `No browser errors`.
+- Continued with the next thin slice: make Stored Vault `Reset` apply the
+  unfiltered stored prompt reload immediately.
+- Found that Stored Vault `Reset` previously cleared the filter fields only;
+  after filtering stored prompts, the user still had to click `Apply` to see
+  unfiltered results again.
+- Added an empty stored-filter factory and wired Reset to clear filters and
+  call the stored prompt loader with the explicit empty filter object, avoiding
+  React state timing races.
+- First full `npm run check` in this slice failed at TypeScript because
+  `onClick={runLoadStored}` could pass a click event as the optional filters
+  argument. The Load Stored button now wraps the handler as
+  `() => runLoadStored()`.
+- `npm run test:ui` passed after this stored-reset slice with 66 tests.
+- `npm run check` passed after the handler fix: UI tests 66 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reused the existing PromptVault workspace 5 browser pane only; no second
+    browser was opened.
+  - Loaded stored prompts and observed the baseline state:
+    `1,000 loaded · latest preview`, 200 rendered rows, empty Source field,
+    Reset disabled, and no top-level error.
+  - Set Source to `Antigravity conversation DB` using the native input setter
+    plus an `input` event, clicked `Apply`, and observed `10 loaded`,
+    10 rows, Source preserved, Reset enabled, and no warning/error.
+  - Clicked `Reset` once and observed Source cleared, Reset disabled,
+    `1,000 loaded · latest preview`, 200 rendered rows, no Stored Load warning,
+    and no top-level error.
+  - Final diagnostics on the same `surface:9` returned `No console entries`
+    and `No browser errors`.
 
 ## Changes
 
@@ -1716,6 +1746,13 @@ stability, performance, and maintainability, then record evidence here.
   user changes the prompt filter or switches Latest/Weakest preview mode.
 - `tests/improvementSelection.test.ts`: covers preserving global errors when
   there is no tracked Improve failure error to clear.
+- `src/storedFilters.ts`: adds `emptyStoredPromptFilters()` so the full
+  unfiltered Stored Vault filter shape has one shared source of truth.
+- `src/App.tsx`: initializes Stored Vault filters from the helper, lets
+  `runLoadStored` accept explicit filters, applies Reset by clearing fields and
+  immediately loading with the empty filters, and wraps the Load Stored click
+  handler to avoid passing mouse events as filter input.
+- `tests/storedFilters.test.ts`: covers the empty stored filter shape.
 - `src/scanStatus.ts`: adds scan failure copy for first-run and stale-results
   failures, plus scan Stop failure copy.
 - `src/App.tsx`: shows a scan retry warning when a scan fails and clears stale
@@ -1901,6 +1938,11 @@ stability, performance, and maintainability, then record evidence here.
   surface-specific `wait`/`click`/`eval` commands then worked. The page-local
   `/api/improve` monkeypatch was cleared by reloading the same surface, and
   final console/errors diagnostics returned clean.
+- During stored-reset QA, the active visible cmux workspace was initially
+  `working.md` rather than PromptVault. Computer Use selected the existing
+  `프롬프트` workspace 5 row, revealing the already-open PromptVault browser
+  at `http://127.0.0.1:5173/?stored-reset-apply=20260606b`; all later actions
+  used the existing `surface:9` and diagnostics returned clean.
 
 ## Research
 

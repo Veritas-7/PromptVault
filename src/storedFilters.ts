@@ -8,6 +8,15 @@ export interface StoredPromptFilters {
   workspace: string;
 }
 
+export function emptyStoredPromptFilters(): StoredPromptFilters {
+  return {
+    date: "",
+    query: "",
+    source: "",
+    workspace: "",
+  };
+}
+
 function trimmedOptional(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   activeStoredPromptFilterCount,
+  emptyStoredPromptFilters,
   storedPromptLoadOptions,
   type StoredPromptFilters,
 } from "../src/storedFilters.ts";
@@ -22,6 +23,10 @@ test("stored prompt options trim and omit empty filters", () => {
     source: undefined,
     workspace: undefined,
   });
+});
+
+test("empty stored prompt filters use the full unfiltered shape", () => {
+  assert.deepEqual(emptyStoredPromptFilters(), emptyFilters);
 });
 
 test("stored prompt options preserve exact source and date filters", () => {

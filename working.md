@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 21:47 KST
+Updated: 2026-06-06 21:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,22 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui`: 98 tests passed after adding Stored Vault Reset and
+  Improve action label coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  disabled-control label slice.
+- `npm run check`: passed after this disabled-control label slice. This covered
+  UI tests 98 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- Real cmux disabled-control label QA on the existing `surface:9`: reloaded
+  `http://127.0.0.1:5173/?disabled-labels=20260606a`, verified Reset announces
+  `No stored filters to reset`, verified Improve announces
+  `Select a prompt before improving`, entered one Stored Vault text filter, and
+  verified Reset updates to `Reset 1 stored filter`.
+- The same cmux surface audit reported `missingCount: 0` and an empty
+  `disabledWithoutReason` list for the no-data control state.
+- Browser diagnostics on the same `surface:9` returned `No console entries`
+  and `No browser errors`.
 - `npm run test:ui`: 96 tests passed after adding Stored Vault preview reload
   and pending-preview notice coverage.
 - `npm run build`: TypeScript and Vite production build passed after the
@@ -2152,9 +2168,39 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this preview-mode slice: UI tests 96 passed,
   TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests
   passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make disabled no-data controls explain
+  why they cannot run.
+- A same-surface rendered control audit on `surface:9` found two remaining
+  disabled controls with unhelpful names in the no-data/no-filter state:
+  Stored Vault `Reset` exposed only `Reset`, and `Improve` exposed only
+  `Improve`.
+- Added tested action labels so Reset announces `No stored filters to reset`
+  when no filters are active, `Reset 1 stored filter` when one filter is
+  active, and locked-state copy while other work is running. Added equivalent
+  Improve labels for no selected prompt, active improvement, locked work, and
+  ready-to-improve states.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?disabled-labels=20260606a`.
+  - Verified initial no-data labels:
+    `No stored filters to reset` and `Select a prompt before improving`.
+  - Entered `cmux` into the Stored Vault Text filter and verified Reset became
+    enabled with `Reset 1 stored filter`.
+  - A follow-up disabled-control audit reported `missingCount: 0` and no
+    disabled controls without an explanatory label.
+  - Browser diagnostics returned `No console entries` and `No browser errors`.
+- `npm run check` passed after this disabled-control label slice: UI tests 98
+  passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
+- `src/storedFilters.ts`: adds `storedFilterResetLabel()` for Reset button
+  disabled, locked, singular, and plural states.
+- `src/improvementSelection.ts`: adds `improvementActionLabel()` for Improve
+  button no-selection, running, locked, and ready states.
+- `src/App.tsx`: applies the new Reset and Improve `aria-label` values.
+- `tests/storedFilters.test.ts` and `tests/improvementSelection.test.ts`:
+  cover the new disabled/action label copy.
 - `src/previewMode.ts`: adds result-origin typing, Stored Vault reload
   decision logic, and pending-preview notice copy for loaded-result mode
   mismatches.
@@ -2584,6 +2630,11 @@ stability, performance, and maintainability, then record evidence here.
   `errors list` commands recovered without restarting cmux or opening another
   browser. One long async eval timed out after firing the intended scan click;
   short follow-up evals captured the real rendered state.
+- During disabled-control label QA, one native `cmux browser click` for Plan
+  timed out and a direct synchronous DOM click for `Load Stored` also timed out
+  after starting the action. Scheduling the DOM click with `setTimeout(..., 0)`
+  returned immediately and reliably loaded Plan/Stored rows on the same
+  `surface:9`; no cmux restart or second browser was used.
 
 ## Research
 

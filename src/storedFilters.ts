@@ -31,6 +31,13 @@ export function activeStoredPromptFilterCount(filters: StoredPromptFilters): num
   ].filter((value) => value.trim()).length;
 }
 
+export function storedFilterResetLabel(activeFilterCount: number, actionLocked: boolean): string {
+  if (actionLocked) return "Cannot reset stored filters while another action is running";
+  if (activeFilterCount === 0) return "No stored filters to reset";
+  if (activeFilterCount === 1) return "Reset 1 stored filter";
+  return `Reset ${activeFilterCount.toLocaleString()} stored filters`;
+}
+
 export function storedPromptLoadOptions(
   filters: StoredPromptFilters,
   previewMode: PreviewMode,

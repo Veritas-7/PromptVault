@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   activeStoredPromptFilterCount,
   emptyStoredPromptFilters,
+  storedFilterResetLabel,
   storedPromptLoadOptions,
   type StoredPromptFilters,
 } from "../src/storedFilters.ts";
@@ -62,4 +63,14 @@ test("active stored prompt filter count ignores whitespace", () => {
     }),
     3,
   );
+});
+
+test("stored filter reset label explains disabled and active states", () => {
+  assert.equal(storedFilterResetLabel(0, false), "No stored filters to reset");
+  assert.equal(
+    storedFilterResetLabel(2, true),
+    "Cannot reset stored filters while another action is running",
+  );
+  assert.equal(storedFilterResetLabel(1, false), "Reset 1 stored filter");
+  assert.equal(storedFilterResetLabel(3, false), "Reset 3 stored filters");
 });

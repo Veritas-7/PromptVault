@@ -25,6 +25,7 @@ import { BROWSER_BRIDGE_NOTICE } from "./browserBridge";
 import { importEventBatchSummary, importEventStatusLabel } from "./importEvents";
 import {
   activeImprovementForSelection,
+  improvementActionLabel,
   improvementFailureText,
   improvementRequestStarted,
   improvementSelectionChanged,
@@ -99,6 +100,7 @@ import {
 import {
   activeStoredPromptFilterCount,
   emptyStoredPromptFilters,
+  storedFilterResetLabel,
   storedPromptLoadOptions,
   type StoredPromptFilters,
 } from "./storedFilters";
@@ -994,6 +996,7 @@ function App() {
             Apply
           </button>
           <button
+            aria-label={storedFilterResetLabel(storedFilterCount, isTopLevelActionLocked)}
             className="inline-action"
             data-reset-stored-filters="true"
             disabled={!storedFilterCount || isTopLevelActionLocked}
@@ -1640,6 +1643,7 @@ function App() {
           <div className="panel-heading">
             <h2>Selected</h2>
             <button
+              aria-label={improvementActionLabel(selectedPrompt !== null, improving, isTopLevelActionLocked)}
               data-run-improve="true"
               disabled={!selectedPrompt || improving || isTopLevelActionLocked}
               onClick={() => runImprove(selectedPrompt)}

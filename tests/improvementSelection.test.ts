@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   activeImprovementForSelection,
+  improvementActionLabel,
   improvementFailureText,
   improvementRequestStarted,
   improvementSelectionChanged,
@@ -37,6 +38,16 @@ test("improvement failure text is scoped to the selected prompt", () => {
   );
   assert.equal(improvementFailureText("prompt-a", "prompt-b"), null);
   assert.equal(improvementFailureText(null, "prompt-a"), null);
+});
+
+test("improvement action label explains disabled and active states", () => {
+  assert.equal(improvementActionLabel(false, false, false), "Select a prompt before improving");
+  assert.equal(improvementActionLabel(true, true, true), "Improving selected prompt");
+  assert.equal(
+    improvementActionLabel(true, false, true),
+    "Cannot improve selected prompt while another action is running",
+  );
+  assert.equal(improvementActionLabel(true, false, false), "Improve selected prompt");
 });
 
 test("selection change clears recommendation state and matching improve error", () => {

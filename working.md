@@ -370,6 +370,18 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check`: passed after the continuous import slice. This covered UI
   tests 14 passed, TypeScript/Vite build, Rust lib 50 passed, CLI 15 passed,
   doc-tests, and clippy with `-D warnings`.
+- Continuous import slice committed and pushed:
+  `cba9922c9130da55cccd254836b38676235067fe`
+  (`feat: add continuous import controls`).
+- After push, `git rev-list --left-right --count HEAD...origin/main` returned
+  `0 0`.
+- Final runtime checks after push:
+  `curl -I http://127.0.0.1:5173/` returned `HTTP/1.0 200 OK`;
+  bridge health returned
+  `{"database_path":"/Users/wj/Documents/PromptVault/promptvault.sqlite","ok":true}`;
+  `surface:11` title remained `PromptVault` at `http://127.0.0.1:5173/`;
+  browser diagnostics still returned `No console entries` and
+  `No browser errors`.
 
 ## Issues
 

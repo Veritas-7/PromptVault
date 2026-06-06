@@ -334,6 +334,8 @@ h3 {
 .plan-source-actions {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: end;
 }
 
@@ -347,6 +349,37 @@ h3 {
 .import-panel {
   gap: 12px;
   padding: 14px;
+}
+
+.import-panel .panel-heading {
+  flex-wrap: wrap;
+}
+
+.import-progress {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.import-progress progress {
+  accent-color: #213629;
+  height: 12px;
+  width: 100%;
+}
+
+.import-progress span {
+  color: #536158;
+  font-size: 12px;
+  font-weight: 720;
+  min-width: 42px;
+  text-align: right;
+}
+
+.stop-action {
+  background: #fff1ed;
+  border-color: #e6b8aa;
+  color: #803c29;
 }
 
 .import-summary {
@@ -745,5 +778,13 @@ h3 {
   .metrics,
   .frequency-grid {
     grid-template-columns: 1fr;
+  }
+
+  .plan-source-row {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-source-actions {
+    justify-content: start;
   }
 }

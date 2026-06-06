@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 10:08 KST
+Updated: 2026-06-06 10:18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -239,6 +239,32 @@ stability, performance, and maintainability, then record evidence here.
   - Browser error collector returned `No browser errors`.
 - Verified DB cursor after UI batch:
   `antigravity-ide-transcripts|3|3|12|1`.
+- Continued with the next thin slice: continuous per-source import progress and
+  stop controls.
+- Added `Run Until Done` next to each source in the import plan, plus an
+  immediate `Stop` control in the `Incremental Import` panel for continuous
+  runs. Stop requests are honored after the current backend batch so the saved
+  SQLite cursor remains valid.
+- Added progress percentage, running/stopping/stopped/complete status labels,
+  and current-source fallback state so a continuous run shows the selected
+  source immediately before the first batch response returns.
+- Real cmux click QA on the same `surface:11` after rebuilding `dist`:
+  - Reloaded `http://127.0.0.1:5173/`.
+  - Clicked `Plan`.
+  - Reset `antigravity-ide-transcripts` to `1 / 3` with the CLI, then clicked
+    `Run Until Done` in the UI.
+  - Observed `Incremental Import` showing `100%`, `Processed 3 / 3`,
+    `2 files · 10 prompts`, `Status Complete`, and the persisted DB notice.
+  - Verified DB cursor:
+    `antigravity-ide-transcripts|3|3|12|1`.
+  - Reset `gemini-tmp-chat` to `1 / 144` with the CLI, clicked
+    `Run Until Done`, then clicked `Stop`.
+  - Observed `Incremental Import` showing `53%`, `Processed 76 / 144`,
+    `5 files · 5 prompts`, `Status Stopped`, and the persisted DB notice.
+  - Verified DB cursor:
+    `gemini-tmp-chat|76|144|77|0`.
+  - Browser console returned `No console entries`.
+  - Browser error collector returned `No browser errors`.
 
 ## Changes
 
@@ -270,6 +296,15 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx` and `src/App.css`: added per-source `Import Batch` buttons and
   `Incremental Import` status panel.
 - `README.md` and `docs/CLI.md`: documented `import-batch`.
+- `src/importProgress.ts`: added import progress and status-label helpers.
+- `tests/importProgress.test.ts`: added unit coverage for progress bounds,
+  continuous stop messaging, stopped/complete status, and failed-state
+  precedence.
+- `src/App.tsx` and `src/App.css`: added continuous per-source import buttons,
+  immediate stop control, progress bar, current-source fallback, and disabled
+  Scan/Plan while an import run is active.
+- `README.md` and `docs/CLI.md`: documented continuous browser-side imports
+  and the full browser bridge endpoint set.
 
 ## Tests
 
@@ -322,6 +357,19 @@ stability, performance, and maintainability, then record evidence here.
   (`feat: add resumable import batches`).
 - After push, `git rev-list --left-right --count HEAD...origin/main` returned
   `0 0`.
+- `npm run test:ui`: 14 tests passed after adding import progress helpers.
+- `npm run build`: TypeScript and Vite production build passed after adding
+  continuous import UI.
+- Real cmux completion flow on `surface:11`: `antigravity-ide-transcripts`
+  continuous run completed from `1 / 3` to `3 / 3` with `Status Complete`.
+- Real cmux stop flow on `surface:11`: `gemini-tmp-chat` continuous run stopped
+  at `76 / 144` with `Status Stopped` and DB `completed=0`.
+- Browser diagnostics after continuous import QA:
+  `cmux browser --surface surface:11 console list` returned `No console entries`;
+  `cmux browser --surface surface:11 errors list` returned `No browser errors`.
+- `npm run check`: passed after the continuous import slice. This covered UI
+  tests 14 passed, TypeScript/Vite build, Rust lib 50 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 
 ## Issues
 
@@ -330,9 +378,10 @@ stability, performance, and maintainability, then record evidence here.
   and about `32.3 GiB` of JSONL. Future work should add resumable incremental
   import slices and a background queue before claiming exhaustive historical
   ingestion of the entire Codex store.
-- Import batching is now resumable per source, but the UI still runs one batch
-  per click. It does not yet have a continuous background queue, cancel control,
-  or multi-source scheduler.
+- Import batching is now resumable per source, and the UI can run one source
+  continuously with a stop-after-current-batch control. It does not yet have a
+  multi-source scheduler or a durable background worker that continues after the
+  browser tab is closed.
 - Several limited source scans intentionally stopped at the configured prompt
   limit and reported the expected limit warning.
 - GLM improvement path hit HTTP 429 during manual QA; local fallback worked.
@@ -346,6 +395,9 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Next Steps
 
-1. Add UI progress/cancel state for long scans and continuous import batches.
-2. Consider a background indexing worker so first-run historical import can
-   continue without blocking the browser UI.
+1. Add a multi-source scheduler so selected sources can be queued without
+   manually starting each source.
+2. Consider a durable background indexing worker so first-run historical import
+   can continue after the browser tab is closed.
+3. Add scan-run cancellation/progress for unrestricted full scans, separate
+   from the safer resumable import-batch path.

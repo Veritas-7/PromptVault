@@ -65,7 +65,7 @@ cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 ```
 
-Run `plan` before an unrestricted scan on large stores. It inventories matching source files, total bytes, large-file counts, and warnings without reading prompt bodies. Use `import-batch --source ID --files N` to persist one resumable source slice and advance that source's DB cursor in `import_states`. Omit `--limit` for a full scan. Use `--source ID` to verify one source without scanning the whole history. In limited scans, `total_files` and source `files_seen` count visited files only, not every matching file in the source root. Use `--no-export` when an agent only needs JSON stats and should not create a large Markdown file. Use `--weakest-first` or `--preview-sort quality-asc` when the preview should prioritize the weakest prompts for repair. Source summaries include average prompt quality and weak-prompt counts so agents can prioritize noisy stores first. The scan command writes prompt bodies to the Markdown output path by default and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N --include-prompts` only when an agent or test needs a bounded prompt preview in the JSON result. Stdout prompt previews are capped at 25 records and redacted for token/key/private-key risk patterns.
+Run `plan` before an unrestricted scan on large stores. It inventories matching source files, total bytes, large-file counts, and warnings without reading prompt bodies. Use `import-batch --source ID --files N` to persist one resumable source slice and advance that source's DB cursor in `import_states`. The browser UI can run one source continuously from the plan table and stop after the current batch without losing the saved cursor. Omit `--limit` for a full scan. Use `--source ID` to verify one source without scanning the whole history. In limited scans, `total_files` and source `files_seen` count visited files only, not every matching file in the source root. Use `--no-export` when an agent only needs JSON stats and should not create a large Markdown file. Use `--weakest-first` or `--preview-sort quality-asc` when the preview should prioritize the weakest prompts for repair. Source summaries include average prompt quality and weak-prompt counts so agents can prioritize noisy stores first. The scan command writes prompt bodies to the Markdown output path by default and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N --include-prompts` only when an agent or test needs a bounded prompt preview in the JSON result. Stdout prompt previews are capped at 25 records and redacted for token/key/private-key risk patterns.
 
 The Tauri UI runs full exports but receives only a latest-prompt preview over IPC, so the large Markdown file remains on disk instead of being serialized into the frontend.
 
@@ -77,8 +77,7 @@ cd src-tauri
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 ```
 
-The browser bridge exposes local-only `/api/scan`, `/api/improve`, and `/api/health` endpoints so cmux or another in-app browser can exercise the same scan/improve code paths without Tauri IPC.
-It also exposes `/api/plan` for browser-side import planning before long scans and `/api/import-batch` for resumable source slices.
+The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/improve`, `/api/plan`, and `/api/import-batch` endpoints so cmux or another in-app browser can exercise the same scan, planning, improvement, and resumable import code paths without Tauri IPC.
 
 ## AI Recommendation Path
 

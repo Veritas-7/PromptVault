@@ -1,14 +1,16 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Brain,
   CheckCircle2,
   ClipboardList,
   FileText,
+  Play,
   RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
+  StopCircle,
 } from "lucide-react";
 import "./App.css";
 import { BROWSER_BRIDGE_NOTICE } from "./browserBridge";
@@ -16,6 +18,12 @@ import {
   activeImprovementForSelection,
   improvementRequestStarted,
 } from "./improvementSelection";
+import {
+  importProgressPercent,
+  importStatusLabel,
+  type ImportRunMode,
+  type ImportRunState,
+} from "./importProgress";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
 import { importBatch, improvePrompt, isBrowserQaMode, planScan, scanPrompts } from "./promptVaultApi";
 import { selectedPromptForView } from "./selection";
@@ -23,10 +31,10 @@ import type { ImportBatchResult, ImproveResult, PromptRecord, ScanPlan, ScanResu
 
 type ScanState = "idle" | "scanning" | "ready" | "failed";
 type PlanState = "idle" | "planning" | "ready" | "failed";
-type ImportState = "idle" | "importing" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
 const MAX_SCAN_LIMIT = 100000;
 const IMPORT_BATCH_FILES = 5;
+const CONTINUOUS_IMPORT_PAUSE_MS = 200;
 
 function parseLimitInput(value: string): number | undefined {
   const trimmed = value.trim();
@@ -45,6 +53,12 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function waitForNextImportBatch(): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, CONTINUOUS_IMPORT_PAUSE_MS);
+  });
+}
+
 function formatBytes(bytes: number): string {
   const units = ["B", "KiB", "MiB", "GiB", "TiB"];
   let value = bytes;
@@ -60,7 +74,10 @@ function App() {
   const browserQaMode = isBrowserQaMode();
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [planState, setPlanState] = useState<PlanState>("idle");
-  const [importState, setImportState] = useState<ImportState>("idle");
+  const [importState, setImportState] = useState<ImportRunState>("idle");
+  const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
+  const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
+  const [stopRequested, setStopRequested] = useState(false);
   const [plan, setPlan] = useState<ScanPlan | null>(null);
   const [importResult, setImportResult] = useState<ImportBatchResult | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -72,6 +89,8 @@ function App() {
   const [improving, setImproving] = useState(false);
   const [improvement, setImprovement] = useState<ImproveResult | null>(null);
   const [improvementPromptId, setImprovementPromptId] = useState<string | null>(null);
+  const importStopRequestedRef = useRef(false);
+  const isImportRunning = importState === "importing";
 
   const prompts = result?.prompts ?? [];
   const promptListMode = effectivePromptListMode(result?.preview_sort, previewMode);
@@ -94,6 +113,9 @@ function App() {
   const selectedPrompt = useMemo(() => {
     return selectedPromptForView(filteredPrompts, selectedId);
   }, [filteredPrompts, selectedId]);
+  const activeImportSource = useMemo(() => {
+    return plan?.sources.find((source) => source.id === activeImportSourceId) ?? null;
+  }, [activeImportSourceId, plan]);
   const activeImprovement = activeImprovementForSelection(
     improvement,
     improvementPromptId,
@@ -113,21 +135,44 @@ function App() {
     }
   }
 
-  async function runImportBatch(sourceId: string) {
+  async function runImportBatch(sourceId: string, mode: ImportRunMode) {
     setError(null);
+    setActiveImportSourceId(sourceId);
+    setImportMode(mode);
+    setStopRequested(false);
+    setImportResult(null);
+    importStopRequestedRef.current = false;
     setImportState("importing");
     try {
-      const next = await importBatch({
-        source_id: sourceId,
-        file_batch_size: IMPORT_BATCH_FILES,
-        preview_limit: 25,
-      });
-      setImportResult(next);
-      setImportState("ready");
+      let next: ImportBatchResult | null = null;
+      do {
+        next = await importBatch({
+          source_id: sourceId,
+          file_batch_size: IMPORT_BATCH_FILES,
+          preview_limit: 25,
+        });
+        setImportResult(next);
+        if (mode !== "continuous" || next.state.completed || importStopRequestedRef.current) {
+          break;
+        }
+        await waitForNextImportBatch();
+      } while (!importStopRequestedRef.current);
+
+      setImportState(
+        importStopRequestedRef.current && !next?.state.completed ? "stopped" : "ready",
+      );
     } catch (err) {
       setError(errorText(err));
       setImportState("failed");
+    } finally {
+      setStopRequested(false);
+      importStopRequestedRef.current = false;
     }
+  }
+
+  function requestStopImport() {
+    importStopRequestedRef.current = true;
+    setStopRequested(true);
   }
 
   async function runScan() {
@@ -222,13 +267,18 @@ function App() {
               onChange={(event) => setLimit(event.currentTarget.value)}
             />
           </label>
-          <button className="primary" disabled={scanState === "scanning"} onClick={runScan} type="button">
+          <button
+            className="primary"
+            disabled={scanState === "scanning" || isImportRunning}
+            onClick={runScan}
+            type="button"
+          >
             <RefreshCw size={18} />
             {scanState === "scanning" ? "Scanning" : "Scan"}
           </button>
           <button
             className="secondary-action"
-            disabled={planState === "planning" || scanState === "scanning"}
+            disabled={planState === "planning" || scanState === "scanning" || isImportRunning}
             onClick={runPlan}
             type="button"
           >
@@ -330,12 +380,26 @@ function App() {
                   <button
                     className="inline-action"
                     data-import-source-id={source.id}
-                    disabled={importState === "importing" || source.file_count === 0}
-                    onClick={() => runImportBatch(source.id)}
+                    disabled={isImportRunning || source.file_count === 0}
+                    onClick={() => runImportBatch(source.id, "single")}
                     type="button"
                   >
                     <RefreshCw size={15} />
-                    {importState === "importing" ? "Importing" : "Import Batch"}
+                    {isImportRunning && activeImportSourceId === source.id && importMode === "single"
+                      ? "Importing"
+                      : "Import Batch"}
+                  </button>
+                  <button
+                    className="inline-action"
+                    data-import-continuous-source-id={source.id}
+                    disabled={isImportRunning || source.file_count === 0}
+                    onClick={() => runImportBatch(source.id, "continuous")}
+                    type="button"
+                  >
+                    <Play size={15} />
+                    {isImportRunning && activeImportSourceId === source.id && importMode === "continuous"
+                      ? "Running"
+                      : "Run Until Done"}
                   </button>
                 </div>
               </div>
@@ -344,46 +408,65 @@ function App() {
         </section>
       ) : null}
 
-      {importResult ? (
+      {importResult || isImportRunning ? (
         <section className="panel import-panel">
           <div className="panel-heading">
             <h2>Incremental Import</h2>
-            <span>{new Date(importResult.generated_at).toLocaleString()}</span>
+            <span>{importResult ? new Date(importResult.generated_at).toLocaleString() : "starting"}</span>
+            {isImportRunning && importMode === "continuous" ? (
+              <button
+                className="inline-action stop-action"
+                data-stop-import="true"
+                disabled={stopRequested}
+                onClick={requestStopImport}
+                type="button"
+              >
+                <StopCircle size={15} />
+                {stopRequested ? "Stopping" : "Stop"}
+              </button>
+            ) : null}
+          </div>
+          <div className="import-progress" aria-live="polite">
+            <progress value={importProgressPercent(importResult)} max={100} />
+            <span>{importProgressPercent(importResult)}%</span>
           </div>
           <div className="import-summary">
             <div>
               <span>Source</span>
-              <strong>{importResult.state.source_label}</strong>
+              <strong>{importResult?.state.source_label ?? activeImportSource?.label ?? "Selected source"}</strong>
             </div>
             <div>
               <span>Processed</span>
               <strong>
-                {importResult.state.processed_files.toLocaleString()} /{" "}
-                {importResult.state.total_files.toLocaleString()}
+                {(importResult?.state.processed_files ?? 0).toLocaleString()} /{" "}
+                {(importResult?.state.total_files ?? activeImportSource?.file_count ?? 0).toLocaleString()}
               </strong>
             </div>
             <div>
               <span>Batch</span>
               <strong>
-                {importResult.batch_file_count.toLocaleString()} files ·{" "}
-                {importResult.batch_prompt_count.toLocaleString()} prompts
+                {importResult
+                  ? `${importResult.batch_file_count.toLocaleString()} files · ${importResult.batch_prompt_count.toLocaleString()} prompts`
+                  : `${IMPORT_BATCH_FILES.toLocaleString()} files per batch`}
               </strong>
             </div>
             <div>
               <span>Status</span>
-              <strong>{importResult.state.completed ? "Complete" : "Resumable"}</strong>
+              <strong>{importStatusLabel(importResult, importState, importMode, stopRequested)}</strong>
             </div>
           </div>
-          <div className="notice secondary">
-            <FileText size={18} />
-            <span>
-              {importResult.persistence.database_path} · stored{" "}
-              {importResult.persistence.stored_prompt_count.toLocaleString()} · new{" "}
-              {importResult.persistence.inserted_prompt_count.toLocaleString()} · updated{" "}
-              {importResult.persistence.updated_prompt_count.toLocaleString()}
-            </span>
-          </div>
-          {importResult.warnings.length ? (
+          {importResult ? (
+            <div className="notice secondary">
+              <FileText size={18} />
+              <span>
+                {importResult.persistence.database_path} · stored{" "}
+                {importResult.persistence.stored_prompt_count.toLocaleString()} · new{" "}
+                {importResult.persistence.inserted_prompt_count.toLocaleString()} · updated{" "}
+                {importResult.persistence.updated_prompt_count.toLocaleString()}
+              </span>
+            </div>
+          ) : null}
+          {importResult?.warnings.length ? (
             <div className="warning-list">
               {importResult.warnings.map((warning) => (
                 <p key={warning}>{warning}</p>

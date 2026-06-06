@@ -5,6 +5,10 @@ export interface ActionLockState {
   storedLoadRunning: boolean;
 }
 
+export interface ExclusiveActionClaim {
+  current: boolean;
+}
+
 export function topLevelActionLocked(state: ActionLockState): boolean {
   return (
     state.scanRunning ||
@@ -16,4 +20,14 @@ export function topLevelActionLocked(state: ActionLockState): boolean {
 
 export function importActionLocked(state: ActionLockState): boolean {
   return topLevelActionLocked(state);
+}
+
+export function claimExclusiveAction(claim: ExclusiveActionClaim): boolean {
+  if (claim.current) return false;
+  claim.current = true;
+  return true;
+}
+
+export function releaseExclusiveAction(claim: ExclusiveActionClaim): void {
+  claim.current = false;
 }

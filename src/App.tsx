@@ -14,7 +14,12 @@ import {
   StopCircle,
 } from "lucide-react";
 import "./App.css";
-import { importActionLocked, topLevelActionLocked } from "./actionLocks";
+import {
+  claimExclusiveAction,
+  importActionLocked,
+  releaseExclusiveAction,
+  topLevelActionLocked,
+} from "./actionLocks";
 import { BROWSER_BRIDGE_NOTICE } from "./browserBridge";
 import { importEventBatchSummary, importEventStatusLabel } from "./importEvents";
 import {
@@ -159,6 +164,7 @@ function App() {
   const [improvementPromptId, setImprovementPromptId] = useState<string | null>(null);
   const importStopRequestedRef = useRef(false);
   const scanRunIdRef = useRef<string | null>(null);
+  const topLevelActionClaimRef = useRef(false);
   const isImportRunning = importState === "importing";
   const isScanRunning = scanState === "scanning" || scanState === "canceling";
   const isStoredLoadRunning = storedLoadState === "loading";
@@ -309,6 +315,7 @@ function App() {
   }
 
   async function runPlan() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setPlanState("planning");
     try {
@@ -319,6 +326,8 @@ function App() {
     } catch (err) {
       setError(errorText(err));
       setPlanState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
 
@@ -340,6 +349,7 @@ function App() {
   }
 
   async function runImportBatch(sourceId: string, mode: ImportRunMode) {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setActiveImportSourceId(sourceId);
     setImportMode(mode);
@@ -361,15 +371,20 @@ function App() {
     } finally {
       setStopRequested(false);
       importStopRequestedRef.current = false;
-      await refreshImportStates({ quiet: true });
-      await refreshImportEvents({ quiet: true });
-      await refreshStoredFacets({ quiet: true });
+      try {
+        await refreshImportStates({ quiet: true });
+        await refreshImportEvents({ quiet: true });
+        await refreshStoredFacets({ quiet: true });
+      } finally {
+        releaseExclusiveAction(topLevelActionClaimRef);
+      }
     }
   }
 
   async function runSelectedImportQueue() {
     const queue = selectedImportQueueSourceIds;
     if (!queue.length) return;
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setImportMode("queue");
     setImportQueueSourceIds(queue);
@@ -398,9 +413,13 @@ function App() {
     } finally {
       setStopRequested(false);
       importStopRequestedRef.current = false;
-      await refreshImportStates({ quiet: true });
-      await refreshImportEvents({ quiet: true });
-      await refreshStoredFacets({ quiet: true });
+      try {
+        await refreshImportStates({ quiet: true });
+        await refreshImportEvents({ quiet: true });
+        await refreshStoredFacets({ quiet: true });
+      } finally {
+        releaseExclusiveAction(topLevelActionClaimRef);
+      }
     }
   }
 
@@ -410,22 +429,16 @@ function App() {
   }
 
   async function runScan() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setImprovement(null);
     setImprovementPromptId(null);
-    let parsedLimit: number;
     try {
-      parsedLimit = parseRequiredScanLimit(limit);
-    } catch (err) {
-      setError(errorText(err));
-      setScanState("failed");
-      return;
-    }
-    const runId = createScanRunId();
-    scanRunIdRef.current = runId;
-    setScanProgressInfo(null);
-    setScanState("scanning");
-    try {
+      const parsedLimit = parseRequiredScanLimit(limit);
+      const runId = createScanRunId();
+      scanRunIdRef.current = runId;
+      setScanProgressInfo(null);
+      setScanState("scanning");
       const next = await scanPrompts({
         limit: parsedLimit,
         preview_limit: PREVIEW_LIMIT,
@@ -450,6 +463,7 @@ function App() {
     } finally {
       scanRunIdRef.current = null;
       setScanProgressInfo(null);
+      releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
 
@@ -468,6 +482,7 @@ function App() {
   }
 
   async function runLoadStored() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setImprovement(null);
     setImprovementPromptId(null);
@@ -488,6 +503,8 @@ function App() {
     } catch (err) {
       setError(errorText(err));
       setStoredLoadState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
 
@@ -509,6 +526,7 @@ function App() {
 
   async function runImprove(prompt: PromptRecord | null) {
     if (!prompt) return;
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setImproving(true);
     setError(null);
     const started = improvementRequestStarted<ImproveResult>(prompt.id);
@@ -525,6 +543,7 @@ function App() {
       setError(errorText(err));
     } finally {
       setImproving(false);
+      releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
 

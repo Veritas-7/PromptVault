@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 17:54 KST
+Updated: 2026-06-06 18:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1081,6 +1081,33 @@ stability, performance, and maintainability, then record evidence here.
     Batch, Run Until Done, and source checkboxes.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: add a function-level exclusive action
+  claim for long-running user actions.
+- Found that the UI disabled controls after state updates, but the async
+  handlers themselves did not synchronously reject same-render duplicate starts
+  from double clicks or delayed events.
+- Added `claimExclusiveAction` and `releaseExclusiveAction` helpers for
+  synchronous in-flight claims.
+- Wired the claim guard into user-started long-running handlers: Plan, Scan,
+  Load Stored, single/continuous import, selected import queue, and Improve.
+  Stop Scan and Stop Import remain outside this claim so cancellation stays
+  available while work is active.
+- `npm run test:ui` passed after this exclusive-claim slice with 27 tests.
+- `npm run check` passed after this exclusive-claim slice: UI tests 27 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?exclusive-claim=20260606b`.
+  - Installed a page-local `/api/plan` fetch counter, then triggered
+    `button.click(); button.click();` against `[data-run-plan="true"]` in the
+    same render turn.
+  - Observed `planCalls: 1`, `.plan-panel: 1`, and `planRows: 11`, proving the
+    second immediate start was rejected while the first Plan completed.
+  - Reloaded the same surface afterward to remove the test-only fetch counter.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1108,10 +1135,14 @@ stability, performance, and maintainability, then record evidence here.
   and Improve while top-level scan/import/stored-load work is active.
 - `src/App.tsx`: now feeds `improving` into the shared action-lock state so
   other long-running actions are disabled while Improve is in flight.
+- `src/App.tsx`: adds a function-level exclusive action claim around
+  user-started long-running handlers so duplicate starts are rejected before
+  React rerenders disabled states.
 - `src/actionLocks.ts`: includes `improvementRunning` in top-level and import
-  write locks.
+  write locks, and now exposes small exclusive action claim helpers.
 - `tests/actionLocks.test.ts`: added coverage for top-level locks and import
-  action locks, including active-scan and active-improvement cases.
+  action locks, including active-scan and active-improvement cases, plus
+  exclusive action claim/release behavior.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1183,6 +1214,11 @@ stability, performance, and maintainability, then record evidence here.
   `/api/improve` to make the in-flight state observable. The same `surface:9`
   page was reloaded after the QA run so the test delay would not leak into
   later manual testing.
+- During exclusive-claim QA, `cmux browser dblclick` returned `OK` but did not
+  trigger the Plan button on this WKWebView surface (`/api/plan` count stayed
+  `0`). The reliable same-surface proof used direct DOM `button.click()` twice,
+  which exercised the app handler in one render turn and measured one
+  `/api/plan` call.
 
 ## Research
 
@@ -1200,3 +1236,5 @@ stability, performance, and maintainability, then record evidence here.
    background scan after browser reload.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
+5. Consider adding focused tests around manual refresh buttons if future QA
+   shows duplicate refresh requests are user-visible or expensive.

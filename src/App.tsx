@@ -733,6 +733,7 @@ function App() {
         <div className="actions">
           <div className="segmented" aria-label="Preview mode" role="group">
             <button
+              aria-pressed={previewMode === "latest"}
               className={previewMode === "latest" ? "active" : ""}
               disabled={isTopLevelActionLocked}
               onClick={() => changePreviewMode("latest")}
@@ -741,6 +742,7 @@ function App() {
               Latest
             </button>
             <button
+              aria-pressed={previewMode === "weakest"}
               className={previewMode === "weakest" ? "active" : ""}
               disabled={isTopLevelActionLocked}
               onClick={() => changePreviewMode("weakest")}
@@ -1498,6 +1500,7 @@ function App() {
           <div className="prompt-list">
             {filteredPrompts.map((prompt) => (
               <button
+                aria-pressed={prompt.id === selectedPrompt?.id}
                 className={`prompt-row ${prompt.id === selectedPrompt?.id ? "active" : ""}`}
                 key={prompt.id}
                 onClick={() => {

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectedQueueSourceIds, toggleSourceSelection } from "../src/importQueue.ts";
+import {
+  importQueueFinalState,
+  selectedQueueSourceIds,
+  toggleSourceSelection,
+} from "../src/importQueue.ts";
 import type { SourcePlan } from "../src/types.ts";
 
 function source(id: string, fileCount: number): SourcePlan {
@@ -28,4 +32,25 @@ test("queue keeps selected order and skips unavailable sources", () => {
   const sources = [source("a", 10), source("b", 0), source("c", 2)];
 
   assert.deepEqual(selectedQueueSourceIds(["c", "b", "a", "missing"], sources), ["c", "a"]);
+});
+
+test("queue final state treats stop after final source completion as ready", () => {
+  assert.deepEqual(importQueueFinalState(1, 1, true), {
+    completedSourceCount: 1,
+    state: "ready",
+  });
+});
+
+test("queue final state reports stopped when stop leaves sources remaining", () => {
+  assert.deepEqual(importQueueFinalState(3, 1, true), {
+    completedSourceCount: 1,
+    state: "stopped",
+  });
+});
+
+test("queue final state bounds completed source count", () => {
+  assert.deepEqual(importQueueFinalState(2, 5, false), {
+    completedSourceCount: 2,
+    state: "ready",
+  });
 });

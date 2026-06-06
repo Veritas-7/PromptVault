@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 19:14 KST
+Updated: 2026-06-06 19:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1475,6 +1475,32 @@ stability, performance, and maintainability, then record evidence here.
     `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 88,378 · new 0 · updated 1`.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: fix the import queue Stop/completion
+  edge case.
+- Found that a Stop request made while the final queued source was still
+  in-flight could mark the queue as `Stopped` and undercount completed sources,
+  even when that final source completed in the current batch.
+- Added queue finalization coverage for stop-after-final-completion, early
+  stopped queues, and bounded completed-source counts.
+- `npm run test:ui` passed after this queue-stop-completion slice with 57
+  tests.
+- `npm run check` passed after this queue-stop-completion slice: UI tests 57
+  passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?import-queue-stop-complete=20260606a`.
+  - Clicked `Plan`, selected only `antigravity-ide-transcripts`, installed a
+    page-local fetch monkeypatch that delayed only `/api/import-batch`, clicked
+    `Run Selected`, then clicked `Stop` while the batch was pending.
+  - Observed the pending state: `Status Stopping after current batch`,
+    `Queue 1 / 1`, and `Stop` changed to `Stopping`.
+  - Restored the original fetch and released the delayed batch response.
+  - Observed the final state: `Status Complete`, `Queue 1 / 1`,
+    `Processed 3 / 3`, no import warning, and no global error.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1577,6 +1603,13 @@ stability, performance, and maintainability, then record evidence here.
   scan Stop warning, re-enables Stop after failed cancel requests, and clears
   transient cancel errors after a successful scan result arrives.
 - `tests/scanStatus.test.ts`: covers scan failure and Stop failure copy.
+- `src/importQueue.ts`: adds a queue final-state helper that distinguishes
+  completed queues from early-stopped queues.
+- `src/App.tsx`: tracks completed import queue sources explicitly so Stop
+  requests made during the final source do not force a completed queue into
+  `Stopped`.
+- `tests/importQueue.test.ts`: covers queue final-state completion and stopped
+  edge cases.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1706,6 +1739,12 @@ stability, performance, and maintainability, then record evidence here.
   `surface:9` page. The first pass exposed a real stale global-error bug after
   scan completion; after clearing errors on successful scan result, the retest
   showed both scoped Stop warning and global error clearing correctly.
+- During import-queue-stop-completion QA, the page-local fetch monkeypatch
+  delayed only `/api/import-batch` on the current `surface:9` page and was
+  restored before releasing the delayed response. The selected source was
+  already complete in the SQLite cursor, so the released batch returned
+  `Processed 3 / 3` and proved the one-source queue finishes as `Complete`
+  despite a pending Stop request.
 
 ## Research
 
@@ -1724,5 +1763,5 @@ stability, performance, and maintainability, then record evidence here.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
 5. Continue reviewing remaining empty and failure states in secondary panels,
-   especially import queue stop/completion edge cases and any secondary refresh
-   paths not yet covered by scoped warnings.
+   especially secondary refresh paths or import queue partial-stop cases not
+   yet covered by scoped warnings.

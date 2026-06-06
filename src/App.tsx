@@ -36,7 +36,11 @@ import {
   type ImportRunState,
 } from "./importProgress";
 import { importRefreshFailureText, importRefreshUnavailableText } from "./importRefreshState";
-import { selectedQueueSourceIds, toggleSourceSelection } from "./importQueue";
+import {
+  importQueueFinalState,
+  selectedQueueSourceIds,
+  toggleSourceSelection,
+} from "./importQueue";
 import { planFailureText, planUnavailableText, type PlanRunState } from "./planStatus";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
 import {
@@ -457,18 +461,24 @@ function App() {
     setImportState("importing");
     try {
       let lastResult: ImportBatchResult | null = null;
+      let completedSourceCount = 0;
       for (const [index, sourceId] of queue.entries()) {
         if (importStopRequestedRef.current) break;
         setCompletedQueueSourceCount(index);
         setActiveImportSourceId(sourceId);
         lastResult = await runImportSource(sourceId, "queue");
-        if (importStopRequestedRef.current && !lastResult?.state.completed) break;
+        if (lastResult?.state.completed) {
+          completedSourceCount = index + 1;
+        }
+        if (importStopRequestedRef.current) break;
       }
-      setCompletedQueueSourceCount((count) => {
-        if (importStopRequestedRef.current) return count;
-        return queue.length;
-      });
-      setImportState(importStopRequestedRef.current ? "stopped" : "ready");
+      const finalState = importQueueFinalState(
+        queue.length,
+        importStopRequestedRef.current ? completedSourceCount : queue.length,
+        importStopRequestedRef.current,
+      );
+      setCompletedQueueSourceCount(finalState.completedSourceCount);
+      setImportState(finalState.state);
     } catch (err) {
       setError(errorText(err));
       setImportState("failed");

@@ -4,6 +4,7 @@ import {
   activeStoredPromptFilterCount,
   emptyStoredPromptFilters,
   storedFilterApplyLabel,
+  storedFilterInputLabel,
   storedFilterResetLabel,
   storedPromptLoadOptions,
   type StoredPromptFilters,
@@ -83,5 +84,20 @@ test("stored filter apply label explains unfiltered, active, and locked states",
   assert.equal(
     storedFilterApplyLabel(2, true),
     "Cannot apply stored filters while another action is running",
+  );
+});
+
+test("stored filter input labels explain field and locked state", () => {
+  assert.equal(storedFilterInputLabel("text", false), "Stored Vault text filter");
+  assert.equal(storedFilterInputLabel("source", false), "Stored Vault source filter");
+  assert.equal(storedFilterInputLabel("date", false), "Stored Vault date filter");
+  assert.equal(storedFilterInputLabel("workspace", false), "Stored Vault workspace filter");
+  assert.equal(
+    storedFilterInputLabel("text", true),
+    "Cannot edit Stored Vault text filter while another action is running",
+  );
+  assert.equal(
+    storedFilterInputLabel("workspace", true),
+    "Cannot edit Stored Vault workspace filter while another action is running",
   );
 });

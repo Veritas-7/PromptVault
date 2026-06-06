@@ -102,6 +102,7 @@ import {
   activeStoredPromptFilterCount,
   emptyStoredPromptFilters,
   storedFilterApplyLabel,
+  storedFilterInputLabel,
   storedFilterResetLabel,
   storedPromptLoadOptions,
   type StoredPromptFilters,
@@ -979,6 +980,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Text</span>
             <input
+              aria-label={storedFilterInputLabel("text", isTopLevelActionLocked)}
               data-stored-filter-query="true"
               disabled={isTopLevelActionLocked}
               value={storedFilters.query}
@@ -989,6 +991,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Source</span>
             <input
+              aria-label={storedFilterInputLabel("source", isTopLevelActionLocked)}
               data-stored-filter-source="true"
               disabled={isTopLevelActionLocked}
               list="stored-source-options"
@@ -1000,6 +1003,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Date</span>
             <input
+              aria-label={storedFilterInputLabel("date", isTopLevelActionLocked)}
               data-stored-filter-date="true"
               disabled={isTopLevelActionLocked}
               list="stored-date-options"
@@ -1011,6 +1015,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Workspace</span>
             <input
+              aria-label={storedFilterInputLabel("workspace", isTopLevelActionLocked)}
               data-stored-filter-workspace="true"
               disabled={isTopLevelActionLocked}
               list="stored-workspace-options"

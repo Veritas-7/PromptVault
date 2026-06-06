@@ -45,6 +45,13 @@ export function storedFilterApplyLabel(activeFilterCount: number, actionLocked: 
   return `Apply ${activeFilterCount.toLocaleString()} stored filters`;
 }
 
+export function storedFilterInputLabel(fieldLabel: string, actionLocked: boolean): string {
+  if (actionLocked) {
+    return `Cannot edit Stored Vault ${fieldLabel} filter while another action is running`;
+  }
+  return `Stored Vault ${fieldLabel} filter`;
+}
+
 export function storedPromptLoadOptions(
   filters: StoredPromptFilters,
   previewMode: PreviewMode,

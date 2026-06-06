@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 23:20 KST
+Updated: 2026-06-06 23:25 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -441,6 +441,19 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check`: passed after the Import Stop label slice. This covered UI
   tests 114 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
   doc-tests, and clippy with `-D warnings`.
+- `npm run test:ui -- tests/storedFilters.test.ts`: passed; due the package
+  script glob this ran the full UI helper suite and reported 115 passing tests,
+  including the new Stored Vault filter input label coverage.
+- `npm run build`: TypeScript and Vite production build passed and refreshed
+  the static frontend bundle for the Stored Vault filter input label slice.
+- `npm run check`: passed after the Stored Vault filter input label slice. This
+  covered UI tests 115 passed, TypeScript/Vite build, Rust lib 64 passed, CLI
+  15 passed, doc-tests, and clippy with `-D warnings`.
+- cmux direct QA remained blocked during the Stored Vault filter input label
+  slice: `cmux ping` returned `PONG`, frontend health returned
+  `HTTP/1.0 200 OK`, bridge `/api/health` returned `ok:true`, but
+  `timeout 8 cmux browser --surface surface:9 get title` exited `124`. No cmux
+  app restart, kill, or second browser was used.
 - `npm run test:ui -- tests/storedFilters.test.ts`: passed; due the package
   script glob this ran the full UI helper suite and reported 113 passing tests,
   including the new Stored Vault Apply label coverage.
@@ -2499,6 +2512,15 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this Import Stop label slice: UI tests 114
   passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
   doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make the Stored Vault filter inputs expose
+  stable field-specific accessible names, including locked-state reasons.
+- Added tested Stored Vault filter input labels so the text, source, date, and
+  workspace inputs announce `Stored Vault <field> filter` when editable and
+  `Cannot edit Stored Vault <field> filter while another action is running`
+  while locked.
+- `npm run check` passed after this Stored Vault filter input label slice: UI
+  tests 115 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
+  passed, doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2779,6 +2801,14 @@ stability, performance, and maintainability, then record evidence here.
   `[data-stop-import=true]`.
 - `tests/importProgress.test.ts`: covers continuous, queued, and
   stop-requested Import Stop labels.
+- `src/storedFilters.ts`: adds `storedFilterInputLabel()` for Stored Vault
+  filter input ready and locked states.
+- `src/App.tsx`: applies the new Stored Vault filter input `aria-label` values
+  to `[data-stored-filter-query=true]`, `[data-stored-filter-source=true]`,
+  `[data-stored-filter-date=true]`, and
+  `[data-stored-filter-workspace=true]`.
+- `tests/storedFilters.test.ts`: covers text, source, date, workspace, and
+  locked Stored Vault filter input labels.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -3047,6 +3077,11 @@ stability, performance, and maintainability, then record evidence here.
   `working.md`, and `surface:9` title/url/eval checks timed out. The slice was
   verified by focused UI helper tests plus the full project gate; direct cmux
   click evidence is still blocked pending safe workspace/surface recovery.
+- During the Stored Vault filter input label slice, cmux app health and both
+  PromptVault services were still green, but the existing `surface:9` title
+  probe timed out after 8 seconds. The slice is verified by focused UI helper
+  tests plus the full project gate until safe same-surface cmux control
+  recovers.
 
 ## Research
 

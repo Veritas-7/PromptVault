@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 22:28 KST
+Updated: 2026-06-06 22:38 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,27 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui -- tests/topActionLabels.test.ts`: passed; due the package
+  script glob this ran the full UI helper suite and reported 108 passing tests,
+  including the new top-action label coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  top-action label change.
+- Real cmux default top-action label QA on the existing `surface:9`: loaded
+  `http://127.0.0.1:5173/?top-action-labels=20260606a` and verified
+  `data-run-scan`, `data-load-stored-prompts`, and `data-run-plan` expose
+  `Scan prompts`, `Load stored prompts`, and `Plan import sources`; no global
+  error was present.
+- Real cmux locked top-action label QA on the same `surface:9`: delayed only
+  `/api/plan`, started Plan with a scheduled DOM click, and verified Scan and
+  Load Stored were disabled with `Cannot scan prompts while an import plan is running`
+  and `Cannot load stored prompts while an import plan is running`; Plan exposed
+  `Planning import sources`. The delay was released, the page-local hook was
+  removed, and the buttons returned to ready labels with no global error.
+- Browser diagnostics on the same `surface:9` returned `No console entries`
+  and `No browser errors` after the top-action label QA.
+- `npm run check`: passed after the top-action label slice. This covered UI
+  tests 108 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 - Same-surface cmux Stored Vault no-match QA after cmux recovery: used the
   existing PromptVault `surface:9`, applied
   `nonexistent-keyboard-flow-token-20260606` through the Stored Vault Text
@@ -2288,6 +2309,27 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this selected metadata accessibility slice: UI
   tests 103 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
   passed, doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make top-bar primary actions expose
+  state-aware accessible names while preserving the visible compact labels.
+- Static audit found the top-bar `Scan`, scan `Stop`, `Load Stored`, and
+  `Plan` buttons had visible status text but no state/reason-specific
+  `aria-label`, unlike the newer panel refresh, Reset, Improve, queue, and
+  source-row actions.
+- Added tested top-action label helpers so ready states announce
+  `Scan prompts`, `Load stored prompts`, and `Plan import sources`, while
+  active locks explain the blocking operation such as
+  `Cannot scan prompts while an import plan is running`.
+- Real cmux QA on the existing `surface:9` verified default top-bar labels at
+  `http://127.0.0.1:5173/?top-action-labels=20260606a`.
+- Real cmux locked-state QA on the same `surface:9` delayed only `/api/plan`
+  with a page-local fetch monkeypatch, clicked `Plan`, and verified Scan and
+  Load Stored were disabled with import-plan-specific `aria-label` reasons
+  while Plan announced `Planning import sources`. Releasing the delay restored
+  `window.fetch`, removed the page-local hook, returned the buttons to ready
+  labels, and left no global error.
+- `npm run check` passed after this top-action label slice: UI tests 108
+  passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2346,6 +2388,13 @@ stability, performance, and maintainability, then record evidence here.
   `aria-label` to `.selected-meta`.
 - `tests/promptRowA11y.test.ts`: covers Selected metadata labels for normal
   records and missing timestamp/workspace values.
+- `src/topActionLabels.ts`: adds state-aware labels for Scan, scan Stop, Load
+  Stored, and Plan, including active lock reasons from the current top-level
+  action state.
+- `src/App.tsx`: applies the top-action labels to the four top-bar action
+  buttons without changing their visible compact labels.
+- `tests/topActionLabels.test.ts`: covers ready, running, failed, and locked
+  top-action labels.
 - `src/App.tsx`: adds panel-specific accessible labels to Saved Import
   Progress and Recent Import Activity refresh buttons.
 - `src/App.tsx`: adds source-specific accessible labels to each Import Plan
@@ -2756,6 +2805,12 @@ stability, performance, and maintainability, then record evidence here.
   after starting the action. Scheduling the DOM click with `setTimeout(..., 0)`
   returned immediately and reliably loaded Plan/Stored rows on the same
   `surface:9`; no cmux restart or second browser was used.
+- At the start of the top-action label slice, Computer Use showed the visible
+  cmux window focused on the unrelated `블로그` workspace even though the
+  existing PromptVault `surface:9` still responded to surface-specific
+  `goto`/`wait`/`eval`, console, and browser-error commands. Direct
+  workspace-row clicks and `workspace:5`/`pane:10` focus RPCs were unreliable,
+  so no new browser, cmux restart, or cmux app kill was used.
 
 ## Research
 

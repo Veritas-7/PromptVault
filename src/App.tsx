@@ -109,6 +109,12 @@ import {
   storedFacetsFailureText,
   type StoredFacetsState,
 } from "./storedFacetStatus";
+import {
+  planActionLabel,
+  scanActionLabel,
+  scanStopActionLabel,
+  storedLoadActionLabel,
+} from "./topActionLabels";
 import type {
   ImportBatchResult,
   ImportEventsResult,
@@ -816,6 +822,7 @@ function App() {
             />
           </label>
           <button
+            aria-label={scanActionLabel(scanState, actionLockState)}
             className="primary"
             data-run-scan="true"
             disabled={isTopLevelActionLocked}
@@ -827,6 +834,7 @@ function App() {
           </button>
           {canStopScan ? (
             <button
+              aria-label={scanStopActionLabel(scanState)}
               className="secondary-action stop-action"
               data-stop-scan="true"
               disabled={scanState === "canceling"}
@@ -838,6 +846,7 @@ function App() {
             </button>
           ) : null}
           <button
+            aria-label={storedLoadActionLabel(storedLoadState, actionLockState)}
             className="secondary-action"
             data-load-stored-prompts="true"
             disabled={isTopLevelActionLocked}
@@ -848,6 +857,7 @@ function App() {
             {isStoredLoadRunning ? "Loading Stored" : "Load Stored"}
           </button>
           <button
+            aria-label={planActionLabel(planState, actionLockState)}
             className="secondary-action"
             data-run-plan="true"
             disabled={planState === "planning" || isTopLevelActionLocked}

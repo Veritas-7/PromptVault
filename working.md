@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 23:10 KST
+Updated: 2026-06-06 23:13 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,19 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- Post-push verification after commit `5ba6ad5`: `git fetch origin main`,
+  `git status --short --branch`, and
+  `git rev-list --left-right --count HEAD...origin/main` confirmed the repo was
+  clean and synchronized at `0 0`; frontend health returned `HTTP/1.0 200 OK`,
+  bridge `/api/health` returned `ok:true`, and `cmux ping` returned `PONG`.
+- Post-push cmux diagnostics on the existing `surface:9`: title/url still
+  returned `PromptVault` and
+  `http://127.0.0.1:5173/?plan-panel-labels=20260606b`, but console/error
+  collectors timed out again and a follow-up reload to
+  `?plan-panel-labels=20260606c` timed out waiting for
+  `[data-run-plan=true]`. Computer Use showed the visible cmux window still on
+  the unrelated `working.md` workspace. No cmux restart, kill, or second
+  browser was used.
 - `npm run test:ui -- tests/topActionLabels.test.ts`: passed; due the
   package script glob this ran the full UI helper suite and reported 112
   passing tests, including the new Import Plan panel label coverage.
@@ -2966,6 +2979,11 @@ stability, performance, and maintainability, then record evidence here.
 - The current frontend on `127.0.0.1:5173` is a static server for `dist`.
   Source-only React changes are not visible to cmux QA until `npm run build`
   refreshes the production bundle.
+- After commit `5ba6ad5` was pushed and repository/service parity was verified,
+  `surface:9` returned to a partial cmux-RPC blocker state: title/url remained
+  readable, but console/errors and selector wait calls timed out. This appears
+  to be the recurring cmux surface/visible-workspace mismatch rather than an app
+  health failure; frontend and bridge health remained green.
 
 ## Research
 

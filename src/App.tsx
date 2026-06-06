@@ -63,6 +63,7 @@ import type {
 
 type ScanState = "idle" | "scanning" | "canceling" | "ready" | "failed";
 type PlanState = "idle" | "planning" | "ready" | "failed";
+type StoredLoadState = "idle" | "loading" | "ready" | "failed";
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 type StoredFacetsState = "idle" | "loading" | "ready" | "failed";
@@ -123,6 +124,7 @@ function App() {
   const browserQaMode = isBrowserQaMode();
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [planState, setPlanState] = useState<PlanState>("idle");
+  const [storedLoadState, setStoredLoadState] = useState<StoredLoadState>("idle");
   const [importState, setImportState] = useState<ImportRunState>("idle");
   const [importStatesState, setImportStatesState] = useState<ImportStatesState>("idle");
   const [importEventsState, setImportEventsState] = useState<ImportEventsState>("idle");
@@ -158,6 +160,7 @@ function App() {
   const scanRunIdRef = useRef<string | null>(null);
   const isImportRunning = importState === "importing";
   const isScanRunning = scanState === "scanning" || scanState === "canceling";
+  const isStoredLoadRunning = storedLoadState === "loading";
   const canStopScan = scanRunIdRef.current !== null && isScanRunning;
   const scanProgressText = scanProgressLabel(scanProgressInfo);
 
@@ -459,7 +462,7 @@ function App() {
     setError(null);
     setImprovement(null);
     setImprovementPromptId(null);
-    setScanState("scanning");
+    setStoredLoadState("loading");
     try {
       const next = await loadStoredPrompts({
         ...storedPromptLoadOptions(storedFilters, previewMode, PREVIEW_LIMIT),
@@ -472,10 +475,10 @@ function App() {
           : next.prompts[next.prompts.length - 1]
         )?.id ?? null,
       );
-      setScanState("ready");
+      setStoredLoadState("ready");
     } catch (err) {
       setError(errorText(err));
-      setScanState("failed");
+      setStoredLoadState("failed");
     }
   }
 
@@ -554,7 +557,7 @@ function App() {
           </label>
           <button
             className="primary"
-            disabled={isScanRunning || isImportRunning}
+            disabled={isScanRunning || isImportRunning || isStoredLoadRunning}
             onClick={runScan}
             type="button"
           >
@@ -576,16 +579,16 @@ function App() {
           <button
             className="secondary-action"
             data-load-stored-prompts="true"
-            disabled={isScanRunning || isImportRunning}
+            disabled={isScanRunning || isImportRunning || isStoredLoadRunning}
             onClick={runLoadStored}
             type="button"
           >
             <Database size={18} />
-            {isScanRunning ? "Loading" : "Load Stored"}
+            {isStoredLoadRunning ? "Loading Stored" : "Load Stored"}
           </button>
           <button
             className="secondary-action"
-            disabled={planState === "planning" || isScanRunning || isImportRunning}
+            disabled={planState === "planning" || isScanRunning || isImportRunning || isStoredLoadRunning}
             onClick={runPlan}
             type="button"
           >
@@ -659,7 +662,7 @@ function App() {
           </label>
           <button
             className="inline-action"
-            disabled={!storedFilterCount || isScanRunning || isImportRunning}
+            disabled={!storedFilterCount || isScanRunning || isImportRunning || isStoredLoadRunning}
             onClick={resetStoredFilters}
             type="button"
           >
@@ -690,7 +693,7 @@ function App() {
             <button
               className="inline-action"
               data-refresh-import-states="true"
-              disabled={importStatesState === "loading" || isImportRunning}
+              disabled={importStatesState === "loading" || isImportRunning || isStoredLoadRunning}
               onClick={() => refreshImportStates()}
               type="button"
             >
@@ -792,7 +795,7 @@ function App() {
             <button
               className="inline-action"
               data-refresh-import-events="true"
-              disabled={importEventsState === "loading" || isImportRunning}
+              disabled={importEventsState === "loading" || isImportRunning || isStoredLoadRunning}
               onClick={() => refreshImportEvents()}
               type="button"
             >
@@ -874,7 +877,7 @@ function App() {
             <button
               className="inline-action"
               data-import-selected="true"
-              disabled={isImportRunning || selectedImportQueueSourceIds.length === 0}
+              disabled={isImportRunning || isStoredLoadRunning || selectedImportQueueSourceIds.length === 0}
               onClick={runSelectedImportQueue}
               type="button"
             >
@@ -890,7 +893,7 @@ function App() {
                     <input
                       checked={selectedImportSourceIds.includes(source.id)}
                       data-select-source-id={source.id}
-                      disabled={isImportRunning || source.file_count === 0}
+                      disabled={isImportRunning || isStoredLoadRunning || source.file_count === 0}
                       onChange={(event) => {
                         const checked = event.currentTarget.checked;
                         setSelectedImportSourceIds((current) =>
@@ -912,7 +915,7 @@ function App() {
                   <button
                     className="inline-action"
                     data-import-source-id={source.id}
-                    disabled={isImportRunning || source.file_count === 0}
+                    disabled={isImportRunning || isStoredLoadRunning || source.file_count === 0}
                     onClick={() => runImportBatch(source.id, "single")}
                     type="button"
                   >
@@ -924,7 +927,7 @@ function App() {
                   <button
                     className="inline-action"
                     data-import-continuous-source-id={source.id}
-                    disabled={isImportRunning || source.file_count === 0}
+                    disabled={isImportRunning || isStoredLoadRunning || source.file_count === 0}
                     onClick={() => runImportBatch(source.id, "continuous")}
                     type="button"
                   >

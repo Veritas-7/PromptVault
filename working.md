@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 17:18 KST
+Updated: 2026-06-06 17:30 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -951,6 +951,33 @@ stability, performance, and maintainability, then record evidence here.
   verification script itself hit cmux JavaScript-result timeouts, so it is not
   treated as successful evidence. After the timeout, the scan controls were no
   longer visible and the vault count remained `1690`.
+- Continued with the next thin slice: separate stored prompt loading state
+  from scan state.
+- `runLoadStored` now uses a dedicated `storedLoadState` instead of
+  `scanState`, so stored-vault loading no longer enters the scan-running UI
+  state.
+- The `Load Stored` button now shows `Loading Stored` during the request and
+  disables conflicting scan, plan, import, reset, refresh, and queued import
+  controls while stored prompts are loading.
+- This prevents stored prompt loads from showing the active scan progress
+  notice.
+- `npm run check` passed after the stored-load state slice: UI tests 24 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reused `surface:9` and did not create another browser.
+  - Loaded the new Vite build `index-Cq25Slp4.js` with a cache-busted
+    PromptVault URL.
+  - Clicked `Load Stored` and waited for stored vault text
+    `stored 1,690`.
+  - Verified `[data-scan-progress="true"]` count was `0`, so no scan progress
+    notice appeared during stored prompt loading.
+  - Verified browser console returned `No console entries`, browser errors
+    returned `No browser errors`, and bridge `/api/prompt-facets` still
+    reported vault count `1690`.
+- Attempts to force a delayed `/api/prompts` response for exact intermediate
+  button-label capture hit cmux JavaScript-result timeouts. Those attempts are
+  recorded as cmux diagnostic limitations, not as successful UI evidence.
 
 ## Changes
 
@@ -964,6 +991,9 @@ stability, performance, and maintainability, then record evidence here.
   the notice now reports discovered files while file totals are pending, and
   polling continues through an early inactive progress response while scan
   state is still running.
+- `src/App.tsx`: separated stored prompt loading into `storedLoadState`, updated
+  `Load Stored` loading text, and guarded scan, plan, import, reset, refresh,
+  and queued import controls while stored prompts are loading.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1019,6 +1049,10 @@ stability, performance, and maintainability, then record evidence here.
   even while `cmux tree` showed the correct PromptVault URL. The real UI flow,
   bridge count, and cancellation warning were verified on the existing
   `surface:9`; do not open a second browser as a workaround.
+- During stored-load state QA, longer cmux `eval` scripts and one chained
+  button-text query hit JavaScript-result timeouts. The reliable evidence came
+  from the same existing `surface:9` click flow, stored vault completion text,
+  scan-progress count `0`, clean console/errors, and bridge vault count `1690`.
 
 ## Research
 

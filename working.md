@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 18:26 KST
+Updated: 2026-06-06 18:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1210,6 +1210,28 @@ stability, performance, and maintainability, then record evidence here.
   - Cleared the filter afterward and observed rows return to `200`.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: make Source and Frequency secondary
+  panels explain the pre-load empty state instead of rendering a blank source
+  body or generic `No data` frequency labels.
+- Added analysis empty-state copy coverage for source summaries and frequency
+  columns before load and after an empty loaded result.
+- `npm run test:ui` passed after this analysis-empty slice with 39 tests.
+- `npm run check` passed after this analysis-empty slice: UI tests 39 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?analysis-empty=20260606a`.
+  - Observed source rows `0`, source empty text
+    `Run a scan or load stored prompts to see source coverage.`, five frequency
+    empty columns, and frequency empty text
+    `Run a scan or load stored prompts to see frequency data.`.
+  - Clicked Stored Vault `Apply` and waited for source and frequency data.
+  - Observed source rows `5`, source empty cleared, frequency items `50`,
+    frequency empty count `0`, and prompt rows `200`.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1248,7 +1270,11 @@ stability, performance, and maintainability, then record evidence here.
   prompt-list and selected-panel empty states when local filtering hides all
   loaded prompts.
 - `src/App.css`: gives the prompt-list empty row the same padded list rhythm as
-  prompt rows.
+  prompt rows, and now pads the Source panel's compact empty row.
+- `src/analysisEmptyState.ts`: adds small copy helpers for Source and Frequency
+  secondary-panel empty states.
+- `src/App.tsx`: shows an explicit Source panel empty row before scan/load, and
+  passes explicit empty text into each Frequency column.
 - `src/promptEmptyState.ts`: adds small copy helpers for loaded-empty and
   filter-miss prompt states; it now also provides Recommendation empty-state
   copy for selected, filter-hidden, and no-data prompt states.
@@ -1261,6 +1287,8 @@ stability, performance, and maintainability, then record evidence here.
   copy for not-loaded, loaded-empty, and filter-miss states, plus
   Recommendation empty-state copy for selected, filter-hidden, and no-data
   states.
+- `tests/analysisEmptyState.test.ts`: covers source-summary and frequency
+  empty-state copy before load and for empty loaded results.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1349,6 +1377,8 @@ stability, performance, and maintainability, then record evidence here.
 - During recommendation-empty QA, the same `surface:9` path worked but most
   cmux browser commands took a few seconds to return. Waiting on each command
   was enough; no cmux restart or second browser was needed.
+- During analysis-empty QA, the same `surface:9` path stayed reliable for
+  `goto`, short `eval`, Stored Vault `Apply`, console list, and errors list.
 
 ## Research
 
@@ -1369,4 +1399,4 @@ stability, performance, and maintainability, then record evidence here.
 5. Consider whether stored facets should show an explicit refresh status if
    future UI work exposes a manual stored-facet refresh control.
 6. Continue reviewing remaining empty and failure states in secondary panels,
-   especially import progress/activity panels and frequency/source panels.
+   especially import progress/activity panels and failed refresh states.

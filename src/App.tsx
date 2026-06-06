@@ -20,6 +20,7 @@ import {
   releaseExclusiveAction,
   topLevelActionLocked,
 } from "./actionLocks";
+import { frequencyEmptyText, sourceSummariesEmptyText } from "./analysisEmptyState";
 import { BROWSER_BRIDGE_NOTICE } from "./browserBridge";
 import { importEventBatchSummary, importEventStatusLabel } from "./importEvents";
 import {
@@ -209,6 +210,8 @@ function App() {
     return selectedPromptForView(filteredPrompts, selectedId);
   }, [filteredPrompts, selectedId]);
   const hasPromptResult = result !== null;
+  const sourceSummaries = result?.stats.source_summaries ?? [];
+  const sourceSummariesEmptyMessage = sourceSummariesEmptyText(hasPromptResult);
   const promptListEmptyMessage = promptListEmptyText(hasPromptResult, query);
   const selectedPromptEmptyMessage = selectedPromptEmptyText(hasPromptResult, query);
   const activeImportSource = useMemo(() => {
@@ -1143,21 +1146,27 @@ function App() {
             <span>{result?.generated_at ? new Date(result.generated_at).toLocaleString() : "not scanned"}</span>
           </div>
           <div className="sources">
-            {(result?.stats.source_summaries ?? []).map((source) => (
-              <div className="source-row" key={source.id}>
-                <div>
-                  <strong>{source.label}</strong>
-                  <span>{source.root_path}</span>
-                  <span className="source-meta">
-                    Q {source.average_quality.toFixed(1)} · Weak {source.weak_prompt_count}
-                  </span>
+            {sourceSummaries.length ? (
+              sourceSummaries.map((source) => (
+                <div className="source-row" key={source.id}>
+                  <div>
+                    <strong>{source.label}</strong>
+                    <span>{source.root_path}</span>
+                    <span className="source-meta">
+                      Q {source.average_quality.toFixed(1)} · Weak {source.weak_prompt_count}
+                    </span>
+                  </div>
+                  <div className={`status ${source.status}`}>
+                    {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                    {source.prompts_found}
+                  </div>
                 </div>
-                <div className={`status ${source.status}`}>
-                  {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-                  {source.prompts_found}
-                </div>
+              ))
+            ) : (
+              <div className="empty compact" data-empty-sources="true">
+                {sourceSummariesEmptyMessage}
               </div>
-            ))}
+            )}
           </div>
         </aside>
 
@@ -1167,11 +1176,31 @@ function App() {
             <span>words and prompt starts</span>
           </div>
           <div className="frequency-grid">
-            <FrequencyColumn title="Words" items={result?.stats.top_words ?? []} />
-            <FrequencyColumn title="Phrases" items={result?.stats.top_phrases ?? []} />
-            <FrequencyColumn title="Repeats" items={result?.stats.repeated_prompts ?? []} />
-            <FrequencyColumn title="Dates" items={result?.stats.prompts_by_date ?? []} />
-            <FrequencyColumn title="Quality gaps" items={result?.stats.top_quality_gaps ?? []} />
+            <FrequencyColumn
+              title="Words"
+              items={result?.stats.top_words ?? []}
+              emptyText={frequencyEmptyText(hasPromptResult, "Words")}
+            />
+            <FrequencyColumn
+              title="Phrases"
+              items={result?.stats.top_phrases ?? []}
+              emptyText={frequencyEmptyText(hasPromptResult, "Phrases")}
+            />
+            <FrequencyColumn
+              title="Repeats"
+              items={result?.stats.repeated_prompts ?? []}
+              emptyText={frequencyEmptyText(hasPromptResult, "Repeats")}
+            />
+            <FrequencyColumn
+              title="Dates"
+              items={result?.stats.prompts_by_date ?? []}
+              emptyText={frequencyEmptyText(hasPromptResult, "Dates")}
+            />
+            <FrequencyColumn
+              title="Quality gaps"
+              items={result?.stats.top_quality_gaps ?? []}
+              emptyText={frequencyEmptyText(hasPromptResult, "Quality gaps")}
+            />
           </div>
         </section>
       </section>
@@ -1353,9 +1382,11 @@ function Metric({
 
 function FrequencyColumn({
   title,
+  emptyText,
   items,
 }: {
   title: string;
+  emptyText: string;
   items: { text: string; count: number }[];
 }) {
   return (
@@ -1369,7 +1400,9 @@ function FrequencyColumn({
           </div>
         ))
       ) : (
-        <p className="empty compact">No data</p>
+        <p className="empty compact" data-empty-frequency={title}>
+          {emptyText}
+        </p>
       )}
     </div>
   );

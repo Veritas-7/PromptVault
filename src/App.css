@@ -634,6 +634,10 @@ h3 {
   max-height: 286px;
 }
 
+.sources .empty.compact {
+  padding: 16px 14px;
+}
+
 .source-row {
   align-items: center;
   border-bottom: 1px solid #eef2ed;

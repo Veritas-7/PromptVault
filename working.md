@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 18:15 KST
+Updated: 2026-06-06 18:21 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1162,6 +1162,28 @@ stability, performance, and maintainability, then record evidence here.
   - Reloaded the same surface afterward to remove test-only fetch counters.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: explain prompt-list empty states when the
+  local prompt filter hides all loaded prompts.
+- Added prompt empty-state copy helpers and UI coverage for loaded-empty versus
+  filter-miss states.
+- `npm run test:ui` passed after this empty-state slice with 32 tests.
+- `npm run check` passed after this empty-state slice: UI tests 32 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?prompt-empty=20260606a`.
+  - Clicked the Stored Vault `Apply` button and waited until stored prompt rows
+    rendered.
+  - Filled the prompt filter with `zzzz-no-prompt-match-20260606`.
+  - Observed rows `0`, prompt-list empty text
+    `No prompts match the current filter.`, selected-panel empty text
+    `No prompt is visible with the current filter.`, and the filter value
+    preserved.
+  - Cleared the filter afterward and observed rows return to `200`.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1196,11 +1218,20 @@ stability, performance, and maintainability, then record evidence here.
   import progress, and recent import activity refresh calls.
 - `src/App.tsx`: makes the Stored Vault filter panel a form with a local Apply
   action, Enter key handling, and stable filter QA selectors.
+- `src/App.tsx`: adds a stable prompt-filter QA selector and shows distinct
+  prompt-list and selected-panel empty states when local filtering hides all
+  loaded prompts.
+- `src/App.css`: gives the prompt-list empty row the same padded list rhythm as
+  prompt rows.
+- `src/promptEmptyState.ts`: adds small copy helpers for loaded-empty and
+  filter-miss prompt states.
 - `src/actionLocks.ts`: includes `improvementRunning` in top-level and import
   write locks, and now exposes small exclusive action claim helpers.
 - `tests/actionLocks.test.ts`: added coverage for top-level locks and import
   action locks, including active-scan and active-improvement cases, plus
   exclusive action claim/release behavior.
+- `tests/promptEmptyState.test.ts`: covers prompt-list and selected-panel empty
+  copy for not-loaded, loaded-empty, and filter-miss states.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1283,6 +1314,9 @@ stability, performance, and maintainability, then record evidence here.
 - During filter-apply QA, `cmux browser press ... Return` did not trigger the
   new Enter handler on this WKWebView surface, while `press ... Enter` did.
   Future keyboard QA should use `Enter` for this surface.
+- During prompt-empty QA, the stable `surface:9` path remained reliable:
+  `goto`, `wait --selector`, `click`, `fill`, short `eval`, console list, and
+  errors list all completed without needing a second browser.
 
 ## Research
 
@@ -1302,5 +1336,5 @@ stability, performance, and maintainability, then record evidence here.
    secondary UI flows before moving to larger background indexing work.
 5. Consider whether stored facets should show an explicit refresh status if
    future UI work exposes a manual stored-facet refresh control.
-6. Continue reviewing filter/search empty states now that Stored Vault filters
-   can be applied locally from the panel.
+6. Continue reviewing remaining empty and failure states in secondary panels,
+   especially places that still assume a scan/load has not happened.

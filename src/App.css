@@ -760,6 +760,11 @@ h3 {
   max-height: 560px;
 }
 
+.prompt-list .empty.compact {
+  border-bottom: 1px solid #edf2eb;
+  padding: 16px 14px;
+}
+
 .prompt-row {
   align-items: start;
   border: 0;

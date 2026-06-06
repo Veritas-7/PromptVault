@@ -34,6 +34,7 @@ import {
 } from "./importProgress";
 import { selectedQueueSourceIds, toggleSourceSelection } from "./importQueue";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
+import { promptListEmptyText, selectedPromptEmptyText } from "./promptEmptyState";
 import {
   cancelScan,
   importBatch,
@@ -203,6 +204,9 @@ function App() {
   const selectedPrompt = useMemo(() => {
     return selectedPromptForView(filteredPrompts, selectedId);
   }, [filteredPrompts, selectedId]);
+  const hasPromptResult = result !== null;
+  const promptListEmptyMessage = promptListEmptyText(hasPromptResult, query);
+  const selectedPromptEmptyMessage = selectedPromptEmptyText(hasPromptResult, query);
   const activeImportSource = useMemo(() => {
     return plan?.sources.find((source) => source.id === activeImportSourceId) ?? null;
   }, [activeImportSourceId, plan]);
@@ -1181,6 +1185,8 @@ function App() {
             <div className="searchbox">
               <Search size={16} />
               <input
+                aria-label="Filter prompts"
+                data-prompt-filter="true"
                 value={query}
                 placeholder="Filter"
                 onChange={(event) => setQuery(event.currentTarget.value)}
@@ -1213,6 +1219,11 @@ function App() {
                 ) : null}
               </button>
             ))}
+            {filteredPrompts.length === 0 && promptListEmptyMessage ? (
+              <div className="empty compact" data-empty-prompts="true">
+                {promptListEmptyMessage}
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -1249,7 +1260,9 @@ function App() {
               <pre className="prompt-text">{selectedPrompt.text}</pre>
             </>
           ) : (
-            <div className="empty">Run a scan or load stored prompts.</div>
+            <div className="empty" data-empty-selected-prompt="true">
+              {selectedPromptEmptyMessage}
+            </div>
           )}
         </section>
 

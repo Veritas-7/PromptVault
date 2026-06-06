@@ -29,6 +29,7 @@ import {
 } from "./improvementSelection";
 import {
   importProgressPercent,
+  importRunFailureText,
   importStatusLabel,
   type ImportRunMode,
   type ImportRunState,
@@ -230,6 +231,10 @@ function App() {
   const activeImportSource = useMemo(() => {
     return plan?.sources.find((source) => source.id === activeImportSourceId) ?? null;
   }, [activeImportSourceId, plan]);
+  const importRunFailureMessage = importRunFailureText(
+    importState,
+    importResult?.state.source_label ?? activeImportSource?.label ?? null,
+  );
   const selectedImportQueueSourceIds = useMemo(() => {
     return selectedQueueSourceIds(selectedImportSourceIds, plan?.sources ?? []);
   }, [plan?.sources, selectedImportSourceIds]);
@@ -1082,11 +1087,17 @@ function App() {
         </section>
       ) : null}
 
-      {importResult || isImportRunning ? (
+      {importResult || isImportRunning || importRunFailureMessage ? (
         <section className="panel import-panel">
           <div className="panel-heading">
             <h2>Incremental Import</h2>
-            <span>{importResult ? new Date(importResult.generated_at).toLocaleString() : "starting"}</span>
+            <span>
+              {importResult
+                ? new Date(importResult.generated_at).toLocaleString()
+                : importRunFailureMessage
+                  ? "failed"
+                  : "starting"}
+            </span>
             {isImportRunning && (importMode === "continuous" || importMode === "queue") ? (
               <button
                 className="inline-action stop-action"
@@ -1100,6 +1111,12 @@ function App() {
               </button>
             ) : null}
           </div>
+          {importRunFailureMessage ? (
+            <div className="notice warning panel-notice" data-import-run-error="true">
+              <AlertTriangle size={18} />
+              <span>{importRunFailureMessage}</span>
+            </div>
+          ) : null}
           <div className="import-progress" aria-live="polite">
             <progress value={importProgressPercent(importResult)} max={100} />
             <span>{importProgressPercent(importResult)}%</span>

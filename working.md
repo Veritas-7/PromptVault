@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 18:44 KST
+Updated: 2026-06-06 18:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1298,6 +1298,35 @@ stability, performance, and maintainability, then record evidence here.
     repopulated, and the button text returned to `Refresh Facets`.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: keep the Incremental Import panel visible
+  when an import batch fails before the first batch result exists.
+- Found that a first-request `importBatch` failure set `importState` to
+  `failed`, but the panel render condition only included `importResult` or an
+  active import. That left only the global error notice and hid the active
+  source, progress, and failed status context.
+- Added import-run failure copy coverage for failed source-specific imports,
+  failed unknown-source imports, and non-failed states.
+- `npm run test:ui` passed after this import-run-failure slice with 45 tests.
+- `npm run check` passed after this import-run-failure slice: UI tests 45
+  passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?import-run-failure=20260606a`.
+  - Clicked `Plan` and waited for import source actions.
+  - Installed a page-local fetch monkeypatch that rejected only
+    `/api/import-batch`, then clicked the first `Import Batch` action.
+  - Observed the failed no-result import panel stayed visible for `Codex` with
+    progress `0%`, `Status Failed`, and in-panel copy:
+    `Could not import Codex. Check the error above and retry from the import plan.`
+  - Reloaded the same surface at
+    `http://127.0.0.1:5173/?import-run-failure=20260606b` to remove the
+    test-only fetch monkeypatch.
+  - Confirmed the warning and top-level error cleared, the import panel was no
+    longer shown on the fresh page, and final diagnostics were clean.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1372,6 +1401,12 @@ stability, performance, and maintainability, then record evidence here.
   empty-state copy before load and for empty loaded results.
 - `tests/importRefreshState.test.ts`: covers import refresh failure and
   unavailable-state copy.
+- `src/importProgress.ts`: adds import-run failure copy for failed imports that
+  have no first batch result yet.
+- `src/App.tsx`: keeps the Incremental Import panel visible on failed no-result
+  imports and shows in-panel retry guidance with the active source label.
+- `tests/importProgress.test.ts`: covers import-run failure copy for named,
+  unknown, and non-failed states.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1471,6 +1506,12 @@ stability, performance, and maintainability, then record evidence here.
   reliable. The page-local `/api/prompt-facets` monkeypatch was cleared by
   reloading the same surface, and final console/errors diagnostics returned
   clean. Do not restart cmux or open a second browser as a workaround.
+- During import-run-failure QA, the page-local fetch monkeypatch affected only
+  `/api/import-batch` on the current `surface:9` page and was cleared by
+  reloading the same surface. The forced failure intentionally produced both a
+  global bridge error and the new in-panel import failure guidance; the recovery
+  reload had no warning, no top-level error, no console entries, and no browser
+  errors.
 
 ## Research
 
@@ -1489,5 +1530,4 @@ stability, performance, and maintainability, then record evidence here.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
 5. Continue reviewing remaining empty and failure states in secondary panels,
-   especially import-panel no-prior-data paths and any retry flows that still
-   rely only on the global error notice.
+   especially any retry flows that still rely only on the global error notice.

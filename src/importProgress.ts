@@ -26,3 +26,14 @@ export function importStatusLabel(
   if (result) return "Resumable";
   return "Idle";
 }
+
+export function importRunFailureText(
+  runState: ImportRunState,
+  sourceLabel: string | null,
+): string | null {
+  if (runState !== "failed") return null;
+  const target = sourceLabel?.trim();
+  return target
+    ? `Could not import ${target}. Check the error above and retry from the import plan.`
+    : "Could not import the selected source. Check the error above and retry from the import plan.";
+}

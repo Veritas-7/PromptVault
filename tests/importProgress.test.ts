@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   importProgressPercent,
+  importRunFailureText,
   importStatusLabel,
   type ImportRunState,
 } from "../src/importProgress.ts";
@@ -87,4 +88,16 @@ test("import status reports failed state first", () => {
   const failed: ImportRunState = "failed";
 
   assert.equal(importStatusLabel(importResult(10, 10, true), failed, "single", false), "Failed");
+});
+
+test("import failure text keeps a failed no-result run visible", () => {
+  assert.equal(
+    importRunFailureText("failed", "Gemini temporary chats"),
+    "Could not import Gemini temporary chats. Check the error above and retry from the import plan.",
+  );
+  assert.equal(
+    importRunFailureText("failed", "  "),
+    "Could not import the selected source. Check the error above and retry from the import plan.",
+  );
+  assert.equal(importRunFailureText("ready", "Gemini temporary chats"), null);
 });

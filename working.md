@@ -423,6 +423,19 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check`: passed after the selected-source queue slice. This covered
   UI tests 16 passed, TypeScript/Vite build, Rust lib 50 passed, CLI 15 passed,
   doc-tests, and clippy with `-D warnings`.
+- Selected-source queue slice committed and pushed:
+  `2a2b87c2429fd59dd5fa6b80980b2991b2d32f4d`
+  (`feat: add selected import queue`).
+- After push, `git rev-list --left-right --count HEAD...origin/main` returned
+  `0 0`.
+- Final queue-slice runtime checks after push:
+  `curl -I http://127.0.0.1:5173/` returned `HTTP/1.0 200 OK`;
+  bridge health returned
+  `{"database_path":"/Users/wj/Documents/PromptVault/promptvault.sqlite","ok":true}`;
+  `surface:11` title/URL remained `PromptVault` and
+  `http://127.0.0.1:5173/`;
+  browser console returned `No console entries`;
+  browser errors returned `No browser errors`.
 
 ## Issues
 

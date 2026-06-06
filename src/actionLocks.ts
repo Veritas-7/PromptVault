@@ -1,6 +1,7 @@
 export interface ActionLockState {
   importRunning: boolean;
   improvementRunning: boolean;
+  planRunning: boolean;
   scanRunning: boolean;
   storedLoadRunning: boolean;
 }
@@ -12,6 +13,7 @@ export interface ExclusiveActionClaim {
 export function topLevelActionLocked(state: ActionLockState): boolean {
   return (
     state.scanRunning ||
+    state.planRunning ||
     state.importRunning ||
     state.storedLoadRunning ||
     state.improvementRunning

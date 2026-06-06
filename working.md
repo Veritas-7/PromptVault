@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 20:31 KST
+Updated: 2026-06-06 20:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1740,6 +1740,30 @@ stability, performance, and maintainability, then record evidence here.
   - Verified `/api/import-states` cursor advanced only one batch to
     `gemini-tmp-chat 86 / 144`.
   - Final diagnostics returned `No console entries` and `No browser errors`.
+- Continued with the next thin slice: make Plan's planning state participate
+  in the same top-level busy lock as scan, import, stored load, and improve.
+- Found that `runPlan` already claimed the exclusive action ref, but
+  `topLevelActionLocked` did not include `planState === "planning"`. That left
+  secondary controls visually enabled during a long Plan request even though
+  their handlers would be rejected by the claim guard.
+- Added `planRunning` to the shared action-lock state so Scan, Load Stored,
+  Stored Vault inputs, panel refresh actions, and import controls are visibly
+  disabled while Plan is loading.
+- `npm run test:ui` passed after this plan-lock slice with 76 tests.
+- `npm run check` passed after this slice: UI tests 76 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?plan-lock=20260606a` on the same
+    PromptVault browser surface.
+  - Installed a page-local monkeypatch delaying only `/api/plan`, clicked
+    `Plan`, and observed `Plan` text change to `Planning`.
+  - While planning, observed `Scan`, `Load Stored`, `Refresh Facets`, Limit,
+    and all Stored Vault filter inputs disabled.
+  - Released the delayed Plan request; the plan rendered in-place and those
+    controls returned to enabled.
+  - Restored `window.fetch`; final diagnostics returned `No console entries`
+    and `No browser errors`.
 
 ## Changes
 
@@ -1875,6 +1899,13 @@ stability, performance, and maintainability, then record evidence here.
   count, total file count, and source label.
 - `tests/importProgress.test.ts`: covers saved cursor progress, result
   precedence, and active-source fallback metadata.
+- `src/actionLocks.ts`: adds `planRunning` to shared top-level and import
+  action lock decisions.
+- `src/App.tsx`: passes `planState === "planning"` into the shared action-lock
+  state so Plan visibly disables other top-level actions during metadata
+  discovery.
+- `tests/actionLocks.test.ts`: covers plan-running locks for top-level and
+  import actions.
 - `src/scanStatus.ts`: adds scan failure copy for first-run and stale-results
   failures, plus scan Stop failure copy.
 - `src/App.tsx`: shows a scan retry warning when a scan fails and clears stale
@@ -2082,6 +2113,10 @@ stability, performance, and maintainability, then record evidence here.
   even though the page loaded. Short `wait`/`eval` commands then worked. The
   real `Run Until Done`/`Stop` QA advanced the Gemini cursor by exactly one
   batch from `81 / 144` to `86 / 144`.
+- During plan-lock QA, the page-local fetch monkeypatch delayed only
+  `/api/plan` on the current `surface:9` page. It was restored inside the same
+  eval after the delayed Plan request completed, and final diagnostics returned
+  clean.
 
 ## Research
 

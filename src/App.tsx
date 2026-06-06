@@ -198,11 +198,13 @@ function App() {
   const importStatesRefreshClaimRef = useRef(false);
   const importEventsRefreshClaimRef = useRef(false);
   const isImportRunning = importState === "importing";
+  const isPlanRunning = planState === "planning";
   const isScanRunning = scanState === "scanning" || scanState === "canceling";
   const isStoredLoadRunning = storedLoadState === "loading";
   const actionLockState = {
     importRunning: isImportRunning,
     improvementRunning: improving,
+    planRunning: isPlanRunning,
     scanRunning: isScanRunning,
     storedLoadRunning: isStoredLoadRunning,
   };

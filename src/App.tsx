@@ -981,6 +981,7 @@ function App() {
           <div className="panel-heading">
             <h2>Saved Import Progress</h2>
             <button
+              aria-label="Refresh saved import progress"
               className="inline-action"
               data-refresh-import-states="true"
               disabled={importStatesState === "loading" || isTopLevelActionLocked}
@@ -1100,6 +1101,7 @@ function App() {
           <div className="panel-heading">
             <h2>Recent Import Activity</h2>
             <button
+              aria-label="Refresh recent import activity"
               className="inline-action"
               data-refresh-import-events="true"
               disabled={importEventsState === "loading" || isTopLevelActionLocked}

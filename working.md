@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 20:56 KST
+Updated: 2026-06-06 21:04 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -422,6 +422,22 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui`: 79 tests passed after making import refresh buttons
+  panel-specific.
+- `npm run build`: TypeScript and Vite production build passed after the
+  refresh-label change.
+- Real cmux duplicate-name QA on the existing `surface:9`: restored cmux by
+  sending Command-period to dismiss the stuck macOS Open dialog, selected
+  `workspace:5`, focused `pane:10`, reloaded
+  `http://127.0.0.1:5173/?refresh-labels=20260606a`, and verified the rendered
+  import refresh buttons expose `Refresh saved import progress` and
+  `Refresh recent import activity`.
+- The same DOM sweep returned no duplicate button names after this slice.
+- Browser diagnostics on the same `surface:9` returned `No console entries`
+  and `No browser errors`.
+- `npm run check`: passed after this refresh-label slice. This covered UI
+  tests 79 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 - `npm run test:ui`: 79 tests passed after adding source-specific row action
   labels.
 - `npm run build`: TypeScript and Vite production build passed after the
@@ -1885,9 +1901,34 @@ stability, performance, and maintainability, then record evidence here.
     `Import one batch from Codex CX`, and `Run Codex CX import until done`.
   - Reloaded the same surface; final diagnostics returned
     `No console entries` and `No browser errors`.
+- Continued with the next thin slice: make duplicate Import panel `Refresh`
+  controls distinguish their target panel for assistive technology.
+- First restored the prior cmux modal blocker by sending Command-period, then
+  selected existing `workspace:5` and focused existing `pane:10`; `surface:9`
+  again reported `PromptVault`, the expected app URL, clean console, and clean
+  browser errors.
+- A rendered DOM sweep after clicking `Plan` showed the only remaining
+  duplicate button name was `Refresh`, shared by Saved Import Progress and
+  Recent Import Activity.
+- Added panel-specific `aria-label` text to those two refresh buttons while
+  preserving the compact visible `Refresh` label.
+- `npm run test:ui && npm run build` passed after this refresh-label slice:
+  UI tests 79 passed and the production Vite bundle built successfully.
+- `npm run check` passed after this slice: UI tests 79 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?refresh-labels=20260606a` on the same
+    PromptVault browser surface.
+  - Observed import refresh controls named `Refresh saved import progress` and
+    `Refresh recent import activity`.
+  - Re-ran the duplicate-name sweep and observed no duplicate button names.
+  - Final diagnostics returned `No console entries` and `No browser errors`.
 
 ## Changes
 
+- `src/App.tsx`: adds panel-specific accessible labels to Saved Import
+  Progress and Recent Import Activity refresh buttons.
 - `src/App.tsx`: adds source-specific accessible labels to each Import Plan
   row's `Import Batch` and `Run Until Done` buttons.
 - `src/importProgress.ts`: adds `importProgressValueText()` for processed/total
@@ -2271,6 +2312,11 @@ stability, performance, and maintainability, then record evidence here.
   macOS Open dialog titled `열기`. Cancel/Escape attempts did not dismiss it
   reliably, so no cmux restart or extra browser was attempted. Treat this as a
   cmux modal diagnostic blocker, not as app evidence.
+- The modal blocker was later cleared without restarting cmux by sending
+  Command-period through Computer Use. After that, `cmux workspace select
+  workspace:5`, `cmux focus-pane --workspace workspace:5 --pane pane:10`,
+  `surface:9` DOM eval, console diagnostics, and browser-error diagnostics all
+  returned normally.
 
 ## Research
 

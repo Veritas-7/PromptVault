@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 23:49 KST
+Updated: 2026-06-06 23:53 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -2622,6 +2622,25 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this source-row lock-reason label slice: UI
   tests 119 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
   passed, doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next low-risk copy polish slice: make failed Import
+  Refresh empty/unavailable text start as a complete sentence even when the
+  source label is lower-case or blank.
+- Added tested Import Refresh unavailable copy so failed panels now announce
+  examples like `Import activity is unavailable. Use Refresh to try again.`
+  and fall back to `Data is unavailable. Use Refresh to try again.` for blank
+  labels.
+- `npm run test:ui -- tests/importRefreshState.test.ts` passed after this
+  Import Refresh unavailable-copy slice; due the package script glob this ran
+  the full UI helper suite and reported 119 passing tests.
+- `npm run build` passed after this Import Refresh unavailable-copy slice and
+  refreshed the static frontend bundle used by `127.0.0.1:5173`.
+- `npm run check` passed after this Import Refresh unavailable-copy slice: UI
+  tests 119 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
+  passed, doc-tests passed, and clippy passed with `-D warnings`.
+- cmux direct QA remained blocked after this Import Refresh unavailable-copy
+  slice: frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health`
+  returned `ok:true`, `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
 
 ## Changes
 
@@ -2939,6 +2958,11 @@ stability, performance, and maintainability, then record evidence here.
 - `tests/sourceStatusA11y.test.ts`: covers scan-running, import-running, and
   stored-load-running source-row lock labels while preserving empty-source
   precedence.
+- `src/importRefreshState.ts`: normalizes failed unavailable-copy labels to a
+  sentence-start form and falls back to `Data` when a caller passes a blank
+  label.
+- `tests/importRefreshState.test.ts`: covers lower-case failed labels and the
+  blank-label fallback while keeping loading copy unchanged.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -3228,6 +3252,11 @@ stability, performance, and maintainability, then record evidence here.
   tests plus the full project gate until safe same-surface cmux control
   recovers.
 - During the source-row lock-reason label slice, cmux app health and both
+  PromptVault services remained green, but direct `surface:9` title probing
+  still timed out with exit `124`. The slice is verified by focused UI helper
+  tests plus the full project gate until safe same-surface cmux control
+  recovers.
+- During the Import Refresh unavailable-copy slice, cmux app health and both
   PromptVault services remained green, but direct `surface:9` title probing
   still timed out with exit `124`. The slice is verified by focused UI helper
   tests plus the full project gate until safe same-surface cmux control

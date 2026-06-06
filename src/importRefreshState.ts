@@ -5,7 +5,14 @@ export function importRefreshFailureText(state: ImportRefreshState, label: strin
   return `Could not refresh ${label}. Existing data may be stale.`;
 }
 
+function sentenceStart(label: string): string {
+  const trimmed = label.trim();
+  if (!trimmed) return "Data";
+  return `${trimmed[0].toUpperCase()}${trimmed.slice(1)}`;
+}
+
 export function importRefreshUnavailableText(state: ImportRefreshState, label: string): string {
-  if (state === "failed") return `${label} is unavailable. Use Refresh to try again.`;
+  const target = sentenceStart(label);
+  if (state === "failed") return `${target} is unavailable. Use Refresh to try again.`;
   return `Loading ${label}.`;
 }

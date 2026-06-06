@@ -21,6 +21,10 @@ test("import refresh unavailable text differentiates loading and failed states",
   assert.equal(importRefreshUnavailableText(loading, "import activity"), "Loading import activity.");
   assert.equal(
     importRefreshUnavailableText(failed, "import activity"),
-    "import activity is unavailable. Use Refresh to try again.",
+    "Import activity is unavailable. Use Refresh to try again.",
+  );
+  assert.equal(
+    importRefreshUnavailableText(failed, "  "),
+    "Data is unavailable. Use Refresh to try again.",
   );
 });

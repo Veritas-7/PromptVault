@@ -36,6 +36,22 @@ export function planActionLabel(planState: PlanRunState, lockState: ActionLockSt
   return planState === "failed" ? "Retry import source plan" : "Plan import sources";
 }
 
+export function planPanelActionLabel(
+  planState: PlanRunState,
+  hasPlan: boolean,
+  lockState: ActionLockState,
+): string {
+  if (planState === "planning") {
+    return hasPlan ? "Refreshing import source plan" : "Planning import sources";
+  }
+
+  const action = hasPlan ? "refresh import source plan" : "retry import source plan";
+  const reason = activeActionLockReason(lockState);
+  if (reason) return `Cannot ${action} while ${reason}`;
+
+  return hasPlan ? "Refresh import source plan" : "Retry import source plan";
+}
+
 export function previewModeActionLabel(
   targetMode: PreviewMode,
   currentMode: PreviewMode,

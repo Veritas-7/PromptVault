@@ -111,6 +111,7 @@ import {
 } from "./storedFacetStatus";
 import {
   planActionLabel,
+  planPanelActionLabel,
   previewModeActionLabel,
   scanActionLabel,
   scanLimitInputLabel,
@@ -1266,6 +1267,7 @@ function App() {
               </span>
               <button
                 className="inline-action"
+                aria-label={planPanelActionLabel(planState, Boolean(plan), actionLockState)}
                 data-refresh-plan="true"
                 disabled={planState === "planning" || isTopLevelActionLocked}
                 onClick={runPlan}

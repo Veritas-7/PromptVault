@@ -4,6 +4,7 @@ import type { ActionLockState } from "../src/actionLocks.ts";
 import {
   activeActionLockReason,
   planActionLabel,
+  planPanelActionLabel,
   previewModeActionLabel,
   scanActionLabel,
   scanLimitInputLabel,
@@ -69,6 +70,23 @@ test("plan action label explains planning, failed, and locked states", () => {
   assert.equal(
     planActionLabel("ready", lockState({ storedLoadRunning: true })),
     "Cannot plan import sources while stored prompts are loading",
+  );
+});
+
+test("plan panel action label explains refresh, retry, and locked states", () => {
+  assert.equal(planPanelActionLabel("ready", true, lockState()), "Refresh import source plan");
+  assert.equal(planPanelActionLabel("failed", false, lockState()), "Retry import source plan");
+  assert.equal(
+    planPanelActionLabel("planning", true, lockState({ planRunning: true })),
+    "Refreshing import source plan",
+  );
+  assert.equal(
+    planPanelActionLabel("ready", true, lockState({ importRunning: true })),
+    "Cannot refresh import source plan while an import is running",
+  );
+  assert.equal(
+    planPanelActionLabel("failed", false, lockState({ scanRunning: true })),
+    "Cannot retry import source plan while a scan is running",
   );
 });
 

@@ -433,6 +433,24 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui -- tests/topActionLabels.test.ts`: passed; due the
+  package script glob this ran the full UI helper suite and reported 112
+  passing tests, including the new Import Plan panel label coverage.
+- First same-surface cmux plan-panel label probe on the existing `surface:9`
+  returned `missing` because `http://127.0.0.1:5173/` is the static `dist`
+  server in this session, not a Vite HMR dev server. Source changes were not
+  visible until the production bundle was rebuilt.
+- `npm run build`: TypeScript and Vite production build passed and refreshed
+  the static frontend bundle used by the existing cmux browser.
+- Same-surface cmux Import Plan panel QA on the existing `surface:9`: loaded
+  `http://127.0.0.1:5173/?plan-panel-labels=20260606b`, clicked
+  `[data-run-plan=true]`, waited for `[data-refresh-plan=true]`, and verified
+  its `aria-label` is `Refresh import source plan`.
+- Browser diagnostics on the same `surface:9` returned `No console entries`
+  and `No browser errors` after the plan-panel label QA.
+- `npm run check`: passed after the plan-panel label slice. This covered UI
+  tests 112 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 - `npm run test:ui -- tests/panelRefresh.test.ts`: first run failed because
   `panelRefresh.ts` imported `activeActionLockReason` as a runtime
   extensionless TS import, which Node's test loader could not resolve. The
@@ -2402,6 +2420,26 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this panel-refresh label slice: UI tests 111
   passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
   doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make the Import Plan panel's
+  `Refresh Plan` / `Retry Plan` action expose state-aware accessible names
+  while keeping the compact visual button text.
+- Added tested panel-plan labels so ready existing-plan state announces
+  `Refresh import source plan`, failed no-plan state announces
+  `Retry import source plan`, planning refresh announces
+  `Refreshing import source plan`, and locked states explain the active
+  blocking operation.
+- Recovered the existing PromptVault `surface:9` without opening another
+  browser or restarting cmux. Computer Use still showed the visible cmux window
+  on another workspace, but direct `surface:9` title/url/console/error checks
+  returned `PromptVault`, the PromptVault URL, `No console entries`, and
+  `No browser errors`.
+- Real cmux QA on the existing `surface:9` loaded the rebuilt static app at
+  `http://127.0.0.1:5173/?plan-panel-labels=20260606b`, clicked `Plan`, and
+  verified the panel button exposes `Refresh import source plan`. Browser
+  console and browser-error diagnostics returned clean.
+- `npm run check` passed after this plan-panel label slice: UI tests 112
+  passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2664,6 +2702,12 @@ stability, performance, and maintainability, then record evidence here.
   errors during quiet background refreshes.
 - `tests/panelRefresh.test.ts`: covers manual refresh success clearing stale
   global errors and quiet refresh success preserving existing errors.
+- `src/topActionLabels.ts`: adds `planPanelActionLabel()` for Import Plan
+  panel refresh/retry button ready, planning, and locked states.
+- `src/App.tsx`: applies the new Import Plan panel action `aria-label` to
+  `[data-refresh-plan=true]`.
+- `tests/topActionLabels.test.ts`: covers refresh, retry, planning refresh,
+  and locked Import Plan panel labels.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -2912,6 +2956,16 @@ stability, performance, and maintainability, then record evidence here.
   `current-workspace`, and `surface-health` all timed out while `cmux ping`
   still returned `PONG`, no macOS dialog title appeared, and frontend/bridge
   health stayed OK. No cmux app restart, kill, or second browser was used.
+- At the start of the plan-panel label slice, Computer Use still showed the
+  visible cmux window on the unrelated `working.md` workspace. A coordinate
+  click on the `프롬프트` sidebar row failed with `noWindowsAvailable`, and
+  `cmux workspace select workspace:5` returned `OK` without changing the
+  visible workspace. Direct `surface:9` title/url/console/errors commands did
+  recover cleanly, so the same existing PromptVault browser remained usable
+  without a cmux restart or second browser.
+- The current frontend on `127.0.0.1:5173` is a static server for `dist`.
+  Source-only React changes are not visible to cmux QA until `npm run build`
+  refreshes the production bundle.
 
 ## Research
 

@@ -6,7 +6,19 @@ import {
   selectedQueueSourceIds,
   toggleSourceSelection,
 } from "../src/importQueue.ts";
+import type { ActionLockState } from "../src/actionLocks.ts";
 import type { SourcePlan } from "../src/types.ts";
+
+function lockState(overrides: Partial<ActionLockState> = {}): ActionLockState {
+  return {
+    importRunning: false,
+    improvementRunning: false,
+    planRunning: false,
+    scanRunning: false,
+    storedLoadRunning: false,
+    ...overrides,
+  };
+}
 
 function source(id: string, fileCount: number): SourcePlan {
   return {
@@ -36,16 +48,34 @@ test("queue keeps selected order and skips unavailable sources", () => {
 });
 
 test("queue action label explains disabled zero-selection state", () => {
-  assert.equal(importQueueActionLabel(0, false), "Select import sources before running queue");
+  assert.equal(importQueueActionLabel(0, false, lockState()), "Select import sources before running queue");
+  assert.equal(
+    importQueueActionLabel(0, false, lockState({ scanRunning: true })),
+    "Select import sources before running queue",
+  );
 });
 
 test("queue action label includes selected source count", () => {
-  assert.equal(importQueueActionLabel(1, false), "Run 1 selected import source");
-  assert.equal(importQueueActionLabel(2, false), "Run 2 selected import sources");
+  assert.equal(importQueueActionLabel(1, false, lockState()), "Run 1 selected import source");
+  assert.equal(importQueueActionLabel(2, false, lockState()), "Run 2 selected import sources");
 });
 
 test("queue action label announces running queue state", () => {
-  assert.equal(importQueueActionLabel(3, true), "Running import queue for 3 selected sources");
+  assert.equal(
+    importQueueActionLabel(3, true, lockState({ importRunning: true })),
+    "Running import queue for 3 selected sources",
+  );
+});
+
+test("queue action label explains top-level lock reasons", () => {
+  assert.equal(
+    importQueueActionLabel(2, false, lockState({ scanRunning: true })),
+    "Cannot run selected import sources while a scan is running",
+  );
+  assert.equal(
+    importQueueActionLabel(2, false, lockState({ storedLoadRunning: true })),
+    "Cannot run selected import sources while stored prompts are loading",
+  );
 });
 
 test("queue final state treats stop after final source completion as ready", () => {

@@ -1320,6 +1320,7 @@ function App() {
                   aria-label={importQueueActionLabel(
                     selectedImportQueueSourceIds.length,
                     isImportRunning && importMode === "queue",
+                    actionLockState,
                   )}
                   className="inline-action"
                   data-import-selected="true"

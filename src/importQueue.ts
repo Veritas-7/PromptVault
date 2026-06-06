@@ -1,3 +1,4 @@
+import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import type { SourcePlan } from "./types";
 
 export type ImportQueueFinalRunState = "ready" | "stopped";
@@ -28,7 +29,11 @@ export function selectedQueueSourceIds(
   return selectedSourceIds.filter((sourceId) => availableSourceIds.has(sourceId));
 }
 
-export function importQueueActionLabel(selectedSourceCount: number, isRunning: boolean): string {
+export function importQueueActionLabel(
+  selectedSourceCount: number,
+  isRunning: boolean,
+  lockState: ActionLockState,
+): string {
   const boundedSelectedSourceCount = Math.max(0, selectedSourceCount);
   const sourceText = boundedSelectedSourceCount === 1 ? "source" : "sources";
   if (isRunning) {
@@ -36,6 +41,10 @@ export function importQueueActionLabel(selectedSourceCount: number, isRunning: b
   }
   if (boundedSelectedSourceCount === 0) {
     return "Select import sources before running queue";
+  }
+  const actionLockReason = activeActionLockReason(lockState);
+  if (actionLockReason) {
+    return `Cannot run selected import sources while ${actionLockReason}`;
   }
   return `Run ${boundedSelectedSourceCount.toLocaleString()} selected import ${sourceText}`;
 }

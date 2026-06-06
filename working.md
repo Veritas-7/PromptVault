@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 23:36 KST
+Updated: 2026-06-06 23:42 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -484,6 +484,18 @@ stability, performance, and maintainability, then record evidence here.
   covered UI tests 115 passed, TypeScript/Vite build, Rust lib 64 passed, CLI
   15 passed, doc-tests, and clippy with `-D warnings`.
 - cmux direct QA remained blocked after the Stored Vault lock-reason label
+  slice: frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health`
+  returned `ok:true`, `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
+- `npm run test:ui -- tests/importQueue.test.ts`: passed; due the package
+  script glob this ran the full UI helper suite and reported 116 passing tests,
+  including the new Import Queue lock-reason label coverage.
+- `npm run build`: TypeScript and Vite production build passed and refreshed
+  the static frontend bundle for the Import Queue lock-reason label slice.
+- `npm run check`: passed after the Import Queue lock-reason label slice. This
+  covered UI tests 116 passed, TypeScript/Vite build, Rust lib 64 passed, CLI
+  15 passed, doc-tests, and clippy with `-D warnings`.
+- cmux direct QA remained blocked after the Import Queue lock-reason label
   slice: frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health`
   returned `ok:true`, `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
@@ -2574,6 +2586,17 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this Stored Vault lock-reason label slice: UI
   tests 115 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
   passed, doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make the Import Plan `Run Selected`
+  queue action explain the specific active lock reason when selected sources
+  are available but another top-level operation blocks queue start.
+- Added tested Import Queue lock-reason labels so selected queues still
+  announce `Run 1 selected import source` / `Run N selected import sources`
+  when ready, keep `Select import sources before running queue` for empty
+  selection, and announce examples like
+  `Cannot run selected import sources while a scan is running` when blocked.
+- `npm run check` passed after this Import Queue lock-reason label slice: UI
+  tests 116 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
+  passed, doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2874,6 +2897,14 @@ stability, performance, and maintainability, then record evidence here.
   Vault Reset, Apply, and filter input label helpers.
 - `tests/storedFilters.test.ts`: covers import-running, scan-running,
   stored-load-running, and improvement-running Stored Vault lock labels.
+- `src/importQueue.ts`: now uses `activeActionLockReason()` so the Import Plan
+  `Run Selected` queue action names the specific blocking operation when
+  selected sources exist but queue start is locked.
+- `src/App.tsx`: passes the full top-level `actionLockState` into
+  `importQueueActionLabel()`.
+- `tests/importQueue.test.ts`: covers empty-selection precedence, ready/running
+  queue labels, and scan-running / stored-load-running Import Queue lock
+  labels.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -3157,6 +3188,11 @@ stability, performance, and maintainability, then record evidence here.
   PromptVault services remained green, but direct `surface:9` title probing
   still timed out. The slice is verified by focused UI helper tests plus the
   full project gate until safe same-surface cmux control recovers.
+- During the Import Queue lock-reason label slice, cmux app health and both
+  PromptVault services remained green, but direct `surface:9` title probing
+  still timed out with exit `124`. The slice is verified by focused UI helper
+  tests plus the full project gate until safe same-surface cmux control
+  recovers.
 
 ## Research
 

@@ -36,6 +36,7 @@ import {
 } from "./importProgress";
 import { importRefreshFailureText, importRefreshUnavailableText } from "./importRefreshState";
 import { selectedQueueSourceIds, toggleSourceSelection } from "./importQueue";
+import { planFailureText, planUnavailableText, type PlanRunState } from "./planStatus";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
 import {
   promptListEmptyText,
@@ -81,7 +82,6 @@ import type {
 } from "./types";
 
 type ScanState = "idle" | "scanning" | "canceling" | "ready" | "failed";
-type PlanState = "idle" | "planning" | "ready" | "failed";
 type StoredLoadState = "idle" | "loading" | "ready" | "failed";
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
@@ -141,7 +141,7 @@ function formatBytes(bytes: number): string {
 function App() {
   const browserQaMode = isBrowserQaMode();
   const [scanState, setScanState] = useState<ScanState>("idle");
-  const [planState, setPlanState] = useState<PlanState>("idle");
+  const [planState, setPlanState] = useState<PlanRunState>("idle");
   const [storedLoadState, setStoredLoadState] = useState<StoredLoadState>("idle");
   const [importState, setImportState] = useState<ImportRunState>("idle");
   const [importStatesState, setImportStatesState] = useState<ImportStatesState>("idle");
@@ -201,6 +201,7 @@ function App() {
     importEventsState,
     "import activity",
   );
+  const planFailureMessage = planFailureText(planState, plan !== null);
 
   const prompts = result?.prompts ?? [];
   const promptListMode = effectivePromptListMode(result?.preview_sort, previewMode);
@@ -990,100 +991,132 @@ function App() {
         </section>
       ) : null}
 
-      {plan ? (
+      {plan || planState === "planning" || planFailureMessage ? (
         <section className="panel plan-panel">
           <div className="panel-heading">
             <h2>Import Plan</h2>
-            <span>{new Date(plan.generated_at).toLocaleString()}</span>
-          </div>
-          <div className="plan-summary">
-            <div>
-              <span>Sources</span>
-              <strong>
-                {plan.available_sources} / {plan.total_sources}
-              </strong>
-            </div>
-            <div>
-              <span>Files</span>
-              <strong>{plan.total_files.toLocaleString()}</strong>
-            </div>
-            <div>
-              <span>Size</span>
-              <strong>{formatBytes(plan.total_bytes)}</strong>
-            </div>
-            <div>
-              <span>Large Files</span>
-              <strong>{plan.large_file_count.toLocaleString()}</strong>
+            <div className="panel-heading-actions">
+              <span data-plan-status="true">
+                {plan
+                  ? new Date(plan.generated_at).toLocaleString()
+                  : planState === "planning"
+                    ? "planning"
+                    : "failed"}
+              </span>
+              <button
+                className="inline-action"
+                data-refresh-plan="true"
+                disabled={planState === "planning" || isTopLevelActionLocked}
+                onClick={runPlan}
+                type="button"
+              >
+                <ClipboardList size={15} />
+                {planState === "planning" ? "Planning" : plan ? "Refresh Plan" : "Retry Plan"}
+              </button>
             </div>
           </div>
-          <div className="plan-toolbar">
-            <span>{selectedImportQueueSourceIds.length.toLocaleString()} selected</span>
-            <button
-              className="inline-action"
-              data-import-selected="true"
-              disabled={isImportActionLocked || selectedImportQueueSourceIds.length === 0}
-              onClick={runSelectedImportQueue}
-              type="button"
-            >
-              <Play size={15} />
-              {isImportRunning && importMode === "queue" ? "Running Queue" : "Run Selected"}
-            </button>
-          </div>
-          <div className="plan-sources">
-            {plan.sources.map((source) => (
-              <div className="plan-source-row" key={source.id}>
-                <div className="plan-source-main">
-                  <label className="source-select">
-                    <input
-                      checked={selectedImportSourceIds.includes(source.id)}
-                      data-select-source-id={source.id}
-                      disabled={isImportActionLocked || source.file_count === 0}
-                      onChange={(event) => {
-                        const checked = event.currentTarget.checked;
-                        setSelectedImportSourceIds((current) =>
-                          toggleSourceSelection(current, source.id, checked),
-                        );
-                      }}
-                      type="checkbox"
-                    />
-                    <strong>{source.label}</strong>
-                  </label>
-                  <span>{source.root_path}</span>
-                  {source.notes.length ? <span className="source-meta">{source.notes.join(" ")}</span> : null}
+          {planFailureMessage ? (
+            <div className="notice warning panel-notice" data-plan-run-error="true">
+              <AlertTriangle size={18} />
+              <span>{planFailureMessage}</span>
+            </div>
+          ) : null}
+          {plan ? (
+            <>
+              <div className="plan-summary">
+                <div>
+                  <span>Sources</span>
+                  <strong>
+                    {plan.available_sources} / {plan.total_sources}
+                  </strong>
                 </div>
-                <div className={`status ${source.status}`}>
-                  {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-                  {source.file_count.toLocaleString()} · {formatBytes(source.byte_count)}
+                <div>
+                  <span>Files</span>
+                  <strong>{plan.total_files.toLocaleString()}</strong>
                 </div>
-                <div className="plan-source-actions">
-                  <button
-                    className="inline-action"
-                    data-import-source-id={source.id}
-                    disabled={isImportActionLocked || source.file_count === 0}
-                    onClick={() => runImportBatch(source.id, "single")}
-                    type="button"
-                  >
-                    <RefreshCw size={15} />
-                    {isImportRunning && activeImportSourceId === source.id && importMode === "single"
-                      ? "Importing"
-                      : "Import Batch"}
-                  </button>
-                  <button
-                    className="inline-action"
-                    data-import-continuous-source-id={source.id}
-                    disabled={isImportActionLocked || source.file_count === 0}
-                    onClick={() => runImportBatch(source.id, "continuous")}
-                    type="button"
-                  >
-                    <Play size={15} />
-                    {isImportRunning && activeImportSourceId === source.id && importMode === "continuous"
-                      ? "Running"
-                      : "Run Until Done"}
-                  </button>
+                <div>
+                  <span>Size</span>
+                  <strong>{formatBytes(plan.total_bytes)}</strong>
+                </div>
+                <div>
+                  <span>Large Files</span>
+                  <strong>{plan.large_file_count.toLocaleString()}</strong>
                 </div>
               </div>
-            ))}
-          </div>
+              <div className="plan-toolbar">
+                <span>{selectedImportQueueSourceIds.length.toLocaleString()} selected</span>
+                <button
+                  className="inline-action"
+                  data-import-selected="true"
+                  disabled={isImportActionLocked || selectedImportQueueSourceIds.length === 0}
+                  onClick={runSelectedImportQueue}
+                  type="button"
+                >
+                  <Play size={15} />
+                  {isImportRunning && importMode === "queue" ? "Running Queue" : "Run Selected"}
+                </button>
+              </div>
+              <div className="plan-sources">
+                {plan.sources.map((source) => (
+                  <div className="plan-source-row" key={source.id}>
+                    <div className="plan-source-main">
+                      <label className="source-select">
+                        <input
+                          checked={selectedImportSourceIds.includes(source.id)}
+                          data-select-source-id={source.id}
+                          disabled={isImportActionLocked || source.file_count === 0}
+                          onChange={(event) => {
+                            const checked = event.currentTarget.checked;
+                            setSelectedImportSourceIds((current) =>
+                              toggleSourceSelection(current, source.id, checked),
+                            );
+                          }}
+                          type="checkbox"
+                        />
+                        <strong>{source.label}</strong>
+                      </label>
+                      <span>{source.root_path}</span>
+                      {source.notes.length ? <span className="source-meta">{source.notes.join(" ")}</span> : null}
+                    </div>
+                    <div className={`status ${source.status}`}>
+                      {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                      {source.file_count.toLocaleString()} · {formatBytes(source.byte_count)}
+                    </div>
+                    <div className="plan-source-actions">
+                      <button
+                        className="inline-action"
+                        data-import-source-id={source.id}
+                        disabled={isImportActionLocked || source.file_count === 0}
+                        onClick={() => runImportBatch(source.id, "single")}
+                        type="button"
+                      >
+                        <RefreshCw size={15} />
+                        {isImportRunning && activeImportSourceId === source.id && importMode === "single"
+                          ? "Importing"
+                          : "Import Batch"}
+                      </button>
+                      <button
+                        className="inline-action"
+                        data-import-continuous-source-id={source.id}
+                        disabled={isImportActionLocked || source.file_count === 0}
+                        onClick={() => runImportBatch(source.id, "continuous")}
+                        type="button"
+                      >
+                        <Play size={15} />
+                        {isImportRunning && activeImportSourceId === source.id && importMode === "continuous"
+                          ? "Running"
+                          : "Run Until Done"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="empty compact" data-empty-plan="true">
+              {planUnavailableText(planState)}
+            </div>
+          )}
         </section>
       ) : null}
 

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 18:48 KST
+Updated: 2026-06-06 18:53 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1327,6 +1327,34 @@ stability, performance, and maintainability, then record evidence here.
     longer shown on the fresh page, and final diagnostics were clean.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: keep the Import Plan panel visible when
+  plan creation fails before any plan data exists.
+- Found that a first-request `planScan` failure set `planState` to `failed`,
+  but the Import Plan panel only rendered when `plan` existed. That left only
+  the global bridge error and hid retry-oriented plan context.
+- Added plan status copy coverage for missing-plan failures, stale-plan
+  failures, loading text, failed unavailable text, and idle guidance.
+- `npm run test:ui` passed after this plan-failure slice with 47 tests.
+- `npm run check` passed after this plan-failure slice: UI tests 47 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?plan-failure=20260606a`.
+  - Installed a page-local fetch monkeypatch that rejected only `/api/plan`,
+    then clicked `Plan`.
+  - Observed the no-plan failure panel stayed visible with status `failed`,
+    `Retry Plan`, empty text `Import plan is unavailable. Use Plan to retry.`,
+    and in-panel copy:
+    `Could not create an import plan. Check the error above and use Plan to retry.`
+  - Restored the original fetch in the same page and clicked the panel-level
+    `Retry Plan` button.
+  - Observed a real plan recover in-place with `11` source rows, first source
+    `Codex`, no plan warning, no global error, and the panel button changed to
+    `Refresh Plan`.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1407,6 +1435,10 @@ stability, performance, and maintainability, then record evidence here.
   imports and shows in-panel retry guidance with the active source label.
 - `tests/importProgress.test.ts`: covers import-run failure copy for named,
   unknown, and non-failed states.
+- `src/planStatus.ts`: adds plan failure and unavailable-state copy helpers.
+- `src/App.tsx`: keeps the Import Plan panel visible while planning or after a
+  no-data plan failure, and adds a panel-level retry/refresh Plan action.
+- `tests/planStatus.test.ts`: covers plan failure and unavailable-state copy.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1512,6 +1544,10 @@ stability, performance, and maintainability, then record evidence here.
   global bridge error and the new in-panel import failure guidance; the recovery
   reload had no warning, no top-level error, no console entries, and no browser
   errors.
+- During plan-failure QA, the page-local fetch monkeypatch affected only
+  `/api/plan` on the current `surface:9` page. Restoring `window.fetch` and
+  clicking the new panel-level `Retry Plan` button recovered the plan in-place
+  without a page reload or a second browser.
 
 ## Research
 
@@ -1530,4 +1566,5 @@ stability, performance, and maintainability, then record evidence here.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
 5. Continue reviewing remaining empty and failure states in secondary panels,
-   especially any retry flows that still rely only on the global error notice.
+   especially scan/load/improve retry flows that still rely mostly on the
+   global error notice.

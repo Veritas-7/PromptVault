@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 18:53 KST
+Updated: 2026-06-06 18:59 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1355,6 +1355,39 @@ stability, performance, and maintainability, then record evidence here.
     `Refresh Plan`.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: make Stored Vault prompt-load failures
+  visible inside the Stored Vault panel.
+- Found that `/api/prompts` failures from the top-level `Load Stored` or Stored
+  Vault `Apply` path set `storedLoadState` to `failed`, but the Stored Vault
+  panel had no load-specific warning. The user only saw the global bridge
+  error.
+- Added stored-load failure copy coverage for no-filter failures, active-filter
+  failures, and non-failed states.
+- `npm run test:ui` passed after this stored-load-failure slice with 49 tests.
+- `npm run check` passed after this stored-load-failure slice: UI tests 49
+  passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?stored-load-failure=20260606a`.
+  - Installed a page-local fetch monkeypatch that rejected only `/api/prompts`,
+    then clicked Stored Vault `Apply`.
+  - Observed the no-filter Stored Vault warning
+    `Could not load stored prompts. Check the error above and retry.`
+  - Reloaded the same surface at
+    `http://127.0.0.1:5173/?stored-load-failure=20260606b`, set the Stored
+    Vault text filter to `cmux`, installed the same `/api/prompts` monkeypatch,
+    and clicked `Apply`.
+  - Observed the filter-aware Stored Vault warning
+    `Could not load stored prompts with the current filters. Check the error above, adjust filters, or retry.`
+    with the `cmux` filter value preserved and Apply re-enabled.
+  - Restored the original fetch in the same page and clicked `Apply` again.
+  - Observed recovery in-place: the warning and global error cleared, the
+    `cmux` filter remained, 200 prompt rows loaded, and the DB notice showed
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 88,378 · new 0 · updated 0`.
+  - Browser console and error diagnostics timed out once after recovery, then a
+    retry returned `No console entries` and `No browser errors`.
 
 ## Changes
 
@@ -1439,6 +1472,11 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx`: keeps the Import Plan panel visible while planning or after a
   no-data plan failure, and adds a panel-level retry/refresh Plan action.
 - `tests/planStatus.test.ts`: covers plan failure and unavailable-state copy.
+- `src/storedLoadStatus.ts`: adds Stored Vault load failure copy for filtered
+  and unfiltered load failures.
+- `src/App.tsx`: shows a Stored Vault in-panel warning when stored prompt loads
+  fail.
+- `tests/storedLoadStatus.test.ts`: covers stored-load failure copy.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1548,6 +1586,12 @@ stability, performance, and maintainability, then record evidence here.
   `/api/plan` on the current `surface:9` page. Restoring `window.fetch` and
   clicking the new panel-level `Retry Plan` button recovered the plan in-place
   without a page reload or a second browser.
+- During stored-load-failure QA, the page-local fetch monkeypatch affected only
+  `/api/prompts` on the current `surface:9` page. Directly setting an input
+  `.value` did not update React state; using the native input setter plus an
+  `input` event preserved the `cmux` filter for the filtered-failure proof.
+  Console/errors diagnostics timed out once after recovery, then succeeded on
+  retry with clean results.
 
 ## Research
 
@@ -1566,5 +1610,5 @@ stability, performance, and maintainability, then record evidence here.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
 5. Continue reviewing remaining empty and failure states in secondary panels,
-   especially scan/load/improve retry flows that still rely mostly on the
+   especially scan/improve retry flows that still rely mostly on the
    global error notice.

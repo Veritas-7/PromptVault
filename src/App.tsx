@@ -58,6 +58,7 @@ import {
 } from "./promptVaultApi";
 import { MAX_SCAN_LIMIT, parseRequiredScanLimit } from "./scanLimit";
 import { selectedPromptForView } from "./selection";
+import { storedLoadFailureText, type StoredLoadState } from "./storedLoadStatus";
 import {
   activeStoredPromptFilterCount,
   storedPromptLoadOptions,
@@ -82,7 +83,6 @@ import type {
 } from "./types";
 
 type ScanState = "idle" | "scanning" | "canceling" | "ready" | "failed";
-type StoredLoadState = "idle" | "loading" | "ready" | "failed";
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
@@ -250,6 +250,7 @@ function App() {
     query,
   );
   const storedFilterCount = activeStoredPromptFilterCount(storedFilters);
+  const storedLoadFailureMessage = storedLoadFailureText(storedLoadState, storedFilterCount);
   const storedSourceSuggestions = useMemo(() => {
     const sourceLabels = storedFacetsResult?.sources.map((source) => source.text)
       ?? (result?.stats.source_summaries ?? []).map((source) => source.label);
@@ -720,6 +721,12 @@ function App() {
           <div className="notice warning panel-notice" data-stored-facets-refresh-error="true">
             <AlertTriangle size={18} />
             <span>{storedFacetsFailureMessage}</span>
+          </div>
+        ) : null}
+        {storedLoadFailureMessage ? (
+          <div className="notice warning panel-notice" data-stored-load-error="true">
+            <AlertTriangle size={18} />
+            <span>{storedLoadFailureMessage}</span>
           </div>
         ) : null}
         <form

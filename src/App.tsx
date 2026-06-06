@@ -61,6 +61,11 @@ import {
   storedPromptLoadOptions,
   type StoredPromptFilters,
 } from "./storedFilters";
+import {
+  storedFacetSummaryText,
+  storedFacetsFailureText,
+  type StoredFacetsState,
+} from "./storedFacetStatus";
 import type {
   ImportBatchResult,
   ImportEventsResult,
@@ -79,7 +84,6 @@ type PlanState = "idle" | "planning" | "ready" | "failed";
 type StoredLoadState = "idle" | "loading" | "ready" | "failed";
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
-type StoredFacetsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
 const IMPORT_BATCH_FILES = 5;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
@@ -254,13 +258,12 @@ function App() {
   const storedWorkspaceSuggestions = useMemo(() => {
     return storedFacetsResult?.workspaces.map((workspace) => workspace.text) ?? [];
   }, [storedFacetsResult?.workspaces]);
-  const storedFacetSummary = storedFacetsResult
-    ? `${storedFacetsResult.total_prompts.toLocaleString()} stored, ${storedFacetsResult.sources.length.toLocaleString()} sources, ${storedFacetsResult.dates.length.toLocaleString()} dates, ${storedFacetsResult.workspaces.length.toLocaleString()} workspaces`
-    : storedFacetsState === "loading"
-      ? "loading stored facets"
-      : storedFilterCount
-        ? `${storedFilterCount} filters active`
-        : "all stored prompts";
+  const storedFacetsFailureMessage = storedFacetsFailureText(storedFacetsState);
+  const storedFacetSummary = storedFacetSummaryText(
+    storedFacetsState,
+    storedFilterCount,
+    storedFacetsResult,
+  );
   const displayDatabasePath =
     result?.persistence?.database_path ?? storedFacetsResult?.database_path ?? "database not updated";
   const displayStoredPromptCount =
@@ -693,8 +696,26 @@ function App() {
       <section className="panel stored-filter-panel">
         <div className="panel-heading">
           <h2>Stored Vault</h2>
-          <span>{storedFacetSummary}</span>
+          <div className="panel-heading-actions">
+            <span data-stored-facet-summary="true">{storedFacetSummary}</span>
+            <button
+              className="inline-action"
+              data-refresh-stored-facets="true"
+              disabled={storedFacetsState === "loading" || isTopLevelActionLocked}
+              onClick={() => refreshStoredFacets()}
+              type="button"
+            >
+              <RefreshCw size={15} />
+              {storedFacetsState === "loading" ? "Loading" : "Refresh Facets"}
+            </button>
+          </div>
         </div>
+        {storedFacetsFailureMessage ? (
+          <div className="notice warning panel-notice" data-stored-facets-refresh-error="true">
+            <AlertTriangle size={18} />
+            <span>{storedFacetsFailureMessage}</span>
+          </div>
+        ) : null}
         <form
           className="stored-filter-grid"
           data-stored-filter-form="true"

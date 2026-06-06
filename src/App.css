@@ -629,6 +629,26 @@ h3 {
   white-space: nowrap;
 }
 
+.panel-heading-actions {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 10px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.panel-heading-actions > span {
+  color: #778177;
+  flex: 1;
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sources,
 .prompt-list {
   overflow: auto;

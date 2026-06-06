@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 18:37 KST
+Updated: 2026-06-06 18:44 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1266,6 +1266,38 @@ stability, performance, and maintainability, then record evidence here.
     `1`, and top-level error cleared.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: make Stored Vault facet refresh failures
+  visible inside the Stored Vault panel.
+- Found that `refreshStoredFacets` could set the facet state to `failed`
+  without an in-panel warning. If no facet result existed, the header could
+  fall back to normal stored-filter summary copy, masking unavailable facet
+  suggestions.
+- Added stored facet status copy coverage for failed refreshes, loading state,
+  filtered failed state, and successful loaded facet summaries.
+- `npm run test:ui` passed after this stored-facet-failure slice with 44 tests.
+- `npm run check` passed after this stored-facet-failure slice: UI tests 44
+  passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?stored-facets-failure=20260606a`.
+  - Confirmed normal Stored Vault facet state first:
+    `88,378 stored, 10 sources, 50 dates, 50 workspaces`, no warning, and
+    `Refresh Facets` button rendered.
+  - Installed a page-local fetch monkeypatch that rejected only
+    `/api/prompt-facets`, then clicked `Refresh Facets`.
+  - Observed the in-panel warning
+    `Could not refresh stored facets. Filter suggestions may be stale.`
+  - Confirmed the refresh button re-enabled and the prior facet summary stayed
+    visible instead of reverting to misleading normal fallback copy.
+  - Reloaded the same surface at
+    `http://127.0.0.1:5173/?stored-facets-failure=20260606b` to remove the
+    test-only fetch monkeypatch.
+  - Confirmed the warning and top-level error cleared, the facet summary
+    repopulated, and the button text returned to `Refresh Facets`.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1316,6 +1348,14 @@ stability, performance, and maintainability, then record evidence here.
   retry-oriented empty state when no prior import data exists.
 - `src/App.css`: adds a small panel notice reset for warning notices inside
   panels.
+- `src/storedFacetStatus.ts`: adds stored facet refresh failure and summary copy
+  helpers.
+- `src/App.tsx`: adds a Stored Vault `Refresh Facets` action, stable facet
+  summary selector, and in-panel stale facet warning.
+- `src/App.css`: adds a compact panel-heading action layout for a summary plus
+  retry button.
+- `tests/storedFacetStatus.test.ts`: covers stored facet failure text and
+  summary copy for loaded, loading, and failed states.
 - `src/promptEmptyState.ts`: adds small copy helpers for loaded-empty and
   filter-miss prompt states; it now also provides Recommendation empty-state
   copy for selected, filter-hidden, and no-data prompt states.
@@ -1425,6 +1465,12 @@ stability, performance, and maintainability, then record evidence here.
 - During import-refresh-failure QA, the page-local fetch monkeypatch affected
   only the current `surface:9` page and was cleared by reloading the same
   surface. Do not leave monkeypatches active across manual QA slices.
+- During stored-facet-failure QA, `cmux tree` and the diagnostics clear RPCs
+  timed out, but selecting `workspace:5`, focusing `pane:10`, and using short
+  surface-specific `goto`/`wait`/`eval` commands on `surface:9` remained
+  reliable. The page-local `/api/prompt-facets` monkeypatch was cleared by
+  reloading the same surface, and final console/errors diagnostics returned
+  clean. Do not restart cmux or open a second browser as a workaround.
 
 ## Research
 
@@ -1442,7 +1488,6 @@ stability, performance, and maintainability, then record evidence here.
    background scan after browser reload.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
-5. Consider whether stored facets should show an explicit refresh status if
-   future UI work exposes a manual stored-facet refresh control.
-6. Continue reviewing remaining empty and failure states in secondary panels,
-   especially stored facet refresh status and import-panel no-prior-data paths.
+5. Continue reviewing remaining empty and failure states in secondary panels,
+   especially import-panel no-prior-data paths and any retry flows that still
+   rely only on the global error notice.

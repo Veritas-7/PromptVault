@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   importProgressPercent,
+  importStopNoticeText,
   importRunFailureText,
   importStatusLabel,
   type ImportRunState,
@@ -100,4 +101,31 @@ test("import failure text keeps a failed no-result run visible", () => {
     "Could not import the selected source. Check the error above and retry from the import plan.",
   );
   assert.equal(importRunFailureText("ready", "Gemini temporary chats"), null);
+});
+
+test("import stop notice explains continuous resume path", () => {
+  assert.equal(
+    importStopNoticeText("stopped", "continuous", "Gemini temporary chats"),
+    "Stopped importing Gemini temporary chats after the current batch. Run Until Done again to resume from the saved cursor.",
+  );
+  assert.equal(
+    importStopNoticeText("stopped", "continuous", "  "),
+    "Stopped importing after the current batch. Run Until Done again to resume from the saved cursor.",
+  );
+});
+
+test("import stop notice explains partial queue resume path", () => {
+  assert.equal(
+    importStopNoticeText("stopped", "queue", null, 1, 3),
+    "Import queue stopped after the current source. 1 of 3 sources completed. Run Selected again to continue.",
+  );
+  assert.equal(
+    importStopNoticeText("stopped", "queue", null, 5, 3),
+    "Import queue stopped after the current source. 3 of 3 sources completed. Run Selected again to continue.",
+  );
+});
+
+test("import stop notice is scoped to stopped imports", () => {
+  assert.equal(importStopNoticeText("ready", "continuous", "Gemini temporary chats"), null);
+  assert.equal(importStopNoticeText("failed", "queue", null, 1, 3), null);
 });

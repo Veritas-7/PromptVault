@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 19:22 KST
+Updated: 2026-06-06 19:30 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1501,6 +1501,29 @@ stability, performance, and maintainability, then record evidence here.
     `Processed 3 / 3`, no import warning, and no global error.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: make intentional partial import stops
+  explain how to resume.
+- Added Incremental Import stopped-state copy for continuous and queued import
+  runs so a user sees that the stop was intentional and resumable, not a hard
+  failure.
+- `npm run test:ui` passed after this import-stop-notice slice with 60 tests.
+- `npm run check` passed after this import-stop-notice slice: UI tests 60
+  passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?import-stop-notice=20260606a`.
+  - Clicked `Plan`, installed a page-local fetch monkeypatch that delayed only
+    `/api/import-batch` and then returned a partial, non-complete Codex batch.
+  - Clicked the Codex `Run Until Done` action, clicked `Stop` while the batch
+    was pending, and observed `Status Stopping after current batch`.
+  - Released the delayed batch and observed final `Status Stopped`,
+    `Processed 5 / 100`, no import-run failure warning, no global error, and
+    the new warning
+    `Stopped importing Codex after the current batch. Run Until Done again to resume from the saved cursor.`
+  - Restored the original fetch, reloaded the same `surface:9`, and confirmed
+    the Plan button rendered with `No console entries` and `No browser errors`.
 
 ## Changes
 
@@ -1610,6 +1633,12 @@ stability, performance, and maintainability, then record evidence here.
   `Stopped`.
 - `tests/importQueue.test.ts`: covers queue final-state completion and stopped
   edge cases.
+- `src/importProgress.ts`: adds stopped import notice copy for continuous and
+  queued partial stops.
+- `src/App.tsx`: shows the stopped import notice inside the Incremental Import
+  panel without treating it as a failed import.
+- `tests/importProgress.test.ts`: covers continuous, queue, and non-stopped
+  import stop notice cases.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1745,6 +1774,10 @@ stability, performance, and maintainability, then record evidence here.
   already complete in the SQLite cursor, so the released batch returned
   `Processed 3 / 3` and proved the one-source queue finishes as `Complete`
   despite a pending Stop request.
+- During import-stop-notice QA, the page-local fetch monkeypatch delayed only
+  `/api/import-batch` on the current `surface:9` page and returned a fake
+  partial Codex batch to avoid mutating the durable SQLite cursor. The original
+  fetch was restored and the same surface was reloaded before final diagnostics.
 
 ## Research
 
@@ -1763,5 +1796,4 @@ stability, performance, and maintainability, then record evidence here.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
 5. Continue reviewing remaining empty and failure states in secondary panels,
-   especially secondary refresh paths or import queue partial-stop cases not
-   yet covered by scoped warnings.
+   especially secondary refresh paths not yet covered by scoped warnings.

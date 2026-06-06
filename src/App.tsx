@@ -31,6 +31,7 @@ import {
 import {
   importProgressPercent,
   importRunFailureText,
+  importStopNoticeText,
   importStatusLabel,
   type ImportRunMode,
   type ImportRunState,
@@ -250,6 +251,13 @@ function App() {
   const importRunFailureMessage = importRunFailureText(
     importState,
     importResult?.state.source_label ?? activeImportSource?.label ?? null,
+  );
+  const importStopNoticeMessage = importStopNoticeText(
+    importState,
+    importMode,
+    importResult?.state.source_label ?? activeImportSource?.label ?? null,
+    completedQueueSourceCount,
+    importQueueSourceIds.length,
   );
   const selectedImportQueueSourceIds = useMemo(() => {
     return selectedQueueSourceIds(selectedImportSourceIds, plan?.sources ?? []);
@@ -1210,6 +1218,12 @@ function App() {
             <div className="notice warning panel-notice" data-import-run-error="true">
               <AlertTriangle size={18} />
               <span>{importRunFailureMessage}</span>
+            </div>
+          ) : null}
+          {importStopNoticeMessage ? (
+            <div className="notice warning panel-notice" data-import-stop-warning="true">
+              <AlertTriangle size={18} />
+              <span>{importStopNoticeMessage}</span>
             </div>
           ) : null}
           <div className="import-progress" aria-live="polite">

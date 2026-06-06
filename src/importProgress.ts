@@ -37,3 +37,35 @@ export function importRunFailureText(
     ? `Could not import ${target}. Check the error above and retry from the import plan.`
     : "Could not import the selected source. Check the error above and retry from the import plan.";
 }
+
+export function importStopNoticeText(
+  runState: ImportRunState,
+  mode: ImportRunMode | null,
+  sourceLabel: string | null,
+  completedQueueSourceCount = 0,
+  queueLength = 0,
+): string | null {
+  if (runState !== "stopped") return null;
+
+  if (mode === "queue") {
+    const boundedCompletedSourceCount = Math.max(
+      0,
+      Math.min(completedQueueSourceCount, queueLength),
+    );
+    const progressText = queueLength > 0
+      ? ` ${boundedCompletedSourceCount.toLocaleString()} of ${queueLength.toLocaleString()} sources completed.`
+      : "";
+    return `Import queue stopped after the current source.${progressText} Run Selected again to continue.`;
+  }
+
+  const target = sourceLabel?.trim();
+  if (mode === "continuous") {
+    return target
+      ? `Stopped importing ${target} after the current batch. Run Until Done again to resume from the saved cursor.`
+      : "Stopped importing after the current batch. Run Until Done again to resume from the saved cursor.";
+  }
+
+  return target
+    ? `Stopped importing ${target}. Retry from the import plan to resume.`
+    : "Stopped importing the selected source. Retry from the import plan to resume.";
+}

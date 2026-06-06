@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  planSourceActionLabel,
   planSourceSelectionLabel,
   planSourceStatusLabel,
   sourceSummaryStatusLabel,
@@ -35,6 +36,22 @@ test("plan source selection labels include disabled empty-source reason", () => 
       "No matching prompt files were found.",
     ]),
     "Import queue selection for Antigravity IDE alt transcripts source empty: 0 files, 0 B. No matching prompt files were found.",
+  );
+});
+
+test("plan source action labels include enabled source status context", () => {
+  assert.equal(
+    planSourceActionLabel("batch", "Codex", "ok", 25105, "32.8 GiB"),
+    "Import one batch for Codex source available: 25,105 files, 32.8 GiB",
+  );
+});
+
+test("plan source action labels include disabled empty-source reason", () => {
+  assert.equal(
+    planSourceActionLabel("continuous", "Antigravity IDE alt transcripts", "empty", 0, "0 B", [
+      "No matching prompt files were found.",
+    ]),
+    "Cannot run import until done for Antigravity IDE alt transcripts source empty: 0 files, 0 B. No matching prompt files were found.",
   );
 });
 

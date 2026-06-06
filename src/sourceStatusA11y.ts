@@ -42,6 +42,26 @@ export function planSourceSelectionLabel(
   )}`;
 }
 
+export type PlanSourceAction = "batch" | "continuous";
+
+function planSourceActionText(action: PlanSourceAction): string {
+  return action === "batch" ? "import one batch" : "run import until done";
+}
+
+export function planSourceActionLabel(
+  action: PlanSourceAction,
+  sourceLabel: string,
+  status: string,
+  fileCount: number,
+  byteText: string,
+  notes: string[] = [],
+): string {
+  const actionText = planSourceActionText(action);
+  const sourceContext = planSourceStatusLabel(sourceLabel, status, fileCount, byteText, notes);
+  if (fileCount === 0) return `Cannot ${actionText} for ${sourceContext}`;
+  return `${actionText[0].toUpperCase()}${actionText.slice(1)} for ${sourceContext}`;
+}
+
 export function sourceSummaryStatusLabel(
   sourceLabel: string,
   status: string,

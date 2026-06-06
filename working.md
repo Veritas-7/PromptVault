@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 21:28 KST
+Updated: 2026-06-06 21:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -128,6 +128,10 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Progress
 
+- Continued same-surface accessibility QA on `surface:9` and found the Plan
+  source action buttons for the disabled empty Antigravity alt source had
+  source-specific names but omitted the unavailable reason that was visible in
+  the row.
 - Loaded workspace policy and relevant QA/testing skills:
   `veritas-ai-workspace-context`, `gstack-qa`, and `webapp-testing`.
 - Confirmed fresh git boundary and remote.
@@ -316,6 +320,13 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Changes
 
+- `src/sourceStatusA11y.ts`: added `planSourceActionLabel` so Plan source
+  action buttons include source availability, file count, size, and disabled
+  empty-source notes.
+- `tests/sourceStatusA11y.test.ts`: added coverage for enabled source action
+  context and disabled empty-source action reasons.
+- `src/App.tsx`: uses the shared action-label helper for each Plan row's
+  `Import Batch` and `Run Until Done` buttons.
 - `Working.md`: started the 2026-06-06 cmux in-app browser QA slice and added
   explicit current-goal sections for future resume.
 - `src-tauri/src/lib.rs`: added persistence schema, scan-run/prompt/source
@@ -422,6 +433,22 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui`: 94 tests passed after adding Plan source action label
+  coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  source-action label change.
+- `npm run check`: passed after this source-action label slice. This covered UI
+  tests 94 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- Real cmux source action label QA on the existing `surface:9`: reloaded
+  `http://127.0.0.1:5173/?source-action-labels=20260606a`, clicked `Plan`,
+  and verified 22 Plan row action buttons rendered.
+- The same cmux sweep verified the enabled Codex batch action exposes
+  `Import one batch for Codex source available: 25,105 files, 32.8 GiB` and
+  both disabled Antigravity IDE alt transcript actions expose `Cannot...`
+  labels with `No matching prompt files were found.`
+- Browser diagnostics on the same `surface:9` returned `No console entries`
+  and `No browser errors`.
 - `npm run test:ui`: 92 tests passed after adding Import Plan source checkbox
   label coverage.
 - `npm run build`: TypeScript and Vite production build passed after the

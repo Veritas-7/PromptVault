@@ -79,6 +79,7 @@ import {
 } from "./scanStatus";
 import { selectedPromptForView } from "./selection";
 import {
+  planSourceActionLabel,
   planSourceSelectionLabel,
   planSourceStatusLabel,
   sourceSummaryStatusLabel,
@@ -1287,7 +1288,14 @@ function App() {
                     </div>
                     <div className="plan-source-actions">
                       <button
-                        aria-label={`Import one batch from ${source.label}`}
+                        aria-label={planSourceActionLabel(
+                          "batch",
+                          source.label,
+                          source.status,
+                          source.file_count,
+                          formatBytes(source.byte_count),
+                          source.notes,
+                        )}
                         className="inline-action"
                         data-import-source-id={source.id}
                         disabled={isImportActionLocked || source.file_count === 0}
@@ -1300,7 +1308,14 @@ function App() {
                           : "Import Batch"}
                       </button>
                       <button
-                        aria-label={`Run ${source.label} import until done`}
+                        aria-label={planSourceActionLabel(
+                          "continuous",
+                          source.label,
+                          source.status,
+                          source.file_count,
+                          formatBytes(source.byte_count),
+                          source.notes,
+                        )}
                         className="inline-action"
                         data-import-continuous-source-id={source.id}
                         disabled={isImportActionLocked || source.file_count === 0}

@@ -58,6 +58,7 @@ import {
   scanPrompts,
 } from "./promptVaultApi";
 import { MAX_SCAN_LIMIT, parseRequiredScanLimit } from "./scanLimit";
+import { scanRunFailureText, type ScanRunState } from "./scanStatus";
 import { selectedPromptForView } from "./selection";
 import { storedLoadFailureText, type StoredLoadState } from "./storedLoadStatus";
 import {
@@ -83,7 +84,7 @@ import type {
   StoredPromptFacetsResult,
 } from "./types";
 
-type ScanState = "idle" | "scanning" | "canceling" | "ready" | "failed";
+type ScanState = ScanRunState;
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
@@ -195,6 +196,7 @@ function App() {
   const isImportActionLocked = importActionLocked(actionLockState);
   const canStopScan = scanRunIdRef.current !== null && isScanRunning;
   const scanProgressText = scanProgressLabel(scanProgressInfo);
+  const scanRunFailureMessage = scanRunFailureText(scanState, result !== null);
   const importStatesFailureMessage = importRefreshFailureText(
     importStatesState,
     "saved import progress",
@@ -541,6 +543,7 @@ function App() {
     setImprovement(null);
     setImprovementPromptId(null);
     setImprovementFailurePromptId(null);
+    setScanState("idle");
     setStoredLoadState("loading");
     try {
       const next = await loadStoredPrompts({
@@ -708,6 +711,13 @@ function App() {
         <section className="notice scan-progress" data-scan-progress="true">
           <RefreshCw size={18} />
           <span>{scanProgressText}</span>
+        </section>
+      ) : null}
+
+      {scanRunFailureMessage ? (
+        <section className="notice warning" data-scan-run-error="true">
+          <AlertTriangle size={18} />
+          <span>{scanRunFailureMessage}</span>
         </section>
       ) : null}
 

@@ -79,6 +79,10 @@ import {
 } from "./scanStatus";
 import { selectedPromptForView } from "./selection";
 import {
+  planSourceStatusLabel,
+  sourceSummaryStatusLabel,
+} from "./sourceStatusA11y";
+import {
   storedFilterChangedAfterFailure,
   storedLoadFailureText,
   type StoredLoadState,
@@ -1260,7 +1264,16 @@ function App() {
                       <span>{source.root_path}</span>
                       {source.notes.length ? <span className="source-meta">{source.notes.join(" ")}</span> : null}
                     </div>
-                    <div className={`status ${source.status}`}>
+                    <div
+                      aria-label={planSourceStatusLabel(
+                        source.label,
+                        source.status,
+                        source.file_count,
+                        formatBytes(source.byte_count),
+                        source.notes,
+                      )}
+                      className={`status ${source.status}`}
+                    >
                       {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
                       {source.file_count.toLocaleString()} · {formatBytes(source.byte_count)}
                     </div>
@@ -1446,7 +1459,14 @@ function App() {
                       Q {source.average_quality.toFixed(1)} · Weak {source.weak_prompt_count}
                     </span>
                   </div>
-                  <div className={`status ${source.status}`}>
+                  <div
+                    aria-label={sourceSummaryStatusLabel(
+                      source.label,
+                      source.status,
+                      source.prompts_found,
+                    )}
+                    className={`status ${source.status}`}
+                  >
                     {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
                     {source.prompts_found}
                   </div>

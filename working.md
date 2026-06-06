@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 21:17 KST
+Updated: 2026-06-06 21:24 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -422,6 +422,23 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui`: 90 tests passed after adding source status badge label
+  coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  status-label change.
+- `npm run check`: passed after this status-label slice. This covered UI tests
+  90 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- Real cmux source status label QA on the existing `surface:9`: reloaded
+  `http://127.0.0.1:5173/?status-labels=20260606a`, clicked `Plan`, clicked
+  `Load Stored`, and verified all Plan and Sources status badges have
+  `aria-label` values.
+- The same cmux sweep verified examples including
+  `Codex source available: 25,105 files, 32.8 GiB`,
+  `Antigravity IDE alt transcripts source empty: 0 files, 0 B. No matching prompt files were found.`,
+  and `Codex source stored: 925 prompts found`.
+- Browser diagnostics on the same `surface:9` returned `No console entries`
+  and `No browser errors`.
 - `npm run test:ui`: 86 tests passed after adding selected import queue
   action label coverage.
 - `npm run build`: TypeScript and Vite production build passed after the
@@ -1998,9 +2015,40 @@ stability, performance, and maintainability, then record evidence here.
   - Verified the selected queue action exposes
     `aria-label="Run 2 selected import sources"` and remains enabled.
   - Final diagnostics returned `No console entries` and `No browser errors`.
+- Continued with the next thin slice: make source status badges expose their
+  state and counts instead of relying on icon color plus bare numbers.
+- A real cmux Plan/Stored sweep showed Plan source status badges had no
+  `aria-label`, so the empty source exposed only `0 · 0 B`; Stored Vault source
+  badges also exposed only prompt counts such as `925`.
+- Added source status label helpers for Plan source file/size status and
+  Sources panel prompt-count status, including `ok` -> `available`,
+  `empty`, `missing`, `partial`, and `stored` states.
+- `npm run test:ui` passed after this status-label slice: UI tests 90 passed,
+  including new status-label coverage.
+- `npm run build` passed after this slice.
+- `npm run check` passed after this slice: UI tests 90 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?status-labels=20260606a` on the same
+    PromptVault browser surface; the initial `goto` timed out, but a short DOM
+    eval verified the same URL loaded.
+  - Clicked `Plan`, clicked `Load Stored`, and waited for plan/source rows.
+  - Verified no Plan or Sources status badges were missing labels.
+  - Verified examples including
+    `Codex source available: 25,105 files, 32.8 GiB`,
+    `Antigravity IDE alt transcripts source empty: 0 files, 0 B. No matching prompt files were found.`,
+    and `Codex source stored: 925 prompts found`.
+  - Final diagnostics returned `No console entries` and `No browser errors`.
 
 ## Changes
 
+- `src/sourceStatusA11y.ts`: adds helper labels for Plan source file/size
+  status and Sources panel prompt-count status.
+- `src/App.tsx`: applies status badge `aria-label` values in the Import Plan
+  source list and the Sources panel.
+- `tests/sourceStatusA11y.test.ts`: covers available, empty-with-note, stored,
+  and unknown backend status labels.
 - `src/importQueue.ts`: adds `importQueueActionLabel()` for zero-selection,
   selected-count, and running queue labels.
 - `src/App.tsx`: applies a stateful `aria-label` to the Import Plan

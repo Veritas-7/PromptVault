@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 21:04 KST
+Updated: 2026-06-06 21:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -422,6 +422,22 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui`: 83 tests passed after adding prompt-row accessible label
+  coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  prompt-row label change.
+- `npm run check`: passed after this prompt-row label slice. This covered UI
+  tests 83 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- Real cmux Stored Vault row-label QA on the existing `surface:9`: reloaded
+  `http://127.0.0.1:5173/?prompt-row-labels=20260606a`, clicked
+  `Load Stored`, waited for `.prompt-row`, and verified 200 prompt rows expose
+  `0` duplicate `aria-label` values and `0` unnamed rows.
+- The same cmux sweep verified the duplicate visible text
+  `Return exactly OK` now has distinct row labels including
+  `Prompt 92 of 200`, `Prompt 94 of 200`, and `Prompt 195 of 200`.
+- Browser diagnostics on the same `surface:9` returned `No console entries`
+  and `No browser errors`.
 - `npm run test:ui`: 79 tests passed after making import refresh buttons
   panel-specific.
 - `npm run build`: TypeScript and Vite production build passed after the
@@ -1924,9 +1940,38 @@ stability, performance, and maintainability, then record evidence here.
     `Refresh recent import activity`.
   - Re-ran the duplicate-name sweep and observed no duplicate button names.
   - Final diagnostics returned `No console entries` and `No browser errors`.
+- Continued with the next thin slice: make Stored Vault prompt-row selection
+  controls distinguish duplicate prompt text for assistive technology.
+- A baseline cmux Stored Vault sweep after clicking `Load Stored` found three
+  `.prompt-row` buttons with the identical accessible name
+  `Codex · 3 words36 · weakReturn exactly OK`.
+- Added a concise row `aria-label` that includes list position, total visible
+  rows, source, timestamp, word count, quality, and a clipped prompt snippet.
+  Visible prompt rows are unchanged.
+- `npm run test:ui` passed after this prompt-row label slice: UI tests
+  83 passed, including new duplicate-text and clipping coverage.
+- `npm run build` passed after this slice.
+- `npm run check` passed after this slice: UI tests 83 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?prompt-row-labels=20260606a` on the same
+    PromptVault browser surface.
+  - Clicked `Load Stored` and waited for 200 rendered `.prompt-row` buttons.
+  - Verified there were `0` unnamed rows and no duplicate row labels.
+  - Verified the previous duplicate `Return exactly OK` rows now expose
+    distinct labels such as `Prompt 92 of 200`, `Prompt 94 of 200`, and
+    `Prompt 195 of 200`.
+  - Final diagnostics returned `No console entries` and `No browser errors`.
 
 ## Changes
 
+- `src/promptRowA11y.ts`: adds a tested helper for concise, unique prompt-row
+  accessible labels.
+- `src/App.tsx`: applies prompt-row `aria-label` values using the filtered row
+  index and visible-row total.
+- `tests/promptRowA11y.test.ts`: covers duplicate prompt text, whitespace
+  compaction, long prompt clipping, and missing timestamps.
 - `src/App.tsx`: adds panel-specific accessible labels to Saved Import
   Progress and Recent Import Activity refresh buttons.
 - `src/App.tsx`: adds source-specific accessible labels to each Import Plan

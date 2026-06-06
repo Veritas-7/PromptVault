@@ -54,6 +54,7 @@ import {
   recommendationEmptyText,
   selectedPromptEmptyText,
 } from "./promptEmptyState";
+import { promptRowAriaLabel } from "./promptRowA11y";
 import {
   cancelScan,
   importBatch,
@@ -1516,8 +1517,9 @@ function App() {
             </div>
           </div>
           <div className="prompt-list">
-            {filteredPrompts.map((prompt) => (
+            {filteredPrompts.map((prompt, index) => (
               <button
+                aria-label={promptRowAriaLabel(prompt, index, filteredPrompts.length)}
                 aria-pressed={prompt.id === selectedPrompt?.id}
                 className={`prompt-row ${prompt.id === selectedPrompt?.id ? "active" : ""}`}
                 key={prompt.id}

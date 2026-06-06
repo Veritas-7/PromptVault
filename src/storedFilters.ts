@@ -38,6 +38,13 @@ export function storedFilterResetLabel(activeFilterCount: number, actionLocked: 
   return `Reset ${activeFilterCount.toLocaleString()} stored filters`;
 }
 
+export function storedFilterApplyLabel(activeFilterCount: number, actionLocked: boolean): string {
+  if (actionLocked) return "Cannot apply stored filters while another action is running";
+  if (activeFilterCount === 0) return "Load stored prompts without filters";
+  if (activeFilterCount === 1) return "Apply 1 stored filter";
+  return `Apply ${activeFilterCount.toLocaleString()} stored filters`;
+}
+
 export function storedPromptLoadOptions(
   filters: StoredPromptFilters,
   previewMode: PreviewMode,

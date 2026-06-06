@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   activeStoredPromptFilterCount,
   emptyStoredPromptFilters,
+  storedFilterApplyLabel,
   storedFilterResetLabel,
   storedPromptLoadOptions,
   type StoredPromptFilters,
@@ -73,4 +74,14 @@ test("stored filter reset label explains disabled and active states", () => {
   );
   assert.equal(storedFilterResetLabel(1, false), "Reset 1 stored filter");
   assert.equal(storedFilterResetLabel(3, false), "Reset 3 stored filters");
+});
+
+test("stored filter apply label explains unfiltered, active, and locked states", () => {
+  assert.equal(storedFilterApplyLabel(0, false), "Load stored prompts without filters");
+  assert.equal(storedFilterApplyLabel(1, false), "Apply 1 stored filter");
+  assert.equal(storedFilterApplyLabel(3, false), "Apply 3 stored filters");
+  assert.equal(
+    storedFilterApplyLabel(2, true),
+    "Cannot apply stored filters while another action is running",
+  );
 });

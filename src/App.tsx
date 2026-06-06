@@ -100,6 +100,7 @@ import {
 import {
   activeStoredPromptFilterCount,
   emptyStoredPromptFilters,
+  storedFilterApplyLabel,
   storedFilterResetLabel,
   storedPromptLoadOptions,
   type StoredPromptFilters,
@@ -1018,6 +1019,7 @@ function App() {
             />
           </label>
           <button
+            aria-label={storedFilterApplyLabel(storedFilterCount, isTopLevelActionLocked)}
             className="inline-action"
             data-apply-stored-filters="true"
             disabled={isTopLevelActionLocked}

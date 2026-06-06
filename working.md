@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 23:13 KST
+Updated: 2026-06-06 23:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,19 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui -- tests/storedFilters.test.ts`: passed; due the package
+  script glob this ran the full UI helper suite and reported 113 passing tests,
+  including the new Stored Vault Apply label coverage.
+- `npm run build`: TypeScript and Vite production build passed and refreshed
+  the static frontend bundle for this slice.
+- `npm run check`: passed after the Stored Vault Apply label slice. This
+  covered UI tests 113 passed, TypeScript/Vite build, Rust lib 64 passed, CLI
+  15 passed, doc-tests, and clippy with `-D warnings`.
+- cmux direct QA remained blocked during the Stored Vault Apply label slice:
+  after Computer Use window Raise, AX workspace-row click, and `super+5`
+  attempts, the visible cmux window still showed the unrelated `working.md`
+  workspace. A final `surface:9` title probe timed out after 6 seconds. This
+  is recorded as a cmux diagnostic blocker rather than app evidence.
 - Post-push verification after commit `5ba6ad5`: `git fetch origin main`,
   `git status --short --branch`, and
   `git rev-list --left-right --count HEAD...origin/main` confirmed the repo was
@@ -2453,6 +2466,21 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this plan-panel label slice: UI tests 112
   passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
   doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make the Stored Vault `Apply` button
+  expose state-aware accessible names while preserving the compact visual
+  button text.
+- Added tested Stored Vault Apply labels so no-filter state announces
+  `Load stored prompts without filters`, active-filter states announce
+  `Apply 1 stored filter` / `Apply N stored filters`, and locked state
+  announces `Cannot apply stored filters while another action is running`.
+- cmux remained blocked for direct `surface:9` QA during this slice. Computer
+  Use showed the visible cmux window on the unrelated `working.md` workspace;
+  window Raise, AX click on the `프롬프트` workspace row, and `super+5` did not
+  switch the visible workspace. `surface:9` title/url/eval commands timed out.
+  No cmux app restart, kill, or second browser was used.
+- `npm run check` passed after this Stored Vault Apply label slice: UI tests
+  113 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2721,6 +2749,12 @@ stability, performance, and maintainability, then record evidence here.
   `[data-refresh-plan=true]`.
 - `tests/topActionLabels.test.ts`: covers refresh, retry, planning refresh,
   and locked Import Plan panel labels.
+- `src/storedFilters.ts`: adds `storedFilterApplyLabel()` for Stored Vault
+  Apply button unfiltered, filtered, and locked states.
+- `src/App.tsx`: applies the new Stored Vault Apply `aria-label` to
+  `[data-apply-stored-filters=true]`.
+- `tests/storedFilters.test.ts`: covers unfiltered, active-filter, and locked
+  Stored Vault Apply labels.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -2984,6 +3018,11 @@ stability, performance, and maintainability, then record evidence here.
   readable, but console/errors and selector wait calls timed out. This appears
   to be the recurring cmux surface/visible-workspace mismatch rather than an app
   health failure; frontend and bridge health remained green.
+- During the Stored Vault Apply label slice, cmux was still alive at the app
+  level (`cmux ping` returned `PONG`) but the active visible workspace remained
+  `working.md`, and `surface:9` title/url/eval checks timed out. The slice was
+  verified by focused UI helper tests plus the full project gate; direct cmux
+  click evidence is still blocked pending safe workspace/surface recovery.
 
 ## Research
 

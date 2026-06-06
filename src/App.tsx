@@ -240,9 +240,10 @@ function App() {
         const progress = await scanProgress(activeRunId);
         if (stopped) return;
         setScanProgressInfo(progress);
-        if (progress.active) {
-          timer = window.setTimeout(pollScanProgress, SCAN_PROGRESS_POLL_MS);
-        }
+        timer = window.setTimeout(
+          pollScanProgress,
+          progress.active ? SCAN_PROGRESS_POLL_MS : SCAN_PROGRESS_POLL_MS * 2,
+        );
       } catch {
         if (!stopped) {
           timer = window.setTimeout(pollScanProgress, SCAN_PROGRESS_POLL_MS * 2);

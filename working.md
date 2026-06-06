@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 17:12 KST
+Updated: 2026-06-06 17:18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -925,6 +925,32 @@ stability, performance, and maintainability, then record evidence here.
     `/api/prompt-facets` after cancellation.
   - Browser console returned `No console entries`; browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: scan progress polling race hardening.
+- Fixed a frontend polling race where an early inactive
+  `/api/scan/progress` response could stop the polling loop while the scan
+  request was still starting. The UI now keeps polling at a slower interval
+  while the scan state is still running, even if the current progress response
+  is inactive.
+- `npm run check` passed after the polling race patch: UI tests 24 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Confirmed `workspace:5` still had exactly one PromptVault browser surface
+    and did not create another browser.
+  - Reused `surface:9` with a cache-busted PromptVault URL and verified it
+    loaded the new Vite build.
+  - Set Limit `100000`, clicked `Scan`, observed progress advance to
+    `Codex: discovering files · 3,350 found · 0 prompts · source 1 / 11 · limit 100,000`,
+    clicked `Stop`, and observed the not-stored cancellation warning.
+  - Verified the stored vault count stayed `1690` through
+    `/api/prompt-facets` after cancellation.
+  - Browser console returned `No console entries`; browser errors returned
+    `No browser errors`.
+- Attempted to force the exact first-progress-inactive race in cmux by
+  monkey-patching the current page's first `/api/scan/progress` fetch. The
+  verification script itself hit cmux JavaScript-result timeouts, so it is not
+  treated as successful evidence. After the timeout, the scan controls were no
+  longer visible and the vault count remained `1690`.
 
 ## Changes
 
@@ -935,7 +961,9 @@ stability, performance, and maintainability, then record evidence here.
 - `src/types.ts` and `src/promptVaultApi.ts`: added scan progress types and
   frontend API wrapper; `src/types.ts` now includes discovery count data.
 - `src/App.tsx` and `src/App.css`: added scan-progress polling and notice UI;
-  the notice now reports discovered files while file totals are pending.
+  the notice now reports discovered files while file totals are pending, and
+  polling continues through an early inactive progress response while scan
+  state is still running.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.

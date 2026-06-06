@@ -1258,6 +1258,7 @@ function App() {
                     </div>
                     <div className="plan-source-actions">
                       <button
+                        aria-label={`Import one batch from ${source.label}`}
                         className="inline-action"
                         data-import-source-id={source.id}
                         disabled={isImportActionLocked || source.file_count === 0}
@@ -1270,6 +1271,7 @@ function App() {
                           : "Import Batch"}
                       </button>
                       <button
+                        aria-label={`Run ${source.label} import until done`}
                         className="inline-action"
                         data-import-continuous-source-id={source.id}
                         disabled={isImportActionLocked || source.file_count === 0}

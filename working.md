@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 20:47 KST
+Updated: 2026-06-06 20:52 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -422,6 +422,22 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui`: 79 tests passed after adding source-specific row action
+  labels.
+- `npm run build`: TypeScript and Vite production build passed after the
+  row-action label change.
+- Real cmux row-action QA on the existing `surface:9`: reloaded
+  `http://127.0.0.1:5173/?row-action-labels=20260606a`, clicked `Plan`, and
+  verified repeated source-row buttons now expose source-specific names such as
+  `Import one batch from Codex`, `Run Codex import until done`,
+  `Import one batch from Claude Code projects`, and
+  `Run Claude Code projects import until done`.
+- After reloading the same surface to
+  `http://127.0.0.1:5173/?row-action-labels-clean=20260606a`, diagnostics
+  returned `No console entries` and `No browser errors`.
+- `npm run check`: passed after this row-action label slice. This covered UI
+  tests 79 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 - `npm run test:ui`: 79 tests passed after adding import progress value text
   coverage.
 - `npm run build`: TypeScript and Vite production build passed after labeling
@@ -1849,9 +1865,31 @@ stability, performance, and maintainability, then record evidence here.
     `value="63"`.
   - Reloaded the same surface to clear the stopped state; final diagnostics
     returned `No console entries` and `No browser errors`.
+- Continued with the next thin slice: make repeated import source-row actions
+  distinguish their target source for assistive technology.
+- Found through code/DOM review that each source row repeated the same
+  `Import Batch` and `Run Until Done` visible button text, so screen-reader
+  button lists could not distinguish which source each action targeted.
+- Added source-specific `aria-label` text to each row's batch and continuous
+  import buttons while preserving the compact visible button labels.
+- `npm run test:ui && npm run build` passed after this row-action label slice:
+  UI tests 79 passed and the production Vite bundle built successfully.
+- `npm run check` passed after this slice: UI tests 79 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?row-action-labels=20260606a` on the same
+    PromptVault browser surface.
+  - Clicked `Plan` and observed source-specific row action names including
+    `Import one batch from Codex`, `Run Codex import until done`,
+    `Import one batch from Codex CX`, and `Run Codex CX import until done`.
+  - Reloaded the same surface; final diagnostics returned
+    `No console entries` and `No browser errors`.
 
 ## Changes
 
+- `src/App.tsx`: adds source-specific accessible labels to each Import Plan
+  row's `Import Batch` and `Run Until Done` buttons.
 - `src/importProgress.ts`: adds `importProgressValueText()` for processed/total
   file-count progress value text.
 - `src/App.tsx`: adds source-specific `aria-label` and file-count

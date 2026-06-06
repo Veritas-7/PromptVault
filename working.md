@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 23:17 KST
+Updated: 2026-06-06 23:20 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,14 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui -- tests/importProgress.test.ts`: passed; due the package
+  script glob this ran the full UI helper suite and reported 114 passing tests,
+  including the new Import Stop action label coverage.
+- `npm run build`: TypeScript and Vite production build passed and refreshed
+  the static frontend bundle for the Import Stop label slice.
+- `npm run check`: passed after the Import Stop label slice. This covered UI
+  tests 114 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 - `npm run test:ui -- tests/storedFilters.test.ts`: passed; due the package
   script glob this ran the full UI helper suite and reported 113 passing tests,
   including the new Stored Vault Apply label coverage.
@@ -2481,6 +2489,16 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this Stored Vault Apply label slice: UI tests
   113 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
   doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make the Incremental Import Stop button
+  expose state-aware accessible names for continuous imports and queued
+  imports.
+- Added tested Import Stop labels so continuous runs announce
+  `Stop import after current batch` / `Stopping import after current batch`,
+  while queue runs announce `Stop import queue after current source` /
+  `Stopping import queue after current source`.
+- `npm run check` passed after this Import Stop label slice: UI tests 114
+  passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2755,6 +2773,12 @@ stability, performance, and maintainability, then record evidence here.
   `[data-apply-stored-filters=true]`.
 - `tests/storedFilters.test.ts`: covers unfiltered, active-filter, and locked
   Stored Vault Apply labels.
+- `src/importProgress.ts`: adds `importStopActionLabel()` for continuous and
+  queued import Stop button states.
+- `src/App.tsx`: applies the new Import Stop `aria-label` to
+  `[data-stop-import=true]`.
+- `tests/importProgress.test.ts`: covers continuous, queued, and
+  stop-requested Import Stop labels.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.

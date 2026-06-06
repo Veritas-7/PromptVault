@@ -76,6 +76,11 @@ export function importStatusLabel(
   return "Idle";
 }
 
+export function importStopActionLabel(mode: ImportRunMode | null, stopRequested: boolean): string {
+  const target = mode === "queue" ? "import queue after current source" : "import after current batch";
+  return stopRequested ? `Stopping ${target}` : `Stop ${target}`;
+}
+
 export function importRunFailureText(
   runState: ImportRunState,
   sourceLabel: string | null,

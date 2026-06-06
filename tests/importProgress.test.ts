@@ -8,6 +8,7 @@ import {
   importStopNoticeText,
   importRunFailureText,
   importStatusLabel,
+  importStopActionLabel,
   type ImportRunState,
 } from "../src/importProgress.ts";
 import type { ImportBatchResult, ImportState } from "../src/types.ts";
@@ -172,6 +173,13 @@ test("import status reports failed state first", () => {
   const failed: ImportRunState = "failed";
 
   assert.equal(importStatusLabel(importResult(10, 10, true), failed, "single", false), "Failed");
+});
+
+test("import stop action label explains continuous and queue stop targets", () => {
+  assert.equal(importStopActionLabel("continuous", false), "Stop import after current batch");
+  assert.equal(importStopActionLabel("continuous", true), "Stopping import after current batch");
+  assert.equal(importStopActionLabel("queue", false), "Stop import queue after current source");
+  assert.equal(importStopActionLabel("queue", true), "Stopping import queue after current source");
 });
 
 test("import failure text keeps a failed no-result run visible", () => {

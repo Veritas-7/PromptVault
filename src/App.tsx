@@ -35,6 +35,7 @@ import {
   importStateProgressPercent,
   importProgressValueText,
   importRunFailureText,
+  importStopActionLabel,
   importStopNoticeText,
   importStatusLabel,
   type ImportRunMode,
@@ -1434,6 +1435,7 @@ function App() {
             </span>
             {isImportRunning && (importMode === "continuous" || importMode === "queue") ? (
               <button
+                aria-label={importStopActionLabel(importMode, stopRequested)}
                 className="inline-action stop-action"
                 data-stop-import="true"
                 disabled={stopRequested}

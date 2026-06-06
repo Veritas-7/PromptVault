@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { ActionLockState } from "../src/actionLocks.ts";
 import {
   activeStoredPromptFilterCount,
   emptyStoredPromptFilters,
@@ -16,6 +17,17 @@ const emptyFilters: StoredPromptFilters = {
   source: "",
   workspace: "",
 };
+
+function lockState(overrides: Partial<ActionLockState> = {}): ActionLockState {
+  return {
+    importRunning: false,
+    improvementRunning: false,
+    planRunning: false,
+    scanRunning: false,
+    storedLoadRunning: false,
+    ...overrides,
+  };
+}
 
 test("stored prompt options trim and omit empty filters", () => {
   assert.deepEqual(storedPromptLoadOptions(emptyFilters, "latest", 1000), {
@@ -68,36 +80,36 @@ test("active stored prompt filter count ignores whitespace", () => {
 });
 
 test("stored filter reset label explains disabled and active states", () => {
-  assert.equal(storedFilterResetLabel(0, false), "No stored filters to reset");
+  assert.equal(storedFilterResetLabel(0, lockState()), "No stored filters to reset");
   assert.equal(
-    storedFilterResetLabel(2, true),
-    "Cannot reset stored filters while another action is running",
+    storedFilterResetLabel(2, lockState({ importRunning: true })),
+    "Cannot reset stored filters while an import is running",
   );
-  assert.equal(storedFilterResetLabel(1, false), "Reset 1 stored filter");
-  assert.equal(storedFilterResetLabel(3, false), "Reset 3 stored filters");
+  assert.equal(storedFilterResetLabel(1, lockState()), "Reset 1 stored filter");
+  assert.equal(storedFilterResetLabel(3, lockState()), "Reset 3 stored filters");
 });
 
 test("stored filter apply label explains unfiltered, active, and locked states", () => {
-  assert.equal(storedFilterApplyLabel(0, false), "Load stored prompts without filters");
-  assert.equal(storedFilterApplyLabel(1, false), "Apply 1 stored filter");
-  assert.equal(storedFilterApplyLabel(3, false), "Apply 3 stored filters");
+  assert.equal(storedFilterApplyLabel(0, lockState()), "Load stored prompts without filters");
+  assert.equal(storedFilterApplyLabel(1, lockState()), "Apply 1 stored filter");
+  assert.equal(storedFilterApplyLabel(3, lockState()), "Apply 3 stored filters");
   assert.equal(
-    storedFilterApplyLabel(2, true),
-    "Cannot apply stored filters while another action is running",
+    storedFilterApplyLabel(2, lockState({ scanRunning: true })),
+    "Cannot apply stored filters while a scan is running",
   );
 });
 
 test("stored filter input labels explain field and locked state", () => {
-  assert.equal(storedFilterInputLabel("text", false), "Stored Vault text filter");
-  assert.equal(storedFilterInputLabel("source", false), "Stored Vault source filter");
-  assert.equal(storedFilterInputLabel("date", false), "Stored Vault date filter");
-  assert.equal(storedFilterInputLabel("workspace", false), "Stored Vault workspace filter");
+  assert.equal(storedFilterInputLabel("text", lockState()), "Stored Vault text filter");
+  assert.equal(storedFilterInputLabel("source", lockState()), "Stored Vault source filter");
+  assert.equal(storedFilterInputLabel("date", lockState()), "Stored Vault date filter");
+  assert.equal(storedFilterInputLabel("workspace", lockState()), "Stored Vault workspace filter");
   assert.equal(
-    storedFilterInputLabel("text", true),
-    "Cannot edit Stored Vault text filter while another action is running",
+    storedFilterInputLabel("text", lockState({ storedLoadRunning: true })),
+    "Cannot edit Stored Vault text filter while stored prompts are loading",
   );
   assert.equal(
-    storedFilterInputLabel("workspace", true),
-    "Cannot edit Stored Vault workspace filter while another action is running",
+    storedFilterInputLabel("workspace", lockState({ improvementRunning: true })),
+    "Cannot edit Stored Vault workspace filter while an improvement is running",
   );
 });

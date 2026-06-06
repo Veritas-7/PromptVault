@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 23:30 KST
+Updated: 2026-06-06 23:36 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -474,6 +474,18 @@ stability, performance, and maintainability, then record evidence here.
 - cmux direct QA remained blocked after the Improve lock-reason label slice:
   frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health` returned
   `ok:true`, `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
+- `npm run test:ui -- tests/storedFilters.test.ts`: passed; due the package
+  script glob this ran the full UI helper suite and reported 115 passing tests,
+  including the new Stored Vault lock-reason label coverage.
+- `npm run build`: TypeScript and Vite production build passed and refreshed
+  the static frontend bundle for the Stored Vault lock-reason label slice.
+- `npm run check`: passed after the Stored Vault lock-reason label slice. This
+  covered UI tests 115 passed, TypeScript/Vite build, Rust lib 64 passed, CLI
+  15 passed, doc-tests, and clippy with `-D warnings`.
+- cmux direct QA remained blocked after the Stored Vault lock-reason label
+  slice: frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health`
+  returned `ok:true`, `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
 - `npm run test:ui -- tests/storedFilters.test.ts`: passed; due the package
   script glob this ran the full UI helper suite and reported 113 passing tests,
@@ -2552,6 +2564,16 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this Improve lock-reason label slice: UI tests
   115 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
   doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make Stored Vault Reset, Apply, and
+  filter input locked labels explain the specific active lock reason instead
+  of using generic "another action" copy.
+- Added tested Stored Vault lock-reason labels so locked states now announce
+  examples like `Cannot reset stored filters while an import is running`,
+  `Cannot apply stored filters while a scan is running`, and
+  `Cannot edit Stored Vault text filter while stored prompts are loading`.
+- `npm run check` passed after this Stored Vault lock-reason label slice: UI
+  tests 115 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
+  passed, doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2846,6 +2868,12 @@ stability, performance, and maintainability, then record evidence here.
   `improvementActionLabel()`.
 - `tests/improvementSelection.test.ts`: covers scan-running and
   stored-load-running Improve lock labels.
+- `src/storedFilters.ts`: now uses `activeActionLockReason()` so Stored Vault
+  Reset, Apply, and filter input labels name the specific blocking operation.
+- `src/App.tsx`: passes the full top-level `actionLockState` into the Stored
+  Vault Reset, Apply, and filter input label helpers.
+- `tests/storedFilters.test.ts`: covers import-running, scan-running,
+  stored-load-running, and improvement-running Stored Vault lock labels.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -3125,6 +3153,10 @@ stability, performance, and maintainability, then record evidence here.
   Safe recovery attempts did not switch visible workspace 5 or restore
   `surface:9` RPCs. This remains a cmux coordination/runtime blocker, not an
   app health failure.
+- During the Stored Vault lock-reason label slice, cmux app health and both
+  PromptVault services remained green, but direct `surface:9` title probing
+  still timed out. The slice is verified by focused UI helper tests plus the
+  full project gate until safe same-surface cmux control recovers.
 
 ## Research
 

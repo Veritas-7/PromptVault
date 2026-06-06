@@ -980,7 +980,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Text</span>
             <input
-              aria-label={storedFilterInputLabel("text", isTopLevelActionLocked)}
+              aria-label={storedFilterInputLabel("text", actionLockState)}
               data-stored-filter-query="true"
               disabled={isTopLevelActionLocked}
               value={storedFilters.query}
@@ -991,7 +991,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Source</span>
             <input
-              aria-label={storedFilterInputLabel("source", isTopLevelActionLocked)}
+              aria-label={storedFilterInputLabel("source", actionLockState)}
               data-stored-filter-source="true"
               disabled={isTopLevelActionLocked}
               list="stored-source-options"
@@ -1003,7 +1003,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Date</span>
             <input
-              aria-label={storedFilterInputLabel("date", isTopLevelActionLocked)}
+              aria-label={storedFilterInputLabel("date", actionLockState)}
               data-stored-filter-date="true"
               disabled={isTopLevelActionLocked}
               list="stored-date-options"
@@ -1015,7 +1015,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Workspace</span>
             <input
-              aria-label={storedFilterInputLabel("workspace", isTopLevelActionLocked)}
+              aria-label={storedFilterInputLabel("workspace", actionLockState)}
               data-stored-filter-workspace="true"
               disabled={isTopLevelActionLocked}
               list="stored-workspace-options"
@@ -1025,7 +1025,7 @@ function App() {
             />
           </label>
           <button
-            aria-label={storedFilterApplyLabel(storedFilterCount, isTopLevelActionLocked)}
+            aria-label={storedFilterApplyLabel(storedFilterCount, actionLockState)}
             className="inline-action"
             data-apply-stored-filters="true"
             disabled={isTopLevelActionLocked}
@@ -1035,7 +1035,7 @@ function App() {
             Apply
           </button>
           <button
-            aria-label={storedFilterResetLabel(storedFilterCount, isTopLevelActionLocked)}
+            aria-label={storedFilterResetLabel(storedFilterCount, actionLockState)}
             className="inline-action"
             data-reset-stored-filters="true"
             disabled={!storedFilterCount || isTopLevelActionLocked}

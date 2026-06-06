@@ -1,4 +1,5 @@
 import { previewSortForMode, type PreviewMode } from "./previewMode.ts";
+import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import type { StoredPromptsOptions } from "./promptVaultApi";
 
 export interface StoredPromptFilters {
@@ -31,23 +32,26 @@ export function activeStoredPromptFilterCount(filters: StoredPromptFilters): num
   ].filter((value) => value.trim()).length;
 }
 
-export function storedFilterResetLabel(activeFilterCount: number, actionLocked: boolean): string {
-  if (actionLocked) return "Cannot reset stored filters while another action is running";
+export function storedFilterResetLabel(activeFilterCount: number, lockState: ActionLockState): string {
+  const reason = activeActionLockReason(lockState);
+  if (reason) return `Cannot reset stored filters while ${reason}`;
   if (activeFilterCount === 0) return "No stored filters to reset";
   if (activeFilterCount === 1) return "Reset 1 stored filter";
   return `Reset ${activeFilterCount.toLocaleString()} stored filters`;
 }
 
-export function storedFilterApplyLabel(activeFilterCount: number, actionLocked: boolean): string {
-  if (actionLocked) return "Cannot apply stored filters while another action is running";
+export function storedFilterApplyLabel(activeFilterCount: number, lockState: ActionLockState): string {
+  const reason = activeActionLockReason(lockState);
+  if (reason) return `Cannot apply stored filters while ${reason}`;
   if (activeFilterCount === 0) return "Load stored prompts without filters";
   if (activeFilterCount === 1) return "Apply 1 stored filter";
   return `Apply ${activeFilterCount.toLocaleString()} stored filters`;
 }
 
-export function storedFilterInputLabel(fieldLabel: string, actionLocked: boolean): string {
-  if (actionLocked) {
-    return `Cannot edit Stored Vault ${fieldLabel} filter while another action is running`;
+export function storedFilterInputLabel(fieldLabel: string, lockState: ActionLockState): string {
+  const reason = activeActionLockReason(lockState);
+  if (reason) {
+    return `Cannot edit Stored Vault ${fieldLabel} filter while ${reason}`;
   }
   return `Stored Vault ${fieldLabel} filter`;
 }

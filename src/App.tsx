@@ -538,6 +538,7 @@ function App() {
           <div className="segmented" aria-label="Preview mode" role="group">
             <button
               className={previewMode === "latest" ? "active" : ""}
+              disabled={isTopLevelActionLocked}
               onClick={() => setPreviewMode("latest")}
               type="button"
             >
@@ -545,6 +546,7 @@ function App() {
             </button>
             <button
               className={previewMode === "weakest" ? "active" : ""}
+              disabled={isTopLevelActionLocked}
               onClick={() => setPreviewMode("weakest")}
               type="button"
             >
@@ -555,6 +557,7 @@ function App() {
             <span>Limit</span>
             <input
               data-scan-limit="true"
+              disabled={isTopLevelActionLocked}
               min={1}
               max={MAX_SCAN_LIMIT}
               step={100}
@@ -639,6 +642,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Text</span>
             <input
+              disabled={isTopLevelActionLocked}
               value={storedFilters.query}
               placeholder="cmux, source, workspace"
               onChange={(event) => updateStoredFilter("query", event.currentTarget.value)}
@@ -647,6 +651,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Source</span>
             <input
+              disabled={isTopLevelActionLocked}
               list="stored-source-options"
               value={storedFilters.source}
               placeholder="Any source"
@@ -656,6 +661,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Date</span>
             <input
+              disabled={isTopLevelActionLocked}
               list="stored-date-options"
               value={storedFilters.date}
               placeholder="YYYY-MM-DD"
@@ -665,6 +671,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Workspace</span>
             <input
+              disabled={isTopLevelActionLocked}
               list="stored-workspace-options"
               value={storedFilters.workspace}
               placeholder="PromptVault"

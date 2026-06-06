@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 17:41 KST
+Updated: 2026-06-06 17:44 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1011,6 +1011,27 @@ stability, performance, and maintainability, then record evidence here.
   cmux CLI selected `workspace:5`, so Computer Use was not used as proof for
   this PromptVault slice. The reliable proof came from cmux CLI against the
   explicit `surface:9` browser.
+- Continued with the next thin slice: lock request-shaping controls during
+  active work.
+- Found a related UI consistency gap: active scan/import/stored-load work
+  locked action buttons, but users could still change preview mode, scan limit,
+  and Stored Vault filter inputs while an in-flight request was using the old
+  values.
+- Preview mode buttons, the Limit input, and all four Stored Vault filter
+  inputs are now disabled while top-level work is active.
+- `npm run check` passed after this control-lock slice: UI tests 26 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused the single
+    PromptVault browser surface.
+  - Loaded the new Vite build `index-CiX2uBAs.js`, clicked `Plan`, filled Limit
+    `100000`, clicked `Scan`, and waited for scan progress.
+  - While scan progress was visible, enabled counts were all `0` for preview
+    mode buttons, `[data-scan-limit="true"]`, and `.stored-filter-panel input`.
+  - Clicked `Stop`, observed `Canceled scan was not stored in the vault.`, and
+    verified browser console returned `No console entries` and browser errors
+    returned `No browser errors`.
 
 ## Changes
 
@@ -1032,6 +1053,8 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx`: now uses shared action-lock helpers, disables import write
   actions while a scan is running or canceling, and exposes stable cmux QA
   selectors for `Scan`, `Plan`, and `Limit`.
+- `src/App.tsx`: disables preview mode, Limit, and Stored Vault filter inputs
+  while top-level scan/import/stored-load work is active.
 - `tests/actionLocks.test.ts`: added coverage for top-level locks and import
   action locks, including the active-scan case.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and

@@ -72,7 +72,11 @@ import {
   type ScanStopFailure,
 } from "./scanStatus";
 import { selectedPromptForView } from "./selection";
-import { storedLoadFailureText, type StoredLoadState } from "./storedLoadStatus";
+import {
+  storedFilterChangedAfterFailure,
+  storedLoadFailureText,
+  type StoredLoadState,
+} from "./storedLoadStatus";
 import {
   activeStoredPromptFilterCount,
   emptyStoredPromptFilters,
@@ -189,6 +193,7 @@ function App() {
   const [improvementPromptId, setImprovementPromptId] = useState<string | null>(null);
   const [improvementFailurePromptId, setImprovementFailurePromptId] = useState<string | null>(null);
   const [improvementFailureErrorText, setImprovementFailureErrorText] = useState<string | null>(null);
+  const [storedLoadFailureErrorText, setStoredLoadFailureErrorText] = useState<string | null>(null);
   const importStopRequestedRef = useRef(false);
   const scanRunIdRef = useRef<string | null>(null);
   const topLevelActionClaimRef = useRef(false);
@@ -583,6 +588,7 @@ function App() {
     setImprovementPromptId(null);
     setImprovementFailurePromptId(null);
     setImprovementFailureErrorText(null);
+    setStoredLoadFailureErrorText(null);
     setScanStopFailure(null);
     setScanState("idle");
     setStoredLoadState("loading");
@@ -599,8 +605,11 @@ function App() {
         )?.id ?? null,
       );
       setStoredLoadState("ready");
+      setStoredLoadFailureErrorText(null);
     } catch (err) {
-      setError(errorText(err));
+      const message = errorText(err);
+      setError(message);
+      setStoredLoadFailureErrorText(message);
       setStoredLoadState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
@@ -612,6 +621,17 @@ function App() {
       ...current,
       [key]: value,
     }));
+    if (storedLoadState === "failed") {
+      const next = storedFilterChangedAfterFailure(
+        storedLoadState,
+        error,
+        storedLoadFailureErrorText,
+        result !== null,
+      );
+      setError(next.error);
+      setStoredLoadFailureErrorText(next.failureErrorText);
+      setStoredLoadState(next.state);
+    }
   }
 
   function resetStoredFilters() {

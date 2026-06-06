@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 20:07 KST
+Updated: 2026-06-06 20:11 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1640,6 +1640,35 @@ stability, performance, and maintainability, then record evidence here.
     and no top-level error.
   - Final diagnostics on the same `surface:9` returned `No console entries`
     and `No browser errors`.
+- Continued with the next thin slice: clear stale Stored Load failure warnings
+  when the user edits Stored Vault filters after a failed load.
+- Found that a failed stored prompt load could leave the panel warning and
+  matching top-level bridge error visible even after the user changed the
+  filter input to recover.
+- Added scoped Stored Load failure-error tracking so filter edits clear only the
+  matching Stored Load global error, preserve unrelated global errors, and
+  return the Stored Load state to `ready` when prior prompt results are still
+  visible.
+- `npm run test:ui` passed after this stored-load-edit-clear slice with 69
+  tests.
+- `npm run check` passed after this slice: UI tests 69 passed, TypeScript and
+  Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, and
+  clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reloaded `http://127.0.0.1:5173/?stored-load-edit-clear=20260606a` on the
+    same PromptVault browser surface.
+  - Clicked `Load Stored` and observed the prior unfiltered result
+    `1,000 loaded · latest preview`.
+  - Installed a page-local fetch monkeypatch that rejected only `/api/prompts`
+    with `forced stored load edit failure`.
+  - Set Source to `Antigravity conversation DB`, clicked `Apply`, and observed
+    the Stored Load panel warning plus the matching top-level bridge error
+    while the prior `1,000 loaded · latest preview` result stayed visible.
+  - Edited Source to `Antigravity conversation DB edited`; the Source value
+    changed, Reset stayed enabled, the prior result stayed visible, and both
+    the panel warning and matching top-level error cleared immediately.
+  - Restored `window.fetch`, reloaded the same `surface:9`, and confirmed
+    `No console entries` and `No browser errors`.
 
 ## Changes
 
@@ -1753,6 +1782,12 @@ stability, performance, and maintainability, then record evidence here.
   immediately loading with the empty filters, and wraps the Load Stored click
   handler to avoid passing mouse events as filter input.
 - `tests/storedFilters.test.ts`: covers the empty stored filter shape.
+- `src/storedLoadStatus.ts`: adds a helper for clearing failed Stored Load
+  state after the user edits filters, scoped to the matching failure error.
+- `src/App.tsx`: tracks the Stored Load failure error text and clears the
+  matching panel/global failure when filters change after a failed load.
+- `tests/storedLoadStatus.test.ts`: covers matching-error cleanup, unrelated
+  error preservation, and no-prior-result fallback to idle.
 - `src/scanStatus.ts`: adds scan failure copy for first-run and stale-results
   failures, plus scan Stop failure copy.
 - `src/App.tsx`: shows a scan retry warning when a scan fails and clears stale
@@ -1943,6 +1978,9 @@ stability, performance, and maintainability, then record evidence here.
   `프롬프트` workspace 5 row, revealing the already-open PromptVault browser
   at `http://127.0.0.1:5173/?stored-reset-apply=20260606b`; all later actions
   used the existing `surface:9` and diagnostics returned clean.
+- During stored-load-edit-clear QA, the page-local fetch monkeypatch affected
+  only `/api/prompts` on the current `surface:9` page and was restored before a
+  clean same-surface reload. Final diagnostics returned clean.
 
 ## Research
 

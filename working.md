@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 09:56 KST
+Updated: 2026-06-06 09:55 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -269,6 +269,11 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check`: passed after the plan slice. This covered UI tests 10
   passed, TypeScript/Vite build, Rust lib 49 passed, CLI 15 passed,
   doc-tests, and clippy with `-D warnings`.
+- Plan slice committed and pushed:
+  `00b58158f3a17b0662897d3b6d13867ac769c3fb`
+  (`feat: add scan import planner`).
+- After push, `git rev-list --left-right --count HEAD...origin/main` returned
+  `0 0`.
 
 ## Issues
 
@@ -290,9 +295,7 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Next Steps
 
-1. Stage only explicit plan-slice paths, run staged whitespace/secret checks,
-   then commit and push this slice.
-2. Add resumable incremental import state for large stores using the plan output.
-3. Add UI progress/cancel state for long scans.
-4. Consider a background indexing worker so first-run historical import can
+1. Add resumable incremental import state for large stores using the plan output.
+2. Add UI progress/cancel state for long scans.
+3. Consider a background indexing worker so first-run historical import can
    continue without blocking the browser UI.

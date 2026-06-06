@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 23:44 KST
+Updated: 2026-06-06 23:49 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -3232,6 +3232,49 @@ stability, performance, and maintainability, then record evidence here.
   still timed out with exit `124`. The slice is verified by focused UI helper
   tests plus the full project gate until safe same-surface cmux control
   recovers.
+
+## Completion Audit Snapshot - 2026-06-06 23:49 KST
+
+Objective restated as concrete deliverables:
+
+1. Use the current session's single existing cmux in-app browser for direct
+   PromptVault QA; do not open a second cmux browser and do not restart/kill
+   cmux.
+2. Directly exercise core user flows: page load, scan, stop, stored prompt
+   load/filter/reset/apply, import plan, import batch/continuous/queue/stop,
+   prompt search/selection, improvement, loading/empty/failure states,
+   keyboard/accessibility-visible states, console/browser-error checks.
+3. Keep improving functionality, UI/UX, stability, performance, and
+   maintainability in small tested slices.
+4. Keep `working.md` current with goal, context, progress, changes, tests,
+   issues, research, and next steps.
+5. Before commits/pushes, stage explicit paths only, run relevant tests,
+   staged whitespace checks, staged gitleaks, then verify local/remote parity.
+
+Prompt-to-artifact checklist:
+
+| Requirement | Current evidence | Status |
+|---|---|---|
+| Target source path is PromptVault | Goal identity and repo root resolve to `/Users/wj/Ai/System/10_Projects/PromptVault`; latest pushed commit is `c923d3e` on `main`. | PASS |
+| `working.md` exists and is updated | Required headings are present: Current Goal, Context, Progress, Changes, Tests, Issues, Research, Next Steps. This audit updates the file at `2026-06-06 23:49 KST`. | PASS |
+| Project-local design policy checked | `find . -maxdepth 2 ... design.md/DESIGN.md/AGENTS.md/CLAUDE.md/PROJECT_STATUS.md` returned no project-local files. Workspace policy comes from `/Users/wj/Ai` rules. | PASS |
+| Automatic tests cover recent slices | Latest full gate before this audit: `npm run check` passed with UI tests 119 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed, doc-tests passed, clippy passed. | PASS |
+| Repo pushed and synchronized | `git status --short --branch` returned `## main...origin/main`; `git rev-list --left-right --count HEAD...origin/main` returned `0 0`. | PASS |
+| Runtime services are alive | Frontend returned `HTTP/1.0 200 OK`; bridge `/api/health` returned `ok:true` with `/Users/wj/Documents/PromptVault/promptvault.sqlite`. | PASS |
+| cmux app process is alive | `CMUX_QUIET=1 cmux ping` returned `PONG`. | PASS |
+| Use only one existing cmux browser | No new cmux browser was opened and no cmux restart/kill was attempted during the recent blocked slices. | PASS |
+| Direct existing-browser QA can currently run | `timeout 6 cmux browser --surface surface:9 get title` exited `124`; `workspace select`, `focus-pane`, and `list-pane-surfaces` also timed out; Computer Use showed visible cmux still on `working.md` / Worklog Tracker. | BLOCKED |
+| Final objective achieved | Direct single-browser cmux QA is a core requirement and is currently blocked. | NOT ACHIEVED |
+
+Audit conclusion:
+
+- Do not mark the thread goal complete yet.
+- The app code and automated gates are currently green, but the objective
+  requires direct QA through the single existing cmux browser.
+- Next work should either safely recover the existing PromptVault cmux
+  workspace/surface without restarting cmux or continue low-risk app
+  improvements that can be verified by unit/full gates until direct cmux QA
+  becomes available again.
 
 ## Research
 

@@ -146,6 +146,15 @@ export interface ImportEventsResult {
   total_events: number;
 }
 
+export interface StoredPromptFacetsResult {
+  generated_at: string;
+  database_path: string;
+  total_prompts: number;
+  sources: FrequencyItem[];
+  dates: FrequencyItem[];
+  workspaces: FrequencyItem[];
+}
+
 export interface ImportBatchResult {
   generated_at: string;
   source: SourcePlan;

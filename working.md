@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 15:49 KST
+Updated: 2026-06-06 16:04 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -380,6 +380,18 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.tsx` and `src/App.css`: added the stored-vault filter panel, reset
   control, source/date suggestions from loaded results, and responsive layout.
 - `README.md`: documented filtered stored-prompt loading.
+- `src-tauri/src/lib.rs`: added `StoredPromptFacetsResult`,
+  `StoredPromptFacetsOptions`, `run_list_stored_prompt_facets`, the Tauri
+  `list_stored_prompt_facets` command, SQL facet aggregation helpers, and
+  focused Rust coverage for source/date/workspace facets.
+- `src-tauri/src/bin/promptvault-cli.rs`: added bridge payload and route for
+  `/api/prompt-facets`, and updated CLI help text.
+- `src/promptVaultApi.ts` and `src/types.ts`: added stored prompt facet
+  API/types.
+- `src/App.tsx`: added startup facet loading, source/date/workspace datalists
+  backed by facet aggregates, Stored Vault facet summary text, workspace
+  suggestions, and quiet facet refreshes after scan/import completion.
+- `README.md` and `docs/CLI.md`: documented `/api/prompt-facets`.
 
 ## Tests
 
@@ -609,6 +621,59 @@ stability, performance, and maintainability, then record evidence here.
     recommendation prompt `Select a prompt and run improvement.`
   - Browser diagnostics after the empty-state test returned `No console
     entries` and `No browser errors`.
+- Continued with the next thin slice: pre-load stored vault facets for source,
+  date, and workspace suggestions before the first unfiltered stored load.
+- Added Tauri command and browser bridge route `/api/prompt-facets`. The route
+  reads only aggregate counts from SQLite, not prompt bodies.
+- Added startup facet loading in the Stored Vault panel and quiet facet
+  refreshes after scan/import flows that can change the persisted vault.
+- Real bridge `/api/prompt-facets` smoke returned `total_prompts 459`, sources
+  including `Codex 200` and `Gemini temporary chats 117`, dates including
+  `2026-06-04 84` and `2026-04-20 63`, and workspaces including
+  `/Users/wj 134`.
+- Confirmed the current cmux workspace `workspace:5` still has exactly one
+  PromptVault browser, `surface:9`, at `http://127.0.0.1:5173/`.
+- Real cmux facet QA on the same `surface:9`:
+  - Reloaded the existing PromptVault browser after rebuilding the frontend.
+  - Observed Stored Vault header
+    `459 stored, 10 sources, 20 dates, 10 workspaces` before clicking
+    `Load Stored`.
+  - Confirmed pre-load datalists contained source suggestions, dates including
+    `2026-04-20`, and workspaces including `/Users/wj`.
+  - Filled Source `Gemini temporary chats` and Date `2026-04-20`, clicked
+    `Load Stored`, and observed metrics `Prompts 63`, `Preview 63`,
+    `Files 63`, `DB Stored 459`, `Dates 20`; the source panel showed only
+    `Gemini temporary chats`.
+  - Clicked `Reset`, clicked `Load Stored`, and observed the full vault again:
+    `Prompts 459`, `Preview 459`, `Files 307`, `Words 92314`,
+    `Quality 74.9`, `Weak 126`, `DB Stored 459`, `Dates 20`.
+  - Browser console returned `No console entries`; browser errors returned
+    `No browser errors`.
+- Post-rebuild browser smoke on `surface:9` still showed
+  `459 stored, 10 sources, 20 dates, 10 workspaces` with no console entries or
+  browser errors.
+- `npm run test:ui`: 21 tests passed after adding stored facet UI wiring.
+- `npm run build`: TypeScript and Vite production build passed after adding
+  the stored facet UI.
+- `cd src-tauri && cargo test stored_prompt_facets`: focused facet aggregation
+  test passed.
+- `npm run check`: passed after the stored facet slice. This covered UI tests
+  21 passed, TypeScript/Vite build, Rust lib 58 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
+- `cd src-tauri && cargo build --bin promptvault-cli`: passed before restarting
+  the browser bridge.
+- Restarted only the `promptvault-bridge` tmux session on
+  `127.0.0.1:5174`; did not stop, restart, or replace cmux.
+- Real bridge `/api/prompt-facets` smoke passed and returned the expected
+  459-prompt aggregate facet summary.
+- Real cmux stored facet pre-load and filtered/unfiltered Load Stored QA on
+  `surface:9`: passed with no console entries or browser errors.
+- Re-ran `npm run check` after adding quiet facet refresh hooks; it passed
+  again with UI tests 21 passed, TypeScript/Vite build, Rust lib 58 passed,
+  CLI 15 passed, doc-tests, and clippy with `-D warnings`.
+- Post-rebuild cmux smoke on `surface:9`: `.stored-filter-panel` rendered,
+  header showed `459 stored, 10 sources, 20 dates, 10 workspaces`, console
+  returned `No console entries`, and errors returned `No browser errors`.
 
 ## Issues
 
@@ -634,6 +699,12 @@ stability, performance, and maintainability, then record evidence here.
   re-targeting the existing PromptVault `surface:9`, cmux browser CLI commands
   worked and diagnostics returned clean. Treat Computer Use app state as the
   currently focused cmux workspace, not proof of the target PromptVault surface.
+- During the facet slice, `cmux browser --surface surface:9 get url` reported
+  the correct PromptVault URL while `snapshot` briefly reported `about:blank`.
+  `focus-webview` returned `invalid_state: WebView is not in a window`;
+  focusing the existing browser pane `pane:10` in `workspace:5` restored
+  reliable surface-specific DOM and click automation. Do not create a new
+  browser as a workaround.
 - GLM still rate-limits with HTTP 429 in browser Improve tests; the local
   fallback continues to produce a usable recommendation and warning.
 
@@ -647,9 +718,7 @@ stability, performance, and maintainability, then record evidence here.
 
 1. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
-2. Add a full stored-vault facet endpoint for all source/date/workspace options
-   so filter suggestions are available before the first unfiltered load.
-3. Add scan-run cancellation/progress for unrestricted full scans, separate
+2. Add scan-run cancellation/progress for unrestricted full scans, separate
    from the safer resumable import-batch path.
-4. Recover or harden the cmux browser diagnostics workflow for cases where the
+3. Recover or harden the cmux browser diagnostics workflow for cases where the
    active visible workspace differs from the target PromptVault surface.

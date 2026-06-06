@@ -7,6 +7,7 @@ import type {
   ImproveResult,
   ScanPlan,
   ScanResult,
+  StoredPromptFacetsResult,
 } from "./types";
 
 export interface ScanPromptOptions {
@@ -46,6 +47,11 @@ export interface StoredPromptsOptions {
   preview_sort?: string;
 }
 
+export interface StoredPromptFacetsOptions {
+  database_path?: string;
+  limit?: number;
+}
+
 export interface ImprovePromptRequest {
   prompt: string;
   context?: string | null;
@@ -77,6 +83,15 @@ export async function listImportEvents(options: ImportEventsOptions = {}): Promi
     return invoke<ImportEventsResult>("list_import_events", { options });
   }
   return postBridge<ImportEventsResult>("/api/import-events", { options });
+}
+
+export async function listStoredPromptFacets(
+  options: StoredPromptFacetsOptions = {},
+): Promise<StoredPromptFacetsResult> {
+  if (hasTauriInvoke()) {
+    return invoke<StoredPromptFacetsResult>("list_stored_prompt_facets", { options });
+  }
+  return postBridge<StoredPromptFacetsResult>("/api/prompt-facets", { options });
 }
 
 export async function loadStoredPrompts(options: StoredPromptsOptions = {}): Promise<ScanResult> {

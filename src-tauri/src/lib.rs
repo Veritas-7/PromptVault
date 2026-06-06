@@ -22,6 +22,8 @@ const DEFAULT_IMPORT_EVENT_LIMIT: usize = 20;
 const MAX_IMPORT_EVENT_LIMIT: usize = 100;
 const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
 const MAX_STORED_PROMPT_LIMIT: usize = 1_000;
+const DEFAULT_STORED_FACET_LIMIT: usize = 50;
+const MAX_STORED_FACET_LIMIT: usize = 200;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptRecord {
@@ -199,6 +201,16 @@ pub struct ImportEventsResult {
     pub total_events: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredPromptFacetsResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub total_prompts: usize,
+    pub sources: Vec<FrequencyItem>,
+    pub dates: Vec<FrequencyItem>,
+    pub workspaces: Vec<FrequencyItem>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ScanPlanOptions {
     pub source_ids: Option<Vec<String>>,
@@ -220,6 +232,12 @@ pub struct ImportStatesOptions {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ImportEventsOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StoredPromptFacetsOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
 }
@@ -320,6 +338,13 @@ fn list_import_states(options: Option<ImportStatesOptions>) -> Result<ImportStat
 #[tauri::command]
 fn list_import_events(options: Option<ImportEventsOptions>) -> Result<ImportEventsResult, String> {
     run_list_import_events(options.unwrap_or_default()).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn list_stored_prompt_facets(
+    options: Option<StoredPromptFacetsOptions>,
+) -> Result<StoredPromptFacetsResult, String> {
+    run_list_stored_prompt_facets(options.unwrap_or_default()).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -563,6 +588,54 @@ pub fn run_list_import_events(
         database_path: database_path.display().to_string(),
         events,
         total_events,
+    })
+}
+
+pub fn run_list_stored_prompt_facets(
+    options: StoredPromptFacetsOptions,
+) -> Result<StoredPromptFacetsResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("stored prompt facet limit requires a positive integer".into());
+    }
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_STORED_FACET_LIMIT)
+        .min(MAX_STORED_FACET_LIMIT);
+    let conn = open_promptvault_database(&database_path)?;
+    let total_prompts: i64 =
+        conn.query_row("SELECT COUNT(*) FROM prompts", [], |row| row.get(0))?;
+
+    Ok(StoredPromptFacetsResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        total_prompts: total_prompts as usize,
+        sources: read_stored_prompt_facet(
+            &conn,
+            "source",
+            "source IS NOT NULL AND source <> ''",
+            limit,
+        )?,
+        dates: read_stored_prompt_facet(
+            &conn,
+            "prompt_date",
+            "prompt_date IS NOT NULL AND prompt_date <> ''",
+            limit,
+        )?,
+        workspaces: read_stored_prompt_facet(
+            &conn,
+            "COALESCE(cwd, '')",
+            "COALESCE(cwd, '') <> ''",
+            limit,
+        )?,
     })
 }
 
@@ -2810,6 +2883,32 @@ fn count_stored_prompt_matches(
     Ok(count as usize)
 }
 
+fn read_stored_prompt_facet(
+    conn: &Connection,
+    expression: &str,
+    where_clause: &str,
+    limit: usize,
+) -> Result<Vec<FrequencyItem>, Box<dyn std::error::Error>> {
+    let sql = format!(
+        "SELECT {expression} AS facet_value, COUNT(*) AS facet_count
+         FROM prompts
+         WHERE {where_clause}
+         GROUP BY facet_value
+         ORDER BY facet_count DESC, LOWER(facet_value) ASC
+         LIMIT ?1"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map([limit as i64], |row| {
+            Ok(FrequencyItem {
+                text: row.get(0)?,
+                count: row.get::<_, i64>(1)? as usize,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 fn stored_source_summaries(prompts: &[PromptRecord]) -> Vec<SourceSummary> {
     let mut by_source = BTreeMap::<String, Vec<&PromptRecord>>::new();
     for prompt in prompts {
@@ -3372,6 +3471,7 @@ pub fn run() {
             import_batch,
             list_import_states,
             list_import_events,
+            list_stored_prompt_facets,
             load_stored_prompts,
             improve_prompt
         ])
@@ -4869,6 +4969,52 @@ mod tests {
         );
 
         std::fs::remove_dir_all(root).expect("remove load filtered root");
+    }
+
+    #[test]
+    fn stored_prompt_facets_summarize_sources_dates_and_workspaces() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-facets-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create facets root");
+        let db_path = root.join("promptvault.sqlite");
+        let mut codex_today = dated_record("facet-codex-today", "2026-06-06T00:00:00Z");
+        codex_today.source = "Codex".to_string();
+        codex_today.cwd = Some("/Users/wj".to_string());
+        let mut codex_yesterday = dated_record("facet-codex-yesterday", "2026-06-05T00:00:00Z");
+        codex_yesterday.source = "Codex".to_string();
+        codex_yesterday.cwd = Some("/Users/wj".to_string());
+        let mut claude_today = dated_record("facet-claude-today", "2026-06-06T00:00:00Z");
+        claude_today.source = "Claude".to_string();
+        claude_today.cwd = Some("/Users/wj".to_string());
+        let mut gemini_today = dated_record("facet-gemini-today", "2026-06-06T00:00:00Z");
+        gemini_today.source = "Gemini".to_string();
+        gemini_today.cwd = Some("/tmp/OtherProject".to_string());
+        let prompts = vec![codex_today, codex_yesterday, claude_today, gemini_today];
+        let stats = build_stats(&prompts, Vec::new());
+        persist_scan_result(&db_path, "2026-06-06T00:01:00Z", &prompts, &stats, &[])
+            .expect("persist prompt facets");
+
+        let result = run_list_stored_prompt_facets(StoredPromptFacetsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(2),
+        })
+        .expect("list stored prompt facets");
+
+        assert_eq!(result.total_prompts, 4);
+        assert_eq!(result.sources.len(), 2);
+        assert_eq!(result.sources[0].text, "Codex");
+        assert_eq!(result.sources[0].count, 2);
+        assert_eq!(result.dates[0].text, "2026-06-06");
+        assert_eq!(result.dates[0].count, 3);
+        assert_eq!(result.workspaces[0].text, "/Users/wj");
+        assert_eq!(result.workspaces[0].count, 3);
+
+        std::fs::remove_dir_all(root).expect("remove facets root");
     }
 
     fn record(id: &str) -> PromptRecord {

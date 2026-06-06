@@ -34,6 +34,7 @@ import {
   isBrowserQaMode,
   listImportEvents,
   listImportStates,
+  listStoredPromptFacets,
   loadStoredPrompts,
   planScan,
   scanPrompts,
@@ -53,12 +54,14 @@ import type {
   PromptRecord,
   ScanPlan,
   ScanResult,
+  StoredPromptFacetsResult,
 } from "./types";
 
 type ScanState = "idle" | "scanning" | "ready" | "failed";
 type PlanState = "idle" | "planning" | "ready" | "failed";
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
+type StoredFacetsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
 const MAX_SCAN_LIMIT = 100000;
 const IMPORT_BATCH_FILES = 5;
@@ -110,6 +113,7 @@ function App() {
   const [importState, setImportState] = useState<ImportRunState>("idle");
   const [importStatesState, setImportStatesState] = useState<ImportStatesState>("idle");
   const [importEventsState, setImportEventsState] = useState<ImportEventsState>("idle");
+  const [storedFacetsState, setStoredFacetsState] = useState<StoredFacetsState>("idle");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -120,6 +124,7 @@ function App() {
   const [importResult, setImportResult] = useState<ImportBatchResult | null>(null);
   const [importStatesResult, setImportStatesResult] = useState<ImportStatesResult | null>(null);
   const [importEventsResult, setImportEventsResult] = useState<ImportEventsResult | null>(null);
+  const [storedFacetsResult, setStoredFacetsResult] = useState<StoredPromptFacetsResult | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -172,18 +177,44 @@ function App() {
   );
   const storedFilterCount = activeStoredPromptFilterCount(storedFilters);
   const storedSourceSuggestions = useMemo(() => {
-    return [...new Set((result?.stats.source_summaries ?? []).map((source) => source.label))]
+    const sourceLabels = storedFacetsResult?.sources.map((source) => source.text)
+      ?? (result?.stats.source_summaries ?? []).map((source) => source.label);
+    return [...new Set(sourceLabels)]
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b));
-  }, [result?.stats.source_summaries]);
+  }, [result?.stats.source_summaries, storedFacetsResult?.sources]);
   const storedDateSuggestions = useMemo(() => {
-    return (result?.stats.prompts_by_date ?? []).map((date) => date.text);
-  }, [result?.stats.prompts_by_date]);
+    return storedFacetsResult?.dates.map((date) => date.text)
+      ?? (result?.stats.prompts_by_date ?? []).map((date) => date.text);
+  }, [result?.stats.prompts_by_date, storedFacetsResult?.dates]);
+  const storedWorkspaceSuggestions = useMemo(() => {
+    return storedFacetsResult?.workspaces.map((workspace) => workspace.text) ?? [];
+  }, [storedFacetsResult?.workspaces]);
+  const storedFacetSummary = storedFacetsResult
+    ? `${storedFacetsResult.total_prompts.toLocaleString()} stored, ${storedFacetsResult.sources.length.toLocaleString()} sources, ${storedFacetsResult.dates.length.toLocaleString()} dates, ${storedFacetsResult.workspaces.length.toLocaleString()} workspaces`
+    : storedFacetsState === "loading"
+      ? "loading stored facets"
+      : storedFilterCount
+        ? `${storedFilterCount} filters active`
+        : "all stored prompts";
 
   useEffect(() => {
+    void refreshStoredFacets();
     void refreshImportStates();
     void refreshImportEvents();
   }, []);
+
+  async function refreshStoredFacets({ quiet = false }: { quiet?: boolean } = {}) {
+    if (!quiet) setStoredFacetsState("loading");
+    try {
+      const next = await listStoredPromptFacets();
+      setStoredFacetsResult(next);
+      setStoredFacetsState("ready");
+    } catch (err) {
+      setStoredFacetsState("failed");
+      if (!quiet) setError(errorText(err));
+    }
+  }
 
   async function refreshImportStates({ quiet = false }: { quiet?: boolean } = {}) {
     if (!quiet) setImportStatesState("loading");
@@ -264,6 +295,7 @@ function App() {
       importStopRequestedRef.current = false;
       await refreshImportStates({ quiet: true });
       await refreshImportEvents({ quiet: true });
+      await refreshStoredFacets({ quiet: true });
     }
   }
 
@@ -300,6 +332,7 @@ function App() {
       importStopRequestedRef.current = false;
       await refreshImportStates({ quiet: true });
       await refreshImportEvents({ quiet: true });
+      await refreshStoredFacets({ quiet: true });
     }
   }
 
@@ -337,6 +370,7 @@ function App() {
         )?.id ?? null,
       );
       setScanState("ready");
+      await refreshStoredFacets({ quiet: true });
     } catch (err) {
       setError(errorText(err));
       setScanState("failed");
@@ -488,7 +522,7 @@ function App() {
       <section className="panel stored-filter-panel">
         <div className="panel-heading">
           <h2>Stored Vault</h2>
-          <span>{storedFilterCount ? `${storedFilterCount} filters active` : "all stored prompts"}</span>
+          <span>{storedFacetSummary}</span>
         </div>
         <div className="stored-filter-grid">
           <label className="stored-filter-control">
@@ -520,6 +554,7 @@ function App() {
           <label className="stored-filter-control">
             <span>Workspace</span>
             <input
+              list="stored-workspace-options"
               value={storedFilters.workspace}
               placeholder="PromptVault"
               onChange={(event) => updateStoredFilter("workspace", event.currentTarget.value)}
@@ -542,6 +577,11 @@ function App() {
         <datalist id="stored-date-options">
           {storedDateSuggestions.map((date) => (
             <option key={date} value={date} />
+          ))}
+        </datalist>
+        <datalist id="stored-workspace-options">
+          {storedWorkspaceSuggestions.map((workspace) => (
+            <option key={workspace} value={workspace} />
           ))}
         </datalist>
       </section>

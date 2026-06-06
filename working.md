@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 18:21 KST
+Updated: 2026-06-06 18:26 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1184,6 +1184,32 @@ stability, performance, and maintainability, then record evidence here.
   - Cleared the filter afterward and observed rows return to `200`.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: make the Recommendation panel's empty
+  copy match the current prompt selection/filter state.
+- Found that the Recommendation panel still said
+  `Select a prompt and run improvement.` even when a prompt was already
+  selected, and it did not explain filter-hidden prompts.
+- Added recommendation empty-state copy coverage for selected prompt,
+  filter-hidden prompt, and no-data states.
+- `npm run test:ui` passed after this recommendation-empty slice with 35 tests.
+- `npm run check` passed after this recommendation-empty slice: UI tests 35
+  passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?recommendation-empty=20260606a`.
+  - Clicked Stored Vault `Apply` and waited until stored prompt rows rendered.
+  - Observed rows `200` and Recommendation empty text
+    `Run improvement for the selected prompt.`.
+  - Filled the prompt filter with `zzzz-no-recommendation-match-20260606`.
+  - Observed rows `0`, prompt-list empty text
+    `No prompts match the current filter.`, selected-panel empty text
+    `No prompt is visible with the current filter.`, and Recommendation empty
+    text `Clear the prompt filter or select a visible prompt before improving.`.
+  - Cleared the filter afterward and observed rows return to `200`.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1224,14 +1250,17 @@ stability, performance, and maintainability, then record evidence here.
 - `src/App.css`: gives the prompt-list empty row the same padded list rhythm as
   prompt rows.
 - `src/promptEmptyState.ts`: adds small copy helpers for loaded-empty and
-  filter-miss prompt states.
+  filter-miss prompt states; it now also provides Recommendation empty-state
+  copy for selected, filter-hidden, and no-data prompt states.
 - `src/actionLocks.ts`: includes `improvementRunning` in top-level and import
   write locks, and now exposes small exclusive action claim helpers.
 - `tests/actionLocks.test.ts`: added coverage for top-level locks and import
   action locks, including active-scan and active-improvement cases, plus
   exclusive action claim/release behavior.
 - `tests/promptEmptyState.test.ts`: covers prompt-list and selected-panel empty
-  copy for not-loaded, loaded-empty, and filter-miss states.
+  copy for not-loaded, loaded-empty, and filter-miss states, plus
+  Recommendation empty-state copy for selected, filter-hidden, and no-data
+  states.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1317,6 +1346,9 @@ stability, performance, and maintainability, then record evidence here.
 - During prompt-empty QA, the stable `surface:9` path remained reliable:
   `goto`, `wait --selector`, `click`, `fill`, short `eval`, console list, and
   errors list all completed without needing a second browser.
+- During recommendation-empty QA, the same `surface:9` path worked but most
+  cmux browser commands took a few seconds to return. Waiting on each command
+  was enough; no cmux restart or second browser was needed.
 
 ## Research
 
@@ -1337,4 +1369,4 @@ stability, performance, and maintainability, then record evidence here.
 5. Consider whether stored facets should show an explicit refresh status if
    future UI work exposes a manual stored-facet refresh control.
 6. Continue reviewing remaining empty and failure states in secondary panels,
-   especially places that still assume a scan/load has not happened.
+   especially import progress/activity panels and frequency/source panels.

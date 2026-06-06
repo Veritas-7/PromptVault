@@ -34,7 +34,11 @@ import {
 } from "./importProgress";
 import { selectedQueueSourceIds, toggleSourceSelection } from "./importQueue";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
-import { promptListEmptyText, selectedPromptEmptyText } from "./promptEmptyState";
+import {
+  promptListEmptyText,
+  recommendationEmptyText,
+  selectedPromptEmptyText,
+} from "./promptEmptyState";
 import {
   cancelScan,
   importBatch,
@@ -217,6 +221,11 @@ function App() {
     improvement,
     improvementPromptId,
     selectedPrompt?.id ?? null,
+  );
+  const recommendationEmptyMessage = recommendationEmptyText(
+    selectedPrompt !== null,
+    hasPromptResult,
+    query,
   );
   const storedFilterCount = activeStoredPromptFilterCount(storedFilters);
   const storedSourceSuggestions = useMemo(() => {
@@ -1314,7 +1323,9 @@ function App() {
               ) : null}
             </>
           ) : (
-            <div className="empty">Select a prompt and run improvement.</div>
+            <div className="empty" data-empty-recommendation="true">
+              {recommendationEmptyMessage}
+            </div>
           )}
         </section>
       </section>

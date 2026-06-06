@@ -24,6 +24,7 @@ import {
   type ImportRunMode,
   type ImportRunState,
 } from "./importProgress";
+import { selectedQueueSourceIds, toggleSourceSelection } from "./importQueue";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
 import { importBatch, improvePrompt, isBrowserQaMode, planScan, scanPrompts } from "./promptVaultApi";
 import { selectedPromptForView } from "./selection";
@@ -77,6 +78,9 @@ function App() {
   const [importState, setImportState] = useState<ImportRunState>("idle");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
+  const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
+  const [importQueueSourceIds, setImportQueueSourceIds] = useState<string[]>([]);
+  const [completedQueueSourceCount, setCompletedQueueSourceCount] = useState(0);
   const [stopRequested, setStopRequested] = useState(false);
   const [plan, setPlan] = useState<ScanPlan | null>(null);
   const [importResult, setImportResult] = useState<ImportBatchResult | null>(null);
@@ -116,6 +120,9 @@ function App() {
   const activeImportSource = useMemo(() => {
     return plan?.sources.find((source) => source.id === activeImportSourceId) ?? null;
   }, [activeImportSourceId, plan]);
+  const selectedImportQueueSourceIds = useMemo(() => {
+    return selectedQueueSourceIds(selectedImportSourceIds, plan?.sources ?? []);
+  }, [plan?.sources, selectedImportSourceIds]);
   const activeImprovement = activeImprovementForSelection(
     improvement,
     improvementPromptId,
@@ -128,6 +135,7 @@ function App() {
     try {
       const next = await planScan();
       setPlan(next);
+      setSelectedImportSourceIds((current) => selectedQueueSourceIds(current, next.sources));
       setPlanState("ready");
     } catch (err) {
       setError(errorText(err));
@@ -135,32 +143,73 @@ function App() {
     }
   }
 
+  async function runImportSource(sourceId: string, mode: ImportRunMode): Promise<ImportBatchResult | null> {
+    let next: ImportBatchResult | null = null;
+    do {
+      next = await importBatch({
+        source_id: sourceId,
+        file_batch_size: IMPORT_BATCH_FILES,
+        preview_limit: 25,
+      });
+      setImportResult(next);
+      if (mode === "single" || next.state.completed || importStopRequestedRef.current) {
+        break;
+      }
+      await waitForNextImportBatch();
+    } while (!importStopRequestedRef.current);
+    return next;
+  }
+
   async function runImportBatch(sourceId: string, mode: ImportRunMode) {
     setError(null);
     setActiveImportSourceId(sourceId);
     setImportMode(mode);
+    setImportQueueSourceIds([]);
+    setCompletedQueueSourceCount(0);
     setStopRequested(false);
     setImportResult(null);
     importStopRequestedRef.current = false;
     setImportState("importing");
     try {
-      let next: ImportBatchResult | null = null;
-      do {
-        next = await importBatch({
-          source_id: sourceId,
-          file_batch_size: IMPORT_BATCH_FILES,
-          preview_limit: 25,
-        });
-        setImportResult(next);
-        if (mode !== "continuous" || next.state.completed || importStopRequestedRef.current) {
-          break;
-        }
-        await waitForNextImportBatch();
-      } while (!importStopRequestedRef.current);
+      const next = await runImportSource(sourceId, mode);
 
       setImportState(
         importStopRequestedRef.current && !next?.state.completed ? "stopped" : "ready",
       );
+    } catch (err) {
+      setError(errorText(err));
+      setImportState("failed");
+    } finally {
+      setStopRequested(false);
+      importStopRequestedRef.current = false;
+    }
+  }
+
+  async function runSelectedImportQueue() {
+    const queue = selectedImportQueueSourceIds;
+    if (!queue.length) return;
+    setError(null);
+    setImportMode("queue");
+    setImportQueueSourceIds(queue);
+    setCompletedQueueSourceCount(0);
+    setStopRequested(false);
+    setImportResult(null);
+    importStopRequestedRef.current = false;
+    setImportState("importing");
+    try {
+      let lastResult: ImportBatchResult | null = null;
+      for (const [index, sourceId] of queue.entries()) {
+        if (importStopRequestedRef.current) break;
+        setCompletedQueueSourceCount(index);
+        setActiveImportSourceId(sourceId);
+        lastResult = await runImportSource(sourceId, "queue");
+        if (importStopRequestedRef.current && !lastResult?.state.completed) break;
+      }
+      setCompletedQueueSourceCount((count) => {
+        if (importStopRequestedRef.current) return count;
+        return queue.length;
+      });
+      setImportState(importStopRequestedRef.current ? "stopped" : "ready");
     } catch (err) {
       setError(errorText(err));
       setImportState("failed");
@@ -364,11 +413,38 @@ function App() {
               <strong>{plan.large_file_count.toLocaleString()}</strong>
             </div>
           </div>
+          <div className="plan-toolbar">
+            <span>{selectedImportQueueSourceIds.length.toLocaleString()} selected</span>
+            <button
+              className="inline-action"
+              data-import-selected="true"
+              disabled={isImportRunning || selectedImportQueueSourceIds.length === 0}
+              onClick={runSelectedImportQueue}
+              type="button"
+            >
+              <Play size={15} />
+              {isImportRunning && importMode === "queue" ? "Running Queue" : "Run Selected"}
+            </button>
+          </div>
           <div className="plan-sources">
             {plan.sources.map((source) => (
               <div className="plan-source-row" key={source.id}>
-                <div>
-                  <strong>{source.label}</strong>
+                <div className="plan-source-main">
+                  <label className="source-select">
+                    <input
+                      checked={selectedImportSourceIds.includes(source.id)}
+                      data-select-source-id={source.id}
+                      disabled={isImportRunning || source.file_count === 0}
+                      onChange={(event) => {
+                        const checked = event.currentTarget.checked;
+                        setSelectedImportSourceIds((current) =>
+                          toggleSourceSelection(current, source.id, checked),
+                        );
+                      }}
+                      type="checkbox"
+                    />
+                    <strong>{source.label}</strong>
+                  </label>
                   <span>{source.root_path}</span>
                   {source.notes.length ? <span className="source-meta">{source.notes.join(" ")}</span> : null}
                 </div>
@@ -413,7 +489,7 @@ function App() {
           <div className="panel-heading">
             <h2>Incremental Import</h2>
             <span>{importResult ? new Date(importResult.generated_at).toLocaleString() : "starting"}</span>
-            {isImportRunning && importMode === "continuous" ? (
+            {isImportRunning && (importMode === "continuous" || importMode === "queue") ? (
               <button
                 className="inline-action stop-action"
                 data-stop-import="true"
@@ -450,6 +526,18 @@ function App() {
                   : `${IMPORT_BATCH_FILES.toLocaleString()} files per batch`}
               </strong>
             </div>
+            {importQueueSourceIds.length ? (
+              <div>
+                <span>Queue</span>
+                <strong>
+                  {Math.min(
+                    completedQueueSourceCount + (isImportRunning ? 1 : 0),
+                    importQueueSourceIds.length,
+                  ).toLocaleString()}{" "}
+                  / {importQueueSourceIds.length.toLocaleString()}
+                </strong>
+              </div>
+            ) : null}
             <div>
               <span>Status</span>
               <strong>{importStatusLabel(importResult, importState, importMode, stopRequested)}</strong>

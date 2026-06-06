@@ -1,7 +1,7 @@
 import type { ImportBatchResult } from "./types";
 
 export type ImportRunState = "idle" | "importing" | "stopped" | "ready" | "failed";
-export type ImportRunMode = "single" | "continuous";
+export type ImportRunMode = "single" | "continuous" | "queue";
 
 export function importProgressPercent(result: ImportBatchResult | null): number {
   if (!result) return 0;
@@ -18,10 +18,11 @@ export function importStatusLabel(
 ): string {
   if (runState === "failed") return "Failed";
   if (runState === "importing" && stopRequested) return "Stopping after current batch";
+  if (runState === "importing" && mode === "queue") return "Running queue";
   if (runState === "importing" && mode === "continuous") return "Running";
   if (runState === "importing") return "Importing";
-  if (result?.state.completed) return "Complete";
   if (runState === "stopped") return "Stopped";
+  if (result?.state.completed) return "Complete";
   if (result) return "Resumable";
   return "Idle";
 }

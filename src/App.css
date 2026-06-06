@@ -297,6 +297,23 @@ h3 {
   font-size: 18px;
 }
 
+.plan-toolbar {
+  align-items: center;
+  background: #f8faf7;
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.plan-toolbar > span {
+  color: #536158;
+  font-size: 12px;
+  font-weight: 720;
+}
+
 .plan-sources {
   border-top: 1px solid #e5ebe4;
   display: grid;
@@ -319,10 +336,29 @@ h3 {
   border-bottom: 0;
 }
 
-.plan-source-row div:first-child {
+.plan-source-main {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.source-select {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.source-select input {
+  accent-color: #213629;
+  flex: 0 0 auto;
+}
+
+.source-select strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .plan-source-row span {
@@ -782,6 +818,11 @@ h3 {
 
   .plan-source-row {
     grid-template-columns: 1fr;
+  }
+
+  .plan-toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .plan-source-actions {

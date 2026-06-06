@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 10:18 KST
+Updated: 2026-06-06 10:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -265,6 +265,27 @@ stability, performance, and maintainability, then record evidence here.
     `gemini-tmp-chat|76|144|77|0`.
   - Browser console returned `No console entries`.
   - Browser error collector returned `No browser errors`.
+- Continued with the next thin slice: selected-source import queue.
+- Added source checkboxes in the import plan and a `Run Selected` queue action
+  that runs checked sources sequentially through the same resumable
+  stop-after-current-batch loop.
+- During real cmux checkbox testing on `surface:11`, found a React event bug:
+  reading `event.currentTarget.checked` inside the deferred state updater could
+  throw `TypeError: null is not an object`. Fixed it by capturing `checked`
+  before calling `setSelectedImportSourceIds`.
+- Real cmux queue click QA on the same `surface:11` after rebuilding `dist`:
+  - Reset `antigravity-ide-transcripts` to `1 / 3`.
+  - Reset `antigravity-cli-conversation-db` to `1 / 10`.
+  - Reloaded `http://127.0.0.1:5173/`, clicked `Plan`, clicked both source
+    checkboxes, then clicked `Run Selected`.
+  - Observed `Incremental Import` showing `100%`, source
+    `Antigravity conversation DB`, `Processed 10 / 10`, `Queue 2 / 2`,
+    `Status Complete`, and the persisted DB notice.
+  - Verified DB cursors:
+    `antigravity-cli-conversation-db|10|10|10|1` and
+    `antigravity-ide-transcripts|3|3|12|1`.
+  - Browser console returned `No console entries`.
+  - Browser error collector returned `No browser errors`.
 
 ## Changes
 
@@ -305,6 +326,13 @@ stability, performance, and maintainability, then record evidence here.
   Scan/Plan while an import run is active.
 - `README.md` and `docs/CLI.md`: documented continuous browser-side imports
   and the full browser bridge endpoint set.
+- `src/importQueue.ts`: added selected-source queue helper logic.
+- `tests/importQueue.test.ts`: added coverage that source selection avoids
+  duplicates and queue execution keeps selected order while skipping empty
+  sources.
+- `src/App.tsx` and `src/App.css`: added source checkboxes, selected-source
+  queue action, queue progress display, and queue-aware stop/status handling.
+- `README.md`: documented selected-source browser queue imports.
 
 ## Tests
 
@@ -382,6 +410,19 @@ stability, performance, and maintainability, then record evidence here.
   `surface:11` title remained `PromptVault` at `http://127.0.0.1:5173/`;
   browser diagnostics still returned `No console entries` and
   `No browser errors`.
+- `npm run test:ui`: 16 tests passed after adding import queue helpers.
+- `npm run build`: TypeScript and Vite production build passed after adding
+  selected-source queue UI.
+- Real cmux checkbox QA initially failed with
+  `TypeError: null is not an object (evaluating '...currentTarget.checked')`;
+  fixed and retested on the same `surface:11`.
+- Real cmux selected-source queue flow on `surface:11`: passed with both
+  selected sources completed and DB cursors persisted.
+- Browser diagnostics after queue QA: console returned `No console entries`;
+  errors returned `No browser errors`.
+- `npm run check`: passed after the selected-source queue slice. This covered
+  UI tests 16 passed, TypeScript/Vite build, Rust lib 50 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 
 ## Issues
 
@@ -390,10 +431,10 @@ stability, performance, and maintainability, then record evidence here.
   and about `32.3 GiB` of JSONL. Future work should add resumable incremental
   import slices and a background queue before claiming exhaustive historical
   ingestion of the entire Codex store.
-- Import batching is now resumable per source, and the UI can run one source
-  continuously with a stop-after-current-batch control. It does not yet have a
-  multi-source scheduler or a durable background worker that continues after the
-  browser tab is closed.
+- Import batching is now resumable per source. The UI can run one source
+  continuously, queue selected sources, and stop after the current batch. It
+  does not yet have a durable background worker that continues after the browser
+  tab is closed.
 - Several limited source scans intentionally stopped at the configured prompt
   limit and reported the expected limit warning.
 - GLM improvement path hit HTTP 429 during manual QA; local fallback worked.
@@ -407,9 +448,9 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Next Steps
 
-1. Add a multi-source scheduler so selected sources can be queued without
-   manually starting each source.
-2. Consider a durable background indexing worker so first-run historical import
+1. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
-3. Add scan-run cancellation/progress for unrestricted full scans, separate
+2. Add scan-run cancellation/progress for unrestricted full scans, separate
    from the safer resumable import-batch path.
+3. Add persisted import-state visibility on initial app load so users can see
+   saved source cursors before starting a new batch.

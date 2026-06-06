@@ -1,5 +1,6 @@
 import type { ActionLockState } from "./actionLocks";
 import type { PlanRunState } from "./planStatus";
+import type { PreviewMode } from "./previewMode";
 import type { ScanRunState } from "./scanStatus";
 import type { StoredLoadState } from "./storedLoadStatus";
 
@@ -40,4 +41,23 @@ export function planActionLabel(planState: PlanRunState, lockState: ActionLockSt
   const reason = activeActionLockReason(lockState);
   if (reason) return `Cannot plan import sources while ${reason}`;
   return planState === "failed" ? "Retry import source plan" : "Plan import sources";
+}
+
+export function previewModeActionLabel(
+  targetMode: PreviewMode,
+  currentMode: PreviewMode,
+  lockState: ActionLockState,
+): string {
+  const targetLabel = targetMode === "latest" ? "latest prompt preview" : "weakest prompt preview";
+  const reason = activeActionLockReason(lockState);
+  if (reason) return `Cannot switch to ${targetLabel} while ${reason}`;
+  return targetMode === currentMode
+    ? `${targetLabel[0].toUpperCase()}${targetLabel.slice(1)} selected`
+    : `Switch to ${targetLabel}`;
+}
+
+export function scanLimitInputLabel(lockState: ActionLockState): string {
+  const reason = activeActionLockReason(lockState);
+  if (reason) return `Cannot edit scan prompt limit while ${reason}`;
+  return "Scan prompt limit";
 }

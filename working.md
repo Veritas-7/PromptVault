@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 22:38 KST
+Updated: 2026-06-06 22:58 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,20 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui -- tests/topActionLabels.test.ts`: passed; due the package
+  script glob this ran the full UI helper suite and reported 110 passing tests,
+  including the new preview-mode and scan-limit label coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  preview-mode and scan-limit label change.
+- Same-surface cmux default preview/limit label QA on the existing
+  `surface:9`: loaded
+  `http://127.0.0.1:5173/?preview-limit-labels=20260606b`; Computer Use
+  confirmed the visible PromptVault browser in `workspace:5` and the
+  accessibility tree exposed `Latest prompt preview selected`,
+  `Switch to weakest prompt preview`, and `Scan prompt limit`.
+- `npm run check`: passed after the preview/limit label slice. This covered UI
+  tests 110 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 - `npm run test:ui -- tests/topActionLabels.test.ts`: passed; due the package
   script glob this ran the full UI helper suite and reported 108 passing tests,
   including the new top-action label coverage.
@@ -2330,6 +2344,24 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this top-action label slice: UI tests 108
   passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
   doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make preview-mode and scan-limit controls
+  expose state-aware accessible names while preserving the compact visual top
+  bar.
+- Added tested labels so the selected preview mode announces
+  `Latest prompt preview selected`, the alternate mode announces
+  `Switch to weakest prompt preview`, and locked states explain the active
+  blocking operation.
+- Existing PromptVault workspace recovery for this slice: `surface:9` was
+  still the only PromptVault browser in `workspace:5`/`pane:10`; Computer Use
+  initially revealed an unrelated workspace and then confirmed the visible
+  PromptVault browser at
+  `http://127.0.0.1:5173/?preview-limit-labels=20260606b`.
+- Computer Use accessibility-tree QA on that same visible `surface:9` confirmed
+  `Latest prompt preview selected`, `Switch to weakest prompt preview`, and
+  `Scan prompt limit` on the rendered controls.
+- `npm run check` passed after this preview/limit label slice: UI tests 110
+  passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2395,6 +2427,13 @@ stability, performance, and maintainability, then record evidence here.
   buttons without changing their visible compact labels.
 - `tests/topActionLabels.test.ts`: covers ready, running, failed, and locked
   top-action labels.
+- `src/topActionLabels.ts`: adds `previewModeActionLabel()` and
+  `scanLimitInputLabel()` so Preview mode and Limit controls expose selected,
+  switch, ready, and locked-state names.
+- `src/App.tsx`: applies the preview-mode and scan-limit accessible labels to
+  the existing top-bar controls.
+- `tests/topActionLabels.test.ts`: covers preview-mode selected/switch/locked
+  labels and scan-limit ready/locked labels.
 - `src/App.tsx`: adds panel-specific accessible labels to Saved Import
   Progress and Recent Import Activity refresh buttons.
 - `src/App.tsx`: adds source-specific accessible labels to each Import Plan
@@ -2811,6 +2850,15 @@ stability, performance, and maintainability, then record evidence here.
   `goto`/`wait`/`eval`, console, and browser-error commands. Direct
   workspace-row clicks and `workspace:5`/`pane:10` focus RPCs were unreliable,
   so no new browser, cmux restart, or cmux app kill was used.
+- During preview/limit label locked-state QA, a page-local `/api/plan`
+  monkeypatch attempt timed out waiting for a JavaScript result and follow-up
+  selector probes briefly returned `null`/`about:blank`; do not treat that
+  locked-state cmux attempt as valid evidence. Computer Use showed a native
+  delete-confirm dialog from another page blocking cmux; the dialog was
+  canceled, `workspace:5` was reselected without opening a new browser, and the
+  visible PromptVault `surface:9` then confirmed the default preview/limit
+  labels. Locked-state behavior for this slice is covered by unit tests rather
+  than by that invalid cmux monkeypatch run.
 
 ## Research
 

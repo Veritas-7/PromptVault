@@ -4,7 +4,9 @@ import type { ActionLockState } from "../src/actionLocks.ts";
 import {
   activeActionLockReason,
   planActionLabel,
+  previewModeActionLabel,
   scanActionLabel,
+  scanLimitInputLabel,
   scanStopActionLabel,
   storedLoadActionLabel,
 } from "../src/topActionLabels.ts";
@@ -67,5 +69,22 @@ test("plan action label explains planning, failed, and locked states", () => {
   assert.equal(
     planActionLabel("ready", lockState({ storedLoadRunning: true })),
     "Cannot plan import sources while stored prompts are loading",
+  );
+});
+
+test("preview mode action label explains selected, switch, and locked states", () => {
+  assert.equal(previewModeActionLabel("latest", "latest", lockState()), "Latest prompt preview selected");
+  assert.equal(previewModeActionLabel("weakest", "latest", lockState()), "Switch to weakest prompt preview");
+  assert.equal(
+    previewModeActionLabel("weakest", "latest", lockState({ scanRunning: true })),
+    "Cannot switch to weakest prompt preview while a scan is running",
+  );
+});
+
+test("scan limit input label explains locked states", () => {
+  assert.equal(scanLimitInputLabel(lockState()), "Scan prompt limit");
+  assert.equal(
+    scanLimitInputLabel(lockState({ planRunning: true })),
+    "Cannot edit scan prompt limit while an import plan is running",
   );
 });

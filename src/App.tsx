@@ -111,7 +111,9 @@ import {
 } from "./storedFacetStatus";
 import {
   planActionLabel,
+  previewModeActionLabel,
   scanActionLabel,
+  scanLimitInputLabel,
   scanStopActionLabel,
   storedLoadActionLabel,
 } from "./topActionLabels";
@@ -789,6 +791,7 @@ function App() {
         <div className="actions">
           <div className="segmented" aria-label="Preview mode" role="group">
             <button
+              aria-label={previewModeActionLabel("latest", previewMode, actionLockState)}
               aria-pressed={previewMode === "latest"}
               className={previewMode === "latest" ? "active" : ""}
               disabled={isTopLevelActionLocked}
@@ -798,6 +801,7 @@ function App() {
               Latest
             </button>
             <button
+              aria-label={previewModeActionLabel("weakest", previewMode, actionLockState)}
               aria-pressed={previewMode === "weakest"}
               className={previewMode === "weakest" ? "active" : ""}
               disabled={isTopLevelActionLocked}
@@ -810,6 +814,7 @@ function App() {
           <label className="limit-control">
             <span>Limit</span>
             <input
+              aria-label={scanLimitInputLabel(actionLockState)}
               data-scan-limit="true"
               disabled={isTopLevelActionLocked}
               min={1}

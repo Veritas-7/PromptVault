@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 23:42 KST
+Updated: 2026-06-06 23:44 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -498,6 +498,18 @@ stability, performance, and maintainability, then record evidence here.
 - cmux direct QA remained blocked after the Import Queue lock-reason label
   slice: frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health`
   returned `ok:true`, `cmux ping` returned `PONG`, but
+  `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
+- `npm run test:ui -- tests/sourceStatusA11y.test.ts`: passed; due the
+  package script glob this ran the full UI helper suite and reported 119
+  passing tests, including the new source-row lock-reason label coverage.
+- `npm run build`: TypeScript and Vite production build passed and refreshed
+  the static frontend bundle for the source-row lock-reason label slice.
+- `npm run check`: passed after the source-row lock-reason label slice. This
+  covered UI tests 119 passed, TypeScript/Vite build, Rust lib 64 passed, CLI
+  15 passed, doc-tests, and clippy with `-D warnings`.
+- cmux direct QA remained blocked after the source-row lock-reason label slice:
+  frontend health returned `HTTP/1.0 200 OK`, bridge `/api/health` returned
+  `ok:true`, `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
 - `npm run test:ui -- tests/storedFilters.test.ts`: passed; due the package
   script glob this ran the full UI helper suite and reported 113 passing tests,
@@ -2597,6 +2609,19 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this Import Queue lock-reason label slice: UI
   tests 116 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
   passed, doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next adjacent thin slice: make Import Plan source-row
+  controls explain specific active lock reasons when an available source's
+  checkbox, `Import Batch`, or `Run Until Done` control is disabled by another
+  top-level operation.
+- Added tested source-row lock-reason labels so available source controls
+  announce examples like
+  `Cannot change import queue selection for Codex source available: 25,105 files, 32.8 GiB while a scan is running`
+  and
+  `Cannot run import until done for Claude Code projects source available: 1,722 files, 714.2 MiB while stored prompts are loading`,
+  while empty-source reasons still take precedence.
+- `npm run check` passed after this source-row lock-reason label slice: UI
+  tests 119 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
+  passed, doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2905,6 +2930,15 @@ stability, performance, and maintainability, then record evidence here.
 - `tests/importQueue.test.ts`: covers empty-selection precedence, ready/running
   queue labels, and scan-running / stored-load-running Import Queue lock
   labels.
+- `src/sourceStatusA11y.ts`: now uses `activeActionLockReason()` so Import
+  Plan source-row checkbox, `Import Batch`, and `Run Until Done` labels name
+  the specific blocking operation when the source is available but row actions
+  are locked.
+- `src/App.tsx`: passes the full top-level `actionLockState` into
+  `planSourceSelectionLabel()` and `planSourceActionLabel()`.
+- `tests/sourceStatusA11y.test.ts`: covers scan-running, import-running, and
+  stored-load-running source-row lock labels while preserving empty-source
+  precedence.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -3189,6 +3223,11 @@ stability, performance, and maintainability, then record evidence here.
   still timed out. The slice is verified by focused UI helper tests plus the
   full project gate until safe same-surface cmux control recovers.
 - During the Import Queue lock-reason label slice, cmux app health and both
+  PromptVault services remained green, but direct `surface:9` title probing
+  still timed out with exit `124`. The slice is verified by focused UI helper
+  tests plus the full project gate until safe same-surface cmux control
+  recovers.
+- During the source-row lock-reason label slice, cmux app health and both
   PromptVault services remained green, but direct `surface:9` title probing
   still timed out with exit `124`. The slice is verified by focused UI helper
   tests plus the full project gate until safe same-surface cmux control

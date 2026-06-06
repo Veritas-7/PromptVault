@@ -1344,6 +1344,7 @@ function App() {
                             source.file_count,
                             formatBytes(source.byte_count),
                             source.notes,
+                            actionLockState,
                           )}
                           checked={selectedImportSourceIds.includes(source.id)}
                           data-select-source-id={source.id}
@@ -1383,6 +1384,7 @@ function App() {
                           source.file_count,
                           formatBytes(source.byte_count),
                           source.notes,
+                          actionLockState,
                         )}
                         className="inline-action"
                         data-import-source-id={source.id}
@@ -1403,6 +1405,7 @@ function App() {
                           source.file_count,
                           formatBytes(source.byte_count),
                           source.notes,
+                          actionLockState,
                         )}
                         className="inline-action"
                         data-import-continuous-source-id={source.id}

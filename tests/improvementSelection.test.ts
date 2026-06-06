@@ -58,3 +58,13 @@ test("selection change preserves unrelated global errors", () => {
     improvementPromptId: null,
   });
 });
+
+test("selection change preserves errors without a tracked improve failure", () => {
+  assert.deepEqual(improvementSelectionChanged("network failed", null), {
+    error: "network failed",
+    improvement: null,
+    improvementFailureErrorText: null,
+    improvementFailurePromptId: null,
+    improvementPromptId: null,
+  });
+});

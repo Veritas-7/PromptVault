@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 19:50 KST
+Updated: 2026-06-06 19:57 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1582,6 +1582,34 @@ stability, performance, and maintainability, then record evidence here.
     no top-level failure and no Improve warning.
   - After re-focusing the existing PromptVault workspace, final diagnostics
     returned `No console entries` and `No browser errors`.
+- Continued with the next thin slice: extend Improve failure cleanup to prompt
+  context changes that do not involve directly clicking a prompt row.
+- Found that prompt filtering and preview mode switching can change the
+  effective selected prompt, but before this slice they did not reuse the
+  matching Improve-origin global-error cleanup.
+- Added a shared prompt-context cleanup path for prompt row clicks, prompt
+  filter changes, and Latest/Weakest preview mode changes.
+- `npm run test:ui` passed after this improve-context-clear slice with 65
+  tests.
+- `npm run check` passed after this improve-context-clear slice: UI tests 65
+  passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Reused the same PromptVault browser surface and loaded
+    `http://127.0.0.1:5173/?improve-context-clear=20260606a`.
+  - Clicked `Load Stored`, installed a page-local fetch monkeypatch that
+    rejected only `/api/improve` with `forced improve context failure`, clicked
+    `Improve`, and observed the top-level bridge error plus the selected-prompt
+    warning.
+  - Set the prompt filter to `6ba9` using the native input setter plus an
+    `input` event; the visible list narrowed to one prompt, the matching
+    top-level Improve error cleared, the inline warning cleared, and
+    Recommendation returned to `Run improvement for the selected prompt.`
+  - Cleared the filter, triggered another forced Improve failure, then clicked
+    the `Weakest` preview toggle; the matching top-level Improve error cleared,
+    the inline warning cleared, and the `Weakest` button became active.
+  - Reloaded the same `surface:9` to clear the page-local monkeypatch and
+    confirmed `No console entries` and `No browser errors`.
 
 ## Changes
 
@@ -1684,6 +1712,10 @@ stability, performance, and maintainability, then record evidence here.
   scoped error when the user selects another prompt.
 - `tests/improvementSelection.test.ts`: covers selection-change cleanup and
   unrelated global error preservation.
+- `src/App.tsx`: now reuses the same Improve prompt-context cleanup when the
+  user changes the prompt filter or switches Latest/Weakest preview mode.
+- `tests/improvementSelection.test.ts`: covers preserving global errors when
+  there is no tracked Improve failure error to clear.
 - `src/scanStatus.ts`: adds scan failure copy for first-run and stale-results
   failures, plus scan Stop failure copy.
 - `src/App.tsx`: shows a scan retry warning when a scan fails and clears stale
@@ -1862,6 +1894,13 @@ stability, performance, and maintainability, then record evidence here.
   was reloaded to clear the monkeypatch. Initial `cmux browser console list`
   and `cmux browser errors list` commands timed out after reload, then succeeded
   after re-focusing the existing PromptVault workspace and returned clean.
+- During improve-context-clear QA, `cmux workspace select workspace:5`,
+  `cmux focus-pane --workspace workspace:5 --pane pane:10`, and the first
+  `surface:9` `goto` timed out. Computer Use confirmed the same visible
+  PromptVault `surface:9` had loaded the target URL, and short
+  surface-specific `wait`/`click`/`eval` commands then worked. The page-local
+  `/api/improve` monkeypatch was cleared by reloading the same surface, and
+  final console/errors diagnostics returned clean.
 
 ## Research
 

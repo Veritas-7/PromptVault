@@ -625,6 +625,29 @@ function App() {
     });
   }
 
+  function clearImprovementPromptContext() {
+    const next = improvementSelectionChanged<ImproveResult>(
+      error,
+      improvementFailureErrorText,
+    );
+    setError(next.error);
+    setImprovement(next.improvement);
+    setImprovementPromptId(next.improvementPromptId);
+    setImprovementFailurePromptId(next.improvementFailurePromptId);
+    setImprovementFailureErrorText(next.improvementFailureErrorText);
+  }
+
+  function changePreviewMode(nextPreviewMode: PreviewMode) {
+    if (nextPreviewMode === previewMode) return;
+    setPreviewMode(nextPreviewMode);
+    clearImprovementPromptContext();
+  }
+
+  function updatePromptFilter(value: string) {
+    setQuery(value);
+    clearImprovementPromptContext();
+  }
+
   async function runImprove(prompt: PromptRecord | null) {
     if (!prompt) return;
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
@@ -667,7 +690,7 @@ function App() {
             <button
               className={previewMode === "latest" ? "active" : ""}
               disabled={isTopLevelActionLocked}
-              onClick={() => setPreviewMode("latest")}
+              onClick={() => changePreviewMode("latest")}
               type="button"
             >
               Latest
@@ -675,7 +698,7 @@ function App() {
             <button
               className={previewMode === "weakest" ? "active" : ""}
               disabled={isTopLevelActionLocked}
-              onClick={() => setPreviewMode("weakest")}
+              onClick={() => changePreviewMode("weakest")}
               type="button"
             >
               Weakest
@@ -1411,7 +1434,7 @@ function App() {
                 data-prompt-filter="true"
                 value={query}
                 placeholder="Filter"
-                onChange={(event) => setQuery(event.currentTarget.value)}
+                onChange={(event) => updatePromptFilter(event.currentTarget.value)}
               />
             </div>
           </div>
@@ -1422,15 +1445,7 @@ function App() {
                 key={prompt.id}
                 onClick={() => {
                   setSelectedId(prompt.id);
-                  const next = improvementSelectionChanged<ImproveResult>(
-                    error,
-                    improvementFailureErrorText,
-                  );
-                  setError(next.error);
-                  setImprovement(next.improvement);
-                  setImprovementPromptId(next.improvementPromptId);
-                  setImprovementFailurePromptId(next.improvementFailurePromptId);
-                  setImprovementFailureErrorText(next.improvementFailureErrorText);
+                  clearImprovementPromptContext();
                 }}
                 type="button"
               >

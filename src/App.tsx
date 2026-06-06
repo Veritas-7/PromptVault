@@ -27,6 +27,7 @@ import {
   activeImprovementForSelection,
   improvementFailureText,
   improvementRequestStarted,
+  improvementSelectionChanged,
 } from "./improvementSelection";
 import {
   importProgressPercent,
@@ -189,6 +190,7 @@ function App() {
   const [improvement, setImprovement] = useState<ImproveResult | null>(null);
   const [improvementPromptId, setImprovementPromptId] = useState<string | null>(null);
   const [improvementFailurePromptId, setImprovementFailurePromptId] = useState<string | null>(null);
+  const [improvementFailureErrorText, setImprovementFailureErrorText] = useState<string | null>(null);
   const importStopRequestedRef = useRef(false);
   const scanRunIdRef = useRef<string | null>(null);
   const topLevelActionClaimRef = useRef(false);
@@ -519,6 +521,7 @@ function App() {
     setImprovement(null);
     setImprovementPromptId(null);
     setImprovementFailurePromptId(null);
+    setImprovementFailureErrorText(null);
     try {
       const parsedLimit = parseRequiredScanLimit(limit);
       const runId = createScanRunId();
@@ -581,6 +584,7 @@ function App() {
     setImprovement(null);
     setImprovementPromptId(null);
     setImprovementFailurePromptId(null);
+    setImprovementFailureErrorText(null);
     setScanStopFailure(null);
     setScanState("idle");
     setStoredLoadState("loading");
@@ -627,6 +631,7 @@ function App() {
     setImproving(true);
     setError(null);
     setImprovementFailurePromptId(null);
+    setImprovementFailureErrorText(null);
     const started = improvementRequestStarted<ImproveResult>(prompt.id);
     setImprovement(started.improvement);
     setImprovementPromptId(started.improvementPromptId);
@@ -638,9 +643,12 @@ function App() {
       setImprovement(next);
       setImprovementPromptId(prompt.id);
       setImprovementFailurePromptId(null);
+      setImprovementFailureErrorText(null);
     } catch (err) {
-      setError(errorText(err));
+      const message = errorText(err);
+      setError(message);
       setImprovementFailurePromptId(prompt.id);
+      setImprovementFailureErrorText(message);
     } finally {
       setImproving(false);
       releaseExclusiveAction(topLevelActionClaimRef);
@@ -1414,7 +1422,15 @@ function App() {
                 key={prompt.id}
                 onClick={() => {
                   setSelectedId(prompt.id);
-                  setImprovement(null);
+                  const next = improvementSelectionChanged<ImproveResult>(
+                    error,
+                    improvementFailureErrorText,
+                  );
+                  setError(next.error);
+                  setImprovement(next.improvement);
+                  setImprovementPromptId(next.improvementPromptId);
+                  setImprovementFailurePromptId(next.improvementFailurePromptId);
+                  setImprovementFailureErrorText(next.improvementFailureErrorText);
                 }}
                 type="button"
               >

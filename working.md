@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 19:37 KST
+Updated: 2026-06-06 19:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1552,6 +1552,36 @@ stability, performance, and maintainability, then record evidence here.
   - Reloaded the same `surface:9` to
     `http://127.0.0.1:5173/?refresh-error-clear-clean=20260606a` and confirmed
     `No console entries` and `No browser errors`.
+- Continued with the next thin slice: clear matching Improve-origin global
+  errors when the user switches prompt selection.
+- Found that a failed Improve request left its top-level bridge error visible
+  even after the user selected a different prompt, while the selected-prompt
+  inline warning disappeared.
+- Added selection-change policy coverage so only the global error produced by
+  that Improve failure is cleared on prompt change; unrelated global errors are
+  preserved.
+- `npm run test:ui` passed after this improve-selection-clear slice with 64
+  tests.
+- `npm run check` passed after this improve-selection-clear slice: UI tests 64
+  passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real QA on the existing cmux `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?improve-select-clear=20260606a`, clicked
+    `Load Stored`, and installed a page-local fetch monkeypatch that rejected
+    only `/api/improve` with `forced improve failure`.
+  - Clicked `Improve` and observed the top-level `forced improve failure`
+    banner plus the selected-prompt warning
+    `Could not improve this prompt. Check the error above and retry.`
+  - Clicking the second stored prompt row through the existing visible cmux
+    browser selected the new prompt and removed the matching top-level
+    `forced improve failure` banner.
+  - Reloaded the same `surface:9` with the toolbar refresh button to clear the
+    page-local monkeypatch; the page returned to the clean initial state with
+    no top-level failure and no Improve warning.
+  - After re-focusing the existing PromptVault workspace, final diagnostics
+    returned `No console entries` and `No browser errors`.
 
 ## Changes
 
@@ -1647,6 +1677,13 @@ stability, performance, and maintainability, then record evidence here.
   prompt's improve request fails and clears it on scan, stored-load, retry, or
   successful improvement.
 - `tests/improvementSelection.test.ts`: covers improve failure copy scoping.
+- `src/improvementSelection.ts`: adds an improve selection-change helper that
+  clears the matching Improve-origin global error while preserving unrelated
+  global errors.
+- `src/App.tsx`: tracks the last Improve failure error text and clears that
+  scoped error when the user selects another prompt.
+- `tests/improvementSelection.test.ts`: covers selection-change cleanup and
+  unrelated global error preservation.
 - `src/scanStatus.ts`: adds scan failure copy for first-run and stale-results
   failures, plus scan Stop failure copy.
 - `src/App.tsx`: shows a scan retry warning when a scan fails and clears stale
@@ -1817,6 +1854,14 @@ stability, performance, and maintainability, then record evidence here.
   `/api/prompt-facets` on the current `surface:9` page. The same surface was
   restored and reloaded before final diagnostics, and final console/browser
   diagnostics were clean.
+- During improve-selection-clear QA, the page-local fetch monkeypatch affected
+  only `/api/improve` on the current `surface:9` page. After a direct DOM click
+  command timed out, Computer Use on the already-open cmux window confirmed the
+  same visible `surface:9` state: the second prompt row selected and the
+  matching top-level `forced improve failure` banner cleared. The same surface
+  was reloaded to clear the monkeypatch. Initial `cmux browser console list`
+  and `cmux browser errors list` commands timed out after reload, then succeeded
+  after re-focusing the existing PromptVault workspace and returned clean.
 
 ## Research
 
@@ -1835,4 +1880,4 @@ stability, performance, and maintainability, then record evidence here.
 4. Continue looking for remaining request-overlap or double-click hazards in
    secondary UI flows before moving to larger background indexing work.
 5. Continue reviewing remaining empty and failure states in secondary panels,
-   especially recovery paths that still rely only on a top-level global error.
+   especially recovery paths that still need scoped cleanup for global errors.

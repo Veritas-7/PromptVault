@@ -48,7 +48,7 @@ import {
   toggleSourceSelection,
 } from "./importQueue";
 import { ALERT_NOTICE_PROPS, STATUS_NOTICE_PROPS } from "./noticeA11y";
-import { refreshGlobalErrorAfterSuccess } from "./panelRefresh";
+import { panelRefreshActionLabel, refreshGlobalErrorAfterSuccess } from "./panelRefresh";
 import { planFailureText, planUnavailableText, type PlanRunState } from "./planStatus";
 import {
   effectivePromptListMode,
@@ -923,6 +923,11 @@ function App() {
           <div className="panel-heading-actions">
             <span data-stored-facet-summary="true">{storedFacetSummary}</span>
             <button
+              aria-label={panelRefreshActionLabel(
+                "stored facet suggestions",
+                storedFacetsState,
+                actionLockState,
+              )}
               className="inline-action"
               data-refresh-stored-facets="true"
               disabled={storedFacetsState === "loading" || isTopLevelActionLocked}
@@ -1053,7 +1058,11 @@ function App() {
           <div className="panel-heading">
             <h2>Saved Import Progress</h2>
             <button
-              aria-label="Refresh saved import progress"
+              aria-label={panelRefreshActionLabel(
+                "saved import progress",
+                importStatesState,
+                actionLockState,
+              )}
               className="inline-action"
               data-refresh-import-states="true"
               disabled={importStatesState === "loading" || isTopLevelActionLocked}
@@ -1173,7 +1182,11 @@ function App() {
           <div className="panel-heading">
             <h2>Recent Import Activity</h2>
             <button
-              aria-label="Refresh recent import activity"
+              aria-label={panelRefreshActionLabel(
+                "recent import activity",
+                importEventsState,
+                actionLockState,
+              )}
               className="inline-action"
               data-refresh-import-events="true"
               disabled={importEventsState === "loading" || isTopLevelActionLocked}

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 22:58 KST
+Updated: 2026-06-06 23:10 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,27 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui -- tests/panelRefresh.test.ts`: first run failed because
+  `panelRefresh.ts` imported `activeActionLockReason` as a runtime
+  extensionless TS import, which Node's test loader could not resolve. The
+  shared helper was moved to `actionLocks.ts` and imported with the `.ts`
+  extension for runtime test compatibility.
+- `npm run test:ui -- tests/panelRefresh.test.ts`: passed after the import fix;
+  due the package script glob this ran the full UI helper suite and reported
+  111 passing tests, including the new panel-refresh label coverage.
+- `npm run build`: TypeScript and Vite production build passed after the
+  panel-refresh label change.
+- Same-surface cmux panel refresh label QA on the existing `surface:9`:
+  `snapshot` and selector `aria-label` checks verified
+  `Refresh stored facet suggestions`, `Refresh saved import progress`, and
+  `Refresh recent import activity`.
+- Same-surface cmux panel refresh click QA on the existing `surface:9`: clicked
+  `[data-refresh-stored-facets=true]`, `[data-refresh-import-states=true]`,
+  and `[data-refresh-import-events=true]`; all three click commands returned
+  `OK`.
+- `npm run check`: passed after the panel-refresh label slice. This covered UI
+  tests 111 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 - `npm run test:ui -- tests/topActionLabels.test.ts`: passed; due the package
   script glob this ran the full UI helper suite and reported 110 passing tests,
   including the new preview-mode and scan-limit label coverage.
@@ -2362,6 +2383,25 @@ stability, performance, and maintainability, then record evidence here.
 - `npm run check` passed after this preview/limit label slice: UI tests 110
   passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
   doc-tests passed, and clippy passed with `-D warnings`.
+- Continued with the next thin slice: make secondary panel Refresh controls
+  expose state-aware accessible names while preserving compact visual labels.
+- Added tested panel refresh labels so ready states announce
+  `Refresh saved import progress`, loading states announce
+  `Refreshing saved import progress`, and locked states explain the active
+  blocking operation such as
+  `Cannot refresh recent import activity while a scan is running`.
+- Moved the shared active-action lock reason helper into `src/actionLocks.ts`
+  so top-bar and panel-refresh labels use the same blocking-operation wording.
+- Real cmux QA on the existing PromptVault `surface:9` verified the rendered
+  default panel refresh labels:
+  `Refresh stored facet suggestions`, `Refresh saved import progress`, and
+  `Refresh recent import activity`.
+- Real cmux click QA on the same `surface:9` clicked Stored Facets, Saved
+  Import Progress, and Recent Import Activity refresh buttons; all three click
+  commands returned `OK` without opening a second browser.
+- `npm run check` passed after this panel-refresh label slice: UI tests 111
+  passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
 
 ## Changes
 
@@ -2434,8 +2474,14 @@ stability, performance, and maintainability, then record evidence here.
   the existing top-bar controls.
 - `tests/topActionLabels.test.ts`: covers preview-mode selected/switch/locked
   labels and scan-limit ready/locked labels.
-- `src/App.tsx`: adds panel-specific accessible labels to Saved Import
-  Progress and Recent Import Activity refresh buttons.
+- `src/panelRefresh.ts`: adds `panelRefreshActionLabel()` for secondary panel
+  refresh ready, loading, and locked-state accessible names.
+- `src/actionLocks.ts` and `src/topActionLabels.ts`: centralize and re-export
+  `activeActionLockReason()` so action labels share the same lock wording.
+- `src/App.tsx`: applies state-aware panel refresh labels to Stored Vault
+  facets, Saved Import Progress, and Recent Import Activity refresh buttons.
+- `tests/panelRefresh.test.ts`: covers panel refresh ready, loading, and
+  locked-state labels.
 - `src/App.tsx`: adds source-specific accessible labels to each Import Plan
   row's `Import Batch` and `Run Until Done` buttons.
 - `src/importProgress.ts`: adds `importProgressValueText()` for processed/total
@@ -2859,6 +2905,13 @@ stability, performance, and maintainability, then record evidence here.
   visible PromptVault `surface:9` then confirmed the default preview/limit
   labels. Locked-state behavior for this slice is covered by unit tests rather
   than by that invalid cmux monkeypatch run.
+- During panel-refresh label QA, `surface:9` snapshot and selector
+  `aria-label` reads worked before the click test, and all three target refresh
+  clicks returned `OK`. Immediately afterward, `surface:9` snapshot,
+  `errors list`, `console list`, `tree`, `list-workspaces`,
+  `current-workspace`, and `surface-health` all timed out while `cmux ping`
+  still returned `PONG`, no macOS dialog title appeared, and frontend/bridge
+  health stayed OK. No cmux app restart, kill, or second browser was used.
 
 ## Research
 

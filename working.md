@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 17:47 KST
+Updated: 2026-06-06 17:54 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1053,6 +1053,34 @@ stability, performance, and maintainability, then record evidence here.
   - Clicked `Stop`, observed `Canceled scan was not stored in the vault.`, and
     verified browser console returned `No console entries` and browser errors
     returned `No browser errors`.
+- Continued with the next thin slice: lock all other long-running actions while
+  an Improve request is active.
+- Found the remaining overlap gap: `Improve` disabled itself while running, but
+  Scan, Load Stored, Plan, preview/limit controls, and import write controls
+  were still governed only by scan/import/stored-load state.
+- `src/actionLocks.ts` now includes `improvementRunning` in the shared
+  top-level lock, and import write locks reuse that same top-level predicate.
+- `src/App.tsx` now passes the active `improving` state into the shared lock.
+- `tests/actionLocks.test.ts` now covers improvement-driven locks for both
+  top-level actions and import write actions.
+- `npm run test:ui` passed after this Improve-lock slice with 26 tests.
+- `npm run check` passed after this Improve-lock slice: UI tests 26 passed,
+  TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?improve-lock=20260606b`.
+  - Clicked `Load Stored`, waited for prompt rows, clicked `Plan`, waited for
+    import action rows, selected the first prompt, then clicked `Improve`.
+  - Installed a page-local `/api/improve` fetch delay so the in-flight
+    `Improving` state could be measured; reloaded the page afterward to remove
+    the test-only monkeypatch.
+  - While `Improving` was visible, enabled counts were all `0` for Scan, Load
+    Stored, Plan, Improve, preview mode buttons, Limit, Run Selected, Import
+    Batch, Run Until Done, and source checkboxes.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1078,8 +1106,12 @@ stability, performance, and maintainability, then record evidence here.
   while top-level scan/import/stored-load work is active.
 - `src/App.tsx`: disables saved import refresh, recent import activity refresh,
   and Improve while top-level scan/import/stored-load work is active.
+- `src/App.tsx`: now feeds `improving` into the shared action-lock state so
+  other long-running actions are disabled while Improve is in flight.
+- `src/actionLocks.ts`: includes `improvementRunning` in top-level and import
+  write locks.
 - `tests/actionLocks.test.ts`: added coverage for top-level locks and import
-  action locks, including the active-scan case.
+  action locks, including active-scan and active-improvement cases.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1147,6 +1179,10 @@ stability, performance, and maintainability, then record evidence here.
   `/api/prompt-facets` count is now `88,378`, so future QA should avoid fixed
   old count assertions and should read the current facet count before comparing
   persistence behavior.
+- During Improve-lock QA, a page-local fetch monkeypatch delayed only
+  `/api/improve` to make the in-flight state observable. The same `surface:9`
+  page was reloaded after the QA run so the test delay would not leak into
+  later manual testing.
 
 ## Research
 
@@ -1162,3 +1198,5 @@ stability, performance, and maintainability, then record evidence here.
    active visible workspace differs from the target PromptVault surface.
 3. Consider making progress telemetry durable enough to reconnect to an active
    background scan after browser reload.
+4. Continue looking for remaining request-overlap or double-click hazards in
+   secondary UI flows before moving to larger background indexing work.

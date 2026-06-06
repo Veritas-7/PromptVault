@@ -164,6 +164,7 @@ function App() {
   const isStoredLoadRunning = storedLoadState === "loading";
   const actionLockState = {
     importRunning: isImportRunning,
+    improvementRunning: improving,
     scanRunning: isScanRunning,
     storedLoadRunning: isStoredLoadRunning,
   };

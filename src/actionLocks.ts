@@ -1,13 +1,19 @@
 export interface ActionLockState {
   importRunning: boolean;
+  improvementRunning: boolean;
   scanRunning: boolean;
   storedLoadRunning: boolean;
 }
 
 export function topLevelActionLocked(state: ActionLockState): boolean {
-  return state.scanRunning || state.importRunning || state.storedLoadRunning;
+  return (
+    state.scanRunning ||
+    state.importRunning ||
+    state.storedLoadRunning ||
+    state.improvementRunning
+  );
 }
 
 export function importActionLocked(state: ActionLockState): boolean {
-  return state.importRunning || state.scanRunning || state.storedLoadRunning;
+  return topLevelActionLocked(state);
 }

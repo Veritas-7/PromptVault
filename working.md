@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-06 18:31 KST
+Updated: 2026-06-06 18:37 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -1232,6 +1232,40 @@ stability, performance, and maintainability, then record evidence here.
     frequency empty count `0`, and prompt rows `200`.
   - Browser console returned `No console entries` and browser errors returned
     `No browser errors`.
+- Continued with the next thin slice: make import progress/activity refresh
+  failures visible inside their own panels.
+- Found that `refreshImportStates` and `refreshImportEvents` set their state to
+  `failed`, but the panels only rendered for existing results or loading state.
+  When prior data existed, the panel body stayed stale without an in-panel
+  warning; when no prior data existed, the panel could disappear.
+- Added import refresh failure copy coverage and connected it to Saved Import
+  Progress and Recent Import Activity panels.
+- `npm run test:ui` passed after this import-refresh-failure slice with 41
+  tests.
+- `npm run check` passed after this import-refresh-failure slice: UI tests 41
+  passed, TypeScript and Vite build passed, Rust lib 64 passed, CLI 15 passed,
+  doc-tests passed, and clippy passed with `-D warnings`.
+- Real cmux QA on the existing `surface:9`:
+  - Selected `workspace:5`, focused existing `pane:10`, and reused only the
+    single PromptVault browser surface.
+  - Loaded `http://127.0.0.1:5173/?import-refresh-failure=20260606a`.
+  - Confirmed normal import panels first: saved import rows `3`, import
+    activity rows `1`.
+  - Installed a page-local fetch monkeypatch that rejected only
+    `/api/import-states` and `/api/import-events`, then clicked both Refresh
+    buttons.
+  - Observed in-panel warnings:
+    `Could not refresh saved import progress. Existing data may be stale.` and
+    `Could not refresh import activity. Existing data may be stale.`
+  - Confirmed prior data stayed visible: saved import rows `3`, import activity
+    rows `1`.
+  - Reloaded the same surface at
+    `http://127.0.0.1:5173/?import-refresh-failure=20260606b` to remove the
+    test-only fetch monkeypatch.
+  - Confirmed warnings cleared, saved import rows `3`, import activity rows
+    `1`, and top-level error cleared.
+  - Browser console returned `No console entries` and browser errors returned
+    `No browser errors`.
 
 ## Changes
 
@@ -1275,6 +1309,13 @@ stability, performance, and maintainability, then record evidence here.
   secondary-panel empty states.
 - `src/App.tsx`: shows an explicit Source panel empty row before scan/load, and
   passes explicit empty text into each Frequency column.
+- `src/importRefreshState.ts`: adds copy helpers for import refresh failure and
+  unavailable states.
+- `src/App.tsx`: keeps Saved Import Progress and Recent Import Activity panels
+  visible on failed refreshes, shows in-panel stale-data warnings, and gives a
+  retry-oriented empty state when no prior import data exists.
+- `src/App.css`: adds a small panel notice reset for warning notices inside
+  panels.
 - `src/promptEmptyState.ts`: adds small copy helpers for loaded-empty and
   filter-miss prompt states; it now also provides Recommendation empty-state
   copy for selected, filter-hidden, and no-data prompt states.
@@ -1289,6 +1330,8 @@ stability, performance, and maintainability, then record evidence here.
   states.
 - `tests/analysisEmptyState.test.ts`: covers source-summary and frequency
   empty-state copy before load and for empty loaded results.
+- `tests/importRefreshState.test.ts`: covers import refresh failure and
+  unavailable-state copy.
 - `README.md` and `docs/CLI.md`: documented the new bridge endpoint and
   discovery-count behavior where applicable.
 - `working.md`: recorded this slice and verification evidence.
@@ -1379,6 +1422,9 @@ stability, performance, and maintainability, then record evidence here.
   was enough; no cmux restart or second browser was needed.
 - During analysis-empty QA, the same `surface:9` path stayed reliable for
   `goto`, short `eval`, Stored Vault `Apply`, console list, and errors list.
+- During import-refresh-failure QA, the page-local fetch monkeypatch affected
+  only the current `surface:9` page and was cleared by reloading the same
+  surface. Do not leave monkeypatches active across manual QA slices.
 
 ## Research
 
@@ -1399,4 +1445,4 @@ stability, performance, and maintainability, then record evidence here.
 5. Consider whether stored facets should show an explicit refresh status if
    future UI work exposes a manual stored-facet refresh control.
 6. Continue reviewing remaining empty and failure states in secondary panels,
-   especially import progress/activity panels and failed refresh states.
+   especially stored facet refresh status and import-panel no-prior-data paths.

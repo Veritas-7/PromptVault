@@ -33,6 +33,7 @@ import {
   type ImportRunMode,
   type ImportRunState,
 } from "./importProgress";
+import { importRefreshFailureText, importRefreshUnavailableText } from "./importRefreshState";
 import { selectedQueueSourceIds, toggleSourceSelection } from "./importQueue";
 import { effectivePromptListMode, previewSortForMode, type PreviewMode } from "./previewMode";
 import {
@@ -187,6 +188,14 @@ function App() {
   const isImportActionLocked = importActionLocked(actionLockState);
   const canStopScan = scanRunIdRef.current !== null && isScanRunning;
   const scanProgressText = scanProgressLabel(scanProgressInfo);
+  const importStatesFailureMessage = importRefreshFailureText(
+    importStatesState,
+    "saved import progress",
+  );
+  const importEventsFailureMessage = importRefreshFailureText(
+    importEventsState,
+    "import activity",
+  );
 
   const prompts = result?.prompts ?? [];
   const promptListMode = effectivePromptListMode(result?.preview_sort, previewMode);
@@ -779,7 +788,7 @@ function App() {
         </datalist>
       </section>
 
-      {importStatesResult || importStatesState === "loading" ? (
+      {importStatesResult || importStatesState === "loading" || importStatesFailureMessage ? (
         <section className="panel saved-import-panel">
           <div className="panel-heading">
             <h2>Saved Import Progress</h2>
@@ -794,6 +803,12 @@ function App() {
               {importStatesState === "loading" ? "Loading" : "Refresh"}
             </button>
           </div>
+          {importStatesFailureMessage ? (
+            <div className="notice warning panel-notice" data-import-states-refresh-error="true">
+              <AlertTriangle size={18} />
+              <span>{importStatesFailureMessage}</span>
+            </div>
+          ) : null}
           {importStatesResult ? (
             <>
               <div className="saved-import-summary">
@@ -841,7 +856,9 @@ function App() {
               )}
             </>
           ) : (
-            <div className="empty compact">Loading saved import cursors.</div>
+            <div className="empty compact" data-empty-import-states="true">
+              {importRefreshUnavailableText(importStatesState, "saved import progress")}
+            </div>
           )}
         </section>
       ) : null}
@@ -881,7 +898,7 @@ function App() {
         </section>
       ) : null}
 
-      {importEventsResult || importEventsState === "loading" ? (
+      {importEventsResult || importEventsState === "loading" || importEventsFailureMessage ? (
         <section className="panel import-activity-panel">
           <div className="panel-heading">
             <h2>Recent Import Activity</h2>
@@ -896,6 +913,12 @@ function App() {
               {importEventsState === "loading" ? "Loading" : "Refresh"}
             </button>
           </div>
+          {importEventsFailureMessage ? (
+            <div className="notice warning panel-notice" data-import-events-refresh-error="true">
+              <AlertTriangle size={18} />
+              <span>{importEventsFailureMessage}</span>
+            </div>
+          ) : null}
           {importEventsResult ? (
             <>
               <div className="import-activity-summary">
@@ -934,7 +957,9 @@ function App() {
               )}
             </>
           ) : (
-            <div className="empty compact">Loading import activity.</div>
+            <div className="empty compact" data-empty-import-events="true">
+              {importRefreshUnavailableText(importEventsState, "import activity")}
+            </div>
           )}
         </section>
       ) : null}

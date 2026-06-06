@@ -238,6 +238,10 @@ h3 {
   color: #536158;
 }
 
+.panel-notice {
+  margin: 0;
+}
+
 .metrics {
   display: grid;
   gap: 12px;

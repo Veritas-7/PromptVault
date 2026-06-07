@@ -1,10 +1,105 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:41 KST
+Updated: 2026-06-07 20:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Stored preview mode reload QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the stored-prompt preview mode reload path after applying stored
+  filters and generating a recommendation.
+
+Context:
+
+- The previous slice covered the broad current-HEAD happy path.
+- Function-level tests already cover `shouldReloadStoredPreview` and
+  `storedPromptLoadOptions`, but this slice verifies the real browser behavior:
+  filter preservation, preview sort reload, selected prompt replacement, and
+  stale recommendation cleanup.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Rebuilt the frontend preview artifact with `npm run build`.
+- Ran a stored preview mode reload browser QA against preview
+  `127.0.0.1:5230`.
+- Mocked the browser bridge endpoints for health, facets, import states,
+  import events, stored prompts, and improve.
+- Applied stored filters, loaded latest stored results, generated a
+  recommendation, switched to `개선 우선`, and verified the stored results
+  reloaded in quality order with the same filters.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only stored preview mode reload QA slice.
+
+Tests:
+
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-MjEXw_ye.js`.
+- Stored preview mode reload QA on preview `127.0.0.1:5230`:
+  - Initial `/api/health` succeeded and the browser bridge rendered connected.
+  - Initial quiet refreshes succeeded once each for `/api/prompt-facets`,
+    `/api/import-states`, and `/api/import-events`.
+  - Stored filters were entered with surrounding spaces where useful:
+    `query=" reload "`, `source=" Codex sessions "`,
+    `date="2026-06-07"`, `workspace=" PromptVault "`.
+  - Clicking `data-apply-stored-filters` sent one `/api/prompts` request with
+    trimmed filters, `limit: 1000`, and `preview_sort: "latest"`.
+  - Latest stored result rendered two prompt rows and selected
+    `stored-latest-selected`.
+  - Clicking `data-run-improve` sent one `/api/improve` request with
+    `prompt_id: "stored-latest-selected"`, the selected prompt text,
+    source/context, `persist: true`, and database path
+    `/tmp/promptvault-stored-preview-mode-reload.sqlite`.
+  - Recommendation UI rendered
+    `Revised latest stored prompt that must disappear after preview reload.`
+    and `추천 이력 #202 저장됨`.
+  - Clicking `개선 우선` sent a second `/api/prompts` request preserving the
+    same trimmed filters and changing only `preview_sort` to `quality_asc`.
+  - Quality preview reload selected `stored-weakest-selected`, displayed
+    `Weakest stored prompt selected after quality preview reload.`, and no
+    longer selected the previous latest prompt.
+  - The stale recommendation text and `추천 이력 #202 저장됨` persistence notice
+    disappeared after reload.
+  - Recommendation panel returned to the selected-prompt empty state:
+    `선택한 프롬프트의 추천을 생성하세요.`
+  - No `data-preview-mode-pending` notice remained after the stored reload.
+  - Final counts: `healthCalls=1`, `facetsCalls=1`,
+    `importStatesCalls=1`, `importEventsCalls=1`, `storedPromptCalls=2`,
+    `improveCalls=1`.
+  - Page errors, unexpected console errors, and unexpected request failures:
+    none.
+  - First QA attempt failed only because the temporary script called
+    `assert.deepEqual` on the local helper; the script helper was corrected and
+    the same browser flow then passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record after staged diff and secret
+  checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Current HEAD core smoke QA
 

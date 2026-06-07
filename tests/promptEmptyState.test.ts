@@ -75,6 +75,10 @@ test("recommendation empty state explains in-flight improvement", () => {
   );
 });
 
+test("recommendation empty state defers to selected prompt failure warnings", () => {
+  assert.equal(recommendationEmptyText(true, true, "", 0, false, false, true), null);
+});
+
 test("recommendation empty state keeps prompt loading ahead of improvement loading", () => {
   assert.equal(
     recommendationEmptyText(true, true, "", 0, true, true),

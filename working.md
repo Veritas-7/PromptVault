@@ -1,10 +1,84 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:06 KST
+Updated: 2026-06-07 18:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Recommendation failure empty-copy suppression
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep the Recommendation panel focused on the active failure guidance after a
+  selected-prompt recommendation request fails.
+
+Context:
+
+- Older improve-failure work added a scoped Recommendation panel warning.
+- Current browser QA still showed the normal idle empty copy under that warning:
+  `선택한 프롬프트의 추천을 생성하세요.`
+- That made a failed recommendation state read like both a failure and an idle
+  prompt to generate again.
+
+Progress:
+
+- Extended `recommendationEmptyText` so selected-prompt failure warnings can
+  suppress the idle empty message.
+- Updated the Recommendation panel to render no empty copy when the helper
+  returns `null`.
+- Added helper coverage for failure-warning precedence.
+
+Changes:
+
+- `src/promptEmptyState.ts`
+  - Added optional `hasSelectedPromptFailure` support to
+    `recommendationEmptyText`.
+- `src/App.tsx`
+  - Passes the active selected-prompt failure state into recommendation empty
+    copy calculation.
+  - Skips the empty recommendation container when failure guidance is already
+    visible.
+- `tests/promptEmptyState.test.ts`
+  - Added failure-warning precedence coverage.
+
+Tests:
+
+- RED browser QA on preview `127.0.0.1:5190` + bridge
+  `127.0.0.1:5174` using Python 3.14 Playwright:
+  - Loaded stored prompts, forced `/api/improve` to fail, and observed the
+    scoped Recommendation warning plus stale empty copy
+    `선택한 프롬프트의 추천을 생성하세요.`
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptEmptyState.test.ts`:
+  PASS, `17` tests.
+- `npm run build`: PASS.
+- Fixed browser QA on preview `127.0.0.1:5190` + bridge
+  `127.0.0.1:5174`:
+  - HTTP-level `/api/improve` failure showed the scoped warning
+    `이 프롬프트 추천을 생성하지 못했습니다. 위 오류를 확인한 뒤 다시 시도하세요.`
+  - No `data-empty-recommendation` copy was rendered under the warning.
+  - Top-level error preserved the actual failure text
+    `forced improve failure for copy QA`.
+  - Body/document width stayed within `1365 / 1365`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `144` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local browser QA and frontend
+  empty-state inspection.
+
+Next Steps:
+
+- Commit and push this recommendation failure empty-copy suppression slice.
+- Continue autonomous QA on the next uncovered PromptVault user flow.
 
 ## Current Slice - 2026-06-07 Prompt row active-work lock
 
@@ -77,8 +151,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this prompt-row active-work lock slice.
-- Continue autonomous QA on the next uncovered PromptVault user flow.
+- Completed and pushed as `506844f fix: lock prompt rows during active work`.
 
 ## Current Slice - 2026-06-07 Prompt filter active-work lock
 

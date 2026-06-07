@@ -413,6 +413,7 @@ function App() {
     activeResultStoredFilterCount,
     isStoredLoadRunning,
     improving,
+    improvementFailureMessage !== null,
   );
   const qualityGapItems = useMemo(() => {
     return (result?.stats.top_quality_gaps ?? []).map((item) => ({
@@ -2009,11 +2010,11 @@ function App() {
                 </div>
               ) : null}
             </>
-          ) : (
+          ) : recommendationEmptyMessage ? (
             <div className="empty" data-empty-recommendation="true">
               {recommendationEmptyMessage}
             </div>
-          )}
+          ) : null}
         </section>
       </section>
     </main>

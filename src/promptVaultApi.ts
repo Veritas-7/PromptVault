@@ -355,8 +355,8 @@ function isSourcePlan(value: unknown): boolean {
     || !isNonNegativeSafeInteger(value.largest_file_bytes)
     || !(
       typeof value.newest_modified_at === "undefined"
-      || typeof value.newest_modified_at === "string"
       || value.newest_modified_at === null
+      || isTimestampString(value.newest_modified_at)
     )
     || !isNonBlankStringArray(value.notes)) {
     return false;

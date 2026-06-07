@@ -1,12 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 06:12 KST
+Updated: 2026-06-08 06:24 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Optional prompt metadata validation
+## Current Slice - 2026-06-08 Source modified timestamp validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge source plan metadata whose optional
+  `newest_modified_at` value is present but blank or unparsable, while still
+  allowing omitted and `null` timestamps from the Rust producer.
+
+Context:
+
+- The previous slices tightened prompt metadata, quality labels, warnings,
+  source notes, export metadata, and persistence metadata.
+- `SourcePlan.newest_modified_at` is optional, but the parser still accepts any
+  string for the field.
+- The Rust producer emits `None`/`null` when no newest mtime exists and uses
+  RFC3339 conversion for real file mtimes, so blank or invalid timestamp text
+  is not part of the expected browser-bridge contract.
+- The field appears in both scan plan and import batch source metadata. Bad
+  values should fail closed at the bridge boundary before plan/import UI state
+  can render misleading source recency.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: optional source
+  `newest_modified_at` metadata in scan plan and import batch payloads.
+- Added RED tests for blank/unparsable source `newest_modified_at` metadata in
+  scan plan and import batch responses.
+- Confirmed RED first: focused API suite failed 88/90 only on the two new
+  missing-rejection cases.
+- Tightened `isSourcePlan` so `newest_modified_at` must be omitted, `null`, or
+  a parseable nonblank timestamp.
+- Confirmed GREEN after the parser change: focused API suite passes 90/90.
+- Confirmed broader UI coverage still passes after the parser change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. Malformed plan source timestamps stayed out of rendered
+  import actions, a valid timestamp plan recovered normally, and malformed
+  import-batch source timestamps surfaced sanitized import failure UI.
+- Removed the temporary preview QA script from
+  `/tmp/promptvault_source_modified_timestamp_qa.mjs`.
+- Ran full check successfully.
+- Confirmed `/tmp/promptvault_source_modified_timestamp_qa.mjs` is absent and
+  preview port `5297` has no listener after the server wrapper stopped the
+  server.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`: adds malformed source modified timestamp
+  tests for scan plan and import batch responses.
+- `src/promptVaultApi.ts`: rejects blank or unparsable present source
+  `newest_modified_at` values.
+
+Tests:
+
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 88/90 only on the two new missing-rejection cases.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  (`90` tests passed).
+- PASS: `npm run test:ui` (`254` tests passed).
+- PASS: `npm run build`.
+- PASS: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5297" --port 5297 node /tmp/promptvault_source_modified_timestamp_qa.mjs`.
+- PASS: `npm run check` (`npm run test:ui`, `npm run build`,
+  `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings`).
+- PASS: `test ! -e /tmp/promptvault_source_modified_timestamp_qa.mjs`.
+- PASS: `lsof -nP -iTCP:5297 -sTCP:LISTEN || true` returned no listener.
+- PASS: `git diff --check`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, run secret scans, commit, and push.
+
+## Previous Slice - 2026-06-08 Optional prompt metadata validation
 
 Current Goal:
 

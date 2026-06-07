@@ -1,10 +1,99 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 03:39 KST
+Updated: 2026-06-08 03:46 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Scan date bucket aggregate validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/load payloads whose returned `prompts_by_date`
+  buckets exceed the scan `stats.total_prompts` before the UI can render
+  impossible date-frequency rows.
+
+Context:
+
+- Rust scan stats compute `total_prompts` from the prompt list.
+- Rust `prompts_by_date()` groups prompts by derived prompt date and truncates
+  the returned rows to a display limit.
+- Because of truncation, returned date bucket sums may be below
+  `total_prompts`, but a returned date bucket or returned date bucket sum can
+  never exceed `total_prompts`.
+- Word and phrase frequency counts can exceed `total_prompts`, so this slice is
+  intentionally scoped to `prompts_by_date`.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the previous persistence aggregate slice is pushed and clean at
+  `d72fc44`.
+- Verified local/remote parity from clean `main...origin/main` with
+  `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
+  returning `0 0`.
+- Identified the date-bucket aggregate gap from live `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `src-tauri/src/lib.rs`.
+- Added RED coverage for `/api/scan` returning `stats.total_prompts: 1` while
+  `prompts_by_date` contains two date rows each reporting `count: 1`.
+- Added parser validation requiring returned date bucket counts and sums to
+  stay within `stats.total_prompts`.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified the broader UI suite, production build, and preview browser-bridge
+  malformed date-bucket path.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for returned date buckets
+    exceeding the scan prompt total.
+- `src/promptVaultApi.ts`
+  - Reuses `isFrequencyItemsWithinTotal()` for `stats.prompts_by_date`.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new date bucket aggregate test resolved
+    instead of rejecting with `Missing expected rejection`.
+  - Result: 50 tests, 49 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 50 tests, 50 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 214 tests, 214 pass.
+- Build:
+  - `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-4_KhOd3P.js`.
+- Preview QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5278" --port 5278 node /tmp/promptvault_date_bucket_aggregate_qa.mjs`
+  - Passed. The mocked bridge returned `total_prompts: 1` with two returned
+    date buckets; the UI showed the generic malformed bridge-response error and
+    did not render the bogus date rows or source row.
+  - Removed `/tmp/promptvault_date_bucket_aggregate_qa.mjs` after the run.
+- Full check:
+  - `npm run check`
+  - Passed. This included `npm run test:ui` (214 tests), `npm run build`,
+    `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit and push the verified slice if cleanup and staged safety checks stay
+  clean.
 
 ## Current Slice - 2026-06-08 Persistence aggregate validation
 

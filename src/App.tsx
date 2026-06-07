@@ -642,6 +642,7 @@ function App() {
         preview_limit: PREVIEW_LIMIT,
         preview_sort: previewSortForMode(previewMode),
         include_markdown: false,
+        write_markdown: false,
         persist_on_cancel: false,
         run_id: runId,
       });

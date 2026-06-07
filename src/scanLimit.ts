@@ -1,5 +1,5 @@
 export const MAX_SCAN_LIMIT = 100000;
-export const RECOMMENDED_SCAN_LIMIT = 1000;
+export const RECOMMENDED_SCAN_LIMIT = 25;
 
 export function recommendedInitialScanLimit(): string {
   return String(RECOMMENDED_SCAN_LIMIT);

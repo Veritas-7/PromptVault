@@ -4956,3 +4956,55 @@ Verification:
   - aria label: `스캔 프롬프트 제한`
   - after filling `250`, input value: `250`
   - disabled: `false`
+
+## 2026-06-07 - Scan click root-cause fix
+
+Root cause from real click testing:
+
+- With the recommended value at `1000`, a real browser-mode Scan click stayed
+  in progress for more than 35 seconds on the Codex source. Progress was active
+  but still only at `49 / 25125` files and `84 / 1000` prompts, so users saw
+  no rows and perceived the scan as broken.
+- Browser scan requests also omitted `write_markdown:false`, so completed UI
+  scans could still write Markdown exports even though the page only needs JSON
+  results and SQLite persistence.
+
+Changes:
+
+- Lowered `RECOMMENDED_SCAN_LIMIT` from `1000` to `25` for a fast first Scan
+  click.
+- Added `write_markdown` and `persist` to the browser API scan option type.
+- `src/App.tsx` now sends `write_markdown:false` with browser scan requests.
+
+Verification:
+
+- Reproduced the slow first-click behavior before the fix:
+  - initial value `1000`
+  - Scan button clicked
+  - after 35 seconds: `prompt_rows=0`, progress visible, no user-facing result
+  - active progress: `Codex`, `source_file_count=25125`,
+    `source_files_seen=49`, `prompts_found=84`, `limit=1000`
+- Verified the fixed default Scan click:
+  - initial value `25`
+  - placeholder `추천 25`
+  - `/api/scan` returned HTTP `200`
+  - `prompt_rows=25`
+  - user-facing error text `null`
+  - `output_path=null`, `markdown=""`
+- Verified user-adjusted Scan click:
+  - default value `25`
+  - user changed value to `5`
+  - request payload included `limit:5`, `include_markdown:false`,
+    `write_markdown:false`, `persist_on_cancel:false`
+  - `/api/scan` returned HTTP `200`
+  - response `total_prompts=5`, `returned_prompt_count=5`,
+    `markdown_written=false`, `markdown_included=false`, `output_path=null`
+  - rendered prompt rows `5`
+  - browser/page errors `[]`
+- `npm run check`: PASS.
+  - UI tests: `125` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `81` passed.
+  - CLI tests: `16` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.

@@ -777,6 +777,15 @@ function isImprovePersistence(value: unknown): boolean {
     && isPositiveSafeInteger(value.prompt_improvement_count);
 }
 
+function stringArraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function resolvedQualityGaps(beforeMissing: string[], afterMissing: string[]): string[] {
+  const remaining = new Set(afterMissing);
+  return beforeMissing.filter((gap) => !remaining.has(gap));
+}
+
 function isQualityDelta(value: unknown): boolean {
   if (!isRecord(value)
     || !isPromptQuality(value.before)
@@ -786,7 +795,12 @@ function isQualityDelta(value: unknown): boolean {
     || !isNonBlankStringArray(value.remaining_gaps)) {
     return false;
   }
-  return value.score_delta === value.after.score - value.before.score;
+  return value.score_delta === value.after.score - value.before.score
+    && stringArraysEqual(value.remaining_gaps as string[], value.after.missing)
+    && stringArraysEqual(
+      value.resolved_gaps as string[],
+      resolvedQualityGaps(value.before.missing, value.after.missing),
+    );
 }
 
 function isInactiveScanProgressSnapshot(value: Record<string, unknown>): boolean {

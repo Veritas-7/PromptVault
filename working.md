@@ -1,12 +1,118 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 08:52 KST
+Updated: 2026-06-08 08:57 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Improvement score delta validation
+## Current Slice - 2026-06-08 Improvement gap delta validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge improvement payloads whose `resolved_gaps` and
+  `remaining_gaps` do not match the `before.missing` and `after.missing`
+  quality gap arrays.
+
+Context:
+
+- The previous slice now rejects `quality_delta.score_delta` values that do not
+  equal `quality_delta.after.score - quality_delta.before.score`.
+- Backend `quality_delta()` computes `remaining_gaps` as a clone of
+  `after.missing`, and `resolved_gaps` as each `before.missing` item absent
+  from `after.missing`.
+- The browser-bridge improvement parser currently validates only that
+  `resolved_gaps` and `remaining_gaps` are nonblank string arrays. A malformed
+  bridge response could therefore present contradictory gap resolution details
+  even when before/after quality objects and score delta are otherwise valid.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at `d2f087c` with `HEAD...origin/main`
+  returning `0 0`.
+- Re-read backend `quality_delta()` and frontend `isQualityDelta`, confirming
+  that gap arrays are not currently cross-checked against the before/after
+  quality gap arrays.
+- Added RED API tests for remaining-gap and resolved-gap mismatch payloads.
+- Confirmed RED first: focused API suite failed 112/114 only on the two new
+  missing-rejection cases.
+- Added parser validation requiring `remaining_gaps` to match `after.missing`
+  and `resolved_gaps` to match `before.missing` minus gaps still present in
+  `after.missing`, preserving backend order.
+- Confirmed GREEN after the parser change: focused API suite passes 114/114.
+- Confirmed the broader UI/helper suite still passes 278/278 and the production
+  Vite build succeeds after the parser change.
+- Verified the local preview UI flow with Node Playwright: a malformed
+  `/api/improve` response with contradictory resolved/remaining gap arrays is
+  rejected as a sanitized bridge error and the revised prompt/checklist/gap
+  details do not render.
+- Removed the temporary preview QA script and confirmed port 5318 was free.
+- Confirmed the full project check passes after the gap parser/test change.
+- Confirmed pre-staging whitespace, repo root, origin parity, remote visibility,
+  and cleanup checks before staging explicit paths.
+- Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then confirmed the staged secret scan found no leaks.
+
+Changes:
+
+- `working.md`: records the current improvement gap delta validation slice.
+- `src/promptVaultApi.ts`: adds score gap array consistency validation for
+  browser-bridge improvement results.
+- `tests/promptVaultApi.test.ts`: adds remaining-gap and resolved-gap mismatch
+  rejection cases.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 112/114 only on the new remaining-gap and resolved-gap missing
+  rejection cases.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 114/114 after the parser validation change.
+- Broader UI/helper suite: `npm run test:ui` passed 278/278.
+- Production build: `npm run build` passed.
+- Preview QA helper: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  returned usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5318" --port 5318 --timeout 30 node /tmp/promptvault_improvement_gap_delta_qa.mjs http://127.0.0.1:5318`
+  passed.
+- Cleanup: `test ! -e /tmp/promptvault_improvement_gap_delta_qa.mjs && echo temp_absent`
+  returned `temp_absent`; `! lsof -nP -iTCP:5318 -sTCP:LISTEN && echo port_5318_free`
+  returned `port_5318_free`.
+- Full project check: `npm run check` passed, including `npm run test:ui`
+  278/278, `npm run build`, `cargo test` 84 lib tests and 16 CLI tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; `git rev-parse --show-toplevel` returned
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md` modified; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` showed only `origin` at
+  `https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `visibility: PRIVATE`; temp script was absent and port 5318 was free.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact` scanned
+  about 8.97 KB and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Restage `working.md`, rerun staged secret scan, commit, full-tree secret scan,
+  push, and parity verification.
+
+## Previous Slice - 2026-06-08 Improvement score delta validation
 
 Current Goal:
 
@@ -124,8 +230,9 @@ Research:
 
 Next Steps:
 
-- Commit and push this closeout-only `working.md` update, then continue with
-  the next narrow autonomous QA hardening slice from a clean tree.
+- Slice is clean and pushed through
+  `d2f087c docs: close improvement score delta handoff`. Continue with the next
+  narrow autonomous QA hardening slice from the clean tree.
 
 ## Previous Slice - 2026-06-08 Complete import batch aggregate validation
 

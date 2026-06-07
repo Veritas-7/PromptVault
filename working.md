@@ -1,10 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 01:17 KST
+Updated: 2026-06-08 01:24 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Source file-total bounds
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose aggregate `stats.total_files`
+  does not match the sum of `source_summaries[].files_seen` before a malformed
+  scan result can present inconsistent file totals.
+
+Context:
+
+- Source summary weak counts are already validated against each source's
+  `prompts_found`, and aggregate weak counts are validated against total
+  prompts.
+- The Rust `build_stats()` path derives `stats.total_files` by summing
+  `source_summaries[].files_seen`.
+- `App.tsx` renders the top-level file metric directly from
+  `result?.stats.total_files`, so malformed browser bridge payloads should be
+  rejected before the result state updates.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for `/api/scan` returning one valid prompt row and valid
+  source row counts, but `stats.total_files: 1` while source summaries report
+  `files_seen: 2`.
+- Added scan stats relation validation requiring aggregate file total to equal
+  the safe-integer sum of source summary file counts.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Pending: staged checks, commit, full-tree secret scan, push, and publication
+  evidence docs commit.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds `sourceFilesSeenTotalMatches()` and requires scan-result
+    `stats.total_files` to match the sum of `source_summaries[].files_seen`.
+- `tests/promptVaultApi.test.ts`
+  - Adds bridge response-shape coverage for source file totals that mismatch
+    aggregate scan file totals.
+- `working.md`
+  - Records this source file-total bounds slice.
+  - Marks the previous source weak-count publication evidence docs commit as
+    pushed.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new source file-total test resolved
+    instead of rejecting.
+  - Result: 36 tests, 35 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 36 tests, 36 pass.
+- `npm run test:ui`:
+  - Passed: 200 tests, 200 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-qEkqphOI.js`.
+- Source file-total browser QA on preview `127.0.0.1:5264`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/scan` returned HTTP 200 with one valid prompt row, but
+    `stats.total_files: 1` and source summary `files_seen: 2`.
+  - Clicking the top-level quick scan button rendered the scan failure notice
+    and sanitized malformed bridge error.
+  - The malformed source row and malformed prompt row text were not rendered.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=2`,
+    `/api/import-states=1`, `/api/import-events=1`, `/api/scan=1`,
+    `/api/scan/progress=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 200 tests, 200 pass.
+  - Build: passed with `index-qEkqphOI.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage explicit paths only: `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `working.md`.
+- Run staged secret/diff/GitHub checks, commit, run full-tree gitleaks, push to
+  `origin main`, then record publication status in a docs commit.
 
 ## Current Slice - 2026-06-08 Source summary weak-count bounds
 
@@ -39,7 +139,8 @@ Progress:
   to be at most that source's found prompt count.
 - Verified focused API tests, full UI/unit tests, production build, preview
   QA, the full project check, staged checks, and GitHub publication.
-- Pending: publication evidence docs commit.
+- Published publication-status update on `origin/main` as
+  `1d23431 docs: mark source weak count validation pushed`.
 
 Changes:
 
@@ -123,7 +224,8 @@ Next Steps:
 
 - Published robustness fix on `origin/main` as
   `f787af4 fix: validate source weak counts`.
-- Commit and push this `working.md` publication-status update.
+- Published publication-status update on `origin/main` as
+  `1d23431 docs: mark source weak count validation pushed`.
 
 ## Current Slice - 2026-06-08 Scan result weak-count bounds
 

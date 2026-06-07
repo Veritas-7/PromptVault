@@ -242,27 +242,27 @@ function isImportState(value: unknown): boolean {
     && typeof value.source_id === "string"
     && typeof value.source_label === "string"
     && typeof value.root_path === "string"
-    && typeof value.total_files === "number"
-    && typeof value.total_bytes === "number"
-    && typeof value.next_file_index === "number"
-    && typeof value.processed_files === "number"
-    && typeof value.imported_prompt_count === "number"
+    && isNonNegativeFiniteNumber(value.total_files)
+    && isNonNegativeFiniteNumber(value.total_bytes)
+    && isNonNegativeFiniteNumber(value.next_file_index)
+    && isNonNegativeFiniteNumber(value.processed_files)
+    && isNonNegativeFiniteNumber(value.imported_prompt_count)
     && typeof value.completed === "boolean"
     && typeof value.updated_at === "string";
 }
 
 function isImportEvent(value: unknown): boolean {
   return isRecord(value)
-    && typeof value.id === "number"
+    && isNonNegativeFiniteNumber(value.id)
     && typeof value.generated_at === "string"
     && typeof value.source_id === "string"
     && typeof value.source_label === "string"
     && typeof value.root_path === "string"
-    && typeof value.batch_start_index === "number"
-    && typeof value.batch_file_count === "number"
-    && typeof value.batch_prompt_count === "number"
-    && typeof value.processed_files === "number"
-    && typeof value.total_files === "number"
+    && isNonNegativeFiniteNumber(value.batch_start_index)
+    && isNonNegativeFiniteNumber(value.batch_file_count)
+    && isNonNegativeFiniteNumber(value.batch_prompt_count)
+    && isNonNegativeFiniteNumber(value.processed_files)
+    && isNonNegativeFiniteNumber(value.total_files)
     && typeof value.completed === "boolean"
     && Array.isArray(value.warnings)
     && value.warnings.every((warning) => typeof warning === "string");
@@ -362,11 +362,11 @@ function parseImportStatesResult(value: unknown): ImportStatesResult {
     || typeof value.database_path !== "string"
     || !Array.isArray(value.states)
     || !value.states.every(isImportState)
-    || typeof value.total_sources !== "number"
-    || typeof value.completed_sources !== "number"
-    || typeof value.total_files !== "number"
-    || typeof value.processed_files !== "number"
-    || typeof value.imported_prompt_count !== "number") {
+    || !isNonNegativeFiniteNumber(value.total_sources)
+    || !isNonNegativeFiniteNumber(value.completed_sources)
+    || !isNonNegativeFiniteNumber(value.total_files)
+    || !isNonNegativeFiniteNumber(value.processed_files)
+    || !isNonNegativeFiniteNumber(value.imported_prompt_count)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ImportStatesResult;
@@ -378,7 +378,7 @@ function parseImportEventsResult(value: unknown): ImportEventsResult {
     || typeof value.database_path !== "string"
     || !Array.isArray(value.events)
     || !value.events.every(isImportEvent)
-    || typeof value.total_events !== "number") {
+    || !isNonNegativeFiniteNumber(value.total_events)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ImportEventsResult;

@@ -1,10 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 22:47 KST
+Updated: 2026-06-07 22:55 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Import state/event numeric validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject impossible browser-bridge `/api/import-states` and
+  `/api/import-events` numeric payloads before negative progress, batch, or
+  event counts can render in saved import panels.
+
+Context:
+
+- Previous slices hardened `/api/scan/progress` and `/api/plan` numeric
+  validation.
+- Import state and event parsers still accepted any JavaScript `number`.
+  Shape-valid negative counters could render in saved import progress rows,
+  import activity rows, and manual refresh flows.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added RED tests for shape-valid but impossible negative import state and
+  import event payloads.
+- Reused the non-negative finite number validator for `ImportState`,
+  `ImportEvent`, and their top-level result counters.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check. Publication is next.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - `isImportState()` now rejects negative or non-finite total, byte, cursor,
+    processed, and imported prompt counters.
+  - `isImportEvent()` now rejects negative or non-finite event id, batch, and
+    processed/total counters.
+  - `parseImportStatesResult()` and `parseImportEventsResult()` now reject
+    negative or non-finite aggregate counters.
+- `tests/promptVaultApi.test.ts`
+  - Adds `/api/import-states` and `/api/import-events` coverage for impossible
+    negative numeric payloads.
+- `working.md`
+  - Records this import state/event numeric validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: both new impossible numeric payload tests
+    resolved instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 17 tests, 17 pass.
+- `npm run test:ui`:
+  - Passed: 181 tests, 181 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-0UCqODGW.js`.
+- Import state/event numeric validation browser QA on preview
+  `127.0.0.1:5248`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health` and `/api/prompt-facets` returned valid payloads.
+  - `/api/import-states` and `/api/import-events` returned HTTP 200 with
+    negative aggregate and row counters.
+  - Initial quiet refresh rendered saved import progress and recent import
+    activity failure notices without creating rows or leaking negative values.
+  - Manual refresh clicks for both panels rendered the sanitized bridge
+    response-shape error and still did not expose `-1`, `-2`, `-3`, `-5`,
+    `-1,024`, `NaN`, or `Infinity`.
+  - Final counts: `health=1`, `facets=1`, `importStates=2`,
+    `importEvents=2`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 181 tests, 181 pass.
+  - Build: passed with `index-0UCqODGW.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+- Commit and push are still pending for this slice.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage explicit paths only, run staged gitleaks, commit, full gitleaks, push,
+  and record publication evidence.
+- Continue autonomous QA on another still-uncovered bridge/import/result/facet
+  numeric edge after publication.
 
 ## Current Slice - 2026-06-07 Scan plan numeric validation
 

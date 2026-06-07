@@ -95,6 +95,46 @@ test("browser bridge import states reject malformed successful payloads", async 
   );
 });
 
+test("browser bridge import states reject impossible numeric payloads", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    states: [{
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      total_files: -5,
+      total_bytes: -1024,
+      next_file_index: -1,
+      processed_files: -2,
+      imported_prompt_count: -3,
+      completed: false,
+      updated_at: "2026-06-07T00:00:00Z",
+    }],
+    total_sources: -1,
+    completed_sources: -1,
+    total_files: -5,
+    processed_files: -2,
+    imported_prompt_count: -3,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listImportStates(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge import events reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ database_path: "/tmp/promptvault.sqlite" }), {
@@ -110,6 +150,44 @@ test("browser bridge import events reject malformed successful payloads", async 
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /toLocaleString|TypeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge import events reject impossible numeric payloads", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    events: [{
+      id: -1,
+      generated_at: "2026-06-07T00:00:00Z",
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      batch_start_index: -1,
+      batch_file_count: -5,
+      batch_prompt_count: -3,
+      processed_files: -2,
+      total_files: -5,
+      completed: false,
+      warnings: [],
+    }],
+    total_events: -1,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listImportEvents(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /toLocaleString|RangeError|undefined/);
       return true;
     },
   );

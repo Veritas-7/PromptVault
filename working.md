@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 04:37 KST
+Updated: 2026-06-08 04:38 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -51,6 +51,17 @@ Progress:
 - Verified local/remote parity after push with
   `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
   returning `0 0`.
+- Committed and pushed the pushed-state marker:
+  `a4809ea docs: mark top word frequency validation pushed`.
+- Verified local/remote parity after the marker push returning `0 0`.
+
+Closeout:
+
+- The top word frequency validation slice is complete.
+- Browser-bridge scan/load payloads now reject impossible `top_words` counts
+  before the statistics frequency column can render them.
+- Preview QA confirmed malformed top-word rows do not render `ghost` or `999`
+  frequency data after rejection.
 
 Changes:
 
@@ -102,7 +113,8 @@ Research:
 
 Next Steps:
 
-- Commit and push this pushed-state marker, then add the slice closeout.
+- Continue autonomous QA from clean pushed `main`; another useful next slice is
+  to inspect remaining scan-stat frequency arrays or user-facing error paths.
 
 ## Current Slice - 2026-06-08 Prompt word-count validation
 

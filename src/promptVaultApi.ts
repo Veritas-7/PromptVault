@@ -606,7 +606,7 @@ function isInactiveScanProgressSnapshot(value: Record<string, unknown>): boolean
 }
 
 function parseCancelScanResult(value: unknown): CancelScanResult {
-  if (!isRecord(value) || typeof value.run_id !== "string" || typeof value.canceled !== "boolean") {
+  if (!isRecord(value) || !isNonBlankString(value.run_id) || typeof value.canceled !== "boolean") {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as CancelScanResult;
@@ -729,7 +729,7 @@ function parseScanResult(value: unknown): ScanResult {
 
 function parseScanProgressResult(value: unknown): ScanProgress {
   if (!isRecord(value)
-    || typeof value.run_id !== "string"
+    || !isNonBlankString(value.run_id)
     || typeof value.active !== "boolean"
     || typeof value.canceled !== "boolean"
     || !isNullableNonBlankString(value.source_id)

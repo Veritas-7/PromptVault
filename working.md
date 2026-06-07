@@ -1,12 +1,99 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 06:26 KST
+Updated: 2026-06-08 06:25 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Source modified timestamp validation
+## Current Slice - 2026-06-08 Scan run id response validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan progress and cancel-scan responses whose `run_id`
+  is blank/whitespace-only before the UI can treat an empty run identity as a
+  valid progress or cancellation response.
+
+Context:
+
+- The previous slices tightened required prompt metadata, source metadata,
+  source modified timestamps, warning/note text, export metadata, and
+  persistence metadata.
+- Rust scan run handling already normalizes `run_id` and rejects empty values
+  before returning scan progress or cancellation responses.
+- The browser-bridge parser still checks only `typeof value.run_id ===
+  "string"` in `parseScanProgressResult` and `parseCancelScanResult`, leaving a
+  contract gap for blank run identities.
+- Scan polling silently retries malformed progress responses, while cancel
+  failures are user-visible; both should fail closed at the parser boundary.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: scan progress and cancel result
+  `run_id` validation in the browser bridge parser.
+- Added RED tests for blank scan progress and cancel-scan result `run_id`
+  values.
+- Confirmed RED first: focused API suite failed 90/92 only on the two new
+  missing-rejection cases.
+- Tightened scan progress and cancel-scan result parsers to require nonblank
+  `run_id` values.
+- Confirmed GREEN after the parser change: focused API suite passes 92/92.
+- Confirmed broader UI coverage still passes after the parser change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. Blank scan progress `run_id` responses stayed out of global
+  errors and did not replace the fallback progress copy; blank cancel-scan
+  result `run_id` responses surfaced sanitized global and stop-failure UI.
+- Removed the temporary preview QA script from
+  `/tmp/promptvault_scan_run_id_qa.mjs`.
+- Ran full check successfully.
+- Confirmed `/tmp/promptvault_scan_run_id_qa.mjs` is absent and preview port
+  `5298` has no listener after the server wrapper stopped the server.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`: adds malformed scan progress and cancel scan
+  `run_id` tests using otherwise-valid response payloads.
+- `src/promptVaultApi.ts`: rejects blank scan progress and cancel-scan result
+  `run_id` values.
+
+Tests:
+
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 90/92 only on the two new missing-rejection cases.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  (`92` tests passed).
+- PASS: `npm run test:ui` (`256` tests passed).
+- PASS: `npm run build`.
+- PASS: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5298" --port 5298 node /tmp/promptvault_scan_run_id_qa.mjs`.
+- PASS: `npm run check` (`npm run test:ui`, `npm run build`,
+  `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings`).
+- PASS: `test ! -e /tmp/promptvault_scan_run_id_qa.mjs`.
+- PASS: `lsof -nP -iTCP:5298 -sTCP:LISTEN || true` returned no listener.
+- PASS: `git diff --check`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, run secret scans, commit, and push.
+
+## Previous Slice - 2026-06-08 Source modified timestamp validation
 
 Current Goal:
 

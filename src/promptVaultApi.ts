@@ -329,6 +329,17 @@ function sourceSummaryIdsAreUnique(sourceSummaries: unknown): boolean {
   return true;
 }
 
+function sourcePlanIdsAreUnique(sources: unknown): boolean {
+  if (!Array.isArray(sources)) return false;
+  const sourceIds = new Set<string>();
+  for (const source of sources) {
+    if (!isRecord(source) || !isNonBlankString(source.id)) return false;
+    if (sourceIds.has(source.id)) return false;
+    sourceIds.add(source.id);
+  }
+  return true;
+}
+
 function sourceFilesSeenTotalMatches(sourceSummaries: unknown, totalFiles: unknown): boolean {
   if (!Array.isArray(sourceSummaries) || !isNonNegativeSafeInteger(totalFiles)) return false;
   let filesSeenTotal = 0;
@@ -854,6 +865,7 @@ function parseScanPlan(value: unknown): ScanPlan {
     || !isNonNegativeSafeIntegerAtMost(value.largest_file_bytes, value.total_bytes)
     || !Array.isArray(value.sources)
     || !value.sources.every(isSourcePlan)
+    || !sourcePlanIdsAreUnique(value.sources)
     || !isNonBlankStringArray(value.warnings)
     || !isScanPlanAggregate(value)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);

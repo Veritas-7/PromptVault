@@ -4045,6 +4045,56 @@ test("browser bridge scan plans reject impossible source size counters", async (
   );
 });
 
+test("browser bridge scan plans reject duplicate source ids", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanPlan({
+    total_sources: 2,
+    available_sources: 2,
+    total_files: 3,
+    total_bytes: 300,
+    large_file_count: 0,
+    largest_file_bytes: 200,
+    sources: [{
+      id: "codex",
+      label: "Codex",
+      root_path: "/tmp/codex",
+      status: "ok",
+      file_count: 1,
+      byte_count: 100,
+      large_file_count: 0,
+      largest_file_bytes: 100,
+      newest_modified_at: null,
+      notes: [],
+    }, {
+      id: "codex",
+      label: "Codex duplicate",
+      root_path: "/tmp/codex-duplicate",
+      status: "ok",
+      file_count: 2,
+      byte_count: 200,
+      large_file_count: 0,
+      largest_file_bytes: 200,
+      newest_modified_at: null,
+      notes: [],
+    }],
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => planScan(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Codex duplicate|3개 파일|300 B|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge cancel scan results reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ run_id: "scan-run-1" }), {

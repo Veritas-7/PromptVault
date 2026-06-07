@@ -395,6 +395,80 @@ test("browser bridge scan results reject impossible numeric payloads", async (t)
   );
 });
 
+test("browser bridge scan results reject fractional integer payloads", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    output_path: null,
+    markdown: "",
+    stats: {
+      total_prompts: 1.5,
+      total_files: 1,
+      total_words: 3,
+      average_words: 3.5,
+      average_quality: 42.5,
+      weak_prompt_count: 0,
+      top_words: [],
+      top_phrases: [],
+      repeated_prompts: [],
+      top_quality_gaps: [],
+      prompts_by_date: [],
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: 1,
+        prompts_found: 1,
+        average_quality: 42.5,
+        weak_prompt_count: 0,
+        status: "ok",
+        notes: [],
+      }],
+    },
+    prompts: [{
+      id: "prompt-1",
+      source: "codex",
+      session_id: "session-1",
+      path: "/tmp/codex/history.jsonl",
+      timestamp: null,
+      cwd: null,
+      text: "Improve this prompt.",
+      word_count: 3.5,
+      char_count: 20,
+      hash: "hash-1",
+      risk_flags: [],
+      quality: {
+        score: 42.5,
+        band: "weak",
+        missing: [],
+        suggestions: [],
+      },
+    }],
+    returned_prompt_count: 1.5,
+    prompts_truncated: false,
+    preview_sort: "latest",
+    markdown_included: false,
+    markdown_written: false,
+    persistence: null,
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge stored prompt loads reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ generated_at: "2026-06-07T00:00:00Z" }), {
@@ -698,6 +772,51 @@ test("browser bridge improvements reject non-finite score deltas", async (t) => 
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /Infinity|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge improvements reject fractional score deltas", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    provider: "local",
+    used_ai: false,
+    revised_prompt: "Improve this prompt by adding context and success criteria.",
+    rationale: ["Added context."],
+    checklist: ["Verify expected outcome."],
+    quality_delta: {
+      before: {
+        score: 40,
+        band: "weak",
+        missing: ["context"],
+        suggestions: ["Add context."],
+      },
+      after: {
+        score: 82,
+        band: "strong",
+        missing: [],
+        suggestions: [],
+      },
+      score_delta: 42.5,
+      resolved_gaps: ["context"],
+      remaining_gaps: [],
+    },
+    warnings: [],
+    persistence: null,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => improvePrompt({ prompt: "Improve this prompt." }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /toLocaleString|RangeError|undefined/);
       return true;
     },
   );

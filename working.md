@@ -1,10 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 23:32 KST
+Updated: 2026-06-07 23:41 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Fractional integer bridge validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject fractional browser-bridge integers for counters, ids, indexes, byte
+  counts, prompt word/character counts, prompt quality scores, and improvement
+  score deltas before misleading values can render in count/progress/quality UI.
+
+Context:
+
+- Previous slices rejected negative/non-finite numeric bridge payloads.
+- Rust response structs use integer types for counts/ids/indexes/bytes and
+  `QualityDelta.score_delta`, while `average_words` and `average_quality` are
+  `f64` and may legitimately be decimal.
+- JavaScript `number` accepts fractional values for every numeric field unless
+  the browser bridge parser explicitly requires safe integers.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Confirmed Rust response field types before changing parser behavior.
+- Added RED coverage for fractional scan result integer payloads and
+  fractional improvement score deltas.
+- Added safe-integer validators for integer response fields while preserving
+  decimal averages.
+- Verified focused API tests, full UI/unit tests, production build, preview QA,
+  and the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds safe-integer helpers and nullable safe-integer validation.
+  - Uses safe-integer validation for response counters, ids, indexes, byte
+    counts, prompt word/character counts, prompt quality scores, and signed
+    `score_delta`.
+  - Keeps `average_words`, `average_quality`, and source average quality as
+    non-negative finite numbers so decimal averages remain valid.
+- `tests/promptVaultApi.test.ts`
+  - Adds `/api/scan` coverage for fractional integer fields while decimal
+    averages are otherwise valid.
+  - Adds `/api/improve` coverage for fractional `quality_delta.score_delta`.
+- `working.md`
+  - Records this fractional integer bridge validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the fractional scan result and fractional
+    score delta tests resolved instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 24 tests, 24 pass.
+- `npm run test:ui`:
+  - Passed: 188 tests, 188 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-B9-NXFOT.js`.
+- Fractional integer scan browser QA on preview `127.0.0.1:5254`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/prompt-facets`, `/api/import-states`,
+    `/api/import-events`, and `/api/scan/progress` returned valid payloads.
+  - `/api/scan` returned HTTP 200 with decimal averages that should remain
+    valid, plus fractional integer fields including `total_prompts: 1.5`,
+    `returned_prompt_count: 1.5`, `word_count: 3.5`, and `quality.score: 42.5`.
+  - Clicking `빠른 스캔` rendered the sanitized bridge response-shape error.
+  - The prompt text and fractional count/quality labels were not rendered.
+  - Final counts: `health=1`, `facets=2`, `importStates=1`,
+    `importEvents=1`, `scan=1`, `progress=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 188 tests, 188 pass.
+  - Build: passed with `index-B9-NXFOT.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then run staged diff/secret checks, commit, and push.
 
 ## Current Slice - 2026-06-07 Improve score delta finite validation
 
@@ -36,8 +134,7 @@ Progress:
 - Added a finite-number validator and used it for `quality_delta.score_delta`,
   while keeping negative finite deltas valid.
 - Verified focused tests, full UI/unit tests, production build, preview QA, the
-  full project check, and GitHub publication.
-- Pending: publication evidence docs commit.
+  full project check, GitHub publication, and publication evidence docs commit.
 
 Changes:
 
@@ -115,7 +212,8 @@ Next Steps:
 
 - Published robustness fix on `origin/main` as
   `e038122 fix: validate improve score deltas`.
-- Commit and push this `working.md` publication-status update.
+- Published publication-status update on `origin/main` as
+  `07e5620 docs: mark improve score delta validation pushed`.
 
 ## Current Slice - 2026-06-07 Improve persistence numeric validation
 

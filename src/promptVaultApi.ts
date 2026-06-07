@@ -169,7 +169,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isFrequencyItem(value: unknown): boolean {
   return isRecord(value)
     && typeof value.text === "string"
-    && isNonNegativeFiniteNumber(value.count);
+    && isNonNegativeSafeInteger(value.count);
 }
 
 function isStringArray(value: unknown): boolean {
@@ -184,13 +184,21 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function isNullableNonNegativeFiniteNumber(value: unknown): boolean {
-  return value === null || isNonNegativeFiniteNumber(value);
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return isSafeInteger(value) && value >= 0;
+}
+
+function isSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value);
+}
+
+function isNullableNonNegativeSafeInteger(value: unknown): boolean {
+  return value === null || isNonNegativeSafeInteger(value);
 }
 
 function isPromptQuality(value: unknown): boolean {
   return isRecord(value)
-    && isNonNegativeFiniteNumber(value.score)
+    && isNonNegativeSafeInteger(value.score)
     && typeof value.band === "string"
     && isStringArray(value.missing)
     && isStringArray(value.suggestions);
@@ -205,8 +213,8 @@ function isPromptRecord(value: unknown): boolean {
     && (typeof value.timestamp === "undefined" || typeof value.timestamp === "string" || value.timestamp === null)
     && (typeof value.cwd === "undefined" || typeof value.cwd === "string" || value.cwd === null)
     && typeof value.text === "string"
-    && isNonNegativeFiniteNumber(value.word_count)
-    && isNonNegativeFiniteNumber(value.char_count)
+    && isNonNegativeSafeInteger(value.word_count)
+    && isNonNegativeSafeInteger(value.char_count)
     && typeof value.hash === "string"
     && isStringArray(value.risk_flags)
     && isPromptQuality(value.quality);
@@ -217,10 +225,10 @@ function isSourceSummary(value: unknown): boolean {
     && typeof value.id === "string"
     && typeof value.label === "string"
     && typeof value.root_path === "string"
-    && isNonNegativeFiniteNumber(value.files_seen)
-    && isNonNegativeFiniteNumber(value.prompts_found)
+    && isNonNegativeSafeInteger(value.files_seen)
+    && isNonNegativeSafeInteger(value.prompts_found)
     && isNonNegativeFiniteNumber(value.average_quality)
-    && isNonNegativeFiniteNumber(value.weak_prompt_count)
+    && isNonNegativeSafeInteger(value.weak_prompt_count)
     && typeof value.status === "string"
     && isStringArray(value.notes);
 }
@@ -231,10 +239,10 @@ function isSourcePlan(value: unknown): boolean {
     && typeof value.label === "string"
     && typeof value.root_path === "string"
     && typeof value.status === "string"
-    && isNonNegativeFiniteNumber(value.file_count)
-    && isNonNegativeFiniteNumber(value.byte_count)
-    && isNonNegativeFiniteNumber(value.large_file_count)
-    && isNonNegativeFiniteNumber(value.largest_file_bytes)
+    && isNonNegativeSafeInteger(value.file_count)
+    && isNonNegativeSafeInteger(value.byte_count)
+    && isNonNegativeSafeInteger(value.large_file_count)
+    && isNonNegativeSafeInteger(value.largest_file_bytes)
     && (
       typeof value.newest_modified_at === "undefined"
       || typeof value.newest_modified_at === "string"
@@ -248,27 +256,27 @@ function isImportState(value: unknown): boolean {
     && typeof value.source_id === "string"
     && typeof value.source_label === "string"
     && typeof value.root_path === "string"
-    && isNonNegativeFiniteNumber(value.total_files)
-    && isNonNegativeFiniteNumber(value.total_bytes)
-    && isNonNegativeFiniteNumber(value.next_file_index)
-    && isNonNegativeFiniteNumber(value.processed_files)
-    && isNonNegativeFiniteNumber(value.imported_prompt_count)
+    && isNonNegativeSafeInteger(value.total_files)
+    && isNonNegativeSafeInteger(value.total_bytes)
+    && isNonNegativeSafeInteger(value.next_file_index)
+    && isNonNegativeSafeInteger(value.processed_files)
+    && isNonNegativeSafeInteger(value.imported_prompt_count)
     && typeof value.completed === "boolean"
     && typeof value.updated_at === "string";
 }
 
 function isImportEvent(value: unknown): boolean {
   return isRecord(value)
-    && isNonNegativeFiniteNumber(value.id)
+    && isNonNegativeSafeInteger(value.id)
     && typeof value.generated_at === "string"
     && typeof value.source_id === "string"
     && typeof value.source_label === "string"
     && typeof value.root_path === "string"
-    && isNonNegativeFiniteNumber(value.batch_start_index)
-    && isNonNegativeFiniteNumber(value.batch_file_count)
-    && isNonNegativeFiniteNumber(value.batch_prompt_count)
-    && isNonNegativeFiniteNumber(value.processed_files)
-    && isNonNegativeFiniteNumber(value.total_files)
+    && isNonNegativeSafeInteger(value.batch_start_index)
+    && isNonNegativeSafeInteger(value.batch_file_count)
+    && isNonNegativeSafeInteger(value.batch_prompt_count)
+    && isNonNegativeSafeInteger(value.processed_files)
+    && isNonNegativeSafeInteger(value.total_files)
     && typeof value.completed === "boolean"
     && Array.isArray(value.warnings)
     && value.warnings.every((warning) => typeof warning === "string");
@@ -277,20 +285,20 @@ function isImportEvent(value: unknown): boolean {
 function isPersistStats(value: unknown): boolean {
   return isRecord(value)
     && typeof value.database_path === "string"
-    && isNonNegativeFiniteNumber(value.stored_prompt_count)
-    && isNonNegativeFiniteNumber(value.inserted_prompt_count)
-    && isNonNegativeFiniteNumber(value.updated_prompt_count)
-    && isNonNegativeFiniteNumber(value.date_count);
+    && isNonNegativeSafeInteger(value.stored_prompt_count)
+    && isNonNegativeSafeInteger(value.inserted_prompt_count)
+    && isNonNegativeSafeInteger(value.updated_prompt_count)
+    && isNonNegativeSafeInteger(value.date_count);
 }
 
 function isScanStats(value: unknown): boolean {
   return isRecord(value)
-    && isNonNegativeFiniteNumber(value.total_prompts)
-    && isNonNegativeFiniteNumber(value.total_files)
-    && isNonNegativeFiniteNumber(value.total_words)
+    && isNonNegativeSafeInteger(value.total_prompts)
+    && isNonNegativeSafeInteger(value.total_files)
+    && isNonNegativeSafeInteger(value.total_words)
     && isNonNegativeFiniteNumber(value.average_words)
     && isNonNegativeFiniteNumber(value.average_quality)
-    && isNonNegativeFiniteNumber(value.weak_prompt_count)
+    && isNonNegativeSafeInteger(value.weak_prompt_count)
     && Array.isArray(value.top_words)
     && value.top_words.every(isFrequencyItem)
     && Array.isArray(value.top_phrases)
@@ -308,15 +316,15 @@ function isScanStats(value: unknown): boolean {
 function isImprovePersistence(value: unknown): boolean {
   return isRecord(value)
     && typeof value.database_path === "string"
-    && isNonNegativeFiniteNumber(value.improvement_event_id)
-    && isNonNegativeFiniteNumber(value.prompt_improvement_count);
+    && isNonNegativeSafeInteger(value.improvement_event_id)
+    && isNonNegativeSafeInteger(value.prompt_improvement_count);
 }
 
 function isQualityDelta(value: unknown): boolean {
   return isRecord(value)
     && isPromptQuality(value.before)
     && isPromptQuality(value.after)
-    && isFiniteNumber(value.score_delta)
+    && isSafeInteger(value.score_delta)
     && isStringArray(value.resolved_gaps)
     && isStringArray(value.remaining_gaps);
 }
@@ -333,10 +341,10 @@ function parseImportBatchResult(value: unknown): ImportBatchResult {
     || typeof value.generated_at !== "string"
     || !isSourcePlan(value.source)
     || !isImportState(value.state)
-    || !isNonNegativeFiniteNumber(value.batch_start_index)
-    || !isNonNegativeFiniteNumber(value.batch_file_count)
-    || !isNonNegativeFiniteNumber(value.batch_prompt_count)
-    || !isNonNegativeFiniteNumber(value.returned_prompt_count)
+    || !isNonNegativeSafeInteger(value.batch_start_index)
+    || !isNonNegativeSafeInteger(value.batch_file_count)
+    || !isNonNegativeSafeInteger(value.batch_prompt_count)
+    || !isNonNegativeSafeInteger(value.returned_prompt_count)
     || !Array.isArray(value.prompts)
     || !value.prompts.every(isPromptRecord)
     || !isScanStats(value.stats)
@@ -368,11 +376,11 @@ function parseImportStatesResult(value: unknown): ImportStatesResult {
     || typeof value.database_path !== "string"
     || !Array.isArray(value.states)
     || !value.states.every(isImportState)
-    || !isNonNegativeFiniteNumber(value.total_sources)
-    || !isNonNegativeFiniteNumber(value.completed_sources)
-    || !isNonNegativeFiniteNumber(value.total_files)
-    || !isNonNegativeFiniteNumber(value.processed_files)
-    || !isNonNegativeFiniteNumber(value.imported_prompt_count)) {
+    || !isNonNegativeSafeInteger(value.total_sources)
+    || !isNonNegativeSafeInteger(value.completed_sources)
+    || !isNonNegativeSafeInteger(value.total_files)
+    || !isNonNegativeSafeInteger(value.processed_files)
+    || !isNonNegativeSafeInteger(value.imported_prompt_count)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ImportStatesResult;
@@ -384,7 +392,7 @@ function parseImportEventsResult(value: unknown): ImportEventsResult {
     || typeof value.database_path !== "string"
     || !Array.isArray(value.events)
     || !value.events.every(isImportEvent)
-    || !isNonNegativeFiniteNumber(value.total_events)) {
+    || !isNonNegativeSafeInteger(value.total_events)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ImportEventsResult;
@@ -394,7 +402,7 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
   if (!isRecord(value)
     || typeof value.generated_at !== "string"
     || typeof value.database_path !== "string"
-    || !isNonNegativeFiniteNumber(value.total_prompts)
+    || !isNonNegativeSafeInteger(value.total_prompts)
     || !Array.isArray(value.sources)
     || !value.sources.every(isFrequencyItem)
     || !Array.isArray(value.dates)
@@ -409,12 +417,12 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
 function parseScanPlan(value: unknown): ScanPlan {
   if (!isRecord(value)
     || typeof value.generated_at !== "string"
-    || !isNonNegativeFiniteNumber(value.total_sources)
-    || !isNonNegativeFiniteNumber(value.available_sources)
-    || !isNonNegativeFiniteNumber(value.total_files)
-    || !isNonNegativeFiniteNumber(value.total_bytes)
-    || !isNonNegativeFiniteNumber(value.large_file_count)
-    || !isNonNegativeFiniteNumber(value.largest_file_bytes)
+    || !isNonNegativeSafeInteger(value.total_sources)
+    || !isNonNegativeSafeInteger(value.available_sources)
+    || !isNonNegativeSafeInteger(value.total_files)
+    || !isNonNegativeSafeInteger(value.total_bytes)
+    || !isNonNegativeSafeInteger(value.large_file_count)
+    || !isNonNegativeSafeInteger(value.largest_file_bytes)
     || !Array.isArray(value.sources)
     || !value.sources.every(isSourcePlan)
     || !isStringArray(value.warnings)) {
@@ -431,7 +439,7 @@ function parseScanResult(value: unknown): ScanResult {
     || !isScanStats(value.stats)
     || !Array.isArray(value.prompts)
     || !value.prompts.every(isPromptRecord)
-    || !isNonNegativeFiniteNumber(value.returned_prompt_count)
+    || !isNonNegativeSafeInteger(value.returned_prompt_count)
     || typeof value.prompts_truncated !== "boolean"
     || typeof value.preview_sort !== "string"
     || typeof value.markdown_included !== "boolean"
@@ -450,14 +458,14 @@ function parseScanProgressResult(value: unknown): ScanProgress {
     || typeof value.canceled !== "boolean"
     || !(typeof value.source_id === "string" || value.source_id === null)
     || !(typeof value.source_label === "string" || value.source_label === null)
-    || !isNonNegativeFiniteNumber(value.source_index)
-    || !isNonNegativeFiniteNumber(value.source_count)
-    || !isNonNegativeFiniteNumber(value.files_seen)
-    || !isNonNegativeFiniteNumber(value.source_files_seen)
-    || !isNonNegativeFiniteNumber(value.source_files_discovered)
-    || !isNullableNonNegativeFiniteNumber(value.source_file_count)
-    || !isNonNegativeFiniteNumber(value.prompts_found)
-    || !isNullableNonNegativeFiniteNumber(value.limit)
+    || !isNonNegativeSafeInteger(value.source_index)
+    || !isNonNegativeSafeInteger(value.source_count)
+    || !isNonNegativeSafeInteger(value.files_seen)
+    || !isNonNegativeSafeInteger(value.source_files_seen)
+    || !isNonNegativeSafeInteger(value.source_files_discovered)
+    || !isNullableNonNegativeSafeInteger(value.source_file_count)
+    || !isNonNegativeSafeInteger(value.prompts_found)
+    || !isNullableNonNegativeSafeInteger(value.limit)
     || typeof value.updated_at !== "string") {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }

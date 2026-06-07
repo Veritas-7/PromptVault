@@ -1,10 +1,72 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:17 KST
+Updated: 2026-06-07 19:19 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Improvement retry browser QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the recommendation generation flow handles a failed request followed
+  by a successful retry for the same selected prompt.
+
+Context:
+
+- Recent work focused on stored-filter state consistency.
+- The recommendation panel had unit coverage for scoped failures and selection
+  changes, but the full browser flow from `/api/improve` failure to retry
+  success needed fresh direct QA.
+
+Progress:
+
+- Ran a browser QA flow with one stored prompt loaded from the mocked bridge.
+- Forced the first `/api/improve` request to return HTTP 500 with
+  `improve failed`.
+- Retried the same selected prompt with a successful improvement response and
+  persistence metadata.
+- No app code change was needed.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only QA slice.
+
+Tests:
+
+- Improvement retry browser QA on preview `127.0.0.1:5211`:
+  - Loaded one stored prompt and confirmed the improve request included
+    `prompt_id`, `source`, `persist: true`, and the browser bridge
+    `database_path`.
+  - First improve request returned expected HTTP 500.
+  - UI showed the global error `improve failed` and scoped panel warning
+    `이 프롬프트 추천을 생성하지 못했습니다. 위 오류를 확인한 뒤 다시 시도하세요.`
+  - Retrying the same selected prompt sent the same improve request shape.
+  - Successful retry rendered the revised prompt and
+    `추천 이력 #42 저장됨 · 이 프롬프트 1회`.
+  - After success, the scoped warning and global error were both cleared.
+  - Page errors, request failures, unexpected HTTP failures: none.
+  - Console showed the expected browser resource error for the forced 500
+    response only.
+
+Issues:
+
+- No blocker found. The only console error came from the intentionally forced
+  HTTP 500 during the RED half of the QA flow.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Stored applied-filter reset availability
 
@@ -80,7 +142,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this stored applied-filter reset availability slice.
+- Completed and pushed as `59fa099 fix: keep stored filter reset available`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Stored preview applied-filter snapshots

@@ -1,10 +1,97 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:36 KST
+Updated: 2026-06-07 19:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Security/dependency audit and Cargo lock refresh
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Audit GitHub-bound secret safety, Node vulnerabilities, and Rust advisory
+  state, then apply any safe compatible dependency refreshes.
+
+Context:
+
+- The previous `HEAD` full-check record was completed and pushed as
+  `ab2c59d docs: record current head full check`.
+- The repo was clean and aligned with `origin/main` before this slice.
+- `cargo audit --deny warnings` reports warnings from transitive Tauri/Wry
+  dependencies; this slice records the risk instead of suppressing advisory
+  output with an ignore file.
+
+Progress:
+
+- Ran a whole-repo `gitleaks` scan before the update: passed with no leaks
+  after scanning about 502.62 MB.
+- Ran `npm audit --audit-level=moderate`: passed with 0 vulnerabilities.
+- Ran `cargo audit --deny warnings`: failed with 17 denied RustSec warnings.
+- Checked compatible Cargo updates with `cargo update --dry-run`, then applied
+  the safe lockfile refresh with `cargo update`.
+- Re-ran the full repository check and post-update security checks.
+
+Changes:
+
+- `src-tauri/Cargo.lock`
+  - Updated compatible Cargo lockfile entries:
+    `bitflags 2.12.1 -> 2.13.0`, `chrono 0.4.44 -> 0.4.45`,
+    `log 0.4.31 -> 0.4.32`, `serde_with 3.20.0 -> 3.21.0`,
+    `serde_with_macros 3.20.0 -> 3.21.0`, and
+    `yoke 0.8.2 -> 0.8.3`.
+- `working.md`
+  - Recorded the audit, lockfile refresh, passing checks, and remaining
+    upstream transitive RustSec warnings.
+
+Tests:
+
+- `npm run check`: passed after the lockfile update.
+  - UI tests: 155 passed.
+  - Build: `tsc && vite build` passed; Vite built 1,780 modules and produced
+    `dist/index.html`, CSS, and JS assets.
+  - Rust lib tests: 84 passed.
+  - Rust CLI tests: 16 passed.
+  - Doc-tests: passed.
+  - Clippy with `-D warnings`: passed.
+- `gitleaks dir . --no-banner --redact`: passed after the update with no leaks
+  after scanning about 697.28 MB.
+- `npm audit --audit-level=moderate`: passed after the update with 0
+  vulnerabilities.
+- `cargo audit --deny warnings`: failed after the update with 17 denied
+  warnings.
+
+Issues:
+
+- `cargo audit --deny warnings` remains failing because of upstream transitive
+  warnings, not direct PromptVault app code:
+  - GTK3 gtk-rs unmaintained advisories through `tauri 2.11.2` /
+    `tauri-runtime-wry 2.11.2` / `wry 0.55.1`:
+    `RUSTSEC-2024-0411`, `RUSTSEC-2024-0412`, `RUSTSEC-2024-0413`,
+    `RUSTSEC-2024-0414`, `RUSTSEC-2024-0415`, `RUSTSEC-2024-0416`,
+    `RUSTSEC-2024-0417`, `RUSTSEC-2024-0418`, `RUSTSEC-2024-0419`,
+    `RUSTSEC-2024-0420`, and `RUSTSEC-2024-0370`.
+  - `glib 0.18.5` unsoundness through the same Tauri/Wry GTK stack:
+    `RUSTSEC-2024-0429`.
+  - `unic-*` unmaintained advisories through `tauri-utils 2.9.2 ->
+    urlpattern 0.3.0`: `RUSTSEC-2025-0075`, `RUSTSEC-2025-0080`,
+    `RUSTSEC-2025-0081`, `RUSTSEC-2025-0098`, and `RUSTSEC-2025-0100`.
+- No `cargo audit` ignore file was added. The unresolved warning set should be
+  revisited when Tauri/Wry/tauri-utils publish a compatible dependency path
+  that removes the affected crates.
+
+Research:
+
+- No external research. This slice used local advisory tooling and dependency
+  graph inspection.
+
+Next Steps:
+
+- Commit and push the Cargo lockfile refresh plus this audit record.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Current HEAD full check
 
@@ -53,7 +140,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only full-check record.
+- Completed and pushed as `ab2c59d docs: record current head full check`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Scan failure limit-change QA

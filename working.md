@@ -1,10 +1,73 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:38 KST
+Updated: 2026-06-07 18:41 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Plan refresh failure recovery QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify a still-uncovered failure/recovery path: import plan success, plan
+  refresh failure with stale plan retained, then retry success.
+
+Context:
+
+- Recent QA covered scan cancel, stored filters, import stop, and accessibility
+  labels.
+- Plan failure helpers existed, but the rendered stale-plan recovery path needed
+  direct browser verification.
+
+Progress:
+
+- Ran rendered browser QA with mocked `/api/plan` responses:
+  - call 1 succeeded with a `Codex` source plan,
+  - call 2 returned a forced `500`,
+  - call 3 succeeded with a changed `Gemini temporary chats` source plan.
+- No source fix was needed from this pass.
+
+Changes:
+
+- `working.md`
+  - Recorded plan refresh failure/recovery QA evidence and marked the prior QA
+    slice as pushed.
+
+Tests:
+
+- Plan failure/recovery browser QA on preview `127.0.0.1:5198` + bridge
+  `127.0.0.1:5174`:
+  - Initial plan rendered `1 / 2` sources, `13` files, two source rows, and
+    selection summary `0 / 1개 선택됨`.
+  - Refresh failure showed global error `forced plan refresh failure` and panel
+    warning
+    `가져오기 계획을 새로고침하지 못했습니다. 기존 계획 데이터가 오래되었을 수 있습니다.`
+  - During failure, the stale `Codex` source stayed visible, the new source did
+    not appear, and the empty-plan state stayed hidden.
+  - Retry success cleared both global and panel errors, replaced `Codex` with
+    `Gemini temporary chats`, and updated the summary to `15` files.
+  - Page width stayed within `1365 / 1365`.
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+  - Expected browser console resource log from the intentionally forced
+    `/api/plan` 500 was captured separately.
+
+Issues:
+
+- No blocker found in this QA pass.
+
+Research:
+
+- No external research. This was rendered browser QA against local preview and
+  the local browser bridge.
+
+Next Steps:
+
+- Commit and push this plan failure/recovery QA worklog slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Scan cancel and stored filter rendered QA
 
@@ -75,7 +138,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this QA worklog slice.
+- Completed and pushed as `fc50401 docs: record scan and filter QA pass`.
 - Continue autonomous QA on a still-uncovered PromptVault user flow, preferably
   a failure or edge state not covered by the recent import/label/filter checks.
 

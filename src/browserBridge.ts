@@ -15,6 +15,10 @@ export function browserBridgeUnavailableMessage(): string {
   return `브라우저 브리지가 실행 중이 아닙니다. 터미널에서 다음 명령을 실행한 뒤 브리지 다시 확인을 누르세요: ${BROWSER_BRIDGE_COMMAND}`;
 }
 
+export function browserBridgeHttpErrorMessage(status: number): string {
+  return `PromptVault 브라우저 브리지가 HTTP ${status}를 반환했습니다.`;
+}
+
 export function hasTauriInvoke(): boolean {
   if (typeof window === "undefined") return false;
   const internals = (window as typeof window & { __TAURI_INTERNALS__?: { invoke?: unknown } })
@@ -66,6 +70,10 @@ export async function checkBrowserBridgeHealth(timeoutMs = 1200): Promise<Browse
       throw new Error(browserBridgeUnavailableMessage());
     }
 
+    if (!response.ok) {
+      throw new Error(browserBridgeHttpErrorMessage(response.status));
+    }
+
     let text: string;
     try {
       text = await response.text();
@@ -73,9 +81,6 @@ export async function checkBrowserBridgeHealth(timeoutMs = 1200): Promise<Browse
       throw new Error("PromptVault 브라우저 브리지 상태 응답을 읽지 못했습니다.");
     }
 
-    if (!response.ok) {
-      throw new Error(text || `PromptVault 브라우저 브리지가 HTTP ${response.status}를 반환했습니다.`);
-    }
     return parseBrowserBridgeHealth(text);
   } finally {
     window.clearTimeout(timer);

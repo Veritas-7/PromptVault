@@ -55,6 +55,26 @@ test("browser bridge responses report unreadable bodies without raw stream error
   );
 });
 
+test("browser bridge HTTP errors omit raw response bodies", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("TypeError: Cannot read properties of undefined\n    at scan", {
+    status: 500,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지가 HTTP 500를 반환했습니다/);
+      assert.doesNotMatch(error.message, /TypeError|Cannot read properties|undefined|at scan/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge import states reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ database_path: "/tmp/promptvault.sqlite" }), {

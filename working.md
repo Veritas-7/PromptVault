@@ -1,10 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 22:15 KST
+Updated: 2026-06-07 22:23 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Bridge HTTP error sanitization
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent raw browser-bridge HTTP error bodies, stack traces, and JavaScript
+  exception text from reaching the user-facing error notices.
+
+Context:
+
+- Previous bridge slices validated successful payload shapes for health,
+  quiet refresh panels, scan progress, scan/stored results, plans, and action
+  responses.
+- Non-OK HTTP responses still used the raw response body as the thrown error
+  text. A bridge route returning an HTTP 500 stack body such as `TypeError:
+  Cannot read properties...` could appear directly in the global UI error.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added RED tests proving raw HTTP 500 bodies leaked through both
+  `checkBrowserBridgeHealth()` and `postBridge()`.
+- Added a shared `browserBridgeHttpErrorMessage(status)` helper.
+- Changed browser bridge health checks and action API calls to fail on
+  non-OK HTTP status before reading or exposing the response body.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+
+Changes:
+
+- `src/browserBridge.ts`
+  - Adds `browserBridgeHttpErrorMessage(status)`.
+  - `checkBrowserBridgeHealth()` now throws the stable HTTP status message for
+    non-OK responses without exposing the response body.
+- `src/promptVaultApi.ts`
+  - `postBridge()` now uses the same stable HTTP status message for non-OK
+    responses before body parsing.
+- `tests/browserBridge.test.ts`
+  - Adds HTTP 500 health response coverage that rejects raw stack/body text.
+- `tests/promptVaultApi.test.ts`
+  - Adds HTTP 500 action response coverage that rejects raw stack/body text.
+- `working.md`
+  - Records this bridge HTTP error sanitization slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/browserBridge.test.ts`
+  - Failed for the intended reason: both new tests saw raw
+    `TypeError: Cannot read properties of undefined` response bodies instead
+    of stable HTTP status copy.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/browserBridge.test.ts`
+  - Passed: 21 tests, 21 pass.
+- `npm run test:ui`:
+  - Passed: 174 tests, 174 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-C2lbt0M0.js`.
+- HTTP 500 body sanitization browser QA on preview `127.0.0.1:5244`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/prompt-facets`, `/api/import-states`, and
+    `/api/import-events` returned valid payloads.
+  - Clicking `[data-run-scan]` made `/api/scan` return HTTP 500 with a raw
+    `TypeError: Cannot read properties of undefined` body.
+  - UI rendered `PromptVault 브라우저 브리지가 HTTP 500를 반환했습니다.`
+    plus `[data-scan-run-error]`.
+  - Body text did not expose `TypeError`, `Cannot read properties`,
+    `undefined`, or stack-frame text.
+  - Final counts: `health=1`, `prompt-facets=2`, `import-states=1`,
+    `import-events=1`, `scan=1`, `scan-progress=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 174 tests, 174 pass.
+  - Build: passed with `index-C2lbt0M0.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Commit and push this robustness fix after explicit-path staging, staged
+  whitespace checks, staged gitleaks, full gitleaks, GitHub auth, remote, and
+  branch parity checks.
 
 ## Current Slice - 2026-06-07 Bridge action payload validation
 

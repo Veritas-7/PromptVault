@@ -137,6 +137,45 @@ test("bridge health reports unreadable response bodies without raw stream errors
   );
 });
 
+test("bridge health HTTP errors omit raw response bodies", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const globalWithWindow = globalThis as typeof globalThis & {
+    window?: {
+      clearTimeout: typeof clearTimeout;
+      setTimeout: typeof setTimeout;
+    };
+  };
+  const originalWindow = globalWithWindow.window;
+
+  globalWithWindow.window = {
+    clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    setTimeout: globalThis.setTimeout.bind(globalThis),
+  };
+  globalThis.fetch = async () => new Response(
+    "TypeError: Cannot read properties of undefined\n    at health",
+    { status: 500 },
+  );
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) {
+      delete globalWithWindow.window;
+    } else {
+      globalWithWindow.window = originalWindow;
+    }
+  });
+
+  await assert.rejects(
+    () => checkBrowserBridgeHealth(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지가 HTTP 500를 반환했습니다/);
+      assert.doesNotMatch(error.message, /TypeError|Cannot read properties|undefined|at health/);
+      return true;
+    },
+  );
+});
+
 test("bridge health rejects unhealthy responses before marking the bridge connected", async (t) => {
   const originalFetch = globalThis.fetch;
   const globalWithWindow = globalThis as typeof globalThis & {

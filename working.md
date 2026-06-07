@@ -3935,7 +3935,7 @@ Next steps:
    conversation DB records, since the inspected `step_type=14` payloads did not
    include reliable timestamps.
 
-## Unknown-Date Stored Facet Regression Test - 2026-06-07 11:26 KST
+## Unknown-Date Stored Facet Regression Test - 2026-06-07 11:30 KST
 
 Context:
 
@@ -3952,15 +3952,25 @@ Change:
 - Added Rust regression coverage in `src-tauri/src/lib.rs`:
   `stored_prompt_facets_include_unknown_dates`.
 - The test persists a timestamp-less `Antigravity IDE conversation DB` prompt,
-  asserts `run_list_stored_prompt_facets` exposes an `unknown-date` date facet,
-  and asserts `run_load_stored_prompts` can load the record with
-  `date=unknown-date`.
+  adds higher-count known-date records, requests date facets with `limit=1`,
+  asserts `run_list_stored_prompt_facets` still exposes an `unknown-date` date
+  facet within the limit, and asserts `run_load_stored_prompts` can load the
+  record with `date=unknown-date`.
+- Updated `run_list_stored_prompt_facets` so `unknown-date` remains in the
+  date facet list whenever timestamp-less prompts exist, even if the generic
+  frequency limit would otherwise truncate it. This keeps timestamp-less
+  Antigravity conversation DB records discoverable from stored prompt filters.
 
 Tests:
 
 - `cargo test stored_prompt_facets_include_unknown_dates`: PASS.
 - `npm run check`: PASS, including 124 UI helper tests, Vite build, 65 Rust
   library tests, 15 CLI tests, doc-tests, and clippy with `-D warnings`.
+- Started a temporary new-code bridge on `127.0.0.1:5175`, verified
+  `/api/health`, then called `/api/prompt-facets` with `limit=50`.
+  Result: `unknown_date={"text":"unknown-date","count":12}` and
+  `last_date={"text":"unknown-date","count":12}`. The temporary bridge was
+  stopped with Ctrl-C after verification.
 
 cmux same-surface status:
 

@@ -896,28 +896,29 @@ pub fn run_list_stored_prompt_facets(
     let total_prompts: i64 =
         conn.query_row("SELECT COUNT(*) FROM prompts", [], |row| row.get(0))?;
 
+    let sources = read_stored_prompt_facet(
+        &conn,
+        "source",
+        "source IS NOT NULL AND source <> ''",
+        limit,
+    )?;
+    let mut dates = read_stored_prompt_facet(
+        &conn,
+        "prompt_date",
+        "prompt_date IS NOT NULL AND prompt_date <> ''",
+        limit,
+    )?;
+    ensure_stored_prompt_facet_value(&conn, &mut dates, "prompt_date", "unknown-date", limit)?;
+    let workspaces =
+        read_stored_prompt_facet(&conn, "COALESCE(cwd, '')", "COALESCE(cwd, '') <> ''", limit)?;
+
     Ok(StoredPromptFacetsResult {
         generated_at,
         database_path: database_path.display().to_string(),
         total_prompts: total_prompts as usize,
-        sources: read_stored_prompt_facet(
-            &conn,
-            "source",
-            "source IS NOT NULL AND source <> ''",
-            limit,
-        )?,
-        dates: read_stored_prompt_facet(
-            &conn,
-            "prompt_date",
-            "prompt_date IS NOT NULL AND prompt_date <> ''",
-            limit,
-        )?,
-        workspaces: read_stored_prompt_facet(
-            &conn,
-            "COALESCE(cwd, '')",
-            "COALESCE(cwd, '') <> ''",
-            limit,
-        )?,
+        sources,
+        dates,
+        workspaces,
     })
 }
 
@@ -3259,6 +3260,33 @@ fn read_stored_prompt_facet(
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
+}
+
+fn ensure_stored_prompt_facet_value(
+    conn: &Connection,
+    items: &mut Vec<FrequencyItem>,
+    column: &str,
+    value: &str,
+    limit: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if items.iter().any(|item| item.text == value) {
+        return Ok(());
+    }
+
+    let sql = format!("SELECT COUNT(*) FROM prompts WHERE {column} = ?1");
+    let count: i64 = conn.query_row(&sql, [value], |row| row.get(0))?;
+    if count <= 0 {
+        return Ok(());
+    }
+
+    if items.len() >= limit {
+        items.pop();
+    }
+    items.push(FrequencyItem {
+        text: value.to_string(),
+        count: count as usize,
+    });
+    Ok(())
 }
 
 fn stored_source_summaries(prompts: &[PromptRecord]) -> Vec<SourceSummary> {
@@ -5608,14 +5636,18 @@ mod tests {
         antigravity_db_prompt.word_count = count_words(&antigravity_db_prompt.text);
         antigravity_db_prompt.char_count = antigravity_db_prompt.text.chars().count();
         antigravity_db_prompt.quality = assess_prompt_quality(&antigravity_db_prompt.text, &[]);
-        let prompts = vec![antigravity_db_prompt];
+        let mut dated_prompt_a = dated_record("known-date-a", "2026-06-07T02:31:00Z");
+        dated_prompt_a.source = "Codex".to_string();
+        let mut dated_prompt_b = dated_record("known-date-b", "2026-06-07T02:32:00Z");
+        dated_prompt_b.source = "Codex".to_string();
+        let prompts = vec![dated_prompt_a, dated_prompt_b, antigravity_db_prompt];
         let stats = build_stats(&prompts, Vec::new());
         persist_scan_result(&db_path, "2026-06-07T02:30:00Z", &prompts, &stats, &[])
             .expect("persist unknown-date prompt");
 
         let facets = run_list_stored_prompt_facets(StoredPromptFacetsOptions {
             database_path: Some(db_path.display().to_string()),
-            limit: Some(10),
+            limit: Some(1),
         })
         .expect("list unknown-date facets");
         let unknown_date = facets
@@ -5624,6 +5656,7 @@ mod tests {
             .find(|item| item.text == "unknown-date")
             .expect("unknown-date facet");
         assert_eq!(unknown_date.count, 1);
+        assert_eq!(facets.dates.len(), 1);
 
         let loaded = run_load_stored_prompts(StoredPromptsOptions {
             database_path: Some(db_path.display().to_string()),

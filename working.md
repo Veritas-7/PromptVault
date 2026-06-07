@@ -1,10 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:54 KST
+Updated: 2026-06-07 20:58 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Initial bridge timeout recovery QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the browser-bridge initial health timeout path: normal app actions
+  should stay locked while checking, transition to disconnected after timeout,
+  recover through `브리지 다시 확인`, and work normally after recovery.
+
+Context:
+
+- Earlier QA covered initial HTTP 503 bridge failure, mid-action bridge loss,
+  and active-work lock behavior.
+- This slice covers a different edge: `/api/health` hangs beyond the app's
+  1.2s timeout, causing an app-side abort before the bridge responds.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Rebuilt the frontend preview artifact with `npm run build`.
+- Ran initial bridge timeout recovery QA against preview `127.0.0.1:5233`.
+- Mocked the first `/api/health` to respond after 1.7s so the app timeout
+  aborts it, then made the second health check succeed.
+- Verified checking locks, disconnected recovery guidance, recheck recovery,
+  and a post-recovery quick scan.
+- Corrected the previous keyboard QA slice's pushed-status wording in this
+  handoff log.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only initial bridge timeout recovery QA slice.
+  - Corrected the previous keyboard activation QA slice's pushed status.
+
+Tests:
+
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-MjEXw_ye.js`.
+- Initial bridge timeout recovery QA on preview `127.0.0.1:5233`:
+  - Initial bridge notice rendered
+    `브라우저 브리지 연결을 확인하는 중입니다.`
+  - While checking, `data-run-scan`, `data-load-stored-prompts`, and
+    `data-run-plan` were disabled.
+  - While checking, `data-check-browser-bridge` was disabled.
+  - First `/api/health` was delayed long enough for app-side timeout and
+    produced the expected browser request failure `net::ERR_ABORTED`.
+  - After timeout, `data-browser-bridge-status="disconnected"` rendered with
+    `브라우저 브리지가 실행 중이 아닙니다.` recovery guidance.
+  - In disconnected state, normal top-level actions stayed disabled while
+    `data-check-browser-bridge` became enabled.
+  - Clicking `data-check-browser-bridge` made a second health call, recovered to
+    `data-browser-bridge-status="connected"`, and showed database path
+    `/tmp/promptvault-initial-timeout.sqlite`.
+  - After recovery, quick scan, stored load, plan, and bridge recheck controls
+    were all enabled.
+  - Clicking `data-run-scan` sent one `/api/scan` with `limit: 25`,
+    `preview_limit: 1000`, `preview_sort: "latest"`,
+    `include_markdown: false`, `write_markdown: false`,
+    six quick-scan source IDs, `source_limit: 5`,
+    `persist_on_cancel: false`, and a generated `run_id`.
+  - Post-recovery scan rendered
+    `Prompt loaded only after initial bridge timeout recovery.`
+  - Final counts: `healthCalls=2`, `facetsCalls=2`,
+    `importStatesCalls=1`, `importEventsCalls=1`, `scanCalls=1`,
+    `scanProgressCalls=1`.
+  - Page errors, unexpected console errors, and unexpected request failures:
+    none. The only request failure was the expected first `/api/health`
+    `net::ERR_ABORTED`.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record after staged diff and secret
+  checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Keyboard activation QA
 
@@ -91,8 +181,8 @@ Research:
 
 Next Steps:
 
-- Completed locally as `d337f6c docs: record keyboard activation QA`; push
-  after the final staged diff and secret checks.
+- Completed and pushed as `d337f6c docs: record keyboard activation QA` and
+  `806a96b docs: mark keyboard activation QA pushed`.
 - Continue autonomous QA on another still-uncovered failure, performance, or
   UX edge state.
 

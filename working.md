@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 11:06 KST
+Updated: 2026-06-07 15:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -5008,3 +5008,82 @@ Verification:
   - CLI tests: `16` passed.
   - Doc-tests: passed.
   - clippy `-D warnings`: passed.
+
+## 2026-06-07 - Browser bridge missing-state fix
+
+Root cause from real right-side browser testing:
+
+- Browser-mode UI calls the local bridge at `127.0.0.1:5174`.
+- If the bridge is not running, the first Scan click previously surfaced the
+  raw fetch failure text including `Load failed`.
+- Startup refresh calls also attempted bridge-backed endpoints before the app
+  had established bridge availability, so the UI had no explicit
+  connected/disconnected state.
+
+Changes:
+
+- Added browser bridge health checking via `GET /api/health`.
+- Added a reusable browser bridge recovery message with the exact serve
+  command.
+- Browser-mode startup now checks bridge health before refreshing stored facets,
+  import cursors, or import events.
+- Top-level bridge-backed actions are locked while the bridge is checking or
+  disconnected.
+- Added a visible `브리지 다시 확인` action that retries health checking and
+  refreshes stored panels after reconnect.
+- Replaced raw fetch failure text with the actionable bridge recovery message.
+
+Verification:
+
+- Unit/UI tests:
+  - `npm run test:ui`: PASS, `127` passed.
+  - Added `tests/browserBridge.test.ts` for bridge endpoint and recovery text.
+  - Added action-lock coverage for browser bridge checking/disconnected states.
+- Type/build check:
+  - `npm run build`: PASS.
+- cmux in-app browser verification, no external browser window:
+  - Vite only on `127.0.0.1:5177`, bridge intentionally not running.
+  - Browser status: `data-browser-bridge-status="disconnected"`.
+  - Scan enabled state: `false`.
+  - Scan aria label:
+    `브라우저 브리지 연결 전에는 프롬프트를 스캔할 수 없습니다`.
+  - Retry button enabled: `true`.
+  - Page text did not include `Load failed`, `Failed to fetch`, or raw
+    `NetworkError`.
+  - Browser console/errors: no browser errors.
+- Bridge reconnect verification:
+  - Started bridge:
+    `cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174`.
+  - `/api/health` returned
+    `{"database_path":"/Users/wj/Documents/PromptVault/promptvault.sqlite","ok":true}`.
+  - Clicked `브리지 다시 확인` in cmux browser.
+  - Browser status changed to `data-browser-bridge-status="connected"`.
+  - Connected notice displayed DB path
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+  - Scan button became enabled with aria label `프롬프트 스캔`.
+- Real Scan verification through the same cmux in-app browser:
+  - Initial limit: `25`.
+  - Scan completed with `25` rendered prompt rows.
+  - DB notice:
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite · 저장 90,746 · 신규 1 · 갱신 24`.
+  - Metrics after scan:
+    `Prompts 25`, `Preview 25`, `Files 10`, `Words 828`,
+    `Quality 54.6`, `Weak 18`, `DB Stored 90746`, `Dates 90`.
+  - User-facing error: `null`.
+  - Page text still did not include `Load failed`.
+  - Browser console/errors: no console entries and no browser errors.
+- Full project gate:
+  - `npm run check`: PASS.
+  - UI tests: `127` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `81` passed.
+  - CLI tests: `16` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- Cleanup:
+  - The temporary Vite and bridge processes started for this verification were
+    stopped.
+  - Ports `5174` and `5177` had no remaining listeners afterward.
+  - A duplicate cmux browser surface created by `cmux open --surface` was
+    closed; PromptVault workspace was left with the original browser
+    `surface:17`.

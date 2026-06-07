@@ -21,7 +21,11 @@ import {
   topLevelActionLocked,
 } from "./actionLocks";
 import { frequencyEmptyText, sourceSummariesEmptyText } from "./analysisEmptyState";
-import { BROWSER_BRIDGE_NOTICE } from "./browserBridge";
+import {
+  BROWSER_BRIDGE_NOTICE,
+  browserBridgeUnavailableMessage,
+  checkBrowserBridgeHealth,
+} from "./browserBridge";
 import { importEventBatchSummary, importEventStatusLabel, importEventWarningSummary } from "./importEvents";
 import {
   activeImprovementForSelection,
@@ -140,6 +144,7 @@ import type {
 } from "./types";
 
 type ScanState = ScanRunState;
+type BrowserBridgeStatus = "native" | "checking" | "connected" | "disconnected";
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
@@ -257,6 +262,10 @@ function App() {
   const [limit, setLimit] = useState(() => recommendedInitialScanLimit());
   const [previewMode, setPreviewMode] = useState<PreviewMode>("latest");
   const [error, setError] = useState<string | null>(null);
+  const [browserBridgeStatus, setBrowserBridgeStatus] = useState<BrowserBridgeStatus>(() =>
+    browserQaMode ? "checking" : "native",
+  );
+  const [browserBridgeDatabasePath, setBrowserBridgeDatabasePath] = useState<string | null>(null);
   const [improving, setImproving] = useState(false);
   const [improvement, setImprovement] = useState<ImproveResult | null>(null);
   const [improvementPromptId, setImprovementPromptId] = useState<string | null>(null);
@@ -273,7 +282,11 @@ function App() {
   const isPlanRunning = planState === "planning";
   const isScanRunning = scanState === "scanning" || scanState === "canceling";
   const isStoredLoadRunning = storedLoadState === "loading";
+  const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
+  const isBrowserBridgeDisconnected = browserQaMode && browserBridgeStatus === "disconnected";
   const actionLockState = {
+    browserBridgeChecking: isBrowserBridgeChecking,
+    browserBridgeDisconnected: isBrowserBridgeDisconnected,
     importRunning: isImportRunning,
     improvementRunning: improving,
     planRunning: isPlanRunning,
@@ -415,8 +428,22 @@ function App() {
     result?.persistence?.stored_prompt_count ?? storedFacetsResult?.total_prompts ?? 0;
   const displayStoredDateCount =
     result?.persistence?.date_count ?? storedFacetsResult?.dates.length ?? 0;
+  const browserBridgeStatusText =
+    browserBridgeStatus === "checking"
+      ? "브라우저 브리지 연결을 확인하는 중입니다."
+      : browserBridgeStatus === "connected"
+        ? `${BROWSER_BRIDGE_NOTICE}${
+            browserBridgeDatabasePath ? ` 데이터베이스: ${browserBridgeDatabasePath}` : ""
+          }`
+        : browserBridgeStatus === "disconnected"
+          ? browserBridgeUnavailableMessage()
+          : null;
 
   useEffect(() => {
+    if (browserQaMode) {
+      void verifyBrowserBridge({ refresh: true });
+      return;
+    }
     void refreshStoredFacets();
     void refreshImportStates();
     void refreshImportEvents();
@@ -454,6 +481,38 @@ function App() {
     };
   }, [isScanRunning, scanState]);
 
+  async function verifyBrowserBridge({ refresh = false }: { refresh?: boolean } = {}) {
+    if (!browserQaMode) return true;
+
+    setBrowserBridgeStatus("checking");
+    try {
+      const health = await checkBrowserBridgeHealth();
+      setBrowserBridgeDatabasePath(health.database_path);
+      setBrowserBridgeStatus("connected");
+      setError((current) => (current === browserBridgeUnavailableMessage() ? null : current));
+      if (refresh) {
+        await Promise.all([
+          refreshStoredFacets({ quiet: true }),
+          refreshImportStates({ quiet: true }),
+          refreshImportEvents({ quiet: true }),
+        ]);
+      }
+      return true;
+    } catch {
+      setBrowserBridgeDatabasePath(null);
+      setBrowserBridgeStatus("disconnected");
+      setError((current) => (current === browserBridgeUnavailableMessage() ? null : current));
+      return false;
+    }
+  }
+
+  function syncBrowserBridgeFailure(message: string) {
+    if (browserQaMode && message === browserBridgeUnavailableMessage()) {
+      setBrowserBridgeDatabasePath(null);
+      setBrowserBridgeStatus("disconnected");
+    }
+  }
+
   async function refreshStoredFacets({ quiet = false }: { quiet?: boolean } = {}) {
     if (!claimExclusiveAction(storedFacetsRefreshClaimRef)) return;
     if (!quiet) setStoredFacetsState("loading");
@@ -463,6 +522,7 @@ function App() {
       setStoredFacetsState("ready");
       setError((current) => refreshGlobalErrorAfterSuccess(quiet, current));
     } catch (err) {
+      syncBrowserBridgeFailure(errorText(err));
       setStoredFacetsState("failed");
       if (!quiet) setError(errorText(err));
     } finally {
@@ -479,6 +539,7 @@ function App() {
       setImportStatesState("ready");
       setError((current) => refreshGlobalErrorAfterSuccess(quiet, current));
     } catch (err) {
+      syncBrowserBridgeFailure(errorText(err));
       setImportStatesState("failed");
       if (!quiet) setError(errorText(err));
     } finally {
@@ -495,6 +556,7 @@ function App() {
       setImportEventsState("ready");
       setError((current) => refreshGlobalErrorAfterSuccess(quiet, current));
     } catch (err) {
+      syncBrowserBridgeFailure(errorText(err));
       setImportEventsState("failed");
       if (!quiet) setError(errorText(err));
     } finally {
@@ -512,7 +574,9 @@ function App() {
       setSelectedImportSourceIds((current) => selectedQueueSourceIds(current, next.sources));
       setPlanState("ready");
     } catch (err) {
-      setError(errorText(err));
+      const message = errorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
       setPlanState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
@@ -554,7 +618,9 @@ function App() {
         importStopRequestedRef.current && !next?.state.completed ? "stopped" : "ready",
       );
     } catch (err) {
-      setError(errorText(err));
+      const message = errorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
       setImportState("failed");
     } finally {
       setStopRequested(false);
@@ -602,7 +668,9 @@ function App() {
       setCompletedQueueSourceCount(finalState.completedSourceCount);
       setImportState(finalState.state);
     } catch (err) {
-      setError(errorText(err));
+      const message = errorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
       setImportState("failed");
     } finally {
       setStopRequested(false);
@@ -662,6 +730,7 @@ function App() {
       await refreshStoredFacets({ quiet: true });
     } catch (err) {
       const message = errorText(err);
+      syncBrowserBridgeFailure(message);
       setError(message);
       setScanFailureErrorText(message);
       setScanState("failed");
@@ -686,7 +755,9 @@ function App() {
         setScanState("scanning");
       }
     } catch (err) {
-      setError(errorText(err));
+      const message = errorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
       setScanStopFailure("request_failed");
       setScanState("scanning");
     }
@@ -723,6 +794,7 @@ function App() {
       setStoredLoadFailureErrorText(null);
     } catch (err) {
       const message = errorText(err);
+      syncBrowserBridgeFailure(message);
       setError(message);
       setStoredLoadFailureErrorText(message);
       setStoredLoadState("failed");
@@ -823,6 +895,7 @@ function App() {
       setImprovementFailureErrorText(null);
     } catch (err) {
       const message = errorText(err);
+      syncBrowserBridgeFailure(message);
       setError(message);
       setImprovementFailurePromptId(prompt.id);
       setImprovementFailureErrorText(message);
@@ -933,10 +1006,25 @@ function App() {
         </section>
       ) : null}
 
-      {browserQaMode ? (
-        <section className="notice browser-mode" {...STATUS_NOTICE_PROPS}>
-          <ShieldCheck size={18} />
-          <span>{BROWSER_BRIDGE_NOTICE}</span>
+      {browserQaMode && browserBridgeStatusText ? (
+        <section
+          className={`notice ${
+            browserBridgeStatus === "disconnected" ? "warning" : "browser-mode"
+          }`}
+          data-browser-bridge-status={browserBridgeStatus}
+          {...(browserBridgeStatus === "disconnected" ? ALERT_NOTICE_PROPS : STATUS_NOTICE_PROPS)}
+        >
+          {browserBridgeStatus === "disconnected" ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}
+          <span>{browserBridgeStatusText}</span>
+          <button
+            className="notice-action"
+            data-check-browser-bridge="true"
+            disabled={browserBridgeStatus === "checking"}
+            onClick={() => void verifyBrowserBridge({ refresh: true })}
+            type="button"
+          >
+            {browserBridgeStatus === "checking" ? "확인 중" : "브리지 다시 확인"}
+          </button>
         </section>
       ) : null}
 

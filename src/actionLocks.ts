@@ -1,4 +1,6 @@
 export interface ActionLockState {
+  browserBridgeChecking?: boolean;
+  browserBridgeDisconnected?: boolean;
   importRunning: boolean;
   improvementRunning: boolean;
   planRunning: boolean;
@@ -16,7 +18,9 @@ export function topLevelActionLocked(state: ActionLockState): boolean {
     state.planRunning ||
     state.importRunning ||
     state.storedLoadRunning ||
-    state.improvementRunning
+    state.improvementRunning ||
+    Boolean(state.browserBridgeChecking) ||
+    Boolean(state.browserBridgeDisconnected)
   );
 }
 
@@ -30,6 +34,8 @@ export function activeActionLockReason(state: ActionLockState): string | null {
   if (state.importRunning) return "가져오기 실행 중";
   if (state.storedLoadRunning) return "저장된 프롬프트 불러오는 중";
   if (state.improvementRunning) return "프롬프트 추천 생성 중";
+  if (state.browserBridgeChecking) return "브라우저 브리지 확인 중";
+  if (state.browserBridgeDisconnected) return "브라우저 브리지 연결 전";
   return null;
 }
 

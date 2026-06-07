@@ -21,6 +21,8 @@ function lockState(overrides: Partial<ActionLockState> = {}): ActionLockState {
 
 test("top-level actions lock for long-running work", () => {
   assert.equal(topLevelActionLocked(lockState()), false);
+  assert.equal(topLevelActionLocked(lockState({ browserBridgeChecking: true })), true);
+  assert.equal(topLevelActionLocked(lockState({ browserBridgeDisconnected: true })), true);
   assert.equal(topLevelActionLocked(lockState({ importRunning: true })), true);
   assert.equal(topLevelActionLocked(lockState({ improvementRunning: true })), true);
   assert.equal(topLevelActionLocked(lockState({ planRunning: true })), true);
@@ -30,6 +32,8 @@ test("top-level actions lock for long-running work", () => {
 
 test("import write actions also lock for long-running work", () => {
   assert.equal(importActionLocked(lockState()), false);
+  assert.equal(importActionLocked(lockState({ browserBridgeChecking: true })), true);
+  assert.equal(importActionLocked(lockState({ browserBridgeDisconnected: true })), true);
   assert.equal(importActionLocked(lockState({ importRunning: true })), true);
   assert.equal(importActionLocked(lockState({ improvementRunning: true })), true);
   assert.equal(importActionLocked(lockState({ planRunning: true })), true);

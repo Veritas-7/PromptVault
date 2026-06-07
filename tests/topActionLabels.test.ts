@@ -36,6 +36,14 @@ test("active action lock reason names the blocking operation", () => {
     activeActionLockReason(lockState({ improvementRunning: true })),
     "프롬프트 추천 생성 중",
   );
+  assert.equal(
+    activeActionLockReason(lockState({ browserBridgeChecking: true })),
+    "브라우저 브리지 확인 중",
+  );
+  assert.equal(
+    activeActionLockReason(lockState({ browserBridgeDisconnected: true })),
+    "브라우저 브리지 연결 전",
+  );
 });
 
 test("scan action label explains running and locked states", () => {
@@ -45,6 +53,10 @@ test("scan action label explains running and locked states", () => {
   assert.equal(
     scanActionLabel("idle", lockState({ importRunning: true })),
     "가져오기 실행 중에는 프롬프트를 스캔할 수 없습니다",
+  );
+  assert.equal(
+    scanActionLabel("idle", lockState({ browserBridgeDisconnected: true })),
+    "브라우저 브리지 연결 전에는 프롬프트를 스캔할 수 없습니다",
   );
 });
 

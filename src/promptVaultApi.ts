@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { bridgeEndpoint, hasTauriInvoke } from "./browserBridge";
+import { bridgeEndpoint, browserBridgeUnavailableMessage, hasTauriInvoke } from "./browserBridge";
 import type {
   CancelScanResult,
   ImportBatchResult,
@@ -157,13 +157,8 @@ async function postBridge<T>(path: string, body: unknown): Promise<T> {
       headers: { "Content-Type": "application/json" },
       method: "POST",
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      `PromptVault 브라우저 브리지에 연결할 수 없습니다: ${bridgeEndpoint(
-        path,
-      )}. 실행 명령: cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174. ${message}`,
-    );
+  } catch {
+    throw new Error(browserBridgeUnavailableMessage());
   }
 
   const text = await response.text();

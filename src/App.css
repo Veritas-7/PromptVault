@@ -238,6 +238,28 @@ h3 {
   color: #536158;
 }
 
+.notice-action {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 700;
+  justify-content: center;
+  margin-left: auto;
+  min-height: 32px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.notice-action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .panel-notice {
   margin: 0;
 }

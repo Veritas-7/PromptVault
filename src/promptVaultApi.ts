@@ -329,10 +329,10 @@ function parseImportBatchResult(value: unknown): ImportBatchResult {
     || typeof value.generated_at !== "string"
     || !isSourcePlan(value.source)
     || !isImportState(value.state)
-    || typeof value.batch_start_index !== "number"
-    || typeof value.batch_file_count !== "number"
-    || typeof value.batch_prompt_count !== "number"
-    || typeof value.returned_prompt_count !== "number"
+    || !isNonNegativeFiniteNumber(value.batch_start_index)
+    || !isNonNegativeFiniteNumber(value.batch_file_count)
+    || !isNonNegativeFiniteNumber(value.batch_prompt_count)
+    || !isNonNegativeFiniteNumber(value.returned_prompt_count)
     || !Array.isArray(value.prompts)
     || !value.prompts.every(isPromptRecord)
     || !isScanStats(value.stats)

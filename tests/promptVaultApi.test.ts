@@ -516,6 +516,79 @@ test("browser bridge import batches reject malformed successful payloads", async
   );
 });
 
+test("browser bridge import batches reject impossible numeric payloads", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    source: {
+      id: "codex",
+      label: "Codex",
+      root_path: "/tmp/codex",
+      status: "ok",
+      file_count: 10,
+      byte_count: 1024,
+      large_file_count: 0,
+      largest_file_bytes: 0,
+      newest_modified_at: null,
+      notes: [],
+    },
+    state: {
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      total_files: 10,
+      total_bytes: 1024,
+      next_file_index: 1,
+      processed_files: 1,
+      imported_prompt_count: 0,
+      completed: false,
+      updated_at: "2026-06-07T00:00:00Z",
+    },
+    batch_start_index: -1,
+    batch_file_count: -5,
+    batch_prompt_count: -3,
+    returned_prompt_count: -2,
+    prompts: [],
+    stats: {
+      total_prompts: 0,
+      total_files: 0,
+      total_words: 0,
+      average_words: 0,
+      average_quality: 0,
+      weak_prompt_count: 0,
+      top_words: [],
+      top_phrases: [],
+      repeated_prompts: [],
+      top_quality_gaps: [],
+      prompts_by_date: [],
+      source_summaries: [],
+    },
+    persistence: {
+      database_path: "/tmp/promptvault.sqlite",
+      stored_prompt_count: 0,
+      inserted_prompt_count: 0,
+      updated_prompt_count: 0,
+      date_count: 0,
+    },
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => importBatch({ source_id: "codex" }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge improvements reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ provider: "local" }), {

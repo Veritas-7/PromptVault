@@ -1,10 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 23:11 KST
+Updated: 2026-06-07 23:16 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Import batch numeric validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject impossible browser-bridge `/api/import-batch` top-level numeric
+  payloads before negative batch or returned prompt counters can affect import
+  progress and downstream prompt state.
+
+Context:
+
+- Previous slices hardened scan progress, scan plan, import state/event, stored
+  facets, and scan result numeric validation.
+- `ImportBatchResult` still accepted any JavaScript `number` for
+  `batch_start_index`, `batch_file_count`, `batch_prompt_count`, and
+  `returned_prompt_count`.
+- Import batch results update the active import panel and can carry prompts,
+  stats, and persistence state. Bad top-level counters should be rejected at the
+  bridge boundary.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added a RED test for shape-valid but impossible negative import batch
+  top-level counters.
+- Reused the non-negative finite number validator for import batch
+  `batch_start_index`, `batch_file_count`, `batch_prompt_count`, and
+  `returned_prompt_count`.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - `parseImportBatchResult()` now rejects negative or non-finite top-level
+    batch counters.
+- `tests/promptVaultApi.test.ts`
+  - Adds `/api/import-batch` coverage for impossible negative numeric
+    payloads.
+- `working.md`
+  - Records this import batch numeric validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new impossible numeric import batch
+    payload test resolved instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 20 tests, 20 pass.
+- `npm run test:ui`:
+  - Passed: 184 tests, 184 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-LoZIaGoA.js`.
+- Import batch numeric validation browser QA on preview `127.0.0.1:5251`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/prompt-facets`, `/api/import-states`,
+    `/api/import-events`, and `/api/plan` returned valid payloads.
+  - `/api/import-batch` returned HTTP 200 with negative
+    `batch_start_index`, `batch_file_count`, `batch_prompt_count`, and
+    `returned_prompt_count`.
+  - Plan load exposed the `Codex` batch import button, then clicking it
+    rendered the sanitized bridge response-shape error.
+  - No prompt rows were created, and the UI did not expose `-1`, `-2`, `-3`,
+    `-5`, `NaN`, or `Infinity`.
+  - Final counts: `health=1`, `facets=2`, `importStates=2`,
+    `importEvents=2`, `plan=1`, `importBatch=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 184 tests, 184 pass.
+  - Build: passed with `index-LoZIaGoA.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then run staged diff/secret checks, commit, and push.
 
 ## Current Slice - 2026-06-07 Scan result numeric validation
 

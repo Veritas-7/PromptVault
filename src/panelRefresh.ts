@@ -14,8 +14,8 @@ export function panelRefreshActionLabel(
   state: PanelRefreshState,
   lockState: ActionLockState,
 ): string {
-  if (state === "loading") return `Refreshing ${label}`;
+  if (state === "loading") return `${label} 새로고침 중`;
   const reason = activeActionLockReason(lockState);
-  if (reason) return `Cannot refresh ${label} while ${reason}`;
-  return `Refresh ${label}`;
+  if (reason) return `${reason}에는 ${label}을 새로고침할 수 없습니다`;
+  return `${label} 새로고침`;
 }

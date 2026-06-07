@@ -9,12 +9,12 @@ export interface StoredFacetSummaryResult {
 
 export function storedFacetsFailureText(state: StoredFacetsState): string | null {
   return state === "failed"
-    ? "Could not refresh stored facets. Filter suggestions may be stale."
+    ? "저장소 필터 후보를 새로고침하지 못했습니다. 필터 후보가 오래되었을 수 있습니다."
     : null;
 }
 
 function countLabel(count: number, singular: string): string {
-  return `${count.toLocaleString()} ${count === 1 ? singular : `${singular}s`}`;
+  return `${singular} ${count.toLocaleString()}개`;
 }
 
 export function storedFacetSummaryText(
@@ -22,18 +22,18 @@ export function storedFacetSummaryText(
   activeFilterCount: number,
   result: StoredFacetSummaryResult | null,
 ): string {
-  const activeFilterText = countLabel(activeFilterCount, "filter");
+  const activeFilterText = countLabel(activeFilterCount, "필터");
   if (result) {
-    const sourceCount = countLabel(result.sources.length, "source");
-    const dateCount = countLabel(result.dates.length, "date");
-    const workspaceCount = countLabel(result.workspaces.length, "workspace");
-    return `${result.total_prompts.toLocaleString()} stored, ${sourceCount}, ${dateCount}, ${workspaceCount}`;
+    const sourceCount = countLabel(result.sources.length, "소스");
+    const dateCount = countLabel(result.dates.length, "날짜");
+    const workspaceCount = countLabel(result.workspaces.length, "작업공간");
+    return `${result.total_prompts.toLocaleString()}개 저장됨, ${sourceCount}, ${dateCount}, ${workspaceCount}`;
   }
-  if (state === "loading") return "loading stored facets";
+  if (state === "loading") return "저장소 필터 후보 불러오는 중";
   if (state === "failed") {
     return activeFilterCount
-      ? `facet refresh failed, ${activeFilterText} active`
-      : "stored facets unavailable";
+      ? `필터 후보 새로고침 실패, ${activeFilterText} 활성`
+      : "저장소 필터 후보를 사용할 수 없음";
   }
-  return activeFilterCount ? `${activeFilterText} active` : "all stored prompts";
+  return activeFilterCount ? `${activeFilterText} 활성` : "전체 저장 프롬프트";
 }

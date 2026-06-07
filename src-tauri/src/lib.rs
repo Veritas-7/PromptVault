@@ -25,8 +25,9 @@ const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
 const MAX_STORED_PROMPT_LIMIT: usize = 1_000;
 const DEFAULT_STORED_FACET_LIMIT: usize = 50;
 const MAX_STORED_FACET_LIMIT: usize = 200;
-const SCAN_CANCELED_WARNING: &str = "Scan canceled by user request; returning partial results.";
-const SCAN_CANCELED_NOT_PERSISTED_WARNING: &str = "Canceled scan was not stored in the vault.";
+const SQLITE_DELETE_CHUNK_SIZE: usize = 500;
+const SCAN_CANCELED_WARNING: &str = "사용자 요청으로 스캔이 취소되어 일부 결과만 반환합니다.";
+const SCAN_CANCELED_NOT_PERSISTED_WARNING: &str = "취소된 스캔은 저장소에 저장하지 않았습니다.";
 
 type ScanCancelFlag = Arc<AtomicBool>;
 
@@ -656,9 +657,7 @@ fn run_scan_with_cancel(
         };
 
         if !source.root.exists() {
-            summary
-                .notes
-                .push("Path was not present on this machine.".to_string());
+            summary.notes.push("이 머신에 경로가 없습니다.".to_string());
             summaries.push(summary);
             continue;
         }
@@ -688,7 +687,7 @@ fn run_scan_with_cancel(
             summary.status = "partial".to_string();
             summary
                 .notes
-                .push("Scan canceled after the current file.".to_string());
+                .push("현재 파일 처리 후 스캔을 취소했습니다.".to_string());
             update_scan_progress(run_id.as_deref(), |progress| {
                 progress.canceled = true;
             });
@@ -700,7 +699,7 @@ fn run_scan_with_cancel(
 
         if limit != usize::MAX && prompts.len() >= limit {
             warnings.push(format!(
-                "Scan stopped at configured limit of {limit} prompts."
+                "설정된 제한 {limit}개 프롬프트에서 스캔을 중지했습니다."
             ));
             break;
         }
@@ -994,7 +993,7 @@ fn run_import_batch_for_source(
     for candidate in matching_source_file_candidates(&source.root, source.kind) {
         match candidate {
             Ok(candidate) => candidates.push(candidate),
-            Err(err) => warnings.push(format!("Skipped walk entry: {err}")),
+            Err(err) => warnings.push(format!("순회 항목을 건너뜀: {err}")),
         }
     }
     let source_plan = source_plan_from_candidates(&source, &candidates, &warnings);
@@ -1367,7 +1366,7 @@ pub async fn improve_prompt_inner(
                         &prompt,
                         request.context.as_deref(),
                         vec![
-                            "GLM response did not include a non-empty revised_prompt; used local fallback."
+                            "GLM 응답에 비어 있지 않은 revised_prompt가 없어 로컬 fallback을 사용했습니다."
                                 .to_string(),
                         ],
                     ));
@@ -1375,7 +1374,7 @@ pub async fn improve_prompt_inner(
             }
             Ok(response) => {
                 let warning = format!(
-                    "GLM returned HTTP {}; used local fallback.",
+                    "GLM이 HTTP {}를 반환해 로컬 fallback을 사용했습니다.",
                     response.status()
                 );
                 return Ok(local_improvement(
@@ -1385,7 +1384,7 @@ pub async fn improve_prompt_inner(
                 ));
             }
             Err(err) => {
-                let warning = format!("GLM request failed: {err}; used local fallback.");
+                let warning = format!("GLM 요청 실패: {err}; 로컬 fallback을 사용했습니다.");
                 return Ok(local_improvement(
                     &prompt,
                     request.context.as_deref(),
@@ -1398,7 +1397,7 @@ pub async fn improve_prompt_inner(
     Ok(local_improvement(
         &prompt,
         request.context.as_deref(),
-        vec!["GLM_API_KEY/GLM_API_KEY_2 was not available; used local fallback.".to_string()],
+        vec!["GLM_API_KEY/GLM_API_KEY_2가 없어 로컬 fallback을 사용했습니다.".to_string()],
     ))
 }
 
@@ -1419,7 +1418,7 @@ fn external_improve_block_reason(prompt: &str, context: Option<&str>) -> Option<
         None
     } else {
         Some(format!(
-            "Prompt/context contains risk-pattern text ({}); used local fallback instead of external GLM.",
+            "프롬프트/맥락에 위험 패턴 텍스트({})가 있어 외부 GLM 대신 로컬 fallback을 사용했습니다.",
             flags.join(", ")
         ))
     }
@@ -1457,7 +1456,9 @@ fn glm_improvement_from_content(prompt: &str, content: &str) -> Option<ImproveRe
         used_ai: true,
         quality_delta: quality_delta(prompt, &revised),
         revised_prompt: revised,
-        rationale: vec!["GLM returned non-JSON text; preserved the model output.".to_string()],
+        rationale: vec![
+            "GLM이 JSON이 아닌 텍스트를 반환해 모델 출력을 그대로 보존했습니다.".to_string(),
+        ],
         checklist: prompt_checklist(),
         warnings: Vec::new(),
     })
@@ -1568,7 +1569,7 @@ fn collect_from_source(
                 path,
             }),
             Err(err) => {
-                summary.notes.push(format!("Skipped walk entry: {err}"));
+                summary.notes.push(format!("순회 항목을 건너뜀: {err}"));
                 None
             }
         })
@@ -1623,7 +1624,7 @@ fn collect_from_candidates(
             }
             Err(err) => summary
                 .notes
-                .push(format!("Skipped {}: {}", file.path.display(), err)),
+                .push(format!("{} 건너뜀: {}", file.path.display(), err)),
         }
         update_scan_progress(run_id, |progress| {
             progress.files_seen += 1;
@@ -1790,8 +1791,7 @@ fn source_plan(source: &SourceSpec) -> SourcePlan {
     };
 
     if !source.root.exists() {
-        plan.notes
-            .push("Path was not present on this machine.".to_string());
+        plan.notes.push("이 머신에 경로가 없습니다.".to_string());
         return plan;
     }
 
@@ -1807,7 +1807,7 @@ fn source_plan(source: &SourceSpec) -> SourcePlan {
                 }
                 newest_ms = newest_ms.max(candidate.modified_ms);
             }
-            Err(err) => plan.notes.push(format!("Skipped walk entry: {err}")),
+            Err(err) => plan.notes.push(format!("순회 항목을 건너뜀: {err}")),
         }
     }
     if newest_ms > 0 {
@@ -1816,7 +1816,7 @@ fn source_plan(source: &SourceSpec) -> SourcePlan {
     if plan.file_count == 0 && plan.status == "ok" {
         plan.status = "empty".to_string();
         plan.notes
-            .push("No matching prompt files were found.".to_string());
+            .push("일치하는 프롬프트 파일을 찾지 못했습니다.".to_string());
     }
     plan
 }
@@ -1858,7 +1858,7 @@ fn source_plan_from_candidates(
     if plan.file_count == 0 && plan.status == "ok" {
         plan.status = "empty".to_string();
         plan.notes
-            .push("No matching prompt files were found.".to_string());
+            .push("일치하는 프롬프트 파일을 찾지 못했습니다.".to_string());
     }
     plan
 }
@@ -3433,7 +3433,7 @@ fn should_reconcile_stored_source_rows(warnings: &[String]) -> bool {
     !warnings.iter().any(|warning| {
         warning == SCAN_CANCELED_WARNING
             || warning == SCAN_CANCELED_NOT_PERSISTED_WARNING
-            || warning.starts_with("Scan stopped at configured limit")
+            || warning.starts_with("설정된 제한")
     })
 }
 
@@ -3468,16 +3468,26 @@ fn reconcile_stored_source_rows(
             continue;
         }
 
-        let placeholders = std::iter::repeat_n("?", ids.len())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let sql = format!("DELETE FROM prompts WHERE source = ? AND id NOT IN ({placeholders})");
-        let mut params: Vec<&dyn ToSql> = Vec::with_capacity(ids.len() + 1);
-        params.push(&source.label);
-        for id in &ids {
-            params.push(id);
+        let mut stmt = tx.prepare("SELECT id FROM prompts WHERE source = ?1")?;
+        let existing_ids = stmt
+            .query_map([&source.label], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        let stale_ids = existing_ids
+            .into_iter()
+            .filter(|id| !ids.contains(id))
+            .collect::<Vec<_>>();
+        for chunk in stale_ids.chunks(SQLITE_DELETE_CHUNK_SIZE) {
+            let placeholders = std::iter::repeat_n("?", chunk.len())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let sql = format!("DELETE FROM prompts WHERE source = ? AND id IN ({placeholders})");
+            let mut params: Vec<&dyn ToSql> = Vec::with_capacity(chunk.len() + 1);
+            params.push(&source.label);
+            for id in chunk {
+                params.push(id);
+            }
+            tx.execute(&sql, params.as_slice())?;
         }
-        tx.execute(&sql, params.as_slice())?;
     }
 
     Ok(())
@@ -4090,7 +4100,7 @@ mod tests {
         )
         .expect("risky prompt should block external improve");
 
-        assert!(warning.contains("risk-pattern text"));
+        assert!(warning.contains("위험 패턴 텍스트"));
         assert!(!warning.contains(&synthetic_token));
     }
 
@@ -4103,7 +4113,7 @@ mod tests {
         )
         .expect("risky context should block external improve");
 
-        assert!(warning.contains("risk-pattern text"));
+        assert!(warning.contains("위험 패턴 텍스트"));
         assert!(!warning.contains(&synthetic_token));
     }
 
@@ -4252,7 +4262,8 @@ mod tests {
     #[test]
     fn should_persist_scan_result_honors_canceled_scan_policy() {
         let canceled_warnings = vec![SCAN_CANCELED_WARNING.to_string()];
-        let normal_warnings = vec!["Scan stopped at configured limit of 10 prompts.".to_string()];
+        let normal_warnings =
+            vec!["설정된 제한 10개 프롬프트에서 스캔을 중지했습니다.".to_string()];
 
         assert!(should_persist_scan_result(true, true, &canceled_warnings));
         assert!(!should_persist_scan_result(true, false, &canceled_warnings));
@@ -5115,7 +5126,7 @@ mod tests {
             summary
                 .notes
                 .iter()
-                .any(|note| note.contains("Skipped walk entry")),
+                .any(|note| note.contains("순회 항목을 건너뜀")),
             "expected walk error note, got {:?}",
             summary.notes
         );
@@ -5220,12 +5231,12 @@ mod tests {
     #[test]
     fn markdown_export_includes_scan_warnings() {
         let stats = build_stats(&[], Vec::new());
-        let warnings = vec!["Scan stopped at configured limit of 1 prompts.".to_string()];
+        let warnings = vec!["설정된 제한 1개 프롬프트에서 스캔을 중지했습니다.".to_string()];
 
         let markdown = render_markdown("2026-06-03T00:00:00Z", &stats, &[], &warnings);
 
         assert!(markdown.contains("## Warnings"));
-        assert!(markdown.contains("- Scan stopped at configured limit of 1 prompts."));
+        assert!(markdown.contains("- 설정된 제한 1개 프롬프트에서 스캔을 중지했습니다."));
     }
 
     #[test]
@@ -5840,6 +5851,46 @@ mod tests {
     }
 
     #[test]
+    fn persist_scan_result_handles_large_complete_source_reconciliation() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-large-reconcile-test-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let prompts = (0..(SQLITE_DELETE_CHUNK_SIZE * 3))
+            .map(|idx| {
+                let mut prompt =
+                    dated_record(&format!("large-row-{idx:04}"), "2026-06-06T00:00:00Z");
+                prompt.source = "Codex".to_string();
+                prompt
+            })
+            .collect::<Vec<_>>();
+        let stats = build_stats(
+            &prompts,
+            vec![source_summary_for(
+                "Codex",
+                prompts.len(),
+                prompts.len(),
+                "ok",
+                Vec::new(),
+            )],
+        );
+
+        persist_scan_result(&db_path, "2026-06-06T00:01:00Z", &prompts, &stats, &[])
+            .expect("persist first large source");
+        let persistence =
+            persist_scan_result(&db_path, "2026-06-06T00:02:00Z", &prompts, &stats, &[])
+                .expect("persist second large source");
+
+        assert_eq!(persistence.stored_prompt_count, prompts.len());
+        let conn = Connection::open(&db_path).expect("open large reconcile db");
+        let ids = prompt_ids_for_source(&conn, "Codex");
+        assert_eq!(ids.len(), prompts.len());
+
+        std::fs::remove_file(db_path).expect("remove large reconcile db");
+    }
+
+    #[test]
     fn persist_scan_result_keeps_stale_source_rows_when_scan_was_limited() {
         let db_path = std::env::temp_dir().join(format!(
             "promptvault-keep-limited-stale-test-{}.sqlite",
@@ -5867,7 +5918,7 @@ mod tests {
             &[current.clone()],
             vec![source_summary_for(&current.source, 1, 1, "ok", Vec::new())],
         );
-        let warnings = vec!["Scan stopped at configured limit of 1 prompts.".to_string()];
+        let warnings = vec!["설정된 제한 1개 프롬프트에서 스캔을 중지했습니다.".to_string()];
         let persistence = persist_scan_result(
             &db_path,
             "2026-06-06T00:03:00Z",

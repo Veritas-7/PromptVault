@@ -48,33 +48,33 @@ test("queue keeps selected order and skips unavailable sources", () => {
 });
 
 test("queue action label explains disabled zero-selection state", () => {
-  assert.equal(importQueueActionLabel(0, false, lockState()), "Select import sources before running queue");
+  assert.equal(importQueueActionLabel(0, false, lockState()), "대기열을 실행하기 전에 가져올 소스를 선택하세요");
   assert.equal(
     importQueueActionLabel(0, false, lockState({ scanRunning: true })),
-    "Select import sources before running queue",
+    "대기열을 실행하기 전에 가져올 소스를 선택하세요",
   );
 });
 
 test("queue action label includes selected source count", () => {
-  assert.equal(importQueueActionLabel(1, false, lockState()), "Run 1 selected import source");
-  assert.equal(importQueueActionLabel(2, false, lockState()), "Run 2 selected import sources");
+  assert.equal(importQueueActionLabel(1, false, lockState()), "선택한 소스 1개 가져오기");
+  assert.equal(importQueueActionLabel(2, false, lockState()), "선택한 소스 2개 가져오기");
 });
 
 test("queue action label announces running queue state", () => {
   assert.equal(
     importQueueActionLabel(3, true, lockState({ importRunning: true })),
-    "Running import queue for 3 selected sources",
+    "선택한 소스 3개의 가져오기 대기열 실행 중",
   );
 });
 
 test("queue action label explains top-level lock reasons", () => {
   assert.equal(
     importQueueActionLabel(2, false, lockState({ scanRunning: true })),
-    "Cannot run selected import sources while a scan is running",
+    "스캔 실행 중에는 선택한 소스를 가져올 수 없습니다",
   );
   assert.equal(
     importQueueActionLabel(2, false, lockState({ storedLoadRunning: true })),
-    "Cannot run selected import sources while stored prompts are loading",
+    "저장된 프롬프트 불러오는 중에는 선택한 소스를 가져올 수 없습니다",
   );
 });
 

@@ -25,14 +25,14 @@ test("quiet panel refresh success preserves existing global errors", () => {
 test("panel refresh labels explain ready, loading, and locked states", () => {
   assert.equal(
     panelRefreshActionLabel("saved import progress", "ready", lockState()),
-    "Refresh saved import progress",
+    "saved import progress 새로고침",
   );
   assert.equal(
     panelRefreshActionLabel("saved import progress", "loading", lockState()),
-    "Refreshing saved import progress",
+    "saved import progress 새로고침 중",
   );
   assert.equal(
     panelRefreshActionLabel("recent import activity", "failed", lockState({ scanRunning: true })),
-    "Cannot refresh recent import activity while a scan is running",
+    "스캔 실행 중에는 recent import activity을 새로고침할 수 없습니다",
   );
 });

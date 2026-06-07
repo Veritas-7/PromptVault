@@ -46,27 +46,27 @@ test("starting an improvement clears the prior recommendation", () => {
 test("improvement failure text is scoped to the selected prompt", () => {
   assert.equal(
     improvementFailureText("prompt-a", "prompt-a"),
-    "Could not improve this prompt. Check the error above and retry.",
+    "이 프롬프트 추천을 생성하지 못했습니다. 위 오류를 확인한 뒤 다시 시도하세요.",
   );
   assert.equal(improvementFailureText("prompt-a", "prompt-b"), null);
   assert.equal(improvementFailureText(null, "prompt-a"), null);
 });
 
 test("improvement action label explains disabled and active states", () => {
-  assert.equal(improvementActionLabel(false, false, lockState()), "Select a prompt before improving");
+  assert.equal(improvementActionLabel(false, false, lockState()), "추천을 생성하기 전에 프롬프트를 선택하세요");
   assert.equal(
     improvementActionLabel(true, true, lockState({ improvementRunning: true })),
-    "Improving selected prompt",
+    "선택한 프롬프트 추천 생성 중",
   );
   assert.equal(
     improvementActionLabel(true, false, lockState({ scanRunning: true })),
-    "Cannot improve selected prompt while a scan is running",
+    "스캔 실행 중에는 선택한 프롬프트 추천을 생성할 수 없습니다",
   );
   assert.equal(
     improvementActionLabel(true, false, lockState({ storedLoadRunning: true })),
-    "Cannot improve selected prompt while stored prompts are loading",
+    "저장된 프롬프트 불러오는 중에는 선택한 프롬프트 추천을 생성할 수 없습니다",
   );
-  assert.equal(improvementActionLabel(true, false, lockState()), "Improve selected prompt");
+  assert.equal(improvementActionLabel(true, false, lockState()), "선택한 프롬프트 추천 생성");
 });
 
 test("selection change clears recommendation state and matching improve error", () => {

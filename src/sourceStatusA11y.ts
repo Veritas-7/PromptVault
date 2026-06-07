@@ -3,22 +3,22 @@ import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 function sourceStatusName(status: string): string {
   switch (status) {
     case "ok":
-      return "available";
+      return "사용 가능";
     case "empty":
-      return "empty";
+      return "비어 있음";
     case "missing":
-      return "missing";
+      return "누락됨";
     case "partial":
-      return "partial";
+      return "부분 처리";
     case "stored":
-      return "stored";
+      return "저장됨";
     default:
-      return status || "unknown";
+      return status || "알 수 없음";
   }
 }
 
 function countLabel(count: number, singular: string): string {
-  return `${count.toLocaleString()} ${count === 1 ? singular : `${singular}s`}`;
+  return `${count.toLocaleString()}개 ${singular}`;
 }
 
 export function planSourceStatusLabel(
@@ -29,7 +29,7 @@ export function planSourceStatusLabel(
   notes: string[] = [],
 ): string {
   const noteText = notes.length ? `. ${notes.join(" ")}` : "";
-  return `${sourceLabel} source ${sourceStatusName(status)}: ${countLabel(fileCount, "file")}, ${byteText}${noteText}`;
+  return `${sourceLabel} 소스 ${sourceStatusName(status)}: ${countLabel(fileCount, "파일")}, ${byteText}${noteText}`;
 }
 
 export function planSourceSelectionLabel(
@@ -49,15 +49,15 @@ export function planSourceSelectionLabel(
   );
   const actionLockReason = fileCount > 0 && lockState ? activeActionLockReason(lockState) : null;
   if (actionLockReason) {
-    return `Cannot change import queue selection for ${sourceContext} while ${actionLockReason}`;
+    return `${actionLockReason}에는 ${sourceContext}의 가져오기 대기열 선택을 바꿀 수 없습니다`;
   }
-  return `Import queue selection for ${sourceContext}`;
+  return `${sourceContext} 가져오기 대기열 선택`;
 }
 
 export type PlanSourceAction = "batch" | "continuous";
 
 function planSourceActionText(action: PlanSourceAction): string {
-  return action === "batch" ? "import one batch" : "run import until done";
+  return action === "batch" ? "한 배치 가져오기" : "끝까지 가져오기";
 }
 
 export function planSourceActionLabel(
@@ -71,10 +71,10 @@ export function planSourceActionLabel(
 ): string {
   const actionText = planSourceActionText(action);
   const sourceContext = planSourceStatusLabel(sourceLabel, status, fileCount, byteText, notes);
-  if (fileCount === 0) return `Cannot ${actionText} for ${sourceContext}`;
+  if (fileCount === 0) return `${sourceContext}은 파일이 없어 ${actionText}를 실행할 수 없습니다`;
   const actionLockReason = lockState ? activeActionLockReason(lockState) : null;
-  if (actionLockReason) return `Cannot ${actionText} for ${sourceContext} while ${actionLockReason}`;
-  return `${actionText[0].toUpperCase()}${actionText.slice(1)} for ${sourceContext}`;
+  if (actionLockReason) return `${actionLockReason}에는 ${sourceContext}의 ${actionText}를 실행할 수 없습니다`;
+  return `${sourceContext} ${actionText}`;
 }
 
 export function sourceSummaryStatusLabel(
@@ -82,5 +82,5 @@ export function sourceSummaryStatusLabel(
   status: string,
   promptCount: number,
 ): string {
-  return `${sourceLabel} source ${sourceStatusName(status)}: ${countLabel(promptCount, "prompt")} found`;
+  return `${sourceLabel} 소스 ${sourceStatusName(status)}: ${countLabel(promptCount, "프롬프트")} 발견`;
 }

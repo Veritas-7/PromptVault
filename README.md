@@ -43,6 +43,60 @@ Tauri dev mode:
 npm run tauri dev
 ```
 
+## Agent Quickstart
+
+Use these steps when an LLM or coding agent needs to install, run, and verify
+PromptVault from a fresh checkout:
+
+```bash
+cd /Users/wj/Ai/System/10_Projects/PromptVault
+npm install
+npm run test:ui
+npm run build
+cd src-tauri
+cargo test
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+For browser-based QA without occupying an external browser window, run the Vite
+frontend and the local PromptVault bridge, then open the app in the cmux
+in-app browser:
+
+```bash
+cd /Users/wj/Ai/System/10_Projects/PromptVault
+npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+cd src-tauri
+cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
+curl -sS http://127.0.0.1:5174/api/health
+```
+
+The default permanent vault is:
+
+```text
+~/Documents/PromptVault/promptvault.sqlite
+```
+
+Recommended agent workflow:
+
+1. Run `cargo run --bin promptvault-cli -- sources --json` to confirm source
+   roots for Codex app/CLI, Claude, Antigravity, and Gemini stores.
+2. Run `cargo run --bin promptvault-cli -- plan --json` before a full import.
+   This inventories matching files without reading prompt bodies.
+3. Use `cargo run --bin promptvault-cli -- import-batch --source SOURCE_ID
+   --files N --json` for resumable incremental imports. The cursor is stored in
+   SQLite and the UI refresh buttons read the same cursor/state tables.
+4. Use `cargo run --bin promptvault-cli -- scan --no-export --json` only when
+   the agent needs aggregate stats without creating a Markdown export.
+5. Use `cargo run --bin promptvault-cli -- scan --preview-limit 5
+   --include-prompts --no-export --json` only when a bounded prompt-body sample
+   is necessary for verification.
+6. Use `cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3`
+   to test deterministic weakest-prompt recommendations.
+
+By default, CLI stdout does not print prompt bodies. Prompt previews require
+`--include-prompts`, are capped, and are redacted for token/key/private-key
+risk patterns.
+
 ## CLI
 
 ```bash

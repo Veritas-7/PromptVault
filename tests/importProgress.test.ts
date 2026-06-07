@@ -119,7 +119,7 @@ test("import progress display uses saved cursor before first batch result", () =
   );
 
   assert.deepEqual(display, {
-    batchSummary: "5 files per batch",
+    batchSummary: "배치당 5개 파일",
     percent: 56,
     processedFiles: 81,
     sourceLabel: "Gemini temporary chats",
@@ -137,7 +137,7 @@ test("import progress display prefers the latest batch result", () => {
   );
 
   assert.deepEqual(display, {
-    batchSummary: "1 file · 1 prompt",
+    batchSummary: "1개 파일 · 1개 프롬프트",
     percent: 60,
     processedFiles: 86,
     sourceLabel: "Source A",
@@ -149,7 +149,7 @@ test("import progress display falls back to active source metadata", () => {
   const display = importProgressDisplay(null, null, "  Plan source  ", 12, 5);
 
   assert.deepEqual(display, {
-    batchSummary: "5 files per batch",
+    batchSummary: "배치당 5개 파일",
     percent: 0,
     processedFiles: 0,
     sourceLabel: "Plan source",
@@ -158,50 +158,50 @@ test("import progress display falls back to active source metadata", () => {
 });
 
 test("import progress display pluralizes fallback batch size", () => {
-  assert.equal(importProgressDisplay(null, null, "Plan source", 12, 1).batchSummary, "1 file per batch");
-  assert.equal(importProgressDisplay(null, null, "Plan source", 12, 2).batchSummary, "2 files per batch");
+  assert.equal(importProgressDisplay(null, null, "Plan source", 12, 1).batchSummary, "배치당 1개 파일");
+  assert.equal(importProgressDisplay(null, null, "Plan source", 12, 2).batchSummary, "배치당 2개 파일");
 });
 
 test("import progress value text mirrors processed file counts", () => {
-  assert.equal(importProgressValueText(86, 144), "86 of 144 files");
-  assert.equal(importProgressValueText(1, 1), "1 of 1 file");
-  assert.equal(importProgressValueText(1_200, 2_000), "1,200 of 2,000 files");
+  assert.equal(importProgressValueText(86, 144), "86 / 144개 파일");
+  assert.equal(importProgressValueText(1, 1), "1 / 1개 파일");
+  assert.equal(importProgressValueText(1_200, 2_000), "1,200 / 2,000개 파일");
 });
 
 test("import status explains continuous stop requests", () => {
-  assert.equal(importStatusLabel(importResult(5, 10), "importing", "continuous", false), "Running");
+  assert.equal(importStatusLabel(importResult(5, 10), "importing", "continuous", false), "실행 중");
   assert.equal(
     importStatusLabel(importResult(5, 10), "importing", "continuous", true),
-    "Stopping after current batch",
+    "현재 배치 후 중지 중",
   );
 });
 
 test("import status differentiates stopped and complete states", () => {
-  assert.equal(importStatusLabel(importResult(5, 10), "stopped", "continuous", false), "Stopped");
-  assert.equal(importStatusLabel(importResult(10, 10, true), "ready", "continuous", false), "Complete");
+  assert.equal(importStatusLabel(importResult(5, 10), "stopped", "continuous", false), "중지됨");
+  assert.equal(importStatusLabel(importResult(10, 10, true), "ready", "continuous", false), "완료");
 });
 
 test("import status reports failed state first", () => {
   const failed: ImportRunState = "failed";
 
-  assert.equal(importStatusLabel(importResult(10, 10, true), failed, "single", false), "Failed");
+  assert.equal(importStatusLabel(importResult(10, 10, true), failed, "single", false), "실패");
 });
 
 test("import stop action label explains continuous and queue stop targets", () => {
-  assert.equal(importStopActionLabel("continuous", false), "Stop import after current batch");
-  assert.equal(importStopActionLabel("continuous", true), "Stopping import after current batch");
-  assert.equal(importStopActionLabel("queue", false), "Stop import queue after current source");
-  assert.equal(importStopActionLabel("queue", true), "Stopping import queue after current source");
+  assert.equal(importStopActionLabel("continuous", false), "현재 배치 후 가져오기 중지");
+  assert.equal(importStopActionLabel("continuous", true), "현재 배치 후 가져오기 중지 중");
+  assert.equal(importStopActionLabel("queue", false), "현재 소스 후 가져오기 대기열 중지");
+  assert.equal(importStopActionLabel("queue", true), "현재 소스 후 가져오기 대기열 중지 중");
 });
 
 test("import failure text keeps a failed no-result run visible", () => {
   assert.equal(
     importRunFailureText("failed", "Gemini temporary chats"),
-    "Could not import Gemini temporary chats. Check the error above and retry from the import plan.",
+    "Gemini temporary chats 가져오기에 실패했습니다. 위 오류를 확인한 뒤 가져오기 계획에서 다시 시도하세요.",
   );
   assert.equal(
     importRunFailureText("failed", "  "),
-    "Could not import the selected source. Check the error above and retry from the import plan.",
+    "선택한 소스를 가져오지 못했습니다. 위 오류를 확인한 뒤 가져오기 계획에서 다시 시도하세요.",
   );
   assert.equal(importRunFailureText("ready", "Gemini temporary chats"), null);
 });
@@ -209,26 +209,26 @@ test("import failure text keeps a failed no-result run visible", () => {
 test("import stop notice explains continuous resume path", () => {
   assert.equal(
     importStopNoticeText("stopped", "continuous", "Gemini temporary chats"),
-    "Stopped importing Gemini temporary chats after the current batch. Run Until Done again to resume from the saved cursor.",
+    "Gemini temporary chats 가져오기가 현재 배치 후 중지되었습니다. 저장된 커서에서 재개하려면 끝까지 실행을 다시 누르세요.",
   );
   assert.equal(
     importStopNoticeText("stopped", "continuous", "  "),
-    "Stopped importing after the current batch. Run Until Done again to resume from the saved cursor.",
+    "가져오기가 현재 배치 후 중지되었습니다. 저장된 커서에서 재개하려면 끝까지 실행을 다시 누르세요.",
   );
 });
 
 test("import stop notice explains partial queue resume path", () => {
   assert.equal(
     importStopNoticeText("stopped", "queue", null, 1, 3),
-    "Import queue stopped after the current source. 1 of 3 sources completed. Run Selected again to continue.",
+    "가져오기 대기열이 현재 소스 후 중지되었습니다. 3개 소스 중 1개 완료. 계속하려면 선택 실행을 다시 누르세요.",
   );
   assert.equal(
     importStopNoticeText("stopped", "queue", null, 5, 3),
-    "Import queue stopped after the current source. 3 of 3 sources completed. Run Selected again to continue.",
+    "가져오기 대기열이 현재 소스 후 중지되었습니다. 3개 소스 중 3개 완료. 계속하려면 선택 실행을 다시 누르세요.",
   );
   assert.equal(
     importStopNoticeText("stopped", "queue", null, 1, 1),
-    "Import queue stopped after the current source. 1 of 1 source completed. Run Selected again to continue.",
+    "가져오기 대기열이 현재 소스 후 중지되었습니다. 1개 소스 중 1개 완료. 계속하려면 선택 실행을 다시 누르세요.",
   );
 });
 

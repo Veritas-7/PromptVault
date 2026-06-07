@@ -4576,3 +4576,141 @@ Remaining issue:
 Next focus:
 
 - Active objective is complete after this note is committed and pushed.
+
+## Parser/DB Full Rescan and Korean UI Finalization - 2026-06-07 13:38 KST
+
+Current goal:
+
+- Finish the user's active request: fully Korean UI, English README agent
+  install/use instructions, exact Codex app/CLI + Antigravity + Gemini +
+  Claude user-prompt parsing verification, app DB persistence/management,
+  stats/recommendations, and refresh/incremental import evidence.
+
+Changes:
+
+- Localized the browser-facing PromptVault UI copy, action labels, status
+  messages, empty states, filters, import progress, stored prompt panels,
+  quality/risk labels, and recommendation panels into Korean.
+- Kept `README.md` in English and added an `Agent Quickstart` with install,
+  test, build, bridge, cmux browser QA, source planning, incremental import,
+  full scan, bounded preview, and repair commands.
+- Fixed full-source DB reconciliation for large sources. The previous
+  complete scan failed when deleting stale rows for Codex because SQLite
+  received too many SQL variables in one `DELETE ... NOT IN (...)` statement.
+  The reconciler now queries existing IDs and deletes stale IDs in chunks of
+  500.
+- Added `persist_scan_result_handles_large_complete_source_reconciliation`
+  to cover the large-source SQLite variable limit path.
+- Changed `repair --json` so prompt metadata is preserved but
+  `/repairs/*/prompt/text` is always `[REDACTED_PROMPT_TEXT]`; recommendations
+  still include the generated revised prompt and quality delta.
+
+Live DB and parser evidence:
+
+- `cargo run --bin promptvault-cli -- sources --json` reported all expected
+  local roots as available: Codex sessions, Codex CX sessions, Claude projects,
+  Claude transcripts, Claude prompt history, Antigravity CLI/IDE transcripts,
+  Antigravity prompt history, Antigravity CLI/IDE conversation DBs, and Gemini
+  temporary chats.
+- Full real scan command:
+  `cargo run --bin promptvault-cli -- scan --no-export --json --preview-limit 0`
+  completed successfully after the reconciliation fix.
+- Full scan persistence result:
+  - DB: `/Users/wj/Documents/PromptVault/promptvault.sqlite`
+  - `stored_prompt_count`: `88409`
+  - `inserted_prompt_count`: `25`
+  - `updated_prompt_count`: `88384`
+  - `returned_prompt_count`: `0`
+  - `prompts_truncated`: `true`
+  - `warnings`: `[]`
+- SQLite verification:
+  - total prompts: `88409`
+  - source counts:
+    `Codex 70158`, `Codex CX 21`, `Claude Code projects 2256`,
+    `Claude transcripts 1175`, `Claude prompt history 12334`,
+    `Antigravity CLI transcripts 637`, `Antigravity IDE transcripts 12`,
+    `Antigravity CLI conversation DB 10`,
+    `Antigravity IDE conversation DB 2`, `Antigravity prompt history 1659`,
+    `Gemini temporary chats 145`
+  - distinct prompt dates: `90`
+  - min/max prompt_date: `2026-03-11` / `unknown-date`
+- Full scan parser totals:
+  - files seen: `28005`
+  - prompts found: `88409`
+  - total words: `17257523`
+  - average quality: `70.85439265233178`
+  - weak prompts: `26220`
+  - top quality gaps:
+    `constraints 44936`, `verification 42465`, `output_format 39417`,
+    `action_verb 23443`, `context 20460`,
+    `sensitive_content_risk 16005`, `specific_goal 12815`,
+    `too_long 12117`
+
+API and recommendation evidence:
+
+- Restarted only the PromptVault bridge process, not cmux:
+  `cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174`.
+- `curl -sS http://127.0.0.1:5174/api/health` returned
+  `{"database_path":"/Users/wj/Documents/PromptVault/promptvault.sqlite","ok":true}`.
+- `/api/prompts` with `limit=3` and `preview_sort=quality-asc` returned
+  `stored_prompt_count=88409`, `returned_prompt_count=3`, and top quality
+  gaps for the selected weakest prompts.
+- `/api/prompt-facets` returned 11 non-empty source facets, led by
+  `Codex 70158`, `Claude prompt history 12334`, `Claude Code projects 2256`,
+  `Antigravity prompt history 1659`, `Claude transcripts 1175`,
+  `Antigravity CLI transcripts 637`, and `Gemini temporary chats 145`.
+- `cargo run --bin promptvault-cli -- repair --json --limit 200 --count 3`
+  returned `scanned_prompt_count=200`, `returned_prompt_count=3`,
+  `repair_count=3`, provider `local-rules`, and score deltas of `+64`.
+- `cargo run --bin promptvault-cli -- repair --json --limit 20 --count 1`
+  verified that `/repairs/0/prompt/text` is `[REDACTED_PROMPT_TEXT]` while
+  hash/source/quality delta remain available.
+
+cmux in-app browser QA:
+
+- Used the existing PromptVault browser surface `surface:10`; no external
+  browser window was opened.
+- Started current frontend with
+  `npm run dev -- --host 127.0.0.1 --port 5175 --strictPort`.
+- Navigated `surface:10` to
+  `http://127.0.0.1:5175/?promptvault-live-qa=20260607-reload2`.
+- `surface:10` initially had URL/title metadata but DOM commands failed while
+  the terminal pane was active. `cmux surface-health --all` showed
+  `surface:10 type=browser in_window=true`; after `cmux focus-pane --pane
+  pane:14` and `cmux browser --surface surface:10 focus-webview`, DOM
+  commands recovered without restarting cmux.
+- Same-surface UI text showed Korean copy, bridge mode, stored vault summary,
+  import progress/history, and source/stats panels:
+  `88,409개 저장됨`, `소스 11개`, `날짜 50개`, `작업공간 50개`,
+  `DB 저장 88409`, `날짜 90`.
+- Clicking `저장소 불러오기` on `surface:10` loaded `1000` prompt previews and
+  displayed source summaries and frequency stats.
+- Clicking `추천 생성` on the selected prompt produced a recommendation panel.
+  GLM returned HTTP 429 in this run, so the UI used the Korean local fallback
+  warning and still displayed recommendation content and verification/risk
+  rationale.
+- `cmux browser --surface surface:10 errors list` returned
+  `No browser errors`; console contained only Vite debug connect messages.
+
+Automatic verification:
+
+- `cargo test persist_scan_result`: PASS, 5 tests.
+- `cargo test repair_json_entry_redacts_prompt_text`: PASS, 1 CLI test.
+- `npm run check`: PASS.
+  - UI tests: `124` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `71` passed.
+  - CLI tests: `16` passed.
+  - Doc-tests: passed.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Remaining issue:
+
+- No PromptVault parser/DB/stat/recommendation blocker remains. The only
+  caveat observed was cmux CLI/WebView focus sensitivity; it recovered by
+  focusing the existing browser pane and did not require a cmux restart.
+
+Next focus:
+
+- Stage explicit paths only, run staged secret checks, commit, push, and then
+  mark the active goal complete.

@@ -3,12 +3,12 @@ export type PlanRunState = "idle" | "planning" | "ready" | "failed";
 export function planFailureText(state: PlanRunState, hasPlan: boolean): string | null {
   if (state !== "failed") return null;
   return hasPlan
-    ? "Could not refresh the import plan. Existing plan data may be stale."
-    : "Could not create an import plan. Check the error above and use Plan to retry.";
+    ? "가져오기 계획을 새로고침하지 못했습니다. 기존 계획 데이터가 오래되었을 수 있습니다."
+    : "가져오기 계획을 만들지 못했습니다. 위 오류를 확인한 뒤 계획을 다시 실행하세요.";
 }
 
 export function planUnavailableText(state: PlanRunState): string {
-  if (state === "planning") return "Building source inventory.";
-  if (state === "failed") return "Import plan is unavailable. Use Plan to retry.";
-  return "Run Plan to inspect available prompt sources.";
+  if (state === "planning") return "소스 목록을 만드는 중입니다.";
+  if (state === "failed") return "가져오기 계획을 사용할 수 없습니다. 계획을 다시 실행하세요.";
+  return "사용 가능한 프롬프트 소스를 보려면 계획을 실행하세요.";
 }

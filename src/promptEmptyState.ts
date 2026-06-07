@@ -4,11 +4,11 @@ export function promptListEmptyText(
   activeStoredFilterCount = 0,
 ): string | null {
   if (!hasResult) return null;
-  if (filterText.trim()) return "No prompts match the current filter.";
+  if (filterText.trim()) return "현재 필터와 일치하는 프롬프트가 없습니다.";
   if (activeStoredFilterCount > 0) {
-    return "No stored prompts match the current Stored Vault filters.";
+    return "현재 저장소 필터와 일치하는 저장 프롬프트가 없습니다.";
   }
-  return "No prompts were loaded.";
+  return "불러온 프롬프트가 없습니다.";
 }
 
 export function selectedPromptEmptyText(
@@ -16,12 +16,12 @@ export function selectedPromptEmptyText(
   filterText: string,
   activeStoredFilterCount = 0,
 ): string {
-  if (!hasResult) return "Run a scan or load stored prompts.";
-  if (filterText.trim()) return "No prompt is visible with the current filter.";
+  if (!hasResult) return "스캔하거나 저장된 프롬프트를 불러오세요.";
+  if (filterText.trim()) return "현재 필터에서 보이는 프롬프트가 없습니다.";
   if (activeStoredFilterCount > 0) {
-    return "No prompt matches the current Stored Vault filters.";
+    return "현재 저장소 필터와 일치하는 프롬프트가 없습니다.";
   }
-  return "No prompt is available in this result.";
+  return "이 결과에서 사용할 수 있는 프롬프트가 없습니다.";
 }
 
 export function recommendationEmptyText(
@@ -30,12 +30,12 @@ export function recommendationEmptyText(
   filterText: string,
   activeStoredFilterCount = 0,
 ): string {
-  if (hasSelectedPrompt) return "Run improvement for the selected prompt.";
+  if (hasSelectedPrompt) return "선택한 프롬프트의 추천을 생성하세요.";
   if (hasResult && filterText.trim()) {
-    return "Clear the prompt filter or select a visible prompt before improving.";
+    return "추천을 생성하기 전에 프롬프트 필터를 지우거나 보이는 프롬프트를 선택하세요.";
   }
   if (hasResult && activeStoredFilterCount > 0) {
-    return "Adjust or reset Stored Vault filters before improving.";
+    return "추천을 생성하기 전에 저장소 필터를 조정하거나 초기화하세요.";
   }
-  return "Select a prompt and run improvement.";
+  return "프롬프트를 선택하고 추천을 생성하세요.";
 }

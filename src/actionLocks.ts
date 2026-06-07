@@ -25,11 +25,11 @@ export function importActionLocked(state: ActionLockState): boolean {
 }
 
 export function activeActionLockReason(state: ActionLockState): string | null {
-  if (state.scanRunning) return "a scan is running";
-  if (state.planRunning) return "an import plan is running";
-  if (state.importRunning) return "an import is running";
-  if (state.storedLoadRunning) return "stored prompts are loading";
-  if (state.improvementRunning) return "an improvement is running";
+  if (state.scanRunning) return "스캔 실행 중";
+  if (state.planRunning) return "가져오기 계획 생성 중";
+  if (state.importRunning) return "가져오기 실행 중";
+  if (state.storedLoadRunning) return "저장된 프롬프트 불러오는 중";
+  if (state.improvementRunning) return "프롬프트 추천 생성 중";
   return null;
 }
 

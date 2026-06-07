@@ -35,18 +35,17 @@ export function importQueueActionLabel(
   lockState: ActionLockState,
 ): string {
   const boundedSelectedSourceCount = Math.max(0, selectedSourceCount);
-  const sourceText = boundedSelectedSourceCount === 1 ? "source" : "sources";
   if (isRunning) {
-    return `Running import queue for ${boundedSelectedSourceCount.toLocaleString()} selected ${sourceText}`;
+    return `선택한 소스 ${boundedSelectedSourceCount.toLocaleString()}개의 가져오기 대기열 실행 중`;
   }
   if (boundedSelectedSourceCount === 0) {
-    return "Select import sources before running queue";
+    return "대기열을 실행하기 전에 가져올 소스를 선택하세요";
   }
   const actionLockReason = activeActionLockReason(lockState);
   if (actionLockReason) {
-    return `Cannot run selected import sources while ${actionLockReason}`;
+    return `${actionLockReason}에는 선택한 소스를 가져올 수 없습니다`;
   }
-  return `Run ${boundedSelectedSourceCount.toLocaleString()} selected import ${sourceText}`;
+  return `선택한 소스 ${boundedSelectedSourceCount.toLocaleString()}개 가져오기`;
 }
 
 export function importQueueFinalState(

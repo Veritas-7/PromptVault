@@ -17,7 +17,7 @@ test("stored facet failure text is only shown after failed refreshes", () => {
   const failed: StoredFacetsState = "failed";
   assert.equal(
     storedFacetsFailureText(failed),
-    "Could not refresh stored facets. Filter suggestions may be stale.",
+    "저장소 필터 후보를 새로고침하지 못했습니다. 필터 후보가 오래되었을 수 있습니다.",
   );
   assert.equal(storedFacetsFailureText("ready"), null);
 });
@@ -25,7 +25,7 @@ test("stored facet failure text is only shown after failed refreshes", () => {
 test("stored facet summary uses live facet result when available", () => {
   assert.equal(
     storedFacetSummaryText("ready", 0, readyResult),
-    "362 stored, 1 source, 1 date, 1 workspace",
+    "362개 저장됨, 소스 1개, 날짜 1개, 작업공간 1개",
   );
   assert.equal(
     storedFacetSummaryText("ready", 0, {
@@ -34,21 +34,21 @@ test("stored facet summary uses live facet result when available", () => {
       total_prompts: 220,
       workspaces: [{ text: "PromptVault", count: 12 }, { text: "Other", count: 2 }],
     }),
-    "220 stored, 2 sources, 0 dates, 2 workspaces",
+    "220개 저장됨, 소스 2개, 날짜 0개, 작업공간 2개",
   );
 });
 
 test("stored facet summary distinguishes loading and failed states without data", () => {
-  assert.equal(storedFacetSummaryText("loading", 0, null), "loading stored facets");
-  assert.equal(storedFacetSummaryText("failed", 0, null), "stored facets unavailable");
+  assert.equal(storedFacetSummaryText("loading", 0, null), "저장소 필터 후보 불러오는 중");
+  assert.equal(storedFacetSummaryText("failed", 0, null), "저장소 필터 후보를 사용할 수 없음");
   assert.equal(
     storedFacetSummaryText("failed", 1, null),
-    "facet refresh failed, 1 filter active",
+    "필터 후보 새로고침 실패, 필터 1개 활성",
   );
   assert.equal(
     storedFacetSummaryText("failed", 2, null),
-    "facet refresh failed, 2 filters active",
+    "필터 후보 새로고침 실패, 필터 2개 활성",
   );
-  assert.equal(storedFacetSummaryText("ready", 1, null), "1 filter active");
-  assert.equal(storedFacetSummaryText("ready", 2, null), "2 filters active");
+  assert.equal(storedFacetSummaryText("ready", 1, null), "필터 1개 활성");
+  assert.equal(storedFacetSummaryText("ready", 2, null), "필터 2개 활성");
 });

@@ -7,33 +7,33 @@ import type { StoredLoadState } from "./storedLoadStatus";
 export { activeActionLockReason } from "./actionLocks.ts";
 
 export function scanActionLabel(scanState: ScanRunState, lockState: ActionLockState): string {
-  if (scanState === "canceling") return "Stopping active scan";
-  if (scanState === "scanning") return "Scanning prompts";
+  if (scanState === "canceling") return "실행 중인 스캔 중지 중";
+  if (scanState === "scanning") return "프롬프트 스캔 중";
   const reason = activeActionLockReason(lockState);
-  if (reason) return `Cannot scan prompts while ${reason}`;
-  return "Scan prompts";
+  if (reason) return `${reason}에는 프롬프트를 스캔할 수 없습니다`;
+  return "프롬프트 스캔";
 }
 
 export function scanStopActionLabel(scanState: ScanRunState): string {
-  if (scanState === "canceling") return "Stopping active scan";
-  return "Stop active scan";
+  if (scanState === "canceling") return "실행 중인 스캔 중지 중";
+  return "실행 중인 스캔 중지";
 }
 
 export function storedLoadActionLabel(
   storedLoadState: StoredLoadState,
   lockState: ActionLockState,
 ): string {
-  if (storedLoadState === "loading") return "Loading stored prompts";
+  if (storedLoadState === "loading") return "저장된 프롬프트 불러오는 중";
   const reason = activeActionLockReason(lockState);
-  if (reason) return `Cannot load stored prompts while ${reason}`;
-  return "Load stored prompts";
+  if (reason) return `${reason}에는 저장된 프롬프트를 불러올 수 없습니다`;
+  return "저장된 프롬프트 불러오기";
 }
 
 export function planActionLabel(planState: PlanRunState, lockState: ActionLockState): string {
-  if (planState === "planning") return "Planning import sources";
+  if (planState === "planning") return "가져오기 소스 계획 중";
   const reason = activeActionLockReason(lockState);
-  if (reason) return `Cannot plan import sources while ${reason}`;
-  return planState === "failed" ? "Retry import source plan" : "Plan import sources";
+  if (reason) return `${reason}에는 가져오기 소스를 계획할 수 없습니다`;
+  return planState === "failed" ? "가져오기 소스 계획 다시 시도" : "가져오기 소스 계획";
 }
 
 export function planPanelActionLabel(
@@ -42,14 +42,14 @@ export function planPanelActionLabel(
   lockState: ActionLockState,
 ): string {
   if (planState === "planning") {
-    return hasPlan ? "Refreshing import source plan" : "Planning import sources";
+    return hasPlan ? "가져오기 소스 계획 새로고침 중" : "가져오기 소스 계획 중";
   }
 
-  const action = hasPlan ? "refresh import source plan" : "retry import source plan";
+  const action = hasPlan ? "가져오기 소스 계획 새로고침" : "가져오기 소스 계획 다시 시도";
   const reason = activeActionLockReason(lockState);
-  if (reason) return `Cannot ${action} while ${reason}`;
+  if (reason) return `${reason}에는 ${action}를 할 수 없습니다`;
 
-  return hasPlan ? "Refresh import source plan" : "Retry import source plan";
+  return hasPlan ? "가져오기 소스 계획 새로고침" : "가져오기 소스 계획 다시 시도";
 }
 
 export function previewModeActionLabel(
@@ -57,16 +57,16 @@ export function previewModeActionLabel(
   currentMode: PreviewMode,
   lockState: ActionLockState,
 ): string {
-  const targetLabel = targetMode === "latest" ? "latest prompt preview" : "weakest prompt preview";
+  const targetLabel = targetMode === "latest" ? "최신 프롬프트 미리보기" : "개선 우선 프롬프트 미리보기";
   const reason = activeActionLockReason(lockState);
-  if (reason) return `Cannot switch to ${targetLabel} while ${reason}`;
+  if (reason) return `${reason}에는 ${targetLabel}로 전환할 수 없습니다`;
   return targetMode === currentMode
-    ? `${targetLabel[0].toUpperCase()}${targetLabel.slice(1)} selected`
-    : `Switch to ${targetLabel}`;
+    ? `${targetLabel} 선택됨`
+    : `${targetLabel}로 전환`;
 }
 
 export function scanLimitInputLabel(lockState: ActionLockState): string {
   const reason = activeActionLockReason(lockState);
-  if (reason) return `Cannot edit scan prompt limit while ${reason}`;
-  return "Scan prompt limit";
+  if (reason) return `${reason}에는 스캔 프롬프트 제한을 편집할 수 없습니다`;
+  return "스캔 프롬프트 제한";
 }

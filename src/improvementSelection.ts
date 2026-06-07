@@ -24,7 +24,7 @@ export function improvementFailureText(
   selectedPromptId: string | null,
 ): string | null {
   if (!failedPromptId || failedPromptId !== selectedPromptId) return null;
-  return "Could not improve this prompt. Check the error above and retry.";
+  return "이 프롬프트 추천을 생성하지 못했습니다. 위 오류를 확인한 뒤 다시 시도하세요.";
 }
 
 export function improvementActionLabel(
@@ -32,11 +32,11 @@ export function improvementActionLabel(
   improving: boolean,
   lockState: ActionLockState,
 ): string {
-  if (improving) return "Improving selected prompt";
-  if (!hasSelectedPrompt) return "Select a prompt before improving";
+  if (improving) return "선택한 프롬프트 추천 생성 중";
+  if (!hasSelectedPrompt) return "추천을 생성하기 전에 프롬프트를 선택하세요";
   const reason = activeActionLockReason(lockState);
-  if (reason) return `Cannot improve selected prompt while ${reason}`;
-  return "Improve selected prompt";
+  if (reason) return `${reason}에는 선택한 프롬프트 추천을 생성할 수 없습니다`;
+  return "선택한 프롬프트 추천 생성";
 }
 
 export interface ImprovementSelectionChange<T> {

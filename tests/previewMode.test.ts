@@ -32,7 +32,7 @@ test("stored previews reload when the user changes preview mode", () => {
 test("pending preview notice explains loaded sort mismatches", () => {
   assert.equal(
     pendingPreviewModeNotice("latest", "weakest", true),
-    "Weakest preview is selected. Run Scan or Load Stored to refresh the loaded prompt list; it is still showing the latest preview.",
+    "개선 우선 미리보기가 선택되었습니다. 불러온 프롬프트 목록을 갱신하려면 스캔 또는 저장소 불러오기를 실행하세요. 현재 목록은 아직 최신순 미리보기입니다.",
   );
   assert.equal(pendingPreviewModeNotice("quality_asc", "weakest", true), null);
   assert.equal(pendingPreviewModeNotice("latest", "weakest", false), null);

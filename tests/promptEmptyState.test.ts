@@ -11,59 +11,59 @@ test("prompt list stays blank before data is loaded", () => {
 });
 
 test("prompt list explains empty loaded data", () => {
-  assert.equal(promptListEmptyText(true, " "), "No prompts were loaded.");
+  assert.equal(promptListEmptyText(true, " "), "불러온 프롬프트가 없습니다.");
 });
 
 test("prompt list explains filter misses", () => {
-  assert.equal(promptListEmptyText(true, "missing"), "No prompts match the current filter.");
+  assert.equal(promptListEmptyText(true, "missing"), "현재 필터와 일치하는 프롬프트가 없습니다.");
 });
 
 test("prompt list explains stored filter misses", () => {
   assert.equal(
     promptListEmptyText(true, "", 2),
-    "No stored prompts match the current Stored Vault filters.",
+    "현재 저장소 필터와 일치하는 저장 프롬프트가 없습니다.",
   );
 });
 
 test("selected prompt empty state preserves load guidance before data exists", () => {
-  assert.equal(selectedPromptEmptyText(false, "missing"), "Run a scan or load stored prompts.");
+  assert.equal(selectedPromptEmptyText(false, "missing"), "스캔하거나 저장된 프롬프트를 불러오세요.");
 });
 
 test("selected prompt empty state explains filtered-out selections", () => {
   assert.equal(
     selectedPromptEmptyText(true, "missing"),
-    "No prompt is visible with the current filter.",
+    "현재 필터에서 보이는 프롬프트가 없습니다.",
   );
 });
 
 test("selected prompt empty state explains stored filter misses", () => {
   assert.equal(
     selectedPromptEmptyText(true, "", 1),
-    "No prompt matches the current Stored Vault filters.",
+    "현재 저장소 필터와 일치하는 프롬프트가 없습니다.",
   );
 });
 
 test("recommendation empty state prompts improvement for a selected prompt", () => {
   assert.equal(
     recommendationEmptyText(true, true, ""),
-    "Run improvement for the selected prompt.",
+    "선택한 프롬프트의 추천을 생성하세요.",
   );
 });
 
 test("recommendation empty state explains filter-hidden selections", () => {
   assert.equal(
     recommendationEmptyText(false, true, "missing"),
-    "Clear the prompt filter or select a visible prompt before improving.",
+    "추천을 생성하기 전에 프롬프트 필터를 지우거나 보이는 프롬프트를 선택하세요.",
   );
 });
 
 test("recommendation empty state explains stored filter misses", () => {
   assert.equal(
     recommendationEmptyText(false, true, "", 1),
-    "Adjust or reset Stored Vault filters before improving.",
+    "추천을 생성하기 전에 저장소 필터를 조정하거나 초기화하세요.",
   );
 });
 
 test("recommendation empty state keeps selection guidance before data exists", () => {
-  assert.equal(recommendationEmptyText(false, false, ""), "Select a prompt and run improvement.");
+  assert.equal(recommendationEmptyText(false, false, ""), "프롬프트를 선택하고 추천을 생성하세요.");
 });

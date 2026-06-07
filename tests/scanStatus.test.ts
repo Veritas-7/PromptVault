@@ -29,13 +29,13 @@ function scanProgress(overrides: Partial<ScanProgress> = {}): ScanProgress {
 }
 
 test("scan progress label handles missing progress", () => {
-  assert.equal(scanProgressLabel(null), "Preparing scan progress.");
+  assert.equal(scanProgressLabel(null), "스캔 진행 상황을 준비 중입니다.");
 });
 
 test("scan progress label pluralizes file and prompt counts", () => {
   assert.equal(
     scanProgressLabel(scanProgress()),
-    "Source A: 1 / 1 file · 1 prompt · source 1 / 2 · limit 10",
+    "Source A: 1 / 1개 파일 · 1개 프롬프트 · 소스 1 / 2 · 제한 10",
   );
   assert.equal(
     scanProgressLabel(scanProgress({
@@ -44,7 +44,7 @@ test("scan progress label pluralizes file and prompt counts", () => {
       prompts_found: 4,
       limit: null,
     })),
-    "Source A: 2 / 3 files · 4 prompts · source 1 / 2",
+    "Source A: 2 / 3개 파일 · 4개 프롬프트 · 소스 1 / 2",
   );
 });
 
@@ -56,7 +56,7 @@ test("scan progress label explains file discovery state", () => {
       prompts_found: 1,
       source_count: 0,
     })),
-    "Source A: discovering files · 1 file found · 1 prompt · source pending · limit 10",
+    "Source A: 파일 찾는 중 · 1개 파일 발견 · 1개 프롬프트 · 소스 대기 중 · 제한 10",
   );
   assert.equal(
     scanProgressLabel(scanProgress({
@@ -65,7 +65,7 @@ test("scan progress label explains file discovery state", () => {
       prompts_found: 2,
       source_count: 0,
     })),
-    "Source A: discovering files · 2 files found · 2 prompts · source pending · limit 10",
+    "Source A: 파일 찾는 중 · 2개 파일 발견 · 2개 프롬프트 · 소스 대기 중 · 제한 10",
   );
 });
 
@@ -79,25 +79,25 @@ test("scan failure text is hidden outside failed scans", () => {
 test("scan failure text explains a failed first scan", () => {
   assert.equal(
     scanRunFailureText("failed", false),
-    "Could not scan prompts. Check the error above, adjust the limit, or retry.",
+    "프롬프트를 스캔하지 못했습니다. 위 오류를 확인하고 제한값을 조정하거나 다시 시도하세요.",
   );
 });
 
 test("scan failure text preserves stale results context", () => {
   assert.equal(
     scanRunFailureText("failed", true),
-    "Could not refresh scan results. Existing results are still shown. Check the error above, adjust the limit, or retry.",
+    "스캔 결과를 새로고침하지 못했습니다. 기존 결과를 계속 표시합니다. 위 오류를 확인하고 제한값을 조정하거나 다시 시도하세요.",
   );
 });
 
 test("scan stop failure text explains failed stop requests", () => {
   assert.equal(
     scanStopFailureText("request_failed"),
-    "Could not stop the active scan. It is still running; check the error above or try Stop again.",
+    "실행 중인 스캔을 중지하지 못했습니다. 아직 실행 중이므로 위 오류를 확인하거나 중지를 다시 시도하세요.",
   );
   assert.equal(
     scanStopFailureText("not_active"),
-    "No active scan was found to stop. The scan may have already finished.",
+    "중지할 실행 중 스캔을 찾지 못했습니다. 스캔이 이미 끝났을 수 있습니다.",
   );
   assert.equal(scanStopFailureText(null), null);
 });

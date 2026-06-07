@@ -25,84 +25,84 @@ function lockState(overrides: Partial<ActionLockState> = {}): ActionLockState {
 
 test("active action lock reason names the blocking operation", () => {
   assert.equal(activeActionLockReason(lockState()), null);
-  assert.equal(activeActionLockReason(lockState({ scanRunning: true })), "a scan is running");
-  assert.equal(activeActionLockReason(lockState({ planRunning: true })), "an import plan is running");
-  assert.equal(activeActionLockReason(lockState({ importRunning: true })), "an import is running");
+  assert.equal(activeActionLockReason(lockState({ scanRunning: true })), "스캔 실행 중");
+  assert.equal(activeActionLockReason(lockState({ planRunning: true })), "가져오기 계획 생성 중");
+  assert.equal(activeActionLockReason(lockState({ importRunning: true })), "가져오기 실행 중");
   assert.equal(
     activeActionLockReason(lockState({ storedLoadRunning: true })),
-    "stored prompts are loading",
+    "저장된 프롬프트 불러오는 중",
   );
   assert.equal(
     activeActionLockReason(lockState({ improvementRunning: true })),
-    "an improvement is running",
+    "프롬프트 추천 생성 중",
   );
 });
 
 test("scan action label explains running and locked states", () => {
-  assert.equal(scanActionLabel("idle", lockState()), "Scan prompts");
-  assert.equal(scanActionLabel("scanning", lockState({ scanRunning: true })), "Scanning prompts");
-  assert.equal(scanActionLabel("canceling", lockState({ scanRunning: true })), "Stopping active scan");
+  assert.equal(scanActionLabel("idle", lockState()), "프롬프트 스캔");
+  assert.equal(scanActionLabel("scanning", lockState({ scanRunning: true })), "프롬프트 스캔 중");
+  assert.equal(scanActionLabel("canceling", lockState({ scanRunning: true })), "실행 중인 스캔 중지 중");
   assert.equal(
     scanActionLabel("idle", lockState({ importRunning: true })),
-    "Cannot scan prompts while an import is running",
+    "가져오기 실행 중에는 프롬프트를 스캔할 수 없습니다",
   );
 });
 
 test("scan stop action label explains the canceling state", () => {
-  assert.equal(scanStopActionLabel("scanning"), "Stop active scan");
-  assert.equal(scanStopActionLabel("canceling"), "Stopping active scan");
+  assert.equal(scanStopActionLabel("scanning"), "실행 중인 스캔 중지");
+  assert.equal(scanStopActionLabel("canceling"), "실행 중인 스캔 중지 중");
 });
 
 test("stored load action label explains loading and locked states", () => {
-  assert.equal(storedLoadActionLabel("idle", lockState()), "Load stored prompts");
-  assert.equal(storedLoadActionLabel("loading", lockState({ storedLoadRunning: true })), "Loading stored prompts");
+  assert.equal(storedLoadActionLabel("idle", lockState()), "저장된 프롬프트 불러오기");
+  assert.equal(storedLoadActionLabel("loading", lockState({ storedLoadRunning: true })), "저장된 프롬프트 불러오는 중");
   assert.equal(
     storedLoadActionLabel("idle", lockState({ improvementRunning: true })),
-    "Cannot load stored prompts while an improvement is running",
+    "프롬프트 추천 생성 중에는 저장된 프롬프트를 불러올 수 없습니다",
   );
 });
 
 test("plan action label explains planning, failed, and locked states", () => {
-  assert.equal(planActionLabel("idle", lockState()), "Plan import sources");
-  assert.equal(planActionLabel("ready", lockState()), "Plan import sources");
-  assert.equal(planActionLabel("failed", lockState()), "Retry import source plan");
-  assert.equal(planActionLabel("planning", lockState({ planRunning: true })), "Planning import sources");
+  assert.equal(planActionLabel("idle", lockState()), "가져오기 소스 계획");
+  assert.equal(planActionLabel("ready", lockState()), "가져오기 소스 계획");
+  assert.equal(planActionLabel("failed", lockState()), "가져오기 소스 계획 다시 시도");
+  assert.equal(planActionLabel("planning", lockState({ planRunning: true })), "가져오기 소스 계획 중");
   assert.equal(
     planActionLabel("ready", lockState({ storedLoadRunning: true })),
-    "Cannot plan import sources while stored prompts are loading",
+    "저장된 프롬프트 불러오는 중에는 가져오기 소스를 계획할 수 없습니다",
   );
 });
 
 test("plan panel action label explains refresh, retry, and locked states", () => {
-  assert.equal(planPanelActionLabel("ready", true, lockState()), "Refresh import source plan");
-  assert.equal(planPanelActionLabel("failed", false, lockState()), "Retry import source plan");
+  assert.equal(planPanelActionLabel("ready", true, lockState()), "가져오기 소스 계획 새로고침");
+  assert.equal(planPanelActionLabel("failed", false, lockState()), "가져오기 소스 계획 다시 시도");
   assert.equal(
     planPanelActionLabel("planning", true, lockState({ planRunning: true })),
-    "Refreshing import source plan",
+    "가져오기 소스 계획 새로고침 중",
   );
   assert.equal(
     planPanelActionLabel("ready", true, lockState({ importRunning: true })),
-    "Cannot refresh import source plan while an import is running",
+    "가져오기 실행 중에는 가져오기 소스 계획 새로고침를 할 수 없습니다",
   );
   assert.equal(
     planPanelActionLabel("failed", false, lockState({ scanRunning: true })),
-    "Cannot retry import source plan while a scan is running",
+    "스캔 실행 중에는 가져오기 소스 계획 다시 시도를 할 수 없습니다",
   );
 });
 
 test("preview mode action label explains selected, switch, and locked states", () => {
-  assert.equal(previewModeActionLabel("latest", "latest", lockState()), "Latest prompt preview selected");
-  assert.equal(previewModeActionLabel("weakest", "latest", lockState()), "Switch to weakest prompt preview");
+  assert.equal(previewModeActionLabel("latest", "latest", lockState()), "최신 프롬프트 미리보기 선택됨");
+  assert.equal(previewModeActionLabel("weakest", "latest", lockState()), "개선 우선 프롬프트 미리보기로 전환");
   assert.equal(
     previewModeActionLabel("weakest", "latest", lockState({ scanRunning: true })),
-    "Cannot switch to weakest prompt preview while a scan is running",
+    "스캔 실행 중에는 개선 우선 프롬프트 미리보기로 전환할 수 없습니다",
   );
 });
 
 test("scan limit input label explains locked states", () => {
-  assert.equal(scanLimitInputLabel(lockState()), "Scan prompt limit");
+  assert.equal(scanLimitInputLabel(lockState()), "스캔 프롬프트 제한");
   assert.equal(
     scanLimitInputLabel(lockState({ planRunning: true })),
-    "Cannot edit scan prompt limit while an import plan is running",
+    "가져오기 계획 생성 중에는 스캔 프롬프트 제한을 편집할 수 없습니다",
   );
 });

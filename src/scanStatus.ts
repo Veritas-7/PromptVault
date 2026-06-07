@@ -4,37 +4,37 @@ export type ScanRunState = "idle" | "scanning" | "canceling" | "ready" | "failed
 export type ScanStopFailure = "not_active" | "request_failed";
 
 function countLabel(count: number, singular: string): string {
-  return `${count.toLocaleString()} ${count === 1 ? singular : `${singular}s`}`;
+  return `${count.toLocaleString()}개 ${singular}`;
 }
 
 export function scanProgressLabel(progress: ScanProgress | null): string {
-  if (!progress) return "Preparing scan progress.";
-  const source = progress.source_label ?? "Preparing source";
+  if (!progress) return "스캔 진행 상황을 준비 중입니다.";
+  const source = progress.source_label ?? "소스 준비 중";
   const fileTotal = progress.source_file_count === null
     ? progress.source_files_discovered
-      ? `discovering files · ${countLabel(progress.source_files_discovered, "file")} found`
-      : "discovering files"
-    : `${progress.source_files_seen.toLocaleString()} / ${countLabel(progress.source_file_count, "file")}`;
+      ? `파일 찾는 중 · ${countLabel(progress.source_files_discovered, "파일")} 발견`
+      : "파일 찾는 중"
+    : `${progress.source_files_seen.toLocaleString()} / ${countLabel(progress.source_file_count, "파일")}`;
   const sourcePosition = progress.source_count
-    ? `source ${progress.source_index.toLocaleString()} / ${progress.source_count.toLocaleString()}`
-    : "source pending";
-  const limit = progress.limit === null ? "" : ` · limit ${progress.limit.toLocaleString()}`;
-  return `${source}: ${fileTotal} · ${countLabel(progress.prompts_found, "prompt")} · ${sourcePosition}${limit}`;
+    ? `소스 ${progress.source_index.toLocaleString()} / ${progress.source_count.toLocaleString()}`
+    : "소스 대기 중";
+  const limit = progress.limit === null ? "" : ` · 제한 ${progress.limit.toLocaleString()}`;
+  return `${source}: ${fileTotal} · ${countLabel(progress.prompts_found, "프롬프트")} · ${sourcePosition}${limit}`;
 }
 
 export function scanRunFailureText(state: ScanRunState, hasResult: boolean): string | null {
   if (state !== "failed") return null;
   return hasResult
-    ? "Could not refresh scan results. Existing results are still shown. Check the error above, adjust the limit, or retry."
-    : "Could not scan prompts. Check the error above, adjust the limit, or retry.";
+    ? "스캔 결과를 새로고침하지 못했습니다. 기존 결과를 계속 표시합니다. 위 오류를 확인하고 제한값을 조정하거나 다시 시도하세요."
+    : "프롬프트를 스캔하지 못했습니다. 위 오류를 확인하고 제한값을 조정하거나 다시 시도하세요.";
 }
 
 export function scanStopFailureText(failure: ScanStopFailure | null): string | null {
   if (failure === "request_failed") {
-    return "Could not stop the active scan. It is still running; check the error above or try Stop again.";
+    return "실행 중인 스캔을 중지하지 못했습니다. 아직 실행 중이므로 위 오류를 확인하거나 중지를 다시 시도하세요.";
   }
   if (failure === "not_active") {
-    return "No active scan was found to stop. The scan may have already finished.";
+    return "중지할 실행 중 스캔을 찾지 못했습니다. 스캔이 이미 끝났을 수 있습니다.";
   }
   return null;
 }

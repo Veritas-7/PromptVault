@@ -170,6 +170,55 @@ function formatBytes(bytes: number): string {
   return unit === 0 ? `${bytes} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
 }
 
+function qualityBandLabel(band: string): string {
+  switch (band) {
+    case "weak":
+      return "약함";
+    case "workable":
+      return "보통";
+    case "strong":
+      return "강함";
+    default:
+      return band || "알 수 없음";
+  }
+}
+
+function qualityGapLabel(gap: string): string {
+  switch (gap) {
+    case "action_verb":
+      return "작업 동사";
+    case "context":
+      return "맥락";
+    case "constraints":
+      return "제약";
+    case "output_format":
+      return "출력 형식";
+    case "sensitive_content_risk":
+      return "민감정보 위험";
+    case "specific_goal":
+      return "구체적 목표";
+    case "too_long":
+      return "과도한 길이";
+    case "verification":
+      return "검증";
+    default:
+      return gap || "알 수 없음";
+  }
+}
+
+function riskFlagLabel(flag: string): string {
+  switch (flag) {
+    case "long_base64_like_token":
+      return "긴 토큰 형식 문자열";
+    case "private_key_marker":
+      return "비공개 키 표식";
+    case "short_secret_like_assignment":
+      return "비밀값 형태 할당";
+    default:
+      return flag || "알 수 없음";
+  }
+}
+
 function App() {
   const browserQaMode = isBrowserQaMode();
   const [scanState, setScanState] = useState<ScanState>("idle");
@@ -234,11 +283,11 @@ function App() {
   const scanStopFailureMessage = scanStopFailureText(scanStopFailure);
   const importStatesFailureMessage = importRefreshFailureText(
     importStatesState,
-    "saved import progress",
+    "저장된 가져오기 진행",
   );
   const importEventsFailureMessage = importRefreshFailureText(
     importEventsState,
-    "import activity",
+    "가져오기 기록",
   );
   const planFailureMessage = planFailureText(planState, plan !== null);
 
@@ -328,6 +377,12 @@ function App() {
     query,
     activeResultStoredFilterCount,
   );
+  const qualityGapItems = useMemo(() => {
+    return (result?.stats.top_quality_gaps ?? []).map((item) => ({
+      ...item,
+      text: qualityGapLabel(item.text),
+    }));
+  }, [result?.stats.top_quality_gaps]);
   const storedLoadFailureMessage = storedLoadFailureText(storedLoadState, storedFilterCount);
   const storedSourceSuggestions = useMemo(() => {
     const sourceLabels = storedFacetsResult?.sources.map((source) => source.text)
@@ -350,7 +405,7 @@ function App() {
     storedFacetsResult,
   );
   const displayDatabasePath =
-    result?.persistence?.database_path ?? storedFacetsResult?.database_path ?? "database not updated";
+    result?.persistence?.database_path ?? storedFacetsResult?.database_path ?? "데이터베이스 미갱신";
   const displayStoredPromptCount =
     result?.persistence?.stored_prompt_count ?? storedFacetsResult?.total_prompts ?? 0;
   const displayStoredDateCount =
@@ -620,7 +675,7 @@ function App() {
     try {
       const result = await cancelScan(runId);
       if (!result.canceled) {
-        setError("No active scan was found to stop.");
+        setError("중지할 실행 중 스캔을 찾지 못했습니다.");
         setScanStopFailure("not_active");
         setScanState("scanning");
       }
@@ -754,7 +809,7 @@ function App() {
     try {
       const next = await improvePrompt({
         prompt: prompt.text,
-        context: `${prompt.source} · ${prompt.cwd ?? "unknown workspace"}`,
+        context: `${prompt.source} · ${prompt.cwd ?? "작업공간 없음"}`,
       });
       setImprovement(next);
       setImprovementPromptId(prompt.id);
@@ -776,10 +831,10 @@ function App() {
       <section className="topbar">
         <div>
           <p className="eyebrow">PromptVault</p>
-          <h1>Agent prompt intelligence</h1>
+          <h1>에이전트 프롬프트 인텔리전스</h1>
         </div>
         <div className="actions">
-          <div className="segmented" aria-label="Preview mode" role="group">
+          <div className="segmented" aria-label="미리보기 모드" role="group">
             <button
               aria-label={previewModeActionLabel("latest", previewMode, actionLockState)}
               aria-pressed={previewMode === "latest"}
@@ -788,7 +843,7 @@ function App() {
               onClick={() => changePreviewMode("latest")}
               type="button"
             >
-              Latest
+              최신순
             </button>
             <button
               aria-label={previewModeActionLabel("weakest", previewMode, actionLockState)}
@@ -798,11 +853,11 @@ function App() {
               onClick={() => changePreviewMode("weakest")}
               type="button"
             >
-              Weakest
+              개선 우선
             </button>
           </div>
           <label className="limit-control">
-            <span>Limit</span>
+            <span>제한</span>
             <input
               aria-label={scanLimitInputLabel(actionLockState)}
               data-scan-limit="true"
@@ -811,7 +866,7 @@ function App() {
               max={MAX_SCAN_LIMIT}
               step={100}
               type="number"
-              placeholder="Required"
+              placeholder="필수"
               value={limit}
               onChange={(event) => updateScanLimit(event.currentTarget.value)}
             />
@@ -825,7 +880,7 @@ function App() {
             type="button"
           >
             <RefreshCw size={18} />
-            {scanState === "canceling" ? "Stopping" : scanState === "scanning" ? "Scanning" : "Scan"}
+            {scanState === "canceling" ? "중지 중" : scanState === "scanning" ? "스캔 중" : "스캔"}
           </button>
           {canStopScan ? (
             <button
@@ -837,7 +892,7 @@ function App() {
               type="button"
             >
               <StopCircle size={18} />
-              {scanState === "canceling" ? "Stopping" : "Stop"}
+              {scanState === "canceling" ? "중지 중" : "중지"}
             </button>
           ) : null}
           <button
@@ -849,7 +904,7 @@ function App() {
             type="button"
           >
             <Database size={18} />
-            {isStoredLoadRunning ? "Loading Stored" : "Load Stored"}
+            {isStoredLoadRunning ? "저장소 불러오는 중" : "저장소 불러오기"}
           </button>
           <button
             aria-label={planActionLabel(planState, actionLockState)}
@@ -860,7 +915,7 @@ function App() {
             type="button"
           >
             <ClipboardList size={18} />
-            {planState === "planning" ? "Planning" : "Plan"}
+            {planState === "planning" ? "계획 중" : "계획"}
           </button>
         </div>
       </section>
@@ -909,12 +964,12 @@ function App() {
 
       <section className="panel stored-filter-panel">
         <div className="panel-heading">
-          <h2>Stored Vault</h2>
+          <h2>저장소</h2>
           <div className="panel-heading-actions">
             <span data-stored-facet-summary="true">{storedFacetSummary}</span>
             <button
               aria-label={panelRefreshActionLabel(
-                "stored facet suggestions",
+                "저장소 필터 후보",
                 storedFacetsState,
                 actionLockState,
               )}
@@ -925,7 +980,7 @@ function App() {
               type="button"
             >
               <RefreshCw size={15} />
-              {storedFacetsState === "loading" ? "Loading" : "Refresh Facets"}
+              {storedFacetsState === "loading" ? "불러오는 중" : "필터 후보 새로고침"}
             </button>
           </div>
         </div>
@@ -964,30 +1019,30 @@ function App() {
           }}
         >
           <label className="stored-filter-control">
-            <span>Text</span>
+            <span>텍스트</span>
             <input
               aria-label={storedFilterInputLabel("text", actionLockState)}
               data-stored-filter-query="true"
               disabled={isTopLevelActionLocked}
               value={storedFilters.query}
-              placeholder="cmux, source, workspace"
+              placeholder="cmux, 소스, 작업공간"
               onChange={(event) => updateStoredFilter("query", event.currentTarget.value)}
             />
           </label>
           <label className="stored-filter-control">
-            <span>Source</span>
+            <span>소스</span>
             <input
               aria-label={storedFilterInputLabel("source", actionLockState)}
               data-stored-filter-source="true"
               disabled={isTopLevelActionLocked}
               list="stored-source-options"
               value={storedFilters.source}
-              placeholder="Any source"
+              placeholder="전체 소스"
               onChange={(event) => updateStoredFilter("source", event.currentTarget.value)}
             />
           </label>
           <label className="stored-filter-control">
-            <span>Date</span>
+            <span>날짜</span>
             <input
               aria-label={storedFilterInputLabel("date", actionLockState)}
               data-stored-filter-date="true"
@@ -999,7 +1054,7 @@ function App() {
             />
           </label>
           <label className="stored-filter-control">
-            <span>Workspace</span>
+            <span>작업공간</span>
             <input
               aria-label={storedFilterInputLabel("workspace", actionLockState)}
               data-stored-filter-workspace="true"
@@ -1018,7 +1073,7 @@ function App() {
             type="submit"
           >
             <Database size={15} />
-            Apply
+            적용
           </button>
           <button
             aria-label={storedFilterResetLabel(storedFilterCount, actionLockState)}
@@ -1028,7 +1083,7 @@ function App() {
             onClick={resetStoredFilters}
             type="button"
           >
-            Reset
+            초기화
           </button>
         </form>
         <datalist id="stored-source-options">
@@ -1051,10 +1106,10 @@ function App() {
       {importStatesResult || importStatesState === "loading" || importStatesFailureMessage ? (
         <section className="panel saved-import-panel">
           <div className="panel-heading">
-            <h2>Saved Import Progress</h2>
+            <h2>저장된 가져오기 진행</h2>
             <button
               aria-label={panelRefreshActionLabel(
-                "saved import progress",
+                "저장된 가져오기 진행",
                 importStatesState,
                 actionLockState,
               )}
@@ -1065,7 +1120,7 @@ function App() {
               type="button"
             >
               <RefreshCw size={15} />
-              {importStatesState === "loading" ? "Loading" : "Refresh"}
+              {importStatesState === "loading" ? "불러오는 중" : "새로고침"}
             </button>
           </div>
           {importStatesFailureMessage ? (
@@ -1082,25 +1137,25 @@ function App() {
             <>
               <div className="saved-import-summary">
                 <div>
-                  <span>Sources</span>
+                  <span>소스</span>
                   <strong>
                     {importStatesResult.completed_sources.toLocaleString()} /{" "}
                     {importStatesResult.total_sources.toLocaleString()}
                   </strong>
                 </div>
                 <div>
-                  <span>Files</span>
+                  <span>파일</span>
                   <strong>
                     {importStatesResult.processed_files.toLocaleString()} /{" "}
                     {importStatesResult.total_files.toLocaleString()}
                   </strong>
                 </div>
                 <div>
-                  <span>Imported Prompts</span>
+                  <span>가져온 프롬프트</span>
                   <strong>{importStatesResult.imported_prompt_count.toLocaleString()}</strong>
                 </div>
                 <div className="summary-path-card">
-                  <span>Database</span>
+                  <span>데이터베이스</span>
                   <strong>{importStatesResult.database_path}</strong>
                 </div>
               </div>
@@ -1120,18 +1175,18 @@ function App() {
                       />
                       <span>
                         {state.processed_files.toLocaleString()} / {state.total_files.toLocaleString()}
-                        {state.completed ? " · complete" : " · resumable"}
+                        {state.completed ? " · 완료" : " · 재개 가능"}
                       </span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="empty compact">No saved import cursors yet.</div>
+                <div className="empty compact">저장된 가져오기 커서가 아직 없습니다.</div>
               )}
             </>
           ) : (
             <div className="empty compact" data-empty-import-states="true">
-              {importRefreshUnavailableText(importStatesState, "saved import progress")}
+              {importRefreshUnavailableText(importStatesState, "저장된 가져오기 진행")}
             </div>
           )}
         </section>
@@ -1141,8 +1196,8 @@ function App() {
         <section className="notice" {...STATUS_NOTICE_PROPS}>
           <FileText size={18} />
           <span>
-            {displayDatabasePath} · stored {displayStoredPromptCount.toLocaleString()} · new{" "}
-            {(result.persistence?.inserted_prompt_count ?? 0).toLocaleString()} · updated{" "}
+            {displayDatabasePath} · 저장 {displayStoredPromptCount.toLocaleString()} · 신규{" "}
+            {(result.persistence?.inserted_prompt_count ?? 0).toLocaleString()} · 갱신{" "}
             {(result.persistence?.updated_prompt_count ?? 0).toLocaleString()}
           </span>
         </section>
@@ -1152,7 +1207,7 @@ function App() {
         <section className="notice secondary" {...STATUS_NOTICE_PROPS}>
           <FileText size={18} />
           <span>
-            Export {result.output_path} · preview {result.returned_prompt_count.toLocaleString()} /{" "}
+            내보내기 {result.output_path} · 미리보기 {result.returned_prompt_count.toLocaleString()} /{" "}
             {result.stats.total_prompts.toLocaleString()}
           </span>
         </section>
@@ -1175,10 +1230,10 @@ function App() {
       {importEventsResult || importEventsState === "loading" || importEventsFailureMessage ? (
         <section className="panel import-activity-panel">
           <div className="panel-heading">
-            <h2>Recent Import Activity</h2>
+            <h2>최근 가져오기 기록</h2>
             <button
               aria-label={panelRefreshActionLabel(
-                "recent import activity",
+                "최근 가져오기 기록",
                 importEventsState,
                 actionLockState,
               )}
@@ -1189,7 +1244,7 @@ function App() {
               type="button"
             >
               <RefreshCw size={15} />
-              {importEventsState === "loading" ? "Loading" : "Refresh"}
+              {importEventsState === "loading" ? "불러오는 중" : "새로고침"}
             </button>
           </div>
           {importEventsFailureMessage ? (
@@ -1206,11 +1261,11 @@ function App() {
             <>
               <div className="import-activity-summary">
                 <div>
-                  <span>Total Events</span>
+                  <span>전체 이벤트</span>
                   <strong>{importEventsResult.total_events.toLocaleString()}</strong>
                 </div>
                 <div className="summary-path-card">
-                  <span>Database</span>
+                  <span>데이터베이스</span>
                   <strong>{importEventsResult.database_path}</strong>
                 </div>
               </div>
@@ -1232,12 +1287,12 @@ function App() {
                   ))}
                 </div>
               ) : (
-                <div className="empty compact">No import activity recorded yet.</div>
+                <div className="empty compact">기록된 가져오기 활동이 아직 없습니다.</div>
               )}
             </>
           ) : (
             <div className="empty compact" data-empty-import-events="true">
-              {importRefreshUnavailableText(importEventsState, "import activity")}
+              {importRefreshUnavailableText(importEventsState, "가져오기 기록")}
             </div>
           )}
         </section>
@@ -1246,14 +1301,14 @@ function App() {
       {plan || planState === "planning" || planFailureMessage ? (
         <section className="panel plan-panel">
           <div className="panel-heading">
-            <h2>Import Plan</h2>
+            <h2>가져오기 계획</h2>
             <div className="panel-heading-actions">
               <span data-plan-status="true">
                 {plan
                   ? new Date(plan.generated_at).toLocaleString()
                   : planState === "planning"
-                    ? "planning"
-                    : "failed"}
+                    ? "계획 중"
+                    : "실패"}
               </span>
               <button
                 className="inline-action"
@@ -1264,7 +1319,7 @@ function App() {
                 type="button"
               >
                 <ClipboardList size={15} />
-                {planState === "planning" ? "Planning" : plan ? "Refresh Plan" : "Retry Plan"}
+                {planState === "planning" ? "계획 중" : plan ? "계획 새로고침" : "계획 다시 시도"}
               </button>
             </div>
           </div>
@@ -1278,26 +1333,26 @@ function App() {
             <>
               <div className="plan-summary">
                 <div>
-                  <span>Sources</span>
+                  <span>소스</span>
                   <strong>
                     {plan.available_sources} / {plan.total_sources}
                   </strong>
                 </div>
                 <div>
-                  <span>Files</span>
+                  <span>파일</span>
                   <strong>{plan.total_files.toLocaleString()}</strong>
                 </div>
                 <div>
-                  <span>Size</span>
+                  <span>크기</span>
                   <strong>{formatBytes(plan.total_bytes)}</strong>
                 </div>
                 <div>
-                  <span>Large Files</span>
+                  <span>대용량 파일</span>
                   <strong>{plan.large_file_count.toLocaleString()}</strong>
                 </div>
               </div>
               <div className="plan-toolbar">
-                <span>{selectedImportQueueSourceIds.length.toLocaleString()} selected</span>
+                <span>{selectedImportQueueSourceIds.length.toLocaleString()}개 선택됨</span>
                 <button
                   aria-label={importQueueActionLabel(
                     selectedImportQueueSourceIds.length,
@@ -1311,7 +1366,7 @@ function App() {
                   type="button"
                 >
                   <Play size={15} />
-                  {isImportRunning && importMode === "queue" ? "Running Queue" : "Run Selected"}
+                  {isImportRunning && importMode === "queue" ? "대기열 실행 중" : "선택 실행"}
                 </button>
               </div>
               <div className="plan-sources">
@@ -1376,8 +1431,8 @@ function App() {
                       >
                         <RefreshCw size={15} />
                         {isImportRunning && activeImportSourceId === source.id && importMode === "single"
-                          ? "Importing"
-                          : "Import Batch"}
+                          ? "가져오는 중"
+                          : "배치 가져오기"}
                       </button>
                       <button
                         aria-label={planSourceActionLabel(
@@ -1397,8 +1452,8 @@ function App() {
                       >
                         <Play size={15} />
                         {isImportRunning && activeImportSourceId === source.id && importMode === "continuous"
-                          ? "Running"
-                          : "Run Until Done"}
+                          ? "실행 중"
+                          : "끝까지 실행"}
                       </button>
                     </div>
                   </div>
@@ -1416,13 +1471,13 @@ function App() {
       {importResult || isImportRunning || importRunFailureMessage ? (
         <section className="panel import-panel">
           <div className="panel-heading">
-            <h2>Incremental Import</h2>
+            <h2>증분 가져오기</h2>
             <span>
               {importResult
                 ? new Date(importResult.generated_at).toLocaleString()
                 : importRunFailureMessage
-                  ? "failed"
-                  : "starting"}
+                  ? "실패"
+                  : "시작 중"}
             </span>
             {isImportRunning && (importMode === "continuous" || importMode === "queue") ? (
               <button
@@ -1434,7 +1489,7 @@ function App() {
                 type="button"
               >
                 <StopCircle size={15} />
-                {stopRequested ? "Stopping" : "Stop"}
+                {stopRequested ? "중지 중" : "중지"}
               </button>
             ) : null}
           </div>
@@ -1452,7 +1507,7 @@ function App() {
           ) : null}
           <div className="import-progress" aria-live="polite">
             <progress
-              aria-label={`${currentImportProgress.sourceLabel} import progress`}
+              aria-label={`${currentImportProgress.sourceLabel} 가져오기 진행`}
               aria-valuetext={importProgressValueText(
                 currentImportProgress.processedFiles,
                 currentImportProgress.totalFiles,
@@ -1464,23 +1519,23 @@ function App() {
           </div>
           <div className="import-summary">
             <div>
-              <span>Source</span>
+              <span>소스</span>
               <strong>{currentImportProgress.sourceLabel}</strong>
             </div>
             <div>
-              <span>Processed</span>
+              <span>처리됨</span>
               <strong>
                 {currentImportProgress.processedFiles.toLocaleString()} /{" "}
                 {currentImportProgress.totalFiles.toLocaleString()}
               </strong>
             </div>
             <div>
-              <span>Batch</span>
+              <span>배치</span>
               <strong>{currentImportProgress.batchSummary}</strong>
             </div>
             {importQueueSourceIds.length ? (
               <div>
-                <span>Queue</span>
+                <span>대기열</span>
                 <strong>
                   {Math.min(
                     completedQueueSourceCount + (isImportRunning ? 1 : 0),
@@ -1491,7 +1546,7 @@ function App() {
               </div>
             ) : null}
             <div>
-              <span>Status</span>
+              <span>상태</span>
               <strong>{importStatusLabel(importResult, importState, importMode, stopRequested)}</strong>
             </div>
           </div>
@@ -1499,9 +1554,9 @@ function App() {
             <div className="notice secondary" {...STATUS_NOTICE_PROPS}>
               <FileText size={18} />
               <span>
-                {importResult.persistence.database_path} · stored{" "}
-                {importResult.persistence.stored_prompt_count.toLocaleString()} · new{" "}
-                {importResult.persistence.inserted_prompt_count.toLocaleString()} · updated{" "}
+                {importResult.persistence.database_path} · 저장{" "}
+                {importResult.persistence.stored_prompt_count.toLocaleString()} · 신규{" "}
+                {importResult.persistence.inserted_prompt_count.toLocaleString()} · 갱신{" "}
                 {importResult.persistence.updated_prompt_count.toLocaleString()}
               </span>
             </div>
@@ -1517,33 +1572,33 @@ function App() {
       ) : null}
 
       <section className="metrics">
-        <Metric icon={<ClipboardList size={18} />} label="Prompts" value={result?.stats.total_prompts ?? 0} />
-        <Metric icon={<Search size={18} />} label="Preview" value={result?.returned_prompt_count ?? 0} />
-        <Metric icon={<FileText size={18} />} label="Files" value={result?.stats.total_files ?? 0} />
-        <Metric icon={<Brain size={18} />} label="Words" value={result?.stats.total_words ?? 0} />
+        <Metric icon={<ClipboardList size={18} />} label="프롬프트" value={result?.stats.total_prompts ?? 0} />
+        <Metric icon={<Search size={18} />} label="미리보기" value={result?.returned_prompt_count ?? 0} />
+        <Metric icon={<FileText size={18} />} label="파일" value={result?.stats.total_files ?? 0} />
+        <Metric icon={<Brain size={18} />} label="단어" value={result?.stats.total_words ?? 0} />
         <Metric
           icon={<ShieldCheck size={18} />}
-          label="Quality"
+          label="품질"
           value={(result?.stats.average_quality ?? 0).toFixed(1)}
         />
         <Metric
           icon={<AlertTriangle size={18} />}
-          label="Weak"
+          label="약함"
           value={result?.stats.weak_prompt_count ?? 0}
         />
         <Metric
           icon={<ShieldCheck size={18} />}
-          label="DB Stored"
+          label="DB 저장"
           value={displayStoredPromptCount}
         />
-        <Metric icon={<FileText size={18} />} label="Dates" value={displayStoredDateCount} />
+        <Metric icon={<FileText size={18} />} label="날짜" value={displayStoredDateCount} />
       </section>
 
       <section className="workspace">
         <aside className="panel sources-panel">
           <div className="panel-heading">
-            <h2>Sources</h2>
-            <span>{result?.generated_at ? new Date(result.generated_at).toLocaleString() : "not scanned"}</span>
+            <h2>소스</h2>
+            <span>{result?.generated_at ? new Date(result.generated_at).toLocaleString() : "아직 스캔 안 함"}</span>
           </div>
           <div className="sources">
             {sourceSummaries.length ? (
@@ -1553,7 +1608,7 @@ function App() {
                     <strong>{source.label}</strong>
                     <span>{source.root_path}</span>
                     <span className="source-meta">
-                      Q {source.average_quality.toFixed(1)} · Weak {source.weak_prompt_count}
+                      품질 {source.average_quality.toFixed(1)} · 약함 {source.weak_prompt_count}
                     </span>
                   </div>
                   <div
@@ -1579,34 +1634,34 @@ function App() {
 
         <section className="panel analysis-panel">
           <div className="panel-heading">
-            <h2>Frequency</h2>
-            <span>words and prompt starts</span>
+            <h2>통계</h2>
+            <span>단어와 프롬프트 시작 구문</span>
           </div>
           <div className="frequency-grid">
             <FrequencyColumn
-              title="Words"
+              title="단어"
               items={result?.stats.top_words ?? []}
-              emptyText={frequencyEmptyText(hasPromptResult, "Words")}
+              emptyText={frequencyEmptyText(hasPromptResult, "단어")}
             />
             <FrequencyColumn
-              title="Phrases"
+              title="시작 구문"
               items={result?.stats.top_phrases ?? []}
-              emptyText={frequencyEmptyText(hasPromptResult, "Phrases")}
+              emptyText={frequencyEmptyText(hasPromptResult, "시작 구문")}
             />
             <FrequencyColumn
-              title="Repeats"
+              title="반복"
               items={result?.stats.repeated_prompts ?? []}
-              emptyText={frequencyEmptyText(hasPromptResult, "Repeats")}
+              emptyText={frequencyEmptyText(hasPromptResult, "반복")}
             />
             <FrequencyColumn
-              title="Dates"
+              title="날짜"
               items={result?.stats.prompts_by_date ?? []}
-              emptyText={frequencyEmptyText(hasPromptResult, "Dates")}
+              emptyText={frequencyEmptyText(hasPromptResult, "날짜")}
             />
             <FrequencyColumn
-              title="Quality gaps"
-              items={result?.stats.top_quality_gaps ?? []}
-              emptyText={frequencyEmptyText(hasPromptResult, "Quality gaps")}
+              title="품질 보완점"
+              items={qualityGapItems}
+              emptyText={frequencyEmptyText(hasPromptResult, "품질 보완점")}
             />
           </div>
         </section>
@@ -1615,25 +1670,25 @@ function App() {
       <section className="prompt-grid">
         <section className="panel prompt-list-panel">
           <div className="panel-heading">
-            <h2>Prompts</h2>
+            <h2>프롬프트</h2>
             <span>
               {result
-                ? `${result.returned_prompt_count.toLocaleString()} loaded${
+                ? `${result.returned_prompt_count.toLocaleString()}개 로드됨${
                     result.prompts_truncated
                       ? result.preview_sort === "quality_asc"
-                        ? " · weakest preview"
-                        : " · latest preview"
+                        ? " · 개선 우선 미리보기"
+                        : " · 최신순 미리보기"
                       : ""
                   }`
-                : "not loaded"}
+                : "아직 로드 안 됨"}
             </span>
             <div className="searchbox">
               <Search size={16} />
               <input
-                aria-label="Filter prompts"
+                aria-label="프롬프트 필터"
                 data-prompt-filter="true"
                 value={query}
-                placeholder="Filter"
+                placeholder="필터"
                 onChange={(event) => updatePromptFilter(event.currentTarget.value)}
               />
             </div>
@@ -1654,16 +1709,16 @@ function App() {
                 type="button"
               >
                 <span className="prompt-meta">
-                  {prompt.source} · {prompt.word_count} words
+                  {prompt.source} · {prompt.word_count.toLocaleString()}개 단어
                 </span>
                 <span className={`quality-pill ${prompt.quality.band}`}>
-                  {prompt.quality.score} · {prompt.quality.band}
+                  {prompt.quality.score} · {qualityBandLabel(prompt.quality.band)}
                 </span>
                 <strong>{oneLine(prompt.text)}</strong>
                 {prompt.risk_flags.length ? (
                   <span className="risk">
                     <AlertTriangle size={13} />
-                    {prompt.risk_flags.join(", ")}
+                    {prompt.risk_flags.map(riskFlagLabel).join(", ")}
                   </span>
                 ) : null}
               </button>
@@ -1678,7 +1733,7 @@ function App() {
 
         <section className="panel detail-panel">
           <div className="panel-heading">
-            <h2>Selected</h2>
+            <h2>선택 항목</h2>
             <button
               aria-label={improvementActionLabel(selectedPrompt !== null, improving, actionLockState)}
               data-run-improve="true"
@@ -1687,7 +1742,7 @@ function App() {
               type="button"
             >
               <Sparkles size={17} />
-              {improving ? "Improving" : "Improve"}
+              {improving ? "추천 생성 중" : "추천 생성"}
             </button>
           </div>
           {selectedPrompt ? (
@@ -1698,10 +1753,10 @@ function App() {
                 role="group"
               >
                 <span>{selectedPrompt.source}</span>
-                <span>{selectedPrompt.timestamp ?? "unknown time"}</span>
-                <span>{selectedPrompt.cwd ?? "unknown workspace"}</span>
+                <span>{selectedPrompt.timestamp ?? "시간 없음"}</span>
+                <span>{selectedPrompt.cwd ?? "작업공간 없음"}</span>
                 <span>
-                  {selectedPrompt.quality.score} · {selectedPrompt.quality.band}
+                  {selectedPrompt.quality.score} · {qualityBandLabel(selectedPrompt.quality.band)}
                 </span>
               </div>
               {selectedPrompt.quality.suggestions.length ? (
@@ -1722,7 +1777,7 @@ function App() {
 
         <section className="panel improve-panel">
           <div className="panel-heading">
-            <h2>Recommendation</h2>
+            <h2>추천</h2>
             <span>{activeImprovement?.provider ?? "local/GLM"}</span>
           </div>
           {improvementFailureMessage ? (
@@ -1749,17 +1804,19 @@ function App() {
                 </strong>
                 {activeImprovement.quality_delta.resolved_gaps.length ? (
                   <p>
-                    Resolved:{" "}
+                    해결됨:{" "}
                     {activeImprovement.quality_delta.resolved_gaps
                       .slice(0, 4)
+                      .map(qualityGapLabel)
                       .join(", ")}
                   </p>
                 ) : (
                   <p>
-                    Remaining:{" "}
+                    남음:{" "}
                     {activeImprovement.quality_delta.remaining_gaps
                       .slice(0, 4)
-                      .join(", ") || "none"}
+                      .map(qualityGapLabel)
+                      .join(", ") || "없음"}
                   </p>
                 )}
               </div>

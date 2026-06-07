@@ -80,36 +80,36 @@ test("active stored prompt filter count ignores whitespace", () => {
 });
 
 test("stored filter reset label explains disabled and active states", () => {
-  assert.equal(storedFilterResetLabel(0, lockState()), "No stored filters to reset");
+  assert.equal(storedFilterResetLabel(0, lockState()), "초기화할 저장소 필터 없음");
   assert.equal(
     storedFilterResetLabel(2, lockState({ importRunning: true })),
-    "Cannot reset stored filters while an import is running",
+    "가져오기 실행 중에는 저장소 필터를 초기화할 수 없습니다",
   );
-  assert.equal(storedFilterResetLabel(1, lockState()), "Reset 1 stored filter");
-  assert.equal(storedFilterResetLabel(3, lockState()), "Reset 3 stored filters");
+  assert.equal(storedFilterResetLabel(1, lockState()), "저장소 필터 1개 초기화");
+  assert.equal(storedFilterResetLabel(3, lockState()), "저장소 필터 3개 초기화");
 });
 
 test("stored filter apply label explains unfiltered, active, and locked states", () => {
-  assert.equal(storedFilterApplyLabel(0, lockState()), "Load stored prompts without filters");
-  assert.equal(storedFilterApplyLabel(1, lockState()), "Apply 1 stored filter");
-  assert.equal(storedFilterApplyLabel(3, lockState()), "Apply 3 stored filters");
+  assert.equal(storedFilterApplyLabel(0, lockState()), "필터 없이 저장 프롬프트 불러오기");
+  assert.equal(storedFilterApplyLabel(1, lockState()), "저장소 필터 1개 적용");
+  assert.equal(storedFilterApplyLabel(3, lockState()), "저장소 필터 3개 적용");
   assert.equal(
     storedFilterApplyLabel(2, lockState({ scanRunning: true })),
-    "Cannot apply stored filters while a scan is running",
+    "스캔 실행 중에는 저장소 필터를 적용할 수 없습니다",
   );
 });
 
 test("stored filter input labels explain field and locked state", () => {
-  assert.equal(storedFilterInputLabel("text", lockState()), "Stored Vault text filter");
-  assert.equal(storedFilterInputLabel("source", lockState()), "Stored Vault source filter");
-  assert.equal(storedFilterInputLabel("date", lockState()), "Stored Vault date filter");
-  assert.equal(storedFilterInputLabel("workspace", lockState()), "Stored Vault workspace filter");
+  assert.equal(storedFilterInputLabel("text", lockState()), "저장소 텍스트 필터");
+  assert.equal(storedFilterInputLabel("source", lockState()), "저장소 소스 필터");
+  assert.equal(storedFilterInputLabel("date", lockState()), "저장소 날짜 필터");
+  assert.equal(storedFilterInputLabel("workspace", lockState()), "저장소 작업공간 필터");
   assert.equal(
     storedFilterInputLabel("text", lockState({ storedLoadRunning: true })),
-    "Cannot edit Stored Vault text filter while stored prompts are loading",
+    "저장된 프롬프트 불러오는 중에는 저장소 텍스트 필터를 편집할 수 없습니다",
   );
   assert.equal(
     storedFilterInputLabel("workspace", lockState({ improvementRunning: true })),
-    "Cannot edit Stored Vault workspace filter while an improvement is running",
+    "프롬프트 추천 생성 중에는 저장소 작업공간 필터를 편집할 수 없습니다",
   );
 });

@@ -34,26 +34,33 @@ export function activeStoredPromptFilterCount(filters: StoredPromptFilters): num
 
 export function storedFilterResetLabel(activeFilterCount: number, lockState: ActionLockState): string {
   const reason = activeActionLockReason(lockState);
-  if (reason) return `Cannot reset stored filters while ${reason}`;
-  if (activeFilterCount === 0) return "No stored filters to reset";
-  if (activeFilterCount === 1) return "Reset 1 stored filter";
-  return `Reset ${activeFilterCount.toLocaleString()} stored filters`;
+  if (reason) return `${reason}에는 저장소 필터를 초기화할 수 없습니다`;
+  if (activeFilterCount === 0) return "초기화할 저장소 필터 없음";
+  if (activeFilterCount === 1) return "저장소 필터 1개 초기화";
+  return `저장소 필터 ${activeFilterCount.toLocaleString()}개 초기화`;
 }
 
 export function storedFilterApplyLabel(activeFilterCount: number, lockState: ActionLockState): string {
   const reason = activeActionLockReason(lockState);
-  if (reason) return `Cannot apply stored filters while ${reason}`;
-  if (activeFilterCount === 0) return "Load stored prompts without filters";
-  if (activeFilterCount === 1) return "Apply 1 stored filter";
-  return `Apply ${activeFilterCount.toLocaleString()} stored filters`;
+  if (reason) return `${reason}에는 저장소 필터를 적용할 수 없습니다`;
+  if (activeFilterCount === 0) return "필터 없이 저장 프롬프트 불러오기";
+  if (activeFilterCount === 1) return "저장소 필터 1개 적용";
+  return `저장소 필터 ${activeFilterCount.toLocaleString()}개 적용`;
 }
 
 export function storedFilterInputLabel(fieldLabel: string, lockState: ActionLockState): string {
   const reason = activeActionLockReason(lockState);
+  const labelMap: Record<string, string> = {
+    date: "날짜",
+    source: "소스",
+    text: "텍스트",
+    workspace: "작업공간",
+  };
+  const label = labelMap[fieldLabel] ?? fieldLabel;
   if (reason) {
-    return `Cannot edit Stored Vault ${fieldLabel} filter while ${reason}`;
+    return `${reason}에는 저장소 ${label} 필터를 편집할 수 없습니다`;
   }
-  return `Stored Vault ${fieldLabel} filter`;
+  return `저장소 ${label} 필터`;
 }
 
 export function storedPromptLoadOptions(

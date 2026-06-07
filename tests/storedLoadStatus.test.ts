@@ -11,7 +11,7 @@ test("stored load failure text is only shown for failed loads", () => {
 
   assert.equal(
     storedLoadFailureText(failed, 0),
-    "Could not load stored prompts. Check the error above and retry.",
+    "저장된 프롬프트를 불러오지 못했습니다. 위 오류를 확인한 뒤 다시 시도하세요.",
   );
   assert.equal(storedLoadFailureText("ready", 0), null);
 });
@@ -19,7 +19,7 @@ test("stored load failure text is only shown for failed loads", () => {
 test("stored load failure text accounts for active filters", () => {
   assert.equal(
     storedLoadFailureText("failed", 2),
-    "Could not load stored prompts with the current filters. Check the error above, adjust filters, or retry.",
+    "현재 필터로 저장된 프롬프트를 불러오지 못했습니다. 위 오류를 확인하고 필터를 조정하거나 다시 시도하세요.",
   );
 });
 

@@ -26,28 +26,28 @@ function event(overrides: Partial<ImportEvent> = {}): ImportEvent {
 }
 
 test("import event status distinguishes resumable, empty, and complete batches", () => {
-  assert.equal(importEventStatusLabel(event()), "resumable");
-  assert.equal(importEventStatusLabel(event({ batch_file_count: 0 })), "no files");
-  assert.equal(importEventStatusLabel(event({ completed: true })), "complete");
+  assert.equal(importEventStatusLabel(event()), "재개 가능");
+  assert.equal(importEventStatusLabel(event({ batch_file_count: 0 })), "파일 없음");
+  assert.equal(importEventStatusLabel(event({ completed: true })), "완료");
 });
 
 test("import event batch summary formats files and prompts", () => {
   assert.equal(
     importEventBatchSummary(event({ batch_file_count: 1234, batch_prompt_count: 5678 })),
-    "1,234 files · 5,678 prompts",
+    "1,234개 파일 · 5,678개 프롬프트",
   );
   assert.equal(
     importEventBatchSummary(event({ batch_file_count: 1, batch_prompt_count: 1 })),
-    "1 file · 1 prompt",
+    "1개 파일 · 1개 프롬프트",
   );
   assert.equal(
     importEventBatchSummary(event({ batch_file_count: 0, batch_prompt_count: 0 })),
-    "0 files · 0 prompts",
+    "0개 파일 · 0개 프롬프트",
   );
 });
 
 test("import event warning summary formats zero, singular, and plural counts", () => {
-  assert.equal(importEventWarningSummary(event({ warnings: [] })), "no warnings");
-  assert.equal(importEventWarningSummary(event({ warnings: ["one"] })), "1 warning");
-  assert.equal(importEventWarningSummary(event({ warnings: ["one", "two"] })), "2 warnings");
+  assert.equal(importEventWarningSummary(event({ warnings: [] })), "경고 없음");
+  assert.equal(importEventWarningSummary(event({ warnings: ["one"] })), "1개 경고");
+  assert.equal(importEventWarningSummary(event({ warnings: ["one", "two"] })), "2개 경고");
 });

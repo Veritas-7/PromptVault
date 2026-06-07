@@ -19,11 +19,11 @@ export function effectivePromptListMode(
 }
 
 function previewModeTitle(mode: PreviewMode): string {
-  return mode === "weakest" ? "Weakest" : "Latest";
+  return mode === "weakest" ? "개선 우선" : "최신순";
 }
 
 function previewModeDescription(mode: PreviewMode): string {
-  return mode === "weakest" ? "weakest" : "latest";
+  return mode === "weakest" ? "개선 우선" : "최신순";
 }
 
 export function shouldReloadStoredPreview(
@@ -44,7 +44,7 @@ export function pendingPreviewModeNotice(
   if (!hasPromptResult || loadedMode === null || loadedMode === pendingMode) return null;
   return `${previewModeTitle(
     pendingMode,
-  )} preview is selected. Run Scan or Load Stored to refresh the loaded prompt list; it is still showing the ${previewModeDescription(
+  )} 미리보기가 선택되었습니다. 불러온 프롬프트 목록을 갱신하려면 스캔 또는 저장소 불러오기를 실행하세요. 현재 목록은 아직 ${previewModeDescription(
     loadedMode,
-  )} preview.`;
+  )} 미리보기입니다.`;
 }

@@ -26,11 +26,11 @@ export function importStateProgressPercent(state: ImportState | null): number {
 }
 
 function countLabel(count: number, singular: string): string {
-  return `${count.toLocaleString()} ${count === 1 ? singular : `${singular}s`}`;
+  return `${count.toLocaleString()}개 ${singular}`;
 }
 
 export function importProgressValueText(processedFiles: number, totalFiles: number): string {
-  return `${processedFiles.toLocaleString()} of ${countLabel(totalFiles, "file")}`;
+  return `${processedFiles.toLocaleString()} / ${countLabel(totalFiles, "파일")}`;
 }
 
 export function importProgressDisplay(
@@ -44,15 +44,15 @@ export function importProgressDisplay(
   const fallbackLabel = fallbackSourceLabel?.trim();
   const sourceLabel = result?.state.source_label
     ?? savedState?.source_label
-    ?? (fallbackLabel ? fallbackLabel : "Selected source");
+    ?? (fallbackLabel ? fallbackLabel : "선택한 소스");
   const processedFiles = state?.processed_files ?? 0;
   const totalFiles = state?.total_files ?? fallbackTotalFiles;
   const percent = result
     ? importProgressPercent(result)
     : importStateProgressPercent(savedState);
   const batchSummary = result
-    ? `${countLabel(result.batch_file_count, "file")} · ${countLabel(result.batch_prompt_count, "prompt")}`
-    : `${countLabel(batchFileSize, "file")} per batch`;
+    ? `${countLabel(result.batch_file_count, "파일")} · ${countLabel(result.batch_prompt_count, "프롬프트")}`
+    : `배치당 ${countLabel(batchFileSize, "파일")}`;
 
   return {
     batchSummary,
@@ -69,20 +69,20 @@ export function importStatusLabel(
   mode: ImportRunMode | null,
   stopRequested: boolean,
 ): string {
-  if (runState === "failed") return "Failed";
-  if (runState === "importing" && stopRequested) return "Stopping after current batch";
-  if (runState === "importing" && mode === "queue") return "Running queue";
-  if (runState === "importing" && mode === "continuous") return "Running";
-  if (runState === "importing") return "Importing";
-  if (runState === "stopped") return "Stopped";
-  if (result?.state.completed) return "Complete";
-  if (result) return "Resumable";
-  return "Idle";
+  if (runState === "failed") return "실패";
+  if (runState === "importing" && stopRequested) return "현재 배치 후 중지 중";
+  if (runState === "importing" && mode === "queue") return "대기열 실행 중";
+  if (runState === "importing" && mode === "continuous") return "실행 중";
+  if (runState === "importing") return "가져오는 중";
+  if (runState === "stopped") return "중지됨";
+  if (result?.state.completed) return "완료";
+  if (result) return "재개 가능";
+  return "대기";
 }
 
 export function importStopActionLabel(mode: ImportRunMode | null, stopRequested: boolean): string {
-  const target = mode === "queue" ? "import queue after current source" : "import after current batch";
-  return stopRequested ? `Stopping ${target}` : `Stop ${target}`;
+  const target = mode === "queue" ? "현재 소스 후 가져오기 대기열" : "현재 배치 후 가져오기";
+  return stopRequested ? `${target} 중지 중` : `${target} 중지`;
 }
 
 export function importRunFailureText(
@@ -92,8 +92,8 @@ export function importRunFailureText(
   if (runState !== "failed") return null;
   const target = sourceLabel?.trim();
   return target
-    ? `Could not import ${target}. Check the error above and retry from the import plan.`
-    : "Could not import the selected source. Check the error above and retry from the import plan.";
+    ? `${target} 가져오기에 실패했습니다. 위 오류를 확인한 뒤 가져오기 계획에서 다시 시도하세요.`
+    : "선택한 소스를 가져오지 못했습니다. 위 오류를 확인한 뒤 가져오기 계획에서 다시 시도하세요.";
 }
 
 export function importStopNoticeText(
@@ -111,19 +111,19 @@ export function importStopNoticeText(
       Math.min(completedQueueSourceCount, queueLength),
     );
     const progressText = queueLength > 0
-      ? ` ${boundedCompletedSourceCount.toLocaleString()} of ${countLabel(queueLength, "source")} completed.`
+      ? ` ${countLabel(queueLength, "소스")} 중 ${boundedCompletedSourceCount.toLocaleString()}개 완료.`
       : "";
-    return `Import queue stopped after the current source.${progressText} Run Selected again to continue.`;
+    return `가져오기 대기열이 현재 소스 후 중지되었습니다.${progressText} 계속하려면 선택 실행을 다시 누르세요.`;
   }
 
   const target = sourceLabel?.trim();
   if (mode === "continuous") {
     return target
-      ? `Stopped importing ${target} after the current batch. Run Until Done again to resume from the saved cursor.`
-      : "Stopped importing after the current batch. Run Until Done again to resume from the saved cursor.";
+      ? `${target} 가져오기가 현재 배치 후 중지되었습니다. 저장된 커서에서 재개하려면 끝까지 실행을 다시 누르세요.`
+      : "가져오기가 현재 배치 후 중지되었습니다. 저장된 커서에서 재개하려면 끝까지 실행을 다시 누르세요.";
   }
 
   return target
-    ? `Stopped importing ${target}. Retry from the import plan to resume.`
-    : "Stopped importing the selected source. Retry from the import plan to resume.";
+    ? `${target} 가져오기가 중지되었습니다. 재개하려면 가져오기 계획에서 다시 시도하세요.`
+    : "선택한 소스 가져오기가 중지되었습니다. 재개하려면 가져오기 계획에서 다시 시도하세요.";
 }

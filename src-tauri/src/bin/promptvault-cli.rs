@@ -595,12 +595,18 @@ fn redacted_prompt_record(prompt: &PromptRecord) -> PromptRecord {
     prompt
 }
 
+fn repair_prompt_record(prompt: &PromptRecord) -> PromptRecord {
+    let mut prompt = prompt.clone();
+    prompt.text = "[REDACTED_PROMPT_TEXT]".to_string();
+    prompt
+}
+
 fn repair_json_entry(
     prompt: &PromptRecord,
     recommendation: serde_json::Value,
 ) -> serde_json::Value {
     serde_json::json!({
-        "prompt": redacted_prompt_record(prompt),
+        "prompt": repair_prompt_record(prompt),
         "recommendation": recommendation
     })
 }
@@ -983,7 +989,7 @@ mod tests {
             entry
                 .pointer("/prompt/text")
                 .and_then(serde_json::Value::as_str),
-            Some("[REDACTED_LONG_BASE64_LIKE_TOKEN]")
+            Some("[REDACTED_PROMPT_TEXT]")
         );
         assert_eq!(prompt.text, synthetic_token);
     }

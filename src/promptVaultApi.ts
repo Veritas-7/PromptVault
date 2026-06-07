@@ -158,15 +158,15 @@ async function postBridge<T>(path: string, body: unknown): Promise<T> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(
-      `PromptVault browser bridge is not reachable at ${bridgeEndpoint(
+      `PromptVault 브라우저 브리지에 연결할 수 없습니다: ${bridgeEndpoint(
         path,
-      )}. Start it with: cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174. ${message}`,
+      )}. 실행 명령: cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174. ${message}`,
     );
   }
 
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(text || `PromptVault browser bridge returned HTTP ${response.status}.`);
+    throw new Error(text || `PromptVault 브라우저 브리지가 HTTP ${response.status}를 반환했습니다.`);
   }
 
   return JSON.parse(text) as T;

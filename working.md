@@ -1,10 +1,77 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:49 KST
+Updated: 2026-06-07 18:52 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Scan stale-result failure recovery QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the quick-scan failure path when prior scan results already exist,
+  including stale-result preservation, limit-change cleanup, and retry success.
+
+Context:
+
+- Helper tests already covered `scanRunFailureText` and
+  `scanLimitChangedAfterFailure`.
+- The rendered app still needed proof that a failed scan refresh keeps the
+  prior prompt list visible and that a limit edit clears only the matching scan
+  failure state before retry.
+
+Progress:
+
+- Ran rendered browser QA with mocked `/api/scan` responses:
+  - first scan succeeded with two `Codex` prompt rows,
+  - second scan returned a forced `500`,
+  - limit edit cleared the scan failure UI while preserving the stale rows,
+  - third scan succeeded with a `Gemini temporary chats` prompt row.
+- No source fix was needed from this pass.
+
+Changes:
+
+- `working.md`
+  - Recorded quick-scan stale-result failure/recovery QA evidence and marked
+    the prior import events slice as pushed.
+
+Tests:
+
+- Scan stale-result failure recovery browser QA on preview `127.0.0.1:5202` +
+  bridge `127.0.0.1:5174`:
+  - First scan rendered `2개 로드됨` and two `Codex` rows.
+  - Forced second scan failure showed global error
+    `forced scan refresh failure` and warning
+    `스캔 결과를 새로고침하지 못했습니다. 기존 결과를 계속 표시합니다. 위 오류를 확인하고 제한값을 조정하거나 다시 시도하세요.`
+  - During failure, the two stale `Codex` rows stayed visible and no
+    `Gemini temporary chats` row appeared.
+  - Editing the scan limit to `26` cleared both the global error and scan
+    warning, returned the scan action label to `빠른 프롬프트 스캔`, and kept the
+    stale `Codex` rows visible.
+  - Retry success replaced the list with one `Gemini temporary chats` row and
+    summary `1개 로드됨`.
+  - Page width stayed within `1365 / 1365`.
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+  - Expected browser console resource log from the intentionally forced
+    `/api/scan` 500 was captured separately.
+
+Issues:
+
+- No blocker found in this QA pass.
+
+Research:
+
+- No external research. This was rendered browser QA against local preview and
+  the local browser bridge.
+
+Next Steps:
+
+- Commit and push this scan stale-result recovery QA worklog slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Import events refresh failure recovery QA
 
@@ -71,7 +138,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this import events refresh recovery QA worklog slice.
+- Completed and pushed as `c1a0100 docs: record import events refresh QA`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Import states refresh failure recovery QA

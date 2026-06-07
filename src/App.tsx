@@ -1644,6 +1644,8 @@ function App() {
                 aria-label={promptRowAriaLabel(prompt, index, filteredPrompts.length)}
                 aria-pressed={prompt.id === selectedPrompt?.id}
                 className={`prompt-row ${prompt.id === selectedPrompt?.id ? "active" : ""}`}
+                data-prompt-index={index + 1}
+                data-prompt-row="true"
                 key={prompt.id}
                 onClick={() => {
                   setSelectedId(prompt.id);

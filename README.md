@@ -54,6 +54,7 @@ cargo run --bin promptvault-cli -- import-batch --source antigravity-ide-transcr
 cargo run --bin promptvault-cli -- scan --output ~/Documents/PromptVault/all-prompts.md
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md --json
 cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
+cargo run --bin promptvault-cli -- scan --source antigravity-ide-conversation-db --output /tmp/promptvault-antigravity-ide-db.md --json
 cargo run --bin promptvault-cli -- scan --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
@@ -108,6 +109,7 @@ cargo run --bin promptvault-cli -- plan --source codex --json
 cargo run --bin promptvault-cli -- import-batch --source antigravity-ide-transcripts --files 1 --reset --json
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md --json
 cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
+cargo run --bin promptvault-cli -- scan --source antigravity-ide-conversation-db --output /tmp/promptvault-antigravity-ide-db.md --json
 cargo run --bin promptvault-cli -- scan --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json

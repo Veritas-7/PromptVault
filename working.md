@@ -3821,3 +3821,116 @@ Audit conclusion:
    background scan after browser reload.
 5. Continue looking for remaining request-overlap, double-click hazards, and
    secondary-panel empty/failure states while direct cmux QA is available.
+
+## Parser and App DB Audit - 2026-06-07 11:22 KST
+
+User clarification:
+
+- PromptVault must accurately parse and manage prompts from Codex app/CLI,
+  Antigravity, Gemini, and Claude chat/session stores, then persist them into
+  the app SQLite DB for review, filtering, and improvement.
+- Browser QA should use the existing cmux in-app browser surface and should not
+  take over visible cmux windows.
+
+Local source inventory and parser check:
+
+- `cargo run --quiet --bin promptvault-cli -- sources --json` initially
+  showed 11 configured sources: Codex, Codex CX, Claude projects,
+  Claude transcripts, Claude prompt history, Antigravity CLI transcripts,
+  Antigravity IDE transcripts, Antigravity IDE alt transcripts,
+  Antigravity prompt history, Antigravity CLI conversation DB, and Gemini
+  temporary chats.
+- `cargo run --quiet --bin promptvault-cli -- plan --json` initially showed
+  `total_sources=11`, `available_sources=11`, `total_files=27999`.
+- Sample-shape checks, without printing prompt bodies, matched the current
+  parsers:
+  - Codex/Codex CX: `response_item`, `payload.role=user`,
+    `payload.content` array, timestamp present.
+  - Claude projects: `type=user`, `message.role=user`, timestamp/session/cwd
+    present, with `isMeta=true` records skipped.
+  - Claude transcripts: `type=user` rows with string content and timestamp.
+  - Antigravity CLI/IDE transcripts: `source=USER_EXPLICIT` and
+    `type=USER_INPUT` with string content; these transcript rows do not carry
+    timestamp/session fields, so path fallback is expected.
+  - Gemini temporary chats: top-level `sessionId`, user messages in
+    `messages[]`, timestamp and message id present.
+- Codex SQLite side stores were inspected by schema only:
+  `logs_2.sqlite`, `state_5.sqlite`, `goals_1.sqlite`,
+  `memories_1.sqlite`, and `sqlite/codex-dev.db`. They hold logs,
+  thread state/goals, memory jobs, and automations, not the full chat source.
+  Codex chat truth remains `~/.codex/sessions/**/*.jsonl`.
+
+Gap found and fixed:
+
+- Local Antigravity has an IDE conversation SQLite store at
+  `~/.gemini/antigravity/conversations/*.db`.
+- That DB uses the same `steps` schema as the already-supported
+  `~/.gemini/antigravity-cli/conversations/*.db`, and the inspected local DB
+  had `step_type=14` rows.
+- Added a new source:
+  - id: `antigravity-ide-conversation-db`
+  - label: `Antigravity IDE conversation DB`
+  - root: `~/.gemini/antigravity/conversations`
+  - parser: existing read-only `AntigravityConversationSqlite` parser.
+- Renamed the CLI conversation source label to
+  `Antigravity CLI conversation DB` so stored facets can distinguish CLI and
+  IDE DB records.
+- Updated `docs/SOURCE_DISCOVERY.md`, `docs/CLI.md`, and `README.md` with the
+  new source and verification command.
+- Kept the earlier `src/App.tsx` prompt-row QA selectors:
+  `data-prompt-row="true"` and `data-prompt-index`.
+
+Persistence verification:
+
+- `cargo run --quiet --bin promptvault-cli -- plan --source antigravity-ide-conversation-db --json`:
+  `total_sources=1`, `available_sources=1`, `total_files=1`,
+  `total_bytes=1294336`.
+- `cargo run --quiet --bin promptvault-cli -- scan --source antigravity-ide-conversation-db --no-export --json`:
+  persisted 2 new prompts into
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- `cargo run --quiet --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --no-export --json`:
+  updated 10 existing CLI DB prompts to the clarified
+  `Antigravity CLI conversation DB` label.
+- SQLite facet check:
+  - `Antigravity CLI conversation DB|10`
+  - `Antigravity IDE conversation DB|2`
+- Bridge API check:
+  `POST http://127.0.0.1:5174/api/prompt-facets` returned
+  `total_prompts=88381` and both conversation DB source facets with counts
+  10 and 2.
+- After the source addition,
+  `cargo run --quiet --bin promptvault-cli -- plan --json` returned
+  `total_sources=12`, `available_sources=12`, `total_files=28000`.
+
+Tests and verification:
+
+- `cargo test --lib`: PASS, 64 tests.
+- `npm run build`: PASS.
+- `npm run check`: PASS, including 124 UI helper tests, Vite build, 64 Rust
+  library tests, 15 CLI tests, doc-tests, and clippy with `-D warnings`.
+- `git diff --check`: PASS.
+
+cmux same-surface browser note:
+
+- Existing `surface:10` was used; no new cmux browser was opened and cmux was
+  not restarted or killed.
+- `cmux tree --all` confirmed `surface:10 [browser] "PromptVault"` under the
+  existing PromptVault workspace.
+- Same-surface bridge/API verification succeeded via the app bridge endpoint,
+  but DOM-level cmux browser commands became unreliable after an eval attempt:
+  `get html`, `console list`, `errors list`, and later `navigate` timed out or
+  returned an empty document/about:blank state.
+- Because cmux runtime safety forbids restart shortcuts, browser DOM QA for the
+  final source-facet display was stopped there. The parser/storage path is
+  nevertheless verified through source inventory, real local DB scan, SQLite
+  persistence, bridge API facets, and full automated gates.
+
+Next steps:
+
+1. Commit and push this parser/source coverage slice after staged gitleaks and
+   staged diff checks.
+2. Continue same-surface browser QA only after `surface:10` responds reliably
+   again; do not restart or kill cmux.
+3. Consider a follow-up to expose `unknown-date` explicitly for Antigravity
+   conversation DB records, since the inspected `step_type=14` payloads did not
+   include reliable timestamps.

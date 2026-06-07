@@ -1517,8 +1517,14 @@ pub fn source_specs() -> Vec<SourceSpec> {
         },
         SourceSpec {
             id: "antigravity-cli-conversation-db",
-            label: "Antigravity conversation DB",
+            label: "Antigravity CLI conversation DB",
             root: home.join(".gemini/antigravity-cli/conversations"),
+            kind: SourceKind::AntigravityConversationSqlite,
+        },
+        SourceSpec {
+            id: "antigravity-ide-conversation-db",
+            label: "Antigravity IDE conversation DB",
+            root: home.join(".gemini/antigravity/conversations"),
             kind: SourceKind::AntigravityConversationSqlite,
         },
         SourceSpec {
@@ -4307,12 +4313,17 @@ mod tests {
     fn selects_requested_sources() {
         let selected = selected_source_specs(Some(&[
             "antigravity-cli-conversation-db".to_string(),
+            "antigravity-ide-conversation-db".to_string(),
             "codex".to_string(),
         ]));
 
         assert_eq!(
             selected.iter().map(|source| source.id).collect::<Vec<_>>(),
-            vec!["codex", "antigravity-cli-conversation-db"]
+            vec![
+                "codex",
+                "antigravity-cli-conversation-db",
+                "antigravity-ide-conversation-db"
+            ]
         );
     }
 

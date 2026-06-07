@@ -72,6 +72,7 @@ cargo run --bin promptvault-cli -- import-batch --source antigravity-ide-transcr
 set +e; cargo run --bin promptvault-cli -- sources --bogus; test "$?" -ne 0; set -e
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md
 cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
+cargo run --bin promptvault-cli -- scan --source antigravity-ide-conversation-db --output /tmp/promptvault-antigravity-ide-db.md --json
 cargo run --bin promptvault-cli -- scan --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
 cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json

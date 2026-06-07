@@ -1,10 +1,91 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:02 KST
+Updated: 2026-06-07 20:08 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Improve bridge loss QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the recommendation path when stored prompts load successfully, then
+  `/api/improve` fails at the network layer and the user recovers through
+  bridge recheck plus a recommendation retry.
+
+Context:
+
+- Recent QA covered mid-action browser bridge loss during stored prompt loading
+  and quick scan.
+- Older improvement QA covered HTTP 500 failures, retry success, prompt
+  selection cleanup, and in-flight locks, but not network-level bridge loss
+  during `/api/improve`.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Mocked initial bridge health, stored prompt facets, import state, import
+  events, and stored prompt loading as successful.
+- Loaded one stored prompt and verified the first improve request included the
+  selected `prompt_id`, `persist: true`, and the browser bridge database path.
+- Aborted the first `/api/improve` request with `net::ERR_FAILED`.
+- Verified disconnected bridge recovery mode, action locks, scoped
+  recommendation failure copy, bridge recheck, and successful recommendation
+  retry with persistence notice.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only improve bridge loss/recovery QA slice.
+
+Tests:
+
+- Improve bridge loss QA on preview `127.0.0.1:5223`:
+  - Initial bridge health succeeded and the browser bridge rendered connected.
+  - `저장소 불러오기` made one `/api/prompts` call and rendered the stored prompt
+    `Improve this prompt after a browser bridge outage.`
+  - First `/api/improve` call was intentionally aborted with
+    `net::ERR_FAILED`.
+  - The first improve request body included `prompt_id:
+    "prompt-improve-bridge"`, `persist: true`, and database path
+    `/tmp/promptvault-improve-bridge-loss.sqlite`.
+  - Global error showed `브라우저 브리지가 실행 중이 아닙니다`.
+  - `data-improvement-run-error` showed
+    `이 프롬프트 추천을 생성하지 못했습니다. 위 오류를 확인한 뒤 다시 시도하세요.`
+  - `data-run-scan`, `data-load-stored-prompts`, `data-run-plan`,
+    `data-scan-limit`, `data-apply-stored-filters`, and
+    `data-run-improve` were disabled while the bridge was disconnected.
+  - `data-check-browser-bridge` stayed enabled while disconnected.
+  - Clicking `data-check-browser-bridge` made a second health call, cleared the
+    global bridge error, and re-enabled `data-run-improve`.
+  - The recommendation warning stayed visible until the failed improve request
+    was retried.
+  - Retrying `추천 생성` made the second `/api/improve` call succeed, rendered
+    revised prompt text containing `concise recovery checklist`, and showed
+    `추천 이력 #77 저장됨`.
+  - Final counts: `healthCalls=2`, `promptCalls=1`, `improveCalls=2`,
+    `facetsCalls=2`, `importStatesCalls=2`, `importEventsCalls=2`.
+  - Page errors and unexpected HTTP failures: none.
+  - Diagnostics contained only the expected aborted `/api/improve`
+    `net::ERR_FAILED` console/request-failure entry.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses and a network-level request abort.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Quick scan bridge loss QA
 

@@ -75,9 +75,11 @@ export function planPanelActionLabel(
     return hasPlan ? "가져오기 소스 계획 새로고침 중" : "가져오기 소스 계획 중";
   }
 
-  const action = hasPlan ? "가져오기 소스 계획 새로고침" : "가져오기 소스 계획 다시 시도";
+  const lockedAction = hasPlan
+    ? "가져오기 소스 계획을 새로고침할"
+    : "가져오기 소스 계획을 다시 시도할";
   const reason = activeActionLockReason(lockState);
-  if (reason) return `${reason}에는 ${action}를 할 수 없습니다`;
+  if (reason) return `${reason}에는 ${lockedAction} 수 없습니다`;
 
   return hasPlan ? "가져오기 소스 계획 새로고침" : "가져오기 소스 계획 다시 시도";
 }

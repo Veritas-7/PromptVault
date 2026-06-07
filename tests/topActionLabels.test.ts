@@ -126,11 +126,11 @@ test("plan panel action label explains refresh, retry, and locked states", () =>
   );
   assert.equal(
     planPanelActionLabel("ready", true, lockState({ importRunning: true })),
-    "가져오기 실행 중에는 가져오기 소스 계획 새로고침를 할 수 없습니다",
+    "가져오기 실행 중에는 가져오기 소스 계획을 새로고침할 수 없습니다",
   );
   assert.equal(
     planPanelActionLabel("failed", false, lockState({ scanRunning: true })),
-    "스캔 실행 중에는 가져오기 소스 계획 다시 시도를 할 수 없습니다",
+    "스캔 실행 중에는 가져오기 소스 계획을 다시 시도할 수 없습니다",
   );
 });
 

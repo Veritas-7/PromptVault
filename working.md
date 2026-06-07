@@ -1,10 +1,79 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:22 KST
+Updated: 2026-06-07 18:27 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Import stop locked plan label copy
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the continuous import stop interaction and keep locked plan-refresh
+  accessibility copy grammatical while an import is active.
+
+Context:
+
+- Browser QA paused `/api/import-batch` during a continuous import, clicked
+  the active stop button, and verified the stop-request/stopped UI states.
+- That rendered flow exposed a locked plan refresh aria-label with broken
+  Korean grammar: `가져오기 소스 계획 새로고침를 할 수 없습니다`.
+
+Progress:
+
+- Confirmed continuous import stop behavior:
+  - Stop button changes to the stop-request state.
+  - Import status changes to `현재 배치 후 중지 중`, then `중지됨`.
+  - The stopped notice explains how to resume from the saved cursor.
+  - Progress label/value remain source-specific.
+- Fixed the locked plan panel refresh/retry aria-label sentence.
+- Added focused top-action helper coverage for the corrected locked refresh and
+  retry labels.
+
+Changes:
+
+- `src/topActionLabels.ts`
+  - Builds locked plan panel labels with verb phrases, e.g.
+    `가져오기 소스 계획을 새로고침할 수 없습니다`.
+- `tests/topActionLabels.test.ts`
+  - Updated locked plan refresh/retry expectations.
+
+Tests:
+
+- RED browser QA on preview `127.0.0.1:5194` + bridge
+  `127.0.0.1:5174`:
+  - Continuous import stop flow worked, but locked plan refresh aria-label was
+    `가져오기 실행 중에는 가져오기 소스 계획 새로고침를 할 수 없습니다`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/topActionLabels.test.ts`:
+  PASS, `10` tests.
+- `npm run build`: PASS.
+- Fixed browser QA on preview `127.0.0.1:5194` + bridge
+  `127.0.0.1:5174`:
+  - Locked plan refresh aria-label became
+    `가져오기 실행 중에는 가져오기 소스 계획을 새로고침할 수 없습니다`.
+  - Stop button label, disabled state, stopped notice, progress label/value,
+    and page width `1365 / 1365` were all correct.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `146` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local browser QA and
+  accessibility label inspection.
+
+Next Steps:
+
+- Commit and push this locked plan label copy slice.
+- Continue autonomous QA on the next uncovered PromptVault user flow.
 
 ## Current Slice - 2026-06-07 Saved import progress Korean labels
 
@@ -69,7 +138,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this saved import progress label slice.
+- Completed and pushed as `ce051bd fix: localize saved import progress labels`.
 - Continue autonomous QA on the next uncovered PromptVault user flow.
 
 ## Current Slice - 2026-06-07 Browser bridge recheck active-work lock

@@ -7,6 +7,7 @@ import {
   improvementFailureText,
   improvementRequestStarted,
   improvementSelectionChanged,
+  shouldClearImprovementOnPromptSelect,
 } from "../src/improvementSelection.ts";
 
 const improvement = { revised_prompt: "better" };
@@ -41,6 +42,15 @@ test("starting an improvement clears the prior recommendation", () => {
     improvement: null,
     improvementPromptId: "prompt-a",
   });
+});
+
+test("same selected prompt keeps its recommendation state", () => {
+  assert.equal(shouldClearImprovementOnPromptSelect("prompt-a", "prompt-a"), false);
+});
+
+test("different or empty selection clears recommendation state", () => {
+  assert.equal(shouldClearImprovementOnPromptSelect("prompt-b", "prompt-a"), true);
+  assert.equal(shouldClearImprovementOnPromptSelect("prompt-a", null), true);
 });
 
 test("improvement failure text is scoped to the selected prompt", () => {

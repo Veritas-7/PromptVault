@@ -34,6 +34,7 @@ import {
   improvementFailureText,
   improvementRequestStarted,
   improvementSelectionChanged,
+  shouldClearImprovementOnPromptSelect,
 } from "./improvementSelection";
 import {
   importProgressDisplay,
@@ -1862,8 +1863,10 @@ function App() {
                 data-prompt-row="true"
                 key={prompt.id}
                 onClick={() => {
+                  if (shouldClearImprovementOnPromptSelect(prompt.id, selectedPrompt?.id ?? null)) {
+                    clearImprovementPromptContext();
+                  }
                   setSelectedId(prompt.id);
-                  clearImprovementPromptContext();
                 }}
                 type="button"
               >

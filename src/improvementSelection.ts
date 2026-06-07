@@ -19,6 +19,13 @@ export function improvementRequestStarted<T>(promptId: string): {
   };
 }
 
+export function shouldClearImprovementOnPromptSelect(
+  clickedPromptId: string,
+  selectedPromptId: string | null,
+): boolean {
+  return clickedPromptId !== selectedPromptId;
+}
+
 export function improvementFailureText(
   failedPromptId: string | null,
   selectedPromptId: string | null,

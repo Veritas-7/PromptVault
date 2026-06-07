@@ -1,10 +1,118 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 02:18 KST
+Updated: 2026-06-08 02:23 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Import event progress relation validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge `/api/import-events` payloads whose event progress
+  fields disagree with the batch window before impossible event history can
+  render.
+
+Context:
+
+- Rust import events are inserted from the persisted import state and batch
+  window. `processed_files` comes from the batch end, and `completed` mirrors
+  whether that batch end reaches the source total.
+- The browser parser already rejects negative import event counters and batch
+  windows that exceed `total_files`.
+- Before this slice, it did not require `processed_files` to equal
+  `batch_start_index + batch_file_count`, nor require `completed` to match
+  whether `processed_files >= total_files`.
+- cmux/in-app browser remains excluded for this runtime. Verification used
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Identified the import event relation gap from live
+  `src/promptVaultApi.ts` and `tests/promptVaultApi.test.ts`.
+- Added RED coverage for `/api/import-events` returning
+  `batch_start_index: 2`, `batch_file_count: 3`, `processed_files: 4`,
+  `total_files: 10`, and `completed: true`.
+- Added parser relation validation requiring import event `processed_files` to
+  equal the batch end and `completed` to match whether the batch reaches
+  `total_files`.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Confirmed the temp preview QA script was removed. One matching
+  `gitleaks dir .` process was unrelated and belonged to
+  `/Users/wj/Ai/System/10_Projects/CareVault`.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Tightens `isImportEvent()` to derive `batchEndIndex`.
+  - Requires `processed_files === batch_start_index + batch_file_count`.
+  - Requires `completed === (batchEndIndex >= total_files)`.
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for import event relation
+    mismatches.
+- `working.md`
+  - Records this import event progress relation validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new import-event relation test resolved
+    instead of rejecting with `Missing expected rejection`.
+  - Result: 41 tests, 40 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 41 tests, 41 pass.
+- `npm run test:ui`:
+  - Passed: 205 tests, 205 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-gF6hjy6X.js`.
+- Import event relation browser QA on preview `127.0.0.1:5269`:
+  - Routed browser bridge requests for `/api/health`, `/api/prompt-facets`,
+    `/api/import-states`, and `/api/import-events`.
+  - `/api/import-events` returned HTTP 200 with a valid-looking event whose
+    batch end should be `5`, but `processed_files` was `4` and `completed` was
+    `true`.
+  - Passed: `가져오기 기록 새로고침에 실패했습니다` rendered, no impossible
+    `4 / 10 · 완료` or `3개 파일 · 1개 프롬프트` event row rendered, event
+    row count stayed `0`, and page errors/console errors/request failures were
+    empty.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=1`,
+    `/api/import-states=1`, `/api/import-events=1`.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 205 tests, 205 pass.
+  - Build: passed with `index-gF6hjy6X.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Cleanup checks before staging:
+  - `/tmp/promptvault_import_event_relation_qa.mjs`: absent.
+  - `ps -axo pid=,command= | rg -- '--port 526[9]|promptvault_import_event_relation_q[a]|gitleaks dir [.] --no-banner --redact'`:
+    only an unrelated CareVault `gitleaks dir .` process matched.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`.
+- Run staged whitespace/secrets checks plus GitHub auth/remote verification.
+- Commit as `fix: validate import event progress relations`, run full-tree
+  gitleaks, and push `origin main`.
+- Update this log with publication evidence and publish the docs marker.
 
 ## Current Slice - 2026-06-08 Import batch file-window validation
 

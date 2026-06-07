@@ -306,21 +306,26 @@ function isImportState(value: unknown): boolean {
 }
 
 function isImportEvent(value: unknown): boolean {
-  return isRecord(value)
-    && isNonNegativeSafeInteger(value.id)
-    && isTimestampString(value.generated_at)
-    && typeof value.source_id === "string"
-    && typeof value.source_label === "string"
-    && typeof value.root_path === "string"
-    && isNonNegativeSafeInteger(value.batch_start_index)
-    && isNonNegativeSafeInteger(value.batch_file_count)
-    && isNonNegativeSafeInteger(value.batch_prompt_count)
-    && isNonNegativeSafeInteger(value.total_files)
-    && isNonNegativeSafeIntegerAtMost(value.processed_files, value.total_files)
-    && isNonNegativeSafeIntegerRangeAtMost(value.batch_start_index, value.batch_file_count, value.total_files)
-    && typeof value.completed === "boolean"
-    && Array.isArray(value.warnings)
-    && value.warnings.every((warning) => typeof warning === "string");
+  if (!isRecord(value)
+    || !isNonNegativeSafeInteger(value.id)
+    || !isTimestampString(value.generated_at)
+    || typeof value.source_id !== "string"
+    || typeof value.source_label !== "string"
+    || typeof value.root_path !== "string"
+    || !isNonNegativeSafeInteger(value.batch_start_index)
+    || !isNonNegativeSafeInteger(value.batch_file_count)
+    || !isNonNegativeSafeInteger(value.batch_prompt_count)
+    || !isNonNegativeSafeInteger(value.total_files)
+    || !isNonNegativeSafeIntegerAtMost(value.processed_files, value.total_files)
+    || !isNonNegativeSafeIntegerRangeAtMost(value.batch_start_index, value.batch_file_count, value.total_files)
+    || typeof value.completed !== "boolean"
+    || !Array.isArray(value.warnings)
+    || !value.warnings.every((warning) => typeof warning === "string")) {
+    return false;
+  }
+  const batchEndIndex = value.batch_start_index + value.batch_file_count;
+  return value.processed_files === batchEndIndex
+    && value.completed === (batchEndIndex >= value.total_files);
 }
 
 function isPersistStats(value: unknown): boolean {

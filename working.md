@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 04:08 KST
+Updated: 2026-06-08 04:09 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -48,6 +48,18 @@ Progress:
 - Verified local/remote parity after push with
   `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
   returning `0 0`.
+- Committed and pushed the pushed-state marker:
+  `0967e02 docs: mark scan plan source-size validation pushed`.
+- Verified local/remote parity after the marker push returning `0 0`.
+
+Closeout:
+
+- The scan plan source-size validation slice is complete.
+- Browser-bridge scan plan payloads now reject source rows whose per-row
+  `large_file_count`, `largest_file_bytes`, or zero-file byte counters are
+  impossible.
+- The UI preview QA confirmed malformed source-size plan payloads surface the
+  generic bridge response-shape error and do not render the bogus plan rows.
 
 Changes:
 
@@ -97,7 +109,8 @@ Research:
 
 Next Steps:
 
-- Commit and push the pushed-state marker, then add the closeout marker.
+- Start the next autonomous PromptVault QA slice from a fresh `git status`,
+  `working.md` read, and local/remote parity check.
 
 ## Current Slice - 2026-06-08 Prompt char-count validation
 

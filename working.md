@@ -1,10 +1,74 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:41 KST
+Updated: 2026-06-07 18:44 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Stored facet refresh failure recovery QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify a manual secondary-panel refresh failure/recovery path for stored
+  filter candidates.
+
+Context:
+
+- Recent QA covered plan refresh failure/recovery, scan cancel, stored filters,
+  import stop, and accessibility labels.
+- Stored facet helper tests existed, but the rendered manual refresh failure
+  and retry-success path needed direct browser verification.
+
+Progress:
+
+- Ran rendered browser QA with mocked `/api/prompt-facets` responses:
+  - initial quiet load succeeded with `12` stored prompts,
+  - manual refresh returned a forced `500`,
+  - second manual refresh succeeded with `27` stored prompts.
+- No source fix was needed from this pass.
+
+Changes:
+
+- `working.md`
+  - Recorded stored facet refresh failure/recovery QA evidence and marked the
+    prior QA slice as pushed.
+
+Tests:
+
+- Stored facet refresh recovery browser QA on preview `127.0.0.1:5199` +
+  bridge `127.0.0.1:5174`:
+  - Initial summary rendered
+    `12개 저장됨, 소스 1개, 날짜 1개, 작업공간 1개`.
+  - Forced refresh failure preserved the stale summary, showed global error
+    `forced stored facet refresh failure`, and showed panel warning
+    `저장소 필터 후보를 새로고침하지 못했습니다. 필터 후보가 오래되었을 수 있습니다.`
+  - Retry success updated the summary to
+    `27개 저장됨, 소스 2개, 날짜 2개, 작업공간 2개`.
+  - Retry success cleared both global error and panel warning.
+  - Refresh aria-label/text stayed `저장소 필터 후보 새로고침` /
+    `필터 후보 새로고침`.
+  - Page width stayed within `1365 / 1365`.
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+  - Expected browser console resource log from the intentionally forced
+    `/api/prompt-facets` 500 was captured separately.
+
+Issues:
+
+- No blocker found in this QA pass.
+
+Research:
+
+- No external research. This was rendered browser QA against local preview and
+  the local browser bridge.
+
+Next Steps:
+
+- Commit and push this stored facet refresh recovery QA worklog slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Plan refresh failure recovery QA
 
@@ -66,7 +130,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this plan failure/recovery QA worklog slice.
+- Completed and pushed as `6c42b8c docs: record plan failure recovery QA`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Scan cancel and stored filter rendered QA

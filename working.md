@@ -1,12 +1,124 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 07:03 KST
+Updated: 2026-06-08 07:10 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Average words aggregate validation
+## Current Slice - 2026-06-08 Untruncated scan quality-average validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose full, untruncated prompt
+  rows disagree with `stats.average_quality`.
+
+Context:
+
+- The previous slices tightened browser-bridge metadata, source, timestamp,
+  scan-run, persistence, frequency-counter, empty aggregate, untruncated
+  word-total, and average-words contracts.
+- Rust `build_stats` derives `average_quality` from every prompt row's
+  `quality.score`, using 0 only when there are no prompts.
+- The parser validates `average_quality` is finite and within the quality cap,
+  but it can still accept a malformed untruncated scan whose aggregate quality
+  average does not match the returned prompt rows.
+- This validation should apply only when `prompts_truncated` is false, because
+  truncated scan previews intentionally omit rows needed to recompute full
+  aggregate quality.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the direct parent project policy and PromptVault README verification
+  commands.
+- Identified the next narrow hardening target: untruncated scan
+  `stats.average_quality` consistency with returned prompt rows.
+- Added a RED API test for an untruncated scan result whose
+  `stats.average_quality` disagrees with otherwise-consistent prompt row
+  quality scores and aggregate counts.
+- Confirmed RED first: focused API suite failed 98/99 only on the new
+  missing-rejection case.
+- Added parser validation requiring untruncated scan results to keep
+  `stats.average_quality` equal to the returned prompt rows' quality-score
+  average.
+- Confirmed GREEN after the parser change: focused API suite passes 99/99.
+- Production build caught a TypeScript narrowing issue in the new helper;
+  changed `isPromptQuality` to a type predicate and re-ran focused API and
+  build successfully.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed untruncated scan result with
+  `stats.average_quality: 90` but returned prompt rows averaging 42 surfaced
+  sanitized global and scan-failure UI, and the bad aggregate/prompt payload was
+  not rendered.
+- Removed the temporary preview QA script from
+  `/tmp/promptvault_average_quality_qa.mjs`.
+- Confirmed `/tmp/promptvault_average_quality_qa.mjs` is absent and preview
+  port `5304` has no listener after the server wrapper stopped the server.
+- Ran full check successfully after preview QA.
+- Verified touched-file whitespace with `git diff --check`.
+- Re-verified repo root, branch status, `HEAD...origin/main` parity `0 0`,
+  and `origin` remotes before staging.
+- Verified the GitHub target repository is private:
+  `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `visibility: PRIVATE` and `isPrivate: true`.
+- Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`; staged secret scan passed.
+
+Changes:
+
+- `src/promptVaultApi.ts`: rejects untruncated scan results whose returned
+  prompt rows do not average to `stats.average_quality`; `isPromptQuality`
+  now narrows to `PromptQuality` for parser helper reuse.
+- `tests/promptVaultApi.test.ts`: adds the untruncated average-quality mismatch
+  rejection case for browser-bridge scan results.
+
+Tests:
+
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 98/99 only on the new untruncated average-quality mismatch case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 99/99.
+- Initial `npm run build` after the helper failed with TS18046 because
+  `prompt.quality` was still `unknown`; the type predicate fix addressed it.
+- `npm run build` passed after the type predicate fix.
+- `npm run test:ui` passed 263/263 on the final code.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5304" --port 5304 --timeout 30 node /tmp/promptvault_average_quality_qa.mjs`
+  passed.
+- Cleanup: `/tmp/promptvault_average_quality_qa.mjs` absent; port `5304` free.
+- `npm run check` passed: UI tests 263/263, production build, Rust lib tests
+  84/84, CLI tests 16/16, and clippy with `-D warnings`.
+- Pre-staging verification: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; repo root/status/remotes/parity checked clean with only the three
+  intended files modified; temp script absent and port `5304` free.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact`
+  passed.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Re-stage the `working.md` scan note, rerun staged secret scan, commit,
+  full-tree secret scan, push, and verify origin parity.
+
+## Previous Slice - 2026-06-08 Average words aggregate validation
 
 Current Goal:
 

@@ -11,6 +11,7 @@ import type {
   ImportEventsResult,
   ImportStatesResult,
   ImproveResult,
+  PromptQuality,
   ScanPlan,
   ScanProgress,
   ScanResult,
@@ -268,7 +269,7 @@ function isPreviewSortString(value: unknown): value is string {
   return value === "latest" || value === "quality_asc";
 }
 
-function isPromptQuality(value: unknown): boolean {
+function isPromptQuality(value: unknown): value is PromptQuality {
   return isRecord(value)
     && isQualityScore(value.score)
     && isNonBlankString(value.band)
@@ -576,6 +577,20 @@ function isUntruncatedPromptWordTotal(value: Record<string, unknown>): boolean {
   return totalWords === value.stats.total_words;
 }
 
+function isUntruncatedPromptAverageQuality(value: Record<string, unknown>): boolean {
+  if (value.prompts_truncated !== false) return true;
+  if (!Array.isArray(value.prompts) || !isRecord(value.stats)) return false;
+  let totalQuality = 0;
+  for (const prompt of value.prompts) {
+    if (!isRecord(prompt) || !isPromptQuality(prompt.quality)) return false;
+    totalQuality += prompt.quality.score;
+    if (!Number.isSafeInteger(totalQuality)) return false;
+  }
+  const expectedAverageQuality = value.prompts.length === 0 ? 0 : totalQuality / value.prompts.length;
+  return isNonNegativeFiniteNumber(value.stats.average_quality)
+    && Math.abs(value.stats.average_quality - expectedAverageQuality) <= 1e-9;
+}
+
 function isScanOutputPathState(outputPath: unknown, markdownWritten: unknown): boolean {
   if (markdownWritten !== true && markdownWritten !== false) return false;
   if (outputPath === null) return markdownWritten === false;
@@ -767,6 +782,7 @@ function parseScanResult(value: unknown): ScanResult {
     || !isReturnedPromptCount(value.returned_prompt_count, value.prompts, value.stats)
     || !isPromptTruncationState(value.prompts_truncated, value.returned_prompt_count, value.stats)
     || !isUntruncatedPromptWordTotal(value)
+    || !isUntruncatedPromptAverageQuality(value)
     || !isPreviewSortString(value.preview_sort)
     || typeof value.markdown_included !== "boolean"
     || typeof value.markdown_written !== "boolean"

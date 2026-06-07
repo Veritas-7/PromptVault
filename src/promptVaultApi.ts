@@ -249,6 +249,12 @@ function isPromptQuality(value: unknown): boolean {
     && isStringArray(value.suggestions);
 }
 
+function isPromptCharCount(text: unknown, charCount: unknown): boolean {
+  return typeof text === "string"
+    && isNonNegativeSafeInteger(charCount)
+    && Array.from(text).length === charCount;
+}
+
 function isPromptRecord(value: unknown): boolean {
   return isRecord(value)
     && typeof value.id === "string"
@@ -259,7 +265,7 @@ function isPromptRecord(value: unknown): boolean {
     && (typeof value.cwd === "undefined" || typeof value.cwd === "string" || value.cwd === null)
     && typeof value.text === "string"
     && isNonNegativeSafeInteger(value.word_count)
-    && isNonNegativeSafeInteger(value.char_count)
+    && isPromptCharCount(value.text, value.char_count)
     && typeof value.hash === "string"
     && isStringArray(value.risk_flags)
     && isPromptQuality(value.quality);

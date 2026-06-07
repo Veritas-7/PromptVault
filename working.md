@@ -1,10 +1,99 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 03:49 KST
+Updated: 2026-06-08 03:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Prompt char-count validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/load payloads whose prompt row `char_count` does
+  not match the actual prompt `text` before the UI can load misleading prompt
+  metadata.
+
+Context:
+
+- Rust creates `PromptRecord.char_count` with `text.chars().count()`.
+- The frontend parser currently accepts any nonnegative safe integer for
+  `char_count`.
+- Browser-bridge payload validation should reject row-level prompt metadata
+  that Rust cannot produce.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the previous scan date bucket aggregate slice is pushed and clean
+  at `40a0bda`.
+- Verified local/remote parity from clean `main...origin/main` with
+  `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
+  returning `0 0`.
+- Confirmed no project-local `AGENTS.md` or `design.md`; applicable parent
+  `../AGENTS.md` requires project-local verification, explicit staging,
+  GitHub privacy checks, and full-tree gitleaks before push.
+- Added RED coverage for `/api/scan` returning prompt text
+  `Improve this prompt.` with impossible `char_count: 999`.
+- Verified the focused API test fails before the guard.
+- Added parser validation requiring prompt `char_count` to match the actual
+  prompt text length.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified the broader UI suite, production build, and preview browser-bridge
+  malformed prompt char-count path.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for prompt `char_count`
+    mismatching prompt `text`.
+- `src/promptVaultApi.ts`
+  - Adds `isPromptCharCount()` and uses it in `isPromptRecord()`.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new prompt char-count mismatch test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 51 tests, 50 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 51 tests, 51 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 215 tests, 215 pass.
+- Build:
+  - `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-CFRH5CiN.js`.
+- Preview QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5279" --port 5279 node /tmp/promptvault_prompt_char_count_qa.mjs`
+  - Passed. The mocked bridge returned a prompt row with text
+    `Improve this prompt.` and `char_count: 999`; the UI showed the generic
+    malformed bridge-response error and did not render the bogus prompt or
+    source rows.
+  - Removed `/tmp/promptvault_prompt_char_count_qa.mjs` after the run.
+- Full check:
+  - `npm run check`
+  - Passed. This included `npm run test:ui` (215 tests), `npm run build`,
+    `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit and push the verified slice if cleanup and staged safety checks stay
+  clean.
 
 ## Current Slice - 2026-06-08 Scan date bucket aggregate validation
 

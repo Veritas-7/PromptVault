@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { bridgeEndpoint, browserBridgeUnavailableMessage, hasTauriInvoke } from "./browserBridge";
+import { bridgeEndpoint, browserBridgeUnavailableMessage, hasTauriInvoke } from "./browserBridge.ts";
 import type {
   CancelScanResult,
   ImportBatchResult,
@@ -172,5 +172,9 @@ async function postBridge<T>(path: string, body: unknown): Promise<T> {
     throw new Error(text || `PromptVault 브라우저 브리지가 HTTP ${response.status}를 반환했습니다.`);
   }
 
-  return JSON.parse(text) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("PromptVault 브라우저 브리지 응답을 JSON으로 해석하지 못했습니다.");
+  }
 }

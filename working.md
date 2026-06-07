@@ -1,10 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 21:00 KST
+Updated: 2026-06-07 21:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Malformed bridge JSON handling
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Improve browser-bridge robustness when an endpoint returns HTTP 200 with a
+  malformed JSON body.
+
+Context:
+
+- Recent QA covered bridge unavailable, initial timeout, and mid-action bridge
+  loss states.
+- A remaining edge was malformed successful bridge responses: `postBridge`
+  parsed JSON directly, so a bad response body surfaced raw parser text such as
+  `Unexpected token`.
+- This slice uses TDD: add a failing API-level test first, then make the
+  smallest implementation change and verify with unit, build, and preview QA.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added API-level coverage for malformed browser bridge JSON responses.
+- Updated browser-bridge API parsing to throw stable PromptVault UI copy
+  instead of raw JSON parser text.
+- Adjusted `promptVaultApi.ts`'s local `browserBridge` import to a `.ts`
+  specifier so the Node test runner can import the module directly.
+- Ran targeted RED/GREEN, full UI/unit tests, production build, browser QA, and
+  the full project check.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Catches JSON parsing failures from successful bridge responses and throws
+    `PromptVault 브라우저 브리지 응답을 JSON으로 해석하지 못했습니다.`
+  - Uses `./browserBridge.ts` for the local import so direct Node tests can
+    resolve it.
+- `tests/promptVaultApi.test.ts`
+  - Adds coverage that `scanPrompts` reports malformed bridge JSON without raw
+    `Unexpected token` or `SyntaxError` copy.
+- `working.md`
+  - Records this malformed bridge JSON handling slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - First run hit Node ESM resolution before the assertion because
+    `promptVaultApi.ts` imported extensionless `./browserBridge`.
+  - After changing the import to `./browserBridge.ts`, the test failed for the
+    intended reason: it received raw parser copy
+    `Unexpected token 'o', "not json" is not valid JSON` instead of
+    PromptVault bridge copy.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 1 test, 1 pass.
+- `npm run test:ui`:
+  - Passed: 156 tests, 156 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-BjiwnYSs.js`.
+- Malformed scan response browser QA on preview `127.0.0.1:5234`:
+  - Initial browser bridge health and quiet refresh endpoints returned valid
+    JSON.
+  - `/api/scan` returned HTTP 200 with body `not json`.
+  - Global error rendered
+    `PromptVault 브라우저 브리지 응답을 JSON으로 해석하지 못했습니다.`
+  - `data-scan-run-error` stayed visible with retryable first-scan failure
+    guidance.
+  - UI did not expose `Unexpected token` or `SyntaxError`.
+  - Bridge recheck stayed available.
+  - Final counts: `healthCalls=1`, `facetsCalls=2`,
+    `importStatesCalls=1`, `importEventsCalls=1`, `scanCalls=1`,
+    `scanProgressCalls=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 156 tests, 156 pass.
+  - Build: passed with the same `index-BjiwnYSs.js` artifact.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Commit and push this robustness fix after staged diff and secret checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Initial bridge timeout recovery QA
 

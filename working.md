@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 04:17 KST
+Updated: 2026-06-08 04:19 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -50,6 +50,18 @@ Progress:
 - Verified local/remote parity after push with
   `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
   returning `0 0`.
+- Committed and pushed the pushed-state marker:
+  `a9c786d docs: mark inactive scan progress validation pushed`.
+- Verified local/remote parity after the marker push returning `0 0`.
+
+Closeout:
+
+- The inactive scan-progress validation slice is complete.
+- Browser-bridge scan-progress payloads now reject inactive snapshots carrying
+  stale source, counter, or limit data instead of the zeroed Rust inactive
+  shape.
+- The UI preview QA confirmed malformed inactive progress responses do not
+  render stale `Codex` source/counter text during an in-flight scan.
 
 Changes:
 
@@ -99,7 +111,8 @@ Research:
 
 Next Steps:
 
-- Commit and push the pushed-state marker, then add the closeout marker.
+- Start the next autonomous PromptVault QA slice from a fresh `git status`,
+  `working.md` read, and local/remote parity check.
 
 ## Current Slice - 2026-06-08 Scan plan source-size validation
 

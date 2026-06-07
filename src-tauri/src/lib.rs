@@ -5590,6 +5590,54 @@ mod tests {
         std::fs::remove_dir_all(root).expect("remove facets root");
     }
 
+    #[test]
+    fn stored_prompt_facets_include_unknown_dates() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-unknown-date-facets-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create unknown-date facets root");
+        let db_path = root.join("promptvault.sqlite");
+        let mut antigravity_db_prompt = record("unknown-date-antigravity-db");
+        antigravity_db_prompt.source = "Antigravity IDE conversation DB".to_string();
+        antigravity_db_prompt.timestamp = None;
+        antigravity_db_prompt.text = "Fix Antigravity conversation DB unknown-date filtering, run cargo test, and report PASS/FAIL.".to_string();
+        antigravity_db_prompt.word_count = count_words(&antigravity_db_prompt.text);
+        antigravity_db_prompt.char_count = antigravity_db_prompt.text.chars().count();
+        antigravity_db_prompt.quality = assess_prompt_quality(&antigravity_db_prompt.text, &[]);
+        let prompts = vec![antigravity_db_prompt];
+        let stats = build_stats(&prompts, Vec::new());
+        persist_scan_result(&db_path, "2026-06-07T02:30:00Z", &prompts, &stats, &[])
+            .expect("persist unknown-date prompt");
+
+        let facets = run_list_stored_prompt_facets(StoredPromptFacetsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(10),
+        })
+        .expect("list unknown-date facets");
+        let unknown_date = facets
+            .dates
+            .iter()
+            .find(|item| item.text == "unknown-date")
+            .expect("unknown-date facet");
+        assert_eq!(unknown_date.count, 1);
+
+        let loaded = run_load_stored_prompts(StoredPromptsOptions {
+            database_path: Some(db_path.display().to_string()),
+            date: Some("unknown-date".to_string()),
+            limit: Some(10),
+            ..Default::default()
+        })
+        .expect("load unknown-date prompts");
+        assert_eq!(loaded.stats.total_prompts, 1);
+        assert_eq!(loaded.prompts[0].source, "Antigravity IDE conversation DB");
+
+        std::fs::remove_dir_all(root).expect("remove unknown-date facets root");
+    }
+
     fn record(id: &str) -> PromptRecord {
         PromptRecord {
             id: id.to_string(),

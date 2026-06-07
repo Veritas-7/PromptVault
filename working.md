@@ -3934,3 +3934,47 @@ Next steps:
 3. Consider a follow-up to expose `unknown-date` explicitly for Antigravity
    conversation DB records, since the inspected `step_type=14` payloads did not
    include reliable timestamps.
+
+## Unknown-Date Stored Facet Regression Test - 2026-06-07 11:26 KST
+
+Context:
+
+- The Antigravity CLI/IDE conversation SQLite records have no reliable
+  per-prompt timestamp in the inspected `step_type=14` payloads.
+- `prompt_date()` already stores those records as `unknown-date`, and the live
+  DB check showed `Antigravity CLI conversation DB|10|10|null timestamps|0 null prompt_date`
+  and `Antigravity IDE conversation DB|2|2|null timestamps|0 null prompt_date`.
+- Therefore no production fallback timestamp was added; file mtime would be
+  misleading as a prompt timestamp.
+
+Change:
+
+- Added Rust regression coverage in `src-tauri/src/lib.rs`:
+  `stored_prompt_facets_include_unknown_dates`.
+- The test persists a timestamp-less `Antigravity IDE conversation DB` prompt,
+  asserts `run_list_stored_prompt_facets` exposes an `unknown-date` date facet,
+  and asserts `run_load_stored_prompts` can load the record with
+  `date=unknown-date`.
+
+Tests:
+
+- `cargo test stored_prompt_facets_include_unknown_dates`: PASS.
+- `npm run check`: PASS, including 124 UI helper tests, Vite build, 65 Rust
+  library tests, 15 CLI tests, doc-tests, and clippy with `-D warnings`.
+
+cmux same-surface status:
+
+- `surface:10` still exists as the single PromptVault browser surface.
+- `cmux browser --surface surface:10 get title`: `PromptVault`.
+- `cmux browser --surface surface:10 get url`: PromptVault URL under 5173.
+- DOM/snapshot commands remain inconsistent: `snapshot` reports an empty
+  `about:blank` document while `get url` reports the PromptVault URL, and
+  some `get html` / `wait` calls time out.
+- No new browser was opened, and cmux was not restarted or killed.
+
+Next steps:
+
+1. Stage only `src-tauri/src/lib.rs` and `working.md`, run staged checks, then
+   commit/push if clean.
+2. Keep direct DOM QA paused until the existing `surface:10` state becomes
+   reliable without restarting cmux or opening another browser.

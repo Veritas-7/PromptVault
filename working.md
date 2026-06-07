@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 03:58 KST
+Updated: 2026-06-08 03:59 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -49,6 +49,18 @@ Progress:
 - Verified local/remote parity after push with
   `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
   returning `0 0`.
+- Committed and pushed the pushed-state marker:
+  `0629177 docs: mark prompt char-count validation pushed`.
+- Verified local/remote parity after the marker push returning `0 0`.
+
+Closeout:
+
+- The prompt char-count validation slice is complete.
+- Browser-bridge scan/load payloads now reject prompt records whose
+  `char_count` does not match the actual prompt `text`.
+- The UI preview QA confirmed malformed prompt char-count payloads surface the
+  generic bridge response-shape error and do not render bogus prompt/source
+  rows.
 
 Changes:
 
@@ -97,7 +109,8 @@ Research:
 
 Next Steps:
 
-- Commit and push this working-log marker, then add the closeout handoff.
+- Start the next autonomous PromptVault QA slice from a fresh `git status`,
+  `working.md` read, and local/remote parity check.
 
 ## Current Slice - 2026-06-08 Scan date bucket aggregate validation
 

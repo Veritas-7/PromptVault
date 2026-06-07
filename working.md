@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 01:05 KST
+Updated: 2026-06-08 01:08 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -37,8 +37,8 @@ Progress:
 - Added scan-result aggregate validation requiring weak prompt count to be at
   most `stats.total_prompts`.
 - Verified focused API tests, full UI/unit tests, production build, preview
-  QA, and the full project check.
-- Pending: commit and push this parser/test/log slice.
+  QA, the full project check, staged checks, and GitHub publication.
+- Pending: publication evidence docs commit.
 
 Changes:
 
@@ -89,6 +89,24 @@ Tests:
   - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
     passed, `src/main.rs` 0 tests, doc tests 0 tests.
   - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Staged and publication checks:
+  - Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`,
+    and `working.md`.
+  - `git diff --cached --check`: passed.
+  - `gitleaks protect --staged --no-banner --redact`: passed; scanned
+    6.19 KB, no leaks found.
+  - `gh auth status`: logged in as `Veritas-7`; HTTPS git operations.
+  - `gitleaks version`: 8.30.1.
+  - Pre-push `git ls-remote origin HEAD`: `bfb33b7`.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo at `https://github.com/Veritas-7/PromptVault`.
+  - `gitleaks dir . --no-banner --redact`: passed; scanned 700.76 MB, no
+    leaks found.
+  - `git push origin main`: pushed `bfb33b7..1daa26e`.
+  - Post-push `git fetch origin main` plus
+    `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - Post-push `git status --short --branch`: `## main...origin/main`.
+  - `/tmp/promptvault_scan_weak_count_qa.mjs`: absent after QA cleanup.
 
 Issues:
 
@@ -100,10 +118,9 @@ Research:
 
 Next Steps:
 
-- Stage explicit paths only: `src/promptVaultApi.ts`,
-  `tests/promptVaultApi.test.ts`, and `working.md`.
-- Run staged secret/diff/GitHub checks, commit, run full-tree gitleaks, push to
-  `origin main`, then record publication status in a docs commit.
+- Published robustness fix on `origin/main` as
+  `1daa26e fix: validate scan weak counts`.
+- Commit and push this `working.md` publication-status update.
 
 ## Current Slice - 2026-06-08 Scan result returned-count bounds
 

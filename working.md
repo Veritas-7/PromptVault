@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 01:24 KST
+Updated: 2026-06-08 01:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -39,8 +39,14 @@ Progress:
   the safe-integer sum of source summary file counts.
 - Verified focused API tests, full UI/unit tests, production build, preview
   QA, and the full project check.
-- Pending: staged checks, commit, full-tree secret scan, push, and publication
-  evidence docs commit.
+- Verified staged whitespace/secrets checks, GitHub auth/remote visibility, and
+  full-tree gitleaks before publication.
+- Published robustness fix on `origin/main` as
+  `d230533 fix: validate scan source file totals`.
+- Verified post-push parity: `git rev-list --left-right --count
+  HEAD...origin/main` returned `0 0`, `git status --short --branch` returned
+  only `## main...origin/main`, the temp QA script was absent, and no matching
+  preview/gitleaks process remained.
 
 Changes:
 
@@ -90,6 +96,23 @@ Tests:
   - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
     passed, `src/main.rs` 0 tests, doc tests 0 tests.
   - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Staged/publication checks:
+  - `git diff --cached --check`: passed.
+  - `gitleaks protect --staged --no-banner --redact`: no leaks found.
+  - `gh auth status`: logged in to `github.com` as `Veritas-7`.
+  - `gitleaks version`: `8.30.1`.
+  - `git ls-remote origin HEAD`: `1d23431... HEAD` before the code push.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo at `https://github.com/Veritas-7/PromptVault`.
+  - `gitleaks dir . --no-banner --redact`: scanned about 700.78 MB in 1m39s,
+    no leaks found.
+  - `git push origin main`: pushed `1d23431..d230533` to `main`.
+  - `git fetch origin main`: fetched `main` from `origin`.
+  - `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - `git status --short --branch`: `## main...origin/main`.
+  - `test ! -e /tmp/promptvault_source_file_total_qa.mjs`: passed.
+  - `ps -axo pid=,command= | rg -- '--port 526[4]|promptvault_source_file_total_q[a]|gitleaks dir [.] --no-banner --redact'`:
+    no matches.
 
 Issues:
 
@@ -101,10 +124,7 @@ Research:
 
 Next Steps:
 
-- Stage explicit paths only: `src/promptVaultApi.ts`,
-  `tests/promptVaultApi.test.ts`, and `working.md`.
-- Run staged secret/diff/GitHub checks, commit, run full-tree gitleaks, push to
-  `origin main`, then record publication status in a docs commit.
+- Commit and push this `working.md` publication-status update.
 
 ## Current Slice - 2026-06-08 Source summary weak-count bounds
 

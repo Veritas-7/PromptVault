@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 04:06 KST
+Updated: 2026-06-08 04:08 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -43,6 +43,11 @@ Progress:
 - Verified the broader UI suite and production build.
 - Verified the preview browser-bridge malformed source-size plan path.
 - Verified the full project check.
+- Committed and pushed the code slice:
+  `a00bc7a fix: validate scan plan source sizes`.
+- Verified local/remote parity after push with
+  `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
+  returning `0 0`.
 
 Changes:
 
@@ -92,8 +97,7 @@ Research:
 
 Next Steps:
 
-- Run cleanup checks, staged secret checks, and publication checks before
-  committing.
+- Commit and push the pushed-state marker, then add the closeout marker.
 
 ## Current Slice - 2026-06-08 Prompt char-count validation
 

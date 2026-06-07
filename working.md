@@ -126,8 +126,8 @@ Research:
 
 Next Steps:
 
-- Commit and push this handoff log update, then continue to the next narrow
-  PromptVault QA/improvement slice.
+- Continue to the next narrow PromptVault QA/improvement slice from the clean,
+  pushed `main...origin/main` state.
 
 ## Previous Slice - 2026-06-08 Duplicate prompt record ID validation
 

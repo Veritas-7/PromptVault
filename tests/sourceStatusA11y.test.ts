@@ -161,6 +161,8 @@ test("source status classes normalize known and unknown statuses", () => {
 test("source ok status helper normalizes status values", () => {
   assert.equal(isSourceStatusOk("ok"), true);
   assert.equal(isSourceStatusOk(" OK "), true);
+  assert.equal(isSourceStatusOk("stored"), true);
+  assert.equal(isSourceStatusOk(" STORED "), true);
   assert.equal(isSourceStatusOk("partial"), false);
   assert.equal(isSourceStatusOk(""), false);
 });

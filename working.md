@@ -1,10 +1,78 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:19 KST
+Updated: 2026-06-07 19:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Stored source summary healthy icon
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Align stored source summary iconography with the `저장됨` healthy status.
+
+Context:
+
+- Previous source status work normalized labels and classes but left the icon
+  predicate limited to `ok`.
+- Browser QA found a RED baseline: a source summary with status `stored`
+  rendered aria text `Codex 소스 저장됨: 1개 프롬프트 발견` and class
+  `status stored`, but still displayed the warning triangle icon.
+
+Progress:
+
+- Treated `stored` as a healthy source status for icon selection.
+- Kept `partial`, unknown, missing, and empty statuses on the warning icon path.
+- Verified the stored source summary now renders the check-circle icon.
+
+Changes:
+
+- `src/sourceStatusA11y.ts`
+  - Updated `isSourceStatusOk` to return true for normalized `stored`.
+- `tests/sourceStatusA11y.test.ts`
+  - Added `stored` and padded uppercase ` STORED ` coverage for the helper.
+- `working.md`
+  - Recorded the RED baseline, fix, and browser QA.
+
+Tests:
+
+- RED baseline browser QA on preview `127.0.0.1:5212`:
+  - Stored source summary rendered `lucide-triangle-alert` despite healthy
+    `저장됨` status text.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/sourceStatusA11y.test.ts`:
+  - 14 passed.
+- `npm run build`:
+  - `tsc && vite build` passed.
+- Fixed-flow browser QA on preview `127.0.0.1:5212`:
+  - Stored source summary aria stayed
+    `Codex 소스 저장됨: 1개 프롬프트 발견`.
+  - Status class stayed `status stored`.
+  - SVG changed to `lucide-circle-check`.
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+- `npm run check`:
+  - UI tests: 155 passed.
+  - Build: passed.
+  - Rust lib tests: 84 passed.
+  - Rust CLI tests: 16 passed.
+  - Doc-tests: passed.
+  - Clippy with `-D warnings`: passed.
+
+Issues:
+
+- No blocker found after this fix.
+
+Research:
+
+- No external research. This was derived from rendered local QA output.
+
+Next Steps:
+
+- Commit and push this stored source summary icon slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Improvement retry browser QA
 
@@ -65,7 +133,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record.
+- Completed and pushed as `2b7499a docs: record improvement retry QA`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Stored applied-filter reset availability

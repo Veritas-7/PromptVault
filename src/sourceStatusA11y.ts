@@ -36,7 +36,8 @@ export function sourceStatusClass(status: string): string {
 }
 
 export function isSourceStatusOk(status: string): boolean {
-  return normalizedSourceStatus(status) === "ok";
+  const normalized = normalizedSourceStatus(status);
+  return normalized === "ok" || normalized === "stored";
 }
 
 function countLabel(count: number, singular: string): string {

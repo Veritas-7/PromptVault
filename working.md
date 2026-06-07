@@ -1,10 +1,104 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 04:29 KST
+Updated: 2026-06-08 04:36 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Top word frequency validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/load payloads whose `stats.top_words` frequency
+  counts exceed the aggregate `stats.total_words` before the UI can render
+  impossible frequency rows.
+
+Context:
+
+- Rust builds `stats.total_words` from prompt `word_count` values.
+- Rust `top_words()` counts matching words from the same prompt text, so the
+  displayed top-word counts cannot exceed the aggregate total word count.
+- The frontend parser validated top-word item shape but not the aggregate
+  bound.
+- The statistics panel renders `top_words` directly in the `단어` frequency
+  column.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the previous prompt word-count slice is pushed and clean at
+  `ab9cae0`.
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified local/remote parity from clean `main...origin/main` with
+  `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
+  returning `0 0`.
+- Added RED coverage for `/api/scan` returning `total_words: 3` with a
+  `top_words` row claiming `ghost: 999`.
+- Verified the focused API test fails before the guard.
+- Added parser validation requiring `stats.top_words` counts to stay within
+  `stats.total_words`.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified the broader UI suite and production build.
+- Verified the preview browser-bridge malformed top-word frequency path.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for top-word counts beyond
+    aggregate total words.
+- `src/promptVaultApi.ts`
+  - Reuses the existing frequency aggregate helper to validate `top_words`
+    against `total_words`.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new top-word count mismatch test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 55 tests, 54 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 55 tests, 55 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 219 tests, 219 pass.
+- Build:
+  - `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-T2lM27Zp.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5283" --port 5283 node /tmp/promptvault_top_words_qa.mjs`
+  - Passed. The mocked bridge returned `total_words: 3` with
+    `top_words: [{ text: "ghost", count: 999 }]`; the UI showed the malformed
+    bridge response error, rendered no prompt rows, and did not leak `ghost` or
+    `999` frequency data.
+  - Removed `/tmp/promptvault_top_words_qa.mjs` after the run.
+- Full check:
+  - `npm run check`
+  - Passed. This included `npm run test:ui` (219 tests), `npm run build`,
+    `cargo test` (84 library tests and 16 CLI tests), and
+    `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found in the RED API suite.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run cleanup checks, staged secret checks, and publication checks before
+  committing.
 
 ## Current Slice - 2026-06-08 Prompt word-count validation
 

@@ -4516,3 +4516,63 @@ Next focus:
 - No parser/DB-management blocker remains for the user's current request.
 - Future polish can continue from UI performance, source filtering ergonomics,
   or deeper parser fixtures if new chat-store formats appear.
+
+## Final Live Completion Audit - 2026-06-07 12:33 KST
+
+Current goal:
+
+- Re-check the completed parser/DB management and single-surface QA evidence
+  against the active thread objective before marking the goal complete.
+
+Prompt-to-artifact checklist:
+
+- Target path `/Users/wj/Ai/System/10_Projects/PromptVault`: PASS.
+  - `pwd` and `git rev-parse --show-toplevel` both resolved to the PromptVault
+    repo.
+- `Working.md` first/read/maintained: PASS.
+  - Completion audit section is present at `working.md:4442`.
+- Managed chat sources for Codex app/CLI, Antigravity, Gemini, and Claude:
+  PASS.
+  - `source_specs()` and parser functions are present for Codex, Codex CX,
+    Claude project/transcript/history, Antigravity transcript/history/
+    conversation DB, and Gemini temporary chat sources.
+- In-app DB persistence and management: PASS.
+  - Bridge health endpoint returned the active DB path
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+  - Current stored prompt count is `88387`.
+  - Stored source counts include all expected families:
+    `Codex 70136`, `Codex CX 21`, `Claude Code projects 2256`,
+    `Claude transcripts 1175`, `Claude prompt history 12334`,
+    `Antigravity CLI transcripts 637`, `Antigravity IDE transcripts 12`,
+    `Antigravity CLI conversation DB 10`,
+    `Antigravity IDE conversation DB 2`, `Antigravity prompt history 1659`,
+    and `Gemini temporary chats 145`.
+- Automatic verification: PASS.
+  - Most recent full `npm run check` after parser changes passed: UI tests 124,
+    Vite build, Rust lib tests 70, CLI tests 16, doc-tests, and clippy
+    `-D warnings`.
+- Direct cmux single-surface browser verification: PASS.
+  - Used only existing `surface:10`; no new browser surface was opened.
+  - Same-surface navigation to
+    `http://127.0.0.1:5173/?completion-audit-live=20260607b` succeeded and
+    returned a PromptVault snapshot with import controls and stored prompt list
+    content visible.
+  - Follow-up same-surface collector checks returned `No console entries` and
+    `No browser errors`.
+  - Follow-up eval returned `root=true`, no global app error, no scan error, no
+    import error, and no stored-load error.
+- Git publication hygiene: PASS.
+  - Current HEAD before this note was `fedab34 docs: record completion audit`.
+  - `git status --short --branch` was clean on `main...origin/main`.
+  - `git rev-list --left-right --count HEAD...origin/main` returned `0 0`.
+
+Remaining issue:
+
+- The cmux helper still sometimes delays `eval/console/errors` responses, but
+  it recovered without restarting cmux and the final collector results were
+  clean. This remains a cmux helper caveat, not an observed PromptVault app
+  failure.
+
+Next focus:
+
+- Active objective is complete after this note is committed and pushed.

@@ -1,10 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 23:43 KST
+Updated: 2026-06-07 23:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Bridge timestamp validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject invalid browser-bridge `generated_at`/`updated_at` timestamps before
+  `Invalid Date` or raw malformed timestamp strings can render in date-driven
+  UI surfaces.
+
+Context:
+
+- Previous slices hardened malformed JSON, HTTP errors, negative/non-finite
+  numeric payloads, and fractional integer payloads.
+- Rust produces `generated_at`/`updated_at` values through timestamp helpers or
+  persisted event/state records; those fields are expected to be parseable
+  timestamps.
+- Several UI surfaces call `new Date(...).toLocaleString()` for generated
+  timestamps, so shape-valid but invalid timestamp strings could otherwise show
+  `Invalid Date`.
+- Source prompt `timestamp` remains a raw source-log value and is not made
+  strict in this slice.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for invalid scan result `generated_at` and nested import
+  batch state `updated_at` values.
+- Added a timestamp-string validator for bridge-generated timestamp fields.
+- Verified focused API tests, full UI/unit tests, production build, preview QA,
+  and the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds `isTimestampString()` for non-empty, parseable timestamp values.
+  - Applies timestamp validation to bridge `generated_at` and `updated_at`
+    fields in scan, plan, import, stored facet, and scan progress payloads.
+  - Keeps source prompt `timestamp` permissive because it reflects original
+    source data rather than a bridge-generated timestamp.
+- `tests/promptVaultApi.test.ts`
+  - Adds `/api/scan` coverage for invalid top-level `generated_at`.
+  - Adds `/api/import-batch` coverage for invalid nested state `updated_at`.
+- `working.md`
+  - Records this bridge timestamp validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: invalid scan/import timestamps resolved
+    instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 26 tests, 26 pass.
+- `npm run test:ui`:
+  - Passed: 190 tests, 190 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-BYQXerLE.js`.
+- Invalid timestamp scan browser QA on preview `127.0.0.1:5255`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/prompt-facets`, `/api/import-states`,
+    `/api/import-events`, and `/api/scan/progress` returned valid payloads.
+  - `/api/scan` returned HTTP 200 with valid scan shape but
+    `generated_at: "not-a-date"`.
+  - Clicking `빠른 스캔` rendered the sanitized bridge response-shape error.
+  - `Invalid Date` and the raw `not-a-date` timestamp were not rendered.
+  - Final counts: `health=1`, `facets=2`, `importStates=1`,
+    `importEvents=1`, `scan=1`, `progress=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 190 tests, 190 pass.
+  - Build: passed with `index-BYQXerLE.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then run staged diff/secret checks, commit, and push.
 
 ## Current Slice - 2026-06-07 Fractional integer bridge validation
 
@@ -36,8 +133,8 @@ Progress:
 - Added safe-integer validators for integer response fields while preserving
   decimal averages.
 - Verified focused API tests, full UI/unit tests, production build, preview QA,
-  the full project check, and GitHub publication.
-- Pending: publication evidence docs commit.
+  the full project check, GitHub publication, and publication evidence docs
+  commit.
 
 Changes:
 
@@ -119,7 +216,8 @@ Next Steps:
 
 - Published robustness fix on `origin/main` as
   `b44fdf6 fix: validate bridge integer payloads`.
-- Commit and push this `working.md` publication-status update.
+- Published publication-status update on `origin/main` as
+  `34c85f0 docs: mark bridge integer validation pushed`.
 
 ## Current Slice - 2026-06-07 Improve score delta finite validation
 

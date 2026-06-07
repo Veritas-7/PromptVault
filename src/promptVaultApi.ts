@@ -196,6 +196,10 @@ function isNullableNonNegativeSafeInteger(value: unknown): boolean {
   return value === null || isNonNegativeSafeInteger(value);
 }
 
+function isTimestampString(value: unknown): value is string {
+  return typeof value === "string" && value.trim() !== "" && Number.isFinite(Date.parse(value));
+}
+
 function isPromptQuality(value: unknown): boolean {
   return isRecord(value)
     && isNonNegativeSafeInteger(value.score)
@@ -262,13 +266,13 @@ function isImportState(value: unknown): boolean {
     && isNonNegativeSafeInteger(value.processed_files)
     && isNonNegativeSafeInteger(value.imported_prompt_count)
     && typeof value.completed === "boolean"
-    && typeof value.updated_at === "string";
+    && isTimestampString(value.updated_at);
 }
 
 function isImportEvent(value: unknown): boolean {
   return isRecord(value)
     && isNonNegativeSafeInteger(value.id)
-    && typeof value.generated_at === "string"
+    && isTimestampString(value.generated_at)
     && typeof value.source_id === "string"
     && typeof value.source_label === "string"
     && typeof value.root_path === "string"
@@ -338,7 +342,7 @@ function parseCancelScanResult(value: unknown): CancelScanResult {
 
 function parseImportBatchResult(value: unknown): ImportBatchResult {
   if (!isRecord(value)
-    || typeof value.generated_at !== "string"
+    || !isTimestampString(value.generated_at)
     || !isSourcePlan(value.source)
     || !isImportState(value.state)
     || !isNonNegativeSafeInteger(value.batch_start_index)
@@ -372,7 +376,7 @@ function parseImproveResult(value: unknown): ImproveResult {
 
 function parseImportStatesResult(value: unknown): ImportStatesResult {
   if (!isRecord(value)
-    || typeof value.generated_at !== "string"
+    || !isTimestampString(value.generated_at)
     || typeof value.database_path !== "string"
     || !Array.isArray(value.states)
     || !value.states.every(isImportState)
@@ -388,7 +392,7 @@ function parseImportStatesResult(value: unknown): ImportStatesResult {
 
 function parseImportEventsResult(value: unknown): ImportEventsResult {
   if (!isRecord(value)
-    || typeof value.generated_at !== "string"
+    || !isTimestampString(value.generated_at)
     || typeof value.database_path !== "string"
     || !Array.isArray(value.events)
     || !value.events.every(isImportEvent)
@@ -400,7 +404,7 @@ function parseImportEventsResult(value: unknown): ImportEventsResult {
 
 function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult {
   if (!isRecord(value)
-    || typeof value.generated_at !== "string"
+    || !isTimestampString(value.generated_at)
     || typeof value.database_path !== "string"
     || !isNonNegativeSafeInteger(value.total_prompts)
     || !Array.isArray(value.sources)
@@ -416,7 +420,7 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
 
 function parseScanPlan(value: unknown): ScanPlan {
   if (!isRecord(value)
-    || typeof value.generated_at !== "string"
+    || !isTimestampString(value.generated_at)
     || !isNonNegativeSafeInteger(value.total_sources)
     || !isNonNegativeSafeInteger(value.available_sources)
     || !isNonNegativeSafeInteger(value.total_files)
@@ -433,7 +437,7 @@ function parseScanPlan(value: unknown): ScanPlan {
 
 function parseScanResult(value: unknown): ScanResult {
   if (!isRecord(value)
-    || typeof value.generated_at !== "string"
+    || !isTimestampString(value.generated_at)
     || !(typeof value.output_path === "string" || value.output_path === null)
     || typeof value.markdown !== "string"
     || !isScanStats(value.stats)
@@ -466,7 +470,7 @@ function parseScanProgressResult(value: unknown): ScanProgress {
     || !isNullableNonNegativeSafeInteger(value.source_file_count)
     || !isNonNegativeSafeInteger(value.prompts_found)
     || !isNullableNonNegativeSafeInteger(value.limit)
-    || typeof value.updated_at !== "string") {
+    || !isTimestampString(value.updated_at)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ScanProgress;

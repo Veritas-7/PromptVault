@@ -1,10 +1,120 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 01:35 KST
+Updated: 2026-06-08 01:42 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Quality score upper bounds
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose quality scores or quality
+  averages exceed the Rust scoring cap of 100 before impossible values such as
+  `101 · 강함` or `품질 101.0` can render.
+
+Context:
+
+- Rust `PromptQuality.score` is `u8`, and `assess_prompt_quality()` clamps the
+  produced score to `0..=100`.
+- Rust scan/source quality averages are derived from prompt quality scores, so
+  aggregate and per-source quality averages should also stay in `0..=100`.
+- The browser parser already rejected negative and fractional values, but still
+  accepted safe integers/floats above 100.
+- `App.tsx` renders prompt scores, selected prompt scores, aggregate quality
+  metrics, and source quality averages directly from bridge payloads.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for `/api/scan` returning otherwise valid scan data with
+  `stats.average_quality: 101`, source `average_quality: 101`, and prompt
+  `quality.score: 101`.
+- Added browser parser upper-bound checks for prompt quality scores and
+  aggregate/source quality averages.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Pending: staged checks, commit, full-tree secret scan, push, and publication
+  evidence docs commit.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds `MAX_QUALITY_SCORE`, `isQualityScore()`, and `isQualityAverage()`.
+  - Requires prompt quality scores to be integer `0..=100`.
+  - Requires scan/source quality averages to be finite numbers `0..=100`.
+- `tests/promptVaultApi.test.ts`
+  - Adds bridge response-shape coverage for quality values above the scoring
+    cap.
+- `working.md`
+  - Records this quality score upper-bounds slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new quality-cap test resolved instead
+    of rejecting.
+  - Result: 37 tests, 36 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 37 tests, 37 pass.
+- `npm run test:ui`:
+  - Passed: 201 tests, 201 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-XjOJrIFM.js`.
+- `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`:
+  - Passed and confirmed usage.
+- Quality-cap browser QA on preview `127.0.0.1:5265`:
+  - Routed browser bridge requests for `/api/health`, `/api/prompt-facets`,
+    `/api/import-states`, `/api/import-events`, `/api/scan/progress`, and
+    `/api/scan`.
+  - `/api/scan` returned HTTP 200 with otherwise valid scan data but
+    `stats.average_quality: 101`, source `average_quality: 101`, and prompt
+    `quality.score: 101`.
+  - First QA run failed because the script expected the word `실패`; app copy
+    correctly said `프롬프트를 스캔하지 못했습니다`. Updated only the QA
+    assertion and reran.
+  - Rerun passed: sanitized malformed bridge error rendered, scan failure copy
+    rendered, no `101 · 강함` prompt score or `품질 101.0` source quality
+    rendered, and prompt row count stayed `0`.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=2`,
+    `/api/import-states=1`, `/api/import-events=1`, `/api/scan=1`,
+    `/api/scan/progress=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 201 tests, 201 pass.
+  - Build: passed with `index-XjOJrIFM.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Cleanup checks before staging:
+  - `test ! -e /tmp/promptvault_quality_cap_qa.mjs`: passed.
+  - `ps -axo pid=,command= | rg -- '--port 526[5]|promptvault_quality_cap_q[a]|gitleaks dir [.] --no-banner --redact'`:
+    no matches.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage explicit paths only: `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `working.md`.
+- Run staged secret/diff/GitHub checks, commit, run full-tree gitleaks, push to
+  `origin main`, then record publication status in a docs commit.
 
 ## Current Slice - 2026-06-08 Source file-total bounds
 

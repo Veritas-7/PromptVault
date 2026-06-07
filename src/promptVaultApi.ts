@@ -161,6 +161,7 @@ export function isBrowserQaMode(): boolean {
 }
 
 const MALFORMED_BRIDGE_RESPONSE_MESSAGE = "PromptVault 브라우저 브리지 응답 형식이 올바르지 않습니다.";
+const MAX_QUALITY_SCORE = 100;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -192,6 +193,14 @@ function isNonNegativeSafeIntegerAtMost(value: unknown, max: unknown): boolean {
   return isNonNegativeSafeInteger(value) && isNonNegativeSafeInteger(max) && value <= max;
 }
 
+function isQualityScore(value: unknown): boolean {
+  return isNonNegativeSafeInteger(value) && value <= MAX_QUALITY_SCORE;
+}
+
+function isQualityAverage(value: unknown): boolean {
+  return isNonNegativeFiniteNumber(value) && value <= MAX_QUALITY_SCORE;
+}
+
 function isNonNegativeSafeIntegerRangeAtMost(start: unknown, count: unknown, max: unknown): boolean {
   return isNonNegativeSafeInteger(start)
     && isNonNegativeSafeInteger(count)
@@ -218,7 +227,7 @@ function isPreviewSortString(value: unknown): value is string {
 
 function isPromptQuality(value: unknown): boolean {
   return isRecord(value)
-    && isNonNegativeSafeInteger(value.score)
+    && isQualityScore(value.score)
     && typeof value.band === "string"
     && isStringArray(value.missing)
     && isStringArray(value.suggestions);
@@ -247,7 +256,7 @@ function isSourceSummary(value: unknown): boolean {
     && typeof value.root_path === "string"
     && isNonNegativeSafeInteger(value.files_seen)
     && isNonNegativeSafeInteger(value.prompts_found)
-    && isNonNegativeFiniteNumber(value.average_quality)
+    && isQualityAverage(value.average_quality)
     && isNonNegativeSafeIntegerAtMost(value.weak_prompt_count, value.prompts_found)
     && typeof value.status === "string"
     && isStringArray(value.notes);
@@ -329,7 +338,7 @@ function isScanStats(value: unknown): boolean {
     && isNonNegativeSafeInteger(value.total_files)
     && isNonNegativeSafeInteger(value.total_words)
     && isNonNegativeFiniteNumber(value.average_words)
-    && isNonNegativeFiniteNumber(value.average_quality)
+    && isQualityAverage(value.average_quality)
     && isNonNegativeSafeIntegerAtMost(value.weak_prompt_count, value.total_prompts)
     && Array.isArray(value.top_words)
     && value.top_words.every(isFrequencyItem)

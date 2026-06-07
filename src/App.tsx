@@ -38,6 +38,7 @@ import {
 } from "./improvementSelection";
 import {
   importProgressDisplay,
+  importProgressLabel,
   importStateProgressPercent,
   importProgressValueText,
   importRunFailureText,
@@ -1294,7 +1295,7 @@ function App() {
                         <span>{state.updated_at}</span>
                       </div>
                       <progress
-                        aria-label={`${state.source_label} import progress`}
+                        aria-label={importProgressLabel(state.source_label)}
                         aria-valuetext={importProgressValueText(state.processed_files, state.total_files)}
                         value={importStateProgressPercent(state)}
                         max={100}
@@ -1673,7 +1674,7 @@ function App() {
           ) : null}
           <div className="import-progress" aria-live="polite">
             <progress
-              aria-label={`${currentImportProgress.sourceLabel} 가져오기 진행`}
+              aria-label={importProgressLabel(currentImportProgress.sourceLabel)}
               aria-valuetext={importProgressValueText(
                 currentImportProgress.processedFiles,
                 currentImportProgress.totalFiles,

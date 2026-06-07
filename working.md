@@ -1,10 +1,76 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:18 KST
+Updated: 2026-06-07 18:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Saved import progress Korean labels
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep saved import progress accessibility labels consistent with the Korean
+  UI and active import progress label.
+
+Context:
+
+- Code inspection found the saved import cursor progress bars used
+  `${source} import progress`, while the visible UI and active import progress
+  were Korean.
+- Browser QA confirmed the rendered Saved Import panel exposed labels such as
+  `Codex import progress`.
+
+Progress:
+
+- Added a shared import progress label helper.
+- Reused that helper for saved import progress rows and active import progress.
+- Added helper coverage for source-specific and fallback labels.
+
+Changes:
+
+- `src/importProgress.ts`
+  - Added `importProgressLabel`.
+- `src/App.tsx`
+  - Uses `importProgressLabel` for saved import rows and the active import
+    progress bar.
+- `tests/importProgress.test.ts`
+  - Added Korean import progress label coverage.
+
+Tests:
+
+- RED browser QA on preview `127.0.0.1:5193` + bridge
+  `127.0.0.1:5174`:
+  - Saved import progress labels rendered in English, including
+    `Codex import progress`.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/importProgress.test.ts`:
+  PASS, `16` tests.
+- `npm run build`: PASS.
+- Fixed browser QA on preview `127.0.0.1:5193` + bridge
+  `127.0.0.1:5174`:
+  - Saved import progress labels rendered in Korean, including
+    `Codex 가져오기 진행` and `Gemini temporary chats 가져오기 진행`.
+  - Saved Import panel was visible, no empty state was shown, and page width
+    stayed within `1365 / 1365`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `146` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local browser QA and accessibility
+  label inspection.
+
+Next Steps:
+
+- Commit and push this saved import progress label slice.
+- Continue autonomous QA on the next uncovered PromptVault user flow.
 
 ## Current Slice - 2026-06-07 Browser bridge recheck active-work lock
 
@@ -80,8 +146,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this browser bridge recheck active-work lock slice.
-- Continue autonomous QA on the next uncovered PromptVault user flow.
+- Completed and pushed as `a729745 fix: lock bridge recheck during active work`.
 
 ## Current Slice - 2026-06-07 Recommendation failure empty-copy suppression
 

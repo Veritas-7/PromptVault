@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   importProgressDisplay,
+  importProgressLabel,
   importProgressPercent,
   importStateProgressPercent,
   importProgressValueText,
@@ -166,6 +167,12 @@ test("import progress value text mirrors processed file counts", () => {
   assert.equal(importProgressValueText(86, 144), "86 / 144개 파일");
   assert.equal(importProgressValueText(1, 1), "1 / 1개 파일");
   assert.equal(importProgressValueText(1_200, 2_000), "1,200 / 2,000개 파일");
+});
+
+test("import progress label names the source in Korean", () => {
+  assert.equal(importProgressLabel("Codex"), "Codex 가져오기 진행");
+  assert.equal(importProgressLabel("  "), "선택한 소스 가져오기 진행");
+  assert.equal(importProgressLabel(null), "선택한 소스 가져오기 진행");
 });
 
 test("import status explains continuous stop requests", () => {

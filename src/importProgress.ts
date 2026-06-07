@@ -33,6 +33,11 @@ export function importProgressValueText(processedFiles: number, totalFiles: numb
   return `${processedFiles.toLocaleString()} / ${countLabel(totalFiles, "파일")}`;
 }
 
+export function importProgressLabel(sourceLabel: string | null | undefined): string {
+  const target = sourceLabel?.trim() || "선택한 소스";
+  return `${target} 가져오기 진행`;
+}
+
 export function importProgressDisplay(
   result: ImportBatchResult | null,
   savedState: ImportState | null,

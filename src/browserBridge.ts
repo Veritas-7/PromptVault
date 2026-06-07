@@ -11,12 +11,27 @@ export interface BrowserBridgeHealth {
   ok: boolean;
 }
 
+export type BrowserBridgeStatus = "native" | "checking" | "connected" | "disconnected";
+
 export function browserBridgeUnavailableMessage(): string {
   return `브라우저 브리지가 실행 중이 아닙니다. 터미널에서 다음 명령을 실행한 뒤 브리지 다시 확인을 누르세요: ${BROWSER_BRIDGE_COMMAND}`;
 }
 
 export function browserBridgeHttpErrorMessage(status: number): string {
   return `PromptVault 브라우저 브리지가 HTTP ${status}를 반환했습니다.`;
+}
+
+export function browserBridgeStatusText(
+  status: BrowserBridgeStatus,
+  databasePath: string | null,
+  failureText: string | null,
+): string | null {
+  if (status === "checking") return "브라우저 브리지 연결을 확인하는 중입니다.";
+  if (status === "connected") {
+    return `${BROWSER_BRIDGE_NOTICE}${databasePath ? ` 데이터베이스: ${databasePath}` : ""}`;
+  }
+  if (status === "disconnected") return failureText?.trim() || browserBridgeUnavailableMessage();
+  return null;
 }
 
 export function hasTauriInvoke(): boolean {

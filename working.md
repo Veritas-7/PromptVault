@@ -1,10 +1,106 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 22:25 KST
+Updated: 2026-06-07 22:30 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Bridge health status failure copy
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make browser bridge health-check failures visible with the actual sanitized
+  failure reason instead of always showing generic "bridge not running" copy.
+
+Context:
+
+- The previous slice sanitized non-OK browser bridge HTTP errors so raw
+  response bodies and stack traces are no longer exposed.
+- `verifyBrowserBridge()` still discarded the sanitized health-check error and
+  rendered the generic recovery message for every disconnected state.
+- If `/api/health` returns HTTP 500, the bridge is reachable but unhealthy, so
+  the status notice should show the stable HTTP status failure rather than a
+  misleading launch-command recovery message.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added RED tests for browser bridge status copy preserving sanitized
+  health-check failure details.
+- Added `BrowserBridgeStatus` and `browserBridgeStatusText()` to keep status
+  copy testable outside React.
+- Updated `App.tsx` to retain the latest health-check failure text and show it
+  in the disconnected browser bridge notice.
+- Verified focused tests, production build, preview QA, and the full project
+  check.
+
+Changes:
+
+- `src/browserBridge.ts`
+  - Exports `BrowserBridgeStatus`.
+  - Adds `browserBridgeStatusText()` for checking, connected, disconnected, and
+    native status copy.
+- `src/App.tsx`
+  - Uses `browserBridgeStatusText()` for the browser bridge notice.
+  - Preserves sanitized health-check failure text in `browserBridgeFailureText`.
+  - Clears the preserved failure text after a successful health check.
+- `tests/browserBridge.test.ts`
+  - Adds status text coverage for sanitized disconnected failures, network
+    fallback copy, and connected database context.
+- `working.md`
+  - Records this browser bridge health status copy slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/browserBridge.test.ts`
+  - Failed for the intended reason: `browserBridgeStatusText` was not exported.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/browserBridge.test.ts`
+  - Passed: 11 tests, 11 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CldLunzL.js`.
+- Health HTTP 500 status browser QA on preview `127.0.0.1:5245`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health` returned HTTP 500 with a raw
+    `TypeError: Cannot read properties of undefined` body.
+  - Initial bridge check rendered
+    `PromptVault 브라우저 브리지가 HTTP 500를 반환했습니다.`
+    in `[data-browser-bridge-status='disconnected']`.
+  - Clicking `[data-check-browser-bridge]` retried `/api/health` and kept the
+    same sanitized HTTP 500 notice.
+  - Body text did not expose `TypeError`, `Cannot read properties`,
+    `undefined`, or stack-frame text.
+  - Final counts: `health=2`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 177 tests, 177 pass.
+  - Build: passed with `index-CldLunzL.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Commit and push this UX robustness fix after explicit-path staging, staged
+  whitespace checks, staged gitleaks, full gitleaks, GitHub auth, remote, and
+  branch parity checks.
 
 ## Current Slice - 2026-06-07 Bridge HTTP error sanitization
 

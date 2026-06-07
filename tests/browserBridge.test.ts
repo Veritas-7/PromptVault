@@ -4,6 +4,7 @@ import {
   BROWSER_BRIDGE_COMMAND,
   BROWSER_BRIDGE_URL,
   bridgeEndpoint,
+  browserBridgeStatusText,
   browserBridgeUnavailableMessage,
   checkBrowserBridgeHealth,
 } from "../src/browserBridge.ts";
@@ -18,6 +19,28 @@ test("bridge unavailable message gives the recovery command without raw fetch er
   assert.match(message, /브라우저 브리지가 실행 중이 아닙니다/);
   assert.match(message, new RegExp(BROWSER_BRIDGE_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(message, /Load failed|Failed to fetch|NetworkError/);
+});
+
+test("bridge status text preserves sanitized check failure details", () => {
+  assert.equal(
+    browserBridgeStatusText("disconnected", null, "PromptVault 브라우저 브리지가 HTTP 500를 반환했습니다."),
+    "PromptVault 브라우저 브리지가 HTTP 500를 반환했습니다.",
+  );
+  assert.doesNotMatch(
+    browserBridgeStatusText("disconnected", null, "PromptVault 브라우저 브리지가 HTTP 500를 반환했습니다.") ?? "",
+    /TypeError|Cannot read properties|undefined/,
+  );
+});
+
+test("bridge status text falls back to recovery copy for network disconnects", () => {
+  assert.match(browserBridgeStatusText("disconnected", null, null) ?? "", /브라우저 브리지가 실행 중이 아닙니다/);
+});
+
+test("bridge status text includes database context when connected", () => {
+  assert.match(
+    browserBridgeStatusText("connected", "/tmp/promptvault.sqlite", null) ?? "",
+    /데이터베이스: \/tmp\/promptvault\.sqlite/,
+  );
 });
 
 test("bridge health reports malformed JSON without raw parser errors", async (t) => {

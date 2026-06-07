@@ -23,8 +23,9 @@ import {
 } from "./actionLocks";
 import { frequencyEmptyText, sourceSummariesEmptyText } from "./analysisEmptyState";
 import {
-  BROWSER_BRIDGE_NOTICE,
+  type BrowserBridgeStatus,
   browserBridgeUnavailableMessage,
+  browserBridgeStatusText,
   checkBrowserBridgeHealth,
 } from "./browserBridge";
 import { importEventBatchSummary, importEventStatusLabel, importEventWarningSummary } from "./importEvents";
@@ -162,7 +163,6 @@ import type {
 } from "./types";
 
 type ScanState = ScanRunState;
-type BrowserBridgeStatus = "native" | "checking" | "connected" | "disconnected";
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
@@ -274,6 +274,7 @@ function App() {
     browserQaMode ? "checking" : "native",
   );
   const [browserBridgeDatabasePath, setBrowserBridgeDatabasePath] = useState<string | null>(null);
+  const [browserBridgeFailureText, setBrowserBridgeFailureText] = useState<string | null>(null);
   const [improving, setImproving] = useState(false);
   const [improvement, setImprovement] = useState<ImproveResult | null>(null);
   const [improvementPromptId, setImprovementPromptId] = useState<string | null>(null);
@@ -454,16 +455,11 @@ function App() {
     result?.persistence?.stored_prompt_count ?? storedFacetsResult?.total_prompts ?? 0;
   const displayStoredDateCount =
     result?.persistence?.date_count ?? storedFacetsResult?.dates.length ?? 0;
-  const browserBridgeStatusText =
-    browserBridgeStatus === "checking"
-      ? "브라우저 브리지 연결을 확인하는 중입니다."
-      : browserBridgeStatus === "connected"
-        ? `${BROWSER_BRIDGE_NOTICE}${
-            browserBridgeDatabasePath ? ` 데이터베이스: ${browserBridgeDatabasePath}` : ""
-          }`
-        : browserBridgeStatus === "disconnected"
-          ? browserBridgeUnavailableMessage()
-          : null;
+  const browserBridgeNoticeText = browserBridgeStatusText(
+    browserBridgeStatus,
+    browserBridgeDatabasePath,
+    browserBridgeFailureText,
+  );
 
   useEffect(() => {
     if (browserQaMode) {
@@ -514,6 +510,7 @@ function App() {
     try {
       const health = await checkBrowserBridgeHealth();
       setBrowserBridgeDatabasePath(health.database_path);
+      setBrowserBridgeFailureText(null);
       setBrowserBridgeStatus("connected");
       setError((current) => (current === browserBridgeUnavailableMessage() ? null : current));
       if (refresh) {
@@ -524,8 +521,10 @@ function App() {
         ]);
       }
       return true;
-    } catch {
+    } catch (err) {
+      const message = errorText(err);
       setBrowserBridgeDatabasePath(null);
+      setBrowserBridgeFailureText(message);
       setBrowserBridgeStatus("disconnected");
       setError((current) => (current === browserBridgeUnavailableMessage() ? null : current));
       return false;
@@ -535,6 +534,7 @@ function App() {
   function syncBrowserBridgeFailure(message: string) {
     if (browserQaMode && message === browserBridgeUnavailableMessage()) {
       setBrowserBridgeDatabasePath(null);
+      setBrowserBridgeFailureText(message);
       setBrowserBridgeStatus("disconnected");
     }
   }
@@ -1045,7 +1045,7 @@ function App() {
         </section>
       ) : null}
 
-      {browserQaMode && browserBridgeStatusText ? (
+      {browserQaMode && browserBridgeNoticeText ? (
         <section
           className={`notice ${
             browserBridgeStatus === "disconnected" ? "warning" : "browser-mode"
@@ -1054,7 +1054,7 @@ function App() {
           {...(browserBridgeStatus === "disconnected" ? ALERT_NOTICE_PROPS : STATUS_NOTICE_PROPS)}
         >
           {browserBridgeStatus === "disconnected" ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}
-          <span>{browserBridgeStatusText}</span>
+          <span>{browserBridgeNoticeText}</span>
           <button
             aria-label={browserBridgeCheckActionLabel(browserBridgeStatus, actionLockState)}
             className="notice-action"

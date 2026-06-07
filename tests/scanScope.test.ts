@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { QUICK_SCAN_SOURCE_IDS, quickScanSourceIds } from "../src/scanScope.ts";
+import {
+  QUICK_SCAN_SOURCE_IDS,
+  QUICK_SCAN_SOURCE_LIMIT,
+  quickScanSourceIds,
+} from "../src/scanScope.ts";
 
 const expectedQuickSourceIds = [
   "antigravity-cli-conversation-db",
@@ -25,4 +29,8 @@ test("quick scan source ids return a defensive copy", () => {
   assert.deepEqual(quickScanSourceIds(), [
     ...expectedQuickSourceIds,
   ]);
+});
+
+test("quick scan caps each source to keep the preview representative", () => {
+  assert.equal(QUICK_SCAN_SOURCE_LIMIT, 5);
 });

@@ -72,12 +72,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let mut preview_limit = Some(0);
             let mut preview_sort = None;
             let mut preview_sort_source = None;
+            let mut source_limit = None;
             let mut source_ids = Vec::new();
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
                     "--limit" => {
                         limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--source-limit" => {
+                        source_limit =
+                            Some(parse_positive_usize_arg(iter.next(), "--source-limit")?);
                     }
                     "--output" => {
                         output_path = Some(parse_required_arg(iter.next(), "--output")?);
@@ -118,6 +123,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 preview_sort,
                 include_markdown: Some(include_markdown),
                 write_markdown: Some(!no_export),
+                source_limit,
                 source_ids: if source_ids.is_empty() {
                     None
                 } else {
@@ -629,7 +635,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1072,6 +1078,8 @@ mod tests {
         assert!(help.contains("import-batch --source ID [--files N>0]"));
         assert!(help.contains("import-batch persists one resumable source slice"));
         assert!(help.contains("--limit N>0"));
+        assert!(help.contains("--source-limit N>0"));
+        assert!(help.contains("--source-limit caps prompts read from each selected source"));
         assert!(help.contains("--count N>0"));
         assert!(help.contains("--output cannot be combined with --no-export"));
         assert!(help.contains("--preview-sort or --weakest-first"));

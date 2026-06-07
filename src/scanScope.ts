@@ -7,6 +7,8 @@ export const QUICK_SCAN_SOURCE_IDS = [
   "codex-cx",
 ] as const;
 
+export const QUICK_SCAN_SOURCE_LIMIT = 5;
+
 export function quickScanSourceIds(): string[] {
   return [...QUICK_SCAN_SOURCE_IDS];
 }

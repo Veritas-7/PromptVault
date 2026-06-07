@@ -89,7 +89,7 @@ import {
   parseRequiredScanLimit,
   recommendedInitialScanLimit,
 } from "./scanLimit";
-import { quickScanSourceIds } from "./scanScope";
+import { QUICK_SCAN_SOURCE_LIMIT, quickScanSourceIds } from "./scanScope";
 import {
   scanLimitChangedAfterFailure,
   scanProgressLabel,
@@ -712,6 +712,7 @@ function App() {
         include_markdown: false,
         write_markdown: false,
         source_ids: quickScanSourceIds(),
+        source_limit: QUICK_SCAN_SOURCE_LIMIT,
         persist_on_cancel: false,
         run_id: runId,
       });

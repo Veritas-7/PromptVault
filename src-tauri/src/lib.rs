@@ -337,6 +337,7 @@ pub struct ScanOptions {
     pub include_markdown: Option<bool>,
     pub write_markdown: Option<bool>,
     pub source_ids: Option<Vec<String>>,
+    pub source_limit: Option<usize>,
     pub persist: Option<bool>,
     pub persist_on_cancel: Option<bool>,
     pub database_path: Option<String>,
@@ -617,7 +618,11 @@ fn run_scan_with_cancel(
     if matches!(options.limit, Some(0)) {
         return Err("scan limit requires a positive integer".into());
     }
+    if matches!(options.source_limit, Some(0)) {
+        return Err("scan source limit requires a positive integer".into());
+    }
     let limit = options.limit.unwrap_or(usize::MAX);
+    let source_limit = options.source_limit.unwrap_or(usize::MAX);
     let preview_limit = options.preview_limit;
     let include_markdown = options.include_markdown.unwrap_or(true);
     let write_markdown = options.write_markdown.unwrap_or(true);
@@ -681,7 +686,7 @@ fn run_scan_with_cancel(
         match collect_from_source(
             &source,
             &mut summary,
-            limit.saturating_sub(prompts.len()),
+            limit.saturating_sub(prompts.len()).min(source_limit),
             cancel_flag,
             run_id.as_deref(),
             prompts.len(),
@@ -4879,6 +4884,21 @@ mod tests {
         assert!(err
             .to_string()
             .contains("scan limit requires a positive integer"));
+    }
+
+    #[test]
+    fn run_scan_rejects_zero_source_limit() {
+        let err = run_scan(ScanOptions {
+            source_limit: Some(0),
+            include_markdown: Some(false),
+            write_markdown: Some(false),
+            ..Default::default()
+        })
+        .expect_err("zero source limit should fail closed");
+
+        assert!(err
+            .to_string()
+            .contains("scan source limit requires a positive integer"));
     }
 
     #[test]

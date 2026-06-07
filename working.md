@@ -1,10 +1,98 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 17:12 KST
+Updated: 2026-06-07 17:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019e8bcb-66b7-7443-a79d-46fd3686eadc`
+
+## Current Slice - 2026-06-07 Per-source quick scan cap
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep toolbar quick scans fast while making the preview representative across
+  the responsive prompt sources.
+
+Context:
+
+- `1a0a5b3 fix: honor requested scan source order` made source order explicit,
+  but the global `limit=25` could still be filled by the first few responsive
+  sources.
+- A quick scan with ordered sources but no per-source cap returned only
+  `Antigravity CLI conversation DB`, `Antigravity IDE conversation DB`, and
+  `Gemini temporary chats`.
+
+Progress:
+
+- Added optional backend/CLI `source_limit` support for scan requests.
+- Kept default scans unchanged; only callers that set `source_limit` get a
+  per-source cap.
+- Set the toolbar quick scan to use `source_limit=5` with the existing global
+  `limit=25`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`
+  - Added `source_limit` to `ScanOptions`.
+  - Rejected `source_limit=0`.
+  - Capped each selected source by `min(global remaining, source_limit)`.
+- `src-tauri/src/bin/promptvault-cli.rs`
+  - Added `scan --source-limit N>0`.
+  - Documented the relationship between `--source-limit` and `--limit`.
+- `src/promptVaultApi.ts`
+  - Added `source_limit` to frontend scan request options.
+- `src/scanScope.ts`
+  - Added `QUICK_SCAN_SOURCE_LIMIT = 5`.
+- `src/App.tsx`
+  - Toolbar quick scan now sends `source_limit: 5`.
+- `tests/scanScope.test.ts`
+  - Added coverage for the quick-scan per-source cap.
+- `README.md`
+  - Documented the toolbar quick-scan per-source cap and CLI
+    `--source-limit`.
+
+Tests:
+
+- `cargo fmt --check`: PASS.
+- `npm run test:ui -- tests/scanScope.test.ts`: PASS. The package script
+  expands to all UI helper tests; `130` tests passed.
+- First targeted Rust test command with two filters failed before running
+  because `cargo test` accepts one test filter; reran filters separately.
+- `cargo test run_scan_rejects_zero_source_limit`: PASS.
+- `cargo test help_text_documents_cli_validation_rules`: PASS.
+- `cargo test selects_requested_sources_in_requested_order`: PASS.
+- `npm run build`: PASS.
+- `npm run check`: PASS. Covered `130` UI helper tests, production build, `84`
+  Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+- CLI source-limit proof:
+  - `cargo run --quiet --bin promptvault-cli -- scan --source antigravity-cli-conversation-db,antigravity-ide-conversation-db,gemini-tmp-chat,antigravity-cli-history,claude-code-history,codex-cx --source-limit 5 --limit 25 --preview-limit 25 --no-export --json`
+  - PASS, about `3.68s`, `25` prompts, `13` files.
+  - Source summaries included all quick sources:
+    `Antigravity CLI conversation DB`, `Antigravity IDE conversation DB`,
+    `Gemini temporary chats`, `Antigravity prompt history`,
+    `Claude prompt history`, `Codex CX`.
+- Browser preview + bridge QA:
+  - Preview: `127.0.0.1:5179`; bridge: `127.0.0.1:5174`.
+  - `/api/scan` payload included ordered `source_ids` and `source_limit: 5`.
+  - Scan returned `25` prompt rows and all six quick source rows.
+  - Desktop overflow: `1440 / 1440`.
+  - Console issues, page errors, request failures: none.
+
+Issues:
+
+- No known blocker in this slice. Full unrestricted scans of the large Codex
+  tree remain intentionally separate from toolbar quick scan.
+
+Research:
+
+- No external research. This was derived from measured local source behavior.
+
+Next Steps:
+
+- Stage only this slice's files and run staged whitespace/gitleaks before
+  commit/push.
 
 ## Current Slice - 2026-06-07 Requested source order for quick scans
 

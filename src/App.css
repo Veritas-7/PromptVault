@@ -517,6 +517,14 @@ h3 {
   font-weight: 720;
 }
 
+.plan-toolbar-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .plan-sources {
   border-top: 1px solid #e5ebe4;
   display: grid;
@@ -1067,6 +1075,10 @@ h3 {
   .plan-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .plan-toolbar-actions {
+    justify-content: flex-start;
   }
 
   .plan-source-actions {

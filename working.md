@@ -1,10 +1,97 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 17:17 KST
+Updated: 2026-06-07 17:27 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
-Resumed from Codex thread: `019e8bcb-66b7-7443-a79d-46fd3686eadc`
+Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Import queue bulk selection
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reduce repetitive plan-table work by letting users select or clear all
+  available import sources before running an ordered queue.
+
+Context:
+
+- Broader core-flow browser QA before this slice passed on preview
+  `127.0.0.1:5180` with bridge `127.0.0.1:5174`:
+  - Stored prompt load returned `200` rows and `6` source rows.
+  - Filter miss for `PromptVault` showed the expected empty copy.
+  - Quick scan returned all six responsive quick sources with payload
+    `source_limit: 5` and `preview_sort: latest`.
+  - Switching to weakest-first showed the pending notice and the next scan sent
+    `preview_sort: quality_asc`.
+  - Import plan returned `12` source rows.
+  - Desktop/mobile overflow stayed within `1440 / 1440` and `390 / 390`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- The first broad QA attempt failed before app execution because shell quoting
+  broke Playwright selector brackets; reran with corrected selector quoting.
+- Existing import plan UI required checking source rows one by one before queue
+  execution.
+
+Progress:
+
+- Added a plan-toolbar `전체 선택` action that selects all importable sources
+  in plan order and skips empty sources.
+- Added a `선택 해제` action that clears the queue source selection.
+- Kept the existing `선택 실행` queue action and disabled-state behavior.
+- Added helper coverage for available source ordering, select-all labels, and
+  clear-selection labels.
+
+Changes:
+
+- `src/importQueue.ts`
+  - Added `availableQueueSourceIds`.
+  - Added ARIA/microcopy helpers for select-all and clear-selection actions.
+  - Reused the available-source helper in `selectedQueueSourceIds`.
+- `src/App.tsx`
+  - Added select-all and clear-selection buttons to the plan toolbar.
+  - Disabled select-all when all available sources are already selected.
+  - Disabled clear-selection when nothing is selected.
+- `src/App.css`
+  - Added wrapping toolbar action layout, left-aligned on narrow screens.
+- `tests/importQueue.test.ts`
+  - Added queue bulk-selection helper tests.
+- `README.md`
+  - Documented that the browser plan UI can select all available import
+    sources before queueing selected sources.
+
+Tests:
+
+- First `npm run test:ui -- tests/importQueue.test.ts`: FAIL. One assertion
+  expected stale lock copy `가져오기 계획 실행 중...`; actual shared lock copy was
+  `가져오기 계획 생성 중...`.
+- `npm run test:ui -- tests/importQueue.test.ts`: PASS, `133` UI helper tests.
+- Browser preview + bridge QA:
+  - Preview: `127.0.0.1:5181`; bridge: `127.0.0.1:5174`.
+  - Plan returned `12` rows with `11` available importable sources.
+  - Initial state: `0개 선택됨`, queue run disabled, select-all enabled,
+    clear-selection disabled.
+  - After `전체 선택`: `11개 선택됨`, queue run enabled, select-all disabled,
+    clear-selection enabled.
+  - After `선택 해제`: `0개 선택됨`, queue run disabled, select-all enabled,
+    clear-selection disabled.
+  - Desktop/mobile overflow stayed within `1440 / 1440` and `390 / 390`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `133` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from direct local UI friction during
+  plan/import QA.
+
+Next Steps:
+
+- Stage explicit paths and run staged whitespace/gitleaks before commit/push.
 
 ## Current Slice - 2026-06-07 Per-source quick scan cap
 

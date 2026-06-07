@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  availableQueueSourceIds,
   importQueueActionLabel,
+  importQueueClearSelectionLabel,
   importQueueFinalState,
+  importQueueSelectAllLabel,
   selectedQueueSourceIds,
   toggleSourceSelection,
 } from "../src/importQueue.ts";
@@ -45,6 +48,32 @@ test("queue keeps selected order and skips unavailable sources", () => {
   const sources = [source("a", 10), source("b", 0), source("c", 2)];
 
   assert.deepEqual(selectedQueueSourceIds(["c", "b", "a", "missing"], sources), ["c", "a"]);
+});
+
+test("available queue source ids keep plan order and omit empty sources", () => {
+  assert.deepEqual(
+    availableQueueSourceIds([source("a", 10), source("b", 0), source("c", 2)]),
+    ["a", "c"],
+  );
+});
+
+test("queue select all label explains availability and lock states", () => {
+  assert.equal(importQueueSelectAllLabel(0, 0, lockState()), "전체 선택할 가져오기 소스 없음");
+  assert.equal(importQueueSelectAllLabel(3, 3, lockState()), "가져올 수 있는 소스 모두 선택됨");
+  assert.equal(importQueueSelectAllLabel(3, 1, lockState()), "가져올 수 있는 소스 3개 전체 선택");
+  assert.equal(
+    importQueueSelectAllLabel(3, 1, lockState({ planRunning: true })),
+    "가져오기 계획 생성 중에는 가져오기 소스를 전체 선택할 수 없습니다",
+  );
+});
+
+test("queue clear selection label explains empty and lock states", () => {
+  assert.equal(importQueueClearSelectionLabel(0, lockState()), "해제할 가져오기 소스 선택 없음");
+  assert.equal(importQueueClearSelectionLabel(2, lockState()), "선택한 가져오기 소스 2개 해제");
+  assert.equal(
+    importQueueClearSelectionLabel(2, lockState({ importRunning: true })),
+    "가져오기 실행 중에는 가져오기 소스 선택을 해제할 수 없습니다",
+  );
 });
 
 test("queue action label explains disabled zero-selection state", () => {

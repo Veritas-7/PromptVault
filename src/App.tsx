@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Sparkles,
   StopCircle,
+  XCircle,
 } from "lucide-react";
 import "./App.css";
 import {
@@ -47,8 +48,11 @@ import {
 } from "./importProgress";
 import { importRefreshFailureText, importRefreshUnavailableText } from "./importRefreshState";
 import {
+  availableQueueSourceIds,
   importQueueActionLabel,
+  importQueueClearSelectionLabel,
   importQueueFinalState,
+  importQueueSelectAllLabel,
   selectedQueueSourceIds,
   toggleSourceSelection,
 } from "./importQueue";
@@ -379,9 +383,15 @@ function App() {
     completedQueueSourceCount,
     importQueueSourceIds.length,
   );
+  const availableImportQueueSourceIds = useMemo(() => {
+    return availableQueueSourceIds(plan?.sources ?? []);
+  }, [plan?.sources]);
   const selectedImportQueueSourceIds = useMemo(() => {
     return selectedQueueSourceIds(selectedImportSourceIds, plan?.sources ?? []);
   }, [plan?.sources, selectedImportSourceIds]);
+  const allImportQueueSourcesSelected =
+    availableImportQueueSourceIds.length > 0
+    && selectedImportQueueSourceIds.length >= availableImportQueueSourceIds.length;
   const activeImprovement = activeImprovementForSelection(
     improvement,
     improvementPromptId,
@@ -1458,21 +1468,56 @@ function App() {
               </div>
               <div className="plan-toolbar">
                 <span>{selectedImportQueueSourceIds.length.toLocaleString()}개 선택됨</span>
-                <button
-                  aria-label={importQueueActionLabel(
-                    selectedImportQueueSourceIds.length,
-                    isImportRunning && importMode === "queue",
-                    actionLockState,
-                  )}
-                  className="inline-action"
-                  data-import-selected="true"
-                  disabled={isImportActionLocked || selectedImportQueueSourceIds.length === 0}
-                  onClick={runSelectedImportQueue}
-                  type="button"
-                >
-                  <Play size={15} />
-                  {isImportRunning && importMode === "queue" ? "대기열 실행 중" : "선택 실행"}
-                </button>
+                <div className="plan-toolbar-actions">
+                  <button
+                    aria-label={importQueueSelectAllLabel(
+                      availableImportQueueSourceIds.length,
+                      selectedImportQueueSourceIds.length,
+                      actionLockState,
+                    )}
+                    className="inline-action"
+                    data-select-all-import-sources="true"
+                    disabled={
+                      isImportActionLocked
+                      || availableImportQueueSourceIds.length === 0
+                      || allImportQueueSourcesSelected
+                    }
+                    onClick={() => setSelectedImportSourceIds(availableImportQueueSourceIds)}
+                    type="button"
+                  >
+                    <CheckCircle2 size={15} />
+                    전체 선택
+                  </button>
+                  <button
+                    aria-label={importQueueClearSelectionLabel(
+                      selectedImportQueueSourceIds.length,
+                      actionLockState,
+                    )}
+                    className="inline-action"
+                    data-clear-import-selection="true"
+                    disabled={isImportActionLocked || selectedImportQueueSourceIds.length === 0}
+                    onClick={() => setSelectedImportSourceIds([])}
+                    type="button"
+                  >
+                    <XCircle size={15} />
+                    선택 해제
+                  </button>
+                  <button
+                    aria-label={importQueueActionLabel(
+                      selectedImportQueueSourceIds.length,
+                      isImportRunning && importMode === "queue",
+                      actionLockState,
+                    )}
+                    className="inline-action"
+                    data-import-selected="true"
+                    disabled={isImportActionLocked || selectedImportQueueSourceIds.length === 0}
+                    onClick={runSelectedImportQueue}
+                    type="button"
+                  >
+                    <Play size={15} />
+                    {isImportRunning && importMode === "queue" ? "대기열 실행 중" : "선택 실행"}
+                  </button>
+                </div>
               </div>
               <div className="plan-sources">
                 {plan.sources.map((source) => (

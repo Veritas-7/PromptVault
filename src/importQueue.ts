@@ -23,10 +23,39 @@ export function selectedQueueSourceIds(
   selectedSourceIds: string[],
   sources: SourcePlan[],
 ): string[] {
-  const availableSourceIds = new Set(
-    sources.filter((source) => source.file_count > 0).map((source) => source.id),
-  );
+  const availableSourceIds = new Set(availableQueueSourceIds(sources));
   return selectedSourceIds.filter((sourceId) => availableSourceIds.has(sourceId));
+}
+
+export function availableQueueSourceIds(sources: SourcePlan[]): string[] {
+  return sources.filter((source) => source.file_count > 0).map((source) => source.id);
+}
+
+export function importQueueSelectAllLabel(
+  availableSourceCount: number,
+  selectedSourceCount: number,
+  lockState: ActionLockState,
+): string {
+  const reason = activeActionLockReason(lockState);
+  if (reason) return `${reason}에는 가져오기 소스를 전체 선택할 수 없습니다`;
+  const boundedAvailableSourceCount = Math.max(0, availableSourceCount);
+  const boundedSelectedSourceCount = Math.max(0, selectedSourceCount);
+  if (boundedAvailableSourceCount === 0) return "전체 선택할 가져오기 소스 없음";
+  if (boundedSelectedSourceCount >= boundedAvailableSourceCount) {
+    return "가져올 수 있는 소스 모두 선택됨";
+  }
+  return `가져올 수 있는 소스 ${boundedAvailableSourceCount.toLocaleString()}개 전체 선택`;
+}
+
+export function importQueueClearSelectionLabel(
+  selectedSourceCount: number,
+  lockState: ActionLockState,
+): string {
+  const reason = activeActionLockReason(lockState);
+  if (reason) return `${reason}에는 가져오기 소스 선택을 해제할 수 없습니다`;
+  const boundedSelectedSourceCount = Math.max(0, selectedSourceCount);
+  if (boundedSelectedSourceCount === 0) return "해제할 가져오기 소스 선택 없음";
+  return `선택한 가져오기 소스 ${boundedSelectedSourceCount.toLocaleString()}개 해제`;
 }
 
 export function importQueueActionLabel(

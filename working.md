@@ -4133,3 +4133,48 @@ Remaining issue:
   live SQLite DB; UI relabel re-check is still limited by that surface helper
   instability unless the surface recovers again without opening another browser
   or restarting cmux.
+
+## Scan and Improve Bridge QA - 2026-06-07 12:00 KST
+
+Context:
+
+- After the import metadata fix, the existing `surface:10` again reported the
+  PromptVault URL/title but returned an empty DOM (`root=false`, `bodyLen=0`)
+  for JS evaluation. No new browser was opened and cmux was not restarted.
+- Because direct UI clicks were blocked by that surface helper state, the next
+  core paths were verified through the same app bridge endpoints used by browser
+  mode.
+
+Scan QA:
+
+- Called `/api/scan` with `limit=5`, `preview_limit=5`, `preview_sort=latest`,
+  `include_markdown=false`, `persist_on_cancel=false`, and run id
+  `codex-api-scan-20260607a`.
+- Result: PASS.
+  - `total_prompts=5`
+  - `total_files=4`
+  - `returned_prompt_count=5`
+  - `prompts_truncated=false`
+  - `preview_sort=latest`
+  - persistence inserted 5 new prompts and stored count became 88,386
+  - warning: `Scan stopped at configured limit of 5 prompts.`
+- A concurrent `/api/scan/progress` request saw the scan active while the scan
+  was running. A follow-up after completion returned `active=false`, confirming
+  run cleanup.
+
+Improve QA:
+
+- Called `/api/improve` with a bounded test prompt and `force_local=true` to
+  avoid external GLM dependency during QA.
+- Result: PASS.
+  - `provider=local-rules`
+  - quality score improved from 80 to 100
+  - `score_delta=20`
+  - no warnings
+
+Next focus:
+
+- Continue direct `surface:10` UI QA when the existing surface recovers without
+  opening another browser. Remaining direct-click coverage should prioritize
+  scan limit validation/failure states, Scan button flow, Improve button flow,
+  and stop/cancel controls.

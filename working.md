@@ -1,10 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 00:57 KST
+Updated: 2026-06-08 01:05 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Scan result weak-count bounds
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose aggregate weak prompt count
+  is larger than `stats.total_prompts` before the dashboard can render an
+  impossible `약함 2` metric for a one-prompt result.
+
+Context:
+
+- Scan result payloads already rejected missing fields, bad timestamps,
+  unsupported preview sort values, negative values, fractional integer
+  counters, and returned preview counts that exceed totals or returned prompt
+  rows.
+- `App.tsx` renders `result?.stats.weak_prompt_count` directly in the top
+  metrics row under the `약함` label.
+- The Rust `build_stats()` path derives weak prompt count by filtering actual
+  prompt rows, so `weak_prompt_count` cannot exceed `total_prompts`.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for `/api/scan` returning one valid prompt row with
+  `stats.total_prompts: 1` but `stats.weak_prompt_count: 2`.
+- Added scan-result aggregate validation requiring weak prompt count to be at
+  most `stats.total_prompts`.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Pending: commit and push this parser/test/log slice.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Requires `stats.weak_prompt_count <= stats.total_prompts` in scan result
+    bridge response validation.
+- `tests/promptVaultApi.test.ts`
+  - Adds bridge response-shape coverage for aggregate weak prompt counts beyond
+    total prompt counts.
+- `working.md`
+  - Records this scan result weak-count bounds slice.
+  - Marks the previous scan returned-count publication evidence docs commit as
+    pushed.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new weak-count test resolved instead
+    of rejecting.
+  - Result: 34 tests, 33 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 34 tests, 34 pass.
+- `npm run test:ui`:
+  - Passed: 198 tests, 198 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-B51JYLt9.js`.
+- Scan weak-count browser QA on preview `127.0.0.1:5262`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/scan` returned HTTP 200 with one valid prompt row but
+    `stats.total_prompts: 1` and `stats.weak_prompt_count: 2`.
+  - Clicking the top-level quick scan button rendered the scan failure notice
+    and sanitized malformed bridge error.
+  - The impossible `약함 2` metric and malformed prompt row text were not
+    rendered.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=2`,
+    `/api/import-states=1`, `/api/import-events=1`, `/api/scan=1`,
+    `/api/scan/progress=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 198 tests, 198 pass.
+  - Build: passed with `index-B51JYLt9.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage explicit paths only: `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `working.md`.
+- Run staged secret/diff/GitHub checks, commit, run full-tree gitleaks, push to
+  `origin main`, then record publication status in a docs commit.
 
 ## Current Slice - 2026-06-08 Scan result returned-count bounds
 
@@ -40,7 +139,8 @@ Progress:
   at most `stats.total_prompts` and equal to the returned `prompts.length`.
 - Verified focused API tests, full UI/unit tests, production build, preview
   QA, the full project check, staged checks, and GitHub publication.
-- Pending: publication evidence docs commit.
+- Published publication-status update on `origin/main` as
+  `bfb33b7 docs: mark scan returned count validation pushed`.
 
 Changes:
 
@@ -122,7 +222,8 @@ Next Steps:
 
 - Published robustness fix on `origin/main` as
   `0e9a296 fix: validate scan returned counts`.
-- Commit and push this `working.md` publication-status update.
+- Published publication-status update on `origin/main` as
+  `bfb33b7 docs: mark scan returned count validation pushed`.
 
 ## Current Slice - 2026-06-08 Scan plan aggregate bounds
 

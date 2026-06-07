@@ -319,7 +319,7 @@ function isScanStats(value: unknown): boolean {
     && isNonNegativeSafeInteger(value.total_words)
     && isNonNegativeFiniteNumber(value.average_words)
     && isNonNegativeFiniteNumber(value.average_quality)
-    && isNonNegativeSafeInteger(value.weak_prompt_count)
+    && isNonNegativeSafeIntegerAtMost(value.weak_prompt_count, value.total_prompts)
     && Array.isArray(value.top_words)
     && value.top_words.every(isFrequencyItem)
     && Array.isArray(value.top_phrases)

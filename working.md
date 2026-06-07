@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 03:02 KST
+Updated: 2026-06-08 03:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -45,6 +45,8 @@ Progress:
 - Corrected the temporary preview QA script to mock the current facets/import
   state/import event schemas and to trigger the top-level plan button before
   the passing browser run.
+- Published code commit `a82eebf` to `origin/main` and verified local/remote
+  parity.
 
 Changes:
 
@@ -86,6 +88,14 @@ Tests:
 - `npm run check`
   - Passed: UI tests, production build, Rust library tests, Rust CLI tests,
     doc-tests, and clippy all completed with exit 0.
+- Pre-push security:
+  - `gitleaks protect --staged --no-banner --redact` passed: no leaks in
+    staged changes.
+  - `gitleaks dir . --no-banner --redact` passed: scanned about 700.86 MB, no
+    leaks found.
+- Post-push parity:
+  - `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
+    returned `0 0`.
 
 Issues:
 
@@ -97,8 +107,7 @@ Research:
 
 Next Steps:
 
-- Run explicit staged diff/security checks, commit, push, and record publication
-  evidence.
+- Record docs marker publication evidence, then close the handoff.
 
 ## Current Slice - 2026-06-08 Import event total count validation
 

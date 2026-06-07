@@ -292,17 +292,23 @@ function isSourcePlan(value: unknown): boolean {
 }
 
 function isImportState(value: unknown): boolean {
-  return isRecord(value)
-    && typeof value.source_id === "string"
-    && typeof value.source_label === "string"
-    && typeof value.root_path === "string"
-    && isNonNegativeSafeInteger(value.total_files)
-    && isNonNegativeSafeInteger(value.total_bytes)
-    && isNonNegativeSafeIntegerAtMost(value.next_file_index, value.total_files)
-    && isNonNegativeSafeIntegerAtMost(value.processed_files, value.total_files)
-    && isNonNegativeSafeInteger(value.imported_prompt_count)
-    && typeof value.completed === "boolean"
-    && isTimestampString(value.updated_at);
+  if (!isRecord(value)
+    || typeof value.source_id !== "string"
+    || typeof value.source_label !== "string"
+    || typeof value.root_path !== "string"
+    || !isNonNegativeSafeInteger(value.total_files)
+    || !isNonNegativeSafeInteger(value.total_bytes)
+    || !isNonNegativeSafeInteger(value.next_file_index)
+    || !isNonNegativeSafeInteger(value.processed_files)
+    || value.next_file_index > value.total_files
+    || value.processed_files > value.total_files
+    || !isNonNegativeSafeInteger(value.imported_prompt_count)
+    || typeof value.completed !== "boolean"
+    || !isTimestampString(value.updated_at)) {
+    return false;
+  }
+  return value.next_file_index === value.processed_files
+    && value.completed === (value.processed_files >= value.total_files);
 }
 
 function isImportEvent(value: unknown): boolean {

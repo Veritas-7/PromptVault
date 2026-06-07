@@ -1,10 +1,122 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 02:34 KST
+Updated: 2026-06-08 02:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Import state row progress relation validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge `/api/import-states` rows whose per-source progress
+  fields disagree before impossible saved import rows can render.
+
+Context:
+
+- Rust import state rows derive both `next_file_index` and `processed_files`
+  from the same batch cursor, and `completed` mirrors whether processed files
+  have reached the source total.
+- The browser parser already rejects negative counters, counters beyond totals,
+  and aggregate summary counters that disagree with returned rows.
+- Before this slice, an individual row could still claim `completed: true`
+  while only part of the source was processed, or report a cursor that differed
+  from `processed_files`.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the active goal identity matches PromptVault and the worktree is
+  clean at `## main...origin/main`.
+- Identified the import state row relation gap from live
+  `src/promptVaultApi.ts` and `tests/promptVaultApi.test.ts`.
+- Added RED coverage for `/api/import-states` returning a single row with
+  `next_file_index: 6`, `processed_files: 5`, and `completed: true` while the
+  aggregate counters match that malformed row.
+- Added parser relation validation requiring each import state row to report
+  `next_file_index === processed_files` and `completed` to match whether
+  processed files reached `total_files`.
+- Verified the focused API test fails before the guard and passes after it.
+- Fixed a TypeScript narrowing issue caught by the first production build
+  retry by using direct safe-integer checks before row relation comparisons.
+- Verified full UI/unit tests, production build, preview QA, and the full
+  project check.
+- Confirmed the temp preview QA script was removed after the browser run.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Tightens `isImportState()` to derive row progress consistency from the
+    returned cursor, processed count, and completion flag.
+  - Uses direct numeric checks for row progress fields so TypeScript narrows the
+    values before the relation comparison.
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for import-state row relation
+    mismatches.
+- `working.md`
+  - Records this import state row progress relation validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new import-state row relation test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 43 tests, 42 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 43 tests, 43 pass.
+- `npm run test:ui`:
+  - Passed: 207 tests, 207 pass.
+- First `npm run build` after the parser guard:
+  - Failed with `src/promptVaultApi.ts(309,29): error TS18046:
+    'value.processed_files' is of type 'unknown'.`
+  - Fixed by replacing boolean-helper-only row progress checks with direct
+    `isNonNegativeSafeInteger()` checks plus explicit bounds.
+- Focused API test after the TypeScript-safe guard:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 43 tests, 43 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-9Xagqbvr.js`.
+- Import state row relation browser QA on preview `127.0.0.1:5271`:
+  - Routed browser bridge requests for `/api/health`, `/api/prompt-facets`,
+    `/api/import-states`, and `/api/import-events`.
+  - `/api/import-states` returned HTTP 200 with one state row where
+    `next_file_index: 6`, `processed_files: 5`, and `completed: true`, while
+    aggregate counters matched that malformed row.
+  - Passed: `저장된 가져오기 진행 새로고침에 실패했습니다` rendered, no
+    malformed `5 / 10 · 완료` row rendered, no `1 / 1` summary rendered,
+    `.saved-import-row` count stayed `0`, and page errors/console
+    errors/request failures were empty.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=1`,
+    `/api/import-states=1`, `/api/import-events=1`.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 207 tests, 207 pass.
+  - Build: passed with `index-9Xagqbvr.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found. The transient TypeScript narrowing failure was fixed
+  before final verification.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run cleanup checks, stage explicit safe paths, run staged secret checks, then
+  commit and push this import state row relation validation slice.
 
 ## Current Slice - 2026-06-08 Import states aggregate consistency validation
 

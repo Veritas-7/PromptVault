@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 04:28 KST
+Updated: 2026-06-08 04:29 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -52,6 +52,17 @@ Progress:
 - Verified local/remote parity after push with
   `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
   returning `0 0`.
+- Committed and pushed the pushed-state marker:
+  `ad0cb30 docs: mark prompt word-count validation pushed`.
+- Verified local/remote parity after the marker push returning `0 0`.
+
+Closeout:
+
+- The prompt word-count validation slice is complete.
+- Browser-bridge scan/load payloads now reject prompt rows whose `word_count`
+  does not match Rust's word-count pattern for the actual prompt `text`.
+- Preview QA confirmed malformed prompt rows do not render misleading
+  `999개 단어` metadata or the malformed prompt text after rejection.
 
 Changes:
 
@@ -103,7 +114,8 @@ Research:
 
 Next Steps:
 
-- Commit and push this pushed-state marker, then add the slice closeout.
+- Continue autonomous QA from clean pushed `main`; next useful slices should
+  inspect another browser-bridge response invariant or a user-facing error path.
 
 ## Current Slice - 2026-06-08 Inactive scan-progress validation
 

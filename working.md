@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 22:38 KST
+Updated: 2026-06-07 22:40 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -87,6 +87,22 @@ Tests:
   - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
     passed, `src/main.rs` 0 tests, doc tests 0 tests.
   - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Publication checks for `f6835c2`:
+  - `git diff --cached --check`: passed before commit.
+  - `gitleaks protect --staged --no-banner --redact`: passed before commit,
+    scanned about 5.68 KB staged content, no leaks found.
+  - `gh auth status`: authenticated as `Veritas-7`.
+  - `gitleaks version`: `8.30.1`.
+  - `git ls-remote origin HEAD`: origin was at `27df666` before push.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo confirmed.
+  - `gitleaks dir . --no-banner --redact`: passed, scanned about 700.65 MB.
+  - `git push origin main`: pushed `27df666..f6835c2`.
+  - `git fetch origin main` plus
+    `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - Final `git status --short --branch`: `## main...origin/main`.
+  - Temporary QA script check:
+    `/tmp/promptvault_scan_progress_numeric_qa.mjs` absent.
 
 Issues:
 
@@ -98,8 +114,8 @@ Research:
 
 Next Steps:
 
-- Commit and push this scan progress numeric validation slice after staged
-  diff and secret checks.
+- Published robustness fix on `origin/main` as
+  `f6835c2 fix: validate scan progress numeric payloads`.
 - Continue autonomous QA on another still-uncovered bridge, import, improve, or
   UX edge state after publication.
 

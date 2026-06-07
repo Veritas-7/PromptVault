@@ -1,12 +1,95 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 06:10 KST
+Updated: 2026-06-08 06:11 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Quality and risk label text validation
+## Current Slice - 2026-06-08 Optional prompt metadata validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge prompt records whose optional `timestamp` or `cwd`
+  metadata is present but blank/whitespace-only, while still allowing omitted
+  or `null` optional metadata.
+
+Context:
+
+- The previous slices tightened required prompt metadata, quality labels, risk
+  labels, warning/note text, export metadata, and persistence metadata.
+- `PromptRecord.timestamp` and `PromptRecord.cwd` are optional fields, but the
+  parser still accepts blank strings for them because it checks only string or
+  null.
+- The React selected prompt panel renders `timestamp` and `cwd` directly, and
+  the improvement request context also uses raw `cwd`; blank strings can
+  produce empty metadata chips or a weak `source · ` context fragment.
+- The Rust producer represents unknown values as `None`/`null` and otherwise
+  passes extracted source values, so present-but-blank optional metadata should
+  fail closed at the browser bridge.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: optional prompt `timestamp` and
+  `cwd` metadata.
+- Added a RED test for present-but-blank optional prompt `timestamp` and `cwd`
+  fields in scan results.
+- Confirmed RED first: focused API suite failed 87/88 only on the new
+  missing-rejection case.
+- Applied nullable-nonblank validation to optional prompt `timestamp` and
+  `cwd`, while preserving support for omitted and `null` values.
+- Confirmed GREEN after the parser change: focused API suite passes 88/88.
+- Confirmed broader UI coverage still passes after the parser change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright against malformed optional
+  prompt metadata and a valid null-metadata prompt; malformed scan data stayed
+  out of the prompt list, while null metadata rendered fallback labels and
+  improvement context as expected.
+- Removed the temporary preview QA script from `/tmp`.
+- Ran full check successfully.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`: adds a malformed optional prompt metadata
+  test using otherwise-valid scan result data.
+- `src/promptVaultApi.ts`: rejects blank present optional prompt `timestamp`
+  and `cwd` values.
+
+Tests:
+
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 87/88 only on the new missing-rejection case.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  (`88` tests passed).
+- PASS: `npm run test:ui` (`252` tests passed).
+- PASS: `npm run build`.
+- PASS: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5296" --port 5296 node /tmp/promptvault_optional_metadata_qa.mjs`.
+- PASS: `npm run check` (`npm run test:ui`, `npm run build`,
+  `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings`).
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, run the required staged/full secret scans, then commit and push
+  if clean.
+
+## Previous Slice - 2026-06-08 Quality and risk label text validation
 
 Current Goal:
 

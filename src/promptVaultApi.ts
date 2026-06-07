@@ -167,7 +167,13 @@ async function postBridge<T>(path: string, body: unknown): Promise<T> {
     throw new Error(browserBridgeUnavailableMessage());
   }
 
-  const text = await response.text();
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    throw new Error("PromptVault 브라우저 브리지 응답을 읽지 못했습니다.");
+  }
+
   if (!response.ok) {
     throw new Error(text || `PromptVault 브라우저 브리지가 HTTP ${response.status}를 반환했습니다.`);
   }

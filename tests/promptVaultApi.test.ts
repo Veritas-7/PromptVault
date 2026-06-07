@@ -19,3 +19,27 @@ test("browser bridge responses report malformed JSON without raw parser errors",
     },
   );
 });
+
+test("browser bridge responses report unreadable bodies without raw stream errors", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => {
+      throw new Error("body stream failure");
+    },
+  } as Response);
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답을 읽지 못했습니다/);
+      assert.doesNotMatch(error.message, /body stream failure|TypeError/);
+      return true;
+    },
+  );
+});

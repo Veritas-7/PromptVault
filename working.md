@@ -1,10 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 21:23 KST
+Updated: 2026-06-07 21:28 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Unreadable bridge response body handling
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep bridge responses whose body stream cannot be read from leaking raw
+  stream/browser errors through health checks or normal bridge API calls.
+
+Context:
+
+- Previous slices hardened network failures and malformed JSON after response
+  body reads succeeded.
+- A separate edge remained: `response.text()` itself can reject, which bypassed
+  the stable PromptVault bridge copy and surfaced raw stream errors.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with a browser-side fetch patch for
+  bridge endpoints.
+
+Progress:
+
+- Added RED tests for unreadable response bodies in both bridge health and
+  normal POST bridge paths.
+- Updated both helpers to catch `response.text()` failures and throw stable
+  PromptVault copy.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+
+Changes:
+
+- `src/browserBridge.ts`
+  - Catches body-read failures from successful `/api/health` responses and
+    throws `PromptVault 브라우저 브리지 상태 응답을 읽지 못했습니다.`
+- `src/promptVaultApi.ts`
+  - Catches body-read failures from successful bridge POST responses and throws
+    `PromptVault 브라우저 브리지 응답을 읽지 못했습니다.`
+- `tests/browserBridge.test.ts`
+  - Adds coverage that unreadable health response bodies do not leak
+    `body stream failure` or `TypeError`.
+- `tests/promptVaultApi.test.ts`
+  - Adds coverage that unreadable bridge API response bodies do not leak raw
+    stream errors.
+- `working.md`
+  - Records this unreadable bridge response body handling slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/browserBridge.test.ts tests/promptVaultApi.test.ts`
+  - Failed for the intended reason in both paths: raw `body stream failure`
+    surfaced from `response.text()`.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/browserBridge.test.ts tests/promptVaultApi.test.ts`
+  - Passed: 7 tests, 7 pass.
+- `npm run test:ui`:
+  - Passed: 160 tests, 160 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-D8LWIngZ.js`.
+- Unreadable bridge body browser QA on preview `127.0.0.1:5237`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - First `/api/health` returned a response whose `text()` rejected.
+  - UI collapsed to disconnected bridge recovery notice without exposing
+    `body stream failure`, `TypeError`, or the helper's exact health read-copy.
+  - Bridge recheck made a second valid health call, showed
+    `/tmp/promptvault-unreadable-body.sqlite`, and unlocked quick scan.
+  - `/api/scan` then returned a response whose `text()` rejected.
+  - Global error rendered
+    `PromptVault 브라우저 브리지 응답을 읽지 못했습니다.`
+  - `data-scan-run-error` stayed visible and quick scan was retryable.
+  - Final counts: `healthCalls=2`, `scanCalls=1`, `scanProgressCalls=1`,
+    `facetsCalls=2`, `importStatesCalls=1`, `importEventsCalls=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 160 tests, 160 pass.
+  - Build: passed with `index-D8LWIngZ.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage explicit changed paths, run staged secret/diff checks, commit, push to
+  `origin main`, and verify branch parity.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Bridge health network-failure copy
 

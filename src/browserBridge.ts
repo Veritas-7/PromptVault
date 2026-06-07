@@ -40,7 +40,13 @@ export async function checkBrowserBridgeHealth(timeoutMs = 1200): Promise<Browse
       throw new Error(browserBridgeUnavailableMessage());
     }
 
-    const text = await response.text();
+    let text: string;
+    try {
+      text = await response.text();
+    } catch {
+      throw new Error("PromptVault 브라우저 브리지 상태 응답을 읽지 못했습니다.");
+    }
+
     if (!response.ok) {
       throw new Error(text || `PromptVault 브라우저 브리지가 HTTP ${response.status}를 반환했습니다.`);
     }

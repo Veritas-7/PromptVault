@@ -94,3 +94,45 @@ test("bridge health reports network failures without raw fetch errors", async (t
     },
   );
 });
+
+test("bridge health reports unreadable response bodies without raw stream errors", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const globalWithWindow = globalThis as typeof globalThis & {
+    window?: {
+      clearTimeout: typeof clearTimeout;
+      setTimeout: typeof setTimeout;
+    };
+  };
+  const originalWindow = globalWithWindow.window;
+
+  globalWithWindow.window = {
+    clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    setTimeout: globalThis.setTimeout.bind(globalThis),
+  };
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => {
+      throw new Error("body stream failure");
+    },
+  } as Response);
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) {
+      delete globalWithWindow.window;
+    } else {
+      globalWithWindow.window = originalWindow;
+    }
+  });
+
+  await assert.rejects(
+    () => checkBrowserBridgeHealth(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 상태 응답을 읽지 못했습니다/);
+      assert.doesNotMatch(error.message, /body stream failure|TypeError/);
+      return true;
+    },
+  );
+});

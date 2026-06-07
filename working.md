@@ -1,10 +1,121 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 02:10 KST
+Updated: 2026-06-08 02:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Import batch file-window validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge `/api/import-batch` payloads whose batch file window
+  exceeds the source/state total file count before impossible batch progress
+  can render in the import result UI.
+
+Context:
+
+- Rust import batches produce `batch_start_index` from the saved cursor,
+  `batch_file_count` from the actual candidate slice length, and
+  `state.next_file_index`/`state.processed_files` from the resulting batch end.
+- Rust also uses the same candidate total for `source.file_count` and
+  `state.total_files`, and sets `state.completed` when the batch end reaches
+  the total file count.
+- Before this slice, the browser parser accepted non-negative import-batch file
+  counters without checking that `batch_start_index + batch_file_count` stayed
+  within `state.total_files` or matched the saved cursor fields.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for `/api/import-batch` returning
+  `batch_start_index: 9`, `batch_file_count: 2`, and `state.total_files: 10`.
+- Added parser relation validation for import batch file progress/window
+  counters.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Confirmed the temp preview QA script was removed and no matching preview or
+  `gitleaks dir` process remained before staging.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds `isImportBatchFileProgress()`.
+  - Requires import batch `source.file_count` to equal `state.total_files`.
+  - Requires `batch_start_index + batch_file_count` to stay within
+    `state.total_files`.
+  - Requires `state.next_file_index`, `state.processed_files`, and
+    `state.completed` to match the batch end.
+- `tests/promptVaultApi.test.ts`
+  - Adds bridge response-shape coverage for import batch file windows that
+    exceed source totals.
+- `working.md`
+  - Records this import batch file-window validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new file-window test resolved instead
+    of rejecting with `Missing expected rejection`.
+  - Result: 40 tests, 39 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 40 tests, 40 pass.
+- `npm run test:ui`:
+  - Passed: 204 tests, 204 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-BeFkY3ji.js`.
+- `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`:
+  - Passed and confirmed usage.
+- Import batch file-window browser QA on preview `127.0.0.1:5268`:
+  - Routed browser bridge requests for `/api/health`, `/api/prompt-facets`,
+    `/api/import-states`, `/api/import-events`, `/api/plan`, and
+    `/api/import-batch`.
+  - `/api/import-batch` returned HTTP 200 with valid-looking import data but
+    `batch_start_index: 9`, `batch_file_count: 2`, and `state.total_files: 10`.
+  - Passed: sanitized malformed bridge error rendered,
+    `Codex 가져오기에 실패했습니다` rendered, no impossible
+    `2개 파일 · 0개 프롬프트` or `11`, and prompt row count stayed `0`.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=2`,
+    `/api/import-states=2`, `/api/import-events=2`, `/api/plan=1`,
+    `/api/import-batch=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 204 tests, 204 pass.
+  - Build: passed with `index-BeFkY3ji.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Cleanup checks before staging:
+  - `/tmp/promptvault_import_batch_window_qa.mjs`: absent.
+  - `ps -axo pid=,command= | rg -- '--port 526[8]|promptvault_import_batch_window_q[a]|gitleaks dir [.] --no-banner --redact'`:
+    no matches.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`.
+- Run staged whitespace/secrets checks plus GitHub auth/remote verification.
+- Commit as `fix: validate import batch file progress`, run full-tree
+  gitleaks, and push `origin main`.
+- Update this log with publication evidence and publish the docs marker.
 
 ## Current Slice - 2026-06-08 Import batch prompt-count validation
 

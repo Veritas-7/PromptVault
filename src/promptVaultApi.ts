@@ -380,6 +380,31 @@ function isImportBatchPromptCounts(value: unknown): boolean {
     && value.prompts.length === value.returned_prompt_count;
 }
 
+function isImportBatchFileProgress(value: unknown): boolean {
+  if (!isRecord(value) || !isRecord(value.source) || !isRecord(value.state)) return false;
+  if (!isNonNegativeSafeInteger(value.batch_start_index)
+    || !isNonNegativeSafeInteger(value.batch_file_count)
+    || !isNonNegativeSafeInteger(value.state.total_files)
+    || !isNonNegativeSafeInteger(value.source.file_count)
+    || !isNonNegativeSafeInteger(value.state.next_file_index)
+    || !isNonNegativeSafeInteger(value.state.processed_files)
+    || typeof value.state.completed !== "boolean") {
+    return false;
+  }
+  if (value.source.file_count !== value.state.total_files) return false;
+  if (!isNonNegativeSafeIntegerRangeAtMost(
+    value.batch_start_index,
+    value.batch_file_count,
+    value.state.total_files,
+  )) {
+    return false;
+  }
+  const batchEndIndex = value.batch_start_index + value.batch_file_count;
+  return value.state.next_file_index === batchEndIndex
+    && value.state.processed_files === batchEndIndex
+    && value.state.completed === (batchEndIndex >= value.state.total_files);
+}
+
 function isImprovePersistence(value: unknown): boolean {
   return isRecord(value)
     && typeof value.database_path === "string"
@@ -414,6 +439,7 @@ function parseImportBatchResult(value: unknown): ImportBatchResult {
     || !value.prompts.every(isPromptRecord)
     || !isScanStats(value.stats)
     || !isImportBatchPromptCounts(value)
+    || !isImportBatchFileProgress(value)
     || !isPersistStats(value.persistence)
     || !isStringArray(value.warnings)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);

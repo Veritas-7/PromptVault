@@ -95,14 +95,14 @@ export async function listImportStates(options: ImportStatesOptions = {}): Promi
   if (hasTauriInvoke()) {
     return invoke<ImportStatesResult>("list_import_states", { options });
   }
-  return postBridge<ImportStatesResult>("/api/import-states", { options });
+  return postBridge<ImportStatesResult>("/api/import-states", { options }, parseImportStatesResult);
 }
 
 export async function listImportEvents(options: ImportEventsOptions = {}): Promise<ImportEventsResult> {
   if (hasTauriInvoke()) {
     return invoke<ImportEventsResult>("list_import_events", { options });
   }
-  return postBridge<ImportEventsResult>("/api/import-events", { options });
+  return postBridge<ImportEventsResult>("/api/import-events", { options }, parseImportEventsResult);
 }
 
 export async function listStoredPromptFacets(
@@ -111,7 +111,7 @@ export async function listStoredPromptFacets(
   if (hasTauriInvoke()) {
     return invoke<StoredPromptFacetsResult>("list_stored_prompt_facets", { options });
   }
-  return postBridge<StoredPromptFacetsResult>("/api/prompt-facets", { options });
+  return postBridge<StoredPromptFacetsResult>("/api/prompt-facets", { options }, parseStoredPromptFacetsResult);
 }
 
 export async function loadStoredPrompts(options: StoredPromptsOptions = {}): Promise<ScanResult> {
@@ -155,7 +155,96 @@ export function isBrowserQaMode(): boolean {
   return !hasTauriInvoke();
 }
 
-async function postBridge<T>(path: string, body: unknown): Promise<T> {
+const MALFORMED_BRIDGE_RESPONSE_MESSAGE = "PromptVault 브라우저 브리지 응답 형식이 올바르지 않습니다.";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFrequencyItem(value: unknown): boolean {
+  return isRecord(value) && typeof value.text === "string" && typeof value.count === "number";
+}
+
+function isImportState(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.source_id === "string"
+    && typeof value.source_label === "string"
+    && typeof value.root_path === "string"
+    && typeof value.total_files === "number"
+    && typeof value.total_bytes === "number"
+    && typeof value.next_file_index === "number"
+    && typeof value.processed_files === "number"
+    && typeof value.imported_prompt_count === "number"
+    && typeof value.completed === "boolean"
+    && typeof value.updated_at === "string";
+}
+
+function isImportEvent(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.id === "number"
+    && typeof value.generated_at === "string"
+    && typeof value.source_id === "string"
+    && typeof value.source_label === "string"
+    && typeof value.root_path === "string"
+    && typeof value.batch_start_index === "number"
+    && typeof value.batch_file_count === "number"
+    && typeof value.batch_prompt_count === "number"
+    && typeof value.processed_files === "number"
+    && typeof value.total_files === "number"
+    && typeof value.completed === "boolean"
+    && Array.isArray(value.warnings)
+    && value.warnings.every((warning) => typeof warning === "string");
+}
+
+function parseImportStatesResult(value: unknown): ImportStatesResult {
+  if (!isRecord(value)
+    || typeof value.generated_at !== "string"
+    || typeof value.database_path !== "string"
+    || !Array.isArray(value.states)
+    || !value.states.every(isImportState)
+    || typeof value.total_sources !== "number"
+    || typeof value.completed_sources !== "number"
+    || typeof value.total_files !== "number"
+    || typeof value.processed_files !== "number"
+    || typeof value.imported_prompt_count !== "number") {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ImportStatesResult;
+}
+
+function parseImportEventsResult(value: unknown): ImportEventsResult {
+  if (!isRecord(value)
+    || typeof value.generated_at !== "string"
+    || typeof value.database_path !== "string"
+    || !Array.isArray(value.events)
+    || !value.events.every(isImportEvent)
+    || typeof value.total_events !== "number") {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ImportEventsResult;
+}
+
+function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult {
+  if (!isRecord(value)
+    || typeof value.generated_at !== "string"
+    || typeof value.database_path !== "string"
+    || typeof value.total_prompts !== "number"
+    || !Array.isArray(value.sources)
+    || !value.sources.every(isFrequencyItem)
+    || !Array.isArray(value.dates)
+    || !value.dates.every(isFrequencyItem)
+    || !Array.isArray(value.workspaces)
+    || !value.workspaces.every(isFrequencyItem)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as StoredPromptFacetsResult;
+}
+
+async function postBridge<T>(
+  path: string,
+  body: unknown,
+  validate?: (value: unknown) => T,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(bridgeEndpoint(path), {
@@ -178,9 +267,11 @@ async function postBridge<T>(path: string, body: unknown): Promise<T> {
     throw new Error(text || `PromptVault 브라우저 브리지가 HTTP ${response.status}를 반환했습니다.`);
   }
 
+  let parsed: unknown;
   try {
-    return JSON.parse(text) as T;
+    parsed = JSON.parse(text);
   } catch {
     throw new Error("PromptVault 브라우저 브리지 응답을 JSON으로 해석하지 못했습니다.");
   }
+  return validate ? validate(parsed) : parsed as T;
 }

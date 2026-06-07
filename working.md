@@ -1,10 +1,113 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 21:40 KST
+Updated: 2026-06-07 21:45 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Bridge refresh payload validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent malformed successful browser-bridge refresh payloads from reaching
+  React render paths and causing runtime exceptions.
+
+Context:
+
+- Previous bridge slices normalized bad health responses and low-level response
+  failures.
+- Preview QA exposed a realistic contract edge: a successful JSON response from
+  a quiet refresh endpoint with missing numeric/array fields can crash the UI
+  later when React renders summary values such as `.toLocaleString()`.
+- The three initial quiet refresh endpoints are `/api/prompt-facets`,
+  `/api/import-states`, and `/api/import-events`.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added RED tests for malformed successful bridge payloads on stored facets,
+  import states, and import events.
+- Added narrow runtime validators for those three bridge endpoint results.
+- Kept JSON parse failures separate from response-shape failures so users see
+  accurate stable PromptVault copy.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - `postBridge()` now optionally accepts a response validator after JSON
+    parsing.
+  - `listStoredPromptFacets()`, `listImportStates()`, and
+    `listImportEvents()` validate top-level result fields and array item shapes
+    before returning typed data to the UI.
+  - Malformed successful payloads throw
+    `PromptVault 브라우저 브리지 응답 형식이 올바르지 않습니다.`
+- `tests/promptVaultApi.test.ts`
+  - Adds coverage that malformed successful stored-facet, import-state, and
+    import-event bridge payloads reject without raw `TypeError`, `undefined`,
+    or `toLocaleString` details.
+- `working.md`
+  - Records this bridge refresh payload validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: all three new malformed successful payload
+    tests saw `Missing expected rejection.`
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 5 tests, 5 pass.
+- `npm run test:ui`:
+  - Passed: 165 tests, 165 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-BlbuhGbo.js`.
+- Malformed refresh payload browser QA on preview `127.0.0.1:5239`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health` returned valid connected health with
+    `/tmp/promptvault-malformed-refresh.sqlite`.
+  - `/api/prompt-facets`, `/api/import-states`, and `/api/import-events`
+    each returned HTTP 200 JSON with only `database_path`.
+  - UI stayed connected and top actions remained enabled.
+  - Stored facets rendered the failed summary
+    `저장소 필터 후보를 사용할 수 없음`.
+  - Import-state and import-event panels rendered their refresh-failure
+    notices.
+  - Page text did not expose `toLocaleString`, `Cannot read properties`,
+    `undefined`, or `TypeError`.
+  - Final counts: `health=1`, `facets=1`, `importStates=1`,
+    `importEvents=1`, `unexpected=[]`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 165 tests, 165 pass.
+  - Build: passed with `index-BlbuhGbo.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Commit and push this refresh payload validation fix after staged safety
+  checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state after publication.
 
 ## Current Slice - 2026-06-07 Bridge health payload validation
 

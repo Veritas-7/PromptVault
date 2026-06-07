@@ -1,10 +1,96 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:28 KST
+Updated: 2026-06-07 20:32 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Continuous import second-batch recovery QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify continuous import recovery when the first batch succeeds, the second
+  batch fails at the network layer, and the user recovers through bridge
+  recheck plus `끝까지 실행` retry.
+
+Context:
+
+- Recent QA covered single-source first-batch import failure and selected queue
+  second-source failure/recovery.
+- Continuous import has a distinct state path because `runImportSource` loops
+  over multiple batches for the same source and can fail after a partial
+  successful batch has already updated progress and persistence.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Mocked a one-source import plan with `Codex sessions`.
+- Ran continuous import:
+  - First `/api/import-batch` succeeded with partial progress `2 / 5`.
+  - Second `/api/import-batch` failed with `net::ERR_FAILED`.
+- Verified disconnected bridge recovery state, partial progress retention,
+  failure warning, action locks, bridge recheck, warning persistence, and
+  successful continuous retry to completion.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only continuous second-batch recovery QA slice.
+  - Marked the previous queue recovery QA slice as completed/pushed.
+
+Tests:
+
+- Continuous second-batch recovery QA on preview `127.0.0.1:5228`:
+  - Initial bridge health succeeded and the browser bridge rendered connected.
+  - `/api/plan` succeeded with one importable `Codex sessions` source.
+  - First continuous run sent two `/api/import-batch` requests to `codex`.
+  - The first request succeeded with `file_batch_size: 5`,
+    `preview_limit: 25`, progress `2 / 5`, and persistence `저장 2`.
+  - The second request was intentionally aborted with `net::ERR_FAILED`.
+  - `data-import-run-error` showed
+    `Codex sessions 가져오기에 실패했습니다. 위 오류를 확인한 뒤 가져오기 계획에서 다시 시도하세요.`
+  - Import panel kept the partial progress visible: `40%`, source
+    `Codex sessions`, processed `2 / 5`, batch `2개 파일 · 2개 프롬프트`,
+    status `실패`, and persistence notice
+    `/tmp/promptvault-continuous-second-batch-recovery.sqlite · 저장 2 · 신규 2 · 갱신 0`.
+  - `data-run-scan`, `data-load-stored-prompts`, `data-run-plan`,
+    `data-import-source-id="codex"`, and
+    `data-import-continuous-source-id="codex"` were disabled while the bridge
+    was disconnected.
+  - `data-check-browser-bridge` stayed enabled while disconnected.
+  - Clicking `data-check-browser-bridge` made a second health call, cleared the
+    global bridge error, and kept the continuous import warning visible until
+    retry.
+  - Retrying `data-import-continuous-source-id="codex"` sent a final
+    `/api/import-batch` request and completed the source.
+  - Final import panel showed `100%`, source `Codex sessions`, processed
+    `5 / 5`, batch `3개 파일 · 3개 프롬프트`, status `완료`, and persistence
+    notice
+    `/tmp/promptvault-continuous-second-batch-recovery.sqlite · 저장 5 · 신규 5 · 갱신 0`.
+  - Final counts: `healthCalls=2`, `planCalls=1`, `importBatchCalls=3`,
+    `facetsCalls=4`, `importStatesCalls=4`, `importEventsCalls=4`.
+  - Page errors and unexpected HTTP failures: none.
+  - Diagnostics contained only the expected aborted `/api/import-batch`
+    `net::ERR_FAILED` console/request-failure entry.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses and a network-level request abort.
+
+Next Steps:
+
+- Commit and push this report-only QA record after staged diff and secret
+  checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Import queue second-source recovery QA
 
@@ -77,8 +163,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record after staged diff and secret
-  checks.
+- Completed and pushed as `64ee7a0 docs: record queue recovery QA`.
 - Continue autonomous QA on another still-uncovered failure, performance, or
   UX edge state.
 

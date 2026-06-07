@@ -1,10 +1,112 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 02:46 KST
+Updated: 2026-06-08 02:51 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Import event total count validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge `/api/import-events` payloads whose `total_events`
+  count is smaller than the returned event rows before the UI can render a
+  contradictory activity summary.
+
+Context:
+
+- Rust reads `total_events` from `SELECT COUNT(*) FROM import_events` and then
+  returns a limited list of event rows, so `total_events` may be greater than
+  the returned list but should never be smaller than `events.length`.
+- The browser parser already validates each event row and rejects impossible
+  per-event progress relation mismatches.
+- Before this slice, `parseImportEventsResult()` only required `total_events`
+  to be a nonnegative safe integer.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the previous import state row progress slice is pushed and clean at
+  `25833e5`.
+- Confirmed the worktree is clean at `## main...origin/main`.
+- Identified the import event total count gap from live
+  `src/promptVaultApi.ts`, `src/App.tsx`, and `src-tauri/src/lib.rs`.
+- Added RED coverage for `/api/import-events` returning one valid event row
+  while `total_events` reports `0`.
+- Added parser validation requiring `total_events >= events.length`.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified full UI/unit tests, production build, preview QA, and the full
+  project check.
+- Corrected the temporary preview QA assertion to match the app's existing
+  `가져오기 기록 새로고침에 실패했습니다` copy before the passing browser run.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Tightens `parseImportEventsResult()` to reject `total_events` values below
+    the number of returned event rows.
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for import-event total counts
+    that are smaller than the returned rows.
+- `working.md`
+  - Records this import event total count validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new import-event total count test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 44 tests, 43 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 44 tests, 44 pass.
+- `npm run test:ui`:
+  - Passed: 208 tests, 208 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CsY_8VNl.js`.
+- Import event total count browser QA on preview `127.0.0.1:5272`:
+  - Routed browser bridge requests for `/api/health`, `/api/prompt-facets`,
+    `/api/import-states`, and `/api/import-events`.
+  - `/api/import-events` returned HTTP 200 with one valid event row while
+    `total_events: 0`.
+  - First run failed because the temp QA script expected `최근 가져오기 기록
+    새로고침에 실패했습니다`, but the app's existing failure copy is
+    `가져오기 기록 새로고침에 실패했습니다`.
+  - After correcting the temp script assertion, passed: the failure notice
+    rendered, no contradictory `전체 이벤트 0` summary rendered, no `Codex`,
+    `1 / 3`, `1개 파일`, or `2개 프롬프트` event row content rendered,
+    `.import-activity-row` count stayed `0`, and page errors/console
+    errors/request failures were empty.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=1`,
+    `/api/import-states=1`, `/api/import-events=1`.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 208 tests, 208 pass.
+  - Build: passed with `index-CsY_8VNl.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found. The only preview QA failure was a temporary script copy
+  mismatch and was corrected before the passing browser run.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run cleanup checks, stage explicit safe paths, run staged secret checks, then
+  commit and push this import event total count validation slice.
 
 ## Current Slice - 2026-06-08 Import state row progress relation validation
 

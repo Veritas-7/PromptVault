@@ -440,6 +440,44 @@ test("browser bridge import events reject progress relation mismatches", async (
   );
 });
 
+test("browser bridge import events reject total count below returned rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    events: [{
+      id: 1,
+      generated_at: "2026-06-07T00:00:00Z",
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      batch_start_index: 0,
+      batch_file_count: 1,
+      batch_prompt_count: 2,
+      processed_files: 1,
+      total_files: 3,
+      completed: false,
+      warnings: [],
+    }],
+    total_events: 0,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listImportEvents(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /전체 이벤트|Codex|1 \/ 3|1개 파일|0|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge stored facets reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ database_path: "/tmp/promptvault.sqlite" }), {

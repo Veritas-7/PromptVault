@@ -529,7 +529,8 @@ function parseImportEventsResult(value: unknown): ImportEventsResult {
     || typeof value.database_path !== "string"
     || !Array.isArray(value.events)
     || !value.events.every(isImportEvent)
-    || !isNonNegativeSafeInteger(value.total_events)) {
+    || !isNonNegativeSafeInteger(value.total_events)
+    || value.total_events < value.events.length) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ImportEventsResult;

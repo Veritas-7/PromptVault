@@ -1,3 +1,4 @@
+import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import type { PromptRecord } from "./types";
 
 const PROMPT_ROW_SNIPPET_LENGTH = 120;
@@ -13,10 +14,18 @@ function clippedPromptSnippet(text: string): string {
   return `${compact.slice(0, PROMPT_ROW_SNIPPET_LENGTH - 3).trimEnd()}...`;
 }
 
-export function promptRowAriaLabel(prompt: PromptRecord, index: number, total: number): string {
+export function promptRowAriaLabel(
+  prompt: PromptRecord,
+  index: number,
+  total: number,
+  lockState?: ActionLockState,
+): string {
   const position = `프롬프트 ${index + 1} / ${total}`;
   const timestamp = prompt.timestamp?.trim() || "시간 없음";
-  return `${position}: ${prompt.source}, ${timestamp}, ${prompt.word_count.toLocaleString()}개 단어, 품질 ${prompt.quality.score} ${prompt.quality.band}, ${clippedPromptSnippet(prompt.text)}`;
+  const label = `${position}: ${prompt.source}, ${timestamp}, ${prompt.word_count.toLocaleString()}개 단어, 품질 ${prompt.quality.score} ${prompt.quality.band}, ${clippedPromptSnippet(prompt.text)}`;
+  const reason = lockState ? activeActionLockReason(lockState) : null;
+  if (reason) return `${label}. ${reason}에는 다른 프롬프트를 선택할 수 없습니다`;
+  return label;
 }
 
 export function selectedPromptMetaLabel(prompt: PromptRecord): string {

@@ -1859,11 +1859,12 @@ function App() {
           <div className="prompt-list">
             {filteredPrompts.map((prompt, index) => (
               <button
-                aria-label={promptRowAriaLabel(prompt, index, filteredPrompts.length)}
+                aria-label={promptRowAriaLabel(prompt, index, filteredPrompts.length, actionLockState)}
                 aria-pressed={prompt.id === selectedPrompt?.id}
                 className={`prompt-row ${prompt.id === selectedPrompt?.id ? "active" : ""}`}
                 data-prompt-index={index + 1}
                 data-prompt-row="true"
+                disabled={isTopLevelActionLocked}
                 key={prompt.id}
                 onClick={() => {
                   if (shouldClearImprovementOnPromptSelect(prompt.id, selectedPrompt?.id ?? null)) {

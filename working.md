@@ -1,10 +1,84 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:00 KST
+Updated: 2026-06-07 18:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Prompt row active-work lock
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent prompt-row selection changes while a selected-prompt recommendation
+  request is in flight.
+
+Context:
+
+- The prior slices locked the recommendation empty copy and prompt filter during
+  delayed `/api/improve` work.
+- Browser QA then showed prompt rows stayed enabled during `추천 생성 중`.
+- Clicking a different row during the delayed request changed selection; when
+  the request resolved, the generated recommendation was hidden from the newly
+  selected prompt context.
+
+Progress:
+
+- Added lock-aware prompt-row aria copy using the existing active action lock
+  reason.
+- Disabled prompt-row buttons whenever top-level work is locked.
+- Added helper coverage for the improvement-running row-selection lock label.
+
+Changes:
+
+- `src/promptRowA11y.ts`
+  - Added optional `ActionLockState` support to `promptRowAriaLabel`.
+  - Appends a Korean disabled-selection reason when an active lock is present.
+- `src/App.tsx`
+  - Passed `actionLockState` into prompt-row labels.
+  - Disabled prompt rows while `isTopLevelActionLocked` is true.
+- `tests/promptRowA11y.test.ts`
+  - Added active-work lock label coverage.
+
+Tests:
+
+- RED browser QA on preview `127.0.0.1:5189` + bridge
+  `127.0.0.1:5174`:
+  - Delayed `/api/improve` response.
+  - While `추천 생성 중` was active, first and second prompt rows were still
+    enabled.
+  - Clicking the second row changed selection, and the delayed recommendation
+    resolved hidden from the visible selected prompt context.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`:
+  PASS, `7` tests.
+- `npm run build`: PASS.
+- Fixed browser QA on preview `127.0.0.1:5189` + bridge
+  `127.0.0.1:5174`:
+  - Prompt rows were enabled before improve.
+  - During `추천 생성 중`, prompt rows were disabled and their labels included
+    `프롬프트 추천 생성 중에는 다른 프롬프트를 선택할 수 없습니다`.
+  - After the delayed result rendered, rows were enabled again, the original
+    row stayed selected, and the revised prompt was visible.
+  - Body/document width stayed within `1365 / 1365`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `143` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local delayed-response browser QA
+  and active-work control consistency inspection.
+
+Next Steps:
+
+- Commit and push this prompt-row active-work lock slice.
+- Continue autonomous QA on the next uncovered PromptVault user flow.
 
 ## Current Slice - 2026-06-07 Prompt filter active-work lock
 
@@ -75,7 +149,7 @@ Research:
 
 Next Steps:
 
-- Continue autonomous QA on the next uncovered PromptVault user flow.
+- Completed and pushed as `a0430d3 fix: lock prompt filter during active work`.
 
 ## Current Slice - 2026-06-07 Recommendation in-flight empty copy
 

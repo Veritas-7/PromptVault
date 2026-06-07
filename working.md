@@ -1,10 +1,87 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:12 KST
+Updated: 2026-06-07 18:18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Browser bridge recheck active-work lock
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep the browser bridge recheck control from starting background bridge
+  refresh work while another top-level user action is active.
+
+Context:
+
+- A mobile QA pass on preview `127.0.0.1:5191` + bridge `127.0.0.1:5174`
+  covered initial bridge state, stored prompt loading, import planning, and
+  select-all at `390x844`.
+- That mobile pass found no horizontal overflow, console errors, page errors,
+  request failures, or HTTP failures.
+- A delayed single import QA then showed the browser bridge recheck button
+  stayed enabled during `가져오는 중` and had no aria label.
+
+Progress:
+
+- Added browser bridge recheck label/disabled helpers that reuse active-work
+  lock reasons while ignoring bridge-disconnected for the recheck itself.
+- Wired the bridge recheck button to the new aria label and disabled policy.
+- Added unit coverage proving disconnected bridge recheck stays available, but
+  checking or active import work disables it.
+
+Changes:
+
+- `src/topActionLabels.ts`
+  - Added `browserBridgeCheckActionLabel` and
+    `browserBridgeCheckActionDisabled`.
+- `src/App.tsx`
+  - Added the lock-aware label and disabled state to
+    `data-check-browser-bridge`.
+- `tests/topActionLabels.test.ts`
+  - Added bridge recheck label/disabled coverage.
+
+Tests:
+
+- Mobile browser QA on preview `127.0.0.1:5191` + bridge
+  `127.0.0.1:5174`:
+  - Initial bridge state, stored load, plan, and select-all stayed within
+    `390 / 390`.
+  - Prompt rows loaded `200`, plan selection summary changed from
+    `0 / 11개 선택됨` to `11 / 11개 선택됨`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- RED browser QA on preview `127.0.0.1:5192` + bridge
+  `127.0.0.1:5174`:
+  - Delayed `/api/import-batch`, started a single import, and observed
+    `data-check-browser-bridge` still enabled during `상태 가져오는 중`.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/topActionLabels.test.ts`:
+  PASS, `10` tests.
+- `npm run build`: PASS.
+- Fixed browser QA on preview `127.0.0.1:5192` + bridge
+  `127.0.0.1:5174`:
+  - During delayed import, the recheck button was disabled.
+  - Its aria label was
+    `가져오기 실행 중에는 브라우저 브리지 연결을 다시 확인할 수 없습니다`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `145` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local mobile/browser QA and
+  active-work control consistency inspection.
+
+Next Steps:
+
+- Commit and push this browser bridge recheck active-work lock slice.
+- Continue autonomous QA on the next uncovered PromptVault user flow.
 
 ## Current Slice - 2026-06-07 Recommendation failure empty-copy suppression
 
@@ -77,8 +154,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this recommendation failure empty-copy suppression slice.
-- Continue autonomous QA on the next uncovered PromptVault user flow.
+- Completed and pushed as `28b56f6 fix: suppress recommendation empty copy after failure`.
 
 ## Current Slice - 2026-06-07 Prompt row active-work lock
 

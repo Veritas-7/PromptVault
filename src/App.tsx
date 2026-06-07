@@ -131,6 +131,8 @@ import {
   type StoredFacetsState,
 } from "./storedFacetStatus";
 import {
+  browserBridgeCheckActionDisabled,
+  browserBridgeCheckActionLabel,
   planActionLabel,
   planPanelActionLabel,
   previewModeActionLabel,
@@ -1046,9 +1048,10 @@ function App() {
           {browserBridgeStatus === "disconnected" ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}
           <span>{browserBridgeStatusText}</span>
           <button
+            aria-label={browserBridgeCheckActionLabel(browserBridgeStatus, actionLockState)}
             className="notice-action"
             data-check-browser-bridge="true"
-            disabled={browserBridgeStatus === "checking"}
+            disabled={browserBridgeCheckActionDisabled(browserBridgeStatus, actionLockState)}
             onClick={() => void verifyBrowserBridge({ refresh: true })}
             type="button"
           >

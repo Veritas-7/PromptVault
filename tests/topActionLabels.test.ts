@@ -3,6 +3,8 @@ import test from "node:test";
 import type { ActionLockState } from "../src/actionLocks.ts";
 import {
   activeActionLockReason,
+  browserBridgeCheckActionDisabled,
+  browserBridgeCheckActionLabel,
   planActionLabel,
   planPanelActionLabel,
   previewModeActionLabel,
@@ -73,6 +75,35 @@ test("stored load action label explains loading and locked states", () => {
     storedLoadActionLabel("idle", lockState({ improvementRunning: true })),
     "프롬프트 추천 생성 중에는 저장된 프롬프트를 불러올 수 없습니다",
   );
+});
+
+test("browser bridge recheck labels and disables only for checking or active work", () => {
+  assert.equal(
+    browserBridgeCheckActionLabel("connected", lockState()),
+    "브라우저 브리지 다시 확인",
+  );
+  assert.equal(
+    browserBridgeCheckActionLabel("disconnected", lockState({ browserBridgeDisconnected: true })),
+    "브라우저 브리지 연결 다시 확인",
+  );
+  assert.equal(
+    browserBridgeCheckActionLabel("checking", lockState({ browserBridgeChecking: true })),
+    "브라우저 브리지 확인 중",
+  );
+  assert.equal(
+    browserBridgeCheckActionLabel("connected", lockState({ importRunning: true })),
+    "가져오기 실행 중에는 브라우저 브리지 연결을 다시 확인할 수 없습니다",
+  );
+  assert.equal(browserBridgeCheckActionDisabled("connected", lockState()), false);
+  assert.equal(
+    browserBridgeCheckActionDisabled("disconnected", lockState({ browserBridgeDisconnected: true })),
+    false,
+  );
+  assert.equal(
+    browserBridgeCheckActionDisabled("checking", lockState({ browserBridgeChecking: true })),
+    true,
+  );
+  assert.equal(browserBridgeCheckActionDisabled("connected", lockState({ importRunning: true })), true);
 });
 
 test("plan action label explains planning, failed, and locked states", () => {

@@ -6,6 +6,36 @@ import type { StoredLoadState } from "./storedLoadStatus";
 
 export { activeActionLockReason } from "./actionLocks.ts";
 
+export type BrowserBridgeCheckState = "native" | "checking" | "connected" | "disconnected";
+
+function activeWorkActionLockReason(state: ActionLockState): string | null {
+  if (state.scanRunning) return "스캔 실행 중";
+  if (state.planRunning) return "가져오기 계획 생성 중";
+  if (state.importRunning) return "가져오기 실행 중";
+  if (state.storedLoadRunning) return "저장된 프롬프트 불러오는 중";
+  if (state.improvementRunning) return "프롬프트 추천 생성 중";
+  return null;
+}
+
+export function browserBridgeCheckActionDisabled(
+  status: BrowserBridgeCheckState,
+  lockState: ActionLockState,
+): boolean {
+  return status === "checking" || activeWorkActionLockReason(lockState) !== null;
+}
+
+export function browserBridgeCheckActionLabel(
+  status: BrowserBridgeCheckState,
+  lockState: ActionLockState,
+): string {
+  if (status === "checking") return "브라우저 브리지 확인 중";
+  const reason = activeWorkActionLockReason(lockState);
+  if (reason) return `${reason}에는 브라우저 브리지 연결을 다시 확인할 수 없습니다`;
+  return status === "disconnected"
+    ? "브라우저 브리지 연결 다시 확인"
+    : "브라우저 브리지 다시 확인";
+}
+
 export function scanActionLabel(scanState: ScanRunState, lockState: ActionLockState): string {
   if (scanState === "canceling") return "실행 중인 스캔 중지 중";
   if (scanState === "scanning") return "빠른 프롬프트 스캔 중";

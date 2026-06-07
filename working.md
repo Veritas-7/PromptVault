@@ -1,10 +1,102 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:32 KST
+Updated: 2026-06-07 20:40 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Current HEAD core smoke QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the current built `HEAD` happy path across the main user-facing
+  browser flows: quick scan, prompt filtering, recommendation generation,
+  stored prompt filters, import planning, and single-source import.
+
+Context:
+
+- Recent QA focused on bridge-loss and import recovery failure states.
+- This slice checks that the non-error core flow still works after those
+  recovery-path fixes and report-only QA additions.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Rebuilt the frontend preview artifact with `npm run build`.
+- Ran a current-HEAD browser smoke test against preview `127.0.0.1:5229`.
+- Mocked the browser bridge endpoints for health, facets, import states,
+  import events, scan, stored prompts, improve, plan, and import batch.
+- Verified request bodies, rendered UI state, saved recommendation notice,
+  stored filter behavior, plan selection defaults, disabled empty source import,
+  and successful import persistence.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only current-HEAD core smoke QA slice.
+  - Marked the previous continuous import recovery QA slice as completed/pushed.
+
+Tests:
+
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-MjEXw_ye.js`.
+- Current HEAD core smoke QA on preview `127.0.0.1:5229`:
+  - Initial `/api/health` succeeded and the browser bridge notice rendered the
+    database path `/tmp/promptvault-current-head-core-smoke.sqlite`.
+  - Clicking `data-run-scan` sent one `/api/scan` request with
+    `include_markdown: false`, `write_markdown: false`,
+    `persist_on_cancel: false`, `preview_sort: "latest"`, `limit: 25`,
+    `preview_limit: 1000`, six quick-scan source IDs, and `source_limit: 5`.
+  - Scan rendered two prompt rows, selected the latest prompt by default, and
+    showed the scan persistence notice with `저장 2`.
+  - `data-prompt-filter` narrowed rows to the release-notes prompt and clearing
+    the filter restored both rows.
+  - Clicking `data-run-improve` sent one `/api/improve` request for
+    `prompt_id: "scan-latest"` with the selected prompt text, source/context,
+    `persist: true`, and the health database path.
+  - Recommendation UI rendered the revised prompt and
+    `추천 이력 #101 저장됨 · 이 프롬프트 2회`.
+  - Stored filters `query=cmux`, `source=Codex sessions`,
+    `date=2026-06-07`, and `workspace=PromptVault` sent one `/api/prompts`
+    request with `limit: 1000` and `preview_sort: "latest"`, then rendered and
+    selected the stored prompt.
+  - Clicking `data-run-plan` sent one `/api/plan` request and rendered one
+    importable `Codex sessions` source plus one disabled `Empty source`; the
+    selection summary started at `0 / 1개 선택됨`.
+  - Clicking `data-import-source-id="codex"` sent one `/api/import-batch`
+    request with `source_id: "codex"`, `file_batch_size: 5`, and
+    `preview_limit: 25`.
+  - Final import panel showed source `Codex sessions`, processed `2 / 2`,
+    status `완료`, and persistence `저장 4 · 신규 1`.
+  - Final counts: `healthCalls=1`, `facetsCalls=3`,
+    `importStatesCalls=2`, `importEventsCalls=2`, `scanCalls=1`,
+    `scanProgressCalls=1`, `storedPromptCalls=1`, `improveCalls=1`,
+    `planCalls=1`, `importBatchCalls=1`.
+  - Page errors, unexpected console errors, and unexpected request failures:
+    none.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record after staged diff and secret
+  checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Continuous import second-batch recovery QA
 
@@ -87,8 +179,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record after staged diff and secret
-  checks.
+- Completed and pushed as `6bbf496 docs: record continuous recovery QA`.
 - Continue autonomous QA on another still-uncovered failure, performance, or
   UX edge state.
 

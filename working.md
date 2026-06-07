@@ -1,10 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 21:07 KST
+Updated: 2026-06-07 21:13 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Malformed bridge health JSON handling
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Harden browser-bridge health checking when `/api/health` returns HTTP 200
+  with a malformed JSON body.
+
+Context:
+
+- The prior slice fixed malformed successful JSON from bridge POST endpoints
+  such as `/api/scan`.
+- `checkBrowserBridgeHealth()` still parsed `/api/health` with raw
+  `JSON.parse(text)`, so a malformed health response could throw raw parser
+  copy before the app collapsed the state into disconnected bridge mode.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added a RED unit test for malformed browser-bridge health JSON.
+- Updated `checkBrowserBridgeHealth()` to throw stable PromptVault copy when a
+  successful health response cannot be parsed as JSON.
+- Verified the focused unit test, full UI/unit suite, production build, preview
+  recovery flow, and the full project check.
+
+Changes:
+
+- `src/browserBridge.ts`
+  - Catches JSON parsing failures from successful `/api/health` responses and
+    throws `PromptVault 브라우저 브리지 상태 응답을 JSON으로 해석하지 못했습니다.`
+- `tests/browserBridge.test.ts`
+  - Adds coverage that `checkBrowserBridgeHealth()` reports malformed health
+    JSON without raw `Unexpected token` or `SyntaxError` parser text.
+- `working.md`
+  - Records this malformed health JSON handling slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/browserBridge.test.ts`
+  - Failed for the intended reason: received raw parser copy
+    `Unexpected token 'o', "not json" is not valid JSON` instead of
+    PromptVault bridge-health copy.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/browserBridge.test.ts`
+  - Passed: 3 tests, 3 pass.
+- `npm run test:ui`:
+  - Passed: 157 tests, 157 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index--jk88xxn.js`.
+- Malformed health response browser QA on preview `127.0.0.1:5235`:
+  - First `/api/health` returned HTTP 200 with body `not json`.
+  - UI transitioned to `data-browser-bridge-status="disconnected"` and showed
+    the bridge recovery notice.
+  - UI did not expose `Unexpected token`, `SyntaxError`, or `not json`.
+  - In disconnected state, `data-run-scan`, `data-load-stored-prompts`, and
+    `data-run-plan` stayed disabled while `data-check-browser-bridge` was
+    enabled.
+  - Clicking `data-check-browser-bridge` made a second valid health call,
+    recovered to `data-browser-bridge-status="connected"`, showed database path
+    `/tmp/promptvault-health-malformed.sqlite`, and unlocked the top actions.
+  - Final count: `healthCalls=2`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 157 tests, 157 pass.
+  - Build: passed with `index--jk88xxn.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage explicit changed paths, run staged secret/diff checks, commit, push to
+  `origin main`, and verify branch parity.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Malformed bridge JSON handling
 

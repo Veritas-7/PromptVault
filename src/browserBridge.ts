@@ -38,7 +38,11 @@ export async function checkBrowserBridgeHealth(timeoutMs = 1200): Promise<Browse
     if (!response.ok) {
       throw new Error(text || `PromptVault 브라우저 브리지가 HTTP ${response.status}를 반환했습니다.`);
     }
-    return JSON.parse(text) as BrowserBridgeHealth;
+    try {
+      return JSON.parse(text) as BrowserBridgeHealth;
+    } catch {
+      throw new Error("PromptVault 브라우저 브리지 상태 응답을 JSON으로 해석하지 못했습니다.");
+    }
   } finally {
     window.clearTimeout(timer);
   }

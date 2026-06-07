@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { qualityBandLabel } from "../src/qualityLabels.ts";
+
+test("quality band labels use Korean UI copy for known bands", () => {
+  assert.equal(qualityBandLabel("weak"), "약함");
+  assert.equal(qualityBandLabel("workable"), "보통");
+  assert.equal(qualityBandLabel("strong"), "강함");
+});
+
+test("quality band labels handle legacy and fallback values", () => {
+  assert.equal(qualityBandLabel("GOOD"), "좋음");
+  assert.equal(qualityBandLabel("excellent"), "우수");
+  assert.equal(qualityBandLabel("custom"), "custom");
+  assert.equal(qualityBandLabel("  "), "알 수 없음");
+});

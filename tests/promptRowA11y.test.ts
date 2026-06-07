@@ -51,7 +51,7 @@ test("prompt row labels distinguish duplicate prompt text by list position", () 
 test("prompt row labels compact whitespace and include quality metadata", () => {
   assert.equal(
     promptRowAriaLabel(promptRecord({ text: "  Improve\n\nthis\tprompt  ", word_count: 3 }), 0, 1),
-    "프롬프트 1 / 1: Codex, 2026-06-06T12:00:00Z, 3개 단어, 품질 36 weak, Improve this prompt",
+    "프롬프트 1 / 1: Codex, 2026-06-06T12:00:00Z, 3개 단어, 품질 36 약함, Improve this prompt",
   );
 });
 
@@ -65,27 +65,27 @@ test("prompt row labels avoid unbounded prompt text", () => {
 test("prompt row labels handle missing timestamps and empty prompts", () => {
   assert.equal(
     promptRowAriaLabel(promptRecord({ timestamp: null, text: "   ", word_count: 0 }), 0, 1),
-    "프롬프트 1 / 1: Codex, 시간 없음, 0개 단어, 품질 36 weak, 빈 프롬프트",
+    "프롬프트 1 / 1: Codex, 시간 없음, 0개 단어, 품질 36 약함, 빈 프롬프트",
   );
 });
 
 test("prompt row labels explain active-work selection locks", () => {
   assert.equal(
     promptRowAriaLabel(promptRecord(), 0, 1, lockState({ improvementRunning: true })),
-    "프롬프트 1 / 1: Codex, 2026-06-06T12:00:00Z, 3개 단어, 품질 36 weak, Return exactly OK. 프롬프트 추천 생성 중에는 다른 프롬프트를 선택할 수 없습니다",
+    "프롬프트 1 / 1: Codex, 2026-06-06T12:00:00Z, 3개 단어, 품질 36 약함, Return exactly OK. 프롬프트 추천 생성 중에는 다른 프롬프트를 선택할 수 없습니다",
   );
 });
 
 test("selected prompt metadata label separates visual chips", () => {
   assert.equal(
     selectedPromptMetaLabel(promptRecord()),
-    "선택한 프롬프트 메타데이터: Codex, 2026-06-06T12:00:00Z, /Users/wj, 품질 36 weak",
+    "선택한 프롬프트 메타데이터: Codex, 2026-06-06T12:00:00Z, /Users/wj, 품질 36 약함",
   );
 });
 
 test("selected prompt metadata label handles missing values", () => {
   assert.equal(
     selectedPromptMetaLabel(promptRecord({ cwd: null, timestamp: null })),
-    "선택한 프롬프트 메타데이터: Codex, 시간 없음, 작업공간 없음, 품질 36 weak",
+    "선택한 프롬프트 메타데이터: Codex, 시간 없음, 작업공간 없음, 품질 36 약함",
   );
 });

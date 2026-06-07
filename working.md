@@ -1,10 +1,92 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:52 KST
+Updated: 2026-06-07 18:55 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Quality band Korean labels
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Polish prompt quality band labels so visible prompt rows and accessibility
+  metadata use consistent Korean UI copy.
+
+Context:
+
+- Scan stale-result browser QA exposed a user-facing mismatch: `약함` was
+  localized, but mocked `GOOD`/`EXCELLENT` values rendered as raw uppercase
+  English.
+- The backend currently emits `weak`, `workable`, and `strong`, but browser QA
+  and persisted/legacy values can still surface compatible variants.
+- Prompt row aria labels and selected-prompt metadata were also using the raw
+  backend band instead of the visible UI label.
+
+Progress:
+
+- Added a shared quality band label helper.
+- Reused the helper in prompt rows, selected prompt metadata aria labels, and
+  the visible App quality pills.
+- Added helper coverage for known backend bands plus legacy/fallback values.
+- Updated prompt-row accessibility tests to expect Korean band labels.
+
+Changes:
+
+- `src/qualityLabels.ts`
+  - Added `qualityBandLabel` for `weak`, `workable`, `strong`, `GOOD`, and
+    `excellent`, with empty/unknown fallbacks.
+- `src/App.tsx`
+  - Replaced the local quality band formatter with the shared helper.
+- `src/promptRowA11y.ts`
+  - Uses the shared helper for prompt row and selected prompt metadata labels.
+- `tests/qualityLabels.test.ts`
+  - Added quality band label coverage.
+- `tests/promptRowA11y.test.ts`
+  - Updated expected aria copy from raw `weak` to `약함`.
+- `working.md`
+  - Recorded this polish slice and marked the prior scan stale-result slice as
+    pushed.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/qualityLabels.test.ts tests/promptRowA11y.test.ts`:
+  - 9 passed.
+- `npm run build`:
+  - `tsc && vite build` passed.
+- Quality band browser QA on preview `127.0.0.1:5203` + bridge
+  `127.0.0.1:5174`:
+  - Mocked scan rows rendered `45 · 약함`, `72 · 보통`, `88 · 강함`,
+    `82 · 좋음`, and `95 · 우수`.
+  - No raw `weak`, `workable`, `strong`, `GOOD`, or `excellent` band text
+    remained in the prompt list.
+  - Selecting the strong row produced selected metadata aria-label containing
+    `품질 88 강함`.
+  - Page width stayed within `1365 / 1365`.
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+- `npm run check`:
+  - UI tests: 148 passed.
+  - Build: passed.
+  - Rust lib tests: 84 passed.
+  - Rust CLI tests: 16 passed.
+  - Doc-tests: passed.
+  - Clippy with `-D warnings`: passed.
+
+Issues:
+
+- No blocker found after this fix.
+
+Research:
+
+- No external research. This was derived from rendered local QA output.
+
+Next Steps:
+
+- Commit and push this quality band label polish slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Scan stale-result failure recovery QA
 
@@ -70,7 +152,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this scan stale-result recovery QA worklog slice.
+- Completed and pushed as `5856831 docs: record scan stale recovery QA`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Import events refresh failure recovery QA

@@ -76,6 +76,7 @@ import {
   selectedPromptEmptyText,
 } from "./promptEmptyState";
 import { promptRowAriaLabel, selectedPromptMetaLabel } from "./promptRowA11y";
+import { qualityBandLabel } from "./qualityLabels";
 import {
   cancelScan,
   importBatch,
@@ -190,19 +191,6 @@ function formatBytes(bytes: number): string {
     unit += 1;
   }
   return unit === 0 ? `${bytes} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
-}
-
-function qualityBandLabel(band: string): string {
-  switch (band) {
-    case "weak":
-      return "약함";
-    case "workable":
-      return "보통";
-    case "strong":
-      return "강함";
-    default:
-      return band || "알 수 없음";
-  }
 }
 
 function qualityGapLabel(gap: string): string {

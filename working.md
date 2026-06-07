@@ -1,10 +1,101 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 03:32 KST
+Updated: 2026-06-08 03:37 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Persistence aggregate validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/import payloads whose persistence stats report
+  impossible stored, inserted, updated, or date totals before the UI can render
+  bogus database status.
+
+Context:
+
+- Rust computes `stored_prompt_count` and `date_count` from SQLite after prompt
+  persistence completes.
+- `inserted_prompt_count` and `updated_prompt_count` count prompt rows handled
+  in the same persistence pass.
+- Therefore `inserted_prompt_count + updated_prompt_count` cannot exceed
+  `stored_prompt_count`, and `date_count` cannot exceed `stored_prompt_count`.
+- Before this slice, `isPersistStats()` only checked that those values were
+  nonnegative safe integers.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the previous scan-source aggregate slice is pushed and clean at
+  `9041024`.
+- Verified local/remote parity from clean `main...origin/main` with
+  `git rev-list --left-right --count HEAD...origin/main` returning `0 0`.
+- Identified the persistence aggregate gap from live `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `src-tauri/src/lib.rs`.
+- Added RED coverage for `/api/scan` returning `stored_prompt_count: 1`,
+  `inserted_prompt_count: 1`, `updated_prompt_count: 1`, and `date_count: 2`.
+- Added parser validation requiring changed prompt counts and date counts to
+  stay within the stored prompt count.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified broader UI tests, production build, and preview QA.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for impossible persistence
+    aggregate totals.
+- `src/promptVaultApi.ts`
+  - Tightens `isPersistStats()` to validate stored/changed/date aggregate
+    relationships.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new persistence aggregate test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 49 tests, 48 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 49 tests, 49 pass.
+- `npm run test:ui`
+  - Passed: 213 tests, 213 pass.
+- `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-D8tT4VWY.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - Ran Vite preview on port `5277` with
+    `/tmp/promptvault_persistence_aggregate_qa.mjs`.
+  - Mocked `/api/scan` with `stored_prompt_count: 1`,
+    `inserted_prompt_count: 1`, `updated_prompt_count: 1`, and
+    `date_count: 2`.
+  - Passed: the UI rendered `data-scan-run-error="true"` and the malformed
+    bridge-response message, did not render impossible source rows, and did not
+    show bogus `저장 1`, `신규 1`, `갱신 1`, or `날짜 2` copy.
+  - Removed `/tmp/promptvault_persistence_aggregate_qa.mjs` after the passing
+    run.
+- `npm run check`
+  - Passed: UI tests, production build, Rust library tests, Rust CLI tests,
+    doc-tests, and clippy all completed with exit 0.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run staged security/git verification, then commit and push this slice.
 
 ## Current Slice - 2026-06-08 Scan source prompt aggregate validation
 

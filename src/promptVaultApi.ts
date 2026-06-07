@@ -448,12 +448,21 @@ function isScanPlanAggregate(value: unknown): boolean {
 }
 
 function isPersistStats(value: unknown): boolean {
-  return isRecord(value)
-    && typeof value.database_path === "string"
-    && isNonNegativeSafeInteger(value.stored_prompt_count)
-    && isNonNegativeSafeInteger(value.inserted_prompt_count)
-    && isNonNegativeSafeInteger(value.updated_prompt_count)
-    && isNonNegativeSafeInteger(value.date_count);
+  if (!isRecord(value) || typeof value.database_path !== "string") return false;
+  const storedPromptCount = value.stored_prompt_count;
+  const insertedPromptCount = value.inserted_prompt_count;
+  const updatedPromptCount = value.updated_prompt_count;
+  const dateCount = value.date_count;
+  if (!isNonNegativeSafeInteger(storedPromptCount)
+    || !isNonNegativeSafeInteger(insertedPromptCount)
+    || !isNonNegativeSafeInteger(updatedPromptCount)
+    || !isNonNegativeSafeInteger(dateCount)) {
+    return false;
+  }
+  const changedPromptCount = insertedPromptCount + updatedPromptCount;
+  return Number.isSafeInteger(changedPromptCount)
+    && changedPromptCount <= storedPromptCount
+    && dateCount <= storedPromptCount;
 }
 
 function isScanStats(value: unknown): boolean {

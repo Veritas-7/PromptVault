@@ -225,10 +225,10 @@ function isSourcePlan(value: unknown): boolean {
     && typeof value.label === "string"
     && typeof value.root_path === "string"
     && typeof value.status === "string"
-    && typeof value.file_count === "number"
-    && typeof value.byte_count === "number"
-    && typeof value.large_file_count === "number"
-    && typeof value.largest_file_bytes === "number"
+    && isNonNegativeFiniteNumber(value.file_count)
+    && isNonNegativeFiniteNumber(value.byte_count)
+    && isNonNegativeFiniteNumber(value.large_file_count)
+    && isNonNegativeFiniteNumber(value.largest_file_bytes)
     && (
       typeof value.newest_modified_at === "undefined"
       || typeof value.newest_modified_at === "string"
@@ -403,12 +403,12 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
 function parseScanPlan(value: unknown): ScanPlan {
   if (!isRecord(value)
     || typeof value.generated_at !== "string"
-    || typeof value.total_sources !== "number"
-    || typeof value.available_sources !== "number"
-    || typeof value.total_files !== "number"
-    || typeof value.total_bytes !== "number"
-    || typeof value.large_file_count !== "number"
-    || typeof value.largest_file_bytes !== "number"
+    || !isNonNegativeFiniteNumber(value.total_sources)
+    || !isNonNegativeFiniteNumber(value.available_sources)
+    || !isNonNegativeFiniteNumber(value.total_files)
+    || !isNonNegativeFiniteNumber(value.total_bytes)
+    || !isNonNegativeFiniteNumber(value.large_file_count)
+    || !isNonNegativeFiniteNumber(value.largest_file_bytes)
     || !Array.isArray(value.sources)
     || !value.sources.every(isSourcePlan)
     || !isStringArray(value.warnings)) {

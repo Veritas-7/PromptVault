@@ -250,6 +250,47 @@ test("browser bridge scan plans reject malformed successful payloads", async (t)
   );
 });
 
+test("browser bridge scan plans reject impossible numeric payloads", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    total_sources: 1,
+    available_sources: 1,
+    total_files: -1,
+    total_bytes: -1024,
+    large_file_count: -1,
+    largest_file_bytes: -512,
+    sources: [{
+      id: "codex",
+      label: "Codex",
+      root_path: "/tmp/codex",
+      status: "ok",
+      file_count: -5,
+      byte_count: -2048,
+      large_file_count: -1,
+      largest_file_bytes: -1024,
+      newest_modified_at: null,
+      notes: [],
+    }],
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => planScan(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge cancel scan results reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ run_id: "scan-run-1" }), {

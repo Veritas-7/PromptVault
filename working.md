@@ -1,10 +1,102 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 22:40 KST
+Updated: 2026-06-07 22:45 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Scan plan numeric validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject impossible browser-bridge `/api/plan` numeric payloads before they can
+  render negative file/byte counts or enable import controls for impossible
+  sources.
+
+Context:
+
+- The previous slice hardened `/api/scan/progress` numeric validation.
+- `/api/plan` and nested `SourcePlan` still accepted any JavaScript `number`.
+  A shape-valid plan with negative source counts could reach plan labels and
+  source action controls.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added a RED test for shape-valid but impossible negative scan plan payloads.
+- Reused the non-negative finite number validator for `ScanPlan` top-level
+  counts and nested `SourcePlan` counts.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - `isSourcePlan()` now rejects negative or non-finite source file/byte
+    counts.
+  - `parseScanPlan()` now rejects negative or non-finite top-level plan counts.
+- `tests/promptVaultApi.test.ts`
+  - Adds `/api/plan` coverage for impossible negative numeric payloads.
+- `working.md`
+  - Records this scan plan numeric validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new impossible numeric plan payload
+    test saw a resolved result instead of the expected bridge response-shape
+    rejection.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 15 tests, 15 pass.
+- `npm run test:ui`:
+  - Passed: 179 tests, 179 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-Vt_JfxXD.js`.
+- Scan plan numeric validation browser QA on preview `127.0.0.1:5247`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/prompt-facets`, `/api/import-states`, and
+    `/api/import-events` returned valid payloads.
+  - Clicking `[data-run-plan]` made `/api/plan` return HTTP 200 with negative
+    plan/source numeric counters.
+  - UI rendered the generic bridge response-shape error plus plan failure copy.
+  - Body text did not expose `-1`, `-5`, `-512`, `-1,024`, `-2,048`, `NaN`, or
+    `Infinity`.
+  - No `[data-import-source-id='codex']` or `[data-select-source-id='codex']`
+    controls were created.
+  - Final counts: `health=1`, `facets=1`, `importStates=1`,
+    `importEvents=1`, `plan=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 179 tests, 179 pass.
+  - Build: passed with `index-Vt_JfxXD.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Commit and push this scan plan numeric validation slice after staged diff and
+  secret checks.
+- Continue autonomous QA on another still-uncovered bridge, import, improve, or
+  UX edge state after publication.
 
 ## Current Slice - 2026-06-07 Scan progress numeric validation
 

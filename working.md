@@ -4292,3 +4292,85 @@ Next focus:
 
 - Continue direct single-surface QA for valid Scan/Improve click flows and
   stop/cancel behavior.
+
+## Direct Single-Surface Core Flow QA - 2026-06-07 12:24 KST
+
+Current goal:
+
+- Continue direct cmux in-app browser QA using only the existing `surface:10`
+  and cover the remaining valid Scan, Improve, Stop, Stored Vault, and preview
+  mode flows.
+
+Context:
+
+- Repo state before this QA slice was clean and synchronized:
+  `git status --short --branch` -> `## main...origin/main`;
+  `git rev-list --left-right --count HEAD...origin/main` -> `0 0`.
+- Frontend static server on `127.0.0.1:5173` returned `HTTP/1.0 200 OK`.
+- PromptVault bridge on `127.0.0.1:5174` returned `/api/health` OK with
+  database `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- Used only existing cmux `surface:10`; no new browser surface was opened and
+  cmux was not restarted or killed.
+
+Direct UI tests:
+
+- Valid Scan flow:
+  - Set scan limit to `3`.
+  - Clicked `Scan`.
+  - Result: PASS.
+  - UI returned to idle, no scan error, 3 prompt rows visible.
+  - Stored facet summary updated to `88,387 stored, 11 sources, 50 dates,
+    50 workspaces`.
+  - UI surfaced the expected limited-scan warning:
+    `Scan stopped at configured limit of 3 prompts.`
+- Improve flow:
+  - Clicked `Improve` for the selected prompt.
+  - Result: PASS.
+  - Provider: `local-rules`.
+  - Quality delta displayed as `56 -> 100 +44`.
+  - Revised prompt panel became visible and no improvement error appeared.
+- Stop/cancel flow:
+  - Recorded DB prompt count before scan: `88387`.
+  - Set scan limit to `100000`.
+  - Clicked `Scan`, waited for `Stop` to appear, then clicked `Stop`.
+  - Result: PASS.
+  - UI showed canceled/not-stored warning:
+    `Scan canceled by user request; returning partial results. Canceled scan was
+    not stored in the vault.`
+  - Prompt rows cleared to 0 for the canceled partial scan.
+  - DB prompt count after scan remained `88387`, proving canceled partial
+    results were not persisted.
+- Stored Vault reset/load flow:
+  - `surface:10` briefly fell into the known empty-DOM/JS timeout state.
+  - Recovered the same surface with non-destructive same-surface browser
+    commands and navigation; no new browser was opened.
+  - Clicked `Reset` and `Load Stored`.
+  - Result: PASS.
+  - Source/date/workspace filters were empty.
+  - No stored-load error.
+  - 200 stored rows visible.
+  - Stored facet summary remained `88,387 stored, 11 sources, 50 dates,
+    50 workspaces`.
+- Preview mode flow:
+  - Toggled `Weakest`.
+  - Result: PASS, `Weakest aria-pressed=true`, `Latest=false`, 200 rows visible,
+    no stored-load error.
+  - Toggled back to `Latest`.
+  - Result: PASS, `Latest aria-pressed=true`, `Weakest=false`, 200 rows visible,
+    no stored-load error.
+
+Diagnostics:
+
+- `cmux browser --surface surface:10 console list`: PASS, no console entries.
+- `cmux browser --surface surface:10 errors list`: PASS, no browser errors.
+
+Remaining issue:
+
+- `surface:10` still intermittently returns an empty DOM/JS timeout, but it can
+  recover through same-surface non-destructive commands. This is a cmux helper
+  instability, not a PromptVault app error based on current console/error state.
+
+Next focus:
+
+- Continue direct single-surface QA for plan/import queue edge cases and perform
+  a completion audit before considering the goal complete.

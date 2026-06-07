@@ -1,12 +1,137 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 08:31 KST
+Updated: 2026-06-08 08:40 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Duplicate import batch prompt ID validation
+## Current Slice - 2026-06-08 Complete import batch aggregate validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge import batch payloads whose prompt aggregate stats do
+  not match the returned prompt records when the returned prompt records cover
+  the complete batch.
+
+Context:
+
+- The previous slices tightened duplicate prompt ID handling for scan/stored
+  prompt results and import batch previews.
+- Backend `run_import_batch_for_source` builds `stats` from the full batch
+  prompt set, then applies `response_prompts(&prompts, preview_limit, ...)` for
+  the returned preview rows.
+- Because preview rows may be truncated, import batch stats cannot always be
+  compared directly against the returned prompt rows.
+- When `returned_prompt_count === batch_prompt_count`, the returned prompt rows
+  represent the complete batch. In that case the parser can safely reuse the
+  scan-result aggregate consistency rules for total words, average quality,
+  weak counts, source prompt counts, and source quality summaries.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault` with no goal-warning.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the direct parent project policy, current `working.md`, relevant
+  TDD/webapp/custom-git/verification skills, and the import batch parser plus
+  backend payload construction.
+- Identified the next narrow hardening target: complete import batch payloads
+  should reject aggregate stats that contradict their complete returned prompt
+  rows.
+- Added a RED API test for a complete import batch result whose returned prompt
+  rows cover the whole batch while `stats.total_words` and `average_words`
+  contradict those returned prompt rows.
+- Confirmed RED first: focused API suite failed 110/111 only on the new
+  missing-rejection case.
+- Connected a complete import batch aggregate gate that runs the existing
+  untruncated prompt/source aggregate checks only when the returned prompt
+  rows cover the complete batch.
+- Confirmed GREEN after the parser change: focused API suite passes 111/111.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed complete import batch response with contradictory
+  aggregate stats surfaced sanitized global and import-run failure UI, and the
+  malformed prompt payload was not rendered as successful import result content.
+- Confirmed `/tmp/promptvault_complete_import_batch_aggregate_qa.mjs` is absent
+  and preview port `5316` has no listener after the server wrapper stopped the
+  preview process.
+- Confirmed the full project check still passes after the parser and test
+  changes.
+- Confirmed pre-staging whitespace, repo parity, cleanup, and GitHub privacy
+  checks before staging explicit paths.
+- Staged only the intended slice files and confirmed the staged secret scan is
+  clean.
+
+Changes:
+
+- `working.md`: records the current complete import batch aggregate validation
+  slice.
+- `src/promptVaultApi.ts`: adds complete import batch aggregate validation for
+  non-preview-truncated import batch results.
+- `tests/promptVaultApi.test.ts`: adds the complete import batch aggregate
+  mismatch rejection case.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 110/111 only on the new complete import batch aggregate mismatch
+  case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 111/111 after the parser validation change.
+- Broader UI/helper suite: `npm run test:ui` passed 275/275.
+- Production build: `npm run build` passed (`tsc && vite build`).
+- Preview QA: first script attempt failed before exercising the app because the
+  temporary Node script resolved `playwright` relative to `/tmp`; corrected the
+  temp script to require dependencies from the project `package.json` and reran
+  successfully. Final command:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5316" --port 5316 --timeout 30 node /tmp/promptvault_complete_import_batch_aggregate_qa.mjs http://127.0.0.1:5316`
+  passed. The page reached `[data-browser-bridge-status="connected"]`,
+  clicking `[data-run-plan="true"]` rendered `[data-import-source-id="codex"]`,
+  clicking that import button produced `[data-import-run-error="true"]`, the
+  global error stayed sanitized, and the UI did not expose
+  `Improve this prompt.`, `8개 단어`, `저장 2`, or `신규 2`.
+- Cleanup check: `/tmp/promptvault_complete_import_batch_aggregate_qa.mjs` is
+  absent and port `5316` is free.
+- Full project check: `npm run check` passed. It reran UI tests 275/275,
+  production build, Rust library tests 84/84, CLI tests 16/16, doctests, and
+  clippy with `-D warnings`.
+- Pre-staging checks: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed with no output. `git rev-parse --show-toplevel` returned
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md` modified; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` showed only `origin`; GitHub reported
+  `Veritas-7/PromptVault` as `PRIVATE`; temp QA script remained absent; and
+  port `5316` remained free.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact` scanned
+  about 9.20 KB and reported no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Re-stage `working.md`, re-run the staged secret scan, then commit and push
+  the finished slice.
+
+## Previous Slice - 2026-06-08 Duplicate import batch prompt ID validation
 
 Current Goal:
 

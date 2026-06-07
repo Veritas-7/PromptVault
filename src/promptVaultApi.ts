@@ -734,6 +734,17 @@ function isImportBatchPromptCounts(value: unknown): boolean {
     && value.prompts.length === value.returned_prompt_count;
 }
 
+function isCompleteImportBatchPromptAggregate(value: Record<string, unknown>): boolean {
+  if (value.returned_prompt_count !== value.batch_prompt_count) return true;
+  const completePromptResult = { ...value, prompts_truncated: false };
+  return isUntruncatedPromptWordTotal(completePromptResult)
+    && isUntruncatedPromptAverageQuality(completePromptResult)
+    && isUntruncatedPromptWeakCount(completePromptResult)
+    && isUntruncatedSourceAverageQuality(completePromptResult)
+    && isUntruncatedSourcePromptCounts(completePromptResult)
+    && isUntruncatedSourceWeakCounts(completePromptResult);
+}
+
 function isImportBatchFileProgress(value: unknown): boolean {
   if (!isRecord(value) || !isRecord(value.source) || !isRecord(value.state)) return false;
   if (!isNonNegativeSafeInteger(value.batch_start_index)
@@ -815,6 +826,7 @@ function parseImportBatchResult(value: unknown): ImportBatchResult {
     || !promptRecordIdsAreUnique(value.prompts)
     || !isScanStats(value.stats)
     || !isImportBatchPromptCounts(value)
+    || !isCompleteImportBatchPromptAggregate(value)
     || !isImportBatchFileProgress(value)
     || !isPersistStats(value.persistence)
     || !isNonBlankStringArray(value.warnings)) {

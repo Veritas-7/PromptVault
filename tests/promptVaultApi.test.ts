@@ -4870,6 +4870,90 @@ test("browser bridge import batches reject duplicate prompt ids", async (t) => {
   );
 });
 
+test("browser bridge import batches reject complete prompt aggregate mismatches", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(importBatchPayload({
+    source: {
+      id: "codex",
+      label: "Codex",
+      root_path: "/tmp/codex",
+      status: "ok",
+      file_count: 1,
+      byte_count: 1024,
+      large_file_count: 0,
+      largest_file_bytes: 0,
+      newest_modified_at: null,
+      notes: [],
+    },
+    state: {
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      total_files: 1,
+      total_bytes: 1024,
+      next_file_index: 1,
+      processed_files: 1,
+      imported_prompt_count: 2,
+      completed: true,
+      updated_at: "2026-06-07T00:00:00Z",
+    },
+    batch_start_index: 0,
+    batch_file_count: 1,
+    batch_prompt_count: 2,
+    returned_prompt_count: 2,
+    prompts: [
+      promptRecord(),
+      promptRecord({
+        id: "prompt-2",
+        session_id: "session-2",
+        path: "/tmp/codex/other-history.jsonl",
+        hash: "hash-2",
+      }),
+    ],
+    stats: emptyScanStats({
+      total_prompts: 2,
+      total_files: 1,
+      total_words: 8,
+      average_words: 4,
+      average_quality: 42,
+      weak_prompt_count: 2,
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: 1,
+        prompts_found: 2,
+        average_quality: 42,
+        weak_prompt_count: 2,
+        status: "ok",
+        notes: [],
+      }],
+    }),
+    persistence: {
+      database_path: "/tmp/promptvault.sqlite",
+      stored_prompt_count: 2,
+      inserted_prompt_count: 2,
+      updated_prompt_count: 0,
+      date_count: 0,
+    },
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => importBatch({ source_id: "codex" }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /8개 단어|Improve this prompt|Codex|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge import batches reject file windows beyond source totals", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

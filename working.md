@@ -1,10 +1,99 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:19 KST
+Updated: 2026-06-07 20:24 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Import queue second-source failure source label
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Fix and verify the selected-source import queue when one queued source
+  completes and the next source fails at the network layer.
+
+Context:
+
+- Recent bridge-loss QA covered single-source `/api/import-batch` recovery.
+- The selected-source queue has a separate state path: after a first source
+  completes, the previous `importResult` can remain while the queue advances to
+  the next source.
+- Root cause: `runSelectedImportQueue` updated `activeImportSourceId` for the
+  next source but did not clear the prior source's `importResult` before
+  starting the next batch. If that next batch failed before returning a result,
+  `importProgressDisplay` still preferred the stale prior result, so the
+  failure notice and import panel named the completed source instead of the
+  failed active source.
+
+Progress:
+
+- Reproduced the bug with a RED browser QA:
+  - Queue sources: `Codex sessions`, then `Gemini logs`.
+  - First `/api/import-batch` succeeded for `codex`.
+  - Second `/api/import-batch` aborted with `net::ERR_FAILED` for `gemini`.
+  - Current code incorrectly showed
+    `Codex sessions 가져오기에 실패했습니다...`.
+- Fixed the queue source transition by clearing `importResult` when advancing
+  to each queued source.
+- Rebuilt `dist` and reran the same QA successfully.
+
+Changes:
+
+- `src/App.tsx`
+  - Clears the prior import result before each queued source starts, allowing
+    the active source metadata fallback to drive failure copy/progress when the
+    new source fails before returning a batch result.
+- `working.md`
+  - Recorded this RED/GREEN bug fix slice and verification evidence.
+
+Tests:
+
+- RED queue second-source failure QA on preview `127.0.0.1:5226` before fix:
+  - Failed as expected because `data-import-run-error` showed
+    `Codex sessions 가져오기에 실패했습니다...` after the second queued source
+    `Gemini logs` failed.
+- `npm run build`:
+  - Passed and refreshed preview `dist`.
+- GREEN queue second-source failure QA on preview `127.0.0.1:5226` after fix:
+  - First queued `/api/import-batch` body targeted `source_id: "codex"`.
+  - Second queued `/api/import-batch` body targeted `source_id: "gemini"` and
+    was intentionally aborted with `net::ERR_FAILED`.
+  - `data-import-run-error` showed
+    `Gemini logs 가져오기에 실패했습니다. 위 오류를 확인한 뒤 가져오기 계획에서 다시 시도하세요.`
+  - Import panel showed source `Gemini logs`, progress `0 / 3`, queue `1 / 2`,
+    and status `실패`.
+  - Diagnostics contained only the expected aborted `/api/import-batch`
+    `net::ERR_FAILED` console/request-failure entry.
+- `npm run test:ui`:
+  - Passed: 155 tests, 155 passed.
+- `npm run check`:
+  - Passed.
+  - UI tests: 155 passed.
+  - Vite build: passed.
+  - Rust lib tests: 84 passed.
+  - Rust CLI tests: 16 passed.
+  - Cargo clippy with `-D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+- The first post-fix QA attempt still showed the old behavior because
+  `vite preview` was serving the previous `dist`; `npm run build` refreshed the
+  preview artifact and the same QA then passed.
+
+Research:
+
+- No external research. Root cause came from tracing `runSelectedImportQueue`
+  state flow and verifying it with a mocked local bridge browser QA.
+
+Next Steps:
+
+- Commit and push this bug fix after staged diff and secret checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Import batch bridge loss QA
 

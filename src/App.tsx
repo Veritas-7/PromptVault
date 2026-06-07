@@ -679,6 +679,7 @@ function App() {
         if (importStopRequestedRef.current) break;
         setCompletedQueueSourceCount(index);
         setActiveImportSourceId(sourceId);
+        setImportResult(null);
         lastResult = await runImportSource(sourceId, "queue");
         if (lastResult?.state.completed) {
           completedSourceCount = index + 1;

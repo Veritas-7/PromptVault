@@ -1,10 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 00:19 KST
+Updated: 2026-06-08 00:27 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Import event counter bounds
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge import event history whose processed or batch counters
+  exceed total file counts before the activity panel can render impossible
+  text such as `12 / 10`.
+
+Context:
+
+- Import state rows already reject `processed_files` and cursor values beyond
+  `total_files`, but import event rows still accepted any non-negative safe
+  integers.
+- `App.tsx` renders import event history as
+  `processed_files / total_files`, so a malformed browser-bridge response could
+  otherwise show impossible historical progress.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for `/api/import-events` returning an otherwise valid
+  event with `processed_files: 12`, `total_files: 10`, and a batch range
+  extending past the total.
+- Added import event relation validation for `processed_files <= total_files`
+  and `batch_start_index + batch_file_count <= total_files`.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds non-negative safe integer range validation.
+  - Requires import event processed and batch counters to stay within
+    `total_files`.
+- `tests/promptVaultApi.test.ts`
+  - Adds import-event bridge response-shape coverage for impossible
+    partial/total counter relationships.
+- `working.md`
+  - Records this import event counter bounds slice.
+  - Marks the previous preview-sort publication evidence docs commit as
+    pushed.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new import event bounds test resolved
+    instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 30 tests, 30 pass.
+- `npm run test:ui`:
+  - Passed: 194 tests, 194 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-RLTCzR3h.js`.
+- Import event bounds browser QA on preview `127.0.0.1:5258`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/import-events` returned HTTP 200 with one malformed event whose
+    progress would have rendered as `12 / 10`.
+  - Clicking the import events refresh button rendered the panel-specific
+    failure notice.
+  - The impossible progress text, malformed event source label, and resumable
+    event status were not rendered.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=1`,
+    `/api/import-states=1`, `/api/import-events=2`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 194 tests, 194 pass.
+  - Build: passed with `index-RLTCzR3h.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+- The first preview QA script assertion expected the raw parser message in the
+  panel notice, but the app intentionally uses panel-specific refresh failure
+  copy there. The QA assertion was corrected to the actual UI contract.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then run staged diff/secret checks, commit, and push.
 
 ## Current Slice - 2026-06-08 Bridge preview sort validation
 
@@ -36,8 +134,8 @@ Progress:
 - Added `isPreviewSortString()` and now accepts only `latest` or
   `quality_asc` in browser-bridge scan results.
 - Verified focused API tests, full UI/unit tests, production build, preview
-  QA, the full project check, staged checks, and GitHub publication.
-- Pending: publication evidence docs commit.
+  QA, the full project check, staged checks, GitHub publication, and
+  publication evidence docs commit.
 
 Changes:
 
@@ -112,7 +210,8 @@ Next Steps:
 
 - Published robustness fix on `origin/main` as
   `4410f54 fix: validate bridge preview sort`.
-- Commit and push this `working.md` publication-status update.
+- Published publication-status update on `origin/main` as
+  `69143af docs: mark bridge preview sort validation pushed`.
 
 ## Current Slice - 2026-06-07 Bridge progress counter bounds
 

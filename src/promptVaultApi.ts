@@ -192,6 +192,14 @@ function isNonNegativeSafeIntegerAtMost(value: unknown, max: unknown): boolean {
   return isNonNegativeSafeInteger(value) && isNonNegativeSafeInteger(max) && value <= max;
 }
 
+function isNonNegativeSafeIntegerRangeAtMost(start: unknown, count: unknown, max: unknown): boolean {
+  return isNonNegativeSafeInteger(start)
+    && isNonNegativeSafeInteger(count)
+    && isNonNegativeSafeInteger(max)
+    && start <= max
+    && count <= max - start;
+}
+
 function isSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value);
 }
@@ -287,8 +295,9 @@ function isImportEvent(value: unknown): boolean {
     && isNonNegativeSafeInteger(value.batch_start_index)
     && isNonNegativeSafeInteger(value.batch_file_count)
     && isNonNegativeSafeInteger(value.batch_prompt_count)
-    && isNonNegativeSafeInteger(value.processed_files)
     && isNonNegativeSafeInteger(value.total_files)
+    && isNonNegativeSafeIntegerAtMost(value.processed_files, value.total_files)
+    && isNonNegativeSafeIntegerRangeAtMost(value.batch_start_index, value.batch_file_count, value.total_files)
     && typeof value.completed === "boolean"
     && Array.isArray(value.warnings)
     && value.warnings.every((warning) => typeof warning === "string");

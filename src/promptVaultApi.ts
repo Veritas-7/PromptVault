@@ -186,6 +186,12 @@ function isFrequencyItemsWithinTotal(value: unknown, total: unknown): boolean {
   return true;
 }
 
+function isFrequencyItemsEachWithinTotal(value: unknown, total: unknown): boolean {
+  return Array.isArray(value)
+    && isNonNegativeSafeInteger(total)
+    && value.every((item) => isFrequencyItem(item) && item.count <= total);
+}
+
 function isStringArray(value: unknown): boolean {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
@@ -495,8 +501,7 @@ function isScanStats(value: unknown): boolean {
     && Array.isArray(value.top_phrases)
     && value.top_phrases.every(isFrequencyItem)
     && isFrequencyItemsWithinTotal(value.repeated_prompts, value.total_prompts)
-    && Array.isArray(value.top_quality_gaps)
-    && value.top_quality_gaps.every(isFrequencyItem)
+    && isFrequencyItemsEachWithinTotal(value.top_quality_gaps, value.total_prompts)
     && isFrequencyItemsWithinTotal(value.prompts_by_date, value.total_prompts)
     && Array.isArray(value.source_summaries)
     && value.source_summaries.every(isSourceSummary)

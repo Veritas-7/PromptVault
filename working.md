@@ -1,10 +1,83 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:47 KST
+Updated: 2026-06-07 19:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Plan retry and import queue browser QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify that a failed import-plan request can be retried from the plan panel
+  and that the recovered plan drives import queue selection controls correctly.
+
+Context:
+
+- The app uses browser-mode bridge calls in local preview, with Tauri IPC
+  unavailable.
+- Plan failure state affects both global error copy and the retryable plan
+  panel; plan success then feeds available-source queue selection.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Mocked browser bridge health and quiet refresh endpoints as successful.
+- Forced the first `/api/plan` request to return HTTP 500 `plan failed`.
+- Retried through the plan panel and returned a plan with two available
+  sources and one empty source.
+- Verified failed-plan warnings clear after retry and queue controls follow the
+  recovered source availability.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only plan retry and import queue browser QA slice.
+
+Tests:
+
+- Plan retry and import queue browser QA on preview `127.0.0.1:5218`:
+  - Browser bridge connected with database path
+    `/tmp/promptvault-plan-retry.sqlite`.
+  - First `/api/plan` call returned the expected HTTP 500.
+  - Global error showed `plan failed`.
+  - Plan panel warning showed
+    `가져오기 계획을 만들지 못했습니다. 위 오류를 확인한 뒤 계획을 다시 실행하세요.`
+  - `data-refresh-plan` was enabled after the failed plan.
+  - Retry succeeded on the second `/api/plan` call.
+  - Successful retry cleared both the global error and `data-plan-run-error`.
+  - Plan rendered three source rows: `Codex sessions`, `Empty source`, and
+    `Claude history`.
+  - Empty source selection, batch import, and continuous import controls were
+    disabled.
+  - Initial queue summary was `0 / 2개 선택됨`, and queue import was disabled.
+  - `data-select-all-import-sources` selected the two available sources,
+    changed summary to `2 / 2개 선택됨`, disabled select-all, enabled clear,
+    and enabled `data-import-selected`.
+  - `data-clear-import-selection` reset both available source checkboxes,
+    restored summary to `0 / 2개 선택됨`, disabled clear, and disabled queue
+    import.
+  - Page errors, request failures, and unexpected HTTP failures: none.
+  - Console contained only the expected browser resource error for the forced
+    `/api/plan` HTTP 500.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Browser bridge recovery QA
 
@@ -77,7 +150,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record.
+- Completed and pushed as `aea9dab docs: record browser bridge recovery QA`.
 - Continue autonomous QA on another still-uncovered failure, performance, or
   UX edge state.
 

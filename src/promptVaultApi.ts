@@ -171,6 +171,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isFrequencyItem(value: unknown): boolean {
   return isRecord(value)
     && typeof value.text === "string"
+    && value.text.trim().length > 0
     && isNonNegativeSafeInteger(value.count);
 }
 

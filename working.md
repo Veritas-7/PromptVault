@@ -1,10 +1,97 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 04:53 KST
+Updated: 2026-06-08 04:57 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Frequency label validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/load/facet payloads whose frequency rows contain
+  empty or whitespace-only labels before the UI can render blank frequency
+  items.
+
+Context:
+
+- `FrequencyColumn` renders each frequency row with `item.text` as the visible
+  label and `item.count` as the value.
+- The backend-generated frequency labels are intended to be non-empty:
+  `top_words` filters real tokens, `top_phrases` keeps non-empty phrase text,
+  `prompts_by_date` falls back to `unknown-date`, and stored facets filter out
+  empty source/date/workspace values.
+- The frontend parser previously accepted `text: ""` or whitespace-only labels
+  because it only checked `typeof text === "string"`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree is clean at `main...origin/main`.
+- Added RED coverage for `/api/scan` returning `top_phrases` with a
+  whitespace-only label.
+- Verified the focused API test fails before the guard.
+- Added parser validation requiring `FrequencyItem.text.trim().length > 0`.
+- Verified the focused API test passes after the guard.
+- Verified the broader UI suite and production build.
+- Verified the preview browser-bridge malformed blank-frequency-label path.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for blank frequency labels.
+- `src/promptVaultApi.ts`
+  - Requires frequency item labels to be non-blank before any frequency row can
+    pass parser validation.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new blank frequency label test resolved
+    instead of rejecting with `Missing expected rejection`.
+  - Result: 58 tests, 57 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 58 tests, 58 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 222 tests, 222 pass.
+- Build:
+  - `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-B9ddKlh0.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5286" --port 5286 node /tmp/promptvault_blank_frequency_label_qa.mjs`
+  - Passed. The mocked bridge returned `top_phrases: [{ text: "   ", count: 1 }]`;
+    the UI showed the malformed bridge response error, rendered no prompt rows
+    or frequency items, and did not leak the prompt text or raw runtime errors.
+  - Removed `/tmp/promptvault_blank_frequency_label_qa.mjs` after the run.
+- Full check:
+  - `npm run check`
+  - Passed. This included `npm run test:ui` (222 tests), `npm run build`,
+    `cargo test` (84 library tests and 16 CLI tests), and
+    `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found in the RED API suite.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit and push this frequency-label validation slice.
 
 ## Current Slice - 2026-06-08 Quality gap frequency validation
 

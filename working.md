@@ -1,10 +1,78 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:44 KST
+Updated: 2026-06-07 18:46 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Import states refresh failure recovery QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify a still-uncovered saved import progress refresh failure/recovery path.
+
+Context:
+
+- Recent browser QA covered plan refresh recovery, stored facet refresh
+  recovery, scan cancel, stored filters, import stop, and accessibility labels.
+- The saved import progress panel has its own manual refresh and stale-data
+  warning path, so it needed direct rendered verification rather than only
+  helper-level confidence.
+
+Progress:
+
+- Ran rendered browser QA with mocked `/api/import-states` responses:
+  - initial load succeeded with a `Codex` partial import state,
+  - manual refresh returned a forced `500`,
+  - second manual refresh succeeded with a completed
+    `Gemini temporary chats` state.
+- No source fix was needed from this pass.
+
+Changes:
+
+- `working.md`
+  - Recorded saved import progress refresh failure/recovery QA evidence and
+    marked the prior stored facet slice as pushed.
+
+Tests:
+
+- Import states refresh recovery browser QA on preview `127.0.0.1:5200` +
+  bridge `127.0.0.1:5174`:
+  - Initial summary rendered `0 / 1` sources, `5 / 10` files, `3` imported
+    prompts, and `/tmp/promptvault.sqlite`.
+  - Initial row rendered `Codex`, `5 / 10 · 재개 가능`, progress label
+    `Codex 가져오기 진행`, and progress value `5 / 10개 파일`.
+  - Forced refresh failure preserved the stale summary and row, showed global
+    error `forced import states refresh failure`, and showed panel warning
+    `저장된 가져오기 진행 새로고침에 실패했습니다. 기존 데이터가 오래되었을 수 있습니다.`
+  - Retry success cleared both global and panel errors, updated the summary to
+    `1 / 1` sources, `20 / 20` files, `7` imported prompts, and replaced the
+    row with `Gemini temporary chats`, `20 / 20 · 완료`.
+  - Retry progress label/value updated to
+    `Gemini temporary chats 가져오기 진행` / `20 / 20개 파일`.
+  - Refresh aria-label stayed `저장된 가져오기 진행 새로고침`.
+  - Page width stayed within `1365 / 1365`.
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+  - Expected browser console resource log from the intentionally forced
+    `/api/import-states` 500 was captured separately.
+
+Issues:
+
+- No blocker found in this QA pass.
+
+Research:
+
+- No external research. This was rendered browser QA against local preview and
+  the local browser bridge.
+
+Next Steps:
+
+- Commit and push this import states refresh recovery QA worklog slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Stored facet refresh failure recovery QA
 
@@ -67,7 +135,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this stored facet refresh recovery QA worklog slice.
+- Completed and pushed as `169f82c docs: record stored facet refresh QA`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Plan refresh failure recovery QA

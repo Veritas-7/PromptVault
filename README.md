@@ -16,7 +16,8 @@ It extracts user-authored prompts, strips known injected context blocks, persist
 - `~/.gemini/antigravity-ide/brain`
 - `~/.gemini/antigravity-cli/history.jsonl`
 - `~/.gemini/antigravity-cli/conversations`
-- `~/.gemini/tmp/wj/chats`
+- `~/.gemini/antigravity/conversations`
+- `~/.gemini/tmp/*/chats`
 
 See [docs/SOURCE_DISCOVERY.md](docs/SOURCE_DISCOVERY.md) for parser details.
 
@@ -49,7 +50,7 @@ Use these steps when an LLM or coding agent needs to install, run, and verify
 PromptVault from a fresh checkout:
 
 ```bash
-cd /Users/wj/Ai/System/10_Projects/PromptVault
+cd <path-to-PromptVault>
 npm install
 npm run test:ui
 npm run build
@@ -63,7 +64,7 @@ frontend and the local PromptVault bridge, then open the app in the cmux
 in-app browser:
 
 ```bash
-cd /Users/wj/Ai/System/10_Projects/PromptVault
+cd <path-to-PromptVault>
 npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 cd src-tauri
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
@@ -136,11 +137,12 @@ The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/scan/can
 
 ## AI Recommendation Path
 
-PromptVault reads non-public GLM configuration from:
+PromptVault reads non-public GLM configuration from the first available source:
 
-```text
-/Users/wj/Ai/System/70_Governance/🔐 Secrets/secrets.env
-```
+- `PROMPTVAULT_SECRET_ENV`, when set to a file path
+- `~/.config/promptvault/secrets.env`
+- `~/Ai/System/70_Governance/🔐 Secrets/secrets.env`
+- process environment variables
 
 Used keys:
 

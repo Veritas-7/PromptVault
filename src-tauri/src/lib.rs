@@ -13,7 +13,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use walkdir::WalkDir;
 
 const APP_DIR_NAME: &str = "PromptVault";
-const SECRET_ENV_PATH: &str = "/Users/wj/Ai/System/70_Governance/🔐 Secrets/secrets.env";
+const USER_SECRET_ENV_RELATIVE_PATH: &str = "Ai/System/70_Governance/🔐 Secrets/secrets.env";
+const PROMPTVAULT_SECRET_ENV_RELATIVE_PATH: &str = ".config/promptvault/secrets.env";
 const DEFAULT_GLM_CHAT_ENDPOINT: &str = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
 const DEFAULT_GLM_MODEL: &str = "glm-4.6";
 const LARGE_SOURCE_FILE_COUNT: usize = 10_000;
@@ -1310,7 +1311,7 @@ pub async fn improve_prompt_inner(
         ));
     }
 
-    let env = read_secret_env(Path::new(SECRET_ENV_PATH)).unwrap_or_default();
+    let env = load_glm_env();
     let key = glm_api_key_from_env(&env);
     let endpoint = normalize_chat_endpoint(
         &env.get("GLM_CODING_ENDPOINT")
@@ -1465,7 +1466,10 @@ fn glm_improvement_from_content(prompt: &str, content: &str) -> Option<ImproveRe
 }
 
 pub fn source_specs() -> Vec<SourceSpec> {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/Users/wj"));
+    source_specs_for_home(&user_home_dir())
+}
+
+fn source_specs_for_home(home: &Path) -> Vec<SourceSpec> {
     vec![
         SourceSpec {
             id: "codex",
@@ -1536,7 +1540,7 @@ pub fn source_specs() -> Vec<SourceSpec> {
         SourceSpec {
             id: "gemini-tmp-chat",
             label: "Gemini temporary chats",
-            root: home.join(".gemini/tmp/wj/chats"),
+            root: home.join(".gemini/tmp"),
             kind: SourceKind::GeminiTmpChatJson,
         },
     ]
@@ -1752,7 +1756,14 @@ fn source_file_matches(path: &Path, kind: SourceKind) -> bool {
         SourceKind::AntigravityConversationSqlite => {
             path.extension().is_some_and(|ext| ext == "db")
         }
-        SourceKind::GeminiTmpChatJson => path.extension().is_some_and(|ext| ext == "json"),
+        SourceKind::GeminiTmpChatJson => {
+            path.extension().is_some_and(|ext| ext == "json")
+                && path
+                    .parent()
+                    .and_then(Path::file_name)
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name == "chats")
+        }
     }
 }
 
@@ -3884,7 +3895,7 @@ fn escape_inline(value: &str) -> String {
 }
 
 fn default_markdown_path() -> PathBuf {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/Users/wj"));
+    let home = user_home_dir();
     let stamp = Local::now().format("%Y-%m-%d-%H%M%S").to_string();
     home.join("Documents")
         .join(APP_DIR_NAME)
@@ -3892,7 +3903,7 @@ fn default_markdown_path() -> PathBuf {
 }
 
 pub fn default_database_path() -> PathBuf {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/Users/wj"));
+    let home = user_home_dir();
     home.join("Documents")
         .join(APP_DIR_NAME)
         .join("promptvault.sqlite")
@@ -3971,6 +3982,58 @@ fn read_secret_env(path: &Path) -> Result<HashMap<String, String>, Box<dyn std::
         }
     }
     Ok(env)
+}
+
+fn user_home_dir() -> PathBuf {
+    dirs::home_dir()
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
+        })
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+}
+
+fn secret_env_candidates_for_home(home: &Path) -> Vec<PathBuf> {
+    vec![
+        home.join(PROMPTVAULT_SECRET_ENV_RELATIVE_PATH),
+        home.join(USER_SECRET_ENV_RELATIVE_PATH),
+    ]
+}
+
+fn secret_env_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(path) = std::env::var_os("PROMPTVAULT_SECRET_ENV")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+    {
+        candidates.push(path);
+    }
+    candidates.extend(secret_env_candidates_for_home(&user_home_dir()));
+    candidates
+}
+
+fn load_glm_env() -> HashMap<String, String> {
+    let mut env = HashMap::new();
+    for path in secret_env_candidates() {
+        if let Ok(values) = read_secret_env(&path) {
+            env.extend(values);
+            break;
+        }
+    }
+    for key in [
+        "GLM_API_KEY",
+        "GLM_API_KEY_2",
+        "GLM_CODING_ENDPOINT",
+        "GLM_CODING_MODEL",
+    ] {
+        if let Ok(value) = std::env::var(key) {
+            if !value.trim().is_empty() {
+                env.insert(key.to_string(), value);
+            }
+        }
+    }
+    env
 }
 
 fn non_empty_env_value(env: &HashMap<String, String>, key: &str) -> Option<String> {
@@ -5237,6 +5300,70 @@ mod tests {
 
         assert!(markdown.contains("## Warnings"));
         assert!(markdown.contains("- 설정된 제한 1개 프롬프트에서 스캔을 중지했습니다."));
+    }
+
+    #[test]
+    fn source_specs_are_home_relative_without_user_literal_paths() {
+        let home = Path::new("/Users/alice");
+        let specs = source_specs_for_home(home);
+
+        let codex = specs
+            .iter()
+            .find(|source| source.id == "codex")
+            .expect("codex source exists");
+        assert_eq!(codex.root, home.join(".codex/sessions"));
+
+        let gemini = specs
+            .iter()
+            .find(|source| source.id == "gemini-tmp-chat")
+            .expect("gemini tmp source exists");
+        assert_eq!(gemini.root, home.join(".gemini/tmp"));
+        assert!(!gemini.root.to_string_lossy().contains("/wj/"));
+    }
+
+    #[test]
+    fn gemini_tmp_chat_matching_finds_only_chat_json_files() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-gemini-tmp-match-{}",
+            std::process::id()
+        ));
+        let chat_dir = root.join("alice/chats");
+        let tool_dir = root.join("alice/tool-outputs");
+        std::fs::create_dir_all(&chat_dir).expect("create chat fixture dir");
+        std::fs::create_dir_all(&tool_dir).expect("create tool fixture dir");
+        let chat_json = chat_dir.join("session.json");
+        let chat_text = chat_dir.join("session.txt");
+        let tool_json = tool_dir.join("tool.json");
+        std::fs::write(&chat_json, "{}").expect("write chat json");
+        std::fs::write(&chat_text, "{}").expect("write chat text");
+        std::fs::write(&tool_json, "{}").expect("write tool json");
+
+        assert!(source_file_matches(
+            &chat_json,
+            SourceKind::GeminiTmpChatJson
+        ));
+        assert!(!source_file_matches(
+            &chat_text,
+            SourceKind::GeminiTmpChatJson
+        ));
+        assert!(!source_file_matches(
+            &tool_json,
+            SourceKind::GeminiTmpChatJson
+        ));
+
+        std::fs::remove_dir_all(root).expect("remove gemini tmp fixture");
+    }
+
+    #[test]
+    fn secret_env_candidates_are_home_relative_and_overrideable() {
+        let home = Path::new("/Users/alice");
+        let candidates = secret_env_candidates_for_home(home);
+
+        assert!(candidates.contains(&home.join(PROMPTVAULT_SECRET_ENV_RELATIVE_PATH)));
+        assert!(candidates.contains(&home.join(USER_SECRET_ENV_RELATIVE_PATH)));
+        assert!(!candidates
+            .iter()
+            .any(|path| path.to_string_lossy().contains("/Users/wj/")));
     }
 
     #[test]

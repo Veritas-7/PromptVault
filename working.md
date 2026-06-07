@@ -4744,3 +4744,99 @@ Next focus:
 
 - Active goal can be marked complete after this post-push note is committed and
   pushed.
+
+## Cross-User Source Discovery Hardening - 2026-06-07 14:33 KST
+
+Current goal:
+
+- Verify and harden PromptVault so it does not depend on the local macOS
+  account name `wj`, can discover normal Codex/Claude/Antigravity/Gemini prompt
+  stores for other users, parses only user-authored prompts, and persists them
+  by prompt date into the app SQLite DB.
+
+Changes:
+
+- Replaced hardcoded `/Users/wj` fallbacks with `user_home_dir()`, which uses
+  `dirs::home_dir()`, then `HOME`, then the current directory as a last resort.
+- Split `source_specs()` into `source_specs_for_home(home)` plus runtime
+  `source_specs()` so tests can prove source roots are home-relative.
+- Changed Gemini temporary chat discovery from machine-specific
+  `~/.gemini/tmp/wj/chats` to `~/.gemini/tmp`, with matching restricted to
+  `*/chats/*.json` so tool-output JSON is not parsed as chat.
+- Generalized GLM secret loading:
+  `PROMPTVAULT_SECRET_ENV`, `~/.config/promptvault/secrets.env`,
+  `~/Ai/System/70_Governance/🔐 Secrets/secrets.env`, then process env vars.
+- Updated `README.md` and `docs/SOURCE_DISCOVERY.md` to document
+  `~/.gemini/tmp/*/chats` and non-`wj` setup paths.
+
+Parser/user-prompt coverage:
+
+- Existing parser tests still cover user-only extraction:
+  Codex strips injected context and drops context-only records; Claude skips
+  meta/tool-result/command-wrapper/local-command-output records; Antigravity
+  conversation DB prefers the schema-specific user prompt field; Gemini tmp
+  chats read only `messages[]` entries with `type=user` or `human`.
+- New tests:
+  - `source_specs_are_home_relative_without_user_literal_paths`
+  - `gemini_tmp_chat_matching_finds_only_chat_json_files`
+  - `secret_env_candidates_are_home_relative_and_overrideable`
+
+Live verification:
+
+- `cargo run --bin promptvault-cli -- sources --json` for `gemini-tmp-chat`
+  now reports root `/Users/wj/.gemini/tmp` instead of
+  `/Users/wj/.gemini/tmp/wj/chats`.
+- `cargo run --bin promptvault-cli -- plan --source gemini-tmp-chat --json`
+  reports `total_files=2433`, matching
+  `find "$HOME/.gemini/tmp" -path '*/chats/*.json' -type f | wc -l`.
+- `cargo run --bin promptvault-cli -- scan --source gemini-tmp-chat
+  --no-export --json --preview-limit 0`:
+  - files: `2433`
+  - prompts: `2478`
+  - warnings: `[]`
+  - inserted: `2333`
+  - updated: `145`
+  - stored DB count: `90742`
+  - source summary root: `/Users/wj/.gemini/tmp`
+- `cargo run --bin promptvault-cli -- import-batch --source gemini-tmp-chat
+  --files 1 --json`:
+  - root: `/Users/wj/.gemini/tmp`
+  - batch start: `144`
+  - processed: `145 / 2433`
+  - updated: `1`
+  - warnings: `[]`
+- SQLite recount after the expanded Gemini scan:
+  - total prompts: `90742`
+  - `Gemini temporary chats`: `2478`
+  - distinct prompt dates: `90`
+  - min/max prompt date: `2026-03-11` / `unknown-date`
+- Browser bridge API verification:
+  - `/api/health`: `ok=true`, DB path
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite`
+  - `/api/plan` for `gemini-tmp-chat`: root `/Users/wj/.gemini/tmp`,
+    `file_count=2433`
+  - `/api/prompt-facets`: `Gemini temporary chats` count `2478`
+
+Automatic verification:
+
+- `cargo test`: PASS.
+  - Rust lib tests: `74` passed.
+  - CLI tests: `16` passed.
+  - Doc-tests: passed.
+- `npm run check`: PASS.
+  - UI tests: `124` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `74` passed.
+  - CLI tests: `16` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Remaining issue:
+
+- None for the cross-user source discovery and user-prompt-only DB persistence
+  objective.
+
+Next focus:
+
+- Stage explicit changed paths, run staged checks/gitleaks, commit, push, and
+  mark the active goal complete.

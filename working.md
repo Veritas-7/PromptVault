@@ -479,6 +479,22 @@ stability, performance, and maintainability, then record evidence here.
 - Fresh full gate in this session: `npm run check` passed. This covered UI
   tests 124 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
   doc-tests, and clippy with `-D warnings`.
+- Fresh same-browser Stored Vault QA on existing `surface:10`:
+  - Set Stored Vault text filter to `cmux`.
+  - Observed action labels change to `Apply 1 stored filter` and
+    `Reset 1 stored filter`.
+  - Clicked Apply and observed filtered stored results load:
+    `Prompts 1000`, `Preview 1000`, `Files 794`, `Words 581077`,
+    `Quality 76.6`, `Weak 50`, `DB Stored 88379`, `Dates 89`.
+  - Observed Sources, Frequency, Dates, Quality Gaps, and prompt rows update
+    for the filtered result set.
+  - Clicked Reset and observed filter fields clear, Apply return to
+    `Load stored prompts without filters`, and Reset return to disabled
+    `No stored filters to reset`.
+  - After this QA, `cmux browser --surface surface:10 get title` returned
+    `PromptVault` and `console list` returned `No console entries`; `errors
+    list` timed out once and is tracked under Issues as an intermittent cmux
+    diagnostics RPC problem.
 - `npm run test:ui -- tests/scanStatus.test.ts`: passed; due the package
   script glob this ran the full UI helper suite and reported 124 passing tests,
   including the new scan progress formatter coverage.
@@ -2851,6 +2867,13 @@ stability, performance, and maintainability, then record evidence here.
   Improve fallback behavior on the same browser.
 - Confirmed post-QA browser diagnostics were clean: no console entries and no
   browser errors.
+- Continued same-browser direct QA with Stored Vault filters:
+  - Entered `cmux` into the text filter.
+  - Verified the Apply/Reset labels reflected one active filter.
+  - Applied the filter and observed 1,000 stored prompts plus refreshed source,
+    frequency, date, quality-gap, and prompt panels.
+  - Reset the filter and observed the unfiltered/disabled control states return
+    correctly.
 
 ## Changes
 
@@ -3233,6 +3256,10 @@ stability, performance, and maintainability, then record evidence here.
   parallel `surface:10` DOM queries timed out in this session, while short
   title/url/console/error checks worked before and after. Computer Use
   accessibility-tree interaction was reliable on the same single browser.
+- After Stored Vault filter/reset QA, `surface:10` title and console checks
+  worked, but `cmux browser --surface surface:10 errors list` timed out once.
+  This is tracked as a cmux diagnostics RPC issue because the page remained
+  visibly healthy and previous/follow-up console checks were clean.
 - Scan Progress discovery-copy text is covered by unit tests. The real browser
   Scan flow completed too quickly at Limit `1` to capture the transient
   discovery text visually, but it verified the updated static bundle, scan

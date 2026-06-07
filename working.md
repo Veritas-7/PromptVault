@@ -1,10 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 03:14 KST
+Updated: 2026-06-08 03:19 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Improvement persistence positive identifier validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge `/api/improve` payloads that claim persisted
+  improvement history with zero-valued event IDs or per-prompt counts before
+  the UI can render a bogus saved-history success notice.
+
+Context:
+
+- Rust creates improvement persistence only after inserting a row into
+  `prompt_improvements`.
+- `improvement_event_id` comes from `last_insert_rowid()` after the insert.
+- `prompt_improvement_count` is counted after the insert, so any persisted
+  improvement result should report positive IDs/counts.
+- Before this slice, `parseImproveResult()` accepted zero-valued improvement
+  persistence identifiers because it only required nonnegative safe integers.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the previous stored-facet slice is pushed and clean at `6e71ffa`.
+- Identified the improvement persistence identifier gap from live
+  `src/promptVaultApi.ts`, `src/App.tsx`, and `src-tauri/src/lib.rs`.
+- Added RED coverage for `/api/improve` returning a persisted result with
+  `improvement_event_id: 0` and `prompt_improvement_count: 0`.
+- Added parser validation requiring persisted improvement event IDs and
+  per-prompt improvement counts to be positive safe integers.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified broader UI tests, production build, preview QA, and the full project
+  check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for zero-valued improvement
+    persistence identifiers.
+- `src/promptVaultApi.ts`
+  - Adds `isPositiveSafeInteger()`.
+  - Uses it for improvement persistence identifiers.
+- `working.md`
+  - Records this improvement persistence positive identifier validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new improvement persistence test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 47 tests, 46 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 47 tests, 47 pass.
+- `npm run test:ui`
+  - Passed: 211 tests, 211 pass.
+- `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-COOKAJO0.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - Ran Vite preview on port `5275` with
+    `/tmp/promptvault_improvement_persistence_zero_qa.mjs`.
+  - Loaded a stored prompt, selected it, and clicked `data-run-improve="true"`.
+  - Mocked `/api/improve` with `improvement_event_id: 0` and
+    `prompt_improvement_count: 0`.
+  - Passed: the UI rendered `data-improvement-run-error="true"`, did not render
+    `data-improvement-persistence="true"`, and did not show the bogus
+    `추천 이력 #0` or `이 프롬프트 0회` success copy.
+  - Removed `/tmp/promptvault_improvement_persistence_zero_qa.mjs` after the
+    passing run.
+- `npm run check`
+  - Passed: UI tests, production build, Rust library tests, Rust CLI tests,
+    doc-tests, and clippy all completed with exit 0.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run explicit staged diff/security checks, commit, push, and record publication
+  evidence.
 
 ## Current Slice - 2026-06-08 Stored facet count validation
 

@@ -201,6 +201,10 @@ function isNonNegativeSafeInteger(value: unknown): value is number {
   return isSafeInteger(value) && value >= 0;
 }
 
+function isPositiveSafeInteger(value: unknown): value is number {
+  return isSafeInteger(value) && value > 0;
+}
+
 function isNonNegativeSafeIntegerAtMost(value: unknown, max: unknown): boolean {
   return isNonNegativeSafeInteger(value) && isNonNegativeSafeInteger(max) && value <= max;
 }
@@ -501,8 +505,8 @@ function isImportBatchFileProgress(value: unknown): boolean {
 function isImprovePersistence(value: unknown): boolean {
   return isRecord(value)
     && typeof value.database_path === "string"
-    && isNonNegativeSafeInteger(value.improvement_event_id)
-    && isNonNegativeSafeInteger(value.prompt_improvement_count);
+    && isPositiveSafeInteger(value.improvement_event_id)
+    && isPositiveSafeInteger(value.prompt_improvement_count);
 }
 
 function isQualityDelta(value: unknown): boolean {

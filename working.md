@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:24 KST
+Updated: 2026-06-07 20:25 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -91,7 +91,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this bug fix after staged diff and secret checks.
+- Completed and pushed as `8352e08 fix: reset queue import progress between sources`.
 - Continue autonomous QA on another still-uncovered failure, performance, or
   UX edge state.
 

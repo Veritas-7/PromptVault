@@ -1753,6 +1753,52 @@ test("browser bridge scan results reject impossible numeric payloads", async (t)
   );
 });
 
+test("browser bridge scan results reject empty prompt aggregates with word totals", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    output_path: null,
+    markdown: "",
+    stats: {
+      total_prompts: 0,
+      total_files: 0,
+      total_words: 3,
+      average_words: 3,
+      average_quality: 42.5,
+      weak_prompt_count: 0,
+      top_words: [],
+      top_phrases: [],
+      repeated_prompts: [],
+      top_quality_gaps: [],
+      prompts_by_date: [],
+      source_summaries: [],
+    },
+    prompts: [],
+    returned_prompt_count: 0,
+    prompts_truncated: false,
+    preview_sort: "latest",
+    markdown_included: false,
+    markdown_written: false,
+    persistence: null,
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /42\.5|3개 단어|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject impossible persistence aggregates", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

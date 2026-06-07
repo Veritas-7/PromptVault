@@ -1,12 +1,103 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 06:41 KST
+Updated: 2026-06-08 06:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Top phrase count validation
+## Current Slice - 2026-06-08 Empty scan aggregate validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose `stats.total_prompts` is 0
+  but aggregate word/quality fields imply non-empty prompt content.
+
+Context:
+
+- The previous slices tightened browser-bridge metadata, source, timestamp,
+  scan-run, persistence, and frequency-counter contracts.
+- Rust `build_stats` returns `total_words: 0`, `average_words: 0`, and
+  `average_quality: 0` when there are no prompts.
+- The browser-bridge parser currently accepts zero-prompt scan stats with
+  positive word or quality aggregates, which can make an empty result look like
+  it has scanned content.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: empty scan aggregate
+  consistency for browser-bridge scan results.
+- Added a RED API test for zero-prompt scan stats with positive word and
+  quality aggregates.
+- Confirmed RED first: focused API suite failed 95/96 only on the new
+  missing-rejection case.
+- Added parser validation requiring empty scan stats to keep word and quality
+  aggregates at zero.
+- Confirmed GREEN after the parser change: focused API suite passes 96/96.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed zero-prompt scan result with positive word and
+  quality aggregates surfaced sanitized global and scan-failure UI, and the
+  bad aggregate values were not rendered.
+- Removed the temporary preview QA script from
+  `/tmp/promptvault_empty_scan_aggregate_qa.mjs`.
+- Confirmed `/tmp/promptvault_empty_scan_aggregate_qa.mjs` is absent and
+  preview port `5301` has no listener after the server wrapper stopped the
+  server.
+- Ran full check successfully after preview QA.
+- Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`; staged secret scan passed.
+
+Changes:
+
+- `src/promptVaultApi.ts`: rejects empty scan stats whose `total_words`,
+  `average_words`, `average_quality`, or `weak_prompt_count` imply non-empty
+  prompt content.
+- `tests/promptVaultApi.test.ts`: adds the zero-prompt positive aggregate
+  rejection case for browser-bridge scan results.
+
+Tests:
+
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 95/96 only on the new empty aggregate missing-rejection case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 96/96.
+- `npm run test:ui` passed 260/260.
+- `npm run build` passed.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5301" --port 5301 --timeout 30 node /tmp/promptvault_empty_scan_aggregate_qa.mjs`
+  passed.
+- Cleanup: `/tmp/promptvault_empty_scan_aggregate_qa.mjs` absent; port `5301`
+  free.
+- `npm run check` passed: UI tests 260/260, production build, Rust lib tests
+  84/84, CLI tests 16/16, and clippy with `-D warnings`.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact`
+  passed.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit and push the completed empty scan aggregate validation slice, then
+  reverify `origin/main` parity, temp cleanup, and preview port `5301`.
+
+## Previous Slice - 2026-06-08 Top phrase count validation
 
 Current Goal:
 

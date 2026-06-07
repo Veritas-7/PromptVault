@@ -508,6 +508,16 @@ function isPersistStats(value: unknown): boolean {
     && dateCount <= storedPromptCount;
 }
 
+function isEmptyScanAggregateConsistent(value: Record<string, unknown>): boolean {
+  return value.total_prompts !== 0
+    || (
+      value.total_words === 0
+      && value.average_words === 0
+      && value.average_quality === 0
+      && value.weak_prompt_count === 0
+    );
+}
+
 function isScanStats(value: unknown): boolean {
   return isRecord(value)
     && isNonNegativeSafeInteger(value.total_prompts)
@@ -516,6 +526,7 @@ function isScanStats(value: unknown): boolean {
     && isNonNegativeFiniteNumber(value.average_words)
     && isQualityAverage(value.average_quality)
     && isNonNegativeSafeIntegerAtMost(value.weak_prompt_count, value.total_prompts)
+    && isEmptyScanAggregateConsistent(value)
     && isFrequencyItemsWithinTotal(value.top_words, value.total_words)
     && isFrequencyItemsWithinTotal(value.top_phrases, value.total_words)
     && isFrequencyItemsWithinTotal(value.repeated_prompts, value.total_prompts)

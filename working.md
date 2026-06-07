@@ -1,10 +1,73 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:27 KST
+Updated: 2026-06-07 19:29 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Stored load failure filter-change QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify a failed filtered stored-load request clears correctly when the user
+  adjusts the stored filter input.
+
+Context:
+
+- Unit tests cover `storedFilterChangedAfterFailure`, but the browser flow with
+  an existing stored result, failed filtered load, and input-only recovery
+  needed direct DOM verification.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Loaded one stored prompt successfully through mocked browser bridge
+  responses.
+- Applied source filter `Missing` and forced the second `/api/prompts` request
+  to fail with HTTP 500 `stored load failed`.
+- Changed the source filter input to `Codex` without reapplying, verifying the
+  stored-load failure state cleared while the previous result stayed visible.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only QA slice.
+
+Tests:
+
+- Stored load failure filter-change browser QA on preview
+  `127.0.0.1:5214`:
+  - First `/api/prompts` request used `limit: 1000` and
+    `preview_sort: "latest"`, returning one stored prompt.
+  - Second `/api/prompts` request included `source: "Missing"` and returned the
+    expected HTTP 500.
+  - Before filter change, global error showed `stored load failed` and the
+    stored-load panel warning showed
+    `현재 필터로 저장된 프롬프트를 불러오지 못했습니다. 위 오류를 확인하고 필터를 조정하거나 다시 시도하세요.`
+  - After changing the source input to `Codex`, global error count was `0` and
+    stored-load error count was `0`.
+  - The prior stored result remained visible with row count `1`.
+  - Reset button was enabled after the input change.
+  - Page errors, request failures, and unexpected HTTP failures: none.
+  - Console contained only the expected browser resource error for the forced
+    HTTP 500 response.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Improvement failure selection-switch QA
 
@@ -68,7 +131,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record.
+- Completed and pushed as `4a274d4 docs: record improvement selection-change QA`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Stored source summary healthy icon

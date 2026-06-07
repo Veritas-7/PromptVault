@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 23:01 KST
+Updated: 2026-06-07 23:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,8 +34,8 @@ Progress:
   payloads.
 - Reused the non-negative finite number validator for stored facet
   `total_prompts` and shared frequency item counts.
-- Verified focused tests, full UI/unit tests, production build, preview QA, and
-  the full project check. Publication is next.
+- Verified focused tests, full UI/unit tests, production build, preview QA, the
+  full project check, and GitHub publication.
 
 Changes:
 
@@ -86,11 +86,26 @@ Tests:
   - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
     passed, `src/main.rs` 0 tests, doc tests 0 tests.
   - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Publication checks for `a72a523`:
+  - `git diff --cached --check`: passed before commit.
+  - `gitleaks protect --staged --no-banner --redact`: passed before commit,
+    scanned about 5.03 KB staged content, no leaks found.
+  - `gh auth status`: authenticated as `Veritas-7`.
+  - `gitleaks version`: `8.30.1`.
+  - `git ls-remote origin HEAD`: origin was at `dfc5435` before push.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo confirmed.
+  - `gitleaks dir . --no-banner --redact`: passed, scanned about 700.67 MB.
+  - `git push origin main`: pushed `dfc5435..a72a523`.
+  - `git fetch origin main` plus
+    `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - Final `git status --short --branch`: `## main...origin/main`.
+  - Temporary QA script check: `/tmp/promptvault_stored_facets_numeric_qa.mjs`
+    absent.
 
 Issues:
 
 - No app blocker found.
-- Commit and push are still pending for this slice.
 
 Research:
 
@@ -98,8 +113,8 @@ Research:
 
 Next Steps:
 
-- Stage explicit paths only, run staged gitleaks, commit, full gitleaks, push,
-  and record publication evidence.
+- Published robustness fix on `origin/main` as
+  `a72a523 fix: validate stored facet numeric payloads`.
 - Continue autonomous QA on another still-uncovered scan result, import batch,
   improve result, or stored prompt numeric edge after publication.
 

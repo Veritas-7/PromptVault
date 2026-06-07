@@ -1,12 +1,98 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 06:34 KST
+Updated: 2026-06-08 06:39 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Scan run id match validation
+## Current Slice - 2026-06-08 Top phrase count validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose `stats.top_phrases` counts
+  exceed the aggregate `stats.total_words`, matching the existing fail-closed
+  handling for top word, repeated prompt, date, and quality-gap frequency
+  counters.
+
+Context:
+
+- The previous slices tightened browser-bridge metadata, source, timestamp,
+  scan-run, and persistence contracts.
+- `isScanStats` validates `top_phrases` item shape, but unlike `top_words`,
+  it does not bound phrase counts against the aggregate word count.
+- Phrase counts represent frequency summaries derived from prompt text and
+  should not let malformed bridge data inflate UI frequency panels.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: aggregate bounds for
+  `stats.top_phrases` in browser-bridge scan results.
+- Added a RED test for oversized `stats.top_phrases` counts.
+- Confirmed RED first: focused API suite failed 94/95 only on the new
+  missing-rejection case.
+- Tightened `isScanStats` so `top_phrases` uses the same aggregate word-count
+  bound as `top_words`.
+- Confirmed GREEN after the parser change: focused API suite passes 95/95.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed scan result with oversized `top_phrases` counts
+  surfaced sanitized global and scan-failure UI, and the bad phrase/count was
+  not rendered in the frequency panel.
+- Removed the temporary preview QA script from
+  `/tmp/promptvault_top_phrase_count_qa.mjs`.
+- Confirmed `/tmp/promptvault_top_phrase_count_qa.mjs` is absent and preview
+  port `5300` has no listener after the server wrapper stopped the server.
+- Ran full check successfully after preview QA.
+
+Changes:
+
+- `src/promptVaultApi.ts`: validates `stats.top_phrases` with
+  `isFrequencyItemsWithinTotal(..., total_words)` instead of only checking item
+  shape.
+- `tests/promptVaultApi.test.ts`: adds an oversized `top_phrases` count test
+  using an otherwise-valid scan result payload.
+
+Tests:
+
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 94/95 only on the new top phrase count overflow case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 95/95.
+- `npm run test:ui` passed 259/259.
+- `npm run build` passed.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5300" --port 5300 --timeout 30 node /tmp/promptvault_top_phrase_count_qa.mjs`
+  passed.
+- Cleanup: `/tmp/promptvault_top_phrase_count_qa.mjs` absent; port `5300`
+  free.
+- `npm run check` passed: UI tests 259/259, production build, Rust lib tests
+  84/84, CLI tests 16/16, and clippy with `-D warnings`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run staged secret scan, commit, full-tree secret scan, push, and final
+  parity/cleanup checks.
+
+## Previous Slice - 2026-06-08 Scan run id match validation
 
 Current Goal:
 

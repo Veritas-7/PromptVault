@@ -2048,6 +2048,86 @@ test("browser bridge scan results reject top word counts beyond aggregate words"
   );
 });
 
+test("browser bridge scan results reject top phrase counts beyond aggregate words", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    output_path: null,
+    markdown: "",
+    stats: {
+      total_prompts: 1,
+      total_files: 1,
+      total_words: 3,
+      average_words: 3,
+      average_quality: 42.5,
+      weak_prompt_count: 0,
+      top_words: [],
+      top_phrases: [{
+        text: "ghost phrase",
+        count: 999,
+      }],
+      repeated_prompts: [],
+      top_quality_gaps: [],
+      prompts_by_date: [{
+        text: "2026-06-07",
+        count: 1,
+      }],
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: 1,
+        prompts_found: 1,
+        average_quality: 42.5,
+        weak_prompt_count: 0,
+        status: "ok",
+        notes: [],
+      }],
+    },
+    prompts: [{
+      id: "prompt-1",
+      source: "codex",
+      session_id: "session-1",
+      path: "/tmp/codex/history.jsonl",
+      timestamp: "2026-06-07T00:00:00Z",
+      cwd: null,
+      text: "Improve this prompt.",
+      word_count: 3,
+      char_count: 20,
+      hash: "hash-1",
+      risk_flags: [],
+      quality: {
+        score: 42,
+        band: "medium",
+        missing: [],
+        suggestions: [],
+      },
+    }],
+    returned_prompt_count: 1,
+    prompts_truncated: false,
+    preview_sort: "latest",
+    markdown_included: false,
+    markdown_written: false,
+    persistence: null,
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /ghost phrase|999|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject repeated prompt counts beyond aggregate prompts", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

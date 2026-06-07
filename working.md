@@ -4374,3 +4374,67 @@ Next focus:
 
 - Continue direct single-surface QA for plan/import queue edge cases and perform
   a completion audit before considering the goal complete.
+
+## Direct Single-Surface Plan/Import Queue QA - 2026-06-07 12:26 KST
+
+Current goal:
+
+- Cover the remaining plan/import queue edge cases using only existing cmux
+  `surface:10`.
+
+Context:
+
+- Repo state before this QA slice was clean and synchronized:
+  `git status --short --branch` -> `## main...origin/main`;
+  `git rev-list --left-right --count HEAD...origin/main` -> `0 0`.
+- Import state before queue QA showed `gemini-tmp-chat` incomplete at
+  `96/144`, while the small Antigravity IDE conversation DB source was already
+  complete at `1/1`.
+- Used only existing cmux `surface:10`; no new browser surface was opened and
+  cmux was not restarted or killed.
+
+Direct UI tests:
+
+- Plan flow:
+  - Clicked `Plan`.
+  - Result: PASS.
+  - Plan generated successfully with 12 source rows.
+  - Queue toolbar showed `0 selected`, and `Run Selected` was disabled.
+  - Large-source warning appeared for Codex/Claude large file counts, as
+    expected.
+- Import queue selection:
+  - Selected `gemini-tmp-chat` and `antigravity-ide-conversation-db` via the
+    plan checkboxes.
+  - Result: PASS.
+  - Queue toolbar showed `2 selected`, both checkboxes were checked, and
+    `Run Selected` became enabled.
+- Run Selected queue:
+  - Clicked `Run Selected`.
+  - Result: PASS.
+  - Queue returned to idle with progress `100%`.
+  - No import run error and no import stop warning appeared.
+  - Stored facet summary remained `88,387 stored, 11 sources, 50 dates,
+    50 workspaces`.
+- DB/event verification:
+  - `gemini-tmp-chat` import state advanced to `144/144`, `completed=1`,
+    `imported_prompt_count=145`.
+  - `antigravity-ide-conversation-db` stayed complete at `1/1`,
+    `completed=1`, `imported_prompt_count=2`.
+  - Recent import events show the queue completed the remaining Gemini files,
+    then handled the already-complete Antigravity IDE DB source as a 0-file
+    completed batch with no warnings.
+
+Diagnostics:
+
+- `cmux browser --surface surface:10 console list`: PASS, no console entries.
+- `cmux browser --surface surface:10 errors list`: PASS, no browser errors.
+
+Remaining issue:
+
+- Same known cmux helper caveat: `surface:10` can intermittently lose the DOM
+  automation context, but this did not recur during this queue QA slice.
+
+Next focus:
+
+- Perform a completion audit against the original goal before deciding whether
+  any direct UI, failure-state, or persistence requirement remains uncovered.

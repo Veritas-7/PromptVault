@@ -52,6 +52,7 @@ import {
   importQueueActionLabel,
   importQueueClearSelectionLabel,
   importQueueFinalState,
+  importQueueSelectionSummaryLabel,
   importQueueSelectAllLabel,
   selectedQueueSourceIds,
   toggleSourceSelection,
@@ -1467,7 +1468,12 @@ function App() {
                 </div>
               </div>
               <div className="plan-toolbar">
-                <span>{selectedImportQueueSourceIds.length.toLocaleString()}개 선택됨</span>
+                <span data-import-selection-summary="true">
+                  {importQueueSelectionSummaryLabel(
+                    selectedImportQueueSourceIds.length,
+                    availableImportQueueSourceIds.length,
+                  )}
+                </span>
                 <div className="plan-toolbar-actions">
                   <button
                     aria-label={importQueueSelectAllLabel(

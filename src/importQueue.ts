@@ -58,6 +58,19 @@ export function importQueueClearSelectionLabel(
   return `선택한 가져오기 소스 ${boundedSelectedSourceCount.toLocaleString()}개 해제`;
 }
 
+export function importQueueSelectionSummaryLabel(
+  selectedSourceCount: number,
+  availableSourceCount: number,
+): string {
+  const boundedAvailableSourceCount = Math.max(0, availableSourceCount);
+  if (boundedAvailableSourceCount === 0) return "선택 가능한 소스 없음";
+  const boundedSelectedSourceCount = Math.min(
+    Math.max(0, selectedSourceCount),
+    boundedAvailableSourceCount,
+  );
+  return `${boundedSelectedSourceCount.toLocaleString()} / ${boundedAvailableSourceCount.toLocaleString()}개 선택됨`;
+}
+
 export function importQueueActionLabel(
   selectedSourceCount: number,
   isRunning: boolean,

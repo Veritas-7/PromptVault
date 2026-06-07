@@ -1,10 +1,71 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 17:27 KST
+Updated: 2026-06-07 17:30 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Import queue selection summary
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make the plan import queue status clearer after adding bulk select/clear
+  controls.
+
+Context:
+
+- `57a814c feat: add import queue bulk selection` added `전체 선택` and
+  `선택 해제`, but the toolbar still showed only the selected count.
+- With bulk selection, users benefit from seeing how many importable sources
+  exist, not just how many are currently selected.
+
+Progress:
+
+- Added a queue selection summary helper that renders selected and available
+  source counts together.
+- Clamped stale, negative, or overlarge selected counts so the visible status
+  cannot show impossible values after plan refreshes.
+- Updated the plan toolbar status from `N개 선택됨` to `N / M개 선택됨`.
+
+Changes:
+
+- `src/importQueue.ts`
+  - Added `importQueueSelectionSummaryLabel`.
+- `src/App.tsx`
+  - Replaced the plan toolbar count span with the selected/available summary
+    and added a stable `data-import-selection-summary` QA hook.
+- `tests/importQueue.test.ts`
+  - Added summary-label coverage for empty, normal, overlarge, and negative
+    selected counts.
+
+Tests:
+
+- `npm run test:ui -- tests/importQueue.test.ts`: PASS, `134` UI helper tests.
+- `npm run build`: PASS.
+- Browser preview + bridge QA:
+  - Preview: `127.0.0.1:5182`; bridge: `127.0.0.1:5174`.
+  - Initial summary: `0 / 11개 선택됨`.
+  - After `전체 선택`: `11 / 11개 선택됨`.
+  - After `선택 해제`: `0 / 11개 선택됨`.
+  - Desktop/mobile overflow stayed within `1440 / 1440` and `390 / 390`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `134` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local plan/import toolbar QA.
+
+Next Steps:
+
+- Stage explicit paths and run staged whitespace/gitleaks before commit/push.
 
 ## Current Slice - 2026-06-07 Import queue bulk selection
 
@@ -91,7 +152,7 @@ Research:
 
 Next Steps:
 
-- Stage explicit paths and run staged whitespace/gitleaks before commit/push.
+- Completed and pushed as `57a814c feat: add import queue bulk selection`.
 
 ## Current Slice - 2026-06-07 Per-source quick scan cap
 

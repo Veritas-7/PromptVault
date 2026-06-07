@@ -5,6 +5,7 @@ import {
   importQueueActionLabel,
   importQueueClearSelectionLabel,
   importQueueFinalState,
+  importQueueSelectionSummaryLabel,
   importQueueSelectAllLabel,
   selectedQueueSourceIds,
   toggleSourceSelection,
@@ -74,6 +75,14 @@ test("queue clear selection label explains empty and lock states", () => {
     importQueueClearSelectionLabel(2, lockState({ importRunning: true })),
     "가져오기 실행 중에는 가져오기 소스 선택을 해제할 수 없습니다",
   );
+});
+
+test("queue selection summary includes available source count", () => {
+  assert.equal(importQueueSelectionSummaryLabel(0, 0), "선택 가능한 소스 없음");
+  assert.equal(importQueueSelectionSummaryLabel(0, 11), "0 / 11개 선택됨");
+  assert.equal(importQueueSelectionSummaryLabel(3, 11), "3 / 11개 선택됨");
+  assert.equal(importQueueSelectionSummaryLabel(99, 11), "11 / 11개 선택됨");
+  assert.equal(importQueueSelectionSummaryLabel(-3, 11), "0 / 11개 선택됨");
 });
 
 test("queue action label explains disabled zero-selection state", () => {

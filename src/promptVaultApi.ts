@@ -536,6 +536,12 @@ function isPromptTruncationState(value: unknown, returnedPromptCount: unknown, s
     && (value || returnedPromptCount === stats.total_prompts);
 }
 
+function isScanOutputPathState(outputPath: unknown, markdownWritten: unknown): boolean {
+  if (markdownWritten !== true && markdownWritten !== false) return false;
+  if (outputPath === null) return markdownWritten === false;
+  return markdownWritten === true && isNonBlankString(outputPath);
+}
+
 function isImportBatchPromptCounts(value: unknown): boolean {
   return isRecord(value)
     && Array.isArray(value.prompts)
@@ -709,7 +715,7 @@ function parseScanPlan(value: unknown): ScanPlan {
 function parseScanResult(value: unknown): ScanResult {
   if (!isRecord(value)
     || !isTimestampString(value.generated_at)
-    || !(typeof value.output_path === "string" || value.output_path === null)
+    || !isScanOutputPathState(value.output_path, value.markdown_written)
     || typeof value.markdown !== "string"
     || !isScanStats(value.stats)
     || !Array.isArray(value.prompts)

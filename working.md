@@ -1,12 +1,89 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 05:41 KST
+Updated: 2026-06-08 05:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Improvement response text validation
+## Current Slice - 2026-06-08 Scan export metadata validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan results whose export path metadata is blank or
+  inconsistent with `markdown_written` before the UI can render a misleading
+  export notice.
+
+Context:
+
+- The previous slices tightened response database paths, source metadata,
+  prompt row metadata, and improvement text.
+- `parseScanResult` still accepts `output_path: "   "`, accepts an output path
+  when `markdown_written` is `false`, and accepts `markdown_written: true` with
+  `output_path: null`.
+- The Rust producer rejects blank requested output paths, rejects output paths
+  when export is disabled, and only returns a concrete output path when
+  markdown was written.
+- The React UI renders `result.output_path` directly in the export notice.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: scan export output-path
+  consistency in browser-bridge parsers.
+- Added RED tests for blank `output_path`, non-null `output_path` when
+  `markdown_written` is `false`, and `markdown_written: true` without an
+  `output_path`.
+- Confirmed RED first: focused API suite failed 74/77 only on the three new
+  missing-rejection cases.
+- Added a parser relation guard for scan output path state.
+- Confirmed GREEN after the parser change: focused API suite passes 77/77.
+- Confirmed broader UI coverage still passes after the parser change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright against three malformed scan
+  export metadata responses; the UI showed sanitized failure copy and did not
+  render export notices or prompt rows.
+- Removed the temporary preview QA script from `/tmp`.
+- Ran full check successfully.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`: covers malformed scan export path states
+  with sanitized bridge error messages.
+- `src/promptVaultApi.ts`: adds `isScanOutputPathState` so `output_path` is
+  nonblank exactly when `markdown_written` is true.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  (`77` tests passed).
+- PASS: `npm run test:ui` (`241` tests passed).
+- PASS: `npm run build`.
+- PASS: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5293" --port 5293 node /tmp/promptvault_scan_export_metadata_qa.mjs`.
+- PASS: `npm run check` (`npm run test:ui`, `npm run build`,
+  `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings`).
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run staged secret scan, commit/push the scoped code slice, then close out
+  this worklog slice.
+
+## Previous Slice - 2026-06-08 Improvement response text validation
 
 Current Goal:
 

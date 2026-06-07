@@ -2978,6 +2978,81 @@ test("browser bridge scan results reject untruncated source weak count mismatche
   );
 });
 
+test("browser bridge scan results reject duplicate source summary ids", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanResult({
+    stats: emptyScanStats({
+      total_prompts: 2,
+      total_files: 2,
+      total_words: 6,
+      average_words: 3,
+      average_quality: 50,
+      weak_prompt_count: 0,
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: 1,
+        prompts_found: 1,
+        average_quality: 20,
+        weak_prompt_count: 0,
+        status: "ok",
+        notes: [],
+      }, {
+        id: "codex",
+        label: "Codex duplicate",
+        root_path: "/tmp/codex-duplicate",
+        files_seen: 1,
+        prompts_found: 1,
+        average_quality: 20,
+        weak_prompt_count: 0,
+        status: "ok",
+        notes: [],
+      }],
+    }),
+    prompts: [
+      promptRecord({
+        quality: {
+          score: 20,
+          band: "medium",
+          missing: [],
+          suggestions: [],
+        },
+      }),
+      promptRecord({
+        hash: "hash-2",
+        id: "prompt-2",
+        source: "claude",
+        path: "/tmp/claude/history-2.jsonl",
+        session_id: "session-2",
+        quality: {
+          score: 80,
+          band: "medium",
+          missing: [],
+          suggestions: [],
+        },
+      }),
+    ],
+    returned_prompt_count: 2,
+    prompts_truncated: false,
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 2 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Codex duplicate|Claude|Improve this prompt|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject fractional integer payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

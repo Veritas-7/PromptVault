@@ -318,6 +318,17 @@ function isSourceSummary(value: unknown): boolean {
     && isNonBlankStringArray(value.notes);
 }
 
+function sourceSummaryIdsAreUnique(sourceSummaries: unknown): boolean {
+  if (!Array.isArray(sourceSummaries)) return false;
+  const sourceIds = new Set<string>();
+  for (const source of sourceSummaries) {
+    if (!isRecord(source) || !isNonBlankString(source.id)) return false;
+    if (sourceIds.has(source.id)) return false;
+    sourceIds.add(source.id);
+  }
+  return true;
+}
+
 function sourceFilesSeenTotalMatches(sourceSummaries: unknown, totalFiles: unknown): boolean {
   if (!Array.isArray(sourceSummaries) || !isNonNegativeSafeInteger(totalFiles)) return false;
   let filesSeenTotal = 0;
@@ -546,6 +557,7 @@ function isScanStats(value: unknown): boolean {
     && isFrequencyItemsWithinTotal(value.prompts_by_date, value.total_prompts)
     && Array.isArray(value.source_summaries)
     && value.source_summaries.every(isSourceSummary)
+    && sourceSummaryIdsAreUnique(value.source_summaries)
     && sourceFilesSeenTotalMatches(value.source_summaries, value.total_files)
     && sourcePromptTotalsMatch(value.source_summaries, value.total_prompts, value.weak_prompt_count);
 }

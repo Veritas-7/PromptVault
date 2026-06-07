@@ -1,12 +1,123 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 07:49 KST
+Updated: 2026-06-08 07:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Untruncated source weak-count validation
+## Current Slice - 2026-06-08 Duplicate source summary ID validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose `source_summaries` contain
+  duplicate source IDs.
+
+Context:
+
+- Recent slices tightened aggregate totals, untruncated word/quality/weak
+  counts, source summary average quality, source summary prompt counts, and
+  source summary weak counts.
+- The parser currently validates each source summary shape and aggregate
+  source totals, but it does not require `source_summaries[].id` values to be
+  unique.
+- Duplicate source IDs make the source summary list ambiguous. A malformed scan
+  can repeat the `codex` summary twice while omitting a `claude` summary, and
+  still satisfy aggregate totals plus per-source row checks for the duplicated
+  ID.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault` with no goal-warning.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the direct parent project policy and relevant parser/test context.
+- Identified the next narrow hardening target: uniqueness for
+  `stats.source_summaries[].id`.
+- Added a RED API test for a malformed scan result whose source summaries
+  repeat `id: "codex"` while one returned prompt row belongs to `claude`.
+- Confirmed RED first: focused API suite failed 103/104 only on the new
+  missing-rejection case.
+- Added parser validation requiring `stats.source_summaries[].id` values to be
+  unique before aggregate source totals are trusted.
+- Confirmed GREEN after the parser change: focused API suite passes 104/104.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed scan result with duplicate source summary IDs
+  surfaced sanitized global and scan-failure UI, and the duplicated source
+  summary plus prompt payload were not rendered.
+- Removed the temporary preview QA script from
+  `/tmp/promptvault_duplicate_source_summary_qa.mjs`.
+- Confirmed `/tmp/promptvault_duplicate_source_summary_qa.mjs` is absent and
+  preview port `5309` has no listener after the server wrapper stopped the
+  server.
+- Ran full check successfully after preview QA.
+- Verified touched-file whitespace with `git diff --check`.
+- Re-verified repo root, branch status, `HEAD...origin/main` parity `0 0`,
+  and `origin` remotes before staging.
+- Verified the GitHub target repository is private:
+  `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `visibility: PRIVATE` and `isPrivate: true`.
+- Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`; staged secret scan passed.
+
+Changes:
+
+- `working.md`: records the current duplicate source summary ID validation
+  slice.
+- `src/promptVaultApi.ts`: rejects scan result payloads with duplicate source
+  summary IDs.
+- `tests/promptVaultApi.test.ts`: adds the duplicate source summary ID
+  rejection case for browser-bridge scan results.
+
+Tests:
+
+- Baseline repo verification: `git rev-parse --show-toplevel`,
+  `git status --short --branch`, `git rev-list --left-right --count HEAD...origin/main`,
+  and `git remote -v` showed repo root
+  `/Users/wj/Ai/System/10_Projects/PromptVault`, clean `main...origin/main`,
+  parity `0 0`, and only `origin`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 103/104 only on the new duplicate source summary ID case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 104/104.
+- `npm run test:ui` passed 268/268.
+- `npm run build` passed.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5309" --port 5309 --timeout 30 node /tmp/promptvault_duplicate_source_summary_qa.mjs`
+  passed.
+- Cleanup: `/tmp/promptvault_duplicate_source_summary_qa.mjs` absent; port
+  `5309` free.
+- `npm run check` passed: UI tests 268/268, production build, Rust lib tests
+  84/84, CLI tests 16/16, and clippy with `-D warnings`.
+- Pre-staging verification: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; repo root/status/remotes/parity checked with only the three intended
+  files modified; temp script absent and port `5309` free; GitHub target is
+  PRIVATE.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact`
+  passed.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Add a RED API test for duplicate source summary IDs, then implement the
+  minimal parser validation and run focused plus broad verification.
+
+## Previous Slice - 2026-06-08 Untruncated source weak-count validation
 
 Current Goal:
 

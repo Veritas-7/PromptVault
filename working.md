@@ -1,10 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 22:56 KST
+Updated: 2026-06-07 23:01 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Stored facets numeric validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject impossible browser-bridge `/api/prompt-facets` numeric payloads before
+  negative stored prompt or facet counts can render in the stored prompt
+  summary and filter suggestions.
+
+Context:
+
+- Previous slices hardened scan progress, scan plan, import state, and import
+  event numeric validation.
+- Stored prompt facets still accepted any JavaScript `number` for
+  `total_prompts` and facet frequency `count` values.
+- `storedFacetSummaryText()` renders `total_prompts.toLocaleString()` directly,
+  so shape-valid negative counts could make the storage summary show impossible
+  values such as `-1개 저장됨`.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added a RED test for shape-valid but impossible negative stored facet
+  payloads.
+- Reused the non-negative finite number validator for stored facet
+  `total_prompts` and shared frequency item counts.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check. Publication is next.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - `isFrequencyItem()` now rejects negative or non-finite frequency counts.
+  - `parseStoredPromptFacetsResult()` now rejects negative or non-finite
+    `total_prompts`.
+- `tests/promptVaultApi.test.ts`
+  - Adds `/api/prompt-facets` coverage for impossible negative numeric
+    payloads.
+- `working.md`
+  - Records this stored facets numeric validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new impossible numeric stored facets
+    payload test resolved instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 18 tests, 18 pass.
+- `npm run test:ui`:
+  - Passed: 182 tests, 182 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-DPkKC7zE.js`.
+- Stored facets numeric validation browser QA on preview `127.0.0.1:5249`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/import-states`, and `/api/import-events` returned
+    valid payloads.
+  - `/api/prompt-facets` returned HTTP 200 with negative `total_prompts` and
+    negative source/date/workspace frequency counts.
+  - Initial quiet refresh rendered the stored facets failure notice and summary
+    `저장소 필터 후보를 사용할 수 없음`, without leaking negative counts.
+  - Manual stored facet refresh rendered the sanitized bridge response-shape
+    error and still did not expose `-1`, `-2`, `-3`, `-5`, `NaN`, or
+    `Infinity`.
+  - Final counts: `health=1`, `facets=2`, `importStates=1`,
+    `importEvents=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 182 tests, 182 pass.
+  - Build: passed with `index-DPkKC7zE.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+- Commit and push are still pending for this slice.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage explicit paths only, run staged gitleaks, commit, full gitleaks, push,
+  and record publication evidence.
+- Continue autonomous QA on another still-uncovered scan result, import batch,
+  improve result, or stored prompt numeric edge after publication.
 
 ## Current Slice - 2026-06-07 Import state/event numeric validation
 

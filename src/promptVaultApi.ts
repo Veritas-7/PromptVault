@@ -167,7 +167,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isFrequencyItem(value: unknown): boolean {
-  return isRecord(value) && typeof value.text === "string" && typeof value.count === "number";
+  return isRecord(value)
+    && typeof value.text === "string"
+    && isNonNegativeFiniteNumber(value.count);
 }
 
 function isStringArray(value: unknown): boolean {
@@ -388,7 +390,7 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
   if (!isRecord(value)
     || typeof value.generated_at !== "string"
     || typeof value.database_path !== "string"
-    || typeof value.total_prompts !== "number"
+    || !isNonNegativeFiniteNumber(value.total_prompts)
     || !Array.isArray(value.sources)
     || !value.sources.every(isFrequencyItem)
     || !Array.isArray(value.dates)

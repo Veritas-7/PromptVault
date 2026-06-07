@@ -30,10 +30,16 @@ export async function checkBrowserBridgeHealth(timeoutMs = 1200): Promise<Browse
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(bridgeEndpoint("/api/health"), {
-      method: "GET",
-      signal: controller.signal,
-    });
+    let response: Response;
+    try {
+      response = await fetch(bridgeEndpoint("/api/health"), {
+        method: "GET",
+        signal: controller.signal,
+      });
+    } catch {
+      throw new Error(browserBridgeUnavailableMessage());
+    }
+
     const text = await response.text();
     if (!response.ok) {
       throw new Error(text || `PromptVault 브라우저 브리지가 HTTP ${response.status}를 반환했습니다.`);

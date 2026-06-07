@@ -55,3 +55,42 @@ test("bridge health reports malformed JSON without raw parser errors", async (t)
     },
   );
 });
+
+test("bridge health reports network failures without raw fetch errors", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const globalWithWindow = globalThis as typeof globalThis & {
+    window?: {
+      clearTimeout: typeof clearTimeout;
+      setTimeout: typeof setTimeout;
+    };
+  };
+  const originalWindow = globalWithWindow.window;
+
+  globalWithWindow.window = {
+    clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    setTimeout: globalThis.setTimeout.bind(globalThis),
+  };
+  globalThis.fetch = async () => {
+    throw new Error("Failed to fetch");
+  };
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) {
+      delete globalWithWindow.window;
+    } else {
+      globalWithWindow.window = originalWindow;
+    }
+  });
+
+  await assert.rejects(
+    () => checkBrowserBridgeHealth(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지가 실행 중이 아닙니다/);
+      assert.match(error.message, new RegExp(BROWSER_BRIDGE_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.doesNotMatch(error.message, /Failed to fetch|Load failed|NetworkError/);
+      return true;
+    },
+  );
+});

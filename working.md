@@ -1,10 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 21:15 KST
+Updated: 2026-06-07 21:21 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Bridge health network-failure copy
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep browser-bridge health network failures from leaking raw browser/network
+  copy such as `Failed to fetch` through the direct health helper contract.
+
+Context:
+
+- Previous slices hardened malformed successful JSON from bridge POST endpoints
+  and from `/api/health`.
+- `postBridge()` already converts fetch failures to the stable bridge recovery
+  command, but `checkBrowserBridgeHealth()` still let direct fetch exceptions
+  propagate as raw network text.
+- The app UI usually collapses health failures into disconnected bridge state,
+  but the bridge helper should have the same no-raw-fetch contract as the POST
+  bridge path.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added a RED unit test for health-check fetch/network failures.
+- Updated `checkBrowserBridgeHealth()` to catch fetch failures and throw
+  `browserBridgeUnavailableMessage()` while preserving existing HTTP and JSON
+  parse handling.
+- Verified focused tests, full UI/unit tests, production build, preview
+  recovery behavior, and the full project check.
+
+Changes:
+
+- `src/browserBridge.ts`
+  - Wraps the `/api/health` fetch call so network failures return the stable
+    bridge recovery command instead of raw fetch/browser copy.
+- `tests/browserBridge.test.ts`
+  - Adds coverage that `checkBrowserBridgeHealth()` reports network failures
+    without `Failed to fetch`, `Load failed`, or `NetworkError`.
+- `working.md`
+  - Records this bridge health network-failure copy slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/browserBridge.test.ts`
+  - Failed for the intended reason: direct health fetch failure surfaced
+    `Failed to fetch`.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/browserBridge.test.ts`
+  - Passed: 4 tests, 4 pass.
+- `npm run test:ui`:
+  - Passed: 158 tests, 158 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-Bq7Q9fSG.js`.
+- Health network-failure browser QA on preview `127.0.0.1:5236`:
+  - First `/api/health` was aborted at the network layer.
+  - Initial QA harness run failed because it treated the expected browser
+    resource console error as unexpected; the temp script was adjusted to
+    classify the single expected health resource error separately.
+  - Rerun passed with one expected request failure:
+    `GET http://127.0.0.1:5174/api/health net::ERR_FAILED`.
+  - Rerun passed with one expected console entry:
+    `Failed to load resource: net::ERR_FAILED`.
+  - UI transitioned to disconnected bridge state with the recovery notice.
+  - UI did not expose `Failed to fetch`, `Load failed`, `NetworkError`, or
+    `net::ERR` in page text.
+  - While disconnected, top actions stayed disabled and bridge recheck was
+    enabled.
+  - Clicking bridge recheck made the second health call succeed, showed
+    `/tmp/promptvault-health-network-failure.sqlite`, and unlocked top actions.
+  - Final count: `healthCalls=2`.
+  - Page errors, unexpected console errors, and unexpected request failures:
+    none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 158 tests, 158 pass.
+  - Build: passed with `index-Bq7Q9fSG.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage explicit changed paths, run staged secret/diff checks, commit, push to
+  `origin main`, and verify branch parity.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Malformed bridge health JSON handling
 

@@ -88,7 +88,7 @@ export async function importBatch(options: ImportBatchOptions): Promise<ImportBa
   if (hasTauriInvoke()) {
     return invoke<ImportBatchResult>("import_batch", { options });
   }
-  return postBridge<ImportBatchResult>("/api/import-batch", { options });
+  return postBridge<ImportBatchResult>("/api/import-batch", { options }, parseImportBatchResult);
 }
 
 export async function listImportStates(options: ImportStatesOptions = {}): Promise<ImportStatesResult> {
@@ -133,7 +133,7 @@ export async function cancelScan(run_id: string): Promise<CancelScanResult> {
   if (hasTauriInvoke()) {
     return invoke<CancelScanResult>("cancel_scan", { options });
   }
-  return postBridge<CancelScanResult>("/api/scan/cancel", { options });
+  return postBridge<CancelScanResult>("/api/scan/cancel", { options }, parseCancelScanResult);
 }
 
 export async function scanProgress(run_id: string): Promise<ScanProgress> {
@@ -148,7 +148,7 @@ export async function improvePrompt(request: ImprovePromptRequest): Promise<Impr
   if (hasTauriInvoke()) {
     return invoke<ImproveResult>("improve_prompt", { request });
   }
-  return postBridge<ImproveResult>("/api/improve", { request });
+  return postBridge<ImproveResult>("/api/improve", { request }, parseImproveResult);
 }
 
 export function isBrowserQaMode(): boolean {
@@ -284,6 +284,63 @@ function isScanStats(value: unknown): boolean {
     && value.prompts_by_date.every(isFrequencyItem)
     && Array.isArray(value.source_summaries)
     && value.source_summaries.every(isSourceSummary);
+}
+
+function isImprovePersistence(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.database_path === "string"
+    && typeof value.improvement_event_id === "number"
+    && typeof value.prompt_improvement_count === "number";
+}
+
+function isQualityDelta(value: unknown): boolean {
+  return isRecord(value)
+    && isPromptQuality(value.before)
+    && isPromptQuality(value.after)
+    && typeof value.score_delta === "number"
+    && isStringArray(value.resolved_gaps)
+    && isStringArray(value.remaining_gaps);
+}
+
+function parseCancelScanResult(value: unknown): CancelScanResult {
+  if (!isRecord(value) || typeof value.run_id !== "string" || typeof value.canceled !== "boolean") {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as CancelScanResult;
+}
+
+function parseImportBatchResult(value: unknown): ImportBatchResult {
+  if (!isRecord(value)
+    || typeof value.generated_at !== "string"
+    || !isSourcePlan(value.source)
+    || !isImportState(value.state)
+    || typeof value.batch_start_index !== "number"
+    || typeof value.batch_file_count !== "number"
+    || typeof value.batch_prompt_count !== "number"
+    || typeof value.returned_prompt_count !== "number"
+    || !Array.isArray(value.prompts)
+    || !value.prompts.every(isPromptRecord)
+    || !isScanStats(value.stats)
+    || !isPersistStats(value.persistence)
+    || !isStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ImportBatchResult;
+}
+
+function parseImproveResult(value: unknown): ImproveResult {
+  if (!isRecord(value)
+    || typeof value.provider !== "string"
+    || typeof value.used_ai !== "boolean"
+    || typeof value.revised_prompt !== "string"
+    || !isStringArray(value.rationale)
+    || !isStringArray(value.checklist)
+    || !isQualityDelta(value.quality_delta)
+    || !isStringArray(value.warnings)
+    || !(isImprovePersistence(value.persistence) || value.persistence === null)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ImproveResult;
 }
 
 function parseImportStatesResult(value: unknown): ImportStatesResult {

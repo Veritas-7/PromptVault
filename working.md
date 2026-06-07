@@ -1,10 +1,121 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 22:08 KST
+Updated: 2026-06-07 22:13 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Bridge action payload validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent malformed successful `/api/import-batch`, `/api/improve`, and
+  `/api/scan/cancel` action payloads from reaching import, improvement, and
+  cancel UI state.
+
+Context:
+
+- Previous bridge slices validated health, quiet refresh, scan progress, scan
+  results, stored prompt loads, and scan plan payloads.
+- Remaining browser bridge action calls still returned typed casts for batch
+  import, prompt improvement, and scan cancellation responses.
+- These payloads feed import summaries, import errors, prompt improvement
+  recommendations, persistence notices, and cancel/stop feedback directly.
+- A successful malformed action response could expose raw JavaScript render
+  details or leave the UI in an inconsistent action state.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added RED tests for malformed successful import-batch, improve, and
+  cancel-scan payloads.
+- Added runtime validators for `CancelScanResult`, `ImportBatchResult`, and
+  `ImproveResult` browser bridge responses.
+- Verified that malformed action payloads become stable PromptVault bridge
+  response-shape failures, not render exceptions or raw JavaScript details.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - `importBatch()` now validates browser bridge `/api/import-batch`
+    responses with `parseImportBatchResult()`.
+  - `improvePrompt()` now validates browser bridge `/api/improve` responses
+    with `parseImproveResult()`.
+  - `cancelScan()` now validates browser bridge `/api/scan/cancel` responses
+    with `parseCancelScanResult()`.
+  - Added validation helpers for improvement persistence and quality deltas.
+- `tests/promptVaultApi.test.ts`
+  - Adds malformed successful response coverage for cancel, import batch, and
+    improve action endpoints.
+  - Asserts stable bridge response-shape copy without raw `TypeError`,
+    `undefined`, or `toLocaleString` details.
+- `working.md`
+  - Records this bridge action payload validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the three new action payload tests saw
+    `Missing expected rejection.`
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 12 tests, 12 pass.
+- `npm run test:ui`:
+  - Passed: 172 tests, 172 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-EaVAGyxY.js`.
+- Malformed action payload browser QA on preview `127.0.0.1:5243`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - Valid setup responses covered health, prompt facets, import states, import
+    events, scan progress, stored prompt load, and scan start.
+  - Clicking `[data-run-plan]` then `[data-import-source-id='codex']` made
+    `/api/import-batch` return HTTP 200 JSON with only `generated_at`.
+  - UI rendered the global malformed bridge response message plus
+    `[data-import-run-error]` without raw JavaScript details.
+  - Clicking `[data-load-stored-prompts]` then `[data-run-improve]` made
+    `/api/improve` return HTTP 200 JSON with only `provider`.
+  - UI rendered the global malformed bridge response message plus
+    `[data-improvement-run-error]` without raw JavaScript details.
+  - Clicking `[data-run-scan]` then `[data-stop-scan]` made
+    `/api/scan/cancel` return HTTP 200 JSON with only `run_id`.
+  - UI rendered the global malformed bridge response message plus
+    `[data-scan-stop-error]` without exposing `toLocaleString`,
+    `Cannot read properties`, `undefined`, or `TypeError`.
+  - Final counts: `cancel=1`, `facets=2`, `health=1`,
+    `importBatch=1`, `importEvents=2`, `importStates=2`, `improve=1`,
+    `plan=1`, `progress=3`, `prompts=1`, `scan=1`, `unexpected=[]`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 172 tests, 172 pass.
+  - Build: passed with `index-EaVAGyxY.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Commit and push this robustness fix after explicit-path staging, staged
+  whitespace checks, staged gitleaks, full gitleaks, GitHub auth, remote, and
+  branch parity checks.
 
 ## Current Slice - 2026-06-07 Bridge plan payload validation
 

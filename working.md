@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 10:53 KST
+Updated: 2026-06-07 10:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -557,6 +557,18 @@ stability, performance, and maintainability, then record evidence here.
   - Observed Saved Import Progress update to `Sources 3 / 4`,
     `Files 110 / 158`, `Imported Prompts 1,778`, with
     `Gemini temporary chats` still `96 / 144 · resumable`.
+  - Follow-up diagnostics returned `No console entries` and
+    `No browser errors`.
+- Fresh same-browser Stored Vault failure/retry QA on existing `surface:10`:
+  - Installed a temporary page-local one-shot failure for `/api/prompts`,
+    clicked `Load Stored`, and observed the Stored Vault panel warning:
+    `Could not load stored prompts. Check the error above and retry.`
+  - Confirmed the injected global error text was visible and `Load Stored`
+    stayed enabled for retry.
+  - Clicked `Load Stored` again, restored the original `fetch`, and observed
+    the warning clear with stored prompt metrics reloaded:
+    `Prompts 1000`, `Preview 1000`, `Files 506`, `Words 99201`,
+    `Quality 69.9`, `Weak 503`, `DB Stored 88379`, `Dates 89`.
   - Follow-up diagnostics returned `No console entries` and
     `No browser errors`.
 - `npm run test:ui -- tests/scanStatus.test.ts`: passed; due the package
@@ -3721,7 +3733,7 @@ Audit conclusion:
   stored-vault, import-plan, import-batch/queue/stop, error, and empty-state
   flows from this surface.
 
-## Completion Audit Snapshot - 2026-06-07 10:53 KST
+## Completion Audit Snapshot - 2026-06-07 10:56 KST
 
 Objective restated as concrete deliverables:
 
@@ -3738,18 +3750,18 @@ Prompt-to-artifact checklist:
 | Requirement | Current evidence | Status |
 |---|---|---|
 | Target source path is PromptVault | Goal identity and repo root resolve to `/Users/wj/Ai/System/10_Projects/PromptVault`. | PASS |
-| `working.md` exists and is updated | This update records same-browser Stored Vault, Import Plan, Import Batch, Import Queue Stop, and continuous Import Stop QA on `surface:10`. | PASS |
+| `working.md` exists and is updated | This update records same-browser Stored Vault normal/failure/retry, Import Plan, Import Batch, Import Queue Stop, and continuous Import Stop QA on `surface:10`. | PASS |
 | Use one existing cmux browser | `cmux tree --all` showed existing `workspace:5` `surface:10 [browser] "PromptVault"`; no `cmux browser open/new`, cmux restart, app kill, or second browser was used. | PASS |
-| Direct browser QA currently works | Existing `surface:10` completed Scan/Improve, Stored Vault filter/reset/apply, Import Plan, Import Batch, selected queue Stop, and continuous Stop QA with clean follow-up console/errors diagnostics. | PARTIAL |
+| Direct browser QA currently works | Existing `surface:10` completed Scan/Improve, Stored Vault filter/reset/apply plus failure/retry, Import Plan, Import Batch, selected queue Stop, and continuous Stop QA with clean follow-up console/errors diagnostics. | PARTIAL |
 | Automated gates cover the latest code slice | `npm run test:ui -- tests/scanStatus.test.ts`, `npm run build`, and `npm run check` passed for the latest code change. This queue-stop update is docs-only. | PASS |
 | Full objective achieved | Core flows have broader same-browser coverage now, but the objective still calls for continued autonomous improvement and remaining recovery/error-state QA. | NOT ACHIEVED |
 
 Audit conclusion:
 
 - Do not mark the thread goal complete yet.
-- Same-browser direct QA on `surface:10` now covers Stored Vault, Import Plan,
-  Import Batch, selected Import Queue Stop, and continuous Import Stop flows
-  in addition to Scan and Improve fallback.
+- Same-browser direct QA on `surface:10` now covers Stored Vault normal and
+  failure/retry paths, Import Plan, Import Batch, selected Import Queue Stop,
+  and continuous Import Stop flows in addition to Scan and Improve fallback.
 - Continue with remaining recovery/error states and durable import/background
   indexing improvements before considering the objective complete.
 
@@ -3761,8 +3773,8 @@ Audit conclusion:
 
 ## Next Steps
 
-1. Continue same-browser direct QA on `surface:10` for failed-state handling,
-   remaining empty-state paths, and request-overlap/double-click hazards.
+1. Continue same-browser direct QA on `surface:10` for remaining empty-state
+   paths and request-overlap/double-click hazards.
 2. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
 3. Harden the cmux browser diagnostics workflow for stale surface IDs, large

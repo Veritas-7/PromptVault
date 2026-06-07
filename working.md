@@ -1,10 +1,60 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:34 KST
+Updated: 2026-06-07 19:36 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Current HEAD full check
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Re-run the full repository check after the recent browser QA/report-only
+  slices to verify the current pushed code and docs still pass all gates.
+
+Context:
+
+- Recent slices were mostly direct browser QA and `working.md` updates.
+- The last code-changing slice had already passed `npm run check`, but the
+  current `HEAD` was rechecked after several follow-up QA commits.
+
+Progress:
+
+- Ran the full check command from the PromptVault project root.
+- Confirmed the TypeScript UI tests, production build, Rust library tests, CLI
+  tests, doc-tests, and clippy all pass.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only full-check slice.
+
+Tests:
+
+- `npm run check`:
+  - UI tests: 155 passed.
+  - Build: `tsc && vite build` passed; Vite built 1,780 modules and produced
+    `dist/index.html`, CSS, and JS assets.
+  - Rust lib tests: 84 passed.
+  - Rust CLI tests: 16 passed.
+  - Doc-tests: passed.
+  - Clippy with `-D warnings`: passed.
+
+Issues:
+
+- No blocker found during the full check.
+
+Research:
+
+- No external research.
+
+Next Steps:
+
+- Commit and push this report-only full-check record.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Scan failure limit-change QA
 
@@ -70,7 +120,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record.
+- Completed and pushed as `068255b docs: record scan failure recovery QA`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Import refresh retry browser QA

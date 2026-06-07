@@ -177,7 +177,11 @@ function isStringArray(value: unknown): boolean {
 }
 
 function isNonNegativeFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  return isFiniteNumber(value) && value >= 0;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function isNullableNonNegativeFiniteNumber(value: unknown): boolean {
@@ -312,7 +316,7 @@ function isQualityDelta(value: unknown): boolean {
   return isRecord(value)
     && isPromptQuality(value.before)
     && isPromptQuality(value.after)
-    && typeof value.score_delta === "number"
+    && isFiniteNumber(value.score_delta)
     && isStringArray(value.resolved_gaps)
     && isStringArray(value.remaining_gaps);
 }

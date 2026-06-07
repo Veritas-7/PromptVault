@@ -1,10 +1,104 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 23:24 KST
+Updated: 2026-06-07 23:30 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Improve score delta finite validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject non-finite browser-bridge `/api/improve` quality score deltas before
+  `Infinity` can render in the recommendation quality delta UI.
+
+Context:
+
+- Previous slices hardened scan progress, scan plan, import state/event, stored
+  facets, scan result, import batch, and improve persistence numeric
+  validation.
+- `ImproveResult.quality_delta.score_delta` is allowed to be negative because
+  Rust computes it as `after.score - before.score`.
+- JavaScript `JSON.parse()` accepts very large JSON numbers such as `1e999` and
+  represents them as `Infinity`, so `typeof score_delta === "number"` was not
+  enough for the bridge response boundary.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added a RED test for a shape-valid improvement response with
+  `score_delta: 1e999`.
+- Added a finite-number validator and used it for `quality_delta.score_delta`,
+  while keeping negative finite deltas valid.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds `isFiniteNumber()` and has `isNonNegativeFiniteNumber()` reuse it.
+  - `isQualityDelta()` now rejects non-finite `score_delta` values while still
+    allowing negative finite deltas.
+- `tests/promptVaultApi.test.ts`
+  - Adds `/api/improve` coverage for non-finite score delta payloads.
+- `working.md`
+  - Records this improve score delta finite validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new non-finite score delta test
+    resolved instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 22 tests, 22 pass.
+- `npm run test:ui`:
+  - Passed: 186 tests, 186 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CB4B97yM.js`.
+- Improve score delta finite browser QA on preview `127.0.0.1:5253`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/prompt-facets`, `/api/import-states`,
+    `/api/import-events`, `/api/scan`, and `/api/scan/progress` returned valid
+    payloads.
+  - `/api/improve` returned raw HTTP 200 JSON with valid improvement shape but
+    `score_delta: 1e999`.
+  - Quick scan loaded one prompt, then clicking `추천 생성` rendered the
+    sanitized bridge response-shape error.
+  - The revised prompt and `Infinity`/`+Infinity`/`NaN` were not rendered.
+  - Final counts: `health=1`, `facets=2`, `importStates=1`,
+    `importEvents=1`, `scan=1`, `progress=1`, `improve=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 186 tests, 186 pass.
+  - Build: passed with `index-CB4B97yM.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then run staged diff/secret checks, commit, and push.
 
 ## Current Slice - 2026-06-07 Improve persistence numeric validation
 

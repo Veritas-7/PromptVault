@@ -657,3 +657,48 @@ test("browser bridge improvements reject impossible persistence counters", async
     },
   );
 });
+
+test("browser bridge improvements reject non-finite score deltas", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(`{
+    "provider": "local",
+    "used_ai": false,
+    "revised_prompt": "Improve this prompt by adding context and success criteria.",
+    "rationale": ["Added context."],
+    "checklist": ["Verify expected outcome."],
+    "quality_delta": {
+      "before": {
+        "score": 40,
+        "band": "weak",
+        "missing": ["context"],
+        "suggestions": ["Add context."]
+      },
+      "after": {
+        "score": 82,
+        "band": "strong",
+        "missing": [],
+        "suggestions": []
+      },
+      "score_delta": 1e999,
+      "resolved_gaps": ["context"],
+      "remaining_gaps": []
+    },
+    "warnings": [],
+    "persistence": null
+  }`, {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => improvePrompt({ prompt: "Improve this prompt." }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Infinity|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});

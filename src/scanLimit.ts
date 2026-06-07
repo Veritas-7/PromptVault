@@ -1,4 +1,9 @@
 export const MAX_SCAN_LIMIT = 100000;
+export const RECOMMENDED_SCAN_LIMIT = 1000;
+
+export function recommendedInitialScanLimit(): string {
+  return String(RECOMMENDED_SCAN_LIMIT);
+}
 
 export function parseRequiredScanLimit(value: string): number {
   const trimmed = value.trim();

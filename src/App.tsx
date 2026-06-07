@@ -78,7 +78,12 @@ import {
   scanProgress,
   scanPrompts,
 } from "./promptVaultApi";
-import { MAX_SCAN_LIMIT, parseRequiredScanLimit } from "./scanLimit";
+import {
+  MAX_SCAN_LIMIT,
+  RECOMMENDED_SCAN_LIMIT,
+  parseRequiredScanLimit,
+  recommendedInitialScanLimit,
+} from "./scanLimit";
 import {
   scanLimitChangedAfterFailure,
   scanProgressLabel,
@@ -249,7 +254,7 @@ function App() {
   const [storedFilters, setStoredFilters] = useState<StoredPromptFilters>(() =>
     emptyStoredPromptFilters(),
   );
-  const [limit, setLimit] = useState("");
+  const [limit, setLimit] = useState(() => recommendedInitialScanLimit());
   const [previewMode, setPreviewMode] = useState<PreviewMode>("latest");
   const [error, setError] = useState<string | null>(null);
   const [improving, setImproving] = useState(false);
@@ -866,7 +871,7 @@ function App() {
               max={MAX_SCAN_LIMIT}
               step={100}
               type="number"
-              placeholder="필수"
+              placeholder={`추천 ${RECOMMENDED_SCAN_LIMIT.toLocaleString()}`}
               value={limit}
               onChange={(event) => updateScanLimit(event.currentTarget.value)}
             />

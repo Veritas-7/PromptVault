@@ -4926,3 +4926,33 @@ Remaining constraint:
   in the current environment or loaded secret files. The OpenAI provider path
   is covered by mock HTTP tests that exercise the actual backend request and
   response parser.
+
+## 2026-06-07 - Recommended initial scan limit
+
+Scope:
+
+- The right-side/browser UI no longer starts with an empty scan limit field.
+- Added `RECOMMENDED_SCAN_LIMIT=1000` and `recommendedInitialScanLimit()` in
+  `src/scanLimit.ts`.
+- Wired `src/App.tsx` to initialize the scan limit input from the recommended
+  value while keeping the number input editable.
+- Updated the empty-field placeholder to `추천 1,000`.
+
+Verification:
+
+- `npm run check`: PASS.
+  - UI tests: `125` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `81` passed.
+  - CLI tests: `16` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- Added UI helper test:
+  `scan limit starts with a recommended value users can edit`.
+- Browser-mode rendering verification with Vite on `127.0.0.1:5177` and the
+  default PromptVault bridge on `127.0.0.1:5174`:
+  - `[data-scan-limit="true"]` initial value: `1000`
+  - placeholder: `추천 1,000`
+  - aria label: `스캔 프롬프트 제한`
+  - after filling `250`, input value: `250`
+  - disabled: `false`

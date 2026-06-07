@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MAX_SCAN_LIMIT, parseRequiredScanLimit } from "../src/scanLimit.ts";
+import {
+  MAX_SCAN_LIMIT,
+  RECOMMENDED_SCAN_LIMIT,
+  parseRequiredScanLimit,
+  recommendedInitialScanLimit,
+} from "../src/scanLimit.ts";
 
 test("scan limit requires an explicit value", () => {
   assert.throws(
@@ -12,6 +17,14 @@ test("scan limit requires an explicit value", () => {
 test("scan limit accepts positive whole numbers", () => {
   assert.equal(parseRequiredScanLimit("100"), 100);
   assert.equal(parseRequiredScanLimit(" 25 "), 25);
+});
+
+test("scan limit starts with a recommended value users can edit", () => {
+  const recommended = recommendedInitialScanLimit();
+
+  assert.equal(recommended, String(RECOMMENDED_SCAN_LIMIT));
+  assert.equal(parseRequiredScanLimit(recommended), RECOMMENDED_SCAN_LIMIT);
+  assert.equal(parseRequiredScanLimit("250"), 250);
 });
 
 test("scan limit rejects invalid and oversized values", () => {

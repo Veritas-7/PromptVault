@@ -626,13 +626,12 @@ function App() {
     } finally {
       setStopRequested(false);
       importStopRequestedRef.current = false;
-      try {
-        await refreshImportStates({ quiet: true });
-        await refreshImportEvents({ quiet: true });
-        await refreshStoredFacets({ quiet: true });
-      } finally {
-        releaseExclusiveAction(topLevelActionClaimRef);
-      }
+      releaseExclusiveAction(topLevelActionClaimRef);
+      void Promise.all([
+        refreshImportStates({ quiet: true }),
+        refreshImportEvents({ quiet: true }),
+        refreshStoredFacets({ quiet: true }),
+      ]);
     }
   }
 
@@ -676,13 +675,12 @@ function App() {
     } finally {
       setStopRequested(false);
       importStopRequestedRef.current = false;
-      try {
-        await refreshImportStates({ quiet: true });
-        await refreshImportEvents({ quiet: true });
-        await refreshStoredFacets({ quiet: true });
-      } finally {
-        releaseExclusiveAction(topLevelActionClaimRef);
-      }
+      releaseExclusiveAction(topLevelActionClaimRef);
+      void Promise.all([
+        refreshImportStates({ quiet: true }),
+        refreshImportEvents({ quiet: true }),
+        refreshStoredFacets({ quiet: true }),
+      ]);
     }
   }
 
@@ -728,7 +726,6 @@ function App() {
       setScanState("ready");
       setScanFailureErrorText(null);
       setScanStopFailure(null);
-      await refreshStoredFacets({ quiet: true });
     } catch (err) {
       const message = errorText(err);
       syncBrowserBridgeFailure(message);
@@ -741,6 +738,7 @@ function App() {
       setScanProgressInfo(null);
       releaseExclusiveAction(topLevelActionClaimRef);
     }
+    void refreshStoredFacets({ quiet: true });
   }
 
   async function requestStopScan() {

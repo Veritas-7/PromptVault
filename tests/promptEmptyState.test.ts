@@ -6,8 +6,11 @@ import {
   selectedPromptEmptyText,
 } from "../src/promptEmptyState.ts";
 
-test("prompt list stays blank before data is loaded", () => {
-  assert.equal(promptListEmptyText(false, ""), null);
+test("prompt list explains how to load data before data is loaded", () => {
+  assert.equal(
+    promptListEmptyText(false, ""),
+    "스캔하거나 저장소 불러오기를 실행하면 프롬프트가 여기에 표시됩니다.",
+  );
 });
 
 test("prompt list explains empty loaded data", () => {

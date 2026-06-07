@@ -1,10 +1,134 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 16:25 KST
+Updated: 2026-06-07 16:59 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019e8bcb-66b7-7443-a79d-46fd3686eadc`
+
+## Current Slice - 2026-06-07 Empty-list guidance and post-scan action unlock
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- cmux in-app browser work is excluded for this environment; use available
+  browser automation and local bridge/preview testing instead.
+- Keep improving real user flows, especially empty states, button actions,
+  browser bridge flows, import, recommendation persistence, and responsive
+  layout.
+
+Context:
+
+- Project remains on `main`, tracking `origin/main`.
+- No project-local `design.md` was found; existing app tone is dense,
+  workbench-style Korean UI for local-first prompt management.
+- Temporary Playwright was run through
+  `npm exec --yes --package=playwright@1.54.2` with a single headless Chromium
+  instance, managed by `webapp-testing`'s `with_server.py`.
+- Preview server used `127.0.0.1:5177`; browser bridge used
+  `127.0.0.1:5174`.
+
+Progress:
+
+- Found that the initial prompt list panel was visually blank before any scan
+  or stored-load action. The detail/recommendation panels had guidance, but the
+  list itself did not.
+- Found a real post-scan action race: after a scan completed, the UI enabled
+  top-level actions before `topLevelActionClaimRef` was released. Clicking
+  `계획` in that window appeared enabled but was silently ignored because
+  `claimExclusiveAction` rejected it.
+- Reproduced the race with browser automation:
+  - after scan completion, clicking `계획` produced no plan panel or import
+    buttons for 60 seconds.
+  - diagnostic DOM state showed no global error, `planDisabled=false`,
+    `importButtons=0`, and no plan state change.
+- Fixed the race by releasing the exclusive action before background refreshes
+  for scan and import completion paths.
+- Verified the exact regression path: after scan completion, `계획` now renders
+  12 import source buttons.
+- Ran wider browser QA including connected bridge state, initial empty list
+  guidance, stored prompt load, local prompt filter miss, stored filter miss,
+  reset, scan, plan, small-source import, recommendation persistence, desktop
+  overflow, and mobile overflow.
+
+Changes:
+
+- `src/promptEmptyState.ts`
+  - `promptListEmptyText(false, ...)` now returns a user-facing load/scan
+    guidance message instead of `null`.
+- `tests/promptEmptyState.test.ts`
+  - Updated the pre-load prompt-list empty-state expectation.
+- `src/App.tsx`
+  - Scan completion now releases `topLevelActionClaimRef` before kicking off
+    quiet stored-facet refresh.
+  - Single-source and queue import completion now release the same top-level
+    action claim before quiet import-state/event/facet refreshes.
+  - This prevents enabled-looking top-level buttons from becoming silent
+    no-ops during background refresh cleanup.
+
+Tests:
+
+- `npm run test:ui`: PASS, 127 tests.
+- `npm run build`: PASS, TypeScript and Vite production build.
+- `npm run check`: PASS.
+  - UI tests: `127` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `83` passed.
+  - CLI tests: `16` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- Direct CLI timing check:
+  - `cargo run --bin promptvault-cli -- plan --json`: PASS, about 1.82s,
+    `12` sources, `30,300` files, `37,331,776,266` bytes.
+  - `cargo run --bin promptvault-cli -- scan --limit 25 --preview-limit 1000 --no-export --json`:
+    PASS, about 16.78s, `25` prompts, `25` returned, `15` files,
+    `markdown_written=false`.
+- Playwright regression QA via preview + bridge:
+  - Initial prompt-list empty message:
+    `스캔하거나 저장소 불러오기를 실행하면 프롬프트가 여기에 표시됩니다.`
+  - Stored prompt load rendered `200` rows.
+  - Scan rendered `25` rows.
+  - Post-scan `계획` click rendered `12` import source buttons.
+  - No console warnings/errors, page errors, or app error notices.
+  - Desktop overflow: `clientWidth=1440`, `scrollWidth=1440`.
+- Wider Playwright QA via preview + bridge:
+  - Stored rows: `200`.
+  - Scan rows: `25`.
+  - Import buttons: `12`.
+  - Small-source import target: `Antigravity IDE conversation DB`; completed
+    with `1 / 1` processed files, `0` new prompts, `0` updates.
+  - Recommendation persistence displayed:
+    `추천 이력 #3 저장됨 · 이 프롬프트 1회`.
+  - Desktop overflow: `1440 / 1440`.
+  - Mobile overflow: `390 / 390`.
+  - Console issues: none.
+  - Page errors: none.
+  - Request failures: none.
+
+Issues:
+
+- Default scan limit `25` is bounded, but scanning still takes about 16-40s in
+  the current live Codex source because the first source has `25,130` files and
+  about `36.4 GB` of source data. The app shows progress, but first-click
+  responsiveness can still be improved further by source ordering or a
+  lightweight source default.
+- Browser QA was run with temporary Playwright via `npm exec`; no permanent
+  Playwright dependency or e2e script has been added yet.
+
+Research:
+
+- No new external research was needed. This slice came from direct browser QA
+  and local CLI timing evidence.
+
+Next Steps:
+
+- Consider the next improvement slice around faster first-scan source ordering
+  or an explicit "quick scan source" control, using live timing evidence before
+  changing behavior.
+- If committing, stage only `src/App.tsx`, `src/promptEmptyState.ts`,
+  `tests/promptEmptyState.test.ts`, and `working.md`, then run staged
+  whitespace/secret checks before commit.
 
 ## Current Slice - 2026-06-07 Prompt Management Autoresearch
 

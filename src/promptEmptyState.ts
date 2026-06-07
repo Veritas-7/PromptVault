@@ -3,7 +3,7 @@ export function promptListEmptyText(
   filterText: string,
   activeStoredFilterCount = 0,
 ): string | null {
-  if (!hasResult) return null;
+  if (!hasResult) return "스캔하거나 저장소 불러오기를 실행하면 프롬프트가 여기에 표시됩니다.";
   if (filterText.trim()) return "현재 필터와 일치하는 프롬프트가 없습니다.";
   if (activeStoredFilterCount > 0) {
     return "현재 저장소 필터와 일치하는 저장 프롬프트가 없습니다.";

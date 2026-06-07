@@ -1,10 +1,77 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:27 KST
+Updated: 2026-06-07 18:30 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Panel refresh Korean particle labels
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep secondary panel refresh aria-labels grammatically correct while long
+  running work locks the UI.
+
+Context:
+
+- After fixing the locked plan refresh label, browser QA checked the other
+  refresh controls during an active continuous import.
+- The shared panel refresh helper always inserted `을`, which produced
+  `저장소 필터 후보을 새로고침할 수 없습니다` for a rendered locked button.
+
+Progress:
+
+- Added a small Hangul object-particle helper for panel refresh labels.
+- Kept existing ready/loading refresh labels unchanged.
+- Added focused tests for Korean labels with and without a final consonant.
+
+Changes:
+
+- `src/panelRefresh.ts`
+  - Chooses `을`/`를` from the final Hangul syllable when building locked
+    refresh labels.
+- `tests/panelRefresh.test.ts`
+  - Covers `저장소 필터 후보를`, `저장된 가져오기 진행`, and
+    `최근 가져오기 기록을` cases.
+
+Tests:
+
+- RED browser QA on preview `127.0.0.1:5195` + bridge
+  `127.0.0.1:5174`:
+  - Active import lock exposed
+    `가져오기 실행 중에는 저장소 필터 후보을 새로고침할 수 없습니다`.
+  - Other locked refresh labels and plan label rendered as expected.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/panelRefresh.test.ts`:
+  PASS, `3` tests.
+- `npm run build`: PASS.
+- Fixed browser QA on preview `127.0.0.1:5195` + bridge
+  `127.0.0.1:5174`:
+  - Stored filter candidate label became
+    `가져오기 실행 중에는 저장소 필터 후보를 새로고침할 수 없습니다`.
+  - Import progress, import event, and plan refresh lock labels stayed
+    grammatical.
+  - Page width stayed within `1365 / 1365`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `146` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local browser QA and
+  accessibility label inspection.
+
+Next Steps:
+
+- Commit and push this panel refresh particle-label slice.
+- Continue autonomous QA on the next uncovered PromptVault user flow.
 
 ## Current Slice - 2026-06-07 Import stop locked plan label copy
 
@@ -72,7 +139,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this locked plan label copy slice.
+- Completed and pushed as `3ca3b18 fix: polish locked plan refresh label`.
 - Continue autonomous QA on the next uncovered PromptVault user flow.
 
 ## Current Slice - 2026-06-07 Saved import progress Korean labels

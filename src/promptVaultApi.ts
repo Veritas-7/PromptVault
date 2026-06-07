@@ -289,6 +289,33 @@ function sourceFilesSeenTotalMatches(sourceSummaries: unknown, totalFiles: unkno
   return filesSeenTotal === totalFiles;
 }
 
+function sourcePromptTotalsMatch(
+  sourceSummaries: unknown,
+  totalPrompts: unknown,
+  weakPromptCount: unknown,
+): boolean {
+  if (!Array.isArray(sourceSummaries)
+    || !isNonNegativeSafeInteger(totalPrompts)
+    || !isNonNegativeSafeInteger(weakPromptCount)) {
+    return false;
+  }
+  let promptsFoundTotal = 0;
+  let weakPromptTotal = 0;
+  for (const source of sourceSummaries) {
+    if (!isRecord(source)
+      || !isNonNegativeSafeInteger(source.prompts_found)
+      || !isNonNegativeSafeInteger(source.weak_prompt_count)) {
+      return false;
+    }
+    promptsFoundTotal += source.prompts_found;
+    weakPromptTotal += source.weak_prompt_count;
+    if (!Number.isSafeInteger(promptsFoundTotal) || !Number.isSafeInteger(weakPromptTotal)) {
+      return false;
+    }
+  }
+  return promptsFoundTotal === totalPrompts && weakPromptTotal === weakPromptCount;
+}
+
 function isSourcePlan(value: unknown): boolean {
   return isRecord(value)
     && typeof value.id === "string"
@@ -449,7 +476,8 @@ function isScanStats(value: unknown): boolean {
     && value.prompts_by_date.every(isFrequencyItem)
     && Array.isArray(value.source_summaries)
     && value.source_summaries.every(isSourceSummary)
-    && sourceFilesSeenTotalMatches(value.source_summaries, value.total_files);
+    && sourceFilesSeenTotalMatches(value.source_summaries, value.total_files)
+    && sourcePromptTotalsMatch(value.source_summaries, value.total_prompts, value.weak_prompt_count);
 }
 
 function isReturnedPromptCount(value: unknown, prompts: unknown, stats: unknown): boolean {

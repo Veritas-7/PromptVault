@@ -1,10 +1,101 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 03:22 KST
+Updated: 2026-06-08 03:30 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Scan source prompt aggregate validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/load payloads whose source summary
+  `prompts_found` aggregates can exceed the scan `stats.total_prompts` before
+  the UI can render impossible source coverage.
+
+Context:
+
+- Rust scan stats compute `total_prompts` from the prompt list.
+- Rust source summaries set each source's `prompts_found` from prompts
+  collected for that source; missing sources contribute zero.
+- Stored prompt loads rebuild source summaries from the returned prompt list.
+- Before this slice, `parseScanResult()` checked source files against
+  `total_files`, but did not check source prompt aggregates against
+  `total_prompts`.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the active goal identity matches PromptVault and the worktree is
+  clean at `## main...origin/main`.
+- Verified local/remote parity with
+  `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
+  returning `0 0`.
+- Identified the scan source prompt aggregate gap from live
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `src-tauri/src/lib.rs`.
+- Added RED coverage for `/api/scan` returning `stats.total_prompts: 1` while
+  two source summaries each report `prompts_found: 1`.
+- Added parser validation requiring source summary prompt and weak-prompt
+  aggregates to match the scan stats totals.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified broader UI tests, production build, and preview QA.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for source prompt aggregates
+    exceeding the scan prompt total.
+- `src/promptVaultApi.ts`
+  - Adds `sourcePromptTotalsMatch()`.
+  - Uses it for scan result source summary aggregate validation.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new source prompt aggregate test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 48 tests, 47 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 48 tests, 48 pass.
+- `npm run test:ui`
+  - Passed: 212 tests, 212 pass.
+- `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-D8JQmLON.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - Ran Vite preview on port `5276` with
+    `/tmp/promptvault_scan_source_prompt_aggregate_qa.mjs`.
+  - Mocked `/api/scan` with `stats.total_prompts: 1` and two source summaries
+    reporting `prompts_found: 1` each.
+  - Passed: the UI rendered `data-scan-run-error="true"` and the malformed
+    bridge-response message, did not render the impossible source rows, and did
+    not show bogus `2 / 1` or `2개 프롬프트` copy.
+  - Removed `/tmp/promptvault_scan_source_prompt_aggregate_qa.mjs` after the
+    passing run.
+- `npm run check`
+  - Passed: UI tests, production build, Rust library tests, Rust CLI tests,
+    doc-tests, and clippy all completed with exit 0.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run staged security/git verification, then commit and push this slice.
 
 ## Current Slice - 2026-06-08 Improvement persistence positive identifier validation
 

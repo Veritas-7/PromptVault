@@ -141,7 +141,7 @@ export async function scanProgress(run_id: string): Promise<ScanProgress> {
   if (hasTauriInvoke()) {
     return invoke<ScanProgress>("scan_progress", { options });
   }
-  return postBridge<ScanProgress>("/api/scan/progress", { options });
+  return postBridge<ScanProgress>("/api/scan/progress", { options }, parseScanProgressResult);
 }
 
 export async function improvePrompt(request: ImprovePromptRequest): Promise<ImproveResult> {
@@ -238,6 +238,27 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as StoredPromptFacetsResult;
+}
+
+function parseScanProgressResult(value: unknown): ScanProgress {
+  if (!isRecord(value)
+    || typeof value.run_id !== "string"
+    || typeof value.active !== "boolean"
+    || typeof value.canceled !== "boolean"
+    || !(typeof value.source_id === "string" || value.source_id === null)
+    || !(typeof value.source_label === "string" || value.source_label === null)
+    || typeof value.source_index !== "number"
+    || typeof value.source_count !== "number"
+    || typeof value.files_seen !== "number"
+    || typeof value.source_files_seen !== "number"
+    || typeof value.source_files_discovered !== "number"
+    || !(typeof value.source_file_count === "number" || value.source_file_count === null)
+    || typeof value.prompts_found !== "number"
+    || !(typeof value.limit === "number" || value.limit === null)
+    || typeof value.updated_at !== "string") {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ScanProgress;
 }
 
 async function postBridge<T>(

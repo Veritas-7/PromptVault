@@ -1,10 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 21:48 KST
+Updated: 2026-06-07 21:54 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Bridge scan progress payload validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent malformed successful `/api/scan/progress` payloads from reaching the
+  scan progress UI and runtime label formatting paths.
+
+Context:
+
+- Previous bridge slices validated health and quiet refresh payload shapes.
+- `scanProgressLabel()` formats numeric progress fields with
+  `.toLocaleString()`, so a successful bridge payload with missing progress
+  numbers could still poison the scan progress render path.
+- Progress polling catches API errors and retries, so the desired behavior is a
+  stable retry state, then normal completion once a later valid progress payload
+  arrives.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added a RED test for malformed successful scan progress payloads.
+- Added a narrow runtime validator for `/api/scan/progress` bridge responses.
+- Verified that malformed progress payloads produce stable PromptVault bridge
+  response-copy instead of raw render exceptions, while later valid progress
+  and scan completion still render normally.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - `scanProgress()` now validates the browser-bridge result with
+    `parseScanProgressResult()` before returning typed progress data.
+  - The validator checks required top-level string, boolean, numeric, nullable,
+    and timestamp fields used by scan progress rendering.
+- `tests/promptVaultApi.test.ts`
+  - Adds coverage that a malformed successful scan progress bridge payload
+    rejects without raw `TypeError`, `undefined`, or `toLocaleString` details.
+- `working.md`
+  - Records this bridge scan progress payload validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new scan progress malformed payload
+    test saw `Missing expected rejection.`
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 6 tests, 6 pass.
+- `npm run test:ui`:
+  - Passed: 166 tests, 166 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CYmE-8ai.js`.
+- Malformed scan progress browser QA on preview `127.0.0.1:5240`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health` returned valid connected health.
+  - Clicking `[data-run-scan]` started a scan.
+  - The first `/api/scan/progress` response returned HTTP 200 JSON with only
+    `run_id`.
+  - Later progress responses returned valid retry progress for source `Codex`
+    and `2 / 5개 파일`.
+  - `/api/scan` completed with a valid empty scan result after a short delay.
+  - UI rendered the successful empty state `불러온 프롬프트가 없습니다.`
+  - Page text did not expose `toLocaleString`, `Cannot read properties`,
+    `undefined`, or `TypeError`.
+  - Final counts: `facets=2`, `health=1`, `importEvents=1`,
+    `importStates=1`, `progress=4`, `scan=1`, `unexpected=[]`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 166 tests, 166 pass.
+  - Build: passed with `index-CYmE-8ai.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Commit and push this scan progress robustness fix after staged diff,
+  whitespace, and secret checks.
+- Continue autonomous QA on another still-uncovered bridge, failure, or UX edge
+  state after publication.
 
 ## Current Slice - 2026-06-07 Bridge refresh payload validation
 

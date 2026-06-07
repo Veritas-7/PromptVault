@@ -69,6 +69,10 @@ export interface StoredPromptFacetsOptions {
 export interface ImprovePromptRequest {
   prompt: string;
   context?: string | null;
+  prompt_id?: string;
+  source?: string;
+  database_path?: string;
+  persist?: boolean;
 }
 
 export async function planScan(options: ScanPlanOptions = {}): Promise<ScanPlan> {

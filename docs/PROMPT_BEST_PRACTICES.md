@@ -64,7 +64,7 @@ PromptVault's local fallback rewrites prompts into:
 - Verification
 - Completion report
 
-The OpenAI/GLM-backed AI path uses the same rubric and asks for strict JSON with `revised_prompt`, `rationale`, and `checklist`. Use CLI `improve --local` when an evaluation needs deterministic recommendations that do not depend on model availability or rate limits.
+The OpenAI/GLM-backed AI path uses the same rubric and asks for strict JSON with `revised_prompt`, `rationale`, and `checklist`. Use CLI `improve --local` when an evaluation needs deterministic recommendations that do not depend on model availability or rate limits. In-app recommendations persist to `prompt_improvements` with prompt id, source, provider, quality delta, rationale, checklist, warnings, and revised prompt text so prompt management can track recommendation history instead of losing it after a refresh.
 
 ## PromptVault Quality Score
 
@@ -86,7 +86,7 @@ Bands:
 - `workable`: 60-79
 - `weak`: 0-59
 
-Use the quality gaps as a repair queue: add missing context, constraints, verification commands, and output format before asking an agent to execute a complex task. Use source-level average quality and weak-prompt counts to decide which prompt store needs attention first. In the app, scan with `Weakest` mode to load the lowest-scoring prompt preview first; in the CLI, use `scan --weakest-first --include-prompts` for an explicit bounded repair queue or `repair --json --count N` for deterministic local repair suggestions.
+Use the quality gaps as a repair queue: add missing context, constraints, verification commands, and output format before asking an agent to execute a complex task. Use source-level average quality and weak-prompt counts to decide which prompt store needs attention first. In the app, scan with `Weakest` mode to load the lowest-scoring prompt preview first; in the CLI, use `scan --weakest-first --include-prompts` for an explicit bounded repair queue or `repair --json --count N` for deterministic local repair suggestions. Treat saved recommendation events as prompt variants that can later be reviewed, compared, and promoted.
 
 ## Research Basis
 

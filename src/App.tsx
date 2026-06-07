@@ -81,6 +81,7 @@ import {
   planScan,
   scanProgress,
   scanPrompts,
+  type ImprovePromptRequest,
 } from "./promptVaultApi";
 import {
   MAX_SCAN_LIMIT,
@@ -885,10 +886,19 @@ function App() {
     setImprovement(started.improvement);
     setImprovementPromptId(started.improvementPromptId);
     try {
-      const next = await improvePrompt({
+      const databasePath =
+        browserBridgeDatabasePath ?? storedFacetsResult?.database_path ?? result?.persistence?.database_path;
+      const request: ImprovePromptRequest = {
         prompt: prompt.text,
         context: `${prompt.source} · ${prompt.cwd ?? "작업공간 없음"}`,
-      });
+        prompt_id: prompt.id,
+        source: prompt.source,
+        persist: true,
+      };
+      if (databasePath) {
+        request.database_path = databasePath;
+      }
+      const next = await improvePrompt(request);
       setImprovement(next);
       setImprovementPromptId(prompt.id);
       setImprovementFailurePromptId(null);
@@ -1915,6 +1925,15 @@ function App() {
                 )}
               </div>
               <pre className="prompt-text revised">{activeImprovement.revised_prompt}</pre>
+              {activeImprovement.persistence ? (
+                <div className="notice success panel-notice" data-improvement-persistence="true">
+                  <Database size={16} />
+                  <span>
+                    추천 이력 #{activeImprovement.persistence.improvement_event_id.toLocaleString()} 저장됨 ·
+                    이 프롬프트 {activeImprovement.persistence.prompt_improvement_count.toLocaleString()}회
+                  </span>
+                </div>
+              ) : null}
               <div className="advice">
                 {activeImprovement.rationale.map((item) => (
                   <p key={item}>{item}</p>

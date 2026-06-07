@@ -289,11 +289,15 @@ pub struct StoredPromptsOptions {
     pub preview_sort: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ImproveRequest {
     pub prompt: String,
     pub context: Option<String>,
     pub force_local: Option<bool>,
+    pub prompt_id: Option<String>,
+    pub source: Option<String>,
+    pub database_path: Option<String>,
+    pub persist: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -305,6 +309,14 @@ pub struct ImproveResult {
     pub checklist: Vec<String>,
     pub quality_delta: QualityDelta,
     pub warnings: Vec<String>,
+    pub persistence: Option<ImprovePersistence>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImprovePersistence {
+    pub database_path: String,
+    pub improvement_event_id: i64,
+    pub prompt_improvement_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1305,19 +1317,13 @@ async fn improve_prompt_with_env(
     }
 
     if request.force_local.unwrap_or(false) {
-        return Ok(local_improvement(
-            &prompt,
-            request.context.as_deref(),
-            Vec::new(),
-        ));
+        let result = local_improvement(&prompt, request.context.as_deref(), Vec::new());
+        return finalize_improvement_result(&request, result);
     }
 
     if let Some(warning) = external_improve_block_reason(&prompt, request.context.as_deref()) {
-        return Ok(local_improvement(
-            &prompt,
-            request.context.as_deref(),
-            vec![warning],
-        ));
+        let result = local_improvement(&prompt, request.context.as_deref(), vec![warning]);
+        return finalize_improvement_result(&request, result);
     }
 
     let mut warnings = Vec::new();
@@ -1329,7 +1335,7 @@ async fn improve_prompt_with_env(
         {
             Ok(mut result) => {
                 result.warnings.extend(warnings);
-                return Ok(result);
+                return finalize_improvement_result(&request, result);
             }
             Err(warning) => warnings.push(warning),
         }
@@ -1339,7 +1345,7 @@ async fn improve_prompt_with_env(
         match request_glm_improvement(&prompt, request.context.as_deref(), &env, &api_key).await {
             Ok(mut result) => {
                 result.warnings.extend(warnings);
-                return Ok(result);
+                return finalize_improvement_result(&request, result);
             }
             Err(warning) => warnings.push(warning),
         }
@@ -1351,11 +1357,31 @@ async fn improve_prompt_with_env(
                 .to_string(),
         );
     }
-    Ok(local_improvement(
-        &prompt,
-        request.context.as_deref(),
-        warnings,
-    ))
+    let result = local_improvement(&prompt, request.context.as_deref(), warnings);
+    finalize_improvement_result(&request, result)
+}
+
+fn finalize_improvement_result(
+    request: &ImproveRequest,
+    mut result: ImproveResult,
+) -> Result<ImproveResult, Box<dyn std::error::Error>> {
+    if !request.persist.unwrap_or(false) {
+        return Ok(result);
+    }
+    let database_path = request
+        .database_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    result.persistence = Some(persist_improvement_result(
+        &database_path,
+        request.prompt_id.as_deref(),
+        request.source.as_deref(),
+        &result,
+    )?);
+    Ok(result)
 }
 
 async fn request_openai_improvement(
@@ -1596,6 +1622,7 @@ fn improvement_from_content(provider: &str, prompt: &str, content: &str) -> Opti
             rationale,
             checklist,
             warnings: Vec::new(),
+            persistence: None,
         });
     }
 
@@ -1613,6 +1640,7 @@ fn improvement_from_content(provider: &str, prompt: &str, content: &str) -> Opti
         )],
         checklist: prompt_checklist(),
         warnings: Vec::new(),
+        persistence: None,
     })
 }
 
@@ -3115,6 +3143,27 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             ON import_events(generated_at DESC);
         CREATE INDEX IF NOT EXISTS idx_import_events_source
             ON import_events(source_id, generated_at DESC);
+        CREATE TABLE IF NOT EXISTS prompt_improvements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            prompt_id TEXT,
+            source TEXT,
+            provider TEXT NOT NULL,
+            used_ai INTEGER NOT NULL,
+            original_quality_score INTEGER NOT NULL,
+            revised_quality_score INTEGER NOT NULL,
+            score_delta INTEGER NOT NULL,
+            resolved_gaps_json TEXT NOT NULL,
+            remaining_gaps_json TEXT NOT NULL,
+            warnings_json TEXT NOT NULL,
+            rationale_json TEXT NOT NULL,
+            checklist_json TEXT NOT NULL,
+            revised_prompt TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_prompt_improvements_prompt
+            ON prompt_improvements(prompt_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_prompt_improvements_created_at
+            ON prompt_improvements(created_at DESC);
         ",
     )?;
     Ok(())
@@ -3792,6 +3841,66 @@ fn persist_scan_result_inner(
     )
 }
 
+fn persist_improvement_result(
+    database_path: &Path,
+    prompt_id: Option<&str>,
+    source: Option<&str>,
+    result: &ImproveResult,
+) -> Result<ImprovePersistence, Box<dyn std::error::Error>> {
+    let conn = open_promptvault_database(database_path)?;
+    let created_at = Utc::now().to_rfc3339();
+    let prompt_id = prompt_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let source = source
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    conn.execute(
+        "INSERT INTO prompt_improvements (
+            created_at, prompt_id, source, provider, used_ai,
+            original_quality_score, revised_quality_score, score_delta,
+            resolved_gaps_json, remaining_gaps_json, warnings_json,
+            rationale_json, checklist_json, revised_prompt
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        rusqlite::params![
+            created_at,
+            prompt_id.as_deref(),
+            source.as_deref(),
+            &result.provider,
+            if result.used_ai { 1i64 } else { 0i64 },
+            result.quality_delta.before.score as i64,
+            result.quality_delta.after.score as i64,
+            result.quality_delta.score_delta as i64,
+            serde_json::to_string(&result.quality_delta.resolved_gaps)?,
+            serde_json::to_string(&result.quality_delta.remaining_gaps)?,
+            serde_json::to_string(&result.warnings)?,
+            serde_json::to_string(&result.rationale)?,
+            serde_json::to_string(&result.checklist)?,
+            &result.revised_prompt,
+        ],
+    )?;
+    let improvement_event_id = conn.last_insert_rowid();
+    let prompt_improvement_count = if let Some(prompt_id) = prompt_id.as_deref() {
+        conn.query_row(
+            "SELECT COUNT(*) FROM prompt_improvements WHERE prompt_id = ?1",
+            [prompt_id],
+            |row| row.get::<_, i64>(0),
+        )?
+    } else {
+        conn.query_row("SELECT COUNT(*) FROM prompt_improvements", [], |row| {
+            row.get::<_, i64>(0)
+        })?
+    };
+
+    Ok(ImprovePersistence {
+        database_path: database_path.display().to_string(),
+        improvement_event_id,
+        prompt_improvement_count: prompt_improvement_count as usize,
+    })
+}
+
 fn rank_counts(counts: HashMap<String, usize>, limit: usize) -> Vec<FrequencyItem> {
     let mut items = counts
         .into_iter()
@@ -4101,6 +4210,7 @@ fn local_improvement(prompt: &str, context: Option<&str>, warnings: Vec<String>)
         ],
         checklist: prompt_checklist(),
         warnings,
+        persistence: None,
     }
 }
 
@@ -4557,6 +4667,7 @@ mod tests {
                 prompt: "make better".to_string(),
                 context: Some("workspace policy: preserve user files".to_string()),
                 force_local: None,
+                ..Default::default()
             },
             env,
         )
@@ -4596,6 +4707,7 @@ mod tests {
                 prompt: "make better".to_string(),
                 context: None,
                 force_local: None,
+                ..Default::default()
             },
             env,
         )
@@ -4620,6 +4732,7 @@ mod tests {
             prompt: "make better".to_string(),
             context: None,
             force_local: Some(true),
+            ..Default::default()
         })
         .await
         .expect("force local improvement");
@@ -4631,11 +4744,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn improve_prompt_inner_persists_history_when_requested() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-improve-history-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create improve history root");
+        let db_path = root.join("promptvault.sqlite");
+
+        let result = improve_prompt_inner(ImproveRequest {
+            prompt: "fix parsing".to_string(),
+            context: Some("Codex · /Users/wj/Ai/System/10_Projects/PromptVault".to_string()),
+            force_local: Some(true),
+            prompt_id: Some("codex-history-row".to_string()),
+            source: Some("Codex".to_string()),
+            database_path: Some(db_path.display().to_string()),
+            persist: Some(true),
+        })
+        .await
+        .expect("persist improvement");
+
+        let persistence = result.persistence.expect("improvement persistence");
+        assert_eq!(persistence.database_path, db_path.display().to_string());
+        assert_eq!(persistence.prompt_improvement_count, 1);
+        assert!(persistence.improvement_event_id > 0);
+
+        let conn = Connection::open(&db_path).expect("open improvement db");
+        let row = conn
+            .query_row(
+                "SELECT prompt_id, source, provider, used_ai, score_delta
+                 FROM prompt_improvements WHERE id = ?1",
+                [persistence.improvement_event_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, i64>(3)?,
+                        row.get::<_, i64>(4)?,
+                    ))
+                },
+            )
+            .expect("improvement history row");
+        assert_eq!(row.0, "codex-history-row");
+        assert_eq!(row.1, "Codex");
+        assert_eq!(row.2, "local-rules");
+        assert_eq!(row.3, 0);
+        assert!(row.4 > 0);
+
+        std::fs::remove_dir_all(root).expect("remove improve history root");
+    }
+
+    #[tokio::test]
+    async fn improve_prompt_inner_does_not_persist_by_default() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-improve-no-history-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let db_path = root.join("promptvault.sqlite");
+
+        let result = improve_prompt_inner(ImproveRequest {
+            prompt: "fix parsing".to_string(),
+            context: None,
+            force_local: Some(true),
+            database_path: Some(db_path.display().to_string()),
+            ..Default::default()
+        })
+        .await
+        .expect("default improvement");
+
+        assert!(result.persistence.is_none());
+        assert!(!db_path.exists());
+    }
+
+    #[tokio::test]
     async fn improve_prompt_inner_rejects_empty_prompt() {
         let err = improve_prompt_inner(ImproveRequest {
             prompt: "  ".to_string(),
             context: None,
             force_local: Some(true),
+            ..Default::default()
         })
         .await
         .expect_err("empty prompt should fail closed");

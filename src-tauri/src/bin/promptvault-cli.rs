@@ -271,6 +271,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 prompt,
                 context: None,
                 force_local: if local { Some(true) } else { None },
+                ..Default::default()
             })
             .await?;
             if json {
@@ -354,6 +355,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         prompt.cwd.as_deref().unwrap_or("unknown workspace")
                     )),
                     force_local: Some(true),
+                    ..Default::default()
                 })
                 .await?;
                 repairs.push(repair_json_entry(

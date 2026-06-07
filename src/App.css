@@ -220,6 +220,12 @@ h3 {
   color: #6f5115;
 }
 
+.notice.success {
+  background: #eef7ef;
+  border-color: #a9d5b2;
+  color: #285a34;
+}
+
 .notice.browser-mode {
   background: #edf4ff;
   border-color: #b7c9e5;

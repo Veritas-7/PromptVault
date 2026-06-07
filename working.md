@@ -1,10 +1,101 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 15:33 KST
+Updated: 2026-06-07 16:25 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019e8bcb-66b7-7443-a79d-46fd3686eadc`
+
+## Current Slice - 2026-06-07 Prompt Management Autoresearch
+
+Goal:
+
+- Verify the app in the cmux in-app browser without opening extra browser
+  windows.
+- Confirm Codex App/CLI, Antigravity, Gemini, and Claude parsing/database
+  management are real and accurate.
+- Research stronger open-source prompt management/evaluation projects, save the
+  findings under `/Users/wj/Ai/System/12_Research`, and apply an evidence-backed
+  improvement.
+
+Live evidence:
+
+- cmux browser surface used: `surface:17` in `workspace:5`.
+- Vite: `http://127.0.0.1:5177/`.
+- Browser bridge: `http://127.0.0.1:5174/`.
+- Bridge health returned
+  `{"database_path":"/Users/wj/Documents/PromptVault/promptvault.sqlite","ok":true}`.
+- Stored DB summary before this code slice:
+  `90,746` prompts, `11` sources, `90` dates, `392` distinct `cwd` values.
+- Source counts included:
+  `Codex 70,162`, `Claude prompt history 12,334`,
+  `Gemini temporary chats 2,478`, `Claude Code projects 2,256`,
+  `Antigravity prompt history 1,659`, `Claude transcripts 1,175`,
+  `Antigravity CLI transcripts 637`, plus Codex CX and Antigravity DB/IDE rows.
+- cmux click QA passed for bridge connection, stored prompt load, `cmux` filter,
+  import planning, bounded scan, and recommendation generation. Browser console
+  showed only Vite connection logs; `cmux browser surface:17 errors list`
+  returned `No browser errors`.
+
+Research:
+
+- Saved report:
+  `/Users/wj/Ai/System/12_Research/PromptVault/prompt-management-github-research-2026-06-07.md`.
+- Checked promptfoo, Langfuse, Phoenix, Agenta, OpenLIT, Helicone, DSPy, and
+  PromptBench. The useful pattern for PromptVault is durable prompt variant /
+  recommendation history tied to prompt ids, providers, quality deltas, and
+  evaluation metadata.
+
+Changes in progress:
+
+- `src-tauri/src/lib.rs`: added `prompt_improvements` SQLite table, persistence
+  result type, optional `ImproveRequest` persistence fields, and Rust tests for
+  explicit-save versus default-no-save recommendation behavior.
+- `src/App.tsx`, `src/promptVaultApi.ts`, `src/types.ts`, `src/App.css`: app
+  recommendation calls now pass selected prompt metadata with `persist: true`
+  and show the saved recommendation event id/count.
+- `README.md` and `docs/PROMPT_BEST_PRACTICES.md`: documented durable
+  recommendation history and the non-persisting CLI default.
+
+Verification completed for this slice:
+
+- `cd src-tauri && cargo test improve_prompt_inner_`: passed 4 focused tests,
+  including explicit persistence and default-no-persistence behavior.
+- `npm run test:ui`: passed 127 UI/unit tests.
+- `npm run build`: passed TypeScript and Vite production build.
+- `cd src-tauri && cargo test`: passed 83 Rust lib tests, 16 CLI tests, and
+  doc-tests. This includes existing Codex/Claude/Gemini/Antigravity parser
+  regression tests.
+- `cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings`:
+  passed.
+- Restarted the PromptVault bridge on `127.0.0.1:5174` and confirmed
+  `/api/health` returned the default DB path.
+- Direct bridge/SQLite persistence proof:
+  `/api/improve` with `persist: true`, `force_local: true`, selected prompt id,
+  source, and database path inserted one row into `prompt_improvements`.
+  SQLite changed `0 -> 1`; latest row:
+  `1|04cfda6d28c3469f|Claude prompt history|local-rules|0|84`.
+- `cargo run --bin promptvault-cli -- sources --json` returned all configured
+  Codex, Codex CX, Claude, Antigravity, and Gemini source roots as `ok`.
+- SQLite source distribution after the verification scan included:
+  `Codex 70,163`, `Claude prompt history 12,334`,
+  `Gemini temporary chats 2,478`, `Claude Code projects 2,256`,
+  `Antigravity prompt history 1,659`, `Claude transcripts 1,175`,
+  `Antigravity CLI transcripts 637`, `Codex CX 21`,
+  `Antigravity IDE transcripts 12`,
+  `Antigravity CLI conversation DB 10`, and
+  `Antigravity IDE conversation DB 2`.
+
+cmux note:
+
+- Fresh page load on `surface:17` connected to the browser bridge with no
+  console/errors.
+- After UI actions that trigger `/api/prompts`, `surface:17` repeatedly reported
+  a stale app URL via `get url` while `snapshot`/`eval` showed `about:blank`,
+  and the bridge logged `Broken pipe`. This happened with both full stored-load
+  and narrowed stored-filter attempts. The direct bridge API and SQLite proof
+  passed, so this is recorded as a cmux surface/action stability issue rather
+  than a backend persistence failure.
 
 ## Previous Slice
 

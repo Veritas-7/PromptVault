@@ -205,4 +205,9 @@ export interface ImproveResult {
     remaining_gaps: string[];
   };
   warnings: string[];
+  persistence: {
+    database_path: string;
+    improvement_event_id: number;
+    prompt_improvement_count: number;
+  } | null;
 }

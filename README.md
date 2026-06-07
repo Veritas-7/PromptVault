@@ -2,7 +2,7 @@
 
 PromptVault is a local-first Tauri + React + TypeScript workbench for collecting user prompts from local Claude Code, Google Antigravity, Codex CLI, and Codex app/session stores.
 
-It extracts user-authored prompts, strips known injected context blocks, persists prompts to a permanent SQLite database, writes Markdown exports, shows daily/source/frequency/quality analytics, and recommends stronger development-agent prompts through OpenAI or GLM when configured, with a deterministic local fallback.
+It extracts user-authored prompts, strips known injected context blocks, persists prompts to a permanent SQLite database, writes Markdown exports, shows daily/source/frequency/quality analytics, and recommends stronger development-agent prompts through OpenAI or GLM when configured, with a deterministic local fallback. In-app recommendations are saved as prompt-improvement history so prompt changes can be managed instead of treated as transient UI output.
 
 ## Source Roots
 
@@ -29,7 +29,7 @@ Scans persist by default to:
 ~/Documents/PromptVault/promptvault.sqlite
 ```
 
-The database stores scan runs, prompt records, source summaries, first/last seen timestamps, quality scores, and ISO prompt dates. Re-running a scan upserts by stable prompt ID, so existing prompt records are updated instead of duplicated.
+The database stores scan runs, prompt records, source summaries, first/last seen timestamps, quality scores, ISO prompt dates, resumable import state, import events, and prompt-improvement events. Re-running a scan upserts by stable prompt ID, so existing prompt records are updated instead of duplicated. In-app recommendation events are appended to `prompt_improvements` with prompt id, source, provider, quality delta, rationale, checklist, warnings, and revised prompt text.
 
 ## Development
 
@@ -153,7 +153,7 @@ Used keys:
 - `GLM_CODING_ENDPOINT`
 - `GLM_CODING_MODEL`
 
-The provider order is OpenAI Responses API first, GLM chat completions second, then local prompt-improvement rules. If configured providers are missing, rate-limited, unavailable, or return an unusable `revised_prompt`, PromptVault falls back locally and reports the warning in the result. Use `improve --local` when automation needs deterministic offline recommendations. Use `repair --json --count N>0` to scan weakest prompts and return deterministic redacted prompt/recommendation pairs; repair batches are capped at 10 records. OpenAI, GLM, and local recommendations report prompt-quality before/after scores, score delta, resolved gaps, and remaining gaps.
+The provider order is OpenAI Responses API first, GLM chat completions second, then local prompt-improvement rules. If configured providers are missing, rate-limited, unavailable, or return an unusable `revised_prompt`, PromptVault falls back locally and reports the warning in the result. Use `improve --local` when automation needs deterministic offline recommendations. Use `repair --json --count N>0` to scan weakest prompts and return deterministic redacted prompt/recommendation pairs; repair batches are capped at 10 records. CLI `improve` and `repair` do not persist recommendation history by default. The app sets `persist: true` for selected-prompt recommendations, and those events are stored in SQLite for later management. OpenAI, GLM, and local recommendations report prompt-quality before/after scores, score delta, resolved gaps, and remaining gaps.
 
 ## Verification
 

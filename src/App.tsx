@@ -108,6 +108,7 @@ import {
 } from "./scanStatus";
 import { selectedPromptForView } from "./selection";
 import {
+  isSourceStatusOk,
   planSourceActionLabel,
   planSourceSelectionLabel,
   sourceStatusClass,
@@ -1565,7 +1566,7 @@ function App() {
                       )}
                       className={`status ${sourceStatusClass(source.status)}`}
                     >
-                      {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                      {isSourceStatusOk(source.status) ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
                       {source.file_count.toLocaleString()} · {formatBytes(source.byte_count)}
                     </div>
                     <div className="plan-source-actions">
@@ -1775,7 +1776,7 @@ function App() {
                     )}
                     className={`status ${sourceStatusClass(source.status)}`}
                   >
-                    {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                    {isSourceStatusOk(source.status) ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
                     {source.prompts_found}
                   </div>
                 </div>

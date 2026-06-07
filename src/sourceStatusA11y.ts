@@ -1,7 +1,12 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 
+function normalizedSourceStatus(status: string): string {
+  return status.trim().toLowerCase();
+}
+
 function sourceStatusName(status: string): string {
-  switch (status) {
+  const normalized = normalizedSourceStatus(status);
+  switch (normalized) {
     case "ok":
       return "사용 가능";
     case "empty":
@@ -13,7 +18,7 @@ function sourceStatusName(status: string): string {
     case "stored":
       return "저장됨";
     default:
-      return status || "알 수 없음";
+      return status.trim() || "알 수 없음";
   }
 }
 
@@ -26,8 +31,12 @@ const SOURCE_STATUS_CLASSES: Record<string, string> = {
 };
 
 export function sourceStatusClass(status: string): string {
-  const normalized = status.trim().toLowerCase();
+  const normalized = normalizedSourceStatus(status);
   return SOURCE_STATUS_CLASSES[normalized] ?? "unknown";
+}
+
+export function isSourceStatusOk(status: string): boolean {
+  return normalizedSourceStatus(status) === "ok";
 }
 
 function countLabel(count: number, singular: string): string {

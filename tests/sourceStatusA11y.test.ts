@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  isSourceStatusOk,
   planSourceActionLabel,
   planSourceSelectionLabel,
   planSourceStatusLabel,
@@ -131,12 +132,35 @@ test("source summary status labels preserve unknown backend statuses", () => {
   );
 });
 
+test("source status labels normalize known statuses and trim unknown values", () => {
+  assert.equal(
+    planSourceStatusLabel("Codex", " OK ", 5, "5.0 KiB"),
+    "Codex 소스 사용 가능: 5개 파일, 5.0 KiB",
+  );
+  assert.equal(
+    sourceSummaryStatusLabel("Stored", " STORED ", 1),
+    "Stored 소스 저장됨: 1개 프롬프트 발견",
+  );
+  assert.equal(
+    sourceSummaryStatusLabel("Claude", " DEGRADED ", 12),
+    "Claude 소스 DEGRADED: 12개 프롬프트 발견",
+  );
+});
+
 test("source status classes normalize known and unknown statuses", () => {
   assert.equal(sourceStatusClass("ok"), "ok");
+  assert.equal(sourceStatusClass(" OK "), "ok");
   assert.equal(sourceStatusClass("empty"), "empty");
   assert.equal(sourceStatusClass("missing"), "missing");
   assert.equal(sourceStatusClass("partial"), "partial");
   assert.equal(sourceStatusClass("stored"), "stored");
   assert.equal(sourceStatusClass("DEGRADED"), "unknown");
   assert.equal(sourceStatusClass("  "), "unknown");
+});
+
+test("source ok status helper normalizes status values", () => {
+  assert.equal(isSourceStatusOk("ok"), true);
+  assert.equal(isSourceStatusOk(" OK "), true);
+  assert.equal(isSourceStatusOk("partial"), false);
+  assert.equal(isSourceStatusOk(""), false);
 });

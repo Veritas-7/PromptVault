@@ -1,10 +1,87 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:02 KST
+Updated: 2026-06-07 19:05 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Source status label/icon normalization
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Ensure source status semantics normalize consistently across text labels,
+  CSS classes, and success/warning icons.
+
+Context:
+
+- The prior source status CSS class slice normalized visual class names.
+- Follow-up inspection found status labels and success icons still checked raw
+  backend values, so padded or uppercase values such as ` OK ` and ` STORED `
+  could render with unknown labels or warning icons while using normalized CSS.
+
+Progress:
+
+- Added a shared source status normalizer.
+- Updated source status labels, CSS class mapping, and ok-icon checks to use
+  the same normalized status.
+- Preserved trimmed unknown backend statuses in aria text for transparency.
+- Added helper coverage for normalized labels, classes, and ok detection.
+
+Changes:
+
+- `src/sourceStatusA11y.ts`
+  - Added source status normalization and `isSourceStatusOk`.
+  - Updated labels and class mapping to use normalized known statuses while
+    preserving trimmed unknown status text.
+- `src/App.tsx`
+  - Uses `isSourceStatusOk` for plan and summary source status icons.
+- `tests/sourceStatusA11y.test.ts`
+  - Added label/icon semantic normalization coverage.
+- `working.md`
+  - Recorded this follow-up semantic normalization slice and marked the prior
+    source status CSS class slice as pushed.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/sourceStatusA11y.test.ts`:
+  - 14 passed.
+- `npm run build`:
+  - `tsc && vite build` passed.
+- Source status semantic browser QA on preview `127.0.0.1:5206` + bridge
+  `127.0.0.1:5174`:
+  - Mocked plan source status ` OK ` rendered the Korean `사용 가능` aria
+    label, `status ok` class, and success-circle icon.
+  - Mocked plan/source summary status ` DEGRADED ` preserved `DEGRADED` in
+    aria text, normalized the class to `status unknown`, and rendered the
+    warning icon.
+  - Mocked source summary status ` STORED ` rendered the Korean `저장됨` aria
+    label and `status stored` class.
+  - Page width stayed within `1365 / 1365`.
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+- `npm run check`:
+  - UI tests: 152 passed.
+  - Build: passed.
+  - Rust lib tests: 84 passed.
+  - Rust CLI tests: 16 passed.
+  - Doc-tests: passed.
+  - Clippy with `-D warnings`: passed.
+
+Issues:
+
+- No blocker found after this fix.
+
+Research:
+
+- No external research. This was derived from rendered local QA output.
+
+Next Steps:
+
+- Commit and push this source status semantic normalization slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Source status CSS class normalization
 
@@ -82,7 +159,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this source status CSS class polish slice.
+- Completed and pushed as `10a85e4 fix: normalize source status classes`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Quality band CSS class normalization

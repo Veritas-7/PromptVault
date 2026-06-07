@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 22:30 KST
+Updated: 2026-06-07 22:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -87,6 +87,22 @@ Tests:
   - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
     passed, `src/main.rs` 0 tests, doc tests 0 tests.
   - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Publication checks for `0b2f2da`:
+  - `git diff --cached --check`: passed before commit.
+  - `gitleaks protect --staged --no-banner --redact`: passed before commit,
+    scanned about 6.17 KB staged content, no leaks found.
+  - `gh auth status`: authenticated as `Veritas-7`.
+  - `gitleaks version`: `8.30.1`.
+  - `git ls-remote origin HEAD`: origin was at `0c3fe8e` before push.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo confirmed.
+  - `gitleaks dir . --no-banner --redact`: passed, scanned about 700.65 MB.
+  - `git push origin main`: pushed `0c3fe8e..0b2f2da`.
+  - `git fetch origin main` plus
+    `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - Final `git status --short --branch`: `## main...origin/main`.
+  - Temporary QA script check:
+    `/tmp/promptvault_health_http_status_qa.mjs` absent.
 
 Issues:
 
@@ -98,9 +114,10 @@ Research:
 
 Next Steps:
 
-- Commit and push this UX robustness fix after explicit-path staging, staged
-  whitespace checks, staged gitleaks, full gitleaks, GitHub auth, remote, and
-  branch parity checks.
+- Published UX robustness fix on `origin/main` as
+  `0b2f2da fix: show bridge health failure status`.
+- Continue autonomous QA on another still-uncovered bridge, import, improve, or
+  UX edge state after publication.
 
 ## Current Slice - 2026-06-07 Bridge HTTP error sanitization
 

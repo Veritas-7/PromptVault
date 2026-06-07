@@ -1,10 +1,85 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:43 KST
+Updated: 2026-06-07 19:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Browser bridge recovery QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the browser-mode recovery flow when the local PromptVault bridge is
+  initially unavailable and then becomes available after the user clicks
+  `브리지 다시 확인`.
+
+Context:
+
+- cmux/in-app browser work is excluded in this environment, so browser QA uses
+  local Vite preview plus Playwright.
+- Browser mode starts without Tauri IPC, checks `/api/health`, and locks
+  top-level app actions while the bridge is disconnected.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Mocked the first browser bridge health check as HTTP 503 to force
+  disconnected mode.
+- Verified the bridge recovery button stayed available while scan, stored-load,
+  plan, scan-limit, and stored-filter actions were locked.
+- Clicked the bridge recovery button, then mocked health, stored facets, saved
+  import progress, and import activity refreshes as successful.
+- Verified all main actions unlocked and the recovered panels rendered the
+  refreshed database/facet/import data.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only browser bridge recovery QA slice.
+
+Tests:
+
+- Browser bridge recovery QA on preview `127.0.0.1:5217`:
+  - First `/api/health` call returned the expected HTTP 503.
+  - Initial notice showed the bridge unavailable recovery command.
+  - `data-check-browser-bridge` remained enabled while
+    `data-run-scan`, `data-load-stored-prompts`, `data-run-plan`,
+    `data-scan-limit`, and `data-apply-stored-filters` were disabled.
+  - Initial bridge failure produced no global `.notice.error`.
+  - Quiet refresh endpoints were not called before health succeeded.
+  - After clicking `data-check-browser-bridge`, health was called a second time
+    and returned database path `/tmp/promptvault-browser-recovery.sqlite`.
+  - Post-recovery quiet refresh counts:
+    `/api/prompt-facets` 1, `/api/import-states` 1,
+    `/api/import-events` 1.
+  - After recovery, scan, stored-load, plan, scan-limit, and stored-filter
+    apply controls were all enabled again.
+  - Stored facet summary rendered
+    `12개 저장됨, 소스 2개, 날짜 1개, 작업공간 1개`.
+  - Saved import progress rendered `Codex sessions` and `4 / 8`.
+  - Import activity rendered `Codex sessions` and
+    `4개 파일 · 9개 프롬프트`.
+  - Page errors, request failures, and unexpected HTTP failures: none.
+  - Console contained only the expected browser resource error for the forced
+    initial HTTP 503.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Security/dependency audit and Cargo lock refresh
 
@@ -89,7 +164,8 @@ Research:
 
 Next Steps:
 
-- Commit and push the Cargo lockfile refresh plus this audit record.
+- Completed and pushed as
+  `2e7b948 chore: refresh cargo lockfile after security audit`.
 - Continue autonomous QA on another still-uncovered failure, performance, or
   UX edge state.
 

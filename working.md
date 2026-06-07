@@ -1,12 +1,115 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 06:54 KST
+Updated: 2026-06-08 07:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Untruncated scan word-total validation
+## Current Slice - 2026-06-08 Average words aggregate validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose `stats.average_words` does
+  not match `stats.total_words / stats.total_prompts`.
+
+Context:
+
+- The previous slices tightened browser-bridge metadata, source, timestamp,
+  scan-run, persistence, frequency-counter, empty aggregate, and untruncated
+  prompt-row word-total contracts.
+- Rust `build_stats` derives `average_words` from `total_words / prompt count`,
+  using 0 only when there are no prompts.
+- The parser now verifies untruncated row sums against `stats.total_words`, but
+  it can still accept a malformed aggregate where `stats.average_words`
+  disagrees with `stats.total_words` and `stats.total_prompts`.
+- This validation is independent of prompt preview truncation because the
+  aggregate values are present in every scan result.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the direct parent project policy and PromptVault README verification
+  commands.
+- Identified the next narrow hardening target: `stats.average_words`
+  consistency with `stats.total_words / stats.total_prompts`.
+- Added a RED API test for a scan result whose `stats.average_words` disagrees
+  with otherwise-consistent `total_words`, `total_prompts`, and returned prompt
+  rows.
+- Confirmed RED first: focused API suite failed 97/98 only on the new
+  missing-rejection case.
+- Added parser validation requiring `stats.average_words` to equal
+  `stats.total_words / stats.total_prompts`, with 0 required for empty scans.
+- Confirmed GREEN after the parser change: focused API suite passes 98/98.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed scan result with `average_words: 4`,
+  `total_words: 6`, and `total_prompts: 2` surfaced sanitized global and
+  scan-failure UI, and the bad aggregate/prompt payload was not rendered.
+- Removed the temporary preview QA script from
+  `/tmp/promptvault_average_words_qa.mjs`.
+- Confirmed `/tmp/promptvault_average_words_qa.mjs` is absent and preview port
+  `5303` has no listener after the server wrapper stopped the server.
+- Ran full check successfully after preview QA.
+- Verified touched-file whitespace with `git diff --check`.
+- Re-verified repo root, branch status, `HEAD...origin/main` parity `0 0`,
+  and `origin` remotes before staging.
+- Verified the GitHub target repository is private:
+  `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `visibility: PRIVATE` and `isPrivate: true`.
+- Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`; staged secret scan passed.
+
+Changes:
+
+- `src/promptVaultApi.ts`: rejects scan stats whose `average_words` aggregate
+  disagrees with `total_words / total_prompts`.
+- `tests/promptVaultApi.test.ts`: adds the average-words mismatch rejection
+  case for browser-bridge scan results.
+
+Tests:
+
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 97/98 only on the new average-words mismatch case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 98/98.
+- `npm run test:ui` passed 262/262.
+- `npm run build` passed.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5303" --port 5303 --timeout 30 node /tmp/promptvault_average_words_qa.mjs`
+  passed.
+- Cleanup: `/tmp/promptvault_average_words_qa.mjs` absent; port `5303` free.
+- `npm run check` passed: UI tests 262/262, production build, Rust lib tests
+  84/84, CLI tests 16/16, and clippy with `-D warnings`.
+- Pre-staging verification: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; repo root/status/remotes/parity checked clean with only the three
+  intended files modified; temp script absent and port `5303` free.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact`
+  passed.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Re-stage the `working.md` scan note, rerun staged secret scan, commit,
+  full-tree secret scan, push, and verify origin parity.
+
+## Previous Slice - 2026-06-08 Untruncated scan word-total validation
 
 Current Goal:
 

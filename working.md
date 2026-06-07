@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 23:09 KST
+Updated: 2026-06-07 23:11 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -36,9 +36,8 @@ Progress:
 - Reused the non-negative finite number validator for scan stats, source
   summaries, prompt word/character counts, prompt quality score, persistence
   stats, and returned prompt count.
-- Verified focused tests, full UI/unit tests, production build, preview QA, and
-  the full project check.
-- Pending: staged checks, commit, and GitHub publication.
+- Verified focused tests, full UI/unit tests, production build, preview QA, the
+  full project check, and GitHub publication.
 
 Changes:
 
@@ -90,6 +89,22 @@ Tests:
   - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
     passed, `src/main.rs` 0 tests, doc tests 0 tests.
   - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Publication checks for `3415a25`:
+  - `git diff --cached --check`: passed before commit.
+  - `gitleaks protect --staged --no-banner --redact`: passed before commit,
+    scanned about 7.08 KB staged content, no leaks found.
+  - `gh auth status`: authenticated as `Veritas-7`.
+  - `gitleaks version`: `8.30.1`.
+  - `git ls-remote origin HEAD`: origin was at `4d540aa` before push.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo confirmed.
+  - `gitleaks dir . --no-banner --redact`: passed, scanned about 700.68 MB.
+  - `git push origin main`: pushed `4d540aa..3415a25`.
+  - `git fetch origin main` plus
+    `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - Final `git status --short --branch`: `## main...origin/main`.
+  - Temporary QA script check: `/tmp/promptvault_scan_result_numeric_qa.mjs`
+    absent.
 
 Issues:
 
@@ -101,8 +116,9 @@ Research:
 
 Next Steps:
 
-- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
-  `working.md`, then run staged diff/secret checks, commit, and push.
+- Published robustness fix on `origin/main` as
+  `3415a25 fix: validate scan result numeric payloads`.
+- Commit and push this `working.md` publication-status update.
 
 ## Current Slice - 2026-06-07 Stored facets numeric validation
 

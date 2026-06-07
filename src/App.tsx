@@ -89,6 +89,7 @@ import {
   parseRequiredScanLimit,
   recommendedInitialScanLimit,
 } from "./scanLimit";
+import { quickScanSourceIds } from "./scanScope";
 import {
   scanLimitChangedAfterFailure,
   scanProgressLabel,
@@ -710,6 +711,7 @@ function App() {
         preview_sort: previewSortForMode(previewMode),
         include_markdown: false,
         write_markdown: false,
+        source_ids: quickScanSourceIds(),
         persist_on_cancel: false,
         run_id: runId,
       });
@@ -967,7 +969,7 @@ function App() {
             type="button"
           >
             <RefreshCw size={18} />
-            {scanState === "canceling" ? "중지 중" : scanState === "scanning" ? "스캔 중" : "스캔"}
+            {scanState === "canceling" ? "중지 중" : scanState === "scanning" ? "스캔 중" : "빠른 스캔"}
           </button>
           {canStopScan ? (
             <button

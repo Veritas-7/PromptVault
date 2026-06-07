@@ -8,10 +8,10 @@ export { activeActionLockReason } from "./actionLocks.ts";
 
 export function scanActionLabel(scanState: ScanRunState, lockState: ActionLockState): string {
   if (scanState === "canceling") return "실행 중인 스캔 중지 중";
-  if (scanState === "scanning") return "프롬프트 스캔 중";
+  if (scanState === "scanning") return "빠른 프롬프트 스캔 중";
   const reason = activeActionLockReason(lockState);
-  if (reason) return `${reason}에는 프롬프트를 스캔할 수 없습니다`;
-  return "프롬프트 스캔";
+  if (reason) return `${reason}에는 빠른 프롬프트를 스캔할 수 없습니다`;
+  return "빠른 프롬프트 스캔";
 }
 
 export function scanStopActionLabel(scanState: ScanRunState): string {

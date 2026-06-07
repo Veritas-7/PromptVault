@@ -18,6 +18,7 @@ export interface ScanPromptOptions {
   preview_sort?: string;
   include_markdown?: boolean;
   write_markdown?: boolean;
+  source_ids?: string[];
   persist?: boolean;
   persist_on_cancel?: boolean;
   run_id?: string;

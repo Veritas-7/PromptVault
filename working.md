@@ -1,10 +1,106 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 16:59 KST
+Updated: 2026-06-07 17:08 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019e8bcb-66b7-7443-a79d-46fd3686eadc`
+
+## Current Slice - 2026-06-07 Fast first scan source scope
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Improve first-click scan responsiveness without weakening the full stored
+  vault, plan/import, or explicit CLI scan paths.
+
+Context:
+
+- Previous slice left the worktree clean at
+  `07f9908 fix: keep post-scan actions responsive`.
+- The remaining live issue was first scan latency: default UI scan limit was
+  already `25`, but scanning still took about `16-40s` because the first source
+  was the large Codex session tree.
+- Root cause evidence:
+  - `codex --limit 25`: about `17.55s`, `25` prompts, `16` files.
+  - `codex-cx --limit 25`: about `0.91s`, `21` prompts.
+  - `claude-code-history --limit 25`: about `2.29s`, enough to top up the
+    quick set.
+  - `antigravity-cli-history`, Antigravity DBs, and Gemini tmp chat all
+    returned in about `1s`.
+  - Combined quick scope
+    `codex-cx,claude-code-history,antigravity-cli-history,gemini-tmp-chat`
+    returned `25` prompts in about `2.56s`.
+
+Progress:
+
+- Added an explicit quick-scan source scope for the toolbar scan action.
+- Changed the toolbar button and ARIA label from generic scan wording to
+  `빠른 스캔` / `빠른 프롬프트 스캔` so the UI no longer implies a full large
+  Codex tree scan.
+- Preserved full/explicit scan capability through CLI `--source`, stored prompt
+  loading, and the existing plan/import flows.
+
+Changes:
+
+- `src/scanScope.ts`
+  - Added `QUICK_SCAN_SOURCE_IDS` and `quickScanSourceIds()`.
+- `src/App.tsx`
+  - `runScan()` now sends `source_ids` for the quick source set.
+  - Toolbar scan button now says `빠른 스캔`.
+- `src/promptVaultApi.ts`
+  - Added `source_ids` to browser/Tauri scan request options.
+- `src/topActionLabels.ts`
+  - Updated scan action labels to match quick-scan behavior.
+- `tests/scanScope.test.ts`
+  - Added coverage for the quick source set and defensive copy behavior.
+- `tests/topActionLabels.test.ts`
+  - Updated quick-scan ARIA expectations.
+- `README.md`
+  - Documented the toolbar quick-scan source set and how to use full review
+    paths for the large Codex tree.
+
+Tests:
+
+- `npm run test:ui`: PASS, `129` tests.
+- `npm run build`: PASS.
+- `npm run check`: PASS. Covered `129` UI helper tests, production build, `83`
+  Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+- CLI timing proof:
+  - `cargo run --quiet --bin promptvault-cli -- scan --source codex-cx,claude-code-history,antigravity-cli-history,gemini-tmp-chat --limit 25 --preview-limit 25 --no-export --json`
+  - PASS, about `2.56s`, `25` prompts, `12` files, source summaries
+    `Codex CX` and `Claude prompt history`.
+- Browser preview + bridge QA:
+  - Preview: `127.0.0.1:5177`; bridge: `127.0.0.1:5174`.
+  - Single headless Chromium instance through Playwright.
+  - Button text: `빠른 스캔`.
+  - ARIA label: `빠른 프롬프트 스캔`.
+  - `/api/scan` payload included:
+    `source_ids=["codex-cx","claude-code-history","antigravity-cli-history","gemini-tmp-chat"]`.
+  - Scan completed in `2695ms` with `25` prompt rows.
+  - Source rows shown after scan: `Codex CX`, `Claude prompt history`.
+  - Desktop overflow: `1440 / 1440`.
+  - Mobile overflow: `390 / 390`.
+  - Console issues, page errors, request failures: none.
+
+Issues:
+
+- The large Codex tree remains expensive for explicit full/large-source scans.
+  That is now outside the toolbar quick-scan path, but a future backend
+  candidate could add bounded recent-file discovery for explicit Codex smoke
+  scans.
+
+Research:
+
+- No new external research. This was based on measured local source timing and
+  the existing app workflow split between quick preview, stored review, and
+  import planning.
+
+Next Steps:
+
+- Stage only this slice's files and run staged whitespace/gitleaks before
+  commit/push.
 
 ## Current Slice - 2026-06-07 Empty-list guidance and post-scan action unlock
 

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 11:03 KST
+Updated: 2026-06-07 11:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -585,6 +585,21 @@ stability, performance, and maintainability, then record evidence here.
   - Released the gate, restored the original `fetch`, and observed the UI
     return to `Load Stored` with no Stored Vault error and the stored prompt
     metrics still visible.
+  - Follow-up diagnostics returned `No console entries` and
+    `No browser errors`.
+- Fresh same-surface Prompt Filter empty-state QA on existing `surface:10`:
+  - Continued using only surface-specific `cmux browser --surface surface:10`
+    commands without switching the visible cmux workspace.
+  - Set the prompt-list filter to `__no_match_promptvault_20260607__`.
+  - Observed prompt-list empty copy:
+    `No prompts match the current filter.`
+  - Observed selected-prompt empty copy:
+    `No prompt is visible with the current filter.`
+  - Observed recommendation empty copy:
+    `Clear the prompt filter or select a visible prompt before improving.`
+  - Confirmed `Improve` was disabled with `Select a prompt before improving`.
+  - Cleared the prompt filter and observed the empty messages clear and
+    `Improve selected prompt` become enabled again.
   - Follow-up diagnostics returned `No console entries` and
     `No browser errors`.
 - `npm run test:ui -- tests/scanStatus.test.ts`: passed; due the package
@@ -3754,7 +3769,7 @@ Audit conclusion:
   stored-vault, import-plan, import-batch/queue/stop, error, and empty-state
   flows from this surface.
 
-## Completion Audit Snapshot - 2026-06-07 11:03 KST
+## Completion Audit Snapshot - 2026-06-07 11:06 KST
 
 Objective restated as concrete deliverables:
 
@@ -3771,9 +3786,9 @@ Prompt-to-artifact checklist:
 | Requirement | Current evidence | Status |
 |---|---|---|
 | Target source path is PromptVault | Goal identity and repo root resolve to `/Users/wj/Ai/System/10_Projects/PromptVault`. | PASS |
-| `working.md` exists and is updated | This update records same-surface Stored Vault normal/failure/retry, double-click/overlap lock QA, Import Plan, Import Batch, Import Queue Stop, and continuous Import Stop QA on `surface:10`. | PASS |
+| `working.md` exists and is updated | This update records same-surface Stored Vault normal/failure/retry, double-click/overlap lock QA, Prompt Filter empty-state QA, Import Plan, Import Batch, Import Queue Stop, and continuous Import Stop QA on `surface:10`. | PASS |
 | Use one existing cmux browser | `cmux tree --all` showed existing `workspace:5` `surface:10 [browser] "PromptVault"`; no `cmux browser open/new`, cmux restart, app kill, or second browser was used. | PASS |
-| Direct browser QA currently works | Existing `surface:10` completed Scan/Improve, Stored Vault filter/reset/apply plus failure/retry and double-click/overlap locking, Import Plan, Import Batch, selected queue Stop, and continuous Stop QA with clean follow-up console/errors diagnostics. | PARTIAL |
+| Direct browser QA currently works | Existing `surface:10` completed Scan/Improve, Stored Vault filter/reset/apply plus failure/retry and double-click/overlap locking, Prompt Filter empty-state/recovery, Import Plan, Import Batch, selected queue Stop, and continuous Stop QA with clean follow-up console/errors diagnostics. | PARTIAL |
 | Automated gates cover the latest code slice | `npm run test:ui -- tests/scanStatus.test.ts`, `npm run build`, and `npm run check` passed for the latest code change. This queue-stop update is docs-only. | PASS |
 | Full objective achieved | Core flows have broader same-browser coverage now, but the objective still calls for continued autonomous improvement and remaining recovery/error-state QA. | NOT ACHIEVED |
 
@@ -3781,9 +3796,9 @@ Audit conclusion:
 
 - Do not mark the thread goal complete yet.
 - Same-surface direct QA on `surface:10` now covers Stored Vault normal,
-  failure/retry, and double-click/overlap locking paths, Import Plan, Import
-  Batch, selected Import Queue Stop, and continuous Import Stop flows in
-  addition to Scan and Improve fallback.
+  failure/retry, double-click/overlap locking paths, Prompt Filter
+  empty-state/recovery, Import Plan, Import Batch, selected Import Queue Stop,
+  and continuous Import Stop flows in addition to Scan and Improve fallback.
 - Continue with remaining recovery/error states and durable import/background
   indexing improvements before considering the objective complete.
 
@@ -3795,8 +3810,8 @@ Audit conclusion:
 
 ## Next Steps
 
-1. Continue same-surface direct QA on `surface:10` for remaining empty-state
-   paths and other request-overlap hazards.
+1. Continue same-surface direct QA on `surface:10` for remaining source/import
+   empty-state paths and other request-overlap hazards.
 2. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
 3. Harden the cmux browser diagnostics workflow for stale surface IDs, large

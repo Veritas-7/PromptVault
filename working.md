@@ -1,10 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 23:51 KST
+Updated: 2026-06-08 00:00 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Bridge progress counter bounds
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge progress counters whose partial counts exceed their
+  totals before impossible UI text such as `12 / 10` can render.
+
+Context:
+
+- Prior slices validated malformed payloads, negative/non-finite numbers,
+  fractional integers, and invalid bridge timestamps.
+- Import progress UI clamps progress bars to 100%, but summary text still
+  prints `processed_files / total_files`; a malformed bridge response could
+  otherwise show impossible progress counts.
+- Rust import state generation clamps cursors to `total_files`, and scan
+  progress derives source-seen counts from discovered files, so partial counts
+  beyond totals are response-integrity failures.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for import states with `next_file_index` and
+  `processed_files` beyond `total_files`.
+- Added RED coverage for scan progress with `source_index > source_count` and
+  `source_files_seen` beyond discovered/total source files.
+- Added parser relation validation for import state and scan progress
+  counters.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds `isNonNegativeSafeIntegerAtMost()` for total-bound counters.
+  - Requires import state `next_file_index` and `processed_files` to be at most
+    `total_files`.
+  - Requires scan progress `source_files_seen` to stay within discovered and
+    known source-file totals, and nonzero `source_index` to be at most
+    `source_count`.
+- `tests/promptVaultApi.test.ts`
+  - Adds import-state and scan-progress bridge response-shape tests for
+    impossible partial/total counter relationships.
+- `working.md`
+  - Records this bridge progress counter bounds slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: both new inconsistent-counter tests
+    resolved instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 28 tests, 28 pass.
+- `npm run test:ui`:
+  - Passed: 192 tests, 192 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CmIGFJG6.js`.
+- Progress bounds import browser QA on preview `127.0.0.1:5256`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/plan` returned one valid `Codex` source with 10 files.
+  - `/api/import-batch` returned HTTP 200 with valid import-batch shape except
+    `next_file_index: 11`, `processed_files: 12`, and `total_files: 10`.
+  - Clicking `계획` then `배치 가져오기` rendered the sanitized bridge
+    response-shape error through the normal import-failure flow.
+  - Impossible `12 / 10` progress text was not rendered.
+  - Final counts: `health=1`, `plan=1`, `importBatch=1`, `importStates=2`,
+    `importEvents=2`, `promptFacets=2`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 192 tests, 192 pass.
+  - Build: passed with `index-CmIGFJG6.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then run staged diff/secret checks, commit, and push.
 
 ## Current Slice - 2026-06-07 Bridge timestamp validation
 
@@ -38,8 +136,8 @@ Progress:
   batch state `updated_at` values.
 - Added a timestamp-string validator for bridge-generated timestamp fields.
 - Verified focused API tests, full UI/unit tests, production build, preview QA,
-  the full project check, staged checks, and GitHub publication.
-- Pending: publication evidence docs commit.
+  the full project check, staged checks, GitHub publication, and publication
+  evidence docs commit.
 
 Changes:
 
@@ -119,7 +217,8 @@ Next Steps:
 
 - Published robustness fix on `origin/main` as
   `de40484 fix: validate bridge timestamps`.
-- Commit and push this `working.md` publication-status update.
+- Published publication-status update on `origin/main` as
+  `796c2d6 docs: mark bridge timestamp validation pushed`.
 
 ## Current Slice - 2026-06-07 Fractional integer bridge validation
 

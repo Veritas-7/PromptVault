@@ -188,6 +188,10 @@ function isNonNegativeSafeInteger(value: unknown): value is number {
   return isSafeInteger(value) && value >= 0;
 }
 
+function isNonNegativeSafeIntegerAtMost(value: unknown, max: unknown): boolean {
+  return isNonNegativeSafeInteger(value) && isNonNegativeSafeInteger(max) && value <= max;
+}
+
 function isSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value);
 }
@@ -262,8 +266,8 @@ function isImportState(value: unknown): boolean {
     && typeof value.root_path === "string"
     && isNonNegativeSafeInteger(value.total_files)
     && isNonNegativeSafeInteger(value.total_bytes)
-    && isNonNegativeSafeInteger(value.next_file_index)
-    && isNonNegativeSafeInteger(value.processed_files)
+    && isNonNegativeSafeIntegerAtMost(value.next_file_index, value.total_files)
+    && isNonNegativeSafeIntegerAtMost(value.processed_files, value.total_files)
     && isNonNegativeSafeInteger(value.imported_prompt_count)
     && typeof value.completed === "boolean"
     && isTimestampString(value.updated_at);
@@ -470,7 +474,10 @@ function parseScanProgressResult(value: unknown): ScanProgress {
     || !isNullableNonNegativeSafeInteger(value.source_file_count)
     || !isNonNegativeSafeInteger(value.prompts_found)
     || !isNullableNonNegativeSafeInteger(value.limit)
-    || !isTimestampString(value.updated_at)) {
+    || !isTimestampString(value.updated_at)
+    || value.source_files_seen > value.source_files_discovered
+    || (value.source_file_count !== null && !isNonNegativeSafeIntegerAtMost(value.source_files_seen, value.source_file_count))
+    || (value.source_index !== 0 && !isNonNegativeSafeIntegerAtMost(value.source_index, value.source_count))) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ScanProgress;

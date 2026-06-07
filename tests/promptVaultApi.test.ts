@@ -135,6 +135,46 @@ test("browser bridge import states reject impossible numeric payloads", async (t
   );
 });
 
+test("browser bridge import states reject progress counters beyond totals", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    states: [{
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      total_files: 10,
+      total_bytes: 1024,
+      next_file_index: 11,
+      processed_files: 12,
+      imported_prompt_count: 0,
+      completed: false,
+      updated_at: "2026-06-07T00:00:00Z",
+    }],
+    total_sources: 1,
+    completed_sources: 0,
+    total_files: 10,
+    processed_files: 12,
+    imported_prompt_count: 0,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listImportStates(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /12 \/ 10|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge import events reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ database_path: "/tmp/promptvault.sqlite" }), {
@@ -290,6 +330,41 @@ test("browser bridge scan progress rejects impossible numeric payloads", async (
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge scan progress rejects progress counters beyond totals", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    run_id: "scan-run-1",
+    active: true,
+    canceled: false,
+    source_id: "codex",
+    source_label: "Codex",
+    source_index: 2,
+    source_count: 1,
+    files_seen: 12,
+    source_files_seen: 12,
+    source_files_discovered: 10,
+    source_file_count: 10,
+    prompts_found: 1,
+    limit: 5,
+    updated_at: "2026-06-07T00:00:00Z",
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanProgress("scan-run-1"),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /12 \/ 10|toLocaleString|RangeError|undefined/);
       return true;
     },
   );

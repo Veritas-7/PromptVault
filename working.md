@@ -1,10 +1,77 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:32 KST
+Updated: 2026-06-07 19:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Scan failure limit-change QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify a failed rescan preserves existing results and clears correctly when
+  the user adjusts the scan limit.
+
+Context:
+
+- Unit tests cover `scanLimitChangedAfterFailure`, but the browser DOM flow
+  with stale scan results, a failed second scan, and limit-input recovery
+  needed direct verification.
+- Earlier scan cancel/progress work is already covered in older slices, so this
+  focused on failed rescan recovery instead of repeating cancellation QA.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Mocked browser bridge health, facets, import panels, scan progress, and scan
+  responses.
+- Ran one successful quick scan returning a single prompt.
+- Changed the scan limit to `99`, forced the second `/api/scan` request to
+  fail with HTTP 500 `scan failed`, then changed the limit to `123`.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only QA slice.
+
+Tests:
+
+- Scan failure limit-change browser QA on preview `127.0.0.1:5216`:
+  - First `/api/scan` request included `limit: 25`, `preview_limit: 1000`,
+    `preview_sort: "latest"`, `include_markdown: false`,
+    `write_markdown: false`, quick-scan `source_ids`, `source_limit: 5`,
+    `persist_on_cancel: false`, and a generated `run_id`.
+  - First scan rendered one prompt row and selected text
+    `Keep prior scan results visible while recovering from a failed rescan.`
+  - Second `/api/scan` request used `limit: 99` with the same quick-scan
+    option shape and returned the expected HTTP 500.
+  - After failed rescan, global error showed `scan failed` and scan panel
+    warning showed
+    `스캔 결과를 새로고침하지 못했습니다. 기존 결과를 계속 표시합니다. 위 오류를 확인하고 제한값을 조정하거나 다시 시도하세요.`
+  - The previous scan result stayed visible with row count `1`.
+  - After changing the limit to `123`, global error count was `0`, scan warning
+    count was `0`, row count stayed `1`, and the run button aria-label returned
+    to `빠른 프롬프트 스캔`.
+  - Page errors, request failures, and unexpected HTTP failures: none.
+  - Console contained only the expected browser resource error for the forced
+    HTTP 500 response.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Import refresh retry browser QA
 
@@ -69,7 +136,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record.
+- Completed and pushed as `b7ea3d5 docs: record import refresh retry QA`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Stored load failure filter-change QA

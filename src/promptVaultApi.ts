@@ -241,7 +241,7 @@ function isQualityScore(value: unknown): boolean {
   return isNonNegativeSafeInteger(value) && value <= MAX_QUALITY_SCORE;
 }
 
-function isQualityAverage(value: unknown): boolean {
+function isQualityAverage(value: unknown): value is number {
   return isNonNegativeFiniteNumber(value) && value <= MAX_QUALITY_SCORE;
 }
 
@@ -603,6 +603,30 @@ function isUntruncatedPromptWeakCount(value: Record<string, unknown>): boolean {
     && weakCount === value.stats.weak_prompt_count;
 }
 
+function isUntruncatedSourceAverageQuality(value: Record<string, unknown>): boolean {
+  if (value.prompts_truncated !== false) return true;
+  if (!Array.isArray(value.prompts) || !isRecord(value.stats) || !Array.isArray(value.stats.source_summaries)) {
+    return false;
+  }
+  for (const source of value.stats.source_summaries) {
+    if (!isRecord(source) || !isNonBlankString(source.id) || !isQualityAverage(source.average_quality)) {
+      return false;
+    }
+    let sourcePromptCount = 0;
+    let totalQuality = 0;
+    for (const prompt of value.prompts) {
+      if (!isRecord(prompt) || !isNonBlankString(prompt.source) || !isPromptQuality(prompt.quality)) return false;
+      if (prompt.source !== source.id) continue;
+      sourcePromptCount += 1;
+      totalQuality += prompt.quality.score;
+      if (!Number.isSafeInteger(sourcePromptCount) || !Number.isSafeInteger(totalQuality)) return false;
+    }
+    const expectedAverageQuality = sourcePromptCount === 0 ? 0 : totalQuality / sourcePromptCount;
+    if (Math.abs(source.average_quality - expectedAverageQuality) > 1e-9) return false;
+  }
+  return true;
+}
+
 function isScanOutputPathState(outputPath: unknown, markdownWritten: unknown): boolean {
   if (markdownWritten !== true && markdownWritten !== false) return false;
   if (outputPath === null) return markdownWritten === false;
@@ -796,6 +820,7 @@ function parseScanResult(value: unknown): ScanResult {
     || !isUntruncatedPromptWordTotal(value)
     || !isUntruncatedPromptAverageQuality(value)
     || !isUntruncatedPromptWeakCount(value)
+    || !isUntruncatedSourceAverageQuality(value)
     || !isPreviewSortString(value.preview_sort)
     || typeof value.markdown_included !== "boolean"
     || typeof value.markdown_written !== "boolean"

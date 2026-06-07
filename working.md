@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 23:30 KST
+Updated: 2026-06-07 23:32 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -35,9 +35,9 @@ Progress:
   `score_delta: 1e999`.
 - Added a finite-number validator and used it for `quality_delta.score_delta`,
   while keeping negative finite deltas valid.
-- Verified focused tests, full UI/unit tests, production build, preview QA, and
-  the full project check.
-- Pending: staged checks, commit, and GitHub publication.
+- Verified focused tests, full UI/unit tests, production build, preview QA, the
+  full project check, and GitHub publication.
+- Pending: publication evidence docs commit.
 
 Changes:
 
@@ -86,6 +86,22 @@ Tests:
   - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
     passed, `src/main.rs` 0 tests, doc tests 0 tests.
   - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Publication checks for `e038122`:
+  - `git diff --cached --check`: passed before commit.
+  - `gitleaks protect --staged --no-banner --redact`: passed before commit,
+    scanned about 5.32 KB staged content, no leaks found.
+  - `gh auth status`: authenticated as `Veritas-7`.
+  - `gitleaks version`: `8.30.1`.
+  - `git ls-remote origin HEAD`: origin was at `945a056` before push.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo confirmed.
+  - `gitleaks dir . --no-banner --redact`: passed, scanned about 700.70 MB.
+  - `git push origin main`: pushed `945a056..e038122`.
+  - `git fetch origin main` plus
+    `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - Final `git status --short --branch`: `## main...origin/main`.
+  - Temporary QA script check:
+    `/tmp/promptvault_improve_score_delta_numeric_qa.mjs` absent.
 
 Issues:
 
@@ -97,8 +113,9 @@ Research:
 
 Next Steps:
 
-- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
-  `working.md`, then run staged diff/secret checks, commit, and push.
+- Published robustness fix on `origin/main` as
+  `e038122 fix: validate improve score deltas`.
+- Commit and push this `working.md` publication-status update.
 
 ## Current Slice - 2026-06-07 Improve persistence numeric validation
 

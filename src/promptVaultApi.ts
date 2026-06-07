@@ -591,6 +591,18 @@ function isUntruncatedPromptAverageQuality(value: Record<string, unknown>): bool
     && Math.abs(value.stats.average_quality - expectedAverageQuality) <= 1e-9;
 }
 
+function isUntruncatedPromptWeakCount(value: Record<string, unknown>): boolean {
+  if (value.prompts_truncated !== false) return true;
+  if (!Array.isArray(value.prompts) || !isRecord(value.stats)) return false;
+  let weakCount = 0;
+  for (const prompt of value.prompts) {
+    if (!isRecord(prompt) || !isPromptQuality(prompt.quality)) return false;
+    if (prompt.quality.band === "weak") weakCount += 1;
+  }
+  return isNonNegativeSafeInteger(value.stats.weak_prompt_count)
+    && weakCount === value.stats.weak_prompt_count;
+}
+
 function isScanOutputPathState(outputPath: unknown, markdownWritten: unknown): boolean {
   if (markdownWritten !== true && markdownWritten !== false) return false;
   if (outputPath === null) return markdownWritten === false;
@@ -783,6 +795,7 @@ function parseScanResult(value: unknown): ScanResult {
     || !isPromptTruncationState(value.prompts_truncated, value.returned_prompt_count, value.stats)
     || !isUntruncatedPromptWordTotal(value)
     || !isUntruncatedPromptAverageQuality(value)
+    || !isUntruncatedPromptWeakCount(value)
     || !isPreviewSortString(value.preview_sort)
     || typeof value.markdown_included !== "boolean"
     || typeof value.markdown_written !== "boolean"

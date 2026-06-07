@@ -1,12 +1,118 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 07:11 KST
+Updated: 2026-06-08 07:26 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Untruncated scan quality-average validation
+## Current Slice - 2026-06-08 Untruncated scan weak-count validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose full, untruncated prompt
+  rows disagree with `stats.weak_prompt_count`.
+
+Context:
+
+- The previous slices tightened browser-bridge metadata, source, timestamp,
+  scan-run, persistence, frequency-counter, empty aggregate, untruncated
+  word-total, average-words, and untruncated average-quality contracts.
+- Rust scan stats derive `weak_prompt_count` from prompt rows whose
+  `quality.band` is `weak`.
+- The parser validates aggregate/source-summary weak-count totals, but it can
+  still accept a malformed untruncated scan whose returned prompt rows contain
+  a different weak prompt count.
+- This validation should apply only when `prompts_truncated` is false, because
+  truncated scan previews intentionally omit rows needed to recompute full weak
+  prompt count.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the direct parent project policy and PromptVault README verification
+  commands.
+- Identified the next narrow hardening target: untruncated scan
+  `stats.weak_prompt_count` consistency with returned prompt rows.
+- Added a RED API test for an untruncated scan result whose aggregate/source
+  weak count is internally consistent but disagrees with the returned prompt
+  rows' `quality.band` values.
+- Confirmed RED first: focused API suite failed 99/100 only on the new
+  missing-rejection case.
+- Added parser validation requiring untruncated scan results to keep
+  `stats.weak_prompt_count` equal to the count of returned prompt rows whose
+  `quality.band` is `weak`.
+- Confirmed GREEN after the parser change: focused API suite passes 100/100.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed untruncated scan result with aggregate/source
+  `weak_prompt_count: 1` but two returned weak-band prompt rows surfaced
+  sanitized global and scan-failure UI, and the bad aggregate/prompt payload was
+  not rendered.
+- Removed the temporary preview QA script from
+  `/tmp/promptvault_weak_count_qa.mjs`.
+- Confirmed `/tmp/promptvault_weak_count_qa.mjs` is absent and preview port
+  `5305` has no listener after the server wrapper stopped the server.
+- Ran full check successfully after preview QA.
+- Verified touched-file whitespace with `git diff --check`.
+- Re-verified repo root, branch status, `HEAD...origin/main` parity `0 0`,
+  and `origin` remotes before staging.
+- Verified the GitHub target repository is private:
+  `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `visibility: PRIVATE` and `isPrivate: true`.
+- Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`; staged secret scan passed.
+
+Changes:
+
+- `src/promptVaultApi.ts`: rejects untruncated scan results whose returned
+  prompt rows do not contain exactly `stats.weak_prompt_count` weak-band rows.
+- `tests/promptVaultApi.test.ts`: adds the untruncated weak-count mismatch
+  rejection case for browser-bridge scan results.
+
+Tests:
+
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 99/100 only on the new untruncated weak-count mismatch case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 100/100.
+- `npm run test:ui` passed 264/264.
+- `npm run build` passed.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5305" --port 5305 --timeout 30 node /tmp/promptvault_weak_count_qa.mjs`
+  passed after aligning the script with the current scan-run warning copy.
+- Cleanup: `/tmp/promptvault_weak_count_qa.mjs` absent; port `5305` free.
+- `npm run check` passed: UI tests 264/264, production build, Rust lib tests
+  84/84, CLI tests 16/16, and clippy with `-D warnings`.
+- Pre-staging verification: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; repo root/status/remotes/parity checked with only the three intended
+  files modified; temp script absent and port `5305` free.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact`
+  passed.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Re-stage `working.md`, rerun staged secret scan, then commit/push verified
+  changes.
+
+## Previous Slice - 2026-06-08 Untruncated scan quality-average validation
 
 Current Goal:
 

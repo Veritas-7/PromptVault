@@ -370,6 +370,16 @@ function isPromptTruncationState(value: unknown, returnedPromptCount: unknown, s
     && (value || returnedPromptCount === stats.total_prompts);
 }
 
+function isImportBatchPromptCounts(value: unknown): boolean {
+  return isRecord(value)
+    && Array.isArray(value.prompts)
+    && isRecord(value.stats)
+    && isNonNegativeSafeInteger(value.batch_prompt_count)
+    && value.batch_prompt_count === value.stats.total_prompts
+    && isNonNegativeSafeIntegerAtMost(value.returned_prompt_count, value.batch_prompt_count)
+    && value.prompts.length === value.returned_prompt_count;
+}
+
 function isImprovePersistence(value: unknown): boolean {
   return isRecord(value)
     && typeof value.database_path === "string"
@@ -400,11 +410,10 @@ function parseImportBatchResult(value: unknown): ImportBatchResult {
     || !isImportState(value.state)
     || !isNonNegativeSafeInteger(value.batch_start_index)
     || !isNonNegativeSafeInteger(value.batch_file_count)
-    || !isNonNegativeSafeInteger(value.batch_prompt_count)
-    || !isNonNegativeSafeInteger(value.returned_prompt_count)
     || !Array.isArray(value.prompts)
     || !value.prompts.every(isPromptRecord)
     || !isScanStats(value.stats)
+    || !isImportBatchPromptCounts(value)
     || !isPersistStats(value.persistence)
     || !isStringArray(value.warnings)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);

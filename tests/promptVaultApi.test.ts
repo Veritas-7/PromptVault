@@ -1466,6 +1466,107 @@ test("browser bridge import batches reject impossible numeric payloads", async (
   );
 });
 
+test("browser bridge import batches reject returned counts that mismatch prompts", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    source: {
+      id: "codex",
+      label: "Codex",
+      root_path: "/tmp/codex",
+      status: "ok",
+      file_count: 1,
+      byte_count: 1024,
+      large_file_count: 0,
+      largest_file_bytes: 0,
+      newest_modified_at: null,
+      notes: [],
+    },
+    state: {
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      total_files: 1,
+      total_bytes: 1024,
+      next_file_index: 1,
+      processed_files: 1,
+      imported_prompt_count: 1,
+      completed: true,
+      updated_at: "2026-06-07T00:00:00Z",
+    },
+    batch_start_index: 0,
+    batch_file_count: 1,
+    batch_prompt_count: 1,
+    returned_prompt_count: 2,
+    prompts: [{
+      id: "prompt-1",
+      source: "codex",
+      session_id: "session-1",
+      path: "/tmp/codex/history.jsonl",
+      timestamp: null,
+      cwd: null,
+      text: "Improve this prompt.",
+      word_count: 3,
+      char_count: 20,
+      hash: "hash-1",
+      risk_flags: [],
+      quality: {
+        score: 42,
+        band: "weak",
+        missing: [],
+        suggestions: [],
+      },
+    }],
+    stats: {
+      total_prompts: 1,
+      total_files: 1,
+      total_words: 3,
+      average_words: 3,
+      average_quality: 42,
+      weak_prompt_count: 1,
+      top_words: [],
+      top_phrases: [],
+      repeated_prompts: [],
+      top_quality_gaps: [],
+      prompts_by_date: [],
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: 1,
+        prompts_found: 1,
+        average_quality: 42,
+        weak_prompt_count: 1,
+        status: "ok",
+        notes: [],
+      }],
+    },
+    persistence: {
+      database_path: "/tmp/promptvault.sqlite",
+      stored_prompt_count: 1,
+      inserted_prompt_count: 1,
+      updated_prompt_count: 0,
+      date_count: 0,
+    },
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => importBatch({ source_id: "codex" }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /2개|2 \/ 1|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge improvements reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ provider: "local" }), {

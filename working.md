@@ -1,10 +1,122 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 02:00 KST
+Updated: 2026-06-08 02:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Import batch prompt-count validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge `/api/import-batch` payloads whose returned prompt
+  count disagrees with the returned prompt rows or batch prompt total before
+  the import result UI can render impossible saved/imported counts.
+
+Context:
+
+- Rust import batches produce `batch_prompt_count` from the collected prompt
+  rows, `stats.total_prompts` from the same batch prompt list, and
+  `returned_prompt_count` from `response_prompts.len()`.
+- Before this slice, the browser parser checked only that
+  `returned_prompt_count` and `batch_prompt_count` were non-negative integers.
+  It did not require `returned_prompt_count === prompts.length`, nor require
+  `batch_prompt_count === stats.total_prompts`.
+- A malformed successful bridge response could therefore advance the UI into
+  an import result state with mismatched prompt counts.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for `/api/import-batch` returning one prompt row with
+  `batch_prompt_count: 1`, `stats.total_prompts: 1`, but
+  `returned_prompt_count: 2`.
+- Added parser relation validation for import batch prompt counts.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Confirmed the temp preview QA script was removed and no matching preview or
+  `gitleaks dir` process remained before staging.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds `isImportBatchPromptCounts()`.
+  - Requires import batch `batch_prompt_count` to equal `stats.total_prompts`.
+  - Requires `returned_prompt_count` to equal `prompts.length` and stay within
+    `batch_prompt_count`.
+- `tests/promptVaultApi.test.ts`
+  - Adds bridge response-shape coverage for import batch returned counts that
+    mismatch the actual returned prompt rows.
+- `working.md`
+  - Records this import batch prompt-count validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new import batch count mismatch test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 39 tests, 38 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 39 tests, 39 pass.
+- `npm run test:ui`:
+  - Passed: 203 tests, 203 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CRnceUZn.js`.
+- `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`:
+  - Passed and confirmed usage.
+- Import batch count browser QA on preview `127.0.0.1:5267`:
+  - First QA script run timed out waiting for `[data-refresh-plan="true"]`
+    because the plan panel refresh button is not rendered before a plan exists.
+    Fixed the QA script to use the top-level `[data-run-plan="true"]` button.
+  - Routed browser bridge requests for `/api/health`, `/api/prompt-facets`,
+    `/api/import-states`, `/api/import-events`, `/api/plan`, and
+    `/api/import-batch`.
+  - `/api/import-batch` returned HTTP 200 with valid-looking import data but
+    one prompt row and `returned_prompt_count: 2`.
+  - Passed: sanitized malformed bridge error rendered,
+    `Codex 가져오기에 실패했습니다` rendered, no `저장 1 · 신규 1 · 갱신 0`,
+    no impossible `2개 프롬프트` or `2 / 1`, and prompt row count stayed `0`.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=2`,
+    `/api/import-states=2`, `/api/import-events=2`, `/api/plan=1`,
+    `/api/import-batch=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 203 tests, 203 pass.
+  - Build: passed with `index-CRnceUZn.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Cleanup checks before staging:
+  - `/tmp/promptvault_import_batch_count_qa.mjs`: absent.
+  - `ps -axo pid=,command= | rg -- '--port 526[7]|promptvault_import_batch_count_q[a]|gitleaks dir [.] --no-banner --redact'`:
+    no matches.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`.
+- Run staged whitespace/secrets checks plus GitHub auth/remote verification.
+- Commit as `fix: validate import batch prompt counts`, run full-tree
+  gitleaks, and push `origin main`.
+- Update this log with publication evidence and publish the docs marker.
 
 ## Current Slice - 2026-06-08 Unmarked truncated preview validation
 

@@ -1,10 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:49 KST
+Updated: 2026-06-07 20:52 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Keyboard activation QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify that core controls still work through keyboard activation, not only
+  pointer clicks or direct API/helper coverage.
+
+Context:
+
+- Recent QA focused on preview mode state, stored reloads, and scan-origin
+  pending notices.
+- Older accessibility work covered labels, `aria-pressed`, and stored-filter
+  Enter handling, but current `HEAD` still needed a fresh local-preview proof
+  that the primary scan -> select -> improve flow can be driven with the
+  keyboard.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Rebuilt the frontend preview artifact with `npm run build`.
+- Ran keyboard activation browser QA against preview `127.0.0.1:5232`.
+- Mocked the browser bridge endpoints for health, facets, import states,
+  import events, scan, scan progress, and improve.
+- Verified `Enter` activation for quick scan, prompt-row selection, and
+  recommendation generation.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only keyboard activation QA slice.
+
+Tests:
+
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-MjEXw_ye.js`.
+- Keyboard activation QA on preview `127.0.0.1:5232`:
+  - Initial `/api/health` succeeded and the browser bridge rendered connected.
+  - Initial quiet refreshes succeeded once each for `/api/prompt-facets`,
+    `/api/import-states`, and `/api/import-events`.
+  - Focused `data-run-scan`, verified it was the active element, and pressed
+    `Enter`.
+  - Keyboard-triggered scan sent one `/api/scan` request with `limit: 25`,
+    `preview_limit: 1000`, `preview_sort: "latest"`,
+    `include_markdown: false`, `write_markdown: false`,
+    six quick-scan source IDs, `source_limit: 5`,
+    `persist_on_cancel: false`, and a generated `run_id`.
+  - Scan result rendered two prompt rows and selected the latest prompt by
+    default.
+  - Focused the older prompt row, verified a prompt row had focus, and pressed
+    `Enter`.
+  - Detail panel changed to
+    `Older scanned prompt selected by keyboard row activation.`
+  - The keyboard-selected prompt row exposed `aria-pressed="true"`.
+  - Focused `data-run-improve`, verified it was the active element, and pressed
+    `Enter`.
+  - Keyboard-triggered improve sent one `/api/improve` request with
+    `prompt_id: "keyboard-old"`, the keyboard-selected prompt text,
+    source/context, `persist: true`, and database path
+    `/tmp/promptvault-keyboard-activation.sqlite`.
+  - Recommendation UI rendered
+    `Revised keyboard-selected prompt with explicit acceptance criteria.` and
+    `추천 이력 #404 저장됨`.
+  - Final counts: `healthCalls=1`, `facetsCalls=2`,
+    `importStatesCalls=1`, `importEventsCalls=1`, `scanCalls=1`,
+    `scanProgressCalls=1`, `improveCalls=1`.
+  - Page errors, unexpected console errors, and unexpected request failures:
+    none.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record after staged diff and secret
+  checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Scan preview pending QA
 

@@ -1,10 +1,89 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:53 KST
+Updated: 2026-06-07 19:59 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Mid-action browser bridge loss QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify that browser-mode UI recovers when the local bridge is initially
+  healthy, then a stored-prompt request loses the bridge mid-action.
+
+Context:
+
+- Recent QA covered initial disconnected bridge recovery, plan retry, import
+  queue selection, and responsive overflow.
+- This slice targets a different user path: a successful initial `/api/health`
+  followed by a network-level `/api/prompts` failure during `저장소 불러오기`.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Mocked initial browser bridge health and quiet refresh endpoints as
+  successful.
+- Aborted the first `/api/prompts` request to simulate the bridge disappearing
+  while the user clicked `저장소 불러오기`.
+- Verified the UI switched to disconnected bridge recovery mode, locked normal
+  app actions, kept `브리지 다시 확인` available, then recovered after recheck.
+- Retried `저장소 불러오기` after recheck and verified stored prompt results
+  rendered and the scoped stored-load warning cleared.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only mid-action browser bridge loss/recovery QA
+    slice.
+
+Tests:
+
+- Mid-action browser bridge loss QA on preview `127.0.0.1:5221`:
+  - Initial `/api/health` succeeded once and rendered connected browser bridge
+    status with database path `/tmp/promptvault-mid-action-bridge-loss.sqlite`.
+  - Initial quiet refresh counts were one call each for `/api/prompt-facets`,
+    `/api/import-states`, and `/api/import-events`.
+  - First `/api/prompts` call was intentionally aborted with
+    `net::ERR_FAILED`.
+  - After that failure, global error and bridge notice both showed
+    `브라우저 브리지가 실행 중이 아닙니다` with the recovery command.
+  - `data-run-scan`, `data-load-stored-prompts`, `data-run-plan`,
+    `data-scan-limit`, and `data-apply-stored-filters` were disabled while the
+    bridge was disconnected.
+  - `data-check-browser-bridge` stayed enabled while disconnected.
+  - Clicking `data-check-browser-bridge` made a second health call, unlocked
+    the app actions, and cleared the global bridge error.
+  - The stored-load panel warning remained until the failed load was retried.
+  - Retrying `저장소 불러오기` made the second `/api/prompts` call succeed,
+    rendered the stored prompt row, and cleared `data-stored-load-error`.
+  - Final counts: `healthCalls=2`, `promptCalls=2`, `facetsCalls=2`,
+    `importStatesCalls=2`, `importEventsCalls=2`.
+  - Page errors and unexpected HTTP failures: none.
+  - Diagnostics contained only the expected aborted `/api/prompts`
+    `net::ERR_FAILED` console/request-failure entry.
+
+Issues:
+
+- No app blocker found.
+- The first QA script pass failed only because the diagnostics allow-list did
+  not accept Chrome's generic `Failed to load resource: net::ERR_FAILED`
+  message for the intentionally aborted request; the script filter was adjusted
+  and the same flow passed.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses and a network-level request abort.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Responsive overflow browser QA
 
@@ -67,7 +146,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record.
+- Completed and pushed as `71ab0ab docs: record responsive overflow QA`.
 - Continue autonomous QA on another still-uncovered failure, performance, or
   UX edge state.
 

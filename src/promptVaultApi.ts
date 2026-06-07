@@ -173,6 +173,18 @@ function isFrequencyItem(value: unknown): boolean {
     && isNonNegativeSafeInteger(value.count);
 }
 
+function isFrequencyItemsWithinTotal(value: unknown, total: unknown): boolean {
+  if (!Array.isArray(value) || !isNonNegativeSafeInteger(total)) return false;
+  let countSum = 0;
+  for (const item of value) {
+    if (!isFrequencyItem(item)) return false;
+    if (item.count > total) return false;
+    countSum += item.count;
+    if (!Number.isSafeInteger(countSum) || countSum > total) return false;
+  }
+  return true;
+}
+
 function isStringArray(value: unknown): boolean {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
@@ -578,12 +590,9 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
     || !isTimestampString(value.generated_at)
     || typeof value.database_path !== "string"
     || !isNonNegativeSafeInteger(value.total_prompts)
-    || !Array.isArray(value.sources)
-    || !value.sources.every(isFrequencyItem)
-    || !Array.isArray(value.dates)
-    || !value.dates.every(isFrequencyItem)
-    || !Array.isArray(value.workspaces)
-    || !value.workspaces.every(isFrequencyItem)) {
+    || !isFrequencyItemsWithinTotal(value.sources, value.total_prompts)
+    || !isFrequencyItemsWithinTotal(value.dates, value.total_prompts)
+    || !isFrequencyItemsWithinTotal(value.workspaces, value.total_prompts)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as StoredPromptFacetsResult;

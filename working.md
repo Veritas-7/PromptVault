@@ -1,10 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 03:05 KST
+Updated: 2026-06-08 03:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Stored facet count validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge `/api/prompt-facets` payloads whose source/date/workspace
+  facet counts exceed the reported stored prompt total before the UI can use
+  impossible filter candidates.
+
+Context:
+
+- Rust reads `total_prompts` from `SELECT COUNT(*) FROM prompts`.
+- Rust facet rows are grouped `COUNT(*)` results from the same prompt table and
+  are limited top-N lists, so each facet count and each per-dimension returned
+  facet sum must be no larger than `total_prompts`.
+- Before this slice, `parseStoredPromptFacetsResult()` only checked that facet
+  counts were nonnegative safe integers.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the active goal identity matches PromptVault and the worktree is
+  clean at `## main...origin/main`.
+- Confirmed there is no project-local `AGENTS.md` or `design.md` inside
+  PromptVault.
+- Identified the stored-facet count consistency gap from live
+  `src/promptVaultApi.ts`, `src/App.tsx`, and `src-tauri/src/lib.rs`.
+- Added RED coverage for `/api/prompt-facets` returning `total_prompts: 1`
+  while one source facet reports `count: 2`.
+- Added parser validation requiring source/date/workspace facet counts and
+  returned per-dimension facet sums to stay within `total_prompts`.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified broader UI tests, production build, preview QA, and the full project
+  check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for stored facet counts that
+    exceed the reported stored prompt total.
+- `src/promptVaultApi.ts`
+  - Adds `isFrequencyItemsWithinTotal()`.
+  - Uses it for stored source/date/workspace facets.
+- `working.md`
+  - Records this stored facet count validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new stored-facet count test resolved
+    instead of rejecting with `Missing expected rejection`.
+  - Result: 46 tests, 45 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 46 tests, 46 pass.
+- `npm run test:ui`
+  - Passed: 210 tests, 210 pass.
+- `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-DhSNr-Vm.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - Ran Vite preview on port `5274` with `/tmp/promptvault_stored_facet_count_qa.mjs`.
+  - Mocked `/api/prompt-facets` with `total_prompts: 1` and a source facet
+    count of `2`.
+  - Passed: the UI rendered `data-stored-facets-refresh-error="true"`, did not
+    render the contradictory stored-facet summary or impossible facet values,
+    kept all stored-filter datalist options empty, and called expected bridge
+    endpoints.
+  - Removed `/tmp/promptvault_stored_facet_count_qa.mjs` after the passing run.
+- `npm run check`
+  - Passed: UI tests, production build, Rust library tests, Rust CLI tests,
+    doc-tests, and clippy all completed with exit 0.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run explicit staged diff/security checks, commit, push, and record publication
+  evidence.
 
 ## Current Slice - 2026-06-08 Scan plan aggregate consistency validation
 

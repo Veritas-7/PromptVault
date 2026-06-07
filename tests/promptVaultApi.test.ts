@@ -315,6 +315,86 @@ test("browser bridge scan results reject malformed successful payloads", async (
   );
 });
 
+test("browser bridge scan results reject impossible numeric payloads", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    output_path: null,
+    markdown: "",
+    stats: {
+      total_prompts: -1,
+      total_files: -2,
+      total_words: -3,
+      average_words: -4,
+      average_quality: -5,
+      weak_prompt_count: -6,
+      top_words: [],
+      top_phrases: [],
+      repeated_prompts: [],
+      top_quality_gaps: [],
+      prompts_by_date: [],
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: -1,
+        prompts_found: -2,
+        average_quality: -3,
+        weak_prompt_count: -4,
+        status: "ok",
+        notes: [],
+      }],
+    },
+    prompts: [{
+      id: "prompt-1",
+      source: "codex",
+      session_id: "session-1",
+      path: "/tmp/codex/history.jsonl",
+      timestamp: null,
+      cwd: null,
+      text: "Improve this prompt.",
+      word_count: -3,
+      char_count: -20,
+      hash: "hash-1",
+      risk_flags: [],
+      quality: {
+        score: -1,
+        band: "weak",
+        missing: [],
+        suggestions: [],
+      },
+    }],
+    returned_prompt_count: -1,
+    prompts_truncated: false,
+    preview_sort: "latest",
+    markdown_included: false,
+    markdown_written: false,
+    persistence: {
+      database_path: "/tmp/promptvault.sqlite",
+      stored_prompt_count: -1,
+      inserted_prompt_count: -2,
+      updated_prompt_count: -3,
+      date_count: -4,
+    },
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge stored prompt loads reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ generated_at: "2026-06-07T00:00:00Z" }), {

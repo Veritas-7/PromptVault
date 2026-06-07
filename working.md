@@ -1,10 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 23:02 KST
+Updated: 2026-06-07 23:09 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Scan result numeric validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject impossible browser-bridge `/api/scan` and stored prompt
+  `ScanResult` numeric payloads before negative dashboard, source summary,
+  prompt row, or persistence counts can render.
+
+Context:
+
+- Previous slices hardened scan progress, scan plan, import state/event, and
+  stored facets numeric validation.
+- `/api/scan` and `/api/prompts` share `parseScanResult()`, but several
+  nested numeric fields still accepted any JavaScript `number`.
+- These values render in dashboard metrics, source panels, prompt rows, and
+  persistence notices, so shape-valid negative counts could leak into user
+  output.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added a RED test for shape-valid but impossible negative scan result
+  payloads.
+- Reused the non-negative finite number validator for scan stats, source
+  summaries, prompt word/character counts, prompt quality score, persistence
+  stats, and returned prompt count.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - `isPromptQuality()` now rejects negative or non-finite scores.
+  - `isPromptRecord()` now rejects negative or non-finite word and character
+    counts.
+  - `isSourceSummary()`, `isPersistStats()`, `isScanStats()`, and
+    `parseScanResult()` now reject negative or non-finite exposed counters and
+    averages.
+- `tests/promptVaultApi.test.ts`
+  - Adds `/api/scan` coverage for impossible negative numeric payloads.
+- `working.md`
+  - Records this scan result numeric validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new impossible numeric scan result
+    payload test resolved instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 19 tests, 19 pass.
+- `npm run test:ui`:
+  - Passed: 183 tests, 183 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CyWtcO5E.js`.
+- Scan result numeric validation browser QA on preview `127.0.0.1:5250`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/prompt-facets`, `/api/import-states`,
+    `/api/import-events`, and `/api/scan/progress` returned valid payloads.
+  - `/api/scan` returned HTTP 200 with negative scan stats, source summary
+    counts, prompt word/character counts, prompt quality score,
+    `returned_prompt_count`, and persistence counters.
+  - Clicking quick scan rendered the sanitized bridge response-shape error.
+  - No prompt rows were created, and the UI did not expose `-1`, `-2`, `-3`,
+    `-4`, `-5`, `-6`, `-20`, `NaN`, or `Infinity`.
+  - Final counts: `health=1`, `facets=2`, `importStates=1`,
+    `importEvents=1`, `scan=1`, `progress=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 183 tests, 183 pass.
+  - Build: passed with `index-CyWtcO5E.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then run staged diff/secret checks, commit, and push.
 
 ## Current Slice - 2026-06-07 Stored facets numeric validation
 

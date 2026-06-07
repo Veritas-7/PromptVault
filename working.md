@@ -86,16 +86,25 @@ Verification completed for this slice:
   `Antigravity CLI conversation DB 10`, and
   `Antigravity IDE conversation DB 2`.
 
-cmux note:
+cmux production-preview QA:
 
-- Fresh page load on `surface:17` connected to the browser bridge with no
-  console/errors.
-- After UI actions that trigger `/api/prompts`, `surface:17` repeatedly reported
-  a stale app URL via `get url` while `snapshot`/`eval` showed `about:blank`,
-  and the bridge logged `Broken pipe`. This happened with both full stored-load
-  and narrowed stored-filter attempts. The direct bridge API and SQLite proof
-  passed, so this is recorded as a cmux surface/action stability issue rather
-  than a backend persistence failure.
+- Re-ran the UI against `npm run preview -- --host 127.0.0.1 --port 5177` plus
+  the local bridge on `127.0.0.1:5174`, closer to the eventual Tauri built
+  frontend than Vite dev/HMR.
+- Earlier `about:blank` snapshots were narrowed to a stale WebView state and one
+  bad `cmux browser fill` invocation that appended `--snapshot-after` into the
+  input value. `cmux browser surface:17 reload --snapshot-after` restored the
+  same browser surface without creating an extra browser.
+- Real cmux UI flow on `surface:17`:
+  - Filled Stored Vault text filter with `도구 추가해야하면`.
+  - Applied the filter and observed one prompt row:
+    `Codex · 7개 단어 · 36 · 약함`.
+  - Selected that prompt and clicked recommendation generation.
+  - GLM returned a recommendation, UI showed quality `36 -> 80`, `+44`, and
+    persistence notice `추천 이력 #2 저장됨 · 이 프롬프트 1회`.
+  - SQLite confirmed the new row:
+    `2|c3ea3bdb225413df|Codex|glm|1|44`.
+  - No global app error or improvement error was present.
 
 ## Previous Slice
 

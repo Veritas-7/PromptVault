@@ -162,6 +162,7 @@ export function isBrowserQaMode(): boolean {
 
 const MALFORMED_BRIDGE_RESPONSE_MESSAGE = "PromptVault 브라우저 브리지 응답 형식이 올바르지 않습니다.";
 const MAX_QUALITY_SCORE = 100;
+const PROMPT_WORD_REGEX = /[A-Za-z가-힣0-9][A-Za-z가-힣0-9_\-']*/g;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -255,6 +256,12 @@ function isPromptCharCount(text: unknown, charCount: unknown): boolean {
     && Array.from(text).length === charCount;
 }
 
+function isPromptWordCount(text: unknown, wordCount: unknown): boolean {
+  return typeof text === "string"
+    && isNonNegativeSafeInteger(wordCount)
+    && (text.match(PROMPT_WORD_REGEX)?.length ?? 0) === wordCount;
+}
+
 function isPromptRecord(value: unknown): boolean {
   return isRecord(value)
     && typeof value.id === "string"
@@ -264,7 +271,7 @@ function isPromptRecord(value: unknown): boolean {
     && (typeof value.timestamp === "undefined" || typeof value.timestamp === "string" || value.timestamp === null)
     && (typeof value.cwd === "undefined" || typeof value.cwd === "string" || value.cwd === null)
     && typeof value.text === "string"
-    && isNonNegativeSafeInteger(value.word_count)
+    && isPromptWordCount(value.text, value.word_count)
     && isPromptCharCount(value.text, value.char_count)
     && typeof value.hash === "string"
     && isStringArray(value.risk_flags)

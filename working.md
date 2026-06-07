@@ -1,10 +1,105 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 04:19 KST
+Updated: 2026-06-08 04:27 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Prompt word-count validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/load payloads whose prompt row `word_count` does
+  not match the actual prompt `text` before the UI can render misleading prompt
+  row metadata.
+
+Context:
+
+- Rust creates `PromptRecord.word_count` with `count_words(text)`.
+- Rust `count_words()` uses the regex
+  `[A-Za-z가-힣0-9][A-Za-z가-힣0-9_\-']*`.
+- The frontend parser already validates prompt `char_count`, but still
+  accepted any nonnegative safe integer for `word_count`.
+- Prompt row labels render `word_count`, so stale bridge payloads can mislead
+  users even when the prompt text is valid.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the previous inactive scan-progress slice is pushed and clean at
+  `2c8c22e`.
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified local/remote parity from clean `main...origin/main` with
+  `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
+  returning `0 0`.
+- Added RED coverage for `/api/scan` returning prompt text
+  `Improve this prompt.` with impossible `word_count: 999` while `char_count`
+  stays valid.
+- Verified the focused API test fails before the guard.
+- Added parser validation requiring prompt `word_count` to match the Rust word
+  regex count for the actual prompt `text`.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified the broader UI suite and production build.
+- Verified the preview browser-bridge malformed prompt word-count path.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for prompt `word_count`
+    mismatching prompt `text`.
+- `src/promptVaultApi.ts`
+  - Adds frontend validation for prompt `word_count` using the Rust word regex
+    equivalent.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new prompt word-count mismatch test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 54 tests, 53 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 54 tests, 54 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 218 tests, 218 pass.
+- Build:
+  - `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-BPT3_4fA.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5282" --port 5282 node /tmp/promptvault_prompt_word_count_qa.mjs`
+  - Passed after adding a valid scan-progress mock to the temp harness. The
+    mocked bridge returned prompt text `Improve this prompt.` with
+    `word_count: 999`; the UI showed the malformed bridge response error,
+    rendered no prompt rows, and did not leak `999개 단어` or the prompt text.
+  - Removed `/tmp/promptvault_prompt_word_count_qa.mjs` after the run.
+- Full check:
+  - `npm run check`
+  - Passed. This included `npm run test:ui` (218 tests), `npm run build`,
+    `cargo test` (84 library tests and 16 CLI tests), and
+    `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found in the focused API suite.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run cleanup checks, staged secret checks, and publication checks before
+  committing.
 
 ## Current Slice - 2026-06-08 Inactive scan-progress validation
 

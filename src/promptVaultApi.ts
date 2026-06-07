@@ -323,21 +323,26 @@ function sourcePromptTotalsMatch(
 }
 
 function isSourcePlan(value: unknown): boolean {
-  return isRecord(value)
-    && typeof value.id === "string"
-    && typeof value.label === "string"
-    && typeof value.root_path === "string"
-    && typeof value.status === "string"
-    && isNonNegativeSafeInteger(value.file_count)
-    && isNonNegativeSafeInteger(value.byte_count)
-    && isNonNegativeSafeInteger(value.large_file_count)
-    && isNonNegativeSafeInteger(value.largest_file_bytes)
-    && (
+  if (!isRecord(value)
+    || typeof value.id !== "string"
+    || typeof value.label !== "string"
+    || typeof value.root_path !== "string"
+    || typeof value.status !== "string"
+    || !isNonNegativeSafeInteger(value.file_count)
+    || !isNonNegativeSafeInteger(value.byte_count)
+    || !isNonNegativeSafeInteger(value.large_file_count)
+    || !isNonNegativeSafeInteger(value.largest_file_bytes)
+    || !(
       typeof value.newest_modified_at === "undefined"
       || typeof value.newest_modified_at === "string"
       || value.newest_modified_at === null
     )
-    && isStringArray(value.notes);
+    || !isStringArray(value.notes)) {
+    return false;
+  }
+  return value.large_file_count <= value.file_count
+    && value.largest_file_bytes <= value.byte_count
+    && (value.file_count > 0 || value.byte_count === 0);
 }
 
 function isImportState(value: unknown): boolean {

@@ -1,10 +1,99 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 03:59 KST
+Updated: 2026-06-08 04:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Scan plan source-size validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan plan payloads whose source rows report impossible
+  file-size counters before the UI can render misleading import-plan rows.
+
+Context:
+
+- Rust builds scan plan source rows from candidate source files.
+- For each source row, `large_file_count` cannot exceed `file_count` and
+  `largest_file_bytes` cannot exceed `byte_count`.
+- If a source row has `file_count: 0`, it cannot have nonzero `byte_count`.
+- Existing aggregate validation catches mismatched top-level sums, but a row
+  can still be internally impossible while its aggregate totals match.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the previous prompt char-count slice is pushed and clean at
+  `9859499`.
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Added RED coverage for `/api/plan` returning one source with
+  `file_count: 1`, `byte_count: 100`, `large_file_count: 2`, and
+  `largest_file_bytes: 200` while the top-level aggregates still match the
+  returned rows.
+- Verified the focused API test fails before the guard.
+- Added parser validation requiring per-source scan-plan size counters to stay
+  internally consistent.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified the broader UI suite and production build.
+- Verified the preview browser-bridge malformed source-size plan path.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for impossible scan-plan
+    source size counters.
+- `src/promptVaultApi.ts`
+  - Tightens `isSourcePlan()` to reject source rows where large-file or largest
+    file byte counters exceed the row totals.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new source-size counter test resolved
+    instead of rejecting with `Missing expected rejection`.
+  - Result: 52 tests, 51 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 52 tests, 52 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 216 tests, 216 pass.
+- Build:
+  - `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-f0_vE1bD.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5280" --port 5280 node /tmp/promptvault_scan_plan_source_size_qa.mjs`
+  - Passed. The mocked bridge returned source rows with internally impossible
+    size counters; the UI showed the generic malformed bridge-response error
+    and did not render the bogus `Codex` or `Claude` plan source rows.
+  - Removed `/tmp/promptvault_scan_plan_source_size_qa.mjs` after the run.
+- Full check:
+  - `npm run check`
+  - Passed. This included `npm run test:ui` (216 tests), `npm run build`,
+    `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found in the focused API suite.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run cleanup checks, staged secret checks, and publication checks before
+  committing.
 
 ## Current Slice - 2026-06-08 Prompt char-count validation
 

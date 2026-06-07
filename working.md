@@ -1,12 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 05:20 KST
+Updated: 2026-06-08 05:27 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Persistence database path validation
+## Current Slice - 2026-06-08 Source metadata validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge source rows whose identity/display metadata is empty or
+  whitespace-only before the UI can render blank source controls, summaries, or
+  progress rows.
+
+Context:
+
+- The previous slices tightened response database path handling.
+- Parser guards still accept blank strings for source plan rows, source
+  summaries, import states, import events, and active scan progress source
+  metadata.
+- Source labels and root paths are rendered directly in the plan/import/summary
+  UI, and source ids can feed later import requests.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: source metadata in bridge
+  response parsers.
+- Added RED coverage for blank source metadata in import states, import events,
+  scan progress, scan results, and scan plan responses.
+- Verified the focused API test fails before the guard.
+- Applied the existing nonblank string guard to source metadata parser fields.
+- Verified the focused API test passes after the guard.
+- Verified the broader UI suite and production build.
+- Preview-tested malformed blank source metadata through the browser UI for
+  plan, import-batch, import refresh, and scan result flows.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for whitespace-only source
+    metadata in import-state rows, import-event rows, active scan progress,
+    scan result source summaries, and scan plan source rows.
+- `src/promptVaultApi.ts`
+  - Requires source ids, labels, root paths, and statuses to be nonblank where
+    those fields are mandatory.
+  - Adds a nullable nonblank string helper for scan progress source metadata,
+    preserving inactive progress snapshots with `null` source fields.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the five new blank source metadata tests
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 69 tests, 64 pass, 5 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 69 tests, 69 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 233 tests, 233 pass.
+- Build:
+  - `npm run build`
+  - Passed; Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-DX9nPh_4.js`.
+- Preview QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5290" --port 5290 node /tmp/promptvault_source_metadata_qa.mjs`
+  - Passed after aligning the script with the UI's panel guidance copy and
+    duplicate quiet import-refresh behavior.
+  - Verified malformed plan source rows, import-batch source/state rows,
+    saved import/history source rows, and scan source summaries surface
+    sanitized or guidance errors without rendering blank source rows.
+  - Removed `/tmp/promptvault_source_metadata_qa.mjs` after pass.
+- Full check:
+  - `npm run check`
+  - Passed: 233 UI tests, production build, 84 Rust lib tests, 16 CLI tests,
+    doc tests, and `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found in the focused API suite.
+- Preview QA needed assertion adjustments for intentional panel guidance copy;
+  no app change was required.
+- No remaining app blocker found so far for this slice.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run secrets checks, then commit and push if clean.
+
+## Previous Slice - 2026-06-08 Persistence database path validation
 
 Current Goal:
 

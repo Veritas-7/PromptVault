@@ -124,6 +124,46 @@ test("browser bridge import states reject blank database paths", async (t) => {
   );
 });
 
+test("browser bridge import states reject blank source metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    states: [{
+      source_id: "   ",
+      source_label: "   ",
+      root_path: "   ",
+      total_files: 0,
+      total_bytes: 0,
+      next_file_index: 0,
+      processed_files: 0,
+      imported_prompt_count: 0,
+      completed: true,
+      updated_at: "2026-06-07T00:00:00Z",
+    }],
+    total_sources: 1,
+    completed_sources: 1,
+    total_files: 0,
+    processed_files: 0,
+    imported_prompt_count: 0,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listImportStates(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /전체 소스|0개 파일|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge import states reject impossible numeric payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
@@ -375,6 +415,44 @@ test("browser bridge import events reject blank database paths", async (t) => {
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /전체 이벤트|0|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge import events reject blank source metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    events: [{
+      id: 1,
+      generated_at: "2026-06-07T00:00:00Z",
+      source_id: "   ",
+      source_label: "   ",
+      root_path: "   ",
+      batch_start_index: 0,
+      batch_file_count: 0,
+      batch_prompt_count: 0,
+      processed_files: 0,
+      total_files: 0,
+      completed: true,
+      warnings: [],
+    }],
+    total_events: 1,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listImportEvents(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /전체 이벤트|toLocaleString|RangeError|undefined/);
       return true;
     },
   );
@@ -653,6 +731,41 @@ test("browser bridge scan progress rejects malformed successful payloads", async
   );
 });
 
+test("browser bridge scan progress rejects blank active source metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    run_id: "scan-run-1",
+    active: true,
+    canceled: false,
+    source_id: "   ",
+    source_label: "   ",
+    source_index: 1,
+    source_count: 1,
+    files_seen: 1,
+    source_files_seen: 1,
+    source_files_discovered: 1,
+    source_file_count: 1,
+    prompts_found: 0,
+    limit: 10,
+    updated_at: "2026-06-07T00:00:00Z",
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanProgress("scan-run-1"),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /1 \/ 1|10|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan progress rejects impossible numeric payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
@@ -865,6 +978,62 @@ test("browser bridge scan results reject unsupported preview sort values", async
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /quality_desc|최신순|개선 우선|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge scan results reject blank source summary metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    output_path: null,
+    markdown: "",
+    stats: {
+      total_prompts: 0,
+      total_files: 0,
+      total_words: 0,
+      average_words: 0,
+      average_quality: 0,
+      weak_prompt_count: 0,
+      top_words: [],
+      top_phrases: [],
+      repeated_prompts: [],
+      top_quality_gaps: [],
+      prompts_by_date: [],
+      source_summaries: [{
+        id: "   ",
+        label: "   ",
+        root_path: "   ",
+        files_seen: 0,
+        prompts_found: 0,
+        average_quality: 0,
+        weak_prompt_count: 0,
+        status: "   ",
+        notes: [],
+      }],
+    },
+    prompts: [],
+    returned_prompt_count: 0,
+    prompts_truncated: false,
+    preview_sort: "latest",
+    markdown_included: false,
+    markdown_written: false,
+    persistence: null,
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /소스|toLocaleString|RangeError|undefined/);
       return true;
     },
   );
@@ -2279,6 +2448,47 @@ test("browser bridge scan plans reject malformed successful payloads", async (t)
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /toLocaleString|TypeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge scan plans reject blank source metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    total_sources: 1,
+    available_sources: 1,
+    total_files: 0,
+    total_bytes: 0,
+    large_file_count: 0,
+    largest_file_bytes: 0,
+    sources: [{
+      id: "   ",
+      label: "   ",
+      root_path: "   ",
+      status: "   ",
+      file_count: 0,
+      byte_count: 0,
+      large_file_count: 0,
+      largest_file_bytes: 0,
+      newest_modified_at: null,
+      notes: [],
+    }],
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => planScan(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /1 \/ 1|0개 파일|toLocaleString|RangeError|undefined/);
       return true;
     },
   );

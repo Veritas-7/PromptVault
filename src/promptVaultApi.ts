@@ -200,6 +200,10 @@ function isNonBlankString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isNullableNonBlankString(value: unknown): boolean {
+  return value === null || isNonBlankString(value);
+}
+
 function isNonNegativeFiniteNumber(value: unknown): value is number {
   return isFiniteNumber(value) && value >= 0;
 }
@@ -290,14 +294,14 @@ function isPromptRecord(value: unknown): boolean {
 
 function isSourceSummary(value: unknown): boolean {
   return isRecord(value)
-    && typeof value.id === "string"
-    && typeof value.label === "string"
-    && typeof value.root_path === "string"
+    && isNonBlankString(value.id)
+    && isNonBlankString(value.label)
+    && isNonBlankString(value.root_path)
     && isNonNegativeSafeInteger(value.files_seen)
     && isNonNegativeSafeInteger(value.prompts_found)
     && isQualityAverage(value.average_quality)
     && isNonNegativeSafeIntegerAtMost(value.weak_prompt_count, value.prompts_found)
-    && typeof value.status === "string"
+    && isNonBlankString(value.status)
     && isStringArray(value.notes);
 }
 
@@ -341,10 +345,10 @@ function sourcePromptTotalsMatch(
 
 function isSourcePlan(value: unknown): boolean {
   if (!isRecord(value)
-    || typeof value.id !== "string"
-    || typeof value.label !== "string"
-    || typeof value.root_path !== "string"
-    || typeof value.status !== "string"
+    || !isNonBlankString(value.id)
+    || !isNonBlankString(value.label)
+    || !isNonBlankString(value.root_path)
+    || !isNonBlankString(value.status)
     || !isNonNegativeSafeInteger(value.file_count)
     || !isNonNegativeSafeInteger(value.byte_count)
     || !isNonNegativeSafeInteger(value.large_file_count)
@@ -364,9 +368,9 @@ function isSourcePlan(value: unknown): boolean {
 
 function isImportState(value: unknown): boolean {
   if (!isRecord(value)
-    || typeof value.source_id !== "string"
-    || typeof value.source_label !== "string"
-    || typeof value.root_path !== "string"
+    || !isNonBlankString(value.source_id)
+    || !isNonBlankString(value.source_label)
+    || !isNonBlankString(value.root_path)
     || !isNonNegativeSafeInteger(value.total_files)
     || !isNonNegativeSafeInteger(value.total_bytes)
     || !isNonNegativeSafeInteger(value.next_file_index)
@@ -386,9 +390,9 @@ function isImportEvent(value: unknown): boolean {
   if (!isRecord(value)
     || !isNonNegativeSafeInteger(value.id)
     || !isTimestampString(value.generated_at)
-    || typeof value.source_id !== "string"
-    || typeof value.source_label !== "string"
-    || typeof value.root_path !== "string"
+    || !isNonBlankString(value.source_id)
+    || !isNonBlankString(value.source_label)
+    || !isNonBlankString(value.root_path)
     || !isNonNegativeSafeInteger(value.batch_start_index)
     || !isNonNegativeSafeInteger(value.batch_file_count)
     || !isNonNegativeSafeInteger(value.batch_prompt_count)
@@ -723,8 +727,8 @@ function parseScanProgressResult(value: unknown): ScanProgress {
     || typeof value.run_id !== "string"
     || typeof value.active !== "boolean"
     || typeof value.canceled !== "boolean"
-    || !(typeof value.source_id === "string" || value.source_id === null)
-    || !(typeof value.source_label === "string" || value.source_label === null)
+    || !isNullableNonBlankString(value.source_id)
+    || !isNullableNonBlankString(value.source_label)
     || !isNonNegativeSafeInteger(value.source_index)
     || !isNonNegativeSafeInteger(value.source_count)
     || !isNonNegativeSafeInteger(value.files_seen)

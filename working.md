@@ -1,10 +1,115 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 02:26 KST
+Updated: 2026-06-08 02:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Import states aggregate consistency validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge `/api/import-states` payloads whose aggregate summary
+  counters disagree with the returned state rows before inconsistent saved
+  import progress can render.
+
+Context:
+
+- Rust builds import-state summaries from the returned state rows: total
+  sources, completed sources, total files, processed files, and imported prompt
+  counts are row-derived.
+- The browser parser already rejects negative counters and aggregate counters
+  that exceed their declared totals.
+- Before this slice, it did not require aggregate summary counters to equal the
+  corresponding row count or row sums.
+- cmux/in-app browser remains excluded for this runtime. Verification used
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the active goal identity matches PromptVault and the worktree is
+  clean at `## main...origin/main`.
+- Identified the import states aggregate consistency gap from live
+  `src/promptVaultApi.ts` and `tests/promptVaultApi.test.ts`.
+- Added RED coverage for `/api/import-states` returning two rows where only one
+  row was complete but `completed_sources` claimed `2`.
+- Added parser relation validation requiring import-state aggregate counters to
+  equal returned row counts and row sums.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Confirmed the temp preview QA script was removed and no matching preview or
+  `gitleaks dir` process remained before staging.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds `isImportStatesAggregate()`.
+  - Requires `total_sources === states.length`.
+  - Requires `completed_sources`, `total_files`, `processed_files`, and
+    `imported_prompt_count` to match the returned state rows.
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for import-state aggregate
+    counters that mismatch returned rows.
+- `working.md`
+  - Records this import states aggregate consistency validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new import-state aggregate test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 42 tests, 41 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 42 tests, 42 pass.
+- `npm run test:ui`:
+  - Passed: 206 tests, 206 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-81Iblts2.js`.
+- Import states aggregate browser QA on preview `127.0.0.1:5270`:
+  - Routed browser bridge requests for `/api/health`, `/api/prompt-facets`,
+    `/api/import-states`, and `/api/import-events`.
+  - `/api/import-states` returned HTTP 200 with two state rows where only one
+    source was complete, but the aggregate claimed `completed_sources: 2`.
+  - Passed: `저장된 가져오기 진행 새로고침에 실패했습니다` rendered, no
+    inconsistent `2 / 2` or `9 / 14` summary rendered, saved import row count
+    stayed `0`, and page errors/console errors/request failures were empty.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=1`,
+    `/api/import-states=1`, `/api/import-events=1`.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 206 tests, 206 pass.
+  - Build: passed with `index-81Iblts2.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Cleanup checks before staging:
+  - `/tmp/promptvault_import_states_aggregate_qa.mjs`: absent.
+  - `ps -axo pid=,command= | rg -- '--port 527[0]|promptvault_import_states_aggregate_q[a]|gitleaks dir [.] --no-banner --redact'`:
+    no matches.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`.
+- Run staged whitespace/secrets checks plus GitHub auth/remote verification.
+- Commit as `fix: validate import states aggregate counts`, run full-tree
+  gitleaks, and push `origin main`.
+- Update this log with publication evidence and publish the docs marker.
 
 ## Current Slice - 2026-06-08 Import event progress relation validation
 

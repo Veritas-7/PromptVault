@@ -328,6 +328,39 @@ function isImportEvent(value: unknown): boolean {
     && value.completed === (batchEndIndex >= value.total_files);
 }
 
+function isImportStatesAggregate(value: unknown): boolean {
+  if (!isRecord(value)
+    || !Array.isArray(value.states)
+    || !isNonNegativeSafeInteger(value.total_sources)
+    || !isNonNegativeSafeInteger(value.completed_sources)
+    || !isNonNegativeSafeInteger(value.total_files)
+    || !isNonNegativeSafeInteger(value.processed_files)
+    || !isNonNegativeSafeInteger(value.imported_prompt_count)) {
+    return false;
+  }
+  let completedSources = 0;
+  let totalFiles = 0;
+  let processedFiles = 0;
+  let importedPromptCount = 0;
+  for (const state of value.states) {
+    if (!isImportState(state)) return false;
+    if (state.completed) completedSources += 1;
+    totalFiles += state.total_files;
+    processedFiles += state.processed_files;
+    importedPromptCount += state.imported_prompt_count;
+    if (!Number.isSafeInteger(totalFiles)
+      || !Number.isSafeInteger(processedFiles)
+      || !Number.isSafeInteger(importedPromptCount)) {
+      return false;
+    }
+  }
+  return value.total_sources === value.states.length
+    && value.completed_sources === completedSources
+    && value.total_files === totalFiles
+    && value.processed_files === processedFiles
+    && value.imported_prompt_count === importedPromptCount;
+}
+
 function isPersistStats(value: unknown): boolean {
   return isRecord(value)
     && typeof value.database_path === "string"
@@ -477,7 +510,8 @@ function parseImportStatesResult(value: unknown): ImportStatesResult {
     || !isNonNegativeSafeIntegerAtMost(value.completed_sources, value.total_sources)
     || !isNonNegativeSafeInteger(value.total_files)
     || !isNonNegativeSafeIntegerAtMost(value.processed_files, value.total_files)
-    || !isNonNegativeSafeInteger(value.imported_prompt_count)) {
+    || !isNonNegativeSafeInteger(value.imported_prompt_count)
+    || !isImportStatesAggregate(value)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ImportStatesResult;

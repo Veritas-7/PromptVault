@@ -70,3 +70,9 @@ export function scanLimitInputLabel(lockState: ActionLockState): string {
   if (reason) return `${reason}에는 스캔 프롬프트 제한을 편집할 수 없습니다`;
   return "스캔 프롬프트 제한";
 }
+
+export function promptFilterInputLabel(lockState: ActionLockState): string {
+  const reason = activeActionLockReason(lockState);
+  if (reason) return `${reason}에는 프롬프트 필터를 편집할 수 없습니다`;
+  return "프롬프트 필터";
+}

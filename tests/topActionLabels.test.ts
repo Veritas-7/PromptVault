@@ -6,6 +6,7 @@ import {
   planActionLabel,
   planPanelActionLabel,
   previewModeActionLabel,
+  promptFilterInputLabel,
   scanActionLabel,
   scanLimitInputLabel,
   scanStopActionLabel,
@@ -116,5 +117,13 @@ test("scan limit input label explains locked states", () => {
   assert.equal(
     scanLimitInputLabel(lockState({ planRunning: true })),
     "가져오기 계획 생성 중에는 스캔 프롬프트 제한을 편집할 수 없습니다",
+  );
+});
+
+test("prompt filter input label explains locked states", () => {
+  assert.equal(promptFilterInputLabel(lockState()), "프롬프트 필터");
+  assert.equal(
+    promptFilterInputLabel(lockState({ improvementRunning: true })),
+    "프롬프트 추천 생성 중에는 프롬프트 필터를 편집할 수 없습니다",
   );
 });

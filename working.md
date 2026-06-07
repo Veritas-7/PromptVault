@@ -1,10 +1,81 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 17:53 KST
+Updated: 2026-06-07 18:00 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Prompt filter active-work lock
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent the prompt filter from changing prompt context while a selected-prompt
+  recommendation request is in flight.
+
+Context:
+
+- Existing control-lock work already disabled preview mode, scan limit, stored
+  filters, and side-effect controls during active work.
+- Browser QA with a delayed `/api/improve` response showed the prompt filter
+  stayed enabled while `추천 생성 중` was active.
+- Editing the prompt filter during that delayed request hid the selected prompt
+  and cleared recommendation context while the request was still resolving.
+
+Progress:
+
+- Added a prompt-filter lock label helper using the existing active action lock
+  reason.
+- Disabled the prompt filter when top-level work is locked, matching other
+  active-work controls.
+- Added unit coverage for the idle and recommendation-running prompt-filter
+  labels.
+
+Changes:
+
+- `src/topActionLabels.ts`
+  - Added `promptFilterInputLabel`.
+- `src/App.tsx`
+  - Wired the prompt filter to the lock-aware label and disabled state.
+- `tests/topActionLabels.test.ts`
+  - Added prompt-filter label coverage for idle and improvement-running states.
+
+Tests:
+
+- RED browser QA on preview `127.0.0.1:5188` + bridge `127.0.0.1:5174`:
+  - Delayed `/api/improve` response.
+  - While `추천 생성 중` was active, prompt filter stayed enabled with label
+    `프롬프트 필터`.
+  - Filling the prompt filter hid all visible prompt rows while the improve
+    request was still resolving.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/topActionLabels.test.ts`:
+  PASS, `9` tests.
+- `npm run build`: PASS.
+- Fixed browser QA on preview `127.0.0.1:5188` + bridge `127.0.0.1:5174`:
+  - Prompt filter was editable before improve and labeled `프롬프트 필터`.
+  - During `추천 생성 중`, prompt filter was disabled and labeled
+    `프롬프트 추천 생성 중에는 프롬프트 필터를 편집할 수 없습니다`.
+  - After the delayed result rendered, prompt filter was enabled again and the
+    revised prompt remained visible.
+  - Body/document width stayed within `1365 / 1365`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `142` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local delayed-response browser QA
+  and active-work control consistency inspection.
+
+Next Steps:
+
+- Continue autonomous QA on the next uncovered PromptVault user flow.
 
 ## Current Slice - 2026-06-07 Recommendation in-flight empty copy
 
@@ -69,8 +140,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this verified slice, then continue autonomous QA on the next
-  uncovered PromptVault user flow.
+- Completed and pushed as `8cfd2d3 fix: show recommendation loading copy`.
 
 ## Current Slice - 2026-06-07 Recommendation active-row preservation
 

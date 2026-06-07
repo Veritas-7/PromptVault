@@ -134,6 +134,7 @@ import {
   planActionLabel,
   planPanelActionLabel,
   previewModeActionLabel,
+  promptFilterInputLabel,
   scanActionLabel,
   scanLimitInputLabel,
   scanStopActionLabel,
@@ -1846,8 +1847,9 @@ function App() {
             <div className="searchbox">
               <Search size={16} />
               <input
-                aria-label="프롬프트 필터"
+                aria-label={promptFilterInputLabel(actionLockState)}
                 data-prompt-filter="true"
+                disabled={isTopLevelActionLocked}
                 value={query}
                 placeholder="필터"
                 onChange={(event) => updatePromptFilter(event.currentTarget.value)}

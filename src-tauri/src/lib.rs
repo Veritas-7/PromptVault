@@ -836,7 +836,9 @@ pub fn run_list_import_states(
         .map(PathBuf::from)
         .unwrap_or_else(default_database_path);
     let conn = open_promptvault_database(&database_path)?;
-    let states = read_import_states(&conn)?;
+    refresh_import_metadata_source_labels(&conn)?;
+    let mut states = read_import_states(&conn)?;
+    canonicalize_import_state_labels(&mut states);
     Ok(import_states_result(
         generated_at,
         database_path.display().to_string(),
@@ -864,7 +866,9 @@ pub fn run_list_import_events(
         .unwrap_or(DEFAULT_IMPORT_EVENT_LIMIT)
         .min(MAX_IMPORT_EVENT_LIMIT);
     let conn = open_promptvault_database(&database_path)?;
-    let (events, total_events) = read_import_events(&conn, limit)?;
+    refresh_import_metadata_source_labels(&conn)?;
+    let (mut events, total_events) = read_import_events(&conn, limit)?;
+    canonicalize_import_event_labels(&mut events);
     Ok(ImportEventsResult {
         generated_at,
         database_path: database_path.display().to_string(),
@@ -2992,6 +2996,51 @@ fn import_states_result(
     }
 }
 
+fn current_source_label_map() -> HashMap<&'static str, &'static str> {
+    source_specs()
+        .into_iter()
+        .map(|source| (source.id, source.label))
+        .collect()
+}
+
+fn canonicalize_import_state_labels(states: &mut [ImportState]) {
+    let source_labels = current_source_label_map();
+    for state in states {
+        if let Some(label) = source_labels.get(state.source_id.as_str()) {
+            state.source_label = (*label).to_string();
+        }
+    }
+}
+
+fn canonicalize_import_event_labels(events: &mut [ImportEvent]) {
+    let source_labels = current_source_label_map();
+    for event in events {
+        if let Some(label) = source_labels.get(event.source_id.as_str()) {
+            event.source_label = (*label).to_string();
+        }
+    }
+}
+
+fn refresh_import_metadata_source_labels(
+    conn: &Connection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for source in source_specs() {
+        conn.execute(
+            "UPDATE import_states
+             SET source_label = ?1
+             WHERE source_id = ?2 AND source_label <> ?1",
+            rusqlite::params![source.label, source.id],
+        )?;
+        conn.execute(
+            "UPDATE import_events
+             SET source_label = ?1
+             WHERE source_id = ?2 AND source_label <> ?1",
+            rusqlite::params![source.label, source.id],
+        )?;
+    }
+    Ok(())
+}
+
 fn upsert_import_state(
     conn: &Connection,
     state: &ImportState,
@@ -4575,6 +4624,58 @@ mod tests {
     }
 
     #[test]
+    fn list_import_states_uses_current_source_labels() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-import-states-current-label-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        let db_path = root.join("promptvault.sqlite");
+        let conn = open_promptvault_database(&db_path).expect("open import db");
+        upsert_import_state(
+            &conn,
+            &ImportState {
+                source_id: "antigravity-cli-conversation-db".to_string(),
+                source_label: "Antigravity conversation DB".to_string(),
+                root_path: root.display().to_string(),
+                total_files: 10,
+                total_bytes: 100,
+                next_file_index: 10,
+                processed_files: 10,
+                imported_prompt_count: 10,
+                completed: true,
+                updated_at: "2026-06-06T00:00:00Z".to_string(),
+            },
+        )
+        .expect("upsert stale label state");
+        drop(conn);
+
+        let result = run_list_import_states(ImportStatesOptions {
+            database_path: Some(db_path.display().to_string()),
+        })
+        .expect("list import states");
+
+        assert_eq!(result.states.len(), 1);
+        assert_eq!(result.states[0].source_id, "antigravity-cli-conversation-db");
+        assert_eq!(result.states[0].source_label, "Antigravity CLI conversation DB");
+        let conn = Connection::open(&db_path).expect("reopen import db");
+        let stored_label: String = conn
+            .query_row(
+                "SELECT source_label FROM import_states WHERE source_id = ?1",
+                ["antigravity-cli-conversation-db"],
+                |row| row.get(0),
+            )
+            .expect("read refreshed import state label");
+        assert_eq!(stored_label, "Antigravity CLI conversation DB");
+        drop(conn);
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
     fn list_import_events_returns_empty_snapshot_for_new_database() {
         let root = std::env::temp_dir().join(format!(
             "promptvault-import-events-empty-{}",
@@ -4594,6 +4695,65 @@ mod tests {
         assert_eq!(result.database_path, db_path.display().to_string());
         assert_eq!(result.events.len(), 0);
         assert_eq!(result.total_events, 0);
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn list_import_events_uses_current_source_labels() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-import-events-current-label-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        let db_path = root.join("promptvault.sqlite");
+        let conn = open_promptvault_database(&db_path).expect("open import db");
+        let state = ImportState {
+            source_id: "antigravity-cli-conversation-db".to_string(),
+            source_label: "Antigravity conversation DB".to_string(),
+            root_path: root.display().to_string(),
+            total_files: 10,
+            total_bytes: 100,
+            next_file_index: 10,
+            processed_files: 10,
+            imported_prompt_count: 10,
+            completed: true,
+            updated_at: "2026-06-06T00:00:00Z".to_string(),
+        };
+        insert_import_event(
+            &conn,
+            "2026-06-06T00:00:00Z",
+            &state,
+            0,
+            10,
+            10,
+            &[],
+        )
+        .expect("insert stale label event");
+        drop(conn);
+
+        let result = run_list_import_events(ImportEventsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: None,
+        })
+        .expect("list import events");
+
+        assert_eq!(result.events.len(), 1);
+        assert_eq!(result.events[0].source_id, "antigravity-cli-conversation-db");
+        assert_eq!(result.events[0].source_label, "Antigravity CLI conversation DB");
+        let conn = Connection::open(&db_path).expect("reopen import db");
+        let stored_label: String = conn
+            .query_row(
+                "SELECT source_label FROM import_events WHERE source_id = ?1",
+                ["antigravity-cli-conversation-db"],
+                |row| row.get(0),
+            )
+            .expect("read refreshed import event label");
+        assert_eq!(stored_label, "Antigravity CLI conversation DB");
+        drop(conn);
 
         std::fs::remove_dir_all(root).expect("remove temp root");
     }

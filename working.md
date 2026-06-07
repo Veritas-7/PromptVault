@@ -4060,3 +4060,76 @@ Remaining caveat:
   internal timeouts), but direct same-surface DOM `eval`, `fill`, and `click`
   were sufficient to verify the target UI behavior without occupying another
   browser window.
+
+## Import Metadata Label Repair - 2026-06-07 11:57 KST
+
+Current goal:
+
+- Continue direct single-surface cmux QA beyond Stored Vault filters, focusing
+  on plan/import management flows and fixing issues found in real UI use.
+
+What was tested:
+
+- Used only existing `surface:10`; no new cmux browser was opened and cmux was
+  not restarted or killed.
+- Clicked the topbar `Plan` button in `surface:10`.
+- Plan panel loaded successfully:
+  - `Sources`: `12 / 12`
+  - `Files`: `28,002`
+  - `Size`: `34.6 GiB`
+  - `Large Files`: `93`
+- Verified the zero-file source `antigravity-ide-alt-transcripts` has disabled
+  selection, `Import Batch`, and `Run Until Done` controls.
+- Clicked `Import Batch` for the small
+  `Antigravity IDE conversation DB` source.
+- Incremental Import panel completed successfully:
+  - source `Antigravity IDE conversation DB`
+  - processed `1 / 1`
+  - batch `1 file · 2 prompts`
+  - status `Complete`
+
+Issue found:
+
+- In Saved Import Progress, the `antigravity-cli-conversation-db` cursor still
+  displayed the stale label `Antigravity conversation DB`.
+- Prompt rows and source facets were already canonical, but the import metadata
+  tables (`import_states` and historical `import_events`) kept denormalized
+  labels from before the source was split into CLI/IDE DB labels.
+
+Change:
+
+- Updated `src-tauri/src/lib.rs` so `run_list_import_states` and
+  `run_list_import_events` refresh known import metadata labels from the
+  current `source_specs()` map before returning data.
+- Added response-level canonicalization for import state/event labels so stale
+  rows cannot leak through the app API.
+- Added regression tests:
+  - `list_import_states_uses_current_source_labels`
+  - `list_import_events_uses_current_source_labels`
+- The tests assert both returned API structs and the underlying SQLite rows are
+  updated to `Antigravity CLI conversation DB`.
+
+Verification:
+
+- `cargo test current_source_labels`: PASS, 2 tests.
+- Rebuilt `promptvault-cli` and restarted only the PromptVault 5174 bridge,
+  not cmux. New bridge PID: 3221, PPID 1.
+- `/api/health`: PASS.
+- `/api/import-states`: PASS, both conversation DB states now return canonical
+  labels:
+  - `antigravity-cli-conversation-db` -> `Antigravity CLI conversation DB`
+  - `antigravity-ide-conversation-db` -> `Antigravity IDE conversation DB`
+- Direct SQLite verification against
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`: PASS, `import_states`
+  rows now store the canonical CLI/IDE labels.
+- `npm run check`: PASS, including 124 UI helper tests, Vite build, 67 Rust
+  library tests, 15 CLI tests, doc-tests, and clippy with `-D warnings`.
+
+Remaining issue:
+
+- `surface:10` remains usable for some direct clicks/evals, but the cmux
+  browser helper can still fall back into an empty-DOM or JS timeout state after
+  navigation. The label fix was verified through the same app bridge API and
+  live SQLite DB; UI relabel re-check is still limited by that surface helper
+  instability unless the surface recovers again without opening another browser
+  or restarting cmux.

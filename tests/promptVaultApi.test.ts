@@ -95,6 +95,35 @@ test("browser bridge import states reject malformed successful payloads", async 
   );
 });
 
+test("browser bridge import states reject blank database paths", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "   ",
+    states: [],
+    total_sources: 0,
+    completed_sources: 0,
+    total_files: 0,
+    processed_files: 0,
+    imported_prompt_count: 0,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listImportStates(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /전체 소스|0개 파일|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge import states reject impossible numeric payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
@@ -321,6 +350,31 @@ test("browser bridge import events reject malformed successful payloads", async 
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /toLocaleString|TypeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge import events reject blank database paths", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "   ",
+    events: [],
+    total_events: 0,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listImportEvents(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /전체 이벤트|0|toLocaleString|RangeError|undefined/);
       return true;
     },
   );

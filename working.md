@@ -1,12 +1,113 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 05:05 KST
+Updated: 2026-06-08 05:09 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Stored facet database path validation
+## Current Slice - 2026-06-08 Import database path validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge import-state and import-event payloads whose successful
+  response reports an empty or whitespace-only `database_path` before those
+  panels can display or trust that path.
+
+Context:
+
+- The import progress and import history panels render
+  `importStatesResult.database_path` and `importEventsResult.database_path`.
+- The backend rejects blank requested database paths and emits display paths for
+  import-state and import-event responses.
+- The stored facet parser now uses `isNonBlankString` for `database_path`; this
+  slice applies the same invariant to the two import status surfaces.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Added RED coverage for `/api/import-states` and `/api/import-events`
+  returning structurally valid payloads with `database_path: "   "`.
+- Verified the focused API test fails before the guard.
+- Reused the existing non-blank string guard for import-state and import-event
+  `database_path` validation.
+- Verified the focused API test passes after the guard.
+- Verified the broader UI suite and production build.
+- Verified the preview browser-bridge malformed import-state/import-event
+  database path paths.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for blank import-state and
+    import-event database paths.
+- `src/promptVaultApi.ts`
+  - Requires import-state and import-event `database_path` values to be
+    non-blank.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the two new blank database path tests
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 61 tests, 59 pass, 2 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 61 tests, 61 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 225 tests, 225 pass.
+- Build:
+  - `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-B3YE3dhb.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - First QA run failed because the temporary script expected the import-event
+    failure copy to repeat the panel heading. The app correctly rendered
+    `가져오기 기록 새로고침에 실패했습니다...`; the script was corrected.
+  - Re-ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5288" --port 5288 node /tmp/promptvault_import_database_path_qa.mjs`
+  - Passed. The mocked bridge returned `database_path: "   "` for
+    `/api/import-states` and `/api/import-events`; the UI showed both panel
+    failures on quiet refresh, made new bridge calls for both manual refresh
+    buttons, showed the sanitized malformed bridge response, and had no
+    console/page errors.
+  - Removed `/tmp/promptvault_import_database_path_qa.mjs` after the run.
+- Full check:
+  - `npm run check`
+  - Passed. This included `npm run test:ui` (225 tests), `npm run build`,
+    `cargo test` (84 library tests and 16 CLI tests), and
+    `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found.
+- Closeout: import-state and import-event bridge responses now reject blank
+  database paths before their panels can render or trust those paths.
+- Closeout: preview QA confirmed the malformed import path responses produce
+  sanitized error UI without rendering misleading import summaries or raw
+  runtime errors.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run secrets checks, then commit and push if clean.
+- Continue autonomous QA from clean pushed `main` afterward.
+
+## Previous Slice - 2026-06-08 Stored facet database path validation
 
 Current Goal:
 

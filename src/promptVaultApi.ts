@@ -640,7 +640,7 @@ function parseImproveResult(value: unknown): ImproveResult {
 function parseImportStatesResult(value: unknown): ImportStatesResult {
   if (!isRecord(value)
     || !isTimestampString(value.generated_at)
-    || typeof value.database_path !== "string"
+    || !isNonBlankString(value.database_path)
     || !Array.isArray(value.states)
     || !value.states.every(isImportState)
     || !isNonNegativeSafeInteger(value.total_sources)
@@ -657,7 +657,7 @@ function parseImportStatesResult(value: unknown): ImportStatesResult {
 function parseImportEventsResult(value: unknown): ImportEventsResult {
   if (!isRecord(value)
     || !isTimestampString(value.generated_at)
-    || typeof value.database_path !== "string"
+    || !isNonBlankString(value.database_path)
     || !Array.isArray(value.events)
     || !value.events.every(isImportEvent)
     || !isNonNegativeSafeInteger(value.total_events)

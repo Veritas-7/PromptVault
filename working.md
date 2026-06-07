@@ -1,12 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 05:57 KST
+Updated: 2026-06-08 06:08 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Warning and note text validation
+## Current Slice - 2026-06-08 Quality and risk label text validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge payloads whose prompt quality labels, suggestions,
+  risk flags, or improvement quality-delta gap arrays contain
+  blank/whitespace-only entries before the UI can render empty suggestion rows
+  or ambiguous `알 수 없음` labels.
+
+Context:
+
+- The previous slices tightened database paths, source metadata, prompt row
+  metadata, improvement text, scan export metadata, warnings, and source notes.
+- Remaining browser-bridge validators still accept plain string arrays for
+  prompt `risk_flags`, prompt quality `missing`/`suggestions`, and improvement
+  quality-delta `resolved_gaps`/`remaining_gaps`.
+- The React UI renders risk flags with `riskFlagLabel`, selected prompt
+  suggestions as paragraph rows, and improvement quality-delta gaps with
+  `qualityGapLabel`; blank values can produce empty content or fallback
+  `알 수 없음` labels.
+- The Rust producer builds these arrays from fixed non-empty risk/gap constants
+  and Korean suggestion strings, so blank entries are not part of the expected
+  producer contract.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: user-visible prompt quality,
+  risk flag, and improvement gap label arrays.
+- Added RED tests for blank risk flags, prompt quality helper text, and
+  improvement quality-delta helper text.
+- Confirmed RED first: focused API suite failed 84/87 only on the three new
+  missing-rejection cases.
+- Applied nonblank string-array validation to prompt quality
+  `missing`/`suggestions`, prompt `risk_flags`, and improvement quality-delta
+  `resolved_gaps`/`remaining_gaps`.
+- Confirmed GREEN after the parser change: focused API suite passes 87/87.
+- Confirmed broader UI coverage still passes after the parser change.
+- Removed the now-unused plain `isStringArray` helper after `tsc` flagged it
+  as dead code.
+- Confirmed production build succeeds after removing the obsolete helper.
+- Ran local Vite preview QA with Node Playwright against malformed scan
+  quality/risk labels and malformed improvement quality-delta labels; the UI
+  surfaced sanitized failure copy without rendering prompt rows, revised prompt
+  output, or fallback `알 수 없음` labels.
+- Removed the temporary preview QA script from `/tmp`.
+- Ran full check successfully.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`: adds compact valid prompt payload builders
+  and three malformed quality/risk/gap label tests.
+- `src/promptVaultApi.ts`: rejects blank entries in browser-bridge prompt
+  quality helper text, risk flags, and improvement quality-delta gap labels.
+  The obsolete plain string-array validator was removed because all remaining
+  user-visible string arrays now require nonblank text.
+
+Tests:
+
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 84/87 only on the three new missing-rejection cases.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  (`87` tests passed).
+- PASS: `npm run test:ui` (`251` tests passed).
+- FAIL then fixed: `npm run build` initially failed because `tsc` reported
+  unused helper `isStringArray` after the final validator was tightened.
+- PASS: `npm run build`.
+- PASS: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5295" --port 5295 node /tmp/promptvault_quality_label_qa.mjs`.
+  The first script run was corrected because the scoped scan warning is
+  intentionally generic while the detailed malformed bridge message appears in
+  the global error notice.
+- PASS: `npm run check` (`npm run test:ui`, `npm run build`,
+  `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings`).
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, run the required staged/full secret scans, then commit and push
+  if clean.
+
+## Previous Slice - 2026-06-08 Warning and note text validation
 
 Current Goal:
 

@@ -192,10 +192,6 @@ function isFrequencyItemsEachWithinTotal(value: unknown, total: unknown): boolea
     && value.every((item) => isFrequencyItem(item) && item.count <= total);
 }
 
-function isStringArray(value: unknown): boolean {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
-}
-
 function isNonBlankStringArray(value: unknown): boolean {
   return Array.isArray(value) && value.every(isNonBlankString);
 }
@@ -264,8 +260,8 @@ function isPromptQuality(value: unknown): boolean {
   return isRecord(value)
     && isQualityScore(value.score)
     && isNonBlankString(value.band)
-    && isStringArray(value.missing)
-    && isStringArray(value.suggestions);
+    && isNonBlankStringArray(value.missing)
+    && isNonBlankStringArray(value.suggestions);
 }
 
 function isPromptCharCount(text: unknown, charCount: unknown): boolean {
@@ -292,7 +288,7 @@ function isPromptRecord(value: unknown): boolean {
     && isPromptWordCount(value.text, value.word_count)
     && isPromptCharCount(value.text, value.char_count)
     && isNonBlankString(value.hash)
-    && isStringArray(value.risk_flags)
+    && isNonBlankStringArray(value.risk_flags)
     && isPromptQuality(value.quality);
 }
 
@@ -588,8 +584,8 @@ function isQualityDelta(value: unknown): boolean {
     && isPromptQuality(value.before)
     && isPromptQuality(value.after)
     && isSafeInteger(value.score_delta)
-    && isStringArray(value.resolved_gaps)
-    && isStringArray(value.remaining_gaps);
+    && isNonBlankStringArray(value.resolved_gaps)
+    && isNonBlankStringArray(value.remaining_gaps);
 }
 
 function isInactiveScanProgressSnapshot(value: Record<string, unknown>): boolean {

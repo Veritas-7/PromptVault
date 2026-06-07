@@ -49,6 +49,55 @@ function emptyScanResult(overrides = {}) {
   };
 }
 
+function promptRecord(overrides = {}) {
+  return {
+    id: "prompt-1",
+    source: "codex",
+    session_id: "session-1",
+    path: "/tmp/codex/history.jsonl",
+    timestamp: null,
+    cwd: null,
+    text: "Improve this prompt.",
+    word_count: 3,
+    char_count: 20,
+    hash: "hash-1",
+    risk_flags: [],
+    quality: {
+      score: 42,
+      band: "weak",
+      missing: ["context"],
+      suggestions: ["Add context."],
+    },
+    ...overrides,
+  };
+}
+
+function scanResultWithPrompt(promptOverrides = {}) {
+  return emptyScanResult({
+    stats: emptyScanStats({
+      total_prompts: 1,
+      total_files: 1,
+      total_words: 3,
+      average_words: 3,
+      average_quality: 42,
+      weak_prompt_count: 1,
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: 1,
+        prompts_found: 1,
+        average_quality: 42,
+        weak_prompt_count: 1,
+        status: "ok",
+        notes: [],
+      }],
+    }),
+    prompts: [promptRecord(promptOverrides)],
+    returned_prompt_count: 1,
+  });
+}
+
 function emptyScanPlan(overrides = {}) {
   return {
     generated_at: "2026-06-07T00:00:00Z",
@@ -1477,6 +1526,55 @@ test("browser bridge scan results reject blank prompt metadata", async (t) => {
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /1개 로드|알 수 없음|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge scan results reject blank risk flags", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(scanResultWithPrompt({
+    risk_flags: ["   "],
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /알 수 없음|긴 토큰|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge scan results reject blank prompt quality helper text", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(scanResultWithPrompt({
+    quality: {
+      score: 42,
+      band: "weak",
+      missing: ["   "],
+      suggestions: ["   "],
+    },
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /선택 항목|알 수 없음|toLocaleString|RangeError|undefined/);
       return true;
     },
   );
@@ -3849,6 +3947,44 @@ test("browser bridge improvements reject blank warnings", async (t) => {
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /추천|경고|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge improvements reject blank quality delta helper text", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(improveResult({
+    quality_delta: {
+      before: {
+        score: 40,
+        band: "weak",
+        missing: ["   "],
+        suggestions: ["   "],
+      },
+      after: {
+        score: 82,
+        band: "strong",
+        missing: ["   "],
+        suggestions: ["   "],
+      },
+      score_delta: 42,
+      resolved_gaps: ["   "],
+      remaining_gaps: ["   "],
+    },
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => improvePrompt({ prompt: "Improve this prompt." }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /알 수 없음|해결됨|남음|추천|toLocaleString|RangeError|undefined/);
       return true;
     },
   );

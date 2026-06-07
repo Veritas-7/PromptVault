@@ -1,10 +1,75 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:22 KST
+Updated: 2026-06-07 19:27 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Improvement failure selection-switch QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the recommendation panel clears a prompt-scoped failure when the user
+  selects a different stored prompt.
+
+Context:
+
+- Unit tests cover `improvementSelectionChanged`, but the full browser flow
+  from `/api/improve` failure to prompt selection change needed direct DOM
+  verification.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Loaded two stored prompts through mocked browser bridge responses.
+- Selected the first visible stored prompt and forced `/api/improve` to return
+  HTTP 500 with `improve failed`.
+- Selected a different stored prompt and verified the global error, scoped
+  recommendation warning, recommendation empty state, and selected row state.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only QA slice.
+
+Tests:
+
+- Improvement failure selection-switch browser QA on preview
+  `127.0.0.1:5213`:
+  - First `/api/improve` request body included `prompt_id: "prompt-b"`,
+    `source: "Worklog"`, `persist: true`, and
+    `database_path: "/tmp/promptvault-selection-clear.sqlite"`.
+  - Before selection change, the global error showed `improve failed` and the
+    recommendation panel showed
+    `이 프롬프트 추천을 생성하지 못했습니다. 위 오류를 확인한 뒤 다시 시도하세요.`
+  - After selecting another prompt, global error count was `0` and scoped
+    recommendation error count was `0`.
+  - Recommendation panel returned to
+    `선택한 프롬프트의 추천을 생성하세요.`
+  - The newly selected row had `aria-pressed="true"` and the detail panel
+    displayed the newly selected prompt text.
+  - Page errors, request failures, and unexpected HTTP failures: none.
+  - Console contained only the expected browser resource error for the forced
+    HTTP 500 response.
+
+Issues:
+
+- No app blocker found. Two earlier harness attempts failed because the script
+  used an unavailable `expect` helper and then expected outdated empty-state
+  copy; both were script-side issues corrected before the clean QA run.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Stored source summary healthy icon
 
@@ -71,7 +136,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this stored source summary icon slice.
+- Completed and pushed as `766785c fix: show stored source summaries as healthy`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Improvement retry browser QA

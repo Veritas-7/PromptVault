@@ -1,12 +1,99 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 06:26 KST
+Updated: 2026-06-08 06:32 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Scan run id response validation
+## Current Slice - 2026-06-08 Scan run id match validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan progress and cancel-scan responses whose returned
+  `run_id` does not match the requested scan run id, so progress/cancel state
+  cannot be applied to the wrong active scan.
+
+Context:
+
+- The previous slice tightened scan progress and cancel-scan response `run_id`
+  values from arbitrary strings to nonblank strings.
+- Rust scan run handling normalizes request ids and returns that same run id in
+  progress and cancellation responses.
+- The browser-bridge client still accepts a nonblank but different response
+  `run_id`, which can let stale or cross-run bridge data affect the current
+  scan UI state.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: response/request `run_id`
+  consistency for scan progress and cancel-scan browser bridge calls.
+- Added RED tests for mismatched scan progress and cancel-scan response
+  `run_id` values.
+- Confirmed RED first: focused API suite failed 92/94 only on the two new
+  missing-rejection cases.
+- Added browser-bridge response/request `run_id` matching for scan progress and
+  cancel-scan calls while preserving the Rust/Tauri path.
+- Confirmed GREEN after the client validation change: focused API suite passes
+  94/94.
+- Confirmed broader UI helper and parser coverage still passes after the match
+  validation.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. Mismatched scan progress `run_id` responses stayed out of
+  global errors and left fallback progress copy intact; mismatched cancel-scan
+  result `run_id` responses surfaced sanitized global and stop-failure UI.
+- Removed the temporary preview QA script from
+  `/tmp/promptvault_scan_run_id_match_qa.mjs`.
+- Confirmed `/tmp/promptvault_scan_run_id_match_qa.mjs` is absent and preview
+  port `5299` has no listener after the server wrapper stopped the server.
+- Ran full check successfully after preview QA.
+
+Changes:
+
+- `src/promptVaultApi.ts`: validates parsed scan progress and cancel-scan
+  results against the requested trimmed `run_id` before returning them to UI
+  state handlers.
+- `tests/promptVaultApi.test.ts`: adds mismatched scan progress and cancel scan
+  `run_id` tests using otherwise-valid response payloads.
+
+Tests:
+
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 92/94 only on the two new missing-rejection cases.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 94/94.
+- `npm run test:ui` passed 258/258.
+- `npm run build` passed.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5299" --port 5299 --timeout 30 node /tmp/promptvault_scan_run_id_match_qa.mjs`
+  passed.
+- Cleanup: `/tmp/promptvault_scan_run_id_match_qa.mjs` absent; port `5299`
+  free.
+- `npm run check` passed: UI tests 258/258, production build, Rust lib tests
+  84/84, CLI tests 16/16, and clippy with `-D warnings`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run staged secret scan, commit, full-tree secret scan, push, and final
+  parity/cleanup checks.
+
+## Previous Slice - 2026-06-08 Scan run id response validation
 
 Current Goal:
 

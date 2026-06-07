@@ -138,7 +138,13 @@ export async function cancelScan(run_id: string): Promise<CancelScanResult> {
   if (hasTauriInvoke()) {
     return invoke<CancelScanResult>("cancel_scan", { options });
   }
-  return postBridge<CancelScanResult>("/api/scan/cancel", { options }, parseCancelScanResult);
+  return postBridge<CancelScanResult>("/api/scan/cancel", { options }, (value) => {
+    const result = parseCancelScanResult(value);
+    if (!matchesRequestedRunId(result, run_id)) {
+      throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+    }
+    return result;
+  });
 }
 
 export async function scanProgress(run_id: string): Promise<ScanProgress> {
@@ -146,7 +152,13 @@ export async function scanProgress(run_id: string): Promise<ScanProgress> {
   if (hasTauriInvoke()) {
     return invoke<ScanProgress>("scan_progress", { options });
   }
-  return postBridge<ScanProgress>("/api/scan/progress", { options }, parseScanProgressResult);
+  return postBridge<ScanProgress>("/api/scan/progress", { options }, (value) => {
+    const result = parseScanProgressResult(value);
+    if (!matchesRequestedRunId(result, run_id)) {
+      throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+    }
+    return result;
+  });
 }
 
 export async function improvePrompt(request: ImprovePromptRequest): Promise<ImproveResult> {
@@ -603,6 +615,10 @@ function isInactiveScanProgressSnapshot(value: Record<string, unknown>): boolean
       && value.prompts_found === 0
       && value.limit === null
     );
+}
+
+function matchesRequestedRunId(value: { run_id: string }, requestedRunId: string): boolean {
+  return value.run_id === requestedRunId.trim();
 }
 
 function parseCancelScanResult(value: unknown): CancelScanResult {

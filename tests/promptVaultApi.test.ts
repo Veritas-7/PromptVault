@@ -986,6 +986,41 @@ test("browser bridge scan progress rejects blank run ids", async (t) => {
   );
 });
 
+test("browser bridge scan progress rejects mismatched run ids", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    run_id: "other-scan-run",
+    active: false,
+    canceled: false,
+    source_id: null,
+    source_label: null,
+    source_index: 0,
+    source_count: 0,
+    files_seen: 0,
+    source_files_seen: 0,
+    source_files_discovered: 0,
+    source_file_count: null,
+    prompts_found: 0,
+    limit: null,
+    updated_at: "2026-06-07T00:00:00Z",
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanProgress("scan-run-1"),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /other-scan-run|스캔 진행|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan progress rejects blank active source metadata", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
@@ -3437,6 +3472,29 @@ test("browser bridge cancel scan results reject blank run ids", async (t) => {
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /toLocaleString|TypeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge cancel scan results reject mismatched run ids", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    run_id: "other-scan-run",
+    canceled: true,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => cancelScan("scan-run-1"),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /other-scan-run|toLocaleString|TypeError|undefined/);
       return true;
     },
   );

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 03:12 KST
+Updated: 2026-06-08 03:13 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -42,6 +42,8 @@ Progress:
 - Verified the focused API test fails before the guard and passes after it.
 - Verified broader UI tests, production build, preview QA, and the full project
   check.
+- Published code commit `0bd7ff1` to `origin/main` and verified local/remote
+  parity.
 
 Changes:
 
@@ -82,6 +84,14 @@ Tests:
 - `npm run check`
   - Passed: UI tests, production build, Rust library tests, Rust CLI tests,
     doc-tests, and clippy all completed with exit 0.
+- Pre-push security:
+  - `gitleaks protect --staged --no-banner --redact` passed: no leaks in
+    staged changes.
+  - `gitleaks dir . --no-banner --redact` passed: scanned about 700.86 MB, no
+    leaks found.
+- Post-push parity:
+  - `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
+    returned `0 0` after code commit `0bd7ff1`.
 
 Issues:
 
@@ -93,8 +103,7 @@ Research:
 
 Next Steps:
 
-- Run explicit staged diff/security checks, commit, push, and record publication
-  evidence.
+- Record docs marker publication evidence, then close the handoff.
 
 ## Current Slice - 2026-06-08 Scan plan aggregate consistency validation
 

@@ -362,6 +362,14 @@ function isReturnedPromptCount(value: unknown, prompts: unknown, stats: unknown)
     && prompts.length === value;
 }
 
+function isPromptTruncationState(value: unknown, returnedPromptCount: unknown, stats: unknown): boolean {
+  return typeof value === "boolean"
+    && isRecord(stats)
+    && isNonNegativeSafeInteger(returnedPromptCount)
+    && isNonNegativeSafeInteger(stats.total_prompts)
+    && (value || returnedPromptCount === stats.total_prompts);
+}
+
 function isImprovePersistence(value: unknown): boolean {
   return isRecord(value)
     && typeof value.database_path === "string"
@@ -489,7 +497,7 @@ function parseScanResult(value: unknown): ScanResult {
     || !Array.isArray(value.prompts)
     || !value.prompts.every(isPromptRecord)
     || !isReturnedPromptCount(value.returned_prompt_count, value.prompts, value.stats)
-    || typeof value.prompts_truncated !== "boolean"
+    || !isPromptTruncationState(value.prompts_truncated, value.returned_prompt_count, value.stats)
     || !isPreviewSortString(value.preview_sort)
     || typeof value.markdown_included !== "boolean"
     || typeof value.markdown_written !== "boolean"

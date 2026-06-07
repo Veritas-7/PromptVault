@@ -18,6 +18,15 @@ export function emptyStoredPromptFilters(): StoredPromptFilters {
   };
 }
 
+export function storedPromptFiltersSnapshot(filters: StoredPromptFilters): StoredPromptFilters {
+  return {
+    date: filters.date,
+    query: filters.query,
+    source: filters.source,
+    workspace: filters.workspace,
+  };
+}
+
 function trimmedOptional(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
@@ -34,10 +43,10 @@ export function activeStoredPromptFilterCount(filters: StoredPromptFilters): num
 
 export function storedResultFilterCount(
   resultOrigin: "scan" | "stored" | null,
-  loadedStoredFilterCount: number,
+  loadedStoredFilters: StoredPromptFilters,
 ): number {
   if (resultOrigin !== "stored") return 0;
-  return Math.max(0, loadedStoredFilterCount);
+  return activeStoredPromptFilterCount(loadedStoredFilters);
 }
 
 export function storedFilterResetLabel(activeFilterCount: number, lockState: ActionLockState): string {

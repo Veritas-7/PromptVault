@@ -1,10 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:11 KST
+Updated: 2026-06-07 19:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Stored preview applied-filter snapshots
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Ensure stored-result preview mode changes reload from the last applied stored
+  filters instead of silently applying draft filter inputs.
+
+Context:
+
+- The previous stored-filter fix scoped empty-state copy to the last successful
+  stored result.
+- Follow-up browser QA found a related RED baseline: after loading unfiltered
+  stored results, typing `Codex` into the source filter and switching to
+  `개선 우선` sent a second `/api/prompts` request with `source: "Codex"` even
+  though the user had not pressed Apply.
+
+Progress:
+
+- Added a stored-filter snapshot helper.
+- Replaced loaded filter count state with the full last-applied stored-filter
+  snapshot.
+- Stored preview-mode reloads now use the last applied stored filters, not
+  current draft inputs.
+- Verified both directions:
+  - draft filters are not applied by preview switching;
+  - filters that were actually applied remain active when preview switching.
+
+Changes:
+
+- `src/storedFilters.ts`
+  - Added `storedPromptFiltersSnapshot`.
+  - Updated `storedResultFilterCount` to derive from the stored snapshot.
+- `src/App.tsx`
+  - Tracks `loadedStoredFilters`.
+  - Resets the stored snapshot on scan results.
+  - Updates the snapshot only after successful stored-load results.
+  - Uses the stored snapshot when preview mode changes reload stored results.
+- `tests/storedFilters.test.ts`
+  - Added snapshot coverage and updated result-filter-count coverage.
+- `working.md`
+  - Recorded the RED baseline, fix, and browser QA.
+
+Tests:
+
+- RED baseline browser QA on preview `127.0.0.1:5208`:
+  - Initial unfiltered stored load sent `/api/prompts` with no source filter.
+  - Typing draft source `Codex` then switching to `개선 우선` sent a second
+    `/api/prompts` with `source: "Codex"` before the fix.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/storedFilters.test.ts tests/previewMode.test.ts tests/promptEmptyState.test.ts`:
+  - 31 passed.
+- `npm run build`:
+  - `tsc && vite build` passed.
+- Fixed draft-flow browser QA on preview `127.0.0.1:5208`:
+  - Initial unfiltered stored load sent no source filter.
+  - Draft source `Codex` plus `개선 우선` sent a second `/api/prompts` request
+    with `preview_sort: "quality_asc"` and no `source`.
+  - Empty prompt message stayed `불러온 프롬프트가 없습니다.`
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+- Applied-filter browser QA on preview `127.0.0.1:5209`:
+  - Applying source `Codex` sent `/api/prompts` with `source: "Codex"`.
+  - Switching to `개선 우선` sent `/api/prompts` with both
+    `preview_sort: "quality_asc"` and `source: "Codex"`.
+  - Filtered empty prompt message stayed
+    `현재 저장소 필터와 일치하는 저장 프롬프트가 없습니다.`
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+- `npm run check`:
+  - UI tests: 154 passed.
+  - Build: passed.
+  - Rust lib tests: 84 passed.
+  - Rust CLI tests: 16 passed.
+  - Doc-tests: passed.
+  - Clippy with `-D warnings`: passed.
+
+Issues:
+
+- No blocker found after this fix.
+
+Research:
+
+- No external research. This was derived from rendered local QA output.
+
+Next Steps:
+
+- Commit and push this stored preview applied-filter snapshot slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Stored filter draft empty-state handling
 
@@ -83,7 +173,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this stored filter draft empty-state slice.
+- Completed and pushed as `7b9259b fix: scope stored filter empty states`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Source status label/icon normalization

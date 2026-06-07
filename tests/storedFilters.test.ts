@@ -7,6 +7,7 @@ import {
   storedFilterApplyLabel,
   storedFilterInputLabel,
   storedFilterResetLabel,
+  storedPromptFiltersSnapshot,
   storedPromptLoadOptions,
   storedResultFilterCount,
   type StoredPromptFilters,
@@ -80,11 +81,32 @@ test("active stored prompt filter count ignores whitespace", () => {
   );
 });
 
+test("stored prompt filter snapshots preserve loaded filter values", () => {
+  const filters = {
+    date: "2026-06-06",
+    query: "cmux",
+    source: "Codex",
+    workspace: "PromptVault",
+  };
+
+  const snapshot = storedPromptFiltersSnapshot(filters);
+
+  assert.deepEqual(snapshot, filters);
+  assert.notEqual(snapshot, filters);
+});
+
 test("stored result filter count follows the last loaded stored result", () => {
-  assert.equal(storedResultFilterCount("stored", 2), 2);
-  assert.equal(storedResultFilterCount("stored", -1), 0);
-  assert.equal(storedResultFilterCount("scan", 3), 0);
-  assert.equal(storedResultFilterCount(null, 3), 0);
+  const loadedFilters = {
+    date: "2026-06-06",
+    query: "",
+    source: "Codex",
+    workspace: "PromptVault",
+  };
+
+  assert.equal(storedResultFilterCount("stored", loadedFilters), 3);
+  assert.equal(storedResultFilterCount("stored", emptyFilters), 0);
+  assert.equal(storedResultFilterCount("scan", loadedFilters), 0);
+  assert.equal(storedResultFilterCount(null, loadedFilters), 0);
 });
 
 test("stored filter reset label explains disabled and active states", () => {

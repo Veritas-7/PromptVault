@@ -126,6 +126,7 @@ import {
   storedFilterApplyLabel,
   storedFilterInputLabel,
   storedFilterResetLabel,
+  storedPromptFiltersSnapshot,
   storedPromptLoadOptions,
   storedResultFilterCount,
   type StoredPromptFilters,
@@ -262,7 +263,9 @@ function App() {
   const [storedFilters, setStoredFilters] = useState<StoredPromptFilters>(() =>
     emptyStoredPromptFilters(),
   );
-  const [loadedStoredFilterCount, setLoadedStoredFilterCount] = useState(0);
+  const [loadedStoredFilters, setLoadedStoredFilters] = useState<StoredPromptFilters>(() =>
+    emptyStoredPromptFilters(),
+  );
   const [limit, setLimit] = useState(() => recommendedInitialScanLimit());
   const [previewMode, setPreviewMode] = useState<PreviewMode>("latest");
   const [error, setError] = useState<string | null>(null);
@@ -347,7 +350,7 @@ function App() {
   const storedFilterCount = activeStoredPromptFilterCount(storedFilters);
   const activeResultStoredFilterCount = storedResultFilterCount(
     resultOrigin,
-    loadedStoredFilterCount,
+    loadedStoredFilters,
   );
   const promptListEmptyMessage = promptListEmptyText(
     hasPromptResult,
@@ -736,7 +739,7 @@ function App() {
       setError(null);
       setResult(next);
       setResultOrigin("scan");
-      setLoadedStoredFilterCount(0);
+      setLoadedStoredFilters(emptyStoredPromptFilters());
       setSelectedId(
         (loadedMode === "weakest"
           ? next.prompts[0]
@@ -797,14 +800,14 @@ function App() {
     setScanState("idle");
     setStoredLoadState("loading");
     try {
-      const nextStoredFilterCount = activeStoredPromptFilterCount(filters);
+      const nextStoredFilters = storedPromptFiltersSnapshot(filters);
       const next = await loadStoredPrompts({
         ...storedPromptLoadOptions(filters, requestedPreviewMode, PREVIEW_LIMIT),
       });
       const loadedMode = effectivePromptListMode(next.preview_sort, requestedPreviewMode);
       setResult(next);
       setResultOrigin("stored");
-      setLoadedStoredFilterCount(nextStoredFilterCount);
+      setLoadedStoredFilters(nextStoredFilters);
       setSelectedId(
         (loadedMode === "weakest"
           ? next.prompts[0]
@@ -886,7 +889,7 @@ function App() {
     setPreviewMode(nextPreviewMode);
     clearImprovementPromptContext();
     if (reloadStoredPreview) {
-      void runLoadStored(storedFilters, nextPreviewMode);
+      void runLoadStored(loadedStoredFilters, nextPreviewMode);
     }
   }
 

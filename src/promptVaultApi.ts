@@ -565,6 +565,23 @@ function isQualityDelta(value: unknown): boolean {
     && isStringArray(value.remaining_gaps);
 }
 
+function isInactiveScanProgressSnapshot(value: Record<string, unknown>): boolean {
+  return value.active !== false
+    || (
+      value.canceled === false
+      && value.source_id === null
+      && value.source_label === null
+      && value.source_index === 0
+      && value.source_count === 0
+      && value.files_seen === 0
+      && value.source_files_seen === 0
+      && value.source_files_discovered === 0
+      && value.source_file_count === null
+      && value.prompts_found === 0
+      && value.limit === null
+    );
+}
+
 function parseCancelScanResult(value: unknown): CancelScanResult {
   if (!isRecord(value) || typeof value.run_id !== "string" || typeof value.canceled !== "boolean") {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
@@ -705,7 +722,8 @@ function parseScanProgressResult(value: unknown): ScanProgress {
     || !isTimestampString(value.updated_at)
     || value.source_files_seen > value.source_files_discovered
     || (value.source_file_count !== null && !isNonNegativeSafeIntegerAtMost(value.source_files_seen, value.source_file_count))
-    || (value.source_index !== 0 && !isNonNegativeSafeIntegerAtMost(value.source_index, value.source_count))) {
+    || (value.source_index !== 0 && !isNonNegativeSafeIntegerAtMost(value.source_index, value.source_count))
+    || !isInactiveScanProgressSnapshot(value)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ScanProgress;

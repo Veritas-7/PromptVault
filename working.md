@@ -1,10 +1,101 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 04:09 KST
+Updated: 2026-06-08 04:15 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Inactive scan-progress validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan progress payloads that claim the scan is inactive
+  while still carrying stale source and counter data.
+
+Context:
+
+- Rust returns an inactive scan-progress snapshot through
+  `inactive_scan_progress()` when a run is missing or complete.
+- That inactive snapshot is zeroed: no source id/label, source index/count `0`,
+  file counters `0`, prompt count `0`, `source_file_count: null`, and
+  `limit: null`.
+- The frontend parser already rejects active progress counters beyond totals,
+  but it still accepted stale nonzero counters when `active: false`.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the previous scan plan source-size slice is pushed and clean at
+  `40c5a0b`.
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified local/remote parity from clean `main...origin/main` with
+  `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
+  returning `0 0`.
+- Added RED coverage for `/api/scan/progress` returning `active: false` with
+  stale source labels, source position, file counters, prompt count, and limit.
+- Verified the focused API test fails before the guard.
+- Added parser validation requiring inactive scan-progress snapshots to match
+  Rust's zeroed inactive response shape.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified the broader UI suite and production build.
+- Verified the preview browser-bridge malformed inactive scan-progress path.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for inactive scan-progress
+    snapshots carrying stale counters.
+- `src/promptVaultApi.ts`
+  - Adds `isInactiveScanProgressSnapshot()` and applies it in
+    `parseScanProgressResult()`.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new inactive scan-progress test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 53 tests, 52 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 53 tests, 53 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 217 tests, 217 pass.
+- Build:
+  - `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-CcTDUBcp.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5281" --port 5281 node /tmp/promptvault_inactive_scan_progress_qa.mjs`
+  - Passed. The mocked bridge returned `active: false` scan progress with
+    stale `Codex` source/counter data while a scan was in flight; the UI kept
+    the progress notice generic and did not render stale source/counter text.
+  - Removed `/tmp/promptvault_inactive_scan_progress_qa.mjs` after the run.
+- Full check:
+  - `npm run check`
+  - Passed. This included `npm run test:ui` (217 tests), `npm run build`,
+    `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found in the focused API suite.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run cleanup checks, staged secret checks, and publication checks before
+  committing.
 
 ## Current Slice - 2026-06-08 Scan plan source-size validation
 

@@ -642,6 +642,41 @@ test("browser bridge scan progress rejects progress counters beyond totals", asy
   );
 });
 
+test("browser bridge scan progress rejects inactive snapshots with stale counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    run_id: "scan-run-1",
+    active: false,
+    canceled: false,
+    source_id: "codex",
+    source_label: "Codex",
+    source_index: 1,
+    source_count: 2,
+    files_seen: 5,
+    source_files_seen: 5,
+    source_files_discovered: 5,
+    source_file_count: 5,
+    prompts_found: 3,
+    limit: 10,
+    updated_at: "2026-06-07T00:00:00Z",
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanProgress("scan-run-1"),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Codex|5 \/ 5|3개|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ generated_at: "2026-06-07T00:00:00Z" }), {

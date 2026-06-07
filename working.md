@@ -1,10 +1,83 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:32 KST
+Updated: 2026-06-07 18:38 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Scan cancel and stored filter rendered QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Cover two still-unrecorded rendered flows: quick-scan cancellation and stored
+  filter Enter/reset behavior.
+
+Context:
+
+- Recent work focused on import and accessibility-label flows.
+- Quick scan stop/cancel and stored filter keyboard/reset paths had helper
+  coverage, but needed fresh rendered-browser evidence.
+
+Progress:
+
+- Ran clean async browser QA for quick-scan cancellation with mocked
+  `/api/scan`, `/api/scan/progress`, and `/api/scan/cancel`.
+- Ran browser QA for stored prompt filter Enter-to-apply and reset behavior
+  with a mocked `/api/prompts` response.
+- No source fix was needed from these passes.
+
+Changes:
+
+- `working.md`
+  - Recorded the clean QA evidence and next uncovered-flow target.
+
+Tests:
+
+- Scan-cancel browser QA on preview `127.0.0.1:5196` + bridge
+  `127.0.0.1:5174`:
+  - Quick scan request included `run_id`, `persist_on_cancel: false`, quick
+    source IDs, and limit `25`.
+  - During scanning, Stop was visible and enabled with
+    `실행 중인 스캔 중지`; scan/stored/plan/limit controls were locked with
+    Korean lock labels.
+  - After clicking Stop, scan and stop buttons both rendered
+    `실행 중인 스캔 중지 중`; Stop was disabled.
+  - Final result hid progress, restored the `빠른 스캔` button, rendered one
+    prompt row, and showed both backend canceled-scan warnings:
+    `사용자 요청으로 스캔이 취소되어 일부 결과만 반환합니다.` and
+    `취소된 스캔은 저장소에 저장하지 않았습니다.`
+  - Console issues, page errors, request failures, HTTP failures: none.
+- Stored-filter browser QA on preview `127.0.0.1:5197` + bridge
+  `127.0.0.1:5174`:
+  - Pressing Enter in the text filter made one `/api/prompts` request with
+    `query: "cmux"`, `limit: 1000`, and `preview_sort: "latest"`.
+  - The apply label before submit was `저장소 필터 1개 적용`.
+  - Reset made one follow-up `/api/prompts` request with filters omitted,
+    cleared the text input, changed reset label to
+    `초기화할 저장소 필터 없음`, and changed apply label to
+    `필터 없이 저장 프롬프트 불러오기`.
+  - Page width stayed within `1365 / 1365`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+
+Issues:
+
+- No blocker found in these QA passes.
+- The scan-cancel flow depends on backend warnings for the final partial-result
+  explanation; current rendered behavior confirmed those warnings are visible.
+
+Research:
+
+- No external research. This was rendered browser QA against local preview and
+  the local browser bridge.
+
+Next Steps:
+
+- Commit and push this QA worklog slice.
+- Continue autonomous QA on a still-uncovered PromptVault user flow, preferably
+  a failure or edge state not covered by the recent import/label/filter checks.
 
 ## Current Slice - 2026-06-07 Panel refresh Korean particle labels
 

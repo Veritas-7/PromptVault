@@ -127,6 +127,7 @@ import {
   storedFilterInputLabel,
   storedFilterResetLabel,
   storedPromptLoadOptions,
+  storedResultFilterCount,
   type StoredPromptFilters,
 } from "./storedFilters";
 import {
@@ -261,6 +262,7 @@ function App() {
   const [storedFilters, setStoredFilters] = useState<StoredPromptFilters>(() =>
     emptyStoredPromptFilters(),
   );
+  const [loadedStoredFilterCount, setLoadedStoredFilterCount] = useState(0);
   const [limit, setLimit] = useState(() => recommendedInitialScanLimit());
   const [previewMode, setPreviewMode] = useState<PreviewMode>("latest");
   const [error, setError] = useState<string | null>(null);
@@ -343,7 +345,10 @@ function App() {
   const sourceSummaries = result?.stats.source_summaries ?? [];
   const sourceSummariesEmptyMessage = sourceSummariesEmptyText(hasPromptResult);
   const storedFilterCount = activeStoredPromptFilterCount(storedFilters);
-  const activeResultStoredFilterCount = resultOrigin === "stored" ? storedFilterCount : 0;
+  const activeResultStoredFilterCount = storedResultFilterCount(
+    resultOrigin,
+    loadedStoredFilterCount,
+  );
   const promptListEmptyMessage = promptListEmptyText(
     hasPromptResult,
     query,
@@ -731,6 +736,7 @@ function App() {
       setError(null);
       setResult(next);
       setResultOrigin("scan");
+      setLoadedStoredFilterCount(0);
       setSelectedId(
         (loadedMode === "weakest"
           ? next.prompts[0]
@@ -791,12 +797,14 @@ function App() {
     setScanState("idle");
     setStoredLoadState("loading");
     try {
+      const nextStoredFilterCount = activeStoredPromptFilterCount(filters);
       const next = await loadStoredPrompts({
         ...storedPromptLoadOptions(filters, requestedPreviewMode, PREVIEW_LIMIT),
       });
       const loadedMode = effectivePromptListMode(next.preview_sort, requestedPreviewMode);
       setResult(next);
       setResultOrigin("stored");
+      setLoadedStoredFilterCount(nextStoredFilterCount);
       setSelectedId(
         (loadedMode === "weakest"
           ? next.prompts[0]

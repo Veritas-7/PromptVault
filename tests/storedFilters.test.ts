@@ -8,6 +8,7 @@ import {
   storedFilterInputLabel,
   storedFilterResetLabel,
   storedPromptLoadOptions,
+  storedResultFilterCount,
   type StoredPromptFilters,
 } from "../src/storedFilters.ts";
 
@@ -77,6 +78,13 @@ test("active stored prompt filter count ignores whitespace", () => {
     }),
     3,
   );
+});
+
+test("stored result filter count follows the last loaded stored result", () => {
+  assert.equal(storedResultFilterCount("stored", 2), 2);
+  assert.equal(storedResultFilterCount("stored", -1), 0);
+  assert.equal(storedResultFilterCount("scan", 3), 0);
+  assert.equal(storedResultFilterCount(null, 3), 0);
 });
 
 test("stored filter reset label explains disabled and active states", () => {

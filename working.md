@@ -1,10 +1,90 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:05 KST
+Updated: 2026-06-07 19:11 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Stored filter draft empty-state handling
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent draft stored-filter edits from making stale or unfiltered stored
+  results look as if the draft filters have already been applied.
+
+Context:
+
+- Browser QA found a RED baseline in the stored prompt empty-state flow.
+- After an unfiltered stored prompt load returned an empty result, typing
+  `Codex` into the source filter without pressing Apply changed the prompt
+  empty state from `불러온 프롬프트가 없습니다.` to
+  `현재 저장소 필터와 일치하는 저장 프롬프트가 없습니다.` even though no second
+  `/api/prompts` request had been made.
+
+Progress:
+
+- Added a helper that derives result-scoped stored filter count from the last
+  successfully loaded stored result, not the current draft inputs.
+- Added UI state for the last successful stored-load filter count.
+- Updated stored-result empty/recommendation copy to use the loaded count.
+- Preserved the correct filtered empty state after the user actually applies a
+  filter and a new stored result loads.
+
+Changes:
+
+- `src/storedFilters.ts`
+  - Added `storedResultFilterCount` for result-scoped stored filter state.
+- `src/App.tsx`
+  - Tracks `loadedStoredFilterCount`.
+  - Resets it on scan results and updates it only after successful stored-load
+    results.
+- `tests/storedFilters.test.ts`
+  - Added helper coverage for stored, scan, null, and negative counts.
+- `working.md`
+  - Recorded the RED baseline, fix, and browser QA.
+
+Tests:
+
+- RED baseline browser QA on preview `127.0.0.1:5207`:
+  - Before fix, typing `Codex` into the source filter without applying changed
+    the empty prompt message to the filtered-result message.
+  - Only one `/api/prompts` request had been made, proving the draft filter was
+    not actually loaded.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/storedFilters.test.ts tests/promptEmptyState.test.ts`:
+  - 25 passed.
+- `npm run build`:
+  - `tsc && vite build` passed.
+- Fixed-flow browser QA on preview `127.0.0.1:5207`:
+  - After unfiltered empty stored load, typing `Codex` kept the empty prompt
+    message as `불러온 프롬프트가 없습니다.`
+  - Pressing Apply sent a second `/api/prompts` request with
+    `source: "Codex"` and then showed
+    `현재 저장소 필터와 일치하는 저장 프롬프트가 없습니다.`
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+- `npm run check`:
+  - UI tests: 153 passed.
+  - Build: passed.
+  - Rust lib tests: 84 passed.
+  - Rust CLI tests: 16 passed.
+  - Doc-tests: passed.
+  - Clippy with `-D warnings`: passed.
+
+Issues:
+
+- No blocker found after this fix.
+
+Research:
+
+- No external research. This was derived from rendered local QA output.
+
+Next Steps:
+
+- Commit and push this stored filter draft empty-state slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Source status label/icon normalization
 
@@ -80,7 +160,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this source status semantic normalization slice.
+- Completed and pushed as `12f2481 fix: normalize source status semantics`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Source status CSS class normalization

@@ -32,6 +32,14 @@ export function activeStoredPromptFilterCount(filters: StoredPromptFilters): num
   ].filter((value) => value.trim()).length;
 }
 
+export function storedResultFilterCount(
+  resultOrigin: "scan" | "stored" | null,
+  loadedStoredFilterCount: number,
+): number {
+  if (resultOrigin !== "stored") return 0;
+  return Math.max(0, loadedStoredFilterCount);
+}
+
 export function storedFilterResetLabel(activeFilterCount: number, lockState: ActionLockState): string {
   const reason = activeActionLockReason(lockState);
   if (reason) return `${reason}에는 저장소 필터를 초기화할 수 없습니다`;

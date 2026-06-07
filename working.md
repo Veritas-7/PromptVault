@@ -1,10 +1,79 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 17:30 KST
+Updated: 2026-06-07 17:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Stored reset loading empty copy
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make stored-filter reset/reload states read as in-progress instead of empty.
+
+Context:
+
+- Broad browser QA on preview `127.0.0.1:5183` with bridge
+  `127.0.0.1:5174` covered bridge connection, quick scan, stored load,
+  stored no-match filter, reset, plan controls, and desktop/mobile overflow.
+- The first broad QA assertion was too narrow: the app correctly used
+  `현재 저장소 필터...`, while the script expected the shorter `현재 필터...`.
+- The same run exposed a real transient UX issue: after reset cleared a
+  no-match stored filter, the stored reload was in flight but the prompt panels
+  briefly rendered generic empty-result copy.
+
+Progress:
+
+- Added loading-aware empty-state copy for prompt list, selected-prompt detail,
+  and recommendation panels.
+- Wired the helpers to `isStoredLoadRunning`, keeping the change scoped to
+  stored prompt reloads.
+
+Changes:
+
+- `src/promptEmptyState.ts`
+  - Added optional loading branches to `promptListEmptyText`,
+    `selectedPromptEmptyText`, and `recommendationEmptyText`.
+- `src/App.tsx`
+  - Passed `isStoredLoadRunning` through the existing empty-state helpers.
+- `tests/promptEmptyState.test.ts`
+  - Added helper coverage for the three in-flight loading messages.
+
+Tests:
+
+- `npm run test:ui -- tests/promptEmptyState.test.ts`: PASS, `137` UI helper
+  tests.
+- `npm run build`: PASS.
+- Browser preview + bridge QA with delayed `/api/prompts`:
+  - Preview: `127.0.0.1:5184`; bridge: `127.0.0.1:5174`.
+  - No-match stored filter kept the stored-filter-specific empty copy.
+  - After reset while reload was in flight:
+    - Prompt list: `프롬프트를 불러오는 중입니다.`
+    - Selected detail: `프롬프트를 불러오는 중입니다.`
+    - Recommendation: `프롬프트를 불러온 뒤 추천을 생성할 수 있습니다.`
+  - After reload: `200` stored prompt rows returned, filter query stayed
+    cleared, reset button returned to disabled, and no empty prompt copy
+    remained.
+  - Desktop/mobile overflow stayed within `1440 / 1440` and `390 / 390`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `137` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local browser QA of stored filter
+  reset behavior.
+
+Next Steps:
+
+- Stage explicit paths and run staged whitespace/gitleaks before commit/push.
 
 ## Current Slice - 2026-06-07 Import queue selection summary
 
@@ -65,7 +134,7 @@ Research:
 
 Next Steps:
 
-- Stage explicit paths and run staged whitespace/gitleaks before commit/push.
+- Completed and pushed as `fe5e3f6 feat: clarify import queue selection count`.
 
 ## Current Slice - 2026-06-07 Import queue bulk selection
 

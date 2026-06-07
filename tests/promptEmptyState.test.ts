@@ -13,6 +13,10 @@ test("prompt list explains how to load data before data is loaded", () => {
   );
 });
 
+test("prompt list explains in-flight loading before empty data", () => {
+  assert.equal(promptListEmptyText(true, "", 0, true), "프롬프트를 불러오는 중입니다.");
+});
+
 test("prompt list explains empty loaded data", () => {
   assert.equal(promptListEmptyText(true, " "), "불러온 프롬프트가 없습니다.");
 });
@@ -30,6 +34,10 @@ test("prompt list explains stored filter misses", () => {
 
 test("selected prompt empty state preserves load guidance before data exists", () => {
   assert.equal(selectedPromptEmptyText(false, "missing"), "스캔하거나 저장된 프롬프트를 불러오세요.");
+});
+
+test("selected prompt empty state explains in-flight loading", () => {
+  assert.equal(selectedPromptEmptyText(true, "", 0, true), "프롬프트를 불러오는 중입니다.");
 });
 
 test("selected prompt empty state explains filtered-out selections", () => {
@@ -50,6 +58,13 @@ test("recommendation empty state prompts improvement for a selected prompt", () 
   assert.equal(
     recommendationEmptyText(true, true, ""),
     "선택한 프롬프트의 추천을 생성하세요.",
+  );
+});
+
+test("recommendation empty state explains in-flight loading", () => {
+  assert.equal(
+    recommendationEmptyText(false, true, "", 0, true),
+    "프롬프트를 불러온 뒤 추천을 생성할 수 있습니다.",
   );
 });
 

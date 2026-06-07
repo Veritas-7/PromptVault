@@ -353,11 +353,13 @@ function App() {
     hasPromptResult,
     query,
     activeResultStoredFilterCount,
+    isStoredLoadRunning,
   );
   const selectedPromptEmptyMessage = selectedPromptEmptyText(
     hasPromptResult,
     query,
     activeResultStoredFilterCount,
+    isStoredLoadRunning,
   );
   const activeImportSource = useMemo(() => {
     return plan?.sources.find((source) => source.id === activeImportSourceId) ?? null;
@@ -407,6 +409,7 @@ function App() {
     hasPromptResult,
     query,
     activeResultStoredFilterCount,
+    isStoredLoadRunning,
   );
   const qualityGapItems = useMemo(() => {
     return (result?.stats.top_quality_gaps ?? []).map((item) => ({

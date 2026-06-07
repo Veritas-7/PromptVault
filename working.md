@@ -1,10 +1,82 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:08 KST
+Updated: 2026-06-07 20:10 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Plan bridge loss QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the import-plan path when `/api/plan` fails at the network layer and
+  the user recovers through bridge recheck plus a plan-panel retry.
+
+Context:
+
+- Recent QA covered network-level browser bridge loss during stored prompt
+  loading, quick scan, and recommendation generation.
+- Older plan QA covered HTTP 500 failure/retry and stale-plan retention, but
+  not network-level bridge loss during first-run `/api/plan`.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Mocked initial bridge health, stored prompt facets, import state, and import
+  events as successful.
+- Aborted the first `/api/plan` request with `net::ERR_FAILED`.
+- Verified disconnected bridge recovery mode, action locks, first-run plan
+  failure copy, empty-plan retry guidance, bridge recheck, and successful plan
+  retry with importable/empty source controls.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only plan bridge loss/recovery QA slice.
+
+Tests:
+
+- Plan bridge loss QA on preview `127.0.0.1:5224`:
+  - Initial bridge health succeeded once and the browser bridge rendered
+    connected.
+  - First `/api/plan` call was intentionally aborted with `net::ERR_FAILED`.
+  - Global error showed `브라우저 브리지가 실행 중이 아닙니다`.
+  - `data-plan-run-error` showed the first-run plan failure guidance
+    `가져오기 계획을 만들지 못했습니다. 위 오류를 확인한 뒤 계획을 다시 실행하세요.`
+  - `data-empty-plan` stayed visible with retry guidance.
+  - `data-run-scan`, `data-load-stored-prompts`, `data-run-plan`,
+    `data-scan-limit`, `data-apply-stored-filters`, and
+    `data-refresh-plan` were disabled while the bridge was disconnected.
+  - `data-check-browser-bridge` stayed enabled while disconnected.
+  - Clicking `data-check-browser-bridge` made a second health call, cleared the
+    global bridge error, and unlocked `data-refresh-plan`.
+  - The plan warning stayed visible until retry.
+  - Retrying from `data-refresh-plan` made the second `/api/plan` call succeed,
+    rendered `Codex sessions`, showed queue summary `0 / 1개 선택됨`, and kept
+    the empty source disabled.
+  - Final counts: `healthCalls=2`, `planCalls=2`, `facetsCalls=2`,
+    `importStatesCalls=2`, `importEventsCalls=2`.
+  - Page errors and unexpected HTTP failures: none.
+  - Diagnostics contained only the expected aborted `/api/plan`
+    `net::ERR_FAILED` console/request-failure entry.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses and a network-level request abort.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Improve bridge loss QA
 
@@ -83,7 +155,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record.
+- Completed and pushed as `5f80d79 docs: record improve bridge recovery QA`.
 - Continue autonomous QA on another still-uncovered failure, performance, or
   UX edge state.
 

@@ -1,6 +1,6 @@
 use chrono::{Local, TimeZone, Utc};
 use regex::Regex;
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, ToSql};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -1051,7 +1051,7 @@ fn run_import_batch_for_source(
 
     let stats = build_stats(&prompts, vec![summary]);
     let persistence =
-        persist_scan_result(database_path, &generated_at, &prompts, &stats, &warnings)?;
+        persist_incremental_scan_result(database_path, &generated_at, &prompts, &stats, &warnings)?;
     let imported_prompt_count = previous_state
         .map(|state| state.imported_prompt_count)
         .unwrap_or(0)
@@ -2034,7 +2034,7 @@ fn parse_antigravity_conversation_sqlite(
 
     for row in rows {
         let (idx, payload) = row?;
-        let strings = protobuf_strings(&payload);
+        let strings = protobuf_string_entries(&payload);
         if let Some(text) = best_prompt_candidate(&strings) {
             let cwd = best_workspace_candidate(&strings);
             let value = serde_json::json!({
@@ -2080,15 +2080,31 @@ fn parse_gemini_tmp_chat(
     Ok(records)
 }
 
-fn protobuf_strings(bytes: &[u8]) -> Vec<String> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProtobufStringEntry {
+    path: Vec<u64>,
+    text: String,
+}
+
+fn protobuf_string_entries(bytes: &[u8]) -> Vec<ProtobufStringEntry> {
     let mut out = Vec::new();
-    collect_protobuf_strings(bytes, 0, &mut out);
-    out.sort();
+    let mut path = Vec::new();
+    collect_protobuf_string_entries(bytes, 0, &mut path, &mut out);
+    out.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then_with(|| left.text.cmp(&right.text))
+    });
     out.dedup();
     out
 }
 
-fn collect_protobuf_strings(bytes: &[u8], depth: usize, out: &mut Vec<String>) {
+fn collect_protobuf_string_entries(
+    bytes: &[u8],
+    depth: usize,
+    path: &mut Vec<u64>,
+    out: &mut Vec<ProtobufStringEntry>,
+) {
     if depth > 8 || bytes.is_empty() || bytes.len() > 2_000_000 {
         return;
     }
@@ -2118,13 +2134,18 @@ fn collect_protobuf_strings(bytes: &[u8], depth: usize, out: &mut Vec<String>) {
                     break;
                 }
                 let slice = &bytes[index..index + len];
+                path.push(key >> 3);
                 if let Ok(text) = std::str::from_utf8(slice) {
                     let normalized = normalize_prompt_text(text);
                     if is_human_readable_blob_string(&normalized) {
-                        out.push(normalized);
+                        out.push(ProtobufStringEntry {
+                            path: path.clone(),
+                            text: normalized,
+                        });
                     }
                 }
-                collect_protobuf_strings(slice, depth + 1, out);
+                collect_protobuf_string_entries(slice, depth + 1, path, out);
+                path.pop();
                 index += len;
             }
             5 => {
@@ -2160,24 +2181,35 @@ fn skip_bytes(bytes: &[u8], index: &mut usize, count: usize) -> bool {
     true
 }
 
-fn best_prompt_candidate(strings: &[String]) -> Option<String> {
+fn best_prompt_candidate(strings: &[ProtobufStringEntry]) -> Option<String> {
+    // Antigravity conversation DB user-input steps store the actual prompt at
+    // field path 19.2. Preserve that schema signal before falling back to the
+    // older string heuristic for unknown payload variants.
+    for preferred_path in [&[19_u64, 2_u64][..], &[19_u64, 3_u64, 1_u64][..]] {
+        if let Some(entry) = strings.iter().find(|entry| {
+            entry.path.as_slice() == preferred_path && is_prompt_candidate(&entry.text)
+        }) {
+            return Some(entry.text.clone());
+        }
+    }
+
     strings
         .iter()
-        .filter(|text| is_prompt_candidate(text))
-        .max_by_key(|text| prompt_candidate_score(text))
-        .cloned()
+        .filter(|entry| is_prompt_candidate(&entry.text))
+        .max_by_key(|entry| prompt_candidate_score(&entry.text))
+        .map(|entry| entry.text.clone())
 }
 
-fn best_workspace_candidate(strings: &[String]) -> Option<String> {
+fn best_workspace_candidate(strings: &[ProtobufStringEntry]) -> Option<String> {
     strings
         .iter()
-        .find(|text| {
-            text.starts_with("/Users/")
-                && !text.contains("/.gemini/")
-                && !text.contains("/Library/")
-                && text.chars().count() < 512
+        .find(|entry| {
+            entry.text.starts_with("/Users/")
+                && !entry.text.contains("/.gemini/")
+                && !entry.text.contains("/Library/")
+                && entry.text.chars().count() < 512
         })
-        .cloned()
+        .map(|entry| entry.text.clone())
 }
 
 fn is_human_readable_blob_string(text: &str) -> bool {
@@ -3397,12 +3429,87 @@ fn prompt_database_stats(
     })
 }
 
+fn should_reconcile_stored_source_rows(warnings: &[String]) -> bool {
+    !warnings.iter().any(|warning| {
+        warning == SCAN_CANCELED_WARNING
+            || warning == SCAN_CANCELED_NOT_PERSISTED_WARNING
+            || warning.starts_with("Scan stopped at configured limit")
+    })
+}
+
+fn reconcile_stored_source_rows(
+    tx: &rusqlite::Transaction<'_>,
+    prompts: &[PromptRecord],
+    stats: &ScanStats,
+    warnings: &[String],
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !should_reconcile_stored_source_rows(warnings) {
+        return Ok(());
+    }
+
+    let mut prompt_ids_by_source = BTreeMap::<String, BTreeSet<String>>::new();
+    for prompt in prompts {
+        prompt_ids_by_source
+            .entry(prompt.source.clone())
+            .or_default()
+            .insert(prompt.id.clone());
+    }
+
+    for source in &stats.source_summaries {
+        if source.status != "ok" || !source.notes.is_empty() {
+            continue;
+        }
+        let ids = prompt_ids_by_source
+            .get(&source.label)
+            .cloned()
+            .unwrap_or_default();
+        if ids.is_empty() {
+            tx.execute("DELETE FROM prompts WHERE source = ?1", [&source.label])?;
+            continue;
+        }
+
+        let placeholders = std::iter::repeat_n("?", ids.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!("DELETE FROM prompts WHERE source = ? AND id NOT IN ({placeholders})");
+        let mut params: Vec<&dyn ToSql> = Vec::with_capacity(ids.len() + 1);
+        params.push(&source.label);
+        for id in &ids {
+            params.push(id);
+        }
+        tx.execute(&sql, params.as_slice())?;
+    }
+
+    Ok(())
+}
+
 fn persist_scan_result(
     database_path: &Path,
     generated_at: &str,
     prompts: &[PromptRecord],
     stats: &ScanStats,
     warnings: &[String],
+) -> Result<PersistStats, Box<dyn std::error::Error>> {
+    persist_scan_result_inner(database_path, generated_at, prompts, stats, warnings, true)
+}
+
+fn persist_incremental_scan_result(
+    database_path: &Path,
+    generated_at: &str,
+    prompts: &[PromptRecord],
+    stats: &ScanStats,
+    warnings: &[String],
+) -> Result<PersistStats, Box<dyn std::error::Error>> {
+    persist_scan_result_inner(database_path, generated_at, prompts, stats, warnings, false)
+}
+
+fn persist_scan_result_inner(
+    database_path: &Path,
+    generated_at: &str,
+    prompts: &[PromptRecord],
+    stats: &ScanStats,
+    warnings: &[String],
+    reconcile_source_rows: bool,
 ) -> Result<PersistStats, Box<dyn std::error::Error>> {
     let mut conn = open_promptvault_database(database_path)?;
 
@@ -3499,6 +3606,9 @@ fn persist_scan_result(
                 generated_at,
             ],
         )?;
+    }
+    if reconcile_source_rows {
+        reconcile_stored_source_rows(&tx, prompts, stats, warnings)?;
     }
     tx.commit()?;
 
@@ -4659,8 +4769,14 @@ mod tests {
         .expect("list import states");
 
         assert_eq!(result.states.len(), 1);
-        assert_eq!(result.states[0].source_id, "antigravity-cli-conversation-db");
-        assert_eq!(result.states[0].source_label, "Antigravity CLI conversation DB");
+        assert_eq!(
+            result.states[0].source_id,
+            "antigravity-cli-conversation-db"
+        );
+        assert_eq!(
+            result.states[0].source_label,
+            "Antigravity CLI conversation DB"
+        );
         let conn = Connection::open(&db_path).expect("reopen import db");
         let stored_label: String = conn
             .query_row(
@@ -4723,16 +4839,8 @@ mod tests {
             completed: true,
             updated_at: "2026-06-06T00:00:00Z".to_string(),
         };
-        insert_import_event(
-            &conn,
-            "2026-06-06T00:00:00Z",
-            &state,
-            0,
-            10,
-            10,
-            &[],
-        )
-        .expect("insert stale label event");
+        insert_import_event(&conn, "2026-06-06T00:00:00Z", &state, 0, 10, 10, &[])
+            .expect("insert stale label event");
         drop(conn);
 
         let result = run_list_import_events(ImportEventsOptions {
@@ -4742,8 +4850,14 @@ mod tests {
         .expect("list import events");
 
         assert_eq!(result.events.len(), 1);
-        assert_eq!(result.events[0].source_id, "antigravity-cli-conversation-db");
-        assert_eq!(result.events[0].source_label, "Antigravity CLI conversation DB");
+        assert_eq!(
+            result.events[0].source_id,
+            "antigravity-cli-conversation-db"
+        );
+        assert_eq!(
+            result.events[0].source_label,
+            "Antigravity CLI conversation DB"
+        );
         let conn = Connection::open(&db_path).expect("reopen import db");
         let stored_label: String = conn
             .query_row(
@@ -5539,6 +5653,77 @@ mod tests {
     }
 
     #[test]
+    fn antigravity_conversation_db_prefers_user_prompt_field_over_longer_metadata() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-antigravity-prefer-user-field-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let conn = Connection::open(&db_path).expect("open test db");
+        conn.execute(
+            "CREATE TABLE steps (
+                idx integer,
+                step_type integer NOT NULL DEFAULT 0,
+                status integer NOT NULL DEFAULT 0,
+                has_subtrajectory numeric NOT NULL DEFAULT false,
+                metadata blob,
+                error_details blob,
+                permissions blob,
+                task_details blob,
+                render_info blob,
+                step_payload blob,
+                step_format integer NOT NULL DEFAULT 0,
+                PRIMARY KEY (idx)
+            )",
+            [],
+        )
+        .expect("create steps table");
+
+        let user_payload = [
+            pb_message(
+                5,
+                &pb_string(
+                    20,
+                    "This longer metadata summary must not be collected as the user prompt.",
+                ),
+            ),
+            pb_message(
+                19,
+                &[
+                    pb_string(2, "ok?"),
+                    pb_string(11, "/Users/wj/Ai/System/10_Projects/PromptVault"),
+                ]
+                .concat(),
+            ),
+        ]
+        .concat();
+        conn.execute(
+            "INSERT INTO steps (idx, step_type, status, step_payload) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![0_i64, 14_i64, 3_i64, user_payload],
+        )
+        .expect("insert user step");
+        drop(conn);
+
+        let source = SourceSpec {
+            id: "antigravity-test-db",
+            label: "Antigravity test DB",
+            root: db_path.clone(),
+            kind: SourceKind::AntigravityConversationSqlite,
+        };
+        let records =
+            parse_antigravity_conversation_sqlite(&source, &db_path).expect("parse test db");
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].text, "ok?");
+        assert_eq!(
+            records[0].cwd.as_deref(),
+            Some("/Users/wj/Ai/System/10_Projects/PromptVault")
+        );
+
+        std::fs::remove_file(&db_path).expect("remove test db");
+    }
+
+    #[test]
     fn normalizes_glm_base_endpoint() {
         assert_eq!(
             normalize_chat_endpoint("   "),
@@ -5605,6 +5790,103 @@ mod tests {
             )
             .expect("read persisted date");
         assert_eq!(stored_date, "2026-06-06");
+
+        std::fs::remove_file(db_path).expect("remove persisted db");
+    }
+
+    #[test]
+    fn persist_scan_result_prunes_stale_source_rows_after_complete_scan() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-prune-stale-test-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut stale = dated_record("stale-row", "2026-06-06T00:00:00Z");
+        stale.source = "Antigravity IDE conversation DB".to_string();
+        let mut current = dated_record("current-row", "2026-06-06T00:01:00Z");
+        current.source = stale.source.clone();
+        let first_stats = build_stats(
+            &[stale.clone()],
+            vec![source_summary_for(&stale.source, 1, 1, "ok", Vec::new())],
+        );
+        persist_scan_result(
+            &db_path,
+            "2026-06-06T00:02:00Z",
+            &[stale],
+            &first_stats,
+            &[],
+        )
+        .expect("persist stale row");
+
+        let second_stats = build_stats(
+            &[current.clone()],
+            vec![source_summary_for(&current.source, 1, 1, "ok", Vec::new())],
+        );
+        let persistence = persist_scan_result(
+            &db_path,
+            "2026-06-06T00:03:00Z",
+            &[current],
+            &second_stats,
+            &[],
+        )
+        .expect("persist current row");
+
+        assert_eq!(persistence.stored_prompt_count, 1);
+        let conn = Connection::open(&db_path).expect("open persisted db");
+        let ids = prompt_ids_for_source(&conn, "Antigravity IDE conversation DB");
+        assert_eq!(ids, vec!["current-row".to_string()]);
+
+        std::fs::remove_file(db_path).expect("remove persisted db");
+    }
+
+    #[test]
+    fn persist_scan_result_keeps_stale_source_rows_when_scan_was_limited() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-keep-limited-stale-test-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut stale = dated_record("limited-stale-row", "2026-06-06T00:00:00Z");
+        stale.source = "Codex".to_string();
+        let mut current = dated_record("limited-current-row", "2026-06-06T00:01:00Z");
+        current.source = stale.source.clone();
+        let first_stats = build_stats(
+            &[stale.clone()],
+            vec![source_summary_for(&stale.source, 1, 1, "ok", Vec::new())],
+        );
+        persist_scan_result(
+            &db_path,
+            "2026-06-06T00:02:00Z",
+            &[stale],
+            &first_stats,
+            &[],
+        )
+        .expect("persist stale row");
+
+        let second_stats = build_stats(
+            &[current.clone()],
+            vec![source_summary_for(&current.source, 1, 1, "ok", Vec::new())],
+        );
+        let warnings = vec!["Scan stopped at configured limit of 1 prompts.".to_string()];
+        let persistence = persist_scan_result(
+            &db_path,
+            "2026-06-06T00:03:00Z",
+            &[current],
+            &second_stats,
+            &warnings,
+        )
+        .expect("persist limited row");
+
+        assert_eq!(persistence.stored_prompt_count, 2);
+        let conn = Connection::open(&db_path).expect("open persisted db");
+        let ids = prompt_ids_for_source(&conn, "Codex");
+        assert_eq!(
+            ids,
+            vec![
+                "limited-current-row".to_string(),
+                "limited-stale-row".to_string()
+            ]
+        );
 
         std::fs::remove_file(db_path).expect("remove persisted db");
     }
@@ -5860,6 +6142,36 @@ mod tests {
         record.char_count = record.text.chars().count();
         record.quality = assess_prompt_quality(&record.text, &[]);
         record
+    }
+
+    fn source_summary_for(
+        label: &str,
+        files_seen: usize,
+        prompts_found: usize,
+        status: &str,
+        notes: Vec<String>,
+    ) -> SourceSummary {
+        SourceSummary {
+            id: label.to_string(),
+            label: label.to_string(),
+            root_path: "/tmp/test-source".to_string(),
+            files_seen,
+            prompts_found,
+            average_quality: 100.0,
+            weak_prompt_count: 0,
+            status: status.to_string(),
+            notes,
+        }
+    }
+
+    fn prompt_ids_for_source(conn: &Connection, source: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare("SELECT id FROM prompts WHERE source = ?1 ORDER BY id")
+            .expect("prepare prompt id query");
+        stmt.query_map([source], |row| row.get::<_, String>(0))
+            .expect("query prompt ids")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect prompt ids")
     }
 
     fn pb_string(field: u64, value: &str) -> Vec<u8> {

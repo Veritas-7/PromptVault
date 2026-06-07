@@ -4178,3 +4178,117 @@ Next focus:
   opening another browser. Remaining direct-click coverage should prioritize
   scan limit validation/failure states, Scan button flow, Improve button flow,
   and stop/cancel controls.
+
+## Parser/DB Management Audit and Repair - 2026-06-07 12:16 KST
+
+Current goal:
+
+- Ensure Codex app/CLI, Antigravity, Gemini, and Claude chat stores are parsed
+  accurately, persisted into the PromptVault SQLite DB, and manageable from the
+  app UI without stale parser artifacts.
+
+Investigation:
+
+- Rechecked live source roots without printing prompt bodies:
+  - Codex sessions: 25,121 JSONL files.
+  - Codex CX sessions: 11 JSONL files.
+  - Claude projects: 1,722 JSONL files.
+  - Claude transcripts: 667 JSONL files.
+  - Claude history: 17,616 JSONL rows.
+  - Antigravity transcripts: 324 transcript JSONL files across CLI/IDE roots.
+  - Antigravity CLI conversation DB: 10 SQLite DB files.
+  - Antigravity IDE conversation DB: 1 SQLite DB file.
+  - Gemini temporary chats: 144 JSON chat files.
+- Sampled source schemas and role/type distributions without prompt text:
+  - Codex/Codex CX user prompts are `response_item` rows with
+    `payload.role=user` and array content.
+  - Claude project prompts are `type=user`, `message.role=user`,
+    `isMeta != true`; tool-result and command wrapper filtering remains
+    necessary.
+  - Claude transcript prompts are `type=user` rows with string content in the
+    current local sample.
+  - Claude and Antigravity history rows use `display` plus project/workspace
+    metadata.
+  - Antigravity transcript prompts are `source=USER_EXPLICIT` or
+    `type=USER_INPUT`.
+  - Gemini temporary chats use top-level `sessionId` and
+    `messages[].type=user` with array content.
+  - Antigravity SQLite DBs have a stable `steps` schema; user-input rows are
+    `step_type=14`.
+
+Issue found:
+
+- Antigravity conversation DB parsing extracted protobuf strings without
+  preserving field paths, then chose the highest-scoring string candidate.
+- Real DB inspection showed the actual user prompt is present at field path
+  `19.2` for every current CLI/IDE `step_type=14` row.
+- One current IDE DB row had a very short user prompt at `19.2` and a longer
+  metadata string at `5.20`, so the old heuristic could persist the wrong row.
+- The permanent DB still contained that stale row ID from the previous parser.
+
+Changes:
+
+- Updated Antigravity SQLite parsing to preserve protobuf string field paths.
+- `best_prompt_candidate` now prefers `19.2` (and known duplicate
+  `19.3.1`) before falling back to the older heuristic for unknown payload
+  variants.
+- Added a regression test where a short `19.2` user prompt competes with a
+  longer metadata string; the parser must store the `19.2` prompt.
+- Added full-source DB reconciliation in `persist_scan_result`: when a source
+  scan completes cleanly without limit/cancel/partial warnings, rows for that
+  source that are no longer produced by the parser are pruned.
+- Split incremental import persistence from full-scan persistence so
+  `import-batch` keeps accumulating source slices and never prunes rows from
+  files it has not processed yet.
+- Added regression tests that stale rows are pruned after a clean full source
+  scan but preserved when a scan is limit-truncated.
+- Updated browser bridge error handling so route validation failures return
+  HTTP 400 with a readable body instead of closing the connection with an empty
+  reply.
+
+Verification:
+
+- `cargo test antigravity_conversation_db`: PASS, 2 tests.
+- `cargo test stale_source_rows`: PASS, 2 tests.
+- `cargo test bridge_returns_http_400_for_route_errors`: PASS.
+- Rebuilt `promptvault-cli` and restarted only the PromptVault 5174 bridge,
+  not cmux. Final bridge PID after the import-batch reconciliation fix:
+  17396.
+- `/api/health`: PASS.
+- `/api/scan` invalid limit now returns `HTTP/1.1 400 Bad Request` with
+  `scan limit requires a positive integer`.
+- `/api/improve` empty prompt now returns `HTTP/1.1 400 Bad Request` with
+  `improve requires a non-empty prompt`.
+- `/api/scan` with `persist=false` for Antigravity DB sources:
+  - CLI conversation DB: 10 prompts, 10 files, no warnings.
+  - IDE conversation DB: 2 prompts, 1 file, no warnings.
+- Ran a clean persisted scan for `antigravity-ide-conversation-db`; it inserted
+  the corrected row, updated the existing correct row, and pruned the old stale
+  row. Stored count stayed 88,386.
+- Direct same-surface cmux QA on existing `surface:10`:
+  - Scan limit `0` shows validation failure state.
+  - Stored Vault source filter `Antigravity IDE conversation DB` returns 2
+    rows with no load error.
+- First full `npm run check` after adding reconciliation failed because
+  `import_batch_persists_resume_state` correctly caught accidental pruning
+  during incremental import. Fixed by routing import-batch through
+  non-reconciling persistence.
+- Second full `npm run check` passed all tests but failed clippy on
+  `manual_repeat_n`. Updated the placeholder builder to `std::iter::repeat_n`.
+- Final `npm run check`: PASS.
+  - UI helper tests: 124 passed.
+  - Rust library tests: 70 passed.
+  - CLI tests: 16 passed.
+  - Doc-tests: passed.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Remaining issue:
+
+- `surface:10` can still temporarily fall into an empty DOM/JS timeout state,
+  but it recovered through same-surface non-destructive browser commands. No new
+  browser surface was opened and cmux was not restarted.
+
+Next focus:
+
+- Continue direct single-surface QA for valid Scan/Improve click flows and
+  stop/cancel behavior.

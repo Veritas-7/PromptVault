@@ -720,6 +720,16 @@ fn handle_bridge_client(mut stream: TcpStream) -> Result<(), Box<dyn std::error:
         return write_response(&mut stream, 204, "text/plain", "");
     }
 
+    match handle_bridge_route(&mut stream, &request) {
+        Ok(()) => Ok(()),
+        Err(err) => write_response(&mut stream, 400, "text/plain", &err.to_string()),
+    }
+}
+
+fn handle_bridge_route(
+    stream: &mut TcpStream,
+    request: &HttpRequest,
+) -> Result<(), Box<dyn std::error::Error>> {
     let path = request
         .path
         .split_once('?')
@@ -731,52 +741,52 @@ fn handle_bridge_client(mut stream: TcpStream) -> Result<(), Box<dyn std::error:
                 "ok": true,
                 "database_path": default_database_path().display().to_string()
             });
-            write_json_response(&mut stream, 200, &body)
+            write_json_response(stream, 200, &body)
         }
         ("POST", "/api/plan") => {
             let payload = serde_json::from_str::<PlanBridgePayload>(&request.body)?;
             let result = build_scan_plan(payload.options.unwrap_or_default())?;
-            write_json_response(&mut stream, 200, &result)
+            write_json_response(stream, 200, &result)
         }
         ("POST", "/api/import-batch") => {
             let payload = serde_json::from_str::<ImportBatchBridgePayload>(&request.body)?;
             let result = run_import_batch(payload.options)?;
-            write_json_response(&mut stream, 200, &result)
+            write_json_response(stream, 200, &result)
         }
         ("POST", "/api/import-states") => {
             let payload = serde_json::from_str::<ImportStatesBridgePayload>(&request.body)?;
             let result = run_list_import_states(payload.options.unwrap_or_default())?;
-            write_json_response(&mut stream, 200, &result)
+            write_json_response(stream, 200, &result)
         }
         ("POST", "/api/import-events") => {
             let payload = serde_json::from_str::<ImportEventsBridgePayload>(&request.body)?;
             let result = run_list_import_events(payload.options.unwrap_or_default())?;
-            write_json_response(&mut stream, 200, &result)
+            write_json_response(stream, 200, &result)
         }
         ("POST", "/api/prompt-facets") => {
             let payload = serde_json::from_str::<StoredPromptFacetsBridgePayload>(&request.body)?;
             let result = run_list_stored_prompt_facets(payload.options.unwrap_or_default())?;
-            write_json_response(&mut stream, 200, &result)
+            write_json_response(stream, 200, &result)
         }
         ("POST", "/api/prompts") => {
             let payload = serde_json::from_str::<StoredPromptsBridgePayload>(&request.body)?;
             let result = run_load_stored_prompts(payload.options.unwrap_or_default())?;
-            write_json_response(&mut stream, 200, &result)
+            write_json_response(stream, 200, &result)
         }
         ("POST", "/api/scan") => {
             let payload = serde_json::from_str::<ScanBridgePayload>(&request.body)?;
             let result = run_scan(payload.options.unwrap_or_default())?;
-            write_json_response(&mut stream, 200, &result)
+            write_json_response(stream, 200, &result)
         }
         ("POST", "/api/scan/cancel") => {
             let payload = serde_json::from_str::<CancelScanBridgePayload>(&request.body)?;
             let result = cancel_scan_run(payload.options)?;
-            write_json_response(&mut stream, 200, &result)
+            write_json_response(stream, 200, &result)
         }
         ("POST", "/api/scan/progress") => {
             let payload = serde_json::from_str::<ScanProgressBridgePayload>(&request.body)?;
             let result = promptvault_lib::scan_progress_run(payload.options)?;
-            write_json_response(&mut stream, 200, &result)
+            write_json_response(stream, 200, &result)
         }
         ("POST", "/api/improve") => {
             let payload = serde_json::from_str::<ImproveBridgePayload>(&request.body)?;
@@ -784,9 +794,9 @@ fn handle_bridge_client(mut stream: TcpStream) -> Result<(), Box<dyn std::error:
                 .enable_all()
                 .build()?;
             let result = runtime.block_on(improve_prompt_inner(payload.request))?;
-            write_json_response(&mut stream, 200, &result)
+            write_json_response(stream, 200, &result)
         }
-        _ => write_response(&mut stream, 404, "text/plain", "Not found"),
+        _ => write_response(stream, 404, "text/plain", "Not found"),
     }
 }
 
@@ -850,7 +860,9 @@ fn write_response(
     let reason = match status {
         200 => "OK",
         204 => "No Content",
+        400 => "Bad Request",
         404 => "Not Found",
+        500 => "Internal Server Error",
         _ => "OK",
     };
     write!(
@@ -998,6 +1010,50 @@ mod tests {
         assert!(is_help_command("-h"));
         assert!(is_help_command("--help"));
         assert!(!is_help_command("scna"));
+    }
+
+    #[test]
+    fn bridge_returns_http_400_for_route_errors() {
+        let response = bridge_response_for(
+            "/api/scan",
+            r#"{"options":{"limit":0,"preview_limit":0,"include_markdown":false,"write_markdown":false,"persist":false}}"#,
+        );
+
+        assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(response.contains("scan limit requires a positive integer"));
+        assert!(response.contains("Access-Control-Allow-Origin: *"));
+    }
+
+    fn bridge_response_for(path: &str, body: &str) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let addr = listener.local_addr().expect("listener addr");
+        let handle = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accept bridge client");
+            handle_bridge_client(stream).expect("handle bridge request");
+        });
+
+        let mut client = std::net::TcpStream::connect(addr).expect("connect bridge client");
+        write!(
+            client,
+            "POST {path} HTTP/1.1\r\n\
+             Host: 127.0.0.1\r\n\
+             Content-Type: application/json\r\n\
+             Content-Length: {}\r\n\
+             Connection: close\r\n\r\n{}",
+            body.len(),
+            body
+        )
+        .expect("write bridge request");
+        client
+            .shutdown(std::net::Shutdown::Write)
+            .expect("shutdown bridge client");
+
+        let mut response = String::new();
+        client
+            .read_to_string(&mut response)
+            .expect("read bridge response");
+        handle.join().expect("join bridge thread");
+        response
     }
 
     #[test]

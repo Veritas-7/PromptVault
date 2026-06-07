@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 01:42 KST
+Updated: 2026-06-08 01:45 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -39,8 +39,13 @@ Progress:
   aggregate/source quality averages.
 - Verified focused API tests, full UI/unit tests, production build, preview
   QA, and the full project check.
-- Pending: staged checks, commit, full-tree secret scan, push, and publication
-  evidence docs commit.
+- Verified staged whitespace/secrets checks, GitHub auth/remote visibility, and
+  full-tree gitleaks before publication.
+- Published robustness fix on `origin/main` as
+  `2d27a4d fix: validate quality score bounds`.
+- Verified post-push parity: `git rev-list --left-right --count
+  HEAD...origin/main` returned `0 0`, `git status --short --branch` returned
+  only `## main...origin/main`, and the temp QA script was absent.
 
 Changes:
 
@@ -100,6 +105,23 @@ Tests:
   - `test ! -e /tmp/promptvault_quality_cap_qa.mjs`: passed.
   - `ps -axo pid=,command= | rg -- '--port 526[5]|promptvault_quality_cap_q[a]|gitleaks dir [.] --no-banner --redact'`:
     no matches.
+- Staged/publication checks:
+  - `git diff --cached --check`: passed.
+  - `gitleaks protect --staged --no-banner --redact`: no leaks found.
+  - `gh auth status`: logged in to `github.com` as `Veritas-7`.
+  - `gitleaks version`: `8.30.1`.
+  - `git ls-remote origin HEAD`: `b20b1ff... HEAD` before the code push.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo at `https://github.com/Veritas-7/PromptVault`.
+  - `gitleaks dir . --no-banner --redact`: scanned about 700.78 MB in 41.4s,
+    no leaks found.
+  - `git push origin main`: pushed `b20b1ff..2d27a4d` to `main`.
+  - `git fetch origin main`: fetched `main` from `origin`.
+  - `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - `git status --short --branch`: `## main...origin/main`.
+  - `test ! -e /tmp/promptvault_quality_cap_qa.mjs`: `temp-absent`.
+  - `ps -p 5968 -o pid=,etime=,command=`: process no longer existed after
+    a transient post-push `gitleaks dir` match.
 
 Issues:
 
@@ -111,10 +133,7 @@ Research:
 
 Next Steps:
 
-- Stage explicit paths only: `src/promptVaultApi.ts`,
-  `tests/promptVaultApi.test.ts`, and `working.md`.
-- Run staged secret/diff/GitHub checks, commit, run full-tree gitleaks, push to
-  `origin main`, then record publication status in a docs commit.
+- Commit and push this `working.md` publication-status update.
 
 ## Current Slice - 2026-06-08 Source file-total bounds
 

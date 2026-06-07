@@ -553,6 +553,18 @@ function isPromptTruncationState(value: unknown, returnedPromptCount: unknown, s
     && (value || returnedPromptCount === stats.total_prompts);
 }
 
+function isUntruncatedPromptWordTotal(value: Record<string, unknown>): boolean {
+  if (value.prompts_truncated !== false) return true;
+  if (!Array.isArray(value.prompts) || !isRecord(value.stats)) return false;
+  let totalWords = 0;
+  for (const prompt of value.prompts) {
+    if (!isRecord(prompt) || !isNonNegativeSafeInteger(prompt.word_count)) return false;
+    totalWords += prompt.word_count;
+    if (!Number.isSafeInteger(totalWords)) return false;
+  }
+  return totalWords === value.stats.total_words;
+}
+
 function isScanOutputPathState(outputPath: unknown, markdownWritten: unknown): boolean {
   if (markdownWritten !== true && markdownWritten !== false) return false;
   if (outputPath === null) return markdownWritten === false;
@@ -743,6 +755,7 @@ function parseScanResult(value: unknown): ScanResult {
     || !value.prompts.every(isPromptRecord)
     || !isReturnedPromptCount(value.returned_prompt_count, value.prompts, value.stats)
     || !isPromptTruncationState(value.prompts_truncated, value.returned_prompt_count, value.stats)
+    || !isUntruncatedPromptWordTotal(value)
     || !isPreviewSortString(value.preview_sort)
     || typeof value.markdown_included !== "boolean"
     || typeof value.markdown_written !== "boolean"

@@ -1,12 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 06:47 KST
+Updated: 2026-06-08 06:53 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Empty scan aggregate validation
+## Current Slice - 2026-06-08 Untruncated scan word-total validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose full, untruncated prompt
+  rows disagree with `stats.total_words`.
+
+Context:
+
+- The previous slices tightened browser-bridge metadata, source, timestamp,
+  scan-run, persistence, frequency-counter, and empty aggregate contracts.
+- Rust `build_stats` derives `total_words` directly from each prompt row's
+  `word_count`.
+- When `prompts_truncated` is false, `returned_prompt_count` must equal
+  `stats.total_prompts`, so the browser response contains every prompt row
+  needed to verify the aggregate word total.
+- The parser validates each prompt row's `word_count` against prompt text, but
+  it can still accept a malformed untruncated scan whose `stats.total_words`
+  does not equal the returned rows' `word_count` sum.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Confirmed the direct parent project policy from `../AGENTS.md`; no
+  project-local `AGENTS.md` was found under the PromptVault repo.
+- Identified the next narrow hardening target: untruncated scan
+  `stats.total_words` consistency with returned prompt rows.
+- Added a RED API test for an untruncated scan result whose returned prompt row
+  word counts sum lower than `stats.total_words`.
+- Confirmed RED first: focused API suite failed 96/97 only on the new
+  missing-rejection case.
+- Added parser validation requiring untruncated scan results to keep
+  `stats.total_words` equal to the returned prompt rows' `word_count` sum.
+- Confirmed GREEN after the parser change: focused API suite passes 97/97.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed untruncated scan result with `stats.total_words`
+  greater than returned prompt row word counts surfaced sanitized global and
+  scan-failure UI, and the bad aggregate/prompt payload was not rendered.
+- Removed the temporary preview QA script from
+  `/tmp/promptvault_untruncated_word_total_qa.mjs`.
+- Confirmed `/tmp/promptvault_untruncated_word_total_qa.mjs` is absent and
+  preview port `5302` has no listener after the server wrapper stopped the
+  server.
+- Ran full check successfully after preview QA.
+- Verified the GitHub target repository is private:
+  `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `visibility: PRIVATE` and `isPrivate: true`.
+- Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`; staged secret scan passed.
+
+Changes:
+
+- `src/promptVaultApi.ts`: rejects untruncated scan results whose returned
+  prompt rows do not sum to `stats.total_words`.
+- `tests/promptVaultApi.test.ts`: adds the untruncated total-word mismatch
+  rejection case for browser-bridge scan results.
+
+Tests:
+
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 96/97 only on the new untruncated total-word mismatch case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 97/97.
+- `npm run test:ui` passed 261/261.
+- `npm run build` passed.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5302" --port 5302 --timeout 30 node /tmp/promptvault_untruncated_word_total_qa.mjs`
+  passed.
+- Cleanup: `/tmp/promptvault_untruncated_word_total_qa.mjs` absent; port
+  `5302` free.
+- `npm run check` passed: UI tests 261/261, production build, Rust lib tests
+  84/84, CLI tests 16/16, and clippy with `-D warnings`.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact`
+  passed.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit and push the completed untruncated word-total validation slice, then
+  reverify `origin/main` parity, temp cleanup, and preview port `5302`.
+
+## Previous Slice - 2026-06-08 Empty scan aggregate validation
 
 Current Goal:
 

@@ -1,10 +1,89 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:59 KST
+Updated: 2026-06-07 19:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Source status CSS class normalization
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Ensure source status pills use normalized CSS classes and styled states for
+  plan and source summary rows.
+
+Context:
+
+- The previous quality band work removed raw band classes from prompt quality
+  pills.
+- Follow-up inspection found source status pills still used raw
+  `source.status` directly, and CSS only styled `ok`, `missing`, and `partial`.
+  `empty`, `stored`, and unknown statuses could render with weak/default visual
+  treatment.
+
+Progress:
+
+- Added a shared `sourceStatusClass` helper.
+- Updated plan source and source summary status pills to use normalized classes.
+- Added explicit `stored` and `unknown` status styles and included `empty` in
+  the warning-style group.
+- Added helper coverage for known and unknown status classes.
+
+Changes:
+
+- `src/sourceStatusA11y.ts`
+  - Added `sourceStatusClass` for `ok`, `empty`, `missing`, `partial`,
+    `stored`, and unknown statuses.
+- `src/App.tsx`
+  - Uses `sourceStatusClass` for plan source and source summary status pills.
+- `src/App.css`
+  - Added `.status.stored`, `.status.unknown`, and `.status.empty` styling.
+- `tests/sourceStatusA11y.test.ts`
+  - Added source status class normalization coverage.
+- `working.md`
+  - Recorded this source status polish slice and marked the prior quality band
+    class slice as pushed.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/sourceStatusA11y.test.ts`:
+  - 12 passed.
+- `npm run build`:
+  - `tsc && vite build` passed.
+- Source status class browser QA on preview `127.0.0.1:5205` + bridge
+  `127.0.0.1:5174`:
+  - Plan rows rendered `status ok`, `status empty`, and `status partial` with
+    styled backgrounds.
+  - Source summary rows rendered `status stored` and `status unknown` with
+    styled backgrounds.
+  - Unknown backend status `DEGRADED` still appeared in the aria status text for
+    transparency, but the CSS class normalized to `unknown`.
+  - Page width stayed within `1365 / 1365`.
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+- `npm run check`:
+  - UI tests: 150 passed.
+  - Build: passed.
+  - Rust lib tests: 84 passed.
+  - Rust CLI tests: 16 passed.
+  - Doc-tests: passed.
+  - Clippy with `-D warnings`: passed.
+
+Issues:
+
+- No blocker found after this fix.
+
+Research:
+
+- No external research. This was derived from rendered local QA output.
+
+Next Steps:
+
+- Commit and push this source status CSS class polish slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Quality band CSS class normalization
 
@@ -82,7 +161,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this quality band CSS class polish slice.
+- Completed and pushed as `4da0694 fix: normalize quality band classes`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Quality band Korean labels

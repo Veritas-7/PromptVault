@@ -110,6 +110,7 @@ import { selectedPromptForView } from "./selection";
 import {
   planSourceActionLabel,
   planSourceSelectionLabel,
+  sourceStatusClass,
   planSourceStatusLabel,
   sourceSummaryStatusLabel,
 } from "./sourceStatusA11y";
@@ -1562,7 +1563,7 @@ function App() {
                         formatBytes(source.byte_count),
                         source.notes,
                       )}
-                      className={`status ${source.status}`}
+                      className={`status ${sourceStatusClass(source.status)}`}
                     >
                       {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
                       {source.file_count.toLocaleString()} · {formatBytes(source.byte_count)}
@@ -1772,7 +1773,7 @@ function App() {
                       source.status,
                       source.prompts_found,
                     )}
-                    className={`status ${source.status}`}
+                    className={`status ${sourceStatusClass(source.status)}`}
                   >
                     {source.status === "ok" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
                     {source.prompts_found}

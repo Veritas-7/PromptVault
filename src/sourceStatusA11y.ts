@@ -17,6 +17,19 @@ function sourceStatusName(status: string): string {
   }
 }
 
+const SOURCE_STATUS_CLASSES: Record<string, string> = {
+  empty: "empty",
+  missing: "missing",
+  ok: "ok",
+  partial: "partial",
+  stored: "stored",
+};
+
+export function sourceStatusClass(status: string): string {
+  const normalized = status.trim().toLowerCase();
+  return SOURCE_STATUS_CLASSES[normalized] ?? "unknown";
+}
+
 function countLabel(count: number, singular: string): string {
   return `${count.toLocaleString()}개 ${singular}`;
 }

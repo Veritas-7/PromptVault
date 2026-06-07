@@ -757,10 +757,21 @@ h3 {
   color: #255d34;
 }
 
+.status.stored {
+  background: #e6f1f5;
+  color: #25586c;
+}
+
+.status.empty,
 .status.missing,
 .status.partial {
   background: #fff5df;
   color: #7c5207;
+}
+
+.status.unknown {
+  background: #eef1f4;
+  color: #4f5e6b;
 }
 
 .frequency-grid {

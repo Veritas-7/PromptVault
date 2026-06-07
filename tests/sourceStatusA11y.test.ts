@@ -4,6 +4,7 @@ import {
   planSourceActionLabel,
   planSourceSelectionLabel,
   planSourceStatusLabel,
+  sourceStatusClass,
   sourceSummaryStatusLabel,
 } from "../src/sourceStatusA11y.ts";
 import type { ActionLockState } from "../src/actionLocks.ts";
@@ -128,4 +129,14 @@ test("source summary status labels preserve unknown backend statuses", () => {
     sourceSummaryStatusLabel("Claude", "degraded", 12),
     "Claude 소스 degraded: 12개 프롬프트 발견",
   );
+});
+
+test("source status classes normalize known and unknown statuses", () => {
+  assert.equal(sourceStatusClass("ok"), "ok");
+  assert.equal(sourceStatusClass("empty"), "empty");
+  assert.equal(sourceStatusClass("missing"), "missing");
+  assert.equal(sourceStatusClass("partial"), "partial");
+  assert.equal(sourceStatusClass("stored"), "stored");
+  assert.equal(sourceStatusClass("DEGRADED"), "unknown");
+  assert.equal(sourceStatusClass("  "), "unknown");
 });

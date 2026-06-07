@@ -1,10 +1,75 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:50 KST
+Updated: 2026-06-07 19:53 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Responsive overflow browser QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify that mobile and desktop browser-mode layouts do not introduce
+  document-level horizontal overflow in disconnected and loaded-result states.
+
+Context:
+
+- PromptVault has long bridge recovery copy, long filesystem paths, source
+  labels, prompt text, and compact action toolbars that can create responsive
+  overflow regressions.
+- This slice used local Vite preview and Playwright viewport checks instead of
+  cmux/in-app browser.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- First probed disconnected mobile bridge notice at `390x844`.
+- Extended the QA to load mock scan results containing a long source label,
+  long workspace path, long selected prompt text, and a long unbroken
+  diagnostic token.
+- Checked disconnected mobile, loaded mobile, and loaded desktop layouts for
+  document/body horizontal overflow and element bounding boxes outside the
+  viewport.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only responsive overflow browser QA slice.
+
+Tests:
+
+- Responsive overflow browser QA on preview `127.0.0.1:5220`:
+  - Disconnected mobile viewport `390x844`:
+    `viewportWidth=390`, `scrollWidth=390`, `bodyScrollWidth=390`,
+    overflowing elements `[]`.
+  - Loaded mobile viewport `390x844` after mock quick scan:
+    rendered 2 prompt rows, selected prompt text was visible,
+    `viewportWidth=390`, `scrollWidth=390`, `bodyScrollWidth=390`,
+    overflowing elements `[]`.
+  - Loaded desktop viewport `1440x1000` after mock quick scan:
+    rendered 2 prompt rows, selected prompt text was visible,
+    `viewportWidth=1440`, `scrollWidth=1440`, `bodyScrollWidth=1440`,
+    overflowing elements `[]`.
+  - The mock scan included long path/source/prompt values to exercise wrapping,
+    truncation, and internal scroll behavior.
+
+Issues:
+
+- No layout blocker found.
+
+Research:
+
+- No external research. This was direct browser QA with mocked local bridge
+  responses and viewport measurements.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Plan retry and import queue browser QA
 
@@ -75,7 +140,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record.
+- Completed and pushed as `e15c5df docs: record plan retry queue QA`.
 - Continue autonomous QA on another still-uncovered failure, performance, or
   UX edge state.
 

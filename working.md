@@ -1,10 +1,86 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:59 KST
+Updated: 2026-06-07 20:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Quick scan bridge loss QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the quick-scan path when the browser bridge is initially healthy, then
+  `/api/scan` fails at the network layer and the user recovers through bridge
+  recheck plus a scan retry.
+
+Context:
+
+- The previous slice covered mid-action bridge loss during stored prompt
+  loading.
+- Quick scan is a separate recovery surface because it uses `run_id`, scan
+  progress polling, scan failure copy, and a follow-up quiet facet refresh.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Mocked initial health, facets, import states, and import events as healthy.
+- Aborted the first `/api/scan` request and the quiet `/api/prompt-facets`
+  refresh that follows a failed scan.
+- Verified the UI switched to disconnected bridge recovery mode, showed the
+  scoped scan warning, locked ordinary app actions, and kept bridge recheck
+  available.
+- Rechecked the bridge, then reran quick scan and verified the prompt row
+  rendered and the scan warning cleared.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only quick-scan bridge loss/recovery QA slice.
+
+Tests:
+
+- Quick scan bridge loss QA on preview `127.0.0.1:5222`:
+  - Initial bridge health succeeded and the browser bridge rendered connected.
+  - First `/api/scan` call was intentionally aborted with `net::ERR_FAILED`.
+  - The quiet `/api/prompt-facets` refresh after the failed scan was also
+    intentionally aborted with `net::ERR_FAILED`.
+  - Global error showed `브라우저 브리지가 실행 중이 아닙니다`.
+  - `data-scan-run-error` showed
+    `프롬프트를 스캔하지 못했습니다. 위 오류를 확인하고 제한값을 조정하거나 다시 시도하세요.`
+  - `data-run-scan`, `data-load-stored-prompts`, `data-run-plan`,
+    `data-scan-limit`, and `data-apply-stored-filters` were disabled while the
+    bridge was disconnected.
+  - `data-check-browser-bridge` stayed enabled while disconnected.
+  - Clicking `data-check-browser-bridge` made a second health call and cleared
+    the global bridge error.
+  - The scan warning stayed visible until the failed scan was retried.
+  - Retrying quick scan made the second `/api/scan` call succeed, rendered the
+    `Retry quick scan` prompt row, and cleared `data-scan-run-error`.
+  - Final counts: `healthCalls=2`, `scanCalls=2`, `progressCalls=2`,
+    `facetsCalls=4`, `importStatesCalls=2`, `importEventsCalls=2`.
+  - Page errors and unexpected HTTP failures: none.
+  - Diagnostics contained only the expected aborted `/api/scan` and
+    `/api/prompt-facets` `net::ERR_FAILED` console/request-failure entries.
+
+Issues:
+
+- No app blocker found.
+- The first QA script pass used an outdated scan failure copy expectation; the
+  script was corrected to the current Korean UI text and the same flow passed.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses and network-level request aborts.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Mid-action browser bridge loss QA
 
@@ -81,7 +157,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record.
+- Completed and pushed as `6348c9b docs: record bridge loss recovery QA`.
 - Continue autonomous QA on another still-uncovered failure, performance, or
   UX edge state.
 

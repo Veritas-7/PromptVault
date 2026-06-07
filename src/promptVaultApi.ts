@@ -648,6 +648,27 @@ function isUntruncatedSourcePromptCounts(value: Record<string, unknown>): boolea
   return true;
 }
 
+function isUntruncatedSourceWeakCounts(value: Record<string, unknown>): boolean {
+  if (value.prompts_truncated !== false) return true;
+  if (!Array.isArray(value.prompts) || !isRecord(value.stats) || !Array.isArray(value.stats.source_summaries)) {
+    return false;
+  }
+  for (const source of value.stats.source_summaries) {
+    if (!isRecord(source) || !isNonBlankString(source.id) || !isNonNegativeSafeInteger(source.weak_prompt_count)) {
+      return false;
+    }
+    let sourceWeakCount = 0;
+    for (const prompt of value.prompts) {
+      if (!isRecord(prompt) || !isNonBlankString(prompt.source) || !isPromptQuality(prompt.quality)) return false;
+      if (prompt.source !== source.id) continue;
+      if (prompt.quality.band === "weak") sourceWeakCount += 1;
+      if (!Number.isSafeInteger(sourceWeakCount)) return false;
+    }
+    if (sourceWeakCount !== source.weak_prompt_count) return false;
+  }
+  return true;
+}
+
 function isScanOutputPathState(outputPath: unknown, markdownWritten: unknown): boolean {
   if (markdownWritten !== true && markdownWritten !== false) return false;
   if (outputPath === null) return markdownWritten === false;
@@ -843,6 +864,7 @@ function parseScanResult(value: unknown): ScanResult {
     || !isUntruncatedPromptWeakCount(value)
     || !isUntruncatedSourceAverageQuality(value)
     || !isUntruncatedSourcePromptCounts(value)
+    || !isUntruncatedSourceWeakCounts(value)
     || !isPreviewSortString(value.preview_sort)
     || typeof value.markdown_included !== "boolean"
     || typeof value.markdown_written !== "boolean"

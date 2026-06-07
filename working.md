@@ -1,12 +1,128 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 07:44 KST
+Updated: 2026-06-08 07:46 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Untruncated source prompt-count validation
+## Current Slice - 2026-06-08 Untruncated source weak-count validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose full, untruncated prompt
+  rows disagree with each `source_summaries[].weak_prompt_count`.
+
+Context:
+
+- Recent slices tightened aggregate totals, untruncated word/quality/weak
+  counts, source summary average quality, and source summary prompt counts.
+- The parser currently validates that source summary weak totals add up to
+  `stats.weak_prompt_count`, and that the aggregate weak count matches returned
+  prompt rows, but it can still accept a malformed untruncated scan whose
+  per-source `weak_prompt_count` values are redistributed across source ids
+  while totals, prompt counts, and quality averages remain valid.
+- This validation should apply only when `prompts_truncated` is false, because
+  truncated previews intentionally omit rows needed to recompute per-source
+  weak prompt counts.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault` with no goal-warning.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the direct parent project policy, README verification commands, and
+  relevant parser/test context.
+- Identified the next narrow hardening target: untruncated source summary
+  `weak_prompt_count` consistency with returned prompt rows grouped by
+  `prompt.source`.
+- Added a RED API test for an untruncated scan result whose aggregate
+  `weak_prompt_count` and source weak total are valid but whose per-source
+  `weak_prompt_count` values do not match the returned prompt rows.
+- Confirmed RED first: focused API suite failed 102/103 only on the new
+  missing-rejection case.
+- Added parser validation requiring untruncated scan results to keep each
+  source summary's `weak_prompt_count` equal to the count of returned weak-band
+  prompt rows with that `source.id`.
+- Confirmed GREEN after the parser change: focused API suite passes 103/103.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed untruncated scan result with valid aggregate
+  weak count but redistributed source `weak_prompt_count` values surfaced
+  sanitized global and scan-failure UI, and the bad prompt and source summary
+  payload were not rendered.
+- Removed the temporary preview QA script from
+  `/tmp/promptvault_source_weak_count_qa.mjs`.
+- Confirmed `/tmp/promptvault_source_weak_count_qa.mjs` is absent and preview
+  port `5308` has no listener after the server wrapper stopped the server.
+- Ran full check successfully after preview QA.
+- Verified touched-file whitespace with `git diff --check`.
+- Re-verified repo root, branch status, `HEAD...origin/main` parity `0 0`,
+  and `origin` remotes before staging.
+- Verified the GitHub target repository is private:
+  `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `visibility: PRIVATE` and `isPrivate: true`.
+- Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`; staged secret scan passed.
+
+Changes:
+
+- `working.md`: records the current source weak-count validation slice.
+- `src/promptVaultApi.ts`: rejects untruncated scan results whose source
+  summary weak counts disagree with returned weak-band prompt rows for that
+  source.
+- `tests/promptVaultApi.test.ts`: adds the untruncated source weak-count
+  mismatch rejection case for browser-bridge scan results.
+
+Tests:
+
+- Baseline repo verification: `git rev-parse --show-toplevel`, `git status --short --branch`,
+  `git rev-list --left-right --count HEAD...origin/main`, and `git remote -v`
+  showed repo root `/Users/wj/Ai/System/10_Projects/PromptVault`, clean
+  `main...origin/main`, parity `0 0`, and only `origin`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 102/103 only on the new untruncated source weak-count mismatch case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 103/103.
+- `npm run test:ui` passed 267/267.
+- `npm run build` passed.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5308" --port 5308 --timeout 30 node /tmp/promptvault_source_weak_count_qa.mjs`
+  passed.
+- Cleanup: `/tmp/promptvault_source_weak_count_qa.mjs` absent; port `5308`
+  free.
+- `npm run check` passed: UI tests 267/267, production build, Rust lib tests
+  84/84, CLI tests 16/16, and clippy with `-D warnings`.
+- Pre-staging verification: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; repo root/status/remotes/parity checked with only the three intended
+  files modified; temp script absent and port `5308` free.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact`
+  passed.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Add a RED API test for an untruncated source weak-count mismatch.
+- Implement the minimal parser validation once the focused API suite fails on
+  the new case.
+- Re-run focused tests, UI tests, build, preview QA, full check, secret scans,
+  explicit-path commit, and push verification.
+
+## Previous Slice - 2026-06-08 Untruncated source prompt-count validation
 
 Current Goal:
 

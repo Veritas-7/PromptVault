@@ -1,10 +1,86 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:25 KST
+Updated: 2026-06-07 20:28 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Import queue second-source recovery QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the selected-source import queue recovery path after the second
+  queued source fails at the network layer.
+
+Context:
+
+- The previous code slice fixed stale first-source progress after a second
+  queued source failure.
+- This QA verifies the follow-on user flow: bridge recheck, warning retention
+  until retry, and successful retry of the same selected queue.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Mocked a two-source import plan with `Codex sessions` and `Gemini logs`.
+- Ran the selected-source queue:
+  - First `/api/import-batch` succeeded for `codex`.
+  - Second `/api/import-batch` failed with `net::ERR_FAILED` for `gemini`.
+- Verified disconnected bridge recovery state, active failure warning, action
+  locks, bridge recheck, warning persistence, and full queue retry success.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only queue second-source recovery QA slice.
+
+Tests:
+
+- Queue second-source recovery QA on preview `127.0.0.1:5227`:
+  - Initial bridge health succeeded and the browser bridge rendered connected.
+  - `/api/plan` succeeded with two importable sources.
+  - `전체 선택` made the import queue summary show `2 / 2개 선택됨`.
+  - First queue run sent `/api/import-batch` to `codex`, then `gemini`.
+  - The `gemini` request was intentionally aborted with `net::ERR_FAILED`.
+  - `data-import-run-error` showed
+    `Gemini logs 가져오기에 실패했습니다. 위 오류를 확인한 뒤 가져오기 계획에서 다시 시도하세요.`
+  - Import panel showed queue progress `1 / 2` while failed.
+  - `data-import-selected`, `data-import-source-id="codex"`, and
+    `data-import-source-id="gemini"` were disabled while the bridge was
+    disconnected.
+  - `data-check-browser-bridge` stayed enabled while disconnected.
+  - Clicking `data-check-browser-bridge` made a second health call, cleared the
+    global bridge error, and kept the queue failure warning visible until
+    retry.
+  - Retrying `data-import-selected` sent `/api/import-batch` to `codex`, then
+    `gemini` again; both retry requests succeeded.
+  - Final import panel showed source `Gemini logs`, progress `3 / 3`, queue
+    `2 / 2`, status `완료`, and persistence notice
+    `/tmp/promptvault-queue-second-source-recovery.sqlite · 저장 5 · 신규 3 · 갱신 0`.
+  - Final counts: `healthCalls=2`, `planCalls=1`, `importBatchCalls=4`,
+    `facetsCalls=4`, `importStatesCalls=4`, `importEventsCalls=4`.
+  - Page errors and unexpected HTTP failures: none.
+  - Diagnostics contained only the expected aborted `/api/import-batch`
+    `net::ERR_FAILED` console/request-failure entry.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses and a network-level request abort.
+
+Next Steps:
+
+- Commit and push this report-only QA record after staged diff and secret
+  checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Import queue second-source failure source label
 

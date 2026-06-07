@@ -1,10 +1,105 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 04:38 KST
+Updated: 2026-06-08 04:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Repeated prompt frequency validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/load payloads whose `stats.repeated_prompts`
+  frequency counts exceed the aggregate `stats.total_prompts` before the UI can
+  render impossible repeated-prompt rows.
+
+Context:
+
+- Rust `repeated_prompts()` normalizes one text bucket per prompt and only keeps
+  buckets with a count greater than one.
+- Therefore the sum of displayed repeated-prompt counts cannot exceed
+  `stats.total_prompts`.
+- The frontend parser validated repeated-prompt item shape but not the
+  aggregate bound.
+- The statistics panel renders `repeated_prompts` directly in the `반복`
+  frequency column.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the previous top word frequency slice is pushed and clean at
+  `394f974`.
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified local/remote parity from clean `main...origin/main` with
+  `git fetch origin main && git rev-list --left-right --count HEAD...origin/main`
+  returning `0 0`.
+- Added RED coverage for `/api/scan` returning `total_prompts: 1` with a
+  `repeated_prompts` row claiming `improve this prompt.: 999`.
+- Verified the focused API test fails before the guard.
+- Added parser validation requiring `stats.repeated_prompts` counts to stay
+  within `stats.total_prompts`.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified the broader UI suite and production build.
+- Verified the preview browser-bridge malformed repeated-prompt frequency path.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for repeated-prompt counts
+    beyond aggregate total prompts.
+- `src/promptVaultApi.ts`
+  - Reuses the existing frequency aggregate helper to validate
+    `repeated_prompts` against `total_prompts`.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new repeated-prompt count mismatch test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 56 tests, 55 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 56 tests, 56 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 220 tests, 220 pass.
+- Build:
+  - `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-CDMs8EVW.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5284" --port 5284 node /tmp/promptvault_repeated_prompts_qa.mjs`
+  - Passed. The mocked bridge returned `total_prompts: 1` with
+    `repeated_prompts: [{ text: "improve this prompt.", count: 999 }]`; the UI
+    showed the malformed bridge response error, rendered no prompt rows, and
+    did not leak the repeated prompt text or `999` frequency data.
+  - Removed `/tmp/promptvault_repeated_prompts_qa.mjs` after the run.
+- Full check:
+  - `npm run check`
+  - Passed. This included `npm run test:ui` (220 tests), `npm run build`,
+    `cargo test` (84 library tests and 16 CLI tests), and
+    `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found in the RED API suite.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run cleanup checks, staged secret checks, and publication checks before
+  committing.
 
 ## Current Slice - 2026-06-08 Top word frequency validation
 

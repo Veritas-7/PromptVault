@@ -495,6 +495,28 @@ stability, performance, and maintainability, then record evidence here.
     `PromptVault` and `console list` returned `No console entries`; `errors
     list` timed out once and is tracked under Issues as an intermittent cmux
     diagnostics RPC problem.
+- Fresh same-browser Import Plan and Import Batch QA on existing `surface:10`:
+  - Scheduled a DOM click for the visible Plan button after native/AX click
+    delivery was unreliable.
+  - Observed Import Plan render with `Sources 11 / 11`, `Files 27,999`,
+    `Size 34.5 GiB`, and `Large Files 93`.
+  - Observed warning copy for unrestricted Codex import:
+    `25,119 matching files` and `33.6 GiB`, plus large-file warnings for
+    Codex and Claude Code projects.
+  - Verified row action labels include source-specific context, including
+    disabled empty-source labels for `Antigravity IDE alt transcripts`.
+  - Ran `Import Batch` for the small `Antigravity prompt history` source.
+  - Observed `Incremental Import` complete at `100%`, source
+    `Antigravity prompt history`, processed `1 / 1`, batch
+    `1 file · 1,659 prompts`, and status `Complete`.
+  - Observed DB notice:
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 88,379 · new 0 · updated 1,659`.
+  - Observed Saved Import Progress update to `Sources 3 / 4`,
+    `Files 105 / 158`, `Imported Prompts 1,773`.
+  - Observed Recent Import Activity add an `Antigravity prompt history` event
+    with `1 file · 1,659 prompts`, `1 / 1 · complete`, and `no warnings`.
+  - Follow-up diagnostics returned `No console entries` and
+    `No browser errors`.
 - `npm run test:ui -- tests/scanStatus.test.ts`: passed; due the package
   script glob this ran the full UI helper suite and reported 124 passing tests,
   including the new scan progress formatter coverage.
@@ -2874,6 +2896,12 @@ stability, performance, and maintainability, then record evidence here.
     frequency, date, quality-gap, and prompt panels.
   - Reset the filter and observed the unfiltered/disabled control states return
     correctly.
+- Continued same-browser direct QA with Import Plan and Import Batch:
+  - Verified the Plan panel, source inventory totals, large-source warnings,
+    enabled source actions, and disabled empty-source action labels.
+  - Ran a one-file `Antigravity prompt history` import batch and verified
+    durable cursor/progress/activity updates plus clean console/error
+    diagnostics.
 
 ## Changes
 

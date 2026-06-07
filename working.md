@@ -1,10 +1,73 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 17:40 KST
+Updated: 2026-06-07 17:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Recommendation active-row preservation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep a generated recommendation visible when the user clicks the already
+  selected prompt row again.
+
+Context:
+
+- Browser QA for the recommendation panel found that re-clicking the active
+  prompt row kept `aria-pressed=true` but cleared the recommendation panel.
+- Switching to a different prompt should still clear prompt-scoped
+  recommendation and failure state.
+
+Progress:
+
+- Added a small selection helper for the recommendation clear/no-clear decision.
+- Updated the prompt row click handler to clear recommendation state only when
+  the selected prompt actually changes.
+- Added helper tests covering same-row preservation, different-row clearing, and
+  empty selection clearing.
+
+Changes:
+
+- `src/improvementSelection.ts`
+  - Added `shouldClearImprovementOnPromptSelect`.
+- `src/App.tsx`
+  - Preserved recommendation state on active prompt row re-click.
+- `tests/improvementSelection.test.ts`
+  - Covered same selected prompt, different prompt, and empty selection cases.
+
+Tests:
+
+- RED browser QA on preview `127.0.0.1:5186` + bridge `127.0.0.1:5174`:
+  - A deterministic `/api/improve` response created a visible recommendation.
+  - Re-clicking the active row cleared `.prompt-text.revised` while the row
+    stayed active.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/improvementSelection.test.ts`:
+  PASS, `11` tests.
+- `npm run build`: PASS.
+- Fixed browser QA on preview `127.0.0.1:5186` + bridge `127.0.0.1:5174`:
+  - Re-clicking the active row kept the revised prompt and persistence notice.
+  - Clicking a different row cleared the recommendation panel.
+  - Body/document width stayed within `1365 / 1365`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `139` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local recommendation-panel browser
+  QA and frontend state inspection.
+
+Next Steps:
+
+- Completed and pushed as `87ca61a fix: preserve prompt recommendation on active row click`.
 
 ## Current Slice - 2026-06-07 Empty plan-source disabled labels
 

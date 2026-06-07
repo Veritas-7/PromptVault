@@ -304,8 +304,8 @@ function isScanStats(value: unknown): boolean {
 function isImprovePersistence(value: unknown): boolean {
   return isRecord(value)
     && typeof value.database_path === "string"
-    && typeof value.improvement_event_id === "number"
-    && typeof value.prompt_improvement_count === "number";
+    && isNonNegativeFiniteNumber(value.improvement_event_id)
+    && isNonNegativeFiniteNumber(value.prompt_improvement_count);
 }
 
 function isQualityDelta(value: unknown): boolean {

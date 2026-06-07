@@ -1,10 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 23:17 KST
+Updated: 2026-06-07 23:23 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Improve persistence numeric validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject impossible browser-bridge `/api/improve` persistence counters before
+  negative recommendation history ids or counts can render in the improvement
+  success notice.
+
+Context:
+
+- Previous slices hardened scan progress, scan plan, import state/event, stored
+  facets, scan result, and import batch numeric validation.
+- `ImproveResult.quality_delta.score_delta` is allowed to be negative because
+  Rust computes it as `after.score - before.score`.
+- `ImprovePersistence.improvement_event_id` and
+  `prompt_improvement_count` come from SQLite row id/count values and should
+  never be negative.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added a RED test for shape-valid but impossible negative improve persistence
+  counters.
+- Reused the non-negative finite number validator for improvement event id and
+  per-prompt improvement count.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - `isImprovePersistence()` now rejects negative or non-finite
+    `improvement_event_id` and `prompt_improvement_count`.
+- `tests/promptVaultApi.test.ts`
+  - Adds `/api/improve` coverage for impossible negative persistence
+    counters.
+- `working.md`
+  - Records this improve persistence numeric validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new impossible numeric improve
+    persistence payload test resolved instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 21 tests, 21 pass.
+- `npm run test:ui`:
+  - Passed: 185 tests, 185 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-Diiuk7d5.js`.
+- Improve persistence numeric validation browser QA on preview
+  `127.0.0.1:5252`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/prompt-facets`, `/api/import-states`,
+    `/api/import-events`, `/api/scan`, and `/api/scan/progress` returned valid
+    payloads.
+  - `/api/improve` returned HTTP 200 with valid improvement copy and quality
+    delta, but negative `improvement_event_id` and
+    `prompt_improvement_count`.
+  - Quick scan loaded one prompt, then clicking `추천 생성` rendered the
+    sanitized bridge response-shape error.
+  - The improvement persistence success notice was not rendered, and the UI did
+    not expose `#-1`, `-1`, `-2`, `NaN`, or `Infinity`.
+  - Final counts: `health=1`, `facets=2`, `importStates=1`,
+    `importEvents=1`, `scan=1`, `progress=1`, `improve=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 185 tests, 185 pass.
+  - Build: passed with `index-Diiuk7d5.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then run staged diff/secret checks, commit, and push.
 
 ## Current Slice - 2026-06-07 Import batch numeric validation
 

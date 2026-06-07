@@ -6,6 +6,7 @@ import {
   emptyStoredPromptFilters,
   storedFilterApplyLabel,
   storedFilterInputLabel,
+  storedFilterResetCount,
   storedFilterResetLabel,
   storedPromptFiltersSnapshot,
   storedPromptLoadOptions,
@@ -107,6 +108,14 @@ test("stored result filter count follows the last loaded stored result", () => {
   assert.equal(storedResultFilterCount("stored", emptyFilters), 0);
   assert.equal(storedResultFilterCount("scan", loadedFilters), 0);
   assert.equal(storedResultFilterCount(null, loadedFilters), 0);
+});
+
+test("stored filter reset count includes draft and loaded result filters", () => {
+  assert.equal(storedFilterResetCount(0, 0), 0);
+  assert.equal(storedFilterResetCount(2, 0), 2);
+  assert.equal(storedFilterResetCount(0, 1), 1);
+  assert.equal(storedFilterResetCount(2, 1), 2);
+  assert.equal(storedFilterResetCount(-1, 1), 1);
 });
 
 test("stored filter reset label explains disabled and active states", () => {

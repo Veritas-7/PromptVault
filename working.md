@@ -1,10 +1,87 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:14 KST
+Updated: 2026-06-07 19:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Stored applied-filter reset availability
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep the stored-filter reset action available when the displayed stored
+  result still has applied filters, even if the draft inputs have been cleared.
+
+Context:
+
+- The stored preview snapshot fix separated draft filters from last-applied
+  result filters.
+- Follow-up browser QA found another edge case: after applying source `Codex`,
+  clearing the source input left the displayed result filtered, but the reset
+  button became disabled with `초기화할 저장소 필터 없음`.
+
+Progress:
+
+- Added a resettable stored-filter count that considers both draft filters and
+  last-applied result filters.
+- Updated reset button aria copy and disabled state to use the resettable count.
+- Verified that reset reloads unfiltered stored results even after the draft
+  input has been manually cleared.
+
+Changes:
+
+- `src/storedFilters.ts`
+  - Added `storedFilterResetCount`.
+- `src/App.tsx`
+  - Uses `storedFilterResettableCount` for reset button label and disabled
+    state.
+- `tests/storedFilters.test.ts`
+  - Added resettable-count coverage for draft-only, result-only, combined, and
+    negative inputs.
+- `working.md`
+  - Recorded the RED baseline, fix, and browser QA.
+
+Tests:
+
+- RED baseline browser QA on preview `127.0.0.1:5210`:
+  - Applying source `Codex` loaded a filtered empty result.
+  - Clearing the source input kept the filtered empty message, but reset was
+    disabled with `초기화할 저장소 필터 없음`.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/storedFilters.test.ts tests/promptEmptyState.test.ts`:
+  - 27 passed.
+- `npm run build`:
+  - `tsc && vite build` passed.
+- Fixed-flow browser QA on preview `127.0.0.1:5210`:
+  - Applying source `Codex` sent `/api/prompts` with `source: "Codex"`.
+  - Clearing the draft input left the filtered empty message visible.
+  - Reset stayed enabled with aria label `저장소 필터 1개 초기화`.
+  - Clicking reset sent a second `/api/prompts` request with no `source`, then
+    showed `불러온 프롬프트가 없습니다.` and disabled reset again.
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+- `npm run check`:
+  - UI tests: 155 passed.
+  - Build: passed.
+  - Rust lib tests: 84 passed.
+  - Rust CLI tests: 16 passed.
+  - Doc-tests: passed.
+  - Clippy with `-D warnings`: passed.
+
+Issues:
+
+- No blocker found after this fix.
+
+Research:
+
+- No external research. This was derived from rendered local QA output.
+
+Next Steps:
+
+- Commit and push this stored applied-filter reset availability slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Stored preview applied-filter snapshots
 
@@ -93,7 +170,8 @@ Research:
 
 Next Steps:
 
-- Commit and push this stored preview applied-filter snapshot slice.
+- Completed and pushed as
+  `98a8c34 fix: preserve applied stored filters for preview reloads`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Stored filter draft empty-state handling

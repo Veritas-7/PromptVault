@@ -125,6 +125,7 @@ import {
   emptyStoredPromptFilters,
   storedFilterApplyLabel,
   storedFilterInputLabel,
+  storedFilterResetCount,
   storedFilterResetLabel,
   storedPromptFiltersSnapshot,
   storedPromptLoadOptions,
@@ -351,6 +352,10 @@ function App() {
   const activeResultStoredFilterCount = storedResultFilterCount(
     resultOrigin,
     loadedStoredFilters,
+  );
+  const storedFilterResettableCount = storedFilterResetCount(
+    storedFilterCount,
+    activeResultStoredFilterCount,
   );
   const promptListEmptyMessage = promptListEmptyText(
     hasPromptResult,
@@ -1204,10 +1209,10 @@ function App() {
             적용
           </button>
           <button
-            aria-label={storedFilterResetLabel(storedFilterCount, actionLockState)}
+            aria-label={storedFilterResetLabel(storedFilterResettableCount, actionLockState)}
             className="inline-action"
             data-reset-stored-filters="true"
-            disabled={!storedFilterCount || isTopLevelActionLocked}
+            disabled={!storedFilterResettableCount || isTopLevelActionLocked}
             onClick={resetStoredFilters}
             type="button"
           >

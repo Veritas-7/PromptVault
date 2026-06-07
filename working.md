@@ -1,10 +1,97 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:10 KST
+Updated: 2026-06-07 20:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Import batch bridge loss QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the single-source import path when `/api/import-batch` fails at the
+  network layer and the user recovers through bridge recheck plus the same
+  source import retry.
+
+Context:
+
+- Recent QA covered network-level browser bridge loss during stored prompt
+  loading, quick scan, recommendation generation, and import-plan creation.
+- Import batch is a separate recovery surface because it uses the active
+  import panel, source-specific failure copy, import action locks, and final
+  quiet refreshes for states/events/facets.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Mocked initial bridge health, stored prompt facets, import states, import
+  events, and a successful import plan with one importable source plus one
+  empty source.
+- Aborted the first `/api/import-batch` request with `net::ERR_FAILED`.
+- Verified disconnected bridge recovery mode, import failure copy, action
+  locks, bridge recheck, preserved import warning until retry, and successful
+  retry for the same source.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only import batch bridge loss/recovery QA slice.
+
+Tests:
+
+- Import batch bridge loss QA on preview `127.0.0.1:5225`:
+  - Initial bridge health succeeded and the browser bridge rendered connected.
+  - `/api/plan` succeeded with `Codex sessions` importable and `Empty source`
+    disabled.
+  - The import queue summary showed `0 / 1개 선택됨`.
+  - First `/api/import-batch` call was intentionally aborted with
+    `net::ERR_FAILED`.
+  - The first import request body included `source_id: "codex"`,
+    `file_batch_size: 5`, and `preview_limit: 25`.
+  - Global error showed `브라우저 브리지가 실행 중이 아닙니다`.
+  - `data-import-run-error` showed
+    `Codex sessions 가져오기에 실패했습니다. 위 오류를 확인한 뒤 가져오기 계획에서 다시 시도하세요.`
+  - `data-run-scan`, `data-load-stored-prompts`, `data-run-plan`,
+    `data-scan-limit`, `data-refresh-plan`, `data-import-source-id="codex"`,
+    `data-import-continuous-source-id="codex"`, and `data-import-selected`
+    were disabled while the bridge was disconnected.
+  - `data-check-browser-bridge` stayed enabled while disconnected.
+  - Clicking `data-check-browser-bridge` made a second health call, cleared the
+    global bridge error, and re-enabled import retry controls.
+  - The import warning stayed visible until retry.
+  - Retrying `data-import-source-id="codex"` made the second
+    `/api/import-batch` call succeed with the same request body.
+  - Final import panel showed `100%`, source `Codex sessions`, status `완료`,
+    and persistence notice
+    `/tmp/promptvault-import-batch-bridge-loss.sqlite · 저장 2 · 신규 2 · 갱신 0`.
+  - Final counts: `healthCalls=2`, `planCalls=1`, `importBatchCalls=2`,
+    `facetsCalls=4`, `importStatesCalls=4`, `importEventsCalls=4`.
+  - Page errors and unexpected HTTP failures: none.
+  - Diagnostics contained only the expected aborted `/api/import-batch`
+    `net::ERR_FAILED` console/request-failure entry.
+
+Issues:
+
+- No app blocker found.
+- The first QA script pass used an outdated import queue default-selection
+  expectation, and the second pass used an outdated batch-size expectation;
+  both script expectations were corrected to current UI/runtime behavior before
+  the passing run.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses and a network-level request abort.
+
+Next Steps:
+
+- Commit and push this report-only QA record after staged diff and secret
+  checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Plan bridge loss QA
 

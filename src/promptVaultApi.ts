@@ -259,7 +259,7 @@ function isPreviewSortString(value: unknown): value is string {
 function isPromptQuality(value: unknown): boolean {
   return isRecord(value)
     && isQualityScore(value.score)
-    && typeof value.band === "string"
+    && isNonBlankString(value.band)
     && isStringArray(value.missing)
     && isStringArray(value.suggestions);
 }
@@ -278,16 +278,16 @@ function isPromptWordCount(text: unknown, wordCount: unknown): boolean {
 
 function isPromptRecord(value: unknown): boolean {
   return isRecord(value)
-    && typeof value.id === "string"
-    && typeof value.source === "string"
-    && typeof value.session_id === "string"
-    && typeof value.path === "string"
+    && isNonBlankString(value.id)
+    && isNonBlankString(value.source)
+    && isNonBlankString(value.session_id)
+    && isNonBlankString(value.path)
     && (typeof value.timestamp === "undefined" || typeof value.timestamp === "string" || value.timestamp === null)
     && (typeof value.cwd === "undefined" || typeof value.cwd === "string" || value.cwd === null)
-    && typeof value.text === "string"
+    && isNonBlankString(value.text)
     && isPromptWordCount(value.text, value.word_count)
     && isPromptCharCount(value.text, value.char_count)
-    && typeof value.hash === "string"
+    && isNonBlankString(value.hash)
     && isStringArray(value.risk_flags)
     && isPromptQuality(value.quality);
 }

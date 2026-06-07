@@ -1,12 +1,94 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 05:28 KST
+Updated: 2026-06-08 05:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Source metadata validation
+## Current Slice - 2026-06-08 Prompt record metadata validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge prompt rows and improvement quality payloads whose
+  mandatory metadata is empty or whitespace-only before the UI can render blank
+  row keys, source chips, file paths, hashes, or quality bands.
+
+Context:
+
+- The previous slices tightened response database paths and source metadata.
+- `PromptRecord` parser guards still accept blank strings for prompt ids,
+  source names, session ids, paths, hashes, and quality bands.
+- Prompt ids drive React row keys and selection state. Source and quality bands
+  are displayed in prompt rows, selected prompt metadata, and recommendation
+  quality deltas.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: prompt record metadata and
+  shared prompt quality bands in bridge response parsers.
+- Added RED tests for blank prompt metadata in scan results, blank prompt
+  metadata in stored prompt loads, and blank quality bands in improvement
+  results.
+- Confirmed RED first: focused API suite failed 69/72 only on the three new
+  missing-rejection cases.
+- Applied the existing nonblank string guard to mandatory prompt row strings
+  and shared prompt quality `band`.
+- Confirmed GREEN after the parser change: focused API suite passes 72/72.
+- Confirmed broader UI helpers still pass 236/236 and production build still
+  succeeds.
+- Ran local Vite preview QA on `127.0.0.1:5291` with mocked browser-bridge
+  payloads. Stored load and scan reject blank prompt metadata with sanitized
+  errors and no prompt rows; a valid stored load followed by an improvement
+  response with blank quality bands shows the recommendation failure state and
+  no success persistence/revised prompt block.
+- Ran full project check successfully.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`: covers whitespace-only prompt row
+  `id/source/session_id/path/text/hash`, whitespace quality `band`, and
+  sanitized bridge error messages for scan, stored load, and improve flows.
+- `src/promptVaultApi.ts`: rejects blank mandatory prompt metadata and blank
+  prompt quality bands before values reach row keys, selected prompt metadata,
+  source chips, or improvement deltas.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  (`72` tests passed).
+- PASS: `npm run test:ui` (`236` tests passed).
+- PASS: `npm run build`.
+- PASS: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5291" --port 5291 node /tmp/promptvault_prompt_metadata_qa.mjs`
+  (`{"status":"passed","promptLoads":2}`; no bad responses, console errors,
+  or page errors).
+- PASS: `npm run check` (`236` UI tests, Vite build, `84` Rust library tests,
+  `16` CLI tests, doc tests, and clippy).
+
+Issues:
+
+- No blocker yet.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`.
+- Run staged secrets scan, commit, full-tree secrets scan, push, and verify
+  branch parity if clean.
+
+## Previous Slice - 2026-06-08 Source metadata validation
 
 Current Goal:
 

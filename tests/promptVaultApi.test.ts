@@ -1039,6 +1039,83 @@ test("browser bridge scan results reject blank source summary metadata", async (
   );
 });
 
+test("browser bridge scan results reject blank prompt metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    output_path: null,
+    markdown: "",
+    stats: {
+      total_prompts: 1,
+      total_files: 1,
+      total_words: 0,
+      average_words: 0,
+      average_quality: 42,
+      weak_prompt_count: 0,
+      top_words: [],
+      top_phrases: [],
+      repeated_prompts: [],
+      top_quality_gaps: [],
+      prompts_by_date: [{
+        text: "2026-06-07",
+        count: 1,
+      }],
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: 1,
+        prompts_found: 1,
+        average_quality: 42,
+        weak_prompt_count: 0,
+        status: "ok",
+        notes: [],
+      }],
+    },
+    prompts: [{
+      id: "   ",
+      source: "   ",
+      session_id: "   ",
+      path: "   ",
+      timestamp: "2026-06-07T00:00:00Z",
+      cwd: null,
+      text: "   ",
+      word_count: 0,
+      char_count: 3,
+      hash: "   ",
+      risk_flags: [],
+      quality: {
+        score: 42,
+        band: "   ",
+        missing: [],
+        suggestions: [],
+      },
+    }],
+    returned_prompt_count: 1,
+    prompts_truncated: false,
+    preview_sort: "latest",
+    markdown_included: false,
+    markdown_written: false,
+    persistence: null,
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /1개 로드|알 수 없음|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject impossible numeric payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
@@ -2433,6 +2510,83 @@ test("browser bridge stored prompt loads reject malformed successful payloads", 
   );
 });
 
+test("browser bridge stored prompt loads reject blank prompt metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    output_path: null,
+    markdown: "",
+    stats: {
+      total_prompts: 1,
+      total_files: 1,
+      total_words: 0,
+      average_words: 0,
+      average_quality: 42,
+      weak_prompt_count: 0,
+      top_words: [],
+      top_phrases: [],
+      repeated_prompts: [],
+      top_quality_gaps: [],
+      prompts_by_date: [{
+        text: "2026-06-07",
+        count: 1,
+      }],
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: 1,
+        prompts_found: 1,
+        average_quality: 42,
+        weak_prompt_count: 0,
+        status: "ok",
+        notes: [],
+      }],
+    },
+    prompts: [{
+      id: "   ",
+      source: "   ",
+      session_id: "   ",
+      path: "   ",
+      timestamp: "2026-06-07T00:00:00Z",
+      cwd: null,
+      text: "   ",
+      word_count: 0,
+      char_count: 3,
+      hash: "   ",
+      risk_flags: [],
+      quality: {
+        score: 42,
+        band: "   ",
+        missing: [],
+        suggestions: [],
+      },
+    }],
+    returned_prompt_count: 1,
+    prompts_truncated: false,
+    preview_sort: "latest",
+    markdown_included: false,
+    markdown_written: false,
+    persistence: null,
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadStoredPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /1개 로드|알 수 없음|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan plans reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ generated_at: "2026-06-07T00:00:00Z" }), {
@@ -3236,6 +3390,51 @@ test("browser bridge improvements reject blank persistence database paths", asyn
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /추천 이력 #1|이 프롬프트 1회|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge improvements reject blank quality bands", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    provider: "local",
+    used_ai: false,
+    revised_prompt: "Improve this prompt by adding context and success criteria.",
+    rationale: ["Added context."],
+    checklist: ["Verify expected outcome."],
+    quality_delta: {
+      before: {
+        score: 40,
+        band: "   ",
+        missing: ["context"],
+        suggestions: ["Add context."],
+      },
+      after: {
+        score: 82,
+        band: "   ",
+        missing: [],
+        suggestions: [],
+      },
+      score_delta: 42,
+      resolved_gaps: ["context"],
+      remaining_gaps: [],
+    },
+    warnings: [],
+    persistence: null,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => improvePrompt({ prompt: "Improve this prompt." }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /알 수 없음|추천|toLocaleString|RangeError|undefined/);
       return true;
     },
   );

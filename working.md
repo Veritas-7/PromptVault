@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 02:31 KST
+Updated: 2026-06-08 02:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -42,6 +42,8 @@ Progress:
   QA, and the full project check.
 - Confirmed the temp preview QA script was removed and no matching preview or
   `gitleaks dir` process remained before staging.
+- Published code commit `998115b` to `origin/main` and verified local/remote
+  parity.
 
 Changes:
 
@@ -94,6 +96,34 @@ Tests:
   - `ps -axo pid=,command= | rg -- '--port 527[0]|promptvault_import_states_aggregate_q[a]|gitleaks dir [.] --no-banner --redact'`:
     no matches.
 
+Publication:
+
+- Explicit staged paths:
+  - `src/promptVaultApi.ts`
+  - `tests/promptVaultApi.test.ts`
+  - `working.md`
+- `git diff --cached --check`: passed.
+- `gitleaks protect --staged --no-banner --redact`: passed, scanned
+  approximately 7.43 KB, no leaks found.
+- `gh auth status`: logged in to `github.com` as `Veritas-7`; active account
+  true; git protocol HTTPS.
+- `gitleaks version`: `8.30.1`.
+- `git ls-remote origin HEAD`: `5cecd7759c045f16045f8e76a5710d116a38aad7`.
+- `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+  private repo at `https://github.com/Veritas-7/PromptVault`.
+- Commit:
+  - `998115b fix: validate import states aggregate counts`
+- `gitleaks dir . --no-banner --redact`: passed, scanned approximately
+  700.83 MB, no leaks found.
+- `git push origin main`: pushed `5cecd77..998115b` to `main`.
+- Post-push:
+  - `git fetch origin main`: passed.
+  - `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - `git status --short --branch`: `## main...origin/main`.
+  - `/tmp/promptvault_import_states_aggregate_qa.mjs`: absent.
+  - No matching preview, temp QA, or PromptVault `gitleaks dir` process
+    remained.
+
 Issues:
 
 - No app blocker found.
@@ -104,12 +134,8 @@ Research:
 
 Next Steps:
 
-- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
-  `working.md`.
-- Run staged whitespace/secrets checks plus GitHub auth/remote verification.
-- Commit as `fix: validate import states aggregate counts`, run full-tree
-  gitleaks, and push `origin main`.
-- Update this log with publication evidence and publish the docs marker.
+- Publish this working-log docs marker with explicit staging.
+- Run staged checks, full-tree gitleaks, push, and post-push parity checks.
 
 ## Current Slice - 2026-06-08 Import event progress relation validation
 

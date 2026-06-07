@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 23:41 KST
+Updated: 2026-06-07 23:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -36,8 +36,8 @@ Progress:
 - Added safe-integer validators for integer response fields while preserving
   decimal averages.
 - Verified focused API tests, full UI/unit tests, production build, preview QA,
-  and the full project check.
-- Pending: staged checks, commit, and GitHub publication.
+  the full project check, and GitHub publication.
+- Pending: publication evidence docs commit.
 
 Changes:
 
@@ -90,6 +90,22 @@ Tests:
   - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
     passed, `src/main.rs` 0 tests, doc tests 0 tests.
   - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Publication checks for `b44fdf6`:
+  - `git diff --cached --check`: passed before commit.
+  - `gitleaks protect --staged --no-banner --redact`: passed before commit,
+    scanned about 11.23 KB staged content, no leaks found.
+  - `gh auth status`: authenticated as `Veritas-7`.
+  - `gitleaks version`: `8.30.1`.
+  - `git ls-remote origin HEAD`: origin was at `07e5620` before push.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo confirmed.
+  - `gitleaks dir . --no-banner --redact`: passed, scanned about 700.70 MB.
+  - `git push origin main`: pushed `07e5620..b44fdf6`.
+  - `git fetch origin main` plus
+    `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - Final `git status --short --branch`: `## main...origin/main`.
+  - Temporary QA script check:
+    `/tmp/promptvault_fractional_integer_scan_qa.mjs` absent.
 
 Issues:
 
@@ -101,8 +117,9 @@ Research:
 
 Next Steps:
 
-- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
-  `working.md`, then run staged diff/secret checks, commit, and push.
+- Published robustness fix on `origin/main` as
+  `b44fdf6 fix: validate bridge integer payloads`.
+- Commit and push this `working.md` publication-status update.
 
 ## Current Slice - 2026-06-07 Improve score delta finite validation
 

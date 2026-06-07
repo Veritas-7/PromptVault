@@ -4840,3 +4840,89 @@ Next focus:
 
 - Stage explicit changed paths, run staged checks/gitleaks, commit, push, and
   mark the active goal complete.
+
+## 2026-06-07 - OpenAI/GLM recommendation provider verification
+
+Scope:
+
+- Added backend OpenAI Responses API support for prompt improvement while
+  keeping GLM chat completions and deterministic local fallback.
+- Provider order is now OpenAI, GLM, then local rules. Risky prompt/context
+  text still blocks external providers and falls back locally.
+- Updated UI/provider copy and English docs to say OpenAI/GLM/local instead of
+  GLM/local only.
+
+Provider implementation evidence:
+
+- Added provider-specific environment loading for `OPENAI_API_KEY`,
+  `OPENAI_BASE_URL`, `OPENAI_RESPONSES_ENDPOINT`, `OPENAI_MODEL`,
+  `GLM_API_KEY`, `GLM_API_KEY_2`, `GLM_CODING_ENDPOINT`, and
+  `GLM_CODING_MODEL`.
+- Default OpenAI model is `gpt-5.2`; `OPENAI_MODEL` overrides it.
+- Added OpenAI response parsing for both `output_text` and nested
+  `output[].content[].text` Responses API shapes.
+- Added mock HTTP tests that verify:
+  - OpenAI request path `/v1/responses`, bearer auth, model field, JSON schema
+    output format, and provider result `openai`.
+  - GLM fallback path `/chat/completions`, bearer auth, model field,
+    `json_object` response format, and provider result `glm`.
+
+Live environment:
+
+- `OPENAI_API_KEY`: unset.
+- `OPENAI_BASE_URL`: unset.
+- `OPENAI_MODEL`: unset.
+- `GLM_API_KEY`: set.
+- `GLM_API_KEY_2`: set.
+- `GLM_CODING_ENDPOINT`: set.
+- `GLM_CODING_MODEL`: set.
+
+Live verification:
+
+- `npm run check`: PASS.
+  - UI tests: `124` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `81` passed.
+  - CLI tests: `16` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- `cargo run --bin promptvault-cli -- sources --json`: all configured sources
+  reported `ok`, including Codex, Codex CX, Claude, Antigravity CLI/IDE,
+  Antigravity conversation DBs, and Gemini temporary chats.
+- SQLite vault verification at
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`:
+  - total prompt rows: `90742`
+  - source counts include `Codex=70158`, `Claude prompt history=12334`,
+    `Gemini temporary chats=2478`, `Claude Code projects=2256`,
+    `Antigravity prompt history=1659`, `Antigravity CLI transcripts=637`,
+    `Codex CX=21`, `Antigravity IDE transcripts=12`,
+    `Antigravity CLI conversation DB=10`
+  - repeated normalized prompt groups: `7743`
+- CLI local recommendation:
+  - provider `local-rules`
+  - `used_ai=false`
+  - warnings `[]`
+  - score delta `12`
+- CLI live GLM recommendation:
+  - provider `glm`
+  - `used_ai=true`
+  - warnings `[]`
+  - score delta `12`
+- Browser bridge verification on `127.0.0.1:5186` without opening an external
+  browser window:
+  - `/api/health`: `ok=true`, DB path
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite`
+  - `POST /api/prompt-facets`: `sources=11`, `dates=20`, `workspaces=20`,
+    first source `Codex` count `70158`
+  - `POST /api/prompts` with `limit=1000`: `prompt_count=1000`,
+    stored prompt count `90742`, repeated stats count `20`, top repeated
+    prompt `return exactly ok` count `70`
+  - `POST /api/improve` with `force_local=true`: provider `local-rules`,
+    warnings `[]`, score delta `12`
+
+Remaining constraint:
+
+- OpenAI live external call was not run because no `OPENAI_API_KEY` is present
+  in the current environment or loaded secret files. The OpenAI provider path
+  is covered by mock HTTP tests that exercise the actual backend request and
+  response parser.

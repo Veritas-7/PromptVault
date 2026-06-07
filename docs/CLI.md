@@ -45,7 +45,7 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174]
 - `--include-markdown` includes the Markdown body in the returned `ScanResult`; omit it for safer/leaner agent automation.
 - `improve` reads one prompt and returns provider, revised prompt, rationale, quality before/after delta, resolved gaps, remaining gaps, and warnings.
 - `improve` requires a non-empty prompt from `--prompt` or stdin and exits non-zero for empty or flag-like `--prompt` values.
-- `improve --local` bypasses GLM and uses deterministic local prompt-improvement rules for reproducible smoke tests and offline repair queues.
+- `improve --local` bypasses OpenAI/GLM and uses deterministic local prompt-improvement rules for reproducible smoke tests and offline repair queues.
 - `repair` scans weakest prompts, runs deterministic local improvement for each one, writes no Markdown export, and returns redacted prompt/recommendation pairs. Repair batches are capped at 10 records.
 - `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, and `/api/import-events` on the requested local address.
 

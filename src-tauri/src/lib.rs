@@ -15,6 +15,8 @@ use walkdir::WalkDir;
 const APP_DIR_NAME: &str = "PromptVault";
 const USER_SECRET_ENV_RELATIVE_PATH: &str = "Ai/System/70_Governance/🔐 Secrets/secrets.env";
 const PROMPTVAULT_SECRET_ENV_RELATIVE_PATH: &str = ".config/promptvault/secrets.env";
+const DEFAULT_OPENAI_RESPONSES_ENDPOINT: &str = "https://api.openai.com/v1/responses";
+const DEFAULT_OPENAI_MODEL: &str = "gpt-5.2";
 const DEFAULT_GLM_CHAT_ENDPOINT: &str = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
 const DEFAULT_GLM_MODEL: &str = "glm-4.6";
 const LARGE_SOURCE_FILE_COUNT: usize = 10_000;
@@ -1290,6 +1292,13 @@ fn selected_source_specs(source_ids: Option<&[String]>) -> Vec<SourceSpec> {
 pub async fn improve_prompt_inner(
     request: ImproveRequest,
 ) -> Result<ImproveResult, Box<dyn std::error::Error>> {
+    improve_prompt_with_env(request, load_improve_env()).await
+}
+
+async fn improve_prompt_with_env(
+    request: ImproveRequest,
+    env: HashMap<String, String>,
+) -> Result<ImproveResult, Box<dyn std::error::Error>> {
     let prompt = request.prompt.trim().to_string();
     if prompt.is_empty() {
         return Err("improve requires a non-empty prompt".into());
@@ -1311,95 +1320,194 @@ pub async fn improve_prompt_inner(
         ));
     }
 
-    let env = load_glm_env();
-    let key = glm_api_key_from_env(&env);
+    let mut warnings = Vec::new();
+    let openai_key = openai_api_key_from_env(&env);
+    let glm_key = glm_api_key_from_env(&env);
+
+    if let Some(api_key) = openai_key {
+        match request_openai_improvement(&prompt, request.context.as_deref(), &env, &api_key).await
+        {
+            Ok(mut result) => {
+                result.warnings.extend(warnings);
+                return Ok(result);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    }
+
+    if let Some(api_key) = glm_key {
+        match request_glm_improvement(&prompt, request.context.as_deref(), &env, &api_key).await {
+            Ok(mut result) => {
+                result.warnings.extend(warnings);
+                return Ok(result);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    }
+
+    if openai_api_key_from_env(&env).is_none() && glm_api_key_from_env(&env).is_none() {
+        warnings.push(
+            "OPENAI_API_KEY 및 GLM_API_KEY/GLM_API_KEY_2가 없어 로컬 fallback을 사용했습니다."
+                .to_string(),
+        );
+    }
+    Ok(local_improvement(
+        &prompt,
+        request.context.as_deref(),
+        warnings,
+    ))
+}
+
+async fn request_openai_improvement(
+    prompt: &str,
+    context: Option<&str>,
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ImproveResult, String> {
+    let endpoint = normalize_openai_responses_endpoint(
+        &env.get("OPENAI_RESPONSES_ENDPOINT")
+            .or_else(|| env.get("OPENAI_BASE_URL"))
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_OPENAI_RESPONSES_ENDPOINT.to_string()),
+    );
+    let model = openai_model_from_env(env);
+    let (system, user) = improvement_messages(prompt, context);
+    let body = serde_json::json!({
+        "model": model,
+        "input": [
+            {
+                "role": "developer",
+                "content": [
+                    { "type": "input_text", "text": system }
+                ]
+            },
+            {
+                "role": "user",
+                "content": [
+                    { "type": "input_text", "text": user }
+                ]
+            }
+        ],
+        "temperature": 0.2,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "prompt_improvement",
+                "strict": true,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "revised_prompt": { "type": "string" },
+                        "rationale": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "checklist": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    },
+                    "required": ["revised_prompt", "rationale", "checklist"]
+                }
+            }
+        }
+    });
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|err| {
+            format!("OpenAI 요청 실패: {err}; 다음 provider 또는 로컬 fallback을 사용합니다.")
+        })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "OpenAI가 HTTP {status}를 반환해 다음 provider 또는 로컬 fallback을 사용합니다."
+        ));
+    }
+
+    let value = response
+        .json::<Value>()
+        .await
+        .map_err(|err| format!("OpenAI 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용합니다."))?;
+    openai_improvement_from_response(prompt, &value).ok_or_else(|| {
+        "OpenAI 응답에 비어 있지 않은 revised_prompt가 없어 다음 provider 또는 로컬 fallback을 사용합니다."
+            .to_string()
+    })
+}
+
+async fn request_glm_improvement(
+    prompt: &str,
+    context: Option<&str>,
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ImproveResult, String> {
     let endpoint = normalize_chat_endpoint(
         &env.get("GLM_CODING_ENDPOINT")
             .cloned()
             .unwrap_or_else(|| DEFAULT_GLM_CHAT_ENDPOINT.to_string()),
     );
-    let model = glm_model_from_env(&env);
+    let model = glm_model_from_env(env);
+    let (system, user) = improvement_messages(prompt, context);
 
-    if let Some(api_key) = key {
-        let system = "You improve developer prompts. Return concise Korean guidance. Preserve user intent, make scope, context, constraints, success criteria, and verification explicit. Do not add unsupported facts.";
-        let mut user = String::new();
-        if let Some(context) = request
-            .context
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-        {
-            user.push_str("Context:\n");
-            user.push_str(context.trim());
-            user.push_str("\n\n");
-        }
-        user.push_str("Original prompt:\n");
-        user.push_str(&prompt);
-        user.push_str("\n\nReturn JSON with keys revised_prompt, rationale, checklist.");
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [
+            { "role": "system", "content": system },
+            { "role": "user", "content": user }
+        ],
+        "temperature": 0.2,
+        "response_format": { "type": "json_object" }
+    });
 
-        let body = serde_json::json!({
-            "model": model,
-            "messages": [
-                { "role": "system", "content": system },
-                { "role": "user", "content": user }
-            ],
-            "temperature": 0.2,
-            "response_format": { "type": "json_object" }
-        });
+    let client = reqwest::Client::new();
+    let response = client
+        .post(endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|err| format!("GLM 요청 실패: {err}; 로컬 fallback을 사용했습니다."))?;
 
-        let client = reqwest::Client::new();
-        match client
-            .post(endpoint)
-            .bearer_auth(api_key)
-            .json(&body)
-            .send()
-            .await
-        {
-            Ok(response) if response.status().is_success() => {
-                let value: Value = response.json().await?;
-                if let Some(content) = value
-                    .pointer("/choices/0/message/content")
-                    .and_then(Value::as_str)
-                {
-                    if let Some(result) = glm_improvement_from_content(&prompt, content) {
-                        return Ok(result);
-                    }
-                    return Ok(local_improvement(
-                        &prompt,
-                        request.context.as_deref(),
-                        vec![
-                            "GLM 응답에 비어 있지 않은 revised_prompt가 없어 로컬 fallback을 사용했습니다."
-                                .to_string(),
-                        ],
-                    ));
-                }
-            }
-            Ok(response) => {
-                let warning = format!(
-                    "GLM이 HTTP {}를 반환해 로컬 fallback을 사용했습니다.",
-                    response.status()
-                );
-                return Ok(local_improvement(
-                    &prompt,
-                    request.context.as_deref(),
-                    vec![warning],
-                ));
-            }
-            Err(err) => {
-                let warning = format!("GLM 요청 실패: {err}; 로컬 fallback을 사용했습니다.");
-                return Ok(local_improvement(
-                    &prompt,
-                    request.context.as_deref(),
-                    vec![warning],
-                ));
-            }
-        }
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "GLM이 HTTP {status}를 반환해 로컬 fallback을 사용했습니다."
+        ));
     }
 
-    Ok(local_improvement(
-        &prompt,
-        request.context.as_deref(),
-        vec!["GLM_API_KEY/GLM_API_KEY_2가 없어 로컬 fallback을 사용했습니다.".to_string()],
-    ))
+    let value = response
+        .json::<Value>()
+        .await
+        .map_err(|err| format!("GLM 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용했습니다."))?;
+    let content = value
+        .pointer("/choices/0/message/content")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "GLM 응답 content가 없어 로컬 fallback을 사용했습니다.".to_string())?;
+
+    glm_improvement_from_content(prompt, content).ok_or_else(|| {
+        "GLM 응답에 비어 있지 않은 revised_prompt가 없어 로컬 fallback을 사용했습니다.".to_string()
+    })
+}
+
+fn improvement_messages(prompt: &str, context: Option<&str>) -> (&'static str, String) {
+    let system = "You improve developer prompts. Return concise Korean guidance. Preserve user intent, make scope, context, constraints, success criteria, and verification explicit. Do not add unsupported facts.";
+    let mut user = String::new();
+    if let Some(context) = context.filter(|value| !value.trim().is_empty()) {
+        user.push_str("Context:\n");
+        user.push_str(context.trim());
+        user.push_str("\n\n");
+    }
+    user.push_str("Original prompt:\n");
+    user.push_str(prompt);
+    user.push_str("\n\nReturn JSON with keys revised_prompt, rationale, checklist.");
+    (system, user)
 }
 
 fn external_improve_block_reason(prompt: &str, context: Option<&str>) -> Option<String> {
@@ -1419,13 +1527,56 @@ fn external_improve_block_reason(prompt: &str, context: Option<&str>) -> Option<
         None
     } else {
         Some(format!(
-            "프롬프트/맥락에 위험 패턴 텍스트({})가 있어 외부 GLM 대신 로컬 fallback을 사용했습니다.",
+            "프롬프트/맥락에 위험 패턴 텍스트({})가 있어 외부 AI provider 대신 로컬 fallback을 사용했습니다.",
             flags.join(", ")
         ))
     }
 }
 
 fn glm_improvement_from_content(prompt: &str, content: &str) -> Option<ImproveResult> {
+    improvement_from_content("glm", prompt, content)
+}
+
+fn openai_improvement_from_response(prompt: &str, value: &Value) -> Option<ImproveResult> {
+    let content = openai_response_content(value)?;
+    improvement_from_content("openai", prompt, &content)
+}
+
+fn openai_response_content(value: &Value) -> Option<String> {
+    if let Some(text) = value.get("output_text").and_then(Value::as_str) {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+
+    if let Some(text) = value
+        .pointer("/choices/0/message/content")
+        .and_then(Value::as_str)
+    {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+
+    let outputs = value.get("output")?.as_array()?;
+    for output in outputs {
+        if let Some(contents) = output.get("content").and_then(Value::as_array) {
+            for item in contents {
+                if let Some(text) = item.get("text").and_then(Value::as_str) {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        return Some(trimmed.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn improvement_from_content(provider: &str, prompt: &str, content: &str) -> Option<ImproveResult> {
     if let Ok(parsed) = serde_json::from_str::<Value>(content) {
         let revised = parsed
             .get("revised_prompt")
@@ -1438,7 +1589,7 @@ fn glm_improvement_from_content(prompt: &str, content: &str) -> Option<ImproveRe
         let rationale = string_array(parsed.get("rationale"));
         let checklist = string_array(parsed.get("checklist"));
         return Some(ImproveResult {
-            provider: "glm".to_string(),
+            provider: provider.to_string(),
             used_ai: true,
             quality_delta: quality_delta(prompt, &revised),
             revised_prompt: revised,
@@ -1453,13 +1604,13 @@ fn glm_improvement_from_content(prompt: &str, content: &str) -> Option<ImproveRe
         return None;
     }
     Some(ImproveResult {
-        provider: "glm".to_string(),
+        provider: provider.to_string(),
         used_ai: true,
         quality_delta: quality_delta(prompt, &revised),
         revised_prompt: revised,
-        rationale: vec![
-            "GLM이 JSON이 아닌 텍스트를 반환해 모델 출력을 그대로 보존했습니다.".to_string(),
-        ],
+        rationale: vec![format!(
+            "{provider} provider가 JSON이 아닌 텍스트를 반환해 모델 출력을 그대로 보존했습니다."
+        )],
         checklist: prompt_checklist(),
         warnings: Vec::new(),
     })
@@ -4013,7 +4164,7 @@ fn secret_env_candidates() -> Vec<PathBuf> {
     candidates
 }
 
-fn load_glm_env() -> HashMap<String, String> {
+fn load_improve_env() -> HashMap<String, String> {
     let mut env = HashMap::new();
     for path in secret_env_candidates() {
         if let Ok(values) = read_secret_env(&path) {
@@ -4022,6 +4173,10 @@ fn load_glm_env() -> HashMap<String, String> {
         }
     }
     for key in [
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "OPENAI_RESPONSES_ENDPOINT",
+        "OPENAI_MODEL",
         "GLM_API_KEY",
         "GLM_API_KEY_2",
         "GLM_CODING_ENDPOINT",
@@ -4043,12 +4198,34 @@ fn non_empty_env_value(env: &HashMap<String, String>, key: &str) -> Option<Strin
         .map(str::to_string)
 }
 
+fn openai_api_key_from_env(env: &HashMap<String, String>) -> Option<String> {
+    non_empty_env_value(env, "OPENAI_API_KEY")
+}
+
+fn openai_model_from_env(env: &HashMap<String, String>) -> String {
+    non_empty_env_value(env, "OPENAI_MODEL").unwrap_or_else(|| DEFAULT_OPENAI_MODEL.to_string())
+}
+
 fn glm_api_key_from_env(env: &HashMap<String, String>) -> Option<String> {
     non_empty_env_value(env, "GLM_API_KEY").or_else(|| non_empty_env_value(env, "GLM_API_KEY_2"))
 }
 
 fn glm_model_from_env(env: &HashMap<String, String>) -> String {
     non_empty_env_value(env, "GLM_CODING_MODEL").unwrap_or_else(|| DEFAULT_GLM_MODEL.to_string())
+}
+
+fn normalize_openai_responses_endpoint(endpoint: &str) -> String {
+    let trimmed = endpoint.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return DEFAULT_OPENAI_RESPONSES_ENDPOINT.to_string();
+    }
+    if trimmed.ends_with("/responses") {
+        trimmed.to_string()
+    } else if trimmed.ends_with("/v1") {
+        format!("{trimmed}/responses")
+    } else {
+        format!("{trimmed}/v1/responses")
+    }
 }
 
 fn normalize_chat_endpoint(endpoint: &str) -> String {
@@ -4098,6 +4275,75 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+        haystack
+            .windows(needle.len())
+            .position(|window| window == needle)
+    }
+
+    fn captured_content_length(headers: &str) -> Option<usize> {
+        headers.lines().find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            if key.eq_ignore_ascii_case("content-length") {
+                value.trim().parse::<usize>().ok()
+            } else {
+                None
+            }
+        })
+    }
+
+    fn spawn_json_server(status: u16, body: Value) -> (String, std::sync::mpsc::Receiver<String>) {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+        let addr = listener.local_addr().expect("test server addr");
+        let (tx, rx) = mpsc::channel();
+        let response_body = body.to_string();
+
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept one test request");
+            let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 4096];
+
+            loop {
+                match stream.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(count) => {
+                        bytes.extend_from_slice(&buffer[..count]);
+                        if let Some(header_end) = find_subslice(&bytes, b"\r\n\r\n") {
+                            let headers = String::from_utf8_lossy(&bytes[..header_end]);
+                            let body_len = captured_content_length(&headers).unwrap_or(0);
+                            if bytes.len() >= header_end + 4 + body_len {
+                                break;
+                            }
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+
+            let request = String::from_utf8_lossy(&bytes).to_string();
+            let _ = tx.send(request);
+            let status_text = if status == 200 {
+                "200 OK"
+            } else {
+                "500 Internal Server Error"
+            };
+            let response = format!(
+                "HTTP/1.1 {status_text}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response_body.len(),
+                response_body
+            );
+            let _ = stream.write_all(response.as_bytes());
+        });
+
+        (format!("http://{addr}"), rx)
+    }
 
     #[test]
     fn strips_codex_injected_context() {
@@ -4203,6 +4449,74 @@ mod tests {
     }
 
     #[test]
+    fn openai_response_parser_reads_output_text() {
+        let value = serde_json::json!({
+            "output_text": "{\"revised_prompt\":\"목표:\\n- Improve parsing tests\\n\\n검증:\\n- cargo test\",\"rationale\":[\"structured\"],\"checklist\":[\"run tests\"]}"
+        });
+
+        let result =
+            openai_improvement_from_response("make better", &value).expect("parse openai output");
+
+        assert_eq!(result.provider, "openai");
+        assert!(result.used_ai);
+        assert!(result.revised_prompt.contains("목표:"));
+    }
+
+    #[test]
+    fn openai_response_parser_reads_nested_output_text() {
+        let value = serde_json::json!({
+            "output": [{
+                "content": [{
+                    "type": "output_text",
+                    "text": "{\"revised_prompt\":\"목표:\\n- Improve nested output parsing\\n\\n검증:\\n- cargo test\",\"rationale\":[\"nested\"],\"checklist\":[\"verify\"]}"
+                }]
+            }]
+        });
+
+        let result =
+            openai_improvement_from_response("make better", &value).expect("parse nested output");
+
+        assert_eq!(result.provider, "openai");
+        assert!(result.revised_prompt.contains("nested output"));
+    }
+
+    #[test]
+    fn openai_api_key_selection_ignores_blank_key() {
+        let mut env = HashMap::new();
+        env.insert("OPENAI_API_KEY".to_string(), "   ".to_string());
+
+        assert!(openai_api_key_from_env(&env).is_none());
+    }
+
+    #[test]
+    fn openai_model_selection_ignores_blank_model() {
+        let mut env = HashMap::new();
+        env.insert("OPENAI_MODEL".to_string(), "   ".to_string());
+
+        assert_eq!(openai_model_from_env(&env), DEFAULT_OPENAI_MODEL);
+    }
+
+    #[test]
+    fn normalizes_openai_responses_endpoint() {
+        assert_eq!(
+            normalize_openai_responses_endpoint(""),
+            DEFAULT_OPENAI_RESPONSES_ENDPOINT
+        );
+        assert_eq!(
+            normalize_openai_responses_endpoint("https://api.openai.com"),
+            "https://api.openai.com/v1/responses"
+        );
+        assert_eq!(
+            normalize_openai_responses_endpoint("https://api.openai.com/v1"),
+            "https://api.openai.com/v1/responses"
+        );
+        assert_eq!(
+            normalize_openai_responses_endpoint("https://api.openai.com/v1/responses"),
+            "https://api.openai.com/v1/responses"
+        );
+    }
+
+    #[test]
     fn glm_api_key_selection_ignores_blank_primary_key() {
         let mut env = HashMap::new();
         env.insert("GLM_API_KEY".to_string(), "   ".to_string());
@@ -4217,6 +4531,87 @@ mod tests {
         env.insert("GLM_CODING_MODEL".to_string(), "   ".to_string());
 
         assert_eq!(glm_model_from_env(&env), "glm-4.6");
+    }
+
+    #[tokio::test]
+    async fn improve_prompt_with_env_uses_openai_provider() {
+        let response = serde_json::json!({
+            "output": [{
+                "content": [{
+                    "type": "output_text",
+                    "text": "{\"revised_prompt\":\"목표:\\n- Make the parser test failure reproducible\\n\\n맥락:\\n- Preserve user files\\n\\n검증:\\n- cargo test parser\",\"rationale\":[\"adds goal and verification\"],\"checklist\":[\"run targeted test\"]}"
+                }]
+            }]
+        });
+        let (base_url, request_rx) = spawn_json_server(200, response);
+        let mut env = HashMap::new();
+        env.insert("OPENAI_API_KEY".to_string(), "mock-openai-key".to_string());
+        env.insert("OPENAI_MODEL".to_string(), "mock-openai-model".to_string());
+        env.insert(
+            "OPENAI_RESPONSES_ENDPOINT".to_string(),
+            format!("{base_url}/v1/responses"),
+        );
+
+        let result = improve_prompt_with_env(
+            ImproveRequest {
+                prompt: "make better".to_string(),
+                context: Some("workspace policy: preserve user files".to_string()),
+                force_local: None,
+            },
+            env,
+        )
+        .await
+        .expect("openai improvement");
+
+        let request = request_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("captured openai request");
+        assert_eq!(result.provider, "openai");
+        assert!(result.used_ai);
+        assert!(result.warnings.is_empty());
+        assert!(result.revised_prompt.contains("검증:"));
+        assert!(request.starts_with("POST /v1/responses HTTP/1.1"));
+        assert!(request.contains("authorization: Bearer mock-openai-key"));
+        assert!(request.contains("\"model\":\"mock-openai-model\""));
+        assert!(request.contains("\"json_schema\""));
+    }
+
+    #[tokio::test]
+    async fn improve_prompt_with_env_uses_glm_when_openai_is_missing() {
+        let response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": "{\"revised_prompt\":\"목표:\\n- Make the GLM path reproducible\\n\\n검증:\\n- cargo test glm\",\"rationale\":[\"uses glm\"],\"checklist\":[\"inspect request\"]}"
+                }
+            }]
+        });
+        let (base_url, request_rx) = spawn_json_server(200, response);
+        let mut env = HashMap::new();
+        env.insert("GLM_API_KEY".to_string(), "mock-glm-key".to_string());
+        env.insert("GLM_CODING_MODEL".to_string(), "mock-glm-model".to_string());
+        env.insert("GLM_CODING_ENDPOINT".to_string(), base_url);
+
+        let result = improve_prompt_with_env(
+            ImproveRequest {
+                prompt: "make better".to_string(),
+                context: None,
+                force_local: None,
+            },
+            env,
+        )
+        .await
+        .expect("glm improvement");
+
+        let request = request_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("captured glm request");
+        assert_eq!(result.provider, "glm");
+        assert!(result.used_ai);
+        assert!(result.warnings.is_empty());
+        assert!(request.starts_with("POST /chat/completions HTTP/1.1"));
+        assert!(request.contains("authorization: Bearer mock-glm-key"));
+        assert!(request.contains("\"model\":\"mock-glm-model\""));
+        assert!(request.contains("\"json_object\""));
     }
 
     #[tokio::test]

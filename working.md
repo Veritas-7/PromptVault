@@ -1,10 +1,102 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 00:29 KST
+Updated: 2026-06-08 00:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Import state aggregate bounds
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge import state summary counters whose completed or
+  processed counts exceed their totals before the saved import panel can render
+  impossible text such as `2 / 1` or `12 / 10`.
+
+Context:
+
+- Import state rows already reject per-source cursor/progress values beyond
+  `total_files`.
+- The saved import progress panel also renders top-level aggregate
+  `completed_sources / total_sources` and `processed_files / total_files`, but
+  those aggregate relationships were not covered when nested rows were valid.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for `/api/import-states` returning valid nested state rows
+  but impossible top-level aggregate counters.
+- Added aggregate relation validation for `completed_sources <= total_sources`
+  and `processed_files <= total_files`.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Requires import-state aggregate completed and processed counters to stay
+    within their totals.
+- `tests/promptVaultApi.test.ts`
+  - Adds bridge response-shape coverage for impossible import-state aggregate
+    counters when nested state rows are otherwise valid.
+- `working.md`
+  - Records this import state aggregate bounds slice.
+  - Marks the previous import event counter publication evidence docs commit
+    as pushed.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new aggregate import-state test
+    resolved instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 31 tests, 31 pass.
+- `npm run test:ui`:
+  - Passed: 195 tests, 195 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-BPHmJeso.js`.
+- Import state aggregate browser QA on preview `127.0.0.1:5259`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/import-states` returned HTTP 200 with valid nested state rows but
+    aggregate counters that would have rendered as `2 / 1` and `12 / 10`.
+  - Clicking the saved import progress refresh button rendered the
+    panel-specific failure notice.
+  - The impossible source aggregate, impossible file aggregate, and nested row
+    were not rendered.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=1`,
+    `/api/import-states=2`, `/api/import-events=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 195 tests, 195 pass.
+  - Build: passed with `index-BPHmJeso.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then run staged diff/secret checks, commit, and push.
 
 ## Current Slice - 2026-06-08 Import event counter bounds
 
@@ -36,8 +128,8 @@ Progress:
 - Added import event relation validation for `processed_files <= total_files`
   and `batch_start_index + batch_file_count <= total_files`.
 - Verified focused API tests, full UI/unit tests, production build, preview
-  QA, the full project check, staged checks, and GitHub publication.
-- Pending: publication evidence docs commit.
+  QA, the full project check, staged checks, GitHub publication, and
+  publication evidence docs commit.
 
 Changes:
 
@@ -122,7 +214,8 @@ Next Steps:
 
 - Published robustness fix on `origin/main` as
   `ca9d43a fix: validate import event counters`.
-- Commit and push this `working.md` publication-status update.
+- Published publication-status update on `origin/main` as
+  `9ec395f docs: mark import event counter validation pushed`.
 
 ## Current Slice - 2026-06-08 Bridge preview sort validation
 

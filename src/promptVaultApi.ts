@@ -398,9 +398,9 @@ function parseImportStatesResult(value: unknown): ImportStatesResult {
     || !Array.isArray(value.states)
     || !value.states.every(isImportState)
     || !isNonNegativeSafeInteger(value.total_sources)
-    || !isNonNegativeSafeInteger(value.completed_sources)
+    || !isNonNegativeSafeIntegerAtMost(value.completed_sources, value.total_sources)
     || !isNonNegativeSafeInteger(value.total_files)
-    || !isNonNegativeSafeInteger(value.processed_files)
+    || !isNonNegativeSafeIntegerAtMost(value.processed_files, value.total_files)
     || !isNonNegativeSafeInteger(value.imported_prompt_count)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }

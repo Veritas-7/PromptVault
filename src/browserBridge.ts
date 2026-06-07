@@ -26,6 +26,32 @@ export function bridgeEndpoint(path: string): string {
   return `${BROWSER_BRIDGE_URL}${path}`;
 }
 
+function parseBrowserBridgeHealth(text: string): BrowserBridgeHealth {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("PromptVault 브라우저 브리지 상태 응답을 JSON으로 해석하지 못했습니다.");
+  }
+
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new Error("PromptVault 브라우저 브리지 상태 응답 형식이 올바르지 않습니다.");
+  }
+
+  const health = parsed as Partial<BrowserBridgeHealth>;
+  if (health.ok !== true) {
+    throw new Error("PromptVault 브라우저 브리지가 정상 상태를 보고하지 않았습니다.");
+  }
+  if (typeof health.database_path !== "string" || health.database_path.trim() === "") {
+    throw new Error("PromptVault 브라우저 브리지 상태 응답 형식이 올바르지 않습니다.");
+  }
+
+  return {
+    database_path: health.database_path,
+    ok: true,
+  };
+}
+
 export async function checkBrowserBridgeHealth(timeoutMs = 1200): Promise<BrowserBridgeHealth> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -50,11 +76,7 @@ export async function checkBrowserBridgeHealth(timeoutMs = 1200): Promise<Browse
     if (!response.ok) {
       throw new Error(text || `PromptVault 브라우저 브리지가 HTTP ${response.status}를 반환했습니다.`);
     }
-    try {
-      return JSON.parse(text) as BrowserBridgeHealth;
-    } catch {
-      throw new Error("PromptVault 브라우저 브리지 상태 응답을 JSON으로 해석하지 못했습니다.");
-    }
+    return parseBrowserBridgeHealth(text);
   } finally {
     window.clearTimeout(timer);
   }

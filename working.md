@@ -1,10 +1,106 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 21:30 KST
+Updated: 2026-06-07 21:38 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Bridge health payload validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent semantically invalid `/api/health` JSON from marking the browser
+  bridge connected.
+
+Context:
+
+- Previous slices normalized malformed JSON, network failures, and unreadable
+  response bodies for browser bridge health/API calls.
+- A remaining edge existed when `/api/health` returned HTTP 200 with valid JSON
+  but invalid health semantics, such as `ok: false` or a missing
+  `database_path`.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added RED coverage for unhealthy and malformed successful health payloads.
+- Added runtime validation after JSON parsing so health must be an object with
+  `ok === true` and a non-empty `database_path`.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+
+Changes:
+
+- `src/browserBridge.ts`
+  - Adds `parseBrowserBridgeHealth()` to validate parsed `/api/health`
+    responses before returning connected browser bridge health.
+  - Rejects `ok !== true` with stable PromptVault bridge health copy.
+  - Rejects missing/blank `database_path` with stable PromptVault response
+    shape copy.
+- `tests/browserBridge.test.ts`
+  - Adds coverage that `ok: false` is rejected before the bridge can become
+    connected.
+  - Adds coverage that `{ ok: true }` without `database_path` is rejected.
+- `working.md`
+  - Records this bridge health payload validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/browserBridge.test.ts`
+  - Failed for the intended reason: both new invalid health payload tests saw
+    `Missing expected rejection.`
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/browserBridge.test.ts`
+  - Passed: 7 tests, 7 pass.
+- `npm run test:ui`:
+  - Passed: 162 tests, 162 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-kE7eaz1w.js`.
+- Invalid health payload browser QA on preview `127.0.0.1:5238`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - First `/api/health` returned HTTP 200 JSON with `ok: false` and a database
+    path.
+  - UI stayed in disconnected bridge recovery state instead of exposing the
+    invalid database path or internal health validation copy.
+  - While disconnected, quick scan, stored load, and plan stayed disabled, and
+    bridge recheck stayed enabled.
+  - Clicking bridge recheck made a second valid health call, rendered connected
+    status with `/tmp/promptvault-invalid-health.sqlite`, and unlocked top
+    actions.
+  - Quiet refreshes after successful recheck completed once each for
+    `/api/prompt-facets`, `/api/import-states`, and `/api/import-events`.
+  - Final counts: `health=2`, `facets=1`, `importStates=1`,
+    `importEvents=1`, `unexpected=[]`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 162 tests, 162 pass.
+  - Build: passed with `index-kE7eaz1w.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Commit and push this health payload validation fix after staged safety checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state after publication.
 
 ## Current Slice - 2026-06-07 Unreadable bridge response body handling
 

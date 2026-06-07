@@ -136,3 +136,76 @@ test("bridge health reports unreadable response bodies without raw stream errors
     },
   );
 });
+
+test("bridge health rejects unhealthy responses before marking the bridge connected", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const globalWithWindow = globalThis as typeof globalThis & {
+    window?: {
+      clearTimeout: typeof clearTimeout;
+      setTimeout: typeof setTimeout;
+    };
+  };
+  const originalWindow = globalWithWindow.window;
+
+  globalWithWindow.window = {
+    clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    setTimeout: globalThis.setTimeout.bind(globalThis),
+  };
+  globalThis.fetch = async () => new Response(
+    JSON.stringify({ database_path: "/tmp/promptvault.sqlite", ok: false }),
+    { status: 200 },
+  );
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) {
+      delete globalWithWindow.window;
+    } else {
+      globalWithWindow.window = originalWindow;
+    }
+  });
+
+  await assert.rejects(
+    () => checkBrowserBridgeHealth(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지가 정상 상태를 보고하지 않았습니다/);
+      return true;
+    },
+  );
+});
+
+test("bridge health rejects malformed successful health payloads", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const globalWithWindow = globalThis as typeof globalThis & {
+    window?: {
+      clearTimeout: typeof clearTimeout;
+      setTimeout: typeof setTimeout;
+    };
+  };
+  const originalWindow = globalWithWindow.window;
+
+  globalWithWindow.window = {
+    clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    setTimeout: globalThis.setTimeout.bind(globalThis),
+  };
+  globalThis.fetch = async () => new Response(JSON.stringify({ ok: true }), { status: 200 });
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) {
+      delete globalWithWindow.window;
+    } else {
+      globalWithWindow.window = originalWindow;
+    }
+  });
+
+  await assert.rejects(
+    () => checkBrowserBridgeHealth(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 상태 응답 형식이 올바르지 않습니다/);
+      return true;
+    },
+  );
+});

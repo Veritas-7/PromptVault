@@ -76,7 +76,7 @@ import {
   selectedPromptEmptyText,
 } from "./promptEmptyState";
 import { promptRowAriaLabel, selectedPromptMetaLabel } from "./promptRowA11y";
-import { qualityBandLabel } from "./qualityLabels";
+import { qualityBandClass, qualityBandLabel } from "./qualityLabels";
 import {
   cancelScan,
   importBatch,
@@ -1870,7 +1870,7 @@ function App() {
                 <span className="prompt-meta">
                   {prompt.source} · {prompt.word_count.toLocaleString()}개 단어
                 </span>
-                <span className={`quality-pill ${prompt.quality.band}`}>
+                <span className={`quality-pill ${qualityBandClass(prompt.quality.band)}`}>
                   {prompt.quality.score} · {qualityBandLabel(prompt.quality.band)}
                 </span>
                 <strong>{oneLine(prompt.text)}</strong>

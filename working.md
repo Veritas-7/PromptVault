@@ -1,10 +1,89 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 18:55 KST
+Updated: 2026-06-07 18:59 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Quality band CSS class normalization
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Ensure prompt quality band pills use normalized CSS classes as well as
+  localized visible labels.
+
+Context:
+
+- The prior quality-label slice localized prompt row text and accessibility
+  metadata.
+- Follow-up inspection found the rendered class still used raw backend/legacy
+  band strings, so `GOOD` could become `class="quality-pill GOOD"` and miss the
+  intended pill styling.
+
+Progress:
+
+- Added a shared `qualityBandClass` helper.
+- Updated prompt row quality pills to use the normalized class.
+- Added explicit `excellent`, `good`, and `unknown` pill styles.
+- Added helper coverage for class normalization.
+
+Changes:
+
+- `src/qualityLabels.ts`
+  - Added `qualityBandClass` for known, legacy, and unknown band values.
+- `src/App.tsx`
+  - Uses `qualityBandClass` for prompt row pill class names.
+- `src/App.css`
+  - Added styled `.quality-pill.excellent`, `.quality-pill.good`, and
+    `.quality-pill.unknown` states.
+- `tests/qualityLabels.test.ts`
+  - Added class normalization coverage.
+- `working.md`
+  - Recorded this CSS class polish slice and marked the prior quality label
+    slice as pushed.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/qualityLabels.test.ts`:
+  - 3 passed.
+- `npm run build`:
+  - `tsc && vite build` passed.
+- Quality band class browser QA on preview `127.0.0.1:5204` + bridge
+  `127.0.0.1:5174`:
+  - Mocked `GOOD` rendered as text `82 · 좋음` with
+    `class="quality-pill good"` and styled background `rgb(237, 247, 232)`.
+  - Mocked `excellent` rendered as text `95 · 우수` with
+    `class="quality-pill excellent"` and styled background
+    `rgb(229, 245, 239)`.
+  - Mocked unknown `custom` rendered as `63 · custom` with
+    `class="quality-pill unknown"` and styled background `rgb(238, 241, 244)`.
+  - No raw `GOOD` class remained.
+  - Page width stayed within `1365 / 1365`.
+  - Unexpected console issues, page errors, request failures, HTTP failures:
+    none.
+- `npm run check`:
+  - UI tests: 149 passed.
+  - Build: passed.
+  - Rust lib tests: 84 passed.
+  - Rust CLI tests: 16 passed.
+  - Doc-tests: passed.
+  - Clippy with `-D warnings`: passed.
+
+Issues:
+
+- No blocker found after this fix.
+
+Research:
+
+- No external research. This was derived from rendered local QA output.
+
+Next Steps:
+
+- Commit and push this quality band CSS class polish slice.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Quality band Korean labels
 
@@ -85,7 +164,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this quality band label polish slice.
+- Completed and pushed as `ffbe25b fix: localize quality band labels`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Scan stale-result failure recovery QA

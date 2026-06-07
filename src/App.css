@@ -886,6 +886,16 @@ h3 {
   color: #24612f;
 }
 
+.quality-pill.excellent {
+  background: #e5f5ef;
+  color: #13543c;
+}
+
+.quality-pill.good {
+  background: #edf7e8;
+  color: #2f642b;
+}
+
 .quality-pill.workable {
   background: #fff6d9;
   color: #735511;
@@ -894,6 +904,11 @@ h3 {
 .quality-pill.weak {
   background: #ffebe5;
   color: #8a3928;
+}
+
+.quality-pill.unknown {
+  background: #eef1f4;
+  color: #4f5e6b;
 }
 
 .risk {

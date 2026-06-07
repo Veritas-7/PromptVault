@@ -1,12 +1,125 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 08:01 KST
+Updated: 2026-06-08 08:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Duplicate import state source ID validation
+## Current Slice - 2026-06-08 Duplicate import event ID validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge import event payloads whose `events` contain duplicate
+  event `id` values.
+
+Context:
+
+- Recent slices tightened duplicate source ID handling for scan summaries, scan
+  plans, and saved import states.
+- Import events are rendered as recent activity rows and carry persistent DB
+  event identifiers. The parser validates row shape and total event count, but
+  it does not require `events[].id` values to be unique.
+- Duplicate event IDs make recent import history ambiguous even when every row
+  is otherwise valid and `total_events` is consistent.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault` with no goal-warning.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the direct parent project policy and relevant import event
+  parser/test context.
+- Identified the next narrow hardening target: uniqueness for import event
+  `events[].id`.
+- Added a RED API test for a malformed import events result whose `events`
+  repeat `id: 7` while row shapes and `total_events` remain consistent.
+- Confirmed RED first: focused API suite failed 106/107 only on the new
+  missing-rejection case.
+- Added parser validation requiring import event `events[].id` values to be
+  unique before recent import history rows are trusted.
+- Confirmed GREEN after the parser change: focused API suite passes 107/107.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed import events response with duplicate event IDs
+  surfaced sanitized global and recent-import-history failure UI, and the
+  duplicated event payload was not rendered.
+- Confirmed `/tmp/promptvault_duplicate_import_event_id_qa.mjs` is absent and
+  preview port `5312` has no listener after the server wrapper stopped the
+  preview process.
+- Confirmed the full project check still passes after the parser and test
+  changes.
+- Confirmed pre-staging whitespace, repo parity, cleanup, and GitHub privacy
+  checks before staging explicit paths.
+- Staged only the intended slice files and confirmed the staged secret scan is
+  clean.
+
+Changes:
+
+- `working.md`: records the current duplicate import event ID validation slice.
+- `src/promptVaultApi.ts`: adds number-field uniqueness validation and connects
+  it to import event `id` validation.
+- `tests/promptVaultApi.test.ts`: adds the duplicate import event ID rejection
+  case for browser-bridge import event results.
+
+Tests:
+
+- Baseline repo verification: `git rev-parse --show-toplevel`,
+  `git status --short --branch`, `git rev-list --left-right --count HEAD...origin/main`,
+  and `git remote -v` showed repo root
+  `/Users/wj/Ai/System/10_Projects/PromptVault`, clean `main...origin/main`,
+  parity `0 0`, and only `origin`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 106/107 only on the new duplicate import event ID case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 107/107 after the parser validation change.
+- Broader UI/helper suite: `npm run test:ui` passed 271/271.
+- Production build: `npm run build` passed (`tsc && vite build`).
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5312" --port 5312 --timeout 30 node /tmp/promptvault_duplicate_import_event_id_qa.mjs http://127.0.0.1:5312`
+  passed after correcting the temp script's expected failure copy to the actual
+  UI text `가져오기 기록 새로고침에 실패했습니다`. The page reached
+  `[data-browser-bridge-status="connected"]`, clicking
+  `[data-refresh-import-events="true"]` produced
+  `[data-import-events-refresh-error="true"]`, the global error stayed
+  sanitized, and the UI did not expose `Claude duplicate`, raw aggregate text,
+  `source_label`, `toLocaleString`, `RangeError`, or `undefined`.
+- Cleanup check: `/tmp/promptvault_duplicate_import_event_id_qa.mjs` is absent
+  and port `5312` is free.
+- Full check: `npm run check` passed: UI suite 271/271, production build,
+  Rust library tests 84/84, CLI tests 16/16, and clippy with `-D warnings`.
+- Pre-staging checks: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed with no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md` modified; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` showed only `origin`; temp cleanup and port
+  `5312` were clean; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `PRIVATE` and `isPrivate: true`.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact` scanned
+  about 7.84 KB and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Re-stage `working.md`, rerun staged secret scan, then commit and push the
+  finished slice.
+
+## Previous Slice - 2026-06-08 Duplicate import state source ID validation
 
 Current Goal:
 

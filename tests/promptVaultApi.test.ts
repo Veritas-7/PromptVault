@@ -669,6 +669,57 @@ test("browser bridge import events reject blank database paths", async (t) => {
   );
 });
 
+test("browser bridge import events reject duplicate event ids", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    events: [{
+      id: 7,
+      generated_at: "2026-06-07T00:00:00Z",
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      batch_start_index: 0,
+      batch_file_count: 2,
+      batch_prompt_count: 1,
+      processed_files: 2,
+      total_files: 2,
+      completed: true,
+      warnings: [],
+    }, {
+      id: 7,
+      generated_at: "2026-06-07T00:00:01Z",
+      source_id: "claude",
+      source_label: "Claude duplicate",
+      root_path: "/tmp/claude",
+      batch_start_index: 0,
+      batch_file_count: 3,
+      batch_prompt_count: 2,
+      processed_files: 3,
+      total_files: 3,
+      completed: true,
+      warnings: [],
+    }],
+    total_events: 2,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listImportEvents(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Claude duplicate|전체 이벤트 2개|3개 파일|2개 프롬프트|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge import events reject blank source metadata", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

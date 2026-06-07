@@ -320,11 +320,24 @@ function isSourceSummary(value: unknown): boolean {
 
 function recordStringFieldValuesAreUnique(values: unknown, fieldName: string): boolean {
   if (!Array.isArray(values)) return false;
-  const sourceIds = new Set<string>();
+  const seenValues = new Set<string>();
   for (const value of values) {
     if (!isRecord(value) || !isNonBlankString(value[fieldName])) return false;
-    if (sourceIds.has(value[fieldName])) return false;
-    sourceIds.add(value[fieldName]);
+    if (seenValues.has(value[fieldName])) return false;
+    seenValues.add(value[fieldName]);
+  }
+  return true;
+}
+
+function recordNumberFieldValuesAreUnique(values: unknown, fieldName: string): boolean {
+  if (!Array.isArray(values)) return false;
+  const seenValues = new Set<number>();
+  for (const value of values) {
+    if (!isRecord(value)) return false;
+    const fieldValue = value[fieldName];
+    if (!isNonNegativeSafeInteger(fieldValue)) return false;
+    if (seenValues.has(fieldValue)) return false;
+    seenValues.add(fieldValue);
   }
   return true;
 }
@@ -339,6 +352,10 @@ function sourcePlanIdsAreUnique(sources: unknown): boolean {
 
 function importStateSourceIdsAreUnique(states: unknown): boolean {
   return recordStringFieldValuesAreUnique(states, "source_id");
+}
+
+function importEventIdsAreUnique(events: unknown): boolean {
+  return recordNumberFieldValuesAreUnique(events, "id");
 }
 
 function sourceFilesSeenTotalMatches(sourceSummaries: unknown, totalFiles: unknown): boolean {
@@ -836,6 +853,7 @@ function parseImportEventsResult(value: unknown): ImportEventsResult {
     || !isNonBlankString(value.database_path)
     || !Array.isArray(value.events)
     || !value.events.every(isImportEvent)
+    || !importEventIdsAreUnique(value.events)
     || !isNonNegativeSafeInteger(value.total_events)
     || value.total_events < value.events.length) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);

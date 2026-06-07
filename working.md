@@ -1,12 +1,129 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 08:16 KST
+Updated: 2026-06-08 08:23 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Duplicate stored facet value validation
+## Current Slice - 2026-06-08 Duplicate prompt record ID validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/stored prompt payloads whose `prompts` array
+  contains duplicate prompt record IDs.
+
+Context:
+
+- Recent slices tightened duplicate ID/value handling for source summaries,
+  scan plans, saved import states, recent import events, and stored prompt
+  facets.
+- `ScanResult.prompts` is rendered with `key={prompt.id}` and drives selected
+  prompt, improvement, and persisted recommendation targeting by prompt ID.
+- Duplicate prompt IDs from the browser bridge can make list rendering,
+  selection state, and improvement persistence ambiguous even when aggregate
+  counts and individual prompt row shapes are otherwise valid.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault` with no goal-warning.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the direct parent project policy, README quickstart, relevant skills,
+  and the scan result parser/rendering context.
+- Identified the next narrow hardening target: uniqueness for browser-bridge
+  `prompts[].id` values before prompt rows are trusted.
+- Added a RED API test for a malformed scan result whose `prompts` array
+  repeats `id: "prompt-duplicate"` while aggregate counts remain consistent.
+- Confirmed RED first: focused API suite failed 108/109 only on the new
+  missing-rejection case.
+- Added parser validation requiring scan/stored prompt `prompts[].id` values to
+  be unique before prompt rows are trusted.
+- Confirmed GREEN after the parser change: focused API suite passes 109/109.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed stored prompt load response with duplicate prompt
+  IDs surfaced sanitized global and stored-load failure UI, and the duplicated
+  prompt payload was not rendered as prompt rows.
+- Confirmed `/tmp/promptvault_duplicate_prompt_id_qa.mjs` is absent and
+  preview port `5314` has no listener after the server wrapper stopped the
+  preview process.
+- Confirmed the full project check still passes after the parser and test
+  changes.
+- Confirmed pre-staging whitespace, repo parity, cleanup, and GitHub privacy
+  checks before staging explicit paths.
+- Staged only the intended slice files and confirmed the staged secret scan is
+  clean.
+
+Changes:
+
+- `working.md`: records the current duplicate prompt record ID validation
+  slice.
+- `src/promptVaultApi.ts`: adds prompt record ID uniqueness validation and
+  connects it to scan/stored prompt result parsing.
+- `tests/promptVaultApi.test.ts`: adds the duplicate prompt record ID
+  rejection case for browser-bridge scan results.
+
+Tests:
+
+- Baseline repo verification: `git rev-parse --show-toplevel`,
+  `git status --short --branch`, `git rev-list --left-right --count HEAD...origin/main`,
+  and `git remote -v` showed repo root
+  `/Users/wj/Ai/System/10_Projects/PromptVault`, clean `main...origin/main`,
+  parity `0 0`, and only `origin`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 108/109 only on the new duplicate prompt ID case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 109/109 after the parser validation change.
+- Broader UI/helper suite: `npm run test:ui` passed 273/273.
+- Production build: `npm run build` passed (`tsc && vite build`).
+- Preview QA: first script attempt failed because the temporary Playwright JS
+  script used `browser.new_page()` instead of `browser.newPage()`; corrected the
+  temp script and reran the app QA successfully. Final command:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5314" --port 5314 --timeout 30 node /tmp/promptvault_duplicate_prompt_id_qa.mjs http://127.0.0.1:5314`
+  passed. The page reached `[data-browser-bridge-status="connected"]`, clicking
+  `[data-load-stored-prompts="true"]` produced
+  `[data-stored-load-error="true"]`, the global error stayed sanitized, no
+  `[data-prompt-row="true"]` rows rendered, and the UI did not expose
+  `prompt-duplicate`, `Improve this prompt.`, `2개 로드됨`, or
+  `codex · 3개 단어`.
+- Cleanup check: `/tmp/promptvault_duplicate_prompt_id_qa.mjs` is absent and
+  port `5314` is free.
+- Full project check: `npm run check` passed. It reran UI tests 273/273,
+  production build, Rust library tests 84/84, CLI tests 16/16, doctests, and
+  clippy with `-D warnings`.
+- Pre-staging checks: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed with no output. `git rev-parse --show-toplevel` returned
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md` modified; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` showed only `origin`; GitHub reported
+  `Veritas-7/PromptVault` as `PRIVATE`; temp QA script remained absent; and
+  port `5314` remained free.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact` scanned
+  about 7.49 KB and reported no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit and push the finished implementation slice, then record closeout.
+
+## Previous Slice - 2026-06-08 Duplicate stored facet value validation
 
 Current Goal:
 

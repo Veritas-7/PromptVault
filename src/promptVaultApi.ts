@@ -350,6 +350,10 @@ function sourcePlanIdsAreUnique(sources: unknown): boolean {
   return recordStringFieldValuesAreUnique(sources, "id");
 }
 
+function promptRecordIdsAreUnique(prompts: unknown): boolean {
+  return recordStringFieldValuesAreUnique(prompts, "id");
+}
+
 function importStateSourceIdsAreUnique(states: unknown): boolean {
   return recordStringFieldValuesAreUnique(states, "source_id");
 }
@@ -908,6 +912,7 @@ function parseScanResult(value: unknown): ScanResult {
     || !isScanStats(value.stats)
     || !Array.isArray(value.prompts)
     || !value.prompts.every(isPromptRecord)
+    || !promptRecordIdsAreUnique(value.prompts)
     || !isReturnedPromptCount(value.returned_prompt_count, value.prompts, value.stats)
     || !isPromptTruncationState(value.prompts_truncated, value.returned_prompt_count, value.stats)
     || !isUntruncatedPromptWordTotal(value)

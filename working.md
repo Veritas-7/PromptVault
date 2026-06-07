@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 01:59 KST
+Updated: 2026-06-08 02:00 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -47,6 +47,8 @@ Progress:
   full-tree gitleaks before publication.
 - Published robustness fix on `origin/main` as
   `4da5ff0 fix: validate scan truncation state`.
+- Published publication-status update on `origin/main` as
+  `2e7f2c0 docs: mark scan truncation validation pushed`.
 - Verified post-push parity: `git rev-list --left-right --count
   HEAD...origin/main` returned `0 0`, `git status --short --branch` returned
   only `## main...origin/main`, the temp QA script was absent, and no matching
@@ -129,6 +131,23 @@ Tests:
   - `/tmp/promptvault_unmarked_truncation_qa.mjs`: `temp-absent`.
   - `ps -axo pid=,command= | rg -- '--port 526[6]|promptvault_unmarked_truncation_q[a]|gitleaks dir [.] --no-banner --redact'`:
     no matches.
+- Publication-status docs checks:
+  - `git diff --cached --check`: passed.
+  - `gitleaks protect --staged --no-banner --redact`: scanned about 2 KB in
+    29 ms, no leaks found.
+  - `git commit -m "docs: mark scan truncation validation pushed"`:
+    `2e7f2c0`.
+  - `gitleaks dir . --no-banner --redact`: scanned about 700.79 MB in 19s,
+    no leaks found.
+  - `git push origin main`: pushed `4da5ff0..2e7f2c0` to `main`.
+  - `git fetch origin main`: fetched `main` from `origin`.
+  - `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - `git status --short --branch`: `## main...origin/main`.
+  - `git log --oneline -5`: `2e7f2c0`, `4da5ff0`, `1611ecc`, `4164446`,
+    `2d27a4d`.
+  - `/tmp/promptvault_unmarked_truncation_qa.mjs`: `temp-absent`.
+  - `ps -axo pid=,command= | rg -- '--port 526[6]|promptvault_unmarked_truncation_q[a]|gitleaks dir [.] --no-banner --redact'`:
+    no matches.
 
 Issues:
 
@@ -140,12 +159,9 @@ Research:
 
 Next Steps:
 
-- Stage only `working.md` for the publication-evidence docs marker.
-- Run staged whitespace/secrets checks, commit as
-  `docs: mark scan truncation validation pushed`, run full-tree gitleaks, and
-  push `origin main`.
-- Re-check local/remote parity, clean status, temp QA cleanup, and matching
-  preview/gitleaks process absence.
+- Continue the next autonomous QA/improvement slice from live repo state.
+- Re-read this log, run the goal identity guard, then choose the next narrow
+  robustness or UX issue with a RED test or preview QA baseline before editing.
 
 ## Current Slice - 2026-06-08 Quality score upper bounds
 

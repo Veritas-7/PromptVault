@@ -1,12 +1,127 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 07:53 KST
+Updated: 2026-06-08 08:00 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Duplicate scan plan source ID validation
+## Current Slice - 2026-06-08 Duplicate import state source ID validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge import state payloads whose `states` contain duplicate
+  `source_id` values.
+
+Context:
+
+- Recent slices tightened scan result source summary uniqueness and scan plan
+  source ID uniqueness.
+- Import states are displayed and refreshed as per-source resume/progress rows.
+  The parser validates each row and aggregate totals, but it does not require
+  `states[].source_id` values to be unique.
+- Duplicate import state source IDs make saved cursor/progress state ambiguous
+  even if the aggregate source, file, processed, and imported prompt counters
+  all match.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault` with no goal-warning.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the direct parent project policy and relevant parser/test context.
+- Identified the next narrow hardening target: uniqueness for import state
+  `states[].source_id`.
+- Added a RED API test for a malformed import states result whose `states`
+  repeat `source_id: "codex"` while all aggregate counters remain consistent.
+- Confirmed RED first: focused API suite failed 105/106 only on the new
+  missing-rejection case.
+- Added parser validation requiring import state `states[].source_id` values to
+  be unique before aggregate import progress counters are trusted.
+- Refactored the source summary and scan plan ID uniqueness checks through a
+  shared string-field uniqueness helper.
+- Confirmed GREEN after the parser change: focused API suite passes 106/106.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed import states response with duplicate source IDs
+  surfaced sanitized global and saved-import-progress failure UI, and the
+  duplicated source payload was not rendered.
+- Confirmed `/tmp/promptvault_duplicate_import_state_source_qa.mjs` is absent
+  and preview port `5311` has no listener after the server wrapper stopped the
+  preview process.
+- Confirmed the full project check still passes after the parser and test
+  changes.
+- Confirmed pre-staging whitespace, repo parity, cleanup, and GitHub privacy
+  checks before staging explicit paths.
+- Staged only the intended slice files and confirmed the staged secret scan is
+  clean.
+
+Changes:
+
+- `working.md`: records the current duplicate import state source ID
+  validation slice.
+- `src/promptVaultApi.ts`: adds a shared string-field uniqueness helper and
+  connects it to import state `source_id` validation.
+- `tests/promptVaultApi.test.ts`: adds the duplicate import state source ID
+  rejection case for browser-bridge import state results.
+
+Tests:
+
+- Baseline repo verification: `git rev-parse --show-toplevel`,
+  `git status --short --branch`, `git rev-list --left-right --count HEAD...origin/main`,
+  and `git remote -v` showed repo root
+  `/Users/wj/Ai/System/10_Projects/PromptVault`, clean `main...origin/main`,
+  parity `0 0`, and only `origin`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 105/106 only on the new duplicate import state source ID case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 106/106 after the parser validation change.
+- Broader UI/helper suite: `npm run test:ui` passed 270/270.
+- Production build: `npm run build` passed (`tsc && vite build`).
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5311" --port 5311 --timeout 30 node /tmp/promptvault_duplicate_import_state_source_qa.mjs http://127.0.0.1:5311`
+  passed after correcting the temp script's Playwright module resolution to use
+  the repo cwd. The page reached `[data-browser-bridge-status="connected"]`,
+  clicking `[data-refresh-import-states="true"]` produced
+  `[data-import-states-refresh-error="true"]`, the global error stayed
+  sanitized, and the UI did not expose `Codex duplicate`, raw counters,
+  `source_id`, `toLocaleString`, `RangeError`, or `undefined`.
+- Cleanup check: `/tmp/promptvault_duplicate_import_state_source_qa.mjs` is
+  absent and port `5311` is free.
+- Full check: `npm run check` passed: UI suite 270/270, production build,
+  Rust library tests 84/84, CLI tests 16/16, and clippy with `-D warnings`.
+- Pre-staging checks: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed with no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md` modified; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` showed only `origin`; temp cleanup and port
+  `5311` were clean; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `PRIVATE` and `isPrivate: true`.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact` scanned
+  about 7.96 KB and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Re-stage `working.md`, rerun staged secret scan, then commit and push the
+  finished slice.
+
+## Previous Slice - 2026-06-08 Duplicate scan plan source ID validation
 
 Current Goal:
 

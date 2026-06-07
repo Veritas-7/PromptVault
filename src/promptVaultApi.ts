@@ -318,26 +318,27 @@ function isSourceSummary(value: unknown): boolean {
     && isNonBlankStringArray(value.notes);
 }
 
-function sourceSummaryIdsAreUnique(sourceSummaries: unknown): boolean {
-  if (!Array.isArray(sourceSummaries)) return false;
+function recordStringFieldValuesAreUnique(values: unknown, fieldName: string): boolean {
+  if (!Array.isArray(values)) return false;
   const sourceIds = new Set<string>();
-  for (const source of sourceSummaries) {
-    if (!isRecord(source) || !isNonBlankString(source.id)) return false;
-    if (sourceIds.has(source.id)) return false;
-    sourceIds.add(source.id);
+  for (const value of values) {
+    if (!isRecord(value) || !isNonBlankString(value[fieldName])) return false;
+    if (sourceIds.has(value[fieldName])) return false;
+    sourceIds.add(value[fieldName]);
   }
   return true;
 }
 
+function sourceSummaryIdsAreUnique(sourceSummaries: unknown): boolean {
+  return recordStringFieldValuesAreUnique(sourceSummaries, "id");
+}
+
 function sourcePlanIdsAreUnique(sources: unknown): boolean {
-  if (!Array.isArray(sources)) return false;
-  const sourceIds = new Set<string>();
-  for (const source of sources) {
-    if (!isRecord(source) || !isNonBlankString(source.id)) return false;
-    if (sourceIds.has(source.id)) return false;
-    sourceIds.add(source.id);
-  }
-  return true;
+  return recordStringFieldValuesAreUnique(sources, "id");
+}
+
+function importStateSourceIdsAreUnique(states: unknown): boolean {
+  return recordStringFieldValuesAreUnique(states, "source_id");
 }
 
 function sourceFilesSeenTotalMatches(sourceSummaries: unknown, totalFiles: unknown): boolean {
@@ -817,6 +818,7 @@ function parseImportStatesResult(value: unknown): ImportStatesResult {
     || !isNonBlankString(value.database_path)
     || !Array.isArray(value.states)
     || !value.states.every(isImportState)
+    || !importStateSourceIdsAreUnique(value.states)
     || !isNonNegativeSafeInteger(value.total_sources)
     || !isNonNegativeSafeIntegerAtMost(value.completed_sources, value.total_sources)
     || !isNonNegativeSafeInteger(value.total_files)

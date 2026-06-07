@@ -533,6 +533,57 @@ test("browser bridge import states reject aggregate counters that mismatch state
   );
 });
 
+test("browser bridge import states reject duplicate source ids", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    states: [{
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      total_files: 2,
+      total_bytes: 200,
+      next_file_index: 2,
+      processed_files: 2,
+      imported_prompt_count: 1,
+      completed: true,
+      updated_at: "2026-06-07T00:00:00Z",
+    }, {
+      source_id: "codex",
+      source_label: "Codex duplicate",
+      root_path: "/tmp/codex-duplicate",
+      total_files: 3,
+      total_bytes: 300,
+      next_file_index: 3,
+      processed_files: 3,
+      imported_prompt_count: 1,
+      completed: true,
+      updated_at: "2026-06-07T00:00:00Z",
+    }],
+    total_sources: 2,
+    completed_sources: 2,
+    total_files: 5,
+    processed_files: 5,
+    imported_prompt_count: 2,
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listImportStates(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Codex duplicate|2 \/ 2|5 \/ 5|2개 프롬프트|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge import states reject row progress relation mismatches", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

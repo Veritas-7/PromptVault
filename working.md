@@ -1,10 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 00:35 KST
+Updated: 2026-06-08 00:41 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Scan plan aggregate bounds
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan plan aggregate counters whose available source,
+  large-file, or largest-file values exceed their declared totals before the
+  import plan panel can render impossible text such as `2 / 1`.
+
+Context:
+
+- Scan plan payloads already rejected missing fields and impossible negative
+  numeric values.
+- `App.tsx` renders plan summary counters directly:
+  `available_sources / total_sources`, `total_files`, `total_bytes`, and
+  `large_file_count`.
+- The Rust plan builder constructs these values from source summaries, so
+  aggregate counters beyond their totals are malformed bridge responses.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for `/api/plan` returning valid nested source rows but
+  impossible top-level aggregate counters.
+- Added aggregate relation validation for `available_sources <= total_sources`,
+  `large_file_count <= total_files`, and
+  `largest_file_bytes <= total_bytes`.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Requires scan-plan aggregate available source, large-file, and
+    largest-file counters to stay within their totals.
+- `tests/promptVaultApi.test.ts`
+  - Adds bridge response-shape coverage for impossible scan-plan aggregate
+    counters when nested source rows are otherwise valid.
+- `working.md`
+  - Records this scan plan aggregate bounds slice.
+  - Marks the previous import state aggregate publication evidence docs commit
+    as pushed.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new aggregate scan-plan test resolved
+    instead of rejecting.
+  - Result: 32 tests, 31 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 32 tests, 32 pass.
+- `npm run test:ui`:
+  - Passed: 196 tests, 196 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CxT0BtWv.js`.
+- Scan plan aggregate browser QA on preview `127.0.0.1:5260`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/plan` returned HTTP 200 with valid nested source rows but aggregate
+    counters that would have rendered as `2 / 1`, `11` large files, and a
+    `2048` byte largest-file value beyond `total_bytes`.
+  - Clicking the top-level plan button rendered the plan failure notice and
+    sanitized malformed bridge error.
+  - The impossible source aggregate, source row, and large-file aggregate were
+    not rendered.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=1`,
+    `/api/import-states=1`, `/api/import-events=1`, `/api/plan=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 196 tests, 196 pass.
+  - Build: passed with `index-CxT0BtWv.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`.
+- Run staged whitespace and secret checks, commit the robustness fix, run a
+  full-tree secret scan, push to `origin main`, then record publication status
+  in `working.md`.
 
 ## Current Slice - 2026-06-08 Import state aggregate bounds
 
@@ -35,7 +135,8 @@ Progress:
   and `processed_files <= total_files`.
 - Verified focused API tests, full UI/unit tests, production build, preview
   QA, the full project check, staged checks, and GitHub publication.
-- Pending: publication evidence docs commit.
+- Published publication-status update on `origin/main` as
+  `ca55ee4 docs: mark import state aggregate validation pushed`.
 
 Changes:
 
@@ -117,7 +218,8 @@ Next Steps:
 
 - Published robustness fix on `origin/main` as
   `5a9db05 fix: validate import state aggregates`.
-- Commit and push this `working.md` publication-status update.
+- Published publication-status update on `origin/main` as
+  `ca55ee4 docs: mark import state aggregate validation pushed`.
 
 ## Current Slice - 2026-06-08 Import event counter bounds
 

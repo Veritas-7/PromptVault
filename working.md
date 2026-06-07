@@ -1,10 +1,111 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 00:45 KST
+Updated: 2026-06-08 00:53 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Scan result returned-count bounds
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose returned preview count is
+  larger than the actual prompt array or larger than `stats.total_prompts`
+  before the scan summary can render impossible text such as `2 / 1` or
+  `2개 로드됨` for one prompt row.
+
+Context:
+
+- Scan result payloads already rejected missing fields, bad timestamps,
+  unsupported preview sort values, negative numeric values, and fractional
+  integer counters.
+- `App.tsx` renders `returned_prompt_count / stats.total_prompts` in the
+  export notice and renders `${returned_prompt_count}개 로드됨` in the prompt
+  list heading.
+- The Rust scan and stored-load paths derive `returned_prompt_count` from the
+  returned prompt vector length, and total prompts are never smaller than that
+  returned count.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for `/api/scan` returning one valid prompt row with
+  `stats.total_prompts: 1` but `returned_prompt_count: 2`.
+- Added scan-result relation validation requiring returned prompt count to be
+  at most `stats.total_prompts` and equal to the returned `prompts.length`.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds `isReturnedPromptCount()` and uses it in `parseScanResult()`.
+- `tests/promptVaultApi.test.ts`
+  - Adds bridge response-shape coverage for preview counts beyond scan totals
+    and actual prompt rows.
+- `working.md`
+  - Records this scan result returned-count bounds slice.
+  - Marks the previous scan plan aggregate publication evidence docs commit
+    as pushed.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new returned-count test resolved
+    instead of rejecting.
+  - Result: 33 tests, 32 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 33 tests, 33 pass.
+- `npm run test:ui`:
+  - Passed: 197 tests, 197 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CeJ-yrf5.js`.
+- Scan returned-count browser QA on preview `127.0.0.1:5261`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/scan` returned HTTP 200 with one valid prompt row but
+    `returned_prompt_count: 2` and `stats.total_prompts: 1`.
+  - Clicking the top-level quick scan button rendered the scan failure notice
+    and sanitized malformed bridge error.
+  - The impossible preview ratio `2 / 1`, impossible heading `2개 로드됨`,
+    and malformed prompt row were not rendered.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=2`,
+    `/api/import-states=1`, `/api/import-events=1`, `/api/scan=1`,
+    `/api/scan/progress=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 197 tests, 197 pass.
+  - Build: passed with `index-CeJ-yrf5.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`.
+- Run staged whitespace and secret checks, commit the robustness fix, run a
+  full-tree secret scan, push to `origin main`, then record publication status
+  in `working.md`.
 
 ## Current Slice - 2026-06-08 Scan plan aggregate bounds
 
@@ -38,7 +139,8 @@ Progress:
   `largest_file_bytes <= total_bytes`.
 - Verified focused API tests, full UI/unit tests, production build, preview
   QA, the full project check, staged checks, and GitHub publication.
-- Pending: publication evidence docs commit.
+- Published publication-status update on `origin/main` as
+  `6419e5f docs: mark scan plan aggregate validation pushed`.
 
 Changes:
 
@@ -121,7 +223,8 @@ Next Steps:
 
 - Published robustness fix on `origin/main` as
   `c9ec1c7 fix: validate scan plan aggregates`.
-- Commit and push this `working.md` publication-status update.
+- Published publication-status update on `origin/main` as
+  `6419e5f docs: mark scan plan aggregate validation pushed`.
 
 ## Current Slice - 2026-06-08 Import state aggregate bounds
 

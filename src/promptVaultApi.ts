@@ -334,6 +334,13 @@ function isScanStats(value: unknown): boolean {
     && value.source_summaries.every(isSourceSummary);
 }
 
+function isReturnedPromptCount(value: unknown, prompts: unknown, stats: unknown): boolean {
+  return Array.isArray(prompts)
+    && isRecord(stats)
+    && isNonNegativeSafeIntegerAtMost(value, stats.total_prompts)
+    && prompts.length === value;
+}
+
 function isImprovePersistence(value: unknown): boolean {
   return isRecord(value)
     && typeof value.database_path === "string"
@@ -460,7 +467,7 @@ function parseScanResult(value: unknown): ScanResult {
     || !isScanStats(value.stats)
     || !Array.isArray(value.prompts)
     || !value.prompts.every(isPromptRecord)
-    || !isNonNegativeSafeInteger(value.returned_prompt_count)
+    || !isReturnedPromptCount(value.returned_prompt_count, value.prompts, value.stats)
     || typeof value.prompts_truncated !== "boolean"
     || !isPreviewSortString(value.preview_sort)
     || typeof value.markdown_included !== "boolean"

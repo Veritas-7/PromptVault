@@ -1,10 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 22:31 KST
+Updated: 2026-06-07 22:38 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Scan progress numeric validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject impossible browser-bridge `/api/scan/progress` numeric payloads before
+  they can render negative or non-finite progress text in the scan progress
+  notice.
+
+Context:
+
+- Previous bridge hardening validated malformed JSON, unreadable bodies,
+  non-OK HTTP status, and missing-field payload shapes.
+- `/api/scan/progress` still accepted any JavaScript `number`, including
+  negative progress counters. A shape-valid payload with negative counts could
+  make the UI show impossible file/prompt progress.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added a RED test for shape-valid but impossible negative scan progress
+  payloads.
+- Added narrow non-negative finite number validation for scan progress numeric
+  fields.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds `isNonNegativeFiniteNumber()` and
+    `isNullableNonNegativeFiniteNumber()`.
+  - `parseScanProgressResult()` now rejects negative or non-finite progress
+    counters and nullable numeric fields.
+- `tests/promptVaultApi.test.ts`
+  - Adds `/api/scan/progress` coverage for impossible numeric payloads.
+- `working.md`
+  - Records this scan progress numeric validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new impossible numeric payload test saw
+    a resolved result instead of the expected bridge response-shape rejection.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 14 tests, 14 pass.
+- `npm run test:ui`:
+  - Passed: 178 tests, 178 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CmZRwFv2.js`.
+- Scan progress numeric validation browser QA on preview `127.0.0.1:5246`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/prompt-facets`, `/api/import-states`, and
+    `/api/import-events` returned valid payloads.
+  - Clicking `[data-run-scan]` started a delayed scan. The first
+    `/api/scan/progress` response returned HTTP 200 with negative numeric
+    counters.
+  - UI kept the progress notice at `스캔 진행 상황을 준비 중입니다.` after the
+    invalid progress response.
+  - Body text did not expose `-1`, `-3`, `-5`, `-10`, `NaN`, `Infinity`, or the
+    generic malformed response text.
+  - A later valid progress response rendered
+    `Codex: 1 / 1개 파일 · 1개 프롬프트 · 소스 1 / 1 · 제한 1,000`.
+  - The delayed scan then completed and rendered the prompt row normally.
+  - Final counts: `health=1`, `facets=2`, `importStates=1`,
+    `importEvents=1`, `scan=1`, `progress=4`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 178 tests, 178 pass.
+  - Build: passed with `index-CmZRwFv2.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Commit and push this scan progress numeric validation slice after staged
+  diff and secret checks.
+- Continue autonomous QA on another still-uncovered bridge, import, improve, or
+  UX edge state after publication.
 
 ## Current Slice - 2026-06-07 Bridge health status failure copy
 

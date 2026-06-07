@@ -174,6 +174,14 @@ function isStringArray(value: unknown): boolean {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function isNonNegativeFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isNullableNonNegativeFiniteNumber(value: unknown): boolean {
+  return value === null || isNonNegativeFiniteNumber(value);
+}
+
 function isPromptQuality(value: unknown): boolean {
   return isRecord(value)
     && typeof value.score === "number"
@@ -436,14 +444,14 @@ function parseScanProgressResult(value: unknown): ScanProgress {
     || typeof value.canceled !== "boolean"
     || !(typeof value.source_id === "string" || value.source_id === null)
     || !(typeof value.source_label === "string" || value.source_label === null)
-    || typeof value.source_index !== "number"
-    || typeof value.source_count !== "number"
-    || typeof value.files_seen !== "number"
-    || typeof value.source_files_seen !== "number"
-    || typeof value.source_files_discovered !== "number"
-    || !(typeof value.source_file_count === "number" || value.source_file_count === null)
-    || typeof value.prompts_found !== "number"
-    || !(typeof value.limit === "number" || value.limit === null)
+    || !isNonNegativeFiniteNumber(value.source_index)
+    || !isNonNegativeFiniteNumber(value.source_count)
+    || !isNonNegativeFiniteNumber(value.files_seen)
+    || !isNonNegativeFiniteNumber(value.source_files_seen)
+    || !isNonNegativeFiniteNumber(value.source_files_discovered)
+    || !isNullableNonNegativeFiniteNumber(value.source_file_count)
+    || !isNonNegativeFiniteNumber(value.prompts_found)
+    || !isNullableNonNegativeFiniteNumber(value.limit)
     || typeof value.updated_at !== "string") {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }

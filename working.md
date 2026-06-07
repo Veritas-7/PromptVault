@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 00:00 KST
+Updated: 2026-06-08 00:05 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -38,8 +38,8 @@ Progress:
 - Added parser relation validation for import state and scan progress
   counters.
 - Verified focused API tests, full UI/unit tests, production build, preview
-  QA, and the full project check.
-- Pending: staged checks, commit, and GitHub publication.
+  QA, the full project check, staged checks, and GitHub publication.
+- Pending: publication evidence docs commit.
 
 Changes:
 
@@ -90,6 +90,23 @@ Tests:
   - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
     passed, `src/main.rs` 0 tests, doc tests 0 tests.
   - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Publication checks for `c68e7a1 fix: validate bridge progress bounds`:
+  - Staged files before commit: `src/promptVaultApi.ts`,
+    `tests/promptVaultApi.test.ts`, `working.md`.
+  - `git diff --cached --check`: passed.
+  - `gitleaks protect --staged --no-banner --redact`: no leaks found.
+  - `gh auth status`: logged in to GitHub as `Veritas-7`; git protocol
+    `https`.
+  - `gitleaks version`: `8.30.1`.
+  - `git ls-remote origin HEAD` before push: `796c2d6... HEAD`.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo, `https://github.com/Veritas-7/PromptVault`.
+  - `gitleaks dir . --no-banner --redact`: scanned about 700.72 MB; no
+    leaks found.
+  - `git push origin main`: `796c2d6..c68e7a1 main -> main`.
+  - Post-push `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - Post-push `git status --short --branch`: `## main...origin/main`.
+  - `/tmp/promptvault_progress_bounds_import_qa.mjs`: absent.
 
 Issues:
 
@@ -101,8 +118,9 @@ Research:
 
 Next Steps:
 
-- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
-  `working.md`, then run staged diff/secret checks, commit, and push.
+- Published robustness fix on `origin/main` as
+  `c68e7a1 fix: validate bridge progress bounds`.
+- Commit and push this `working.md` publication-status update.
 
 ## Current Slice - 2026-06-07 Bridge timestamp validation
 

@@ -306,7 +306,7 @@ function isSourceSummary(value: unknown): boolean {
     && isQualityAverage(value.average_quality)
     && isNonNegativeSafeIntegerAtMost(value.weak_prompt_count, value.prompts_found)
     && isNonBlankString(value.status)
-    && isStringArray(value.notes);
+    && isNonBlankStringArray(value.notes);
 }
 
 function sourceFilesSeenTotalMatches(sourceSummaries: unknown, totalFiles: unknown): boolean {
@@ -362,7 +362,7 @@ function isSourcePlan(value: unknown): boolean {
       || typeof value.newest_modified_at === "string"
       || value.newest_modified_at === null
     )
-    || !isStringArray(value.notes)) {
+    || !isNonBlankStringArray(value.notes)) {
     return false;
   }
   return value.large_file_count <= value.file_count
@@ -404,8 +404,7 @@ function isImportEvent(value: unknown): boolean {
     || !isNonNegativeSafeIntegerAtMost(value.processed_files, value.total_files)
     || !isNonNegativeSafeIntegerRangeAtMost(value.batch_start_index, value.batch_file_count, value.total_files)
     || typeof value.completed !== "boolean"
-    || !Array.isArray(value.warnings)
-    || !value.warnings.every((warning) => typeof warning === "string")) {
+    || !isNonBlankStringArray(value.warnings)) {
     return false;
   }
   const batchEndIndex = value.batch_start_index + value.batch_file_count;
@@ -630,7 +629,7 @@ function parseImportBatchResult(value: unknown): ImportBatchResult {
     || !isImportBatchPromptCounts(value)
     || !isImportBatchFileProgress(value)
     || !isPersistStats(value.persistence)
-    || !isStringArray(value.warnings)) {
+    || !isNonBlankStringArray(value.warnings)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ImportBatchResult;
@@ -644,7 +643,7 @@ function parseImproveResult(value: unknown): ImproveResult {
     || !isNonBlankStringArray(value.rationale)
     || !isNonBlankStringArray(value.checklist)
     || !isQualityDelta(value.quality_delta)
-    || !isStringArray(value.warnings)
+    || !isNonBlankStringArray(value.warnings)
     || !(isImprovePersistence(value.persistence) || value.persistence === null)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
@@ -705,7 +704,7 @@ function parseScanPlan(value: unknown): ScanPlan {
     || !isNonNegativeSafeIntegerAtMost(value.largest_file_bytes, value.total_bytes)
     || !Array.isArray(value.sources)
     || !value.sources.every(isSourcePlan)
-    || !isStringArray(value.warnings)
+    || !isNonBlankStringArray(value.warnings)
     || !isScanPlanAggregate(value)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
@@ -726,7 +725,7 @@ function parseScanResult(value: unknown): ScanResult {
     || typeof value.markdown_included !== "boolean"
     || typeof value.markdown_written !== "boolean"
     || !(isPersistStats(value.persistence) || value.persistence === null)
-    || !isStringArray(value.warnings)) {
+    || !isNonBlankStringArray(value.warnings)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ScanResult;

@@ -13,6 +13,155 @@ import {
   scanPrompts,
 } from "../src/promptVaultApi.ts";
 
+function emptyScanStats(overrides = {}) {
+  return {
+    total_prompts: 0,
+    total_files: 0,
+    total_words: 0,
+    average_words: 0,
+    average_quality: 0,
+    weak_prompt_count: 0,
+    top_words: [],
+    top_phrases: [],
+    repeated_prompts: [],
+    top_quality_gaps: [],
+    prompts_by_date: [],
+    source_summaries: [],
+    ...overrides,
+  };
+}
+
+function emptyScanResult(overrides = {}) {
+  return {
+    generated_at: "2026-06-07T00:00:00Z",
+    output_path: null,
+    markdown: "",
+    stats: emptyScanStats(),
+    prompts: [],
+    returned_prompt_count: 0,
+    prompts_truncated: false,
+    preview_sort: "latest",
+    markdown_included: false,
+    markdown_written: false,
+    persistence: null,
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function emptyScanPlan(overrides = {}) {
+  return {
+    generated_at: "2026-06-07T00:00:00Z",
+    total_sources: 0,
+    available_sources: 0,
+    total_files: 0,
+    total_bytes: 0,
+    large_file_count: 0,
+    largest_file_bytes: 0,
+    sources: [],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function importEventPayload(eventOverrides = {}) {
+  return {
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    events: [{
+      id: 1,
+      generated_at: "2026-06-07T00:00:00Z",
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      batch_start_index: 0,
+      batch_file_count: 0,
+      batch_prompt_count: 0,
+      processed_files: 0,
+      total_files: 0,
+      completed: true,
+      warnings: [],
+      ...eventOverrides,
+    }],
+    total_events: 1,
+  };
+}
+
+function importBatchPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-07T00:00:00Z",
+    source: {
+      id: "codex",
+      label: "Codex",
+      root_path: "/tmp/codex",
+      status: "ok",
+      file_count: 0,
+      byte_count: 0,
+      large_file_count: 0,
+      largest_file_bytes: 0,
+      newest_modified_at: null,
+      notes: [],
+    },
+    state: {
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      total_files: 0,
+      total_bytes: 0,
+      next_file_index: 0,
+      processed_files: 0,
+      imported_prompt_count: 0,
+      completed: true,
+      updated_at: "2026-06-07T00:00:00Z",
+    },
+    batch_start_index: 0,
+    batch_file_count: 0,
+    batch_prompt_count: 0,
+    returned_prompt_count: 0,
+    prompts: [],
+    stats: emptyScanStats(),
+    persistence: {
+      database_path: "/tmp/promptvault.sqlite",
+      stored_prompt_count: 0,
+      inserted_prompt_count: 0,
+      updated_prompt_count: 0,
+      date_count: 0,
+    },
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function improveResult(overrides = {}) {
+  return {
+    provider: "local",
+    used_ai: false,
+    revised_prompt: "Improve this prompt by adding context and success criteria.",
+    rationale: ["Added context."],
+    checklist: ["Verify expected outcome."],
+    quality_delta: {
+      before: {
+        score: 40,
+        band: "weak",
+        missing: ["context"],
+        suggestions: ["Add context."],
+      },
+      after: {
+        score: 82,
+        band: "strong",
+        missing: [],
+        suggestions: [],
+      },
+      score_delta: 42,
+      resolved_gaps: ["context"],
+      remaining_gaps: [],
+    },
+    warnings: [],
+    persistence: null,
+    ...overrides,
+  };
+}
+
 test("browser bridge responses report malformed JSON without raw parser errors", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response("not json", { status: 200 });
@@ -453,6 +602,28 @@ test("browser bridge import events reject blank source metadata", async (t) => {
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /전체 이벤트|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge import events reject blank warnings", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(importEventPayload({
+    warnings: ["   "],
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listImportEvents(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /전체 이벤트|Codex|경고 1개|toLocaleString|RangeError|undefined/);
       return true;
     },
   );
@@ -1116,6 +1287,63 @@ test("browser bridge scan results reject written markdown without output paths",
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /내보내기|미리보기|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge scan results reject blank warnings", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanResult({
+    warnings: ["   "],
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /내보내기|미리보기|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge scan results reject blank source notes", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanResult({
+    stats: emptyScanStats({
+      total_files: 1,
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: 1,
+        prompts_found: 0,
+        average_quality: 0,
+        weak_prompt_count: 0,
+        status: "partial",
+        notes: ["   "],
+      }],
+    }),
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Codex|partial|toLocaleString|RangeError|undefined/);
       return true;
     },
   );
@@ -2786,6 +3014,63 @@ test("browser bridge scan plans reject blank source metadata", async (t) => {
   );
 });
 
+test("browser bridge scan plans reject blank warnings", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanPlan({
+    warnings: ["   "],
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => planScan(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /0개 파일|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge scan plans reject blank source notes", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanPlan({
+    total_sources: 1,
+    available_sources: 1,
+    sources: [{
+      id: "codex",
+      label: "Codex",
+      root_path: "/tmp/codex",
+      status: "ok",
+      file_count: 0,
+      byte_count: 0,
+      large_file_count: 0,
+      largest_file_bytes: 0,
+      newest_modified_at: null,
+      notes: ["   "],
+    }],
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => planScan(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Codex|0개 파일|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan plans reject impossible numeric payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
@@ -3007,6 +3292,28 @@ test("browser bridge import batches reject malformed successful payloads", async
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /toLocaleString|TypeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge import batches reject blank warnings", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(importBatchPayload({
+    warnings: ["   "],
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => importBatch({ source_id: "codex" }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Codex|toLocaleString|RangeError|undefined/);
       return true;
     },
   );
@@ -3520,6 +3827,28 @@ test("browser bridge improvements reject blank rationale and checklist items", a
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /Added context|Verify expected outcome|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge improvements reject blank warnings", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(improveResult({
+    warnings: ["   "],
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => improvePrompt({ prompt: "Improve this prompt." }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /추천|경고|toLocaleString|RangeError|undefined/);
       return true;
     },
   );

@@ -1,12 +1,91 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 05:49 KST
+Updated: 2026-06-08 05:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Scan export metadata validation
+## Current Slice - 2026-06-08 Warning and note text validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge payloads whose user-visible `warnings` or source
+  `notes` arrays contain blank/whitespace-only entries before the UI can render
+  empty warning notices, empty list items, or blank source metadata text.
+
+Context:
+
+- The previous slices tightened database paths, source metadata, prompt row
+  metadata, improvement text, and scan export metadata.
+- Several remaining parser paths still validate `warnings` and source `notes`
+  as plain string arrays. The React UI renders scan/plan warnings with
+  `join(" ")`, import/improvement warnings as list items, and source notes in
+  source metadata/status labels.
+- The Rust producer builds warnings and notes from fixed messages or formatted
+  non-empty error/context strings; blank entries are not part of the expected
+  producer contract.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: user-visible browser-bridge
+  `warnings` and source `notes` arrays.
+- Added RED tests for blank warnings in scan results, scan plans, import
+  events, import batches, and improvements, plus blank source notes in scan
+  results and scan plans.
+- Confirmed RED first: focused API suite failed 77/84 only on the seven new
+  missing-rejection cases.
+- Applied nonblank string-array validation to user-visible warning and note
+  arrays.
+- Confirmed GREEN after the parser change: focused API suite passes 84/84.
+- Confirmed broader UI coverage still passes after the parser change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright against malformed warning/note
+  responses across quick scan, plan, import-events refresh, import batch, and
+  improvement flows; each surfaced sanitized failure copy without rendering
+  blank warning/list/source-note UI.
+- Removed the temporary preview QA script from `/tmp`.
+- Ran full check successfully.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`: adds compact valid payload builders and
+  seven malformed warning/note tests.
+- `src/promptVaultApi.ts`: applies nonblank string-array validation to
+  user-visible scan/import/improvement warnings and source notes.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  (`84` tests passed).
+- PASS: `npm run test:ui` (`248` tests passed).
+- PASS: `npm run build`.
+- PASS: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5294" --port 5294 node /tmp/promptvault_warning_note_qa.mjs`.
+- PASS: `npm run check` (`npm run test:ui`, `npm run build`,
+  `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings`).
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run staged secret scan, commit/push the scoped code slice, then close out
+  this worklog slice.
+
+## Previous Slice - 2026-06-08 Scan export metadata validation
 
 Current Goal:
 

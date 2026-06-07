@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 01:14 KST
+Updated: 2026-06-08 01:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -38,9 +38,8 @@ Progress:
 - Added source summary relation validation requiring source weak prompt count
   to be at most that source's found prompt count.
 - Verified focused API tests, full UI/unit tests, production build, preview
-  QA, and the full project check.
-- Pending: staged checks, commit, full-tree secret scan, push, and publication
-  evidence docs commit.
+  QA, the full project check, staged checks, and GitHub publication.
+- Pending: publication evidence docs commit.
 
 Changes:
 
@@ -92,6 +91,25 @@ Tests:
   - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
     passed, `src/main.rs` 0 tests, doc tests 0 tests.
   - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Staged and publication checks:
+  - Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`,
+    and `working.md`.
+  - `git diff --cached --check`: passed.
+  - `gitleaks protect --staged --no-banner --redact`: passed; scanned
+    6.41 KB, no leaks found.
+  - `gh auth status`: logged in as `Veritas-7`; HTTPS git operations.
+  - `gitleaks version`: 8.30.1.
+  - Pre-push `git ls-remote origin HEAD`: `6421d1e`.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo at `https://github.com/Veritas-7/PromptVault`.
+  - `gitleaks dir . --no-banner --redact`: passed; scanned 700.77 MB, no
+    leaks found.
+  - `git push origin main`: pushed `6421d1e..f787af4`.
+  - Post-push `git fetch origin main` plus
+    `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - Post-push `git status --short --branch`: `## main...origin/main`.
+  - `/tmp/promptvault_source_weak_count_qa.mjs`: absent after QA cleanup.
+  - No preview QA or full-tree gitleaks process remained after push.
 
 Issues:
 
@@ -103,10 +121,9 @@ Research:
 
 Next Steps:
 
-- Stage explicit paths only: `src/promptVaultApi.ts`,
-  `tests/promptVaultApi.test.ts`, and `working.md`.
-- Run staged secret/diff/GitHub checks, commit, run full-tree gitleaks, push to
-  `origin main`, then record publication status in a docs commit.
+- Published robustness fix on `origin/main` as
+  `f787af4 fix: validate source weak counts`.
+- Commit and push this `working.md` publication-status update.
 
 ## Current Slice - 2026-06-08 Scan result weak-count bounds
 

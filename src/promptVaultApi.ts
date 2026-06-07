@@ -81,7 +81,7 @@ export async function planScan(options: ScanPlanOptions = {}): Promise<ScanPlan>
   if (hasTauriInvoke()) {
     return invoke<ScanPlan>("plan_scan", { options });
   }
-  return postBridge<ScanPlan>("/api/plan", { options });
+  return postBridge<ScanPlan>("/api/plan", { options }, parseScanPlan);
 }
 
 export async function importBatch(options: ImportBatchOptions): Promise<ImportBatchResult> {
@@ -206,6 +206,24 @@ function isSourceSummary(value: unknown): boolean {
     && isStringArray(value.notes);
 }
 
+function isSourcePlan(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.id === "string"
+    && typeof value.label === "string"
+    && typeof value.root_path === "string"
+    && typeof value.status === "string"
+    && typeof value.file_count === "number"
+    && typeof value.byte_count === "number"
+    && typeof value.large_file_count === "number"
+    && typeof value.largest_file_bytes === "number"
+    && (
+      typeof value.newest_modified_at === "undefined"
+      || typeof value.newest_modified_at === "string"
+      || value.newest_modified_at === null
+    )
+    && isStringArray(value.notes);
+}
+
 function isImportState(value: unknown): boolean {
   return isRecord(value)
     && typeof value.source_id === "string"
@@ -310,6 +328,23 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as StoredPromptFacetsResult;
+}
+
+function parseScanPlan(value: unknown): ScanPlan {
+  if (!isRecord(value)
+    || typeof value.generated_at !== "string"
+    || typeof value.total_sources !== "number"
+    || typeof value.available_sources !== "number"
+    || typeof value.total_files !== "number"
+    || typeof value.total_bytes !== "number"
+    || typeof value.large_file_count !== "number"
+    || typeof value.largest_file_bytes !== "number"
+    || !Array.isArray(value.sources)
+    || !value.sources.every(isSourcePlan)
+    || !isStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ScanPlan;
 }
 
 function parseScanResult(value: unknown): ScanResult {

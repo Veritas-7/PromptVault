@@ -1,10 +1,106 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 22:03 KST
+Updated: 2026-06-07 22:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Bridge plan payload validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent malformed successful `/api/plan` payloads from reaching plan summary,
+  source list, and import queue render paths.
+
+Context:
+
+- Previous bridge slices validated health, quiet refresh, scan progress, and
+  scan/stored-load result payloads.
+- `ScanPlan` results feed plan metrics, source checkboxes, per-source status
+  labels, import queue availability, and action labels directly.
+- A successful `/api/plan` response missing numeric counters, `sources`, source
+  notes, or `warnings` could crash UI formatting or leave the import queue in an
+  inconsistent state after a typed cast.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added a RED test for malformed successful scan plan payloads.
+- Added a `ScanPlan` runtime validator and connected it to browser bridge
+  `/api/plan` calls.
+- Verified that malformed plan results become stable PromptVault bridge
+  response-shape failures, not render exceptions or raw JavaScript details.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - `planScan()` now validates browser-bridge `ScanPlan` responses with
+    `parseScanPlan()`.
+  - Added `isSourcePlan()` validation for source IDs, labels, root paths,
+    status, file/byte counters, optional modification time, and notes.
+- `tests/promptVaultApi.test.ts`
+  - Adds malformed successful `/api/plan` response coverage.
+  - Asserts stable bridge response-shape copy without raw `TypeError`,
+    `undefined`, or `toLocaleString` details.
+- `working.md`
+  - Records this bridge plan payload validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new plan payload test saw
+    `Missing expected rejection.`
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 9 tests, 9 pass.
+- `npm run test:ui`:
+  - Passed: 169 tests, 169 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CA5rPxdm.js`.
+- Malformed plan payload browser QA on preview `127.0.0.1:5242`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/prompt-facets`, `/api/import-states`, and
+    `/api/import-events` returned valid empty payloads.
+  - Clicking `[data-run-plan]` made `/api/plan` return HTTP 200 JSON with only
+    `generated_at`.
+  - UI rendered the global malformed bridge response message plus
+    `[data-plan-run-error]` without exposing `toLocaleString`,
+    `Cannot read properties`, `undefined`, or `TypeError`.
+  - Final counts: `facets=1`, `health=1`, `importEvents=1`,
+    `importStates=1`, `plan=1`, `unexpected=[]`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 169 tests, 169 pass.
+  - Build: passed with `index-CA5rPxdm.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Commit and push this plan robustness fix after staged diff, whitespace, and
+  secret checks.
+- Continue autonomous QA on another still-uncovered bridge, import, improve, or
+  UX edge state after publication.
 
 ## Current Slice - 2026-06-07 Bridge scan result payload validation
 

@@ -2,12 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { QUICK_SCAN_SOURCE_IDS, quickScanSourceIds } from "../src/scanScope.ts";
 
+const expectedQuickSourceIds = [
+  "antigravity-cli-conversation-db",
+  "antigravity-ide-conversation-db",
+  "gemini-tmp-chat",
+  "antigravity-cli-history",
+  "claude-code-history",
+  "codex-cx",
+];
+
 test("quick scan uses responsive prompt sources before the large Codex tree", () => {
   assert.deepEqual(quickScanSourceIds(), [
-    "codex-cx",
-    "claude-code-history",
-    "antigravity-cli-history",
-    "gemini-tmp-chat",
+    ...expectedQuickSourceIds,
   ]);
   assert.equal(QUICK_SCAN_SOURCE_IDS.includes("codex"), false);
 });
@@ -17,9 +23,6 @@ test("quick scan source ids return a defensive copy", () => {
   ids.push("codex");
 
   assert.deepEqual(quickScanSourceIds(), [
-    "codex-cx",
-    "claude-code-history",
-    "antigravity-cli-history",
-    "gemini-tmp-chat",
+    ...expectedQuickSourceIds,
   ]);
 });

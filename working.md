@@ -1,10 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 17:08 KST
+Updated: 2026-06-07 17:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019e8bcb-66b7-7443-a79d-46fd3686eadc`
+
+## Current Slice - 2026-06-07 Requested source order for quick scans
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make the toolbar quick scan both fast and representative of responsive
+  prompt stores.
+
+Context:
+
+- After `72de9b6 perf: speed up toolbar quick scan`, the toolbar passed a
+  quick source list, but backend source selection still returned matching
+  sources in catalog order.
+- Because catalog order put `codex-cx` and `claude-code-history` before
+  Antigravity/Gemini sources, the global `--limit 25` was filled before later
+  quick sources could contribute.
+- Local timing showed the Antigravity conversation DB sources are responsive
+  and contain real prompts:
+  - `antigravity-cli-conversation-db`: `10` prompts, about `1.18s`.
+  - `antigravity-ide-conversation-db`: `2` prompts, about `1.09s`.
+
+Progress:
+
+- Changed backend `selected_source_specs` to preserve explicit requested
+  source order while still deduping repeated source IDs.
+- Reordered the frontend quick-scan source list to prioritize responsive DB and
+  tmp-chat sources before larger history trees.
+- Updated README quick-scan source documentation.
+
+Changes:
+
+- `src-tauri/src/lib.rs`
+  - `selected_source_specs` now preserves request order and ignores duplicate
+    source IDs after the first occurrence.
+  - Updated the source-selection unit test to assert requested order.
+- `src/scanScope.ts`
+  - Reordered quick scan sources:
+    `antigravity-cli-conversation-db`, `antigravity-ide-conversation-db`,
+    `gemini-tmp-chat`, `antigravity-cli-history`, `claude-code-history`,
+    `codex-cx`.
+- `tests/scanScope.test.ts`
+  - Updated quick-source expectations.
+- `README.md`
+  - Documented the expanded quick-source set.
+
+Tests:
+
+- `npm run test:ui -- tests/scanScope.test.ts`: PASS. The package script
+  expands to all UI helper tests; `129` tests passed.
+- `cargo test selects_requested_sources_in_requested_order`: PASS.
+- `cargo fmt --check`: PASS.
+- `npm run build`: PASS.
+- `npm run check`: PASS. Covered `129` UI helper tests, production build, `83`
+  Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+- CLI timing/order proof:
+  - `cargo run --quiet --bin promptvault-cli -- scan --source antigravity-cli-conversation-db,antigravity-ide-conversation-db,gemini-tmp-chat,antigravity-cli-history,claude-code-history,codex-cx --limit 25 --preview-limit 25 --no-export --json`
+  - PASS, about `1.75s`, `25` prompts, `23` files.
+  - Source summaries appeared in requested order:
+    `Antigravity CLI conversation DB`, `Antigravity IDE conversation DB`,
+    `Gemini temporary chats`.
+- Browser preview + bridge QA:
+  - First run failed before app execution because Node 26 rejected top-level
+    await mixed with `require`; reran with ESM `import`.
+  - Preview: `127.0.0.1:5178`; bridge: `127.0.0.1:5174`.
+  - `/api/scan` payload preserved source order:
+    `["antigravity-cli-conversation-db","antigravity-ide-conversation-db","gemini-tmp-chat","antigravity-cli-history","claude-code-history","codex-cx"]`.
+  - Scan returned `25` prompt rows with source summaries
+    `Antigravity CLI conversation DB`, `Antigravity IDE conversation DB`, and
+    `Gemini temporary chats`.
+  - Desktop overflow: `1440 / 1440`.
+  - Console issues, page errors, request failures: none.
+
+Issues:
+
+- The toolbar quick scan still uses a global prompt limit. With the new source
+  order, early fast sources may fill the limit before later quick sources such
+  as `codex-cx`; stored loading, plan/import, and explicit CLI scans remain the
+  full review paths.
+
+Research:
+
+- No new external research. This was based on local source timing and direct
+  CLI/browser verification.
+
+Next Steps:
+
+- Stage only this slice's files and run staged whitespace/gitleaks before
+  commit/push.
 
 ## Current Slice - 2026-06-07 Fast first scan source scope
 

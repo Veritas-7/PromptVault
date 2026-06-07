@@ -1,8 +1,10 @@
 export const QUICK_SCAN_SOURCE_IDS = [
-  "codex-cx",
-  "claude-code-history",
-  "antigravity-cli-history",
+  "antigravity-cli-conversation-db",
+  "antigravity-ide-conversation-db",
   "gemini-tmp-chat",
+  "antigravity-cli-history",
+  "claude-code-history",
+  "codex-cx",
 ] as const;
 
 export function quickScanSourceIds(): string[] {

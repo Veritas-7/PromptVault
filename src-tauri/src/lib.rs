@@ -1286,19 +1286,28 @@ fn selected_source_specs(source_ids: Option<&[String]>) -> Vec<SourceSpec> {
         return sources;
     }
 
-    let requested = requested
+    let mut source_by_id = sources
+        .into_iter()
+        .map(|source| (source.id, source))
+        .collect::<HashMap<_, _>>();
+    let mut seen = HashSet::new();
+    let selected = requested
         .iter()
         .map(|id| id.trim())
         .filter(|id| !id.is_empty())
-        .collect::<HashSet<_>>();
-    if requested.is_empty() {
-        return sources;
+        .filter_map(|id| {
+            if !seen.insert(id) {
+                return None;
+            }
+            source_by_id.remove(id)
+        })
+        .collect::<Vec<_>>();
+
+    if selected.is_empty() {
+        return source_specs();
     }
 
-    sources
-        .into_iter()
-        .filter(|source| requested.contains(source.id))
-        .collect::<Vec<_>>()
+    selected
 }
 
 pub async fn improve_prompt_inner(
@@ -5162,18 +5171,19 @@ mod tests {
     }
 
     #[test]
-    fn selects_requested_sources() {
+    fn selects_requested_sources_in_requested_order() {
         let selected = selected_source_specs(Some(&[
             "antigravity-cli-conversation-db".to_string(),
-            "antigravity-ide-conversation-db".to_string(),
             "codex".to_string(),
+            "antigravity-cli-conversation-db".to_string(),
+            "antigravity-ide-conversation-db".to_string(),
         ]));
 
         assert_eq!(
             selected.iter().map(|source| source.id).collect::<Vec<_>>(),
             vec![
-                "codex",
                 "antigravity-cli-conversation-db",
+                "codex",
                 "antigravity-ide-conversation-db"
             ]
         );

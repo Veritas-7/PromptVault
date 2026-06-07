@@ -4438,3 +4438,81 @@ Next focus:
 
 - Perform a completion audit against the original goal before deciding whether
   any direct UI, failure-state, or persistence requirement remains uncovered.
+
+## Completion Audit - 2026-06-07 12:38 KST
+
+Current goal:
+
+- Confirm the parser/DB management and direct single-surface QA slice is
+  covered against the user's current request before reporting back.
+
+Audit result:
+
+- Parser/source coverage: PASS.
+  - `source_specs()` covers Codex app/session JSONL, Codex CX sessions, Claude
+    projects/transcripts/history, Antigravity CLI/IDE transcripts, Antigravity
+    CLI history, Antigravity CLI/IDE conversation DBs, and Gemini temporary
+    chats.
+  - README source roots match the managed stores.
+- Permanent DB coverage: PASS.
+  - `sqlite3 ~/Documents/PromptVault/promptvault.sqlite "SELECT COUNT(*) FROM
+    prompts;"` -> `88387`.
+  - Source counts currently stored:
+    - `Codex`: 70136
+    - `Codex CX`: 21
+    - `Claude Code projects`: 2256
+    - `Claude transcripts`: 1175
+    - `Claude prompt history`: 12334
+    - `Antigravity CLI transcripts`: 637
+    - `Antigravity IDE transcripts`: 12
+    - `Antigravity CLI conversation DB`: 10
+    - `Antigravity IDE conversation DB`: 2
+    - `Antigravity prompt history`: 1659
+    - `Gemini temporary chats`: 145
+- Parser correctness regression checks: PASS.
+  - `cargo test --manifest-path src-tauri/Cargo.toml
+    antigravity_conversation_db_prefers_user_prompt_field_over_longer_metadata`
+    -> 1 passed.
+  - `cargo test --manifest-path src-tauri/Cargo.toml
+    persist_scan_result_prunes_stale_source_rows_after_complete_scan` -> 1
+    passed.
+  - `cargo test --manifest-path src-tauri/Cargo.toml
+    persist_scan_result_keeps_stale_source_rows_when_scan_was_limited` -> 1
+    passed.
+- Full verification: PASS.
+  - `npm run check` passed: UI tests 124 passed, Vite production build passed,
+    Rust lib tests 70 passed, CLI tests 16 passed, doc-tests passed, and clippy
+    with `-D warnings` passed.
+- Direct single-surface QA coverage: PASS for the current core flow slice.
+  - Existing `surface:10` covered valid scan, improve, stop/cancel
+    not-persisted behavior, stored reset/load, preview mode, plan generation,
+    queue selection, and queued import completion.
+  - Earlier same-surface records in this file also cover invalid scan limit,
+    stored-load failure display/clear, stored and prompt filter empty states,
+    progress/locking labels, import stop behavior, and disabled empty-source
+    controls.
+- Last live cmux state: PASS.
+  - Used only existing `surface:10`; no new browser surface was opened.
+  - Eval result: PromptVault page loaded with `#root`, body text length 47665,
+    no global app error, no scan/import/stored error notices.
+  - `cmux browser --surface surface:10 console list`: no console entries.
+  - `cmux browser --surface surface:10 errors list`: no browser errors.
+- Git/release hygiene: PASS.
+  - Parser fix committed as `8a7dbfb`.
+  - Core-flow QA record committed as `418977d`.
+  - Plan/import queue QA record committed as `cbc123b`.
+  - `git rev-list --left-right --count HEAD...origin/main` after push was
+    `0 0`; worktree was clean before this audit entry.
+
+Remaining issue:
+
+- The only remaining caveat is cmux helper instability where `surface:10` can
+  intermittently lose DOM automation context. It recovered with same-surface
+  non-destructive navigation and has not produced PromptVault console/browser
+  errors.
+
+Next focus:
+
+- No parser/DB-management blocker remains for the user's current request.
+- Future polish can continue from UI performance, source filtering ergonomics,
+  or deeper parser fixtures if new chat-store formats appear.

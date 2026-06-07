@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 10:35 KST
+Updated: 2026-06-07 10:51 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -515,6 +515,29 @@ stability, performance, and maintainability, then record evidence here.
     `Files 105 / 158`, `Imported Prompts 1,773`.
   - Observed Recent Import Activity add an `Antigravity prompt history` event
     with `1 file · 1,659 prompts`, `1 / 1 · complete`, and `no warnings`.
+  - Follow-up diagnostics returned `No console entries` and
+    `No browser errors`.
+- Fresh same-browser Import Queue Stop QA on existing `surface:10`:
+  - Reused the same PromptVault browser; did not open a new cmux browser,
+    restart cmux, kill cmux, or use another workspace's browser.
+  - Reopened the Plan panel and selected exactly two sources:
+    `Antigravity prompt history` and `Gemini temporary chats`.
+  - Verified the queue action label was `Run 2 selected import sources`.
+  - Installed a temporary page-local 1.8-second delay only for
+    `/api/import-batch` so the Stop button could be clicked during the
+    current-source request, then restored the original `fetch` immediately
+    after reading the result.
+  - Clicked `Run Selected`, clicked Stop as soon as
+    `[data-stop-import="true"]` appeared, and observed:
+    `Import queue stopped after the current source. 1 of 2 sources completed.
+    Run Selected again to continue.`
+  - Observed Incremental Import details: source `Antigravity prompt history`,
+    processed `1 / 1`, batch `0 files · 0 prompts`, queue `1 / 2`, status
+    `Stopped`, and DB notice
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 88,379 · new 0 · updated 0`.
+  - Observed Saved Import Progress remain coherent at `Sources 3 / 4`,
+    `Files 105 / 158`, `Imported Prompts 1,773`, with
+    `Gemini temporary chats` still `91 / 144 · resumable`.
   - Follow-up diagnostics returned `No console entries` and
     `No browser errors`.
 - `npm run test:ui -- tests/scanStatus.test.ts`: passed; due the package
@@ -3284,6 +3307,13 @@ stability, performance, and maintainability, then record evidence here.
   parallel `surface:10` DOM queries timed out in this session, while short
   title/url/console/error checks worked before and after. Computer Use
   accessibility-tree interaction was reliable on the same single browser.
+- During queue-stop QA, the background `surface:10` briefly reported the
+  correct PromptVault title and URL while `document.body` was empty after a
+  large timed-out DOM read. Server health, bridge health, console, and browser
+  errors were clean. Switching the existing `프롬프트` workspace back into
+  focus and using `cmux browser --surface surface:10 goto` on the same
+  browser restored the React DOM without opening a new browser or restarting
+  cmux.
 - After Stored Vault filter/reset QA, `surface:10` title and console checks
   worked, but `cmux browser --surface surface:10 errors list` timed out once.
   This is tracked as a cmux diagnostics RPC issue because the page remained
@@ -3672,6 +3702,38 @@ Audit conclusion:
   stored-vault, import-plan, import-batch/queue/stop, error, and empty-state
   flows from this surface.
 
+## Completion Audit Snapshot - 2026-06-07 10:51 KST
+
+Objective restated as concrete deliverables:
+
+1. Continue PromptVault development in `/Users/wj/Ai/System/10_Projects/PromptVault`.
+2. Use only the current session's single cmux in-app browser for direct QA.
+3. Do not restart/kill cmux and do not open a second cmux browser.
+4. Keep improving app quality in small tested slices and keep `working.md`
+   current.
+5. Commit/push only after explicit-path staging, relevant tests, staged
+   whitespace/gitleaks checks, and remote parity verification.
+
+Prompt-to-artifact checklist:
+
+| Requirement | Current evidence | Status |
+|---|---|---|
+| Target source path is PromptVault | Goal identity and repo root resolve to `/Users/wj/Ai/System/10_Projects/PromptVault`. | PASS |
+| `working.md` exists and is updated | This update records same-browser Stored Vault, Import Plan, Import Batch, and Import Queue Stop QA on `surface:10`. | PASS |
+| Use one existing cmux browser | `cmux tree --all` showed existing `workspace:5` `surface:10 [browser] "PromptVault"`; no `cmux browser open/new`, cmux restart, app kill, or second browser was used. | PASS |
+| Direct browser QA currently works | Existing `surface:10` completed Scan/Improve, Stored Vault filter/reset/apply, Import Plan, Import Batch, and selected queue Stop QA with clean follow-up console/errors diagnostics. | PARTIAL |
+| Automated gates cover the latest code slice | `npm run test:ui -- tests/scanStatus.test.ts`, `npm run build`, and `npm run check` passed for the latest code change. This queue-stop update is docs-only. | PASS |
+| Full objective achieved | Core flows have broader same-browser coverage now, but the objective still calls for continued autonomous improvement and remaining recovery/error-state QA. | NOT ACHIEVED |
+
+Audit conclusion:
+
+- Do not mark the thread goal complete yet.
+- Same-browser direct QA on `surface:10` now covers Stored Vault, Import Plan,
+  Import Batch, and selected Import Queue Stop flows in addition to Scan and
+  Improve fallback.
+- Continue with remaining recovery/error states and durable import/background
+  indexing improvements before considering the objective complete.
+
 ## Research
 
 - No new external web research was needed. This slice used local repo state,
@@ -3680,17 +3742,15 @@ Audit conclusion:
 
 ## Next Steps
 
-1. Commit and push the Scan Progress discovery-copy slice after explicit-path
-   staging, `git diff --check`, staged gitleaks, and remote parity checks.
-2. Continue same-browser direct QA on `surface:10` for Stored Vault
-   load/filter/reset/apply, Import Plan, Import Batch, Run Until Done, queue,
-   stop, and recovery states.
-3. Consider a durable background indexing worker so first-run historical import
+1. Continue same-browser direct QA on `surface:10` for continuous
+   `Run Until Done` stop/recovery states, failed-state handling, and remaining
+   empty-state paths.
+2. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
-4. Harden the cmux browser diagnostics workflow for stale surface IDs and large
+3. Harden the cmux browser diagnostics workflow for stale surface IDs, large
    DOM-read timeouts; prefer `cmux tree --all` plus short surface-specific
    checks before falling back to Computer Use.
-5. Consider making progress telemetry durable enough to reconnect to an active
+4. Consider making progress telemetry durable enough to reconnect to an active
    background scan after browser reload.
-6. Continue looking for remaining request-overlap, double-click hazards, and
+5. Continue looking for remaining request-overlap, double-click hazards, and
    secondary-panel empty/failure states while direct cmux QA is available.

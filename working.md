@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 02:23 KST
+Updated: 2026-06-08 02:25 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -44,6 +44,8 @@ Progress:
 - Confirmed the temp preview QA script was removed. One matching
   `gitleaks dir .` process was unrelated and belonged to
   `/Users/wj/Ai/System/10_Projects/CareVault`.
+- Published code commit `ba957d3` to `origin/main` and verified local/remote
+  parity.
 
 Changes:
 
@@ -97,6 +99,34 @@ Tests:
   - `ps -axo pid=,command= | rg -- '--port 526[9]|promptvault_import_event_relation_q[a]|gitleaks dir [.] --no-banner --redact'`:
     only an unrelated CareVault `gitleaks dir .` process matched.
 
+Publication:
+
+- Explicit staged paths:
+  - `src/promptVaultApi.ts`
+  - `tests/promptVaultApi.test.ts`
+  - `working.md`
+- `git diff --cached --check`: passed.
+- `gitleaks protect --staged --no-banner --redact`: passed, scanned
+  approximately 6.84 KB, no leaks found.
+- `gh auth status`: logged in to `github.com` as `Veritas-7`; active account
+  true; git protocol HTTPS.
+- `gitleaks version`: `8.30.1`.
+- `git ls-remote origin HEAD`: `92e50f46c80c8b485372b8e2edb9d815c770a1d2`.
+- `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+  private repo at `https://github.com/Veritas-7/PromptVault`.
+- Commit:
+  - `ba957d3 fix: validate import event progress relations`
+- `gitleaks dir . --no-banner --redact`: passed, scanned approximately
+  700.82 MB, no leaks found.
+- `git push origin main`: pushed `92e50f4..ba957d3` to `main`.
+- Post-push:
+  - `git fetch origin main`: passed.
+  - `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - `git status --short --branch`: `## main...origin/main`.
+  - `/tmp/promptvault_import_event_relation_qa.mjs`: absent.
+  - No matching preview, temp QA, or PromptVault `gitleaks dir` process
+    remained.
+
 Issues:
 
 - No app blocker found.
@@ -107,12 +137,8 @@ Research:
 
 Next Steps:
 
-- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
-  `working.md`.
-- Run staged whitespace/secrets checks plus GitHub auth/remote verification.
-- Commit as `fix: validate import event progress relations`, run full-tree
-  gitleaks, and push `origin main`.
-- Update this log with publication evidence and publish the docs marker.
+- Publish this working-log docs marker with explicit staging.
+- Run staged checks, full-tree gitleaks, push, and post-push parity checks.
 
 ## Current Slice - 2026-06-08 Import batch file-window validation
 

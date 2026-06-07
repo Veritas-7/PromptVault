@@ -196,6 +196,10 @@ function isStringArray(value: unknown): boolean {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function isNonBlankStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every(isNonBlankString);
+}
+
 function isNonBlankString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -628,11 +632,11 @@ function parseImportBatchResult(value: unknown): ImportBatchResult {
 
 function parseImproveResult(value: unknown): ImproveResult {
   if (!isRecord(value)
-    || typeof value.provider !== "string"
+    || !isNonBlankString(value.provider)
     || typeof value.used_ai !== "boolean"
-    || typeof value.revised_prompt !== "string"
-    || !isStringArray(value.rationale)
-    || !isStringArray(value.checklist)
+    || !isNonBlankString(value.revised_prompt)
+    || !isNonBlankStringArray(value.rationale)
+    || !isNonBlankStringArray(value.checklist)
     || !isQualityDelta(value.quality_delta)
     || !isStringArray(value.warnings)
     || !(isImprovePersistence(value.persistence) || value.persistence === null)) {

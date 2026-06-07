@@ -1,12 +1,92 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 05:36 KST
+Updated: 2026-06-08 05:40 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Prompt record metadata validation
+## Current Slice - 2026-06-08 Improvement response text validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge improvement responses whose mandatory user-visible text
+  fields are empty or whitespace-only before the UI can render blank provider
+  labels, empty revised prompts, or empty rationale/checklist guidance.
+
+Context:
+
+- The previous slices tightened response database paths, source metadata, and
+  prompt row metadata.
+- `parseImproveResult` still accepts blank strings for `provider` and
+  `revised_prompt`, and accepts blank items in `rationale` and `checklist`.
+- The Rust producer trims and rejects empty `revised_prompt`, emits explicit
+  providers such as `local-rules`, `openai`, or `glm`, and local fallback emits
+  non-empty rationale/checklist guidance.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Identified the next narrow hardening target: user-visible improvement
+  response text in browser-bridge parsers.
+- Added RED tests for blank improvement `provider`/`revised_prompt` and blank
+  `rationale`/`checklist` items.
+- Confirmed RED first: focused API suite failed 72/74 only on the two new
+  missing-rejection cases.
+- Applied nonblank string guards to mandatory improvement text fields.
+- Confirmed GREEN after the parser change: focused API suite passes 74/74.
+- Confirmed broader UI helpers still pass 238/238 and production build still
+  succeeds.
+- Ran local Vite preview QA on `127.0.0.1:5292` with a valid stored prompt and
+  two malformed improvement responses. Blank provider/revised prompt and blank
+  rationale/checklist items both surface sanitized recommendation failure
+  states with no revised prompt, advice text, or persistence success block.
+- Ran full project check successfully.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`: covers whitespace-only improvement provider,
+  revised prompt, rationale item, and checklist item with sanitized bridge
+  error messages.
+- `src/promptVaultApi.ts`: adds a nonblank string-array guard and applies it
+  to improvement rationale/checklist; also rejects blank improvement provider
+  and revised prompt.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  (`74` tests passed).
+- PASS: `npm run test:ui` (`238` tests passed).
+- PASS: `npm run build`.
+- PASS: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5292" --port 5292 node /tmp/promptvault_improvement_text_qa.mjs`
+  (`{"status":"passed","improveRequests":2}`; no bad responses, console
+  errors, or page errors).
+- PASS: `npm run check` (`238` UI tests, Vite build, `84` Rust library tests,
+  `16` CLI tests, doc tests, and clippy).
+
+Issues:
+
+- No blocker yet.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`.
+- Run staged secrets scan, commit, full-tree secrets scan, push, and verify
+  branch parity if clean.
+
+## Previous Slice - 2026-06-08 Prompt record metadata validation
 
 Current Goal:
 

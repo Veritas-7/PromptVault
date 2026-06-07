@@ -1,10 +1,106 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 20:44 KST
+Updated: 2026-06-07 20:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Scan preview pending QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the scan-origin preview mode path where changing from `최신순` to
+  `개선 우선` should show a pending notice instead of silently changing or
+  reloading the already-scanned list.
+
+Context:
+
+- The previous slice verified stored-result preview changes, which auto-reload
+  stored prompts with the last applied filters.
+- Scan-origin results intentionally behave differently: the loaded scan rows
+  remain in their backend-returned order until the user runs Scan again.
+- This slice recertifies that behavior on current `HEAD` with local
+  preview/Playwright rather than cmux.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Rebuilt the frontend preview artifact with `npm run build`.
+- Ran scan preview pending browser QA against preview `127.0.0.1:5231`.
+- Mocked the browser bridge endpoints for health, facets, import states,
+  import events, scan, scan progress, and improve.
+- Verified first scan in latest mode, recommendation rendering, preview-mode
+  pending notice, stale recommendation cleanup, and the second scan using
+  `quality_asc`.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only scan preview pending QA slice.
+
+Tests:
+
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-MjEXw_ye.js`.
+- Scan preview pending QA on preview `127.0.0.1:5231`:
+  - Initial `/api/health` succeeded and the browser bridge rendered connected.
+  - Initial quiet refreshes succeeded once each for `/api/prompt-facets`,
+    `/api/import-states`, and `/api/import-events`.
+  - First `data-run-scan` sent `/api/scan` with `limit: 25`,
+    `preview_limit: 1000`, `preview_sort: "latest"`,
+    `include_markdown: false`, `write_markdown: false`,
+    six quick-scan source IDs, `source_limit: 5`,
+    `persist_on_cancel: false`, and a generated `run_id`.
+  - Latest scan result rendered two prompt rows and selected
+    `scan-latest-selected`.
+  - Clicking `data-run-improve` sent one `/api/improve` request with
+    `prompt_id: "scan-latest-selected"`, the selected prompt text,
+    source/context, `persist: true`, and database path
+    `/tmp/promptvault-scan-preview-pending.sqlite`.
+  - Recommendation UI rendered
+    `Revised latest scan prompt that should clear on pending preview change.`
+  - Clicking `개선 우선` did not send another `/api/scan`; `scanCalls` stayed
+    at `1`.
+  - `data-preview-mode-pending` appeared and explained both sides of the state:
+    `개선 우선 미리보기가 선택되었습니다.` and
+    `현재 목록은 아직 최신순 미리보기입니다.`
+  - Scan-origin pending mode kept the loaded latest selection visible.
+  - The stale recommendation text and `추천 이력 #303 저장됨` persistence notice
+    disappeared after preview mode changed.
+  - Recommendation panel returned to the selected-prompt empty state:
+    `선택한 프롬프트의 추천을 생성하세요.`
+  - Clicking `data-run-scan` again sent a second `/api/scan` with
+    `preview_sort: "quality_asc"` and the same bounded scan options.
+  - The second scan cleared the pending notice, selected
+    `scan-weakest-selected`, displayed
+    `Weakest scanned prompt selected after quality scan rerun.`, and no longer
+    displayed the old latest selection.
+  - Final counts: `healthCalls=1`, `facetsCalls=3`,
+    `importStatesCalls=1`, `importEventsCalls=1`, `scanCalls=2`,
+    `scanProgressCalls=2`, `improveCalls=1`.
+  - Page errors, unexpected console errors, and unexpected request failures:
+    none.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record after staged diff and secret
+  checks.
+- Continue autonomous QA on another still-uncovered failure, performance, or
+  UX edge state.
 
 ## Current Slice - 2026-06-07 Stored preview mode reload QA
 

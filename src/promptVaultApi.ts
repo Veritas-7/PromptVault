@@ -118,14 +118,14 @@ export async function loadStoredPrompts(options: StoredPromptsOptions = {}): Pro
   if (hasTauriInvoke()) {
     return invoke<ScanResult>("load_stored_prompts", { options });
   }
-  return postBridge<ScanResult>("/api/prompts", { options });
+  return postBridge<ScanResult>("/api/prompts", { options }, parseScanResult);
 }
 
 export async function scanPrompts(options: ScanPromptOptions): Promise<ScanResult> {
   if (hasTauriInvoke()) {
     return invoke<ScanResult>("scan_prompts", { options });
   }
-  return postBridge<ScanResult>("/api/scan", { options });
+  return postBridge<ScanResult>("/api/scan", { options }, parseScanResult);
 }
 
 export async function cancelScan(run_id: string): Promise<CancelScanResult> {
@@ -165,6 +165,47 @@ function isFrequencyItem(value: unknown): boolean {
   return isRecord(value) && typeof value.text === "string" && typeof value.count === "number";
 }
 
+function isStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isPromptQuality(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.score === "number"
+    && typeof value.band === "string"
+    && isStringArray(value.missing)
+    && isStringArray(value.suggestions);
+}
+
+function isPromptRecord(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.id === "string"
+    && typeof value.source === "string"
+    && typeof value.session_id === "string"
+    && typeof value.path === "string"
+    && (typeof value.timestamp === "undefined" || typeof value.timestamp === "string" || value.timestamp === null)
+    && (typeof value.cwd === "undefined" || typeof value.cwd === "string" || value.cwd === null)
+    && typeof value.text === "string"
+    && typeof value.word_count === "number"
+    && typeof value.char_count === "number"
+    && typeof value.hash === "string"
+    && isStringArray(value.risk_flags)
+    && isPromptQuality(value.quality);
+}
+
+function isSourceSummary(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.id === "string"
+    && typeof value.label === "string"
+    && typeof value.root_path === "string"
+    && typeof value.files_seen === "number"
+    && typeof value.prompts_found === "number"
+    && typeof value.average_quality === "number"
+    && typeof value.weak_prompt_count === "number"
+    && typeof value.status === "string"
+    && isStringArray(value.notes);
+}
+
 function isImportState(value: unknown): boolean {
   return isRecord(value)
     && typeof value.source_id === "string"
@@ -194,6 +235,37 @@ function isImportEvent(value: unknown): boolean {
     && typeof value.completed === "boolean"
     && Array.isArray(value.warnings)
     && value.warnings.every((warning) => typeof warning === "string");
+}
+
+function isPersistStats(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.database_path === "string"
+    && typeof value.stored_prompt_count === "number"
+    && typeof value.inserted_prompt_count === "number"
+    && typeof value.updated_prompt_count === "number"
+    && typeof value.date_count === "number";
+}
+
+function isScanStats(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.total_prompts === "number"
+    && typeof value.total_files === "number"
+    && typeof value.total_words === "number"
+    && typeof value.average_words === "number"
+    && typeof value.average_quality === "number"
+    && typeof value.weak_prompt_count === "number"
+    && Array.isArray(value.top_words)
+    && value.top_words.every(isFrequencyItem)
+    && Array.isArray(value.top_phrases)
+    && value.top_phrases.every(isFrequencyItem)
+    && Array.isArray(value.repeated_prompts)
+    && value.repeated_prompts.every(isFrequencyItem)
+    && Array.isArray(value.top_quality_gaps)
+    && value.top_quality_gaps.every(isFrequencyItem)
+    && Array.isArray(value.prompts_by_date)
+    && value.prompts_by_date.every(isFrequencyItem)
+    && Array.isArray(value.source_summaries)
+    && value.source_summaries.every(isSourceSummary);
 }
 
 function parseImportStatesResult(value: unknown): ImportStatesResult {
@@ -238,6 +310,26 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as StoredPromptFacetsResult;
+}
+
+function parseScanResult(value: unknown): ScanResult {
+  if (!isRecord(value)
+    || typeof value.generated_at !== "string"
+    || !(typeof value.output_path === "string" || value.output_path === null)
+    || typeof value.markdown !== "string"
+    || !isScanStats(value.stats)
+    || !Array.isArray(value.prompts)
+    || !value.prompts.every(isPromptRecord)
+    || typeof value.returned_prompt_count !== "number"
+    || typeof value.prompts_truncated !== "boolean"
+    || typeof value.preview_sort !== "string"
+    || typeof value.markdown_included !== "boolean"
+    || typeof value.markdown_written !== "boolean"
+    || !(isPersistStats(value.persistence) || value.persistence === null)
+    || !isStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ScanResult;
 }
 
 function parseScanProgressResult(value: unknown): ScanProgress {

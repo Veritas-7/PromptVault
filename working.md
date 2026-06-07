@@ -1,10 +1,112 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 21:56 KST
+Updated: 2026-06-07 22:01 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Bridge scan result payload validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent malformed successful `/api/scan` and `/api/prompts` payloads from
+  reaching prompt/stat render paths.
+
+Context:
+
+- Previous bridge slices validated health, quiet refresh, and scan progress
+  payload shapes.
+- Full `ScanResult` payloads feed metrics, source summaries, frequency lists,
+  prompt rows, selection state, and persistence notices directly.
+- A successful browser-bridge scan or stored-load response with missing
+  `stats`, `prompts`, `quality`, `warnings`, or persistence fields could crash
+  render code such as `.toLocaleString()`, `.map()`, `.toFixed()`, or prompt row
+  formatting after the API layer returned a typed cast.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge responses.
+
+Progress:
+
+- Added RED tests for malformed successful scan and stored prompt load payloads.
+- Added a `ScanResult` runtime validator and connected it to browser bridge
+  `/api/scan` and `/api/prompts` calls.
+- Verified that malformed scan/load results become stable PromptVault bridge
+  response-shape failures, not render exceptions or raw JavaScript details.
+- Verified focused tests, full UI/unit tests, production build, preview QA, and
+  the full project check.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - `scanPrompts()` and `loadStoredPrompts()` now validate browser-bridge
+    `ScanResult` responses with `parseScanResult()`.
+  - Added validators for prompt quality, prompt records, source summaries,
+    scan stats, persistence stats, and string arrays.
+- `tests/promptVaultApi.test.ts`
+  - Adds malformed successful `/api/scan` and `/api/prompts` response tests.
+  - Both tests assert stable bridge response-shape copy without raw
+    `TypeError`, `undefined`, or `toLocaleString` details.
+- `working.md`
+  - Records this bridge scan result payload validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the two new scan result tests saw
+    `Missing expected rejection.`
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 8 tests, 8 pass.
+- `npm run test:ui`:
+  - Passed: 168 tests, 168 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CXvHEYPg.js`.
+- Malformed scan/stored load result browser QA on preview `127.0.0.1:5241`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/health`, `/api/prompt-facets`, `/api/import-states`, and
+    `/api/import-events` returned valid empty payloads.
+  - Clicking `[data-run-scan]` made `/api/scan` return HTTP 200 JSON with only
+    `generated_at`.
+  - UI rendered the global malformed bridge response message plus
+    `[data-scan-run-error]` without exposing `toLocaleString`,
+    `Cannot read properties`, `undefined`, or `TypeError`.
+  - Clicking `[data-load-stored-prompts]` made `/api/prompts` return HTTP 200
+    JSON with only `generated_at`.
+  - UI rendered the global malformed bridge response message plus
+    `[data-stored-load-error]` without raw JavaScript details.
+  - Final counts: `facets=2`, `health=1`, `importEvents=1`,
+    `importStates=1`, `progress=1`, `prompts=1`, `scan=1`,
+    `unexpected=[]`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 168 tests, 168 pass.
+  - Build: passed with `index-CXvHEYPg.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Commit and push this scan result robustness fix after staged diff,
+  whitespace, and secret checks.
+- Continue autonomous QA on another still-uncovered bridge, import, improve, or
+  UX edge state after publication.
 
 ## Current Slice - 2026-06-07 Bridge scan progress payload validation
 

@@ -1033,6 +1033,58 @@ test("browser bridge scan results reject impossible persistence aggregates", asy
   );
 });
 
+test("browser bridge scan results reject blank persistence database paths", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    output_path: null,
+    markdown: "",
+    stats: {
+      total_prompts: 0,
+      total_files: 0,
+      total_words: 0,
+      average_words: 0,
+      average_quality: 0,
+      weak_prompt_count: 0,
+      top_words: [],
+      top_phrases: [],
+      repeated_prompts: [],
+      top_quality_gaps: [],
+      prompts_by_date: [],
+      source_summaries: [],
+    },
+    prompts: [],
+    returned_prompt_count: 0,
+    prompts_truncated: false,
+    preview_sort: "latest",
+    markdown_included: false,
+    markdown_written: false,
+    persistence: {
+      database_path: "   ",
+      stored_prompt_count: 0,
+      inserted_prompt_count: 0,
+      updated_prompt_count: 0,
+      date_count: 0,
+    },
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /0개 저장|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject date buckets beyond aggregate prompts", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
@@ -2531,6 +2583,79 @@ test("browser bridge import batches reject invalid nested timestamps", async (t)
   );
 });
 
+test("browser bridge import batches reject blank persistence database paths", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    source: {
+      id: "codex",
+      label: "Codex",
+      root_path: "/tmp/codex",
+      status: "ok",
+      file_count: 0,
+      byte_count: 0,
+      large_file_count: 0,
+      largest_file_bytes: 0,
+      newest_modified_at: null,
+      notes: [],
+    },
+    state: {
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/tmp/codex",
+      total_files: 0,
+      total_bytes: 0,
+      next_file_index: 0,
+      processed_files: 0,
+      imported_prompt_count: 0,
+      completed: true,
+      updated_at: "2026-06-07T00:00:00Z",
+    },
+    batch_start_index: 0,
+    batch_file_count: 0,
+    batch_prompt_count: 0,
+    returned_prompt_count: 0,
+    prompts: [],
+    stats: {
+      total_prompts: 0,
+      total_files: 0,
+      total_words: 0,
+      average_words: 0,
+      average_quality: 0,
+      weak_prompt_count: 0,
+      top_words: [],
+      top_phrases: [],
+      repeated_prompts: [],
+      top_quality_gaps: [],
+      prompts_by_date: [],
+      source_summaries: [],
+    },
+    persistence: {
+      database_path: "   ",
+      stored_prompt_count: 0,
+      inserted_prompt_count: 0,
+      updated_prompt_count: 0,
+      date_count: 0,
+    },
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => importBatch({ source_id: "codex" }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /0개 저장|Codex|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge import batches reject impossible numeric payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
@@ -2852,6 +2977,55 @@ test("browser bridge improvements reject impossible persistence counters", async
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge improvements reject blank persistence database paths", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    provider: "local",
+    used_ai: false,
+    revised_prompt: "Improve this prompt by adding context and success criteria.",
+    rationale: ["Added context."],
+    checklist: ["Verify expected outcome."],
+    quality_delta: {
+      before: {
+        score: 40,
+        band: "weak",
+        missing: ["context"],
+        suggestions: ["Add context."],
+      },
+      after: {
+        score: 82,
+        band: "strong",
+        missing: [],
+        suggestions: [],
+      },
+      score_delta: 42,
+      resolved_gaps: ["context"],
+      remaining_gaps: [],
+    },
+    warnings: [],
+    persistence: {
+      database_path: "   ",
+      improvement_event_id: 1,
+      prompt_improvement_count: 1,
+    },
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => improvePrompt({ prompt: "Improve this prompt." }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /추천 이력 #1|이 프롬프트 1회|toLocaleString|RangeError|undefined/);
       return true;
     },
   );

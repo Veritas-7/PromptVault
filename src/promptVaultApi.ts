@@ -476,7 +476,7 @@ function isScanPlanAggregate(value: unknown): boolean {
 }
 
 function isPersistStats(value: unknown): boolean {
-  if (!isRecord(value) || typeof value.database_path !== "string") return false;
+  if (!isRecord(value) || !isNonBlankString(value.database_path)) return false;
   const storedPromptCount = value.stored_prompt_count;
   const insertedPromptCount = value.inserted_prompt_count;
   const updatedPromptCount = value.updated_prompt_count;
@@ -565,7 +565,7 @@ function isImportBatchFileProgress(value: unknown): boolean {
 
 function isImprovePersistence(value: unknown): boolean {
   return isRecord(value)
-    && typeof value.database_path === "string"
+    && isNonBlankString(value.database_path)
     && isPositiveSafeInteger(value.improvement_event_id)
     && isPositiveSafeInteger(value.prompt_improvement_count);
 }

@@ -1,12 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 05:10 KST
+Updated: 2026-06-08 05:18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Import database path validation
+## Current Slice - 2026-06-08 Persistence database path validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/import-batch/improvement payloads whose persistence
+  object reports an empty or whitespace-only `database_path` before the UI can
+  render or reuse that value.
+
+Context:
+
+- Previous slices tightened top-level database paths for stored facets, import
+  states, and import events.
+- `ScanResult.persistence` and `ImportBatchResult.persistence` still used
+  `isPersistStats`, which only checked `typeof database_path === "string"`.
+- `ImproveResult.persistence` still used `isImprovePersistence`, which only
+  checked `typeof database_path === "string"`.
+- These persistence paths can be rendered in storage status or persistence
+  notices and can inform later requests.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Added RED coverage for `/api/scan`, `/api/import-batch`, and `/api/improve`
+  returning structurally valid payloads with `persistence.database_path: "   "`.
+- Verified the focused API test fails before the guard.
+- Reused the existing non-blank string guard for scan/import-batch persistence
+  and improvement persistence database paths.
+- Verified the focused API test passes after the guard.
+- Verified the broader UI suite and production build.
+- Preview-tested malformed blank persistence database paths through the browser
+  UI for scan, import batch, and improvement flows.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for blank persistence database
+    paths on scan, import batch, and improvement responses.
+- `src/promptVaultApi.ts`
+  - Requires `isPersistStats` and `isImprovePersistence` database paths to be
+    non-blank.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the three new blank persistence database
+    path tests resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 64 tests, 61 pass, 3 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 64 tests, 64 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 228 tests, 228 pass.
+- Build:
+  - `npm run build`
+  - Passed; Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-BIRLj-V1.js`.
+- Preview QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5289" --port 5289 node /tmp/promptvault_persistence_database_path_qa.mjs`
+  - Passed after correcting the temporary fixture prompt `char_count` to 57
+    and mocking the expected `/api/scan/progress` poll response.
+  - Verified scan/import-batch/improvement blank persistence database paths
+    show the sanitized malformed bridge response and do not render persistence
+    success details.
+  - Removed `/tmp/promptvault_persistence_database_path_qa.mjs` after pass.
+- Full check:
+  - `npm run check`
+  - Passed: 228 UI tests, production build, 84 Rust lib tests, 16 CLI tests,
+    doc tests, and `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found in the focused API suite.
+- First preview QA attempt used an invalid prompt `char_count` in the temporary
+  fixture, which kept the stored prompt selection unavailable. The fixture was
+  corrected before the passing preview run.
+- No remaining app blocker found for this slice.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run secrets checks, then commit and push if clean.
+
+## Previous Slice - 2026-06-08 Import database path validation
 
 Current Goal:
 

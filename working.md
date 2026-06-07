@@ -3960,12 +3960,15 @@ Change:
   date facet list whenever timestamp-less prompts exist, even if the generic
   frequency limit would otherwise truncate it. This keeps timestamp-less
   Antigravity conversation DB records discoverable from stored prompt filters.
+- Tightened the helper to a fixed `unknown-date` / `prompt_date` query instead
+  of accepting a dynamic facet column name.
 
 Tests:
 
 - `cargo test stored_prompt_facets_include_unknown_dates`: PASS.
-- `npm run check`: PASS, including 124 UI helper tests, Vite build, 65 Rust
-  library tests, 15 CLI tests, doc-tests, and clippy with `-D warnings`.
+- Final `npm run check`: PASS, including 124 UI helper tests, Vite build,
+  65 Rust library tests, 15 CLI tests, doc-tests, and clippy with
+  `-D warnings`.
 - Started a temporary new-code bridge on `127.0.0.1:5175`, verified
   `/api/health`, then called `/api/prompt-facets` with `limit=50`.
   Result: `unknown_date={"text":"unknown-date","count":12}` and

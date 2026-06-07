@@ -908,7 +908,7 @@ pub fn run_list_stored_prompt_facets(
         "prompt_date IS NOT NULL AND prompt_date <> ''",
         limit,
     )?;
-    ensure_stored_prompt_facet_value(&conn, &mut dates, "prompt_date", "unknown-date", limit)?;
+    ensure_unknown_date_facet(&conn, &mut dates, limit)?;
     let workspaces =
         read_stored_prompt_facet(&conn, "COALESCE(cwd, '')", "COALESCE(cwd, '') <> ''", limit)?;
 
@@ -3262,19 +3262,21 @@ fn read_stored_prompt_facet(
     Ok(rows)
 }
 
-fn ensure_stored_prompt_facet_value(
+fn ensure_unknown_date_facet(
     conn: &Connection,
     items: &mut Vec<FrequencyItem>,
-    column: &str,
-    value: &str,
     limit: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if items.iter().any(|item| item.text == value) {
+    const UNKNOWN_DATE: &str = "unknown-date";
+    if items.iter().any(|item| item.text == UNKNOWN_DATE) {
         return Ok(());
     }
 
-    let sql = format!("SELECT COUNT(*) FROM prompts WHERE {column} = ?1");
-    let count: i64 = conn.query_row(&sql, [value], |row| row.get(0))?;
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM prompts WHERE prompt_date = ?1",
+        [UNKNOWN_DATE],
+        |row| row.get(0),
+    )?;
     if count <= 0 {
         return Ok(());
     }
@@ -3283,7 +3285,7 @@ fn ensure_stored_prompt_facet_value(
         items.pop();
     }
     items.push(FrequencyItem {
-        text: value.to_string(),
+        text: UNKNOWN_DATE.to_string(),
         count: count as usize,
     });
     Ok(())

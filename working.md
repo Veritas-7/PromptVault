@@ -74,7 +74,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record.
+- Completed and pushed as `50b9078 docs: record plan bridge recovery QA`.
 - Continue autonomous QA on another still-uncovered failure, performance, or
   UX edge state.
 

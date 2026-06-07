@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 00:53 KST
+Updated: 2026-06-08 00:57 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -39,8 +39,8 @@ Progress:
 - Added scan-result relation validation requiring returned prompt count to be
   at most `stats.total_prompts` and equal to the returned `prompts.length`.
 - Verified focused API tests, full UI/unit tests, production build, preview
-  QA, and the full project check.
-- Pending: staged checks, commit, and GitHub publication.
+  QA, the full project check, staged checks, and GitHub publication.
+- Pending: publication evidence docs commit.
 
 Changes:
 
@@ -90,6 +90,25 @@ Tests:
   - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
     passed, `src/main.rs` 0 tests, doc tests 0 tests.
   - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+- Staged and publication checks:
+  - Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`,
+    and `working.md`.
+  - `git diff --cached --check`: passed.
+  - `gitleaks protect --staged --no-banner --redact`: passed; scanned
+    6.62 KB, no leaks found.
+  - `gh auth status`: logged in as `Veritas-7`; HTTPS git operations.
+  - `gitleaks version`: 8.30.1.
+  - Pre-push `git ls-remote origin HEAD`: `6419e5f`.
+  - `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`:
+    private repo at `https://github.com/Veritas-7/PromptVault`.
+  - `gitleaks dir . --no-banner --redact`: passed; scanned 700.75 MB, no
+    leaks found.
+  - `git push origin main`: pushed `6419e5f..0e9a296`.
+  - Post-push `git fetch origin main` plus
+    `git rev-list --left-right --count HEAD...origin/main`: `0 0`.
+  - Post-push `git status --short --branch`: `## main...origin/main`.
+  - `/tmp/promptvault_scan_returned_count_qa.mjs`: absent after QA cleanup.
+  - No preview QA process remained on port `5261`.
 
 Issues:
 
@@ -101,11 +120,9 @@ Research:
 
 Next Steps:
 
-- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
-  `working.md`.
-- Run staged whitespace and secret checks, commit the robustness fix, run a
-  full-tree secret scan, push to `origin main`, then record publication status
-  in `working.md`.
+- Published robustness fix on `origin/main` as
+  `0e9a296 fix: validate scan returned counts`.
+- Commit and push this `working.md` publication-status update.
 
 ## Current Slice - 2026-06-08 Scan plan aggregate bounds
 

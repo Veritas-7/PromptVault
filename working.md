@@ -1,10 +1,112 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 01:08 KST
+Updated: 2026-06-08 01:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Source summary weak-count bounds
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan result payloads whose per-source weak prompt count
+  is larger than that source's `prompts_found` before a source row can render
+  impossible text such as `품질 42.5 · 약함 2` for one found prompt.
+
+Context:
+
+- Aggregate scan result weak counts are already validated against
+  `stats.total_prompts`.
+- `App.tsx` also renders each `source_summaries` row directly as
+  `품질 {source.average_quality.toFixed(1)} · 약함 {source.weak_prompt_count}`
+  beside `source.prompts_found`.
+- The Rust `summarize_source_quality()` path counts weak prompts from the same
+  per-source prompt vector used to set `prompts_found`, so a source weak count
+  cannot exceed that source's found prompt count.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for `/api/scan` returning one valid prompt row and valid
+  aggregate stats, but a source summary with `prompts_found: 1` and
+  `weak_prompt_count: 2`.
+- Added source summary relation validation requiring source weak prompt count
+  to be at most that source's found prompt count.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Pending: staged checks, commit, full-tree secret scan, push, and publication
+  evidence docs commit.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Requires `source_summaries[].weak_prompt_count <= prompts_found` in scan
+    result bridge response validation.
+- `tests/promptVaultApi.test.ts`
+  - Adds bridge response-shape coverage for per-source weak prompt counts
+    beyond that source's found prompt count.
+- `working.md`
+  - Records this source summary weak-count bounds slice.
+  - Marks the previous scan weak-count publication evidence docs commit as
+    pushed.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new source weak-count test resolved
+    instead of rejecting.
+  - Result: 35 tests, 34 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 35 tests, 35 pass.
+- `npm run test:ui`:
+  - Passed: 199 tests, 199 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-DQpdXR4N.js`.
+- Source weak-count browser QA on preview `127.0.0.1:5263`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/scan` returned HTTP 200 with valid aggregate stats and one valid
+    prompt row, but source summary `prompts_found: 1` and
+    `weak_prompt_count: 2`.
+  - Clicking the top-level quick scan button rendered the scan failure notice
+    and sanitized malformed bridge error.
+  - The impossible source row text `품질 42.5 · 약함 2` and malformed prompt
+    row text were not rendered.
+  - Final counts: `/api/health=1`, `/api/prompt-facets=2`,
+    `/api/import-states=1`, `/api/import-events=1`, `/api/scan=1`,
+    `/api/scan/progress=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 199 tests, 199 pass.
+  - Build: passed with `index-DQpdXR4N.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage explicit paths only: `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `working.md`.
+- Run staged secret/diff/GitHub checks, commit, run full-tree gitleaks, push to
+  `origin main`, then record publication status in a docs commit.
 
 ## Current Slice - 2026-06-08 Scan result weak-count bounds
 
@@ -38,7 +140,8 @@ Progress:
   most `stats.total_prompts`.
 - Verified focused API tests, full UI/unit tests, production build, preview
   QA, the full project check, staged checks, and GitHub publication.
-- Pending: publication evidence docs commit.
+- Published publication-status update on `origin/main` as
+  `6421d1e docs: mark scan weak count validation pushed`.
 
 Changes:
 
@@ -120,7 +223,8 @@ Next Steps:
 
 - Published robustness fix on `origin/main` as
   `1daa26e fix: validate scan weak counts`.
-- Commit and push this `working.md` publication-status update.
+- Published publication-status update on `origin/main` as
+  `6421d1e docs: mark scan weak count validation pushed`.
 
 ## Current Slice - 2026-06-08 Scan result returned-count bounds
 

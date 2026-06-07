@@ -248,7 +248,7 @@ function isSourceSummary(value: unknown): boolean {
     && isNonNegativeSafeInteger(value.files_seen)
     && isNonNegativeSafeInteger(value.prompts_found)
     && isNonNegativeFiniteNumber(value.average_quality)
-    && isNonNegativeSafeInteger(value.weak_prompt_count)
+    && isNonNegativeSafeIntegerAtMost(value.weak_prompt_count, value.prompts_found)
     && typeof value.status === "string"
     && isStringArray(value.notes);
 }

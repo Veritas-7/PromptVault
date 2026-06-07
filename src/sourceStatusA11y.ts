@@ -21,6 +21,12 @@ function countLabel(count: number, singular: string): string {
   return `${count.toLocaleString()}개 ${singular}`;
 }
 
+function appendSentence(text: string, sentence: string): string {
+  const trimmed = text.trim();
+  const separator = /[.!?。！？]$/.test(trimmed) ? " " : ". ";
+  return `${trimmed}${separator}${sentence}`;
+}
+
 export function planSourceStatusLabel(
   sourceLabel: string,
   status: string,
@@ -47,6 +53,9 @@ export function planSourceSelectionLabel(
     byteText,
     notes,
   );
+  if (fileCount === 0) {
+    return appendSentence(sourceContext, "파일이 없어 가져오기 대기열에 선택할 수 없습니다");
+  }
   const actionLockReason = fileCount > 0 && lockState ? activeActionLockReason(lockState) : null;
   if (actionLockReason) {
     return `${actionLockReason}에는 ${sourceContext}의 가져오기 대기열 선택을 바꿀 수 없습니다`;
@@ -71,7 +80,7 @@ export function planSourceActionLabel(
 ): string {
   const actionText = planSourceActionText(action);
   const sourceContext = planSourceStatusLabel(sourceLabel, status, fileCount, byteText, notes);
-  if (fileCount === 0) return `${sourceContext}은 파일이 없어 ${actionText}를 실행할 수 없습니다`;
+  if (fileCount === 0) return appendSentence(sourceContext, `파일이 없어 ${actionText}를 실행할 수 없습니다`);
   const actionLockReason = lockState ? activeActionLockReason(lockState) : null;
   if (actionLockReason) return `${actionLockReason}에는 ${sourceContext}의 ${actionText}를 실행할 수 없습니다`;
   return `${sourceContext} ${actionText}`;

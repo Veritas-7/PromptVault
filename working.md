@@ -1,10 +1,73 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 17:35 KST
+Updated: 2026-06-07 17:39 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Empty plan-source disabled labels
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make disabled import-plan controls for empty sources explain that the action
+  cannot be selected or run.
+
+Context:
+
+- Browser QA for plan/import flows had to inspect an empty plan row.
+- The empty source controls were disabled, but the checkbox label still read
+  like a selection action and action labels had awkward `0 B은...` grammar.
+
+Progress:
+
+- Added a shared sentence appender for source-status accessibility labels.
+- Updated empty source checkbox labels to say the source cannot be selected for
+  the import queue.
+- Updated empty source batch/continuous action labels to say the action cannot
+  run because no files are available.
+
+Changes:
+
+- `src/sourceStatusA11y.ts`
+  - Added `appendSentence` to avoid doubled punctuation after source notes.
+  - Improved empty-source selection and action disabled labels.
+- `tests/sourceStatusA11y.test.ts`
+  - Updated empty-source label expectations for checkbox and action buttons.
+
+Tests:
+
+- `npm run test:ui -- tests/sourceStatusA11y.test.ts`: PASS, `137` UI helper
+  tests.
+- `npm run build`: PASS.
+- Browser preview + bridge QA:
+  - Preview: `127.0.0.1:5185`; bridge: `127.0.0.1:5174`.
+  - Plan returned `12` rows and found the empty
+    `Antigravity IDE alt transcripts` source.
+  - Empty checkbox was disabled and label included
+    `파일이 없어 가져오기 대기열에 선택할 수 없습니다`.
+  - Empty `배치 가져오기` and `끝까지 실행` actions were disabled and labels
+    included `실행할 수 없습니다`.
+  - Verified old `0 B은` grammar was absent.
+  - Desktop/mobile overflow stayed within `1440 / 1440` and `390 / 390`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `137` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local import-plan accessibility
+  QA.
+
+Next Steps:
+
+- Stage explicit paths and run staged whitespace/gitleaks before commit/push.
 
 ## Current Slice - 2026-06-07 Stored reset loading empty copy
 
@@ -73,7 +136,7 @@ Research:
 
 Next Steps:
 
-- Stage explicit paths and run staged whitespace/gitleaks before commit/push.
+- Completed and pushed as `f3ce9dc fix: show loading copy during stored reset`.
 
 ## Current Slice - 2026-06-07 Import queue selection summary
 

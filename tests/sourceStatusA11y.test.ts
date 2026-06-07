@@ -51,7 +51,7 @@ test("plan source selection labels include disabled empty-source reason", () => 
     planSourceSelectionLabel("Antigravity IDE alt transcripts", "empty", 0, "0 B", [
       "일치하는 프롬프트 파일을 찾지 못했습니다.",
     ]),
-    "Antigravity IDE alt transcripts 소스 비어 있음: 0개 파일, 0 B. 일치하는 프롬프트 파일을 찾지 못했습니다. 가져오기 대기열 선택",
+    "Antigravity IDE alt transcripts 소스 비어 있음: 0개 파일, 0 B. 일치하는 프롬프트 파일을 찾지 못했습니다. 파일이 없어 가져오기 대기열에 선택할 수 없습니다",
   );
 });
 
@@ -74,7 +74,7 @@ test("plan source action labels include disabled empty-source reason", () => {
     planSourceActionLabel("continuous", "Antigravity IDE alt transcripts", "empty", 0, "0 B", [
       "일치하는 프롬프트 파일을 찾지 못했습니다.",
     ]),
-    "Antigravity IDE alt transcripts 소스 비어 있음: 0개 파일, 0 B. 일치하는 프롬프트 파일을 찾지 못했습니다.은 파일이 없어 끝까지 가져오기를 실행할 수 없습니다",
+    "Antigravity IDE alt transcripts 소스 비어 있음: 0개 파일, 0 B. 일치하는 프롬프트 파일을 찾지 못했습니다. 파일이 없어 끝까지 가져오기를 실행할 수 없습니다",
   );
 });
 
@@ -108,7 +108,7 @@ test("plan source action labels explain top-level lock reasons", () => {
 test("plan source action labels keep empty-source reasons before lock reasons", () => {
   assert.equal(
     planSourceActionLabel("batch", "Empty", "empty", 0, "0 B", [], lockState({ scanRunning: true })),
-    "Empty 소스 비어 있음: 0개 파일, 0 B은 파일이 없어 한 배치 가져오기를 실행할 수 없습니다",
+    "Empty 소스 비어 있음: 0개 파일, 0 B. 파일이 없어 한 배치 가져오기를 실행할 수 없습니다",
   );
 });
 

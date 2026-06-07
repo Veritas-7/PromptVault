@@ -1,12 +1,127 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 08:08 KST
+Updated: 2026-06-08 08:15 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Duplicate import event ID validation
+## Current Slice - 2026-06-08 Duplicate stored facet value validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge stored prompt facet payloads whose facet lists contain
+  duplicate option values.
+
+Context:
+
+- Recent slices tightened duplicate ID handling for scan summaries, scan plans,
+  saved import states, and recent import events.
+- Stored prompt facets populate filter options for source, date, and workspace.
+  The parser validates each frequency item and aggregate counts, but it does
+  not require facet `text` values to be unique within each list.
+- Duplicate facet option values can render repeated filter choices and make
+  count summaries ambiguous even when each row shape and total count relation
+  is otherwise valid.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault` with no goal-warning.
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the direct parent project policy and relevant stored facet
+  parser/test context.
+- Identified the next narrow hardening target: uniqueness for stored prompt
+  facet `text` values within each facet list.
+- Added a RED API test for a malformed stored prompt facets result whose
+  `sources` list repeats `text: "Codex"` while count totals remain consistent.
+- Confirmed RED first: focused API suite failed 107/108 only on the new
+  missing-rejection case.
+- Added parser validation requiring stored facet `text` values to be unique
+  within `sources`, `dates`, and `workspaces` before filter options are trusted.
+- Confirmed GREEN after the parser change: focused API suite passes 108/108.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed stored prompt facets response with duplicate
+  source facet text surfaced sanitized global and stored-filter failure UI, and
+  the duplicated facet payload was not rendered.
+- Confirmed `/tmp/promptvault_duplicate_stored_facet_qa.mjs` is absent and
+  preview port `5313` has no listener after the server wrapper stopped the
+  preview process.
+- Confirmed the full project check still passes after the parser and test
+  changes.
+- Confirmed pre-staging whitespace, repo parity, cleanup, and GitHub privacy
+  checks before staging explicit paths.
+- Staged only the intended slice files and confirmed the staged secret scan is
+  clean.
+
+Changes:
+
+- `working.md`: records the current duplicate stored facet value validation
+  slice.
+- `src/promptVaultApi.ts`: adds frequency text uniqueness validation and
+  connects it to stored prompt facet parsing.
+- `tests/promptVaultApi.test.ts`: adds the duplicate stored source facet value
+  rejection case for browser-bridge stored prompt facet results.
+
+Tests:
+
+- Baseline repo verification: `git rev-parse --show-toplevel`,
+  `git status --short --branch`, `git rev-list --left-right --count HEAD...origin/main`,
+  and `git remote -v` showed repo root
+  `/Users/wj/Ai/System/10_Projects/PromptVault`, clean `main...origin/main`,
+  parity `0 0`, and only `origin`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 107/108 only on the new duplicate stored source facet value case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 108/108 after the parser validation change.
+- Broader UI/helper suite: `npm run test:ui` passed 272/272.
+- Production build: `npm run build` passed (`tsc && vite build`).
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5313" --port 5313 --timeout 30 node /tmp/promptvault_duplicate_stored_facet_qa.mjs http://127.0.0.1:5313`
+  passed. The page reached `[data-browser-bridge-status="connected"]`,
+  clicking `[data-refresh-stored-facets="true"]` produced
+  `[data-stored-facets-refresh-error="true"]`, the global error stayed
+  sanitized, and the UI did not expose `4개 저장됨`, `Codex`, `소스 2개`,
+  `source`, `toLocaleString`, `RangeError`, or `undefined`.
+- Cleanup check: `/tmp/promptvault_duplicate_stored_facet_qa.mjs` is absent and
+  port `5313` is free.
+- Full project check: `npm run check` passed. It reran UI tests 272/272,
+  production build, Rust library tests 84/84, CLI tests 16/16, doctests, and
+  clippy with `-D warnings`.
+- Pre-staging checks: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed with no output. `git rev-parse --show-toplevel` returned
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md` modified; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` showed only `origin`; GitHub reported
+  `Veritas-7/PromptVault` as `PRIVATE`; temp QA script remained absent; and
+  port `5313` remained free.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact` scanned
+  about 7.03 KB and reported no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run pre-staging verification, secret scans, then commit and push the
+  finished slice.
+- Commit and push the finished implementation slice, then record closeout.
+
+## Previous Slice - 2026-06-08 Duplicate import event ID validation
 
 Current Goal:
 

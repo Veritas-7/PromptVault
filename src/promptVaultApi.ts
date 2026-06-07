@@ -358,6 +358,10 @@ function importEventIdsAreUnique(events: unknown): boolean {
   return recordNumberFieldValuesAreUnique(events, "id");
 }
 
+function frequencyTextsAreUnique(items: unknown): boolean {
+  return recordStringFieldValuesAreUnique(items, "text");
+}
+
 function sourceFilesSeenTotalMatches(sourceSummaries: unknown, totalFiles: unknown): boolean {
   if (!Array.isArray(sourceSummaries) || !isNonNegativeSafeInteger(totalFiles)) return false;
   let filesSeenTotal = 0;
@@ -867,8 +871,11 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
     || !isNonBlankString(value.database_path)
     || !isNonNegativeSafeInteger(value.total_prompts)
     || !isFrequencyItemsWithinTotal(value.sources, value.total_prompts)
+    || !frequencyTextsAreUnique(value.sources)
     || !isFrequencyItemsWithinTotal(value.dates, value.total_prompts)
-    || !isFrequencyItemsWithinTotal(value.workspaces, value.total_prompts)) {
+    || !frequencyTextsAreUnique(value.dates)
+    || !isFrequencyItemsWithinTotal(value.workspaces, value.total_prompts)
+    || !frequencyTextsAreUnique(value.workspaces)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as StoredPromptFacetsResult;

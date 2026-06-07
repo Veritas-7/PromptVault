@@ -34,8 +34,10 @@ export function recommendationEmptyText(
   filterText: string,
   activeStoredFilterCount = 0,
   isLoading = false,
+  isImproving = false,
 ): string {
   if (isLoading) return "프롬프트를 불러온 뒤 추천을 생성할 수 있습니다.";
+  if (isImproving) return "선택한 프롬프트 추천을 생성하는 중입니다.";
   if (hasSelectedPrompt) return "선택한 프롬프트의 추천을 생성하세요.";
   if (hasResult && filterText.trim()) {
     return "추천을 생성하기 전에 프롬프트 필터를 지우거나 보이는 프롬프트를 선택하세요.";

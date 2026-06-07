@@ -411,6 +411,7 @@ function App() {
     query,
     activeResultStoredFilterCount,
     isStoredLoadRunning,
+    improving,
   );
   const qualityGapItems = useMemo(() => {
     return (result?.stats.top_quality_gaps ?? []).map((item) => ({

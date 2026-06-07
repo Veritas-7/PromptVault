@@ -68,6 +68,20 @@ test("recommendation empty state explains in-flight loading", () => {
   );
 });
 
+test("recommendation empty state explains in-flight improvement", () => {
+  assert.equal(
+    recommendationEmptyText(true, true, "", 0, false, true),
+    "선택한 프롬프트 추천을 생성하는 중입니다.",
+  );
+});
+
+test("recommendation empty state keeps prompt loading ahead of improvement loading", () => {
+  assert.equal(
+    recommendationEmptyText(true, true, "", 0, true, true),
+    "프롬프트를 불러온 뒤 추천을 생성할 수 있습니다.",
+  );
+});
+
 test("recommendation empty state explains filter-hidden selections", () => {
   assert.equal(
     recommendationEmptyText(false, true, "missing"),

@@ -1,10 +1,76 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 17:47 KST
+Updated: 2026-06-07 17:53 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Recommendation in-flight empty copy
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make the recommendation panel reflect an active recommendation request
+  instead of asking the user to generate one while generation is already
+  running.
+
+Context:
+
+- Browser QA with a delayed `/api/improve` response showed the `추천 생성`
+  button disabled and labeled `추천 생성 중`, but the recommendation panel still
+  rendered `선택한 프롬프트의 추천을 생성하세요.`
+- The mismatch made the selected-prompt recommendation flow look idle while the
+  app was actually waiting for the provider response.
+
+Progress:
+
+- Added an improvement-loading branch to the recommendation empty-state helper.
+- Passed the `improving` state into recommendation empty-copy calculation.
+- Preserved existing stored-prompt loading precedence so stored-load copy still
+  wins if prompt data is loading.
+
+Changes:
+
+- `src/promptEmptyState.ts`
+  - Added `isImproving` support to `recommendationEmptyText`.
+- `src/App.tsx`
+  - Passed active recommendation state into the recommendation empty-state copy.
+- `tests/promptEmptyState.test.ts`
+  - Added in-flight improvement copy coverage and precedence coverage.
+
+Tests:
+
+- RED browser QA on preview `127.0.0.1:5187` + bridge `127.0.0.1:5174`:
+  - Delayed `/api/improve` response.
+  - During the request, button text was `추천 생성 중` and disabled.
+  - Recommendation panel still said `선택한 프롬프트의 추천을 생성하세요.`
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptEmptyState.test.ts`:
+  PASS, `16` tests.
+- `npm run build`: PASS after correcting the helper call site.
+- Fixed browser QA on preview `127.0.0.1:5187` + bridge `127.0.0.1:5174`:
+  - During the delayed request, recommendation panel said
+    `선택한 프롬프트 추천을 생성하는 중입니다.`
+  - Final revised prompt rendered after the delayed response.
+  - Body/document width stayed within `1365 / 1365`.
+  - Console issues, page errors, request failures, HTTP failures: none.
+- `npm run check`: PASS. Covered `141` UI helper tests, production build,
+  `84` Rust lib tests, `16` CLI tests, doc-tests, and clippy.
+
+Issues:
+
+- No known blocker in this slice.
+
+Research:
+
+- No external research. This was derived from local delayed-response browser QA
+  and frontend empty-state inspection.
+
+Next Steps:
+
+- Commit and push this verified slice, then continue autonomous QA on the next
+  uncovered PromptVault user flow.
 
 ## Current Slice - 2026-06-07 Recommendation active-row preservation
 

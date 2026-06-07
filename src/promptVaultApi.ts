@@ -778,12 +778,15 @@ function isImprovePersistence(value: unknown): boolean {
 }
 
 function isQualityDelta(value: unknown): boolean {
-  return isRecord(value)
-    && isPromptQuality(value.before)
-    && isPromptQuality(value.after)
-    && isSafeInteger(value.score_delta)
-    && isNonBlankStringArray(value.resolved_gaps)
-    && isNonBlankStringArray(value.remaining_gaps);
+  if (!isRecord(value)
+    || !isPromptQuality(value.before)
+    || !isPromptQuality(value.after)
+    || !isSafeInteger(value.score_delta)
+    || !isNonBlankStringArray(value.resolved_gaps)
+    || !isNonBlankStringArray(value.remaining_gaps)) {
+    return false;
+  }
+  return value.score_delta === value.after.score - value.before.score;
 }
 
 function isInactiveScanProgressSnapshot(value: Record<string, unknown>): boolean {

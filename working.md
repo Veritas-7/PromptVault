@@ -1,12 +1,116 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 08:41 KST
+Updated: 2026-06-08 08:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Complete import batch aggregate validation
+## Current Slice - 2026-06-08 Improvement score delta validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge improvement payloads whose `quality_delta.score_delta`
+  does not equal `quality_delta.after.score - quality_delta.before.score`.
+
+Context:
+
+- Import/scan bridge payloads now have stronger duplicate and aggregate
+  consistency checks.
+- Backend improvement generation computes score deltas as
+  `after.score - before.score`, and persistence stores that value as the
+  improvement event's score delta.
+- The browser-bridge improvement parser currently validates only that
+  `score_delta` is a safe integer. A malformed bridge response could therefore
+  render or persist a contradictory delta even when before/after quality scores
+  are otherwise valid.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the improvement parser/test context and backend `quality_delta`
+  construction, confirming the frontend trust boundary does not yet enforce
+  score delta consistency.
+- Added a RED API test for a browser-bridge improvement result whose
+  before/after quality scores imply `score_delta: 42` while the payload reports
+  `score_delta: -42`.
+- Confirmed RED first: focused API suite failed 111/112 only on the new
+  missing-rejection case.
+- Added parser validation requiring `quality_delta.score_delta` to match
+  `quality_delta.after.score - quality_delta.before.score`.
+- Confirmed GREEN after the parser change: focused API suite passes 112/112.
+- Confirmed the broader UI/helper suite still passes 276/276 and the production
+  Vite build succeeds after the parser change.
+- Verified the local preview UI flow with Node Playwright: a malformed
+  `/api/improve` response with contradictory `score_delta` is rejected as a
+  sanitized bridge error and the revised prompt/checklist/delta values do not
+  render.
+- Removed the temporary preview QA script and confirmed port 5317 was free.
+- Confirmed the full project check passes after the score delta parser/test
+  change.
+- Confirmed pre-staging whitespace, repo root, origin parity, remote visibility,
+  and cleanup checks before staging explicit paths.
+- Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then confirmed the staged secret scan found no leaks.
+
+Changes:
+
+- `working.md`: records the current improvement score delta validation slice.
+- `src/promptVaultApi.ts`: adds score delta consistency validation for
+  browser-bridge improvement results.
+- `tests/promptVaultApi.test.ts`: adds the score delta mismatch rejection case.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 111/112 only on the new score delta mismatch case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 112/112 after the parser validation change.
+- Broader UI/helper suite: `npm run test:ui` passed 276/276.
+- Production build: `npm run build` passed.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5317" --port 5317 --timeout 30 node /tmp/promptvault_improvement_score_delta_qa.mjs http://127.0.0.1:5317`
+  passed after the QA mock also covered the app's initial bridge refresh
+  endpoints.
+- Cleanup: `test ! -e /tmp/promptvault_improvement_score_delta_qa.mjs && echo temp_absent`
+  returned `temp_absent`; `! lsof -nP -iTCP:5317 -sTCP:LISTEN && echo port_5317_free`
+  returned `port_5317_free`.
+- Full project check: `npm run check` passed, including `npm run test:ui`
+  276/276, `npm run build`, `cargo test` 84 lib tests and 16 CLI tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; `git rev-parse --show-toplevel` returned
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md` modified; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` showed only `origin` at
+  `https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `visibility: PRIVATE`; temp script was absent and port 5317 was free.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact` scanned
+  about 6.84 KB and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Restage `working.md`, rerun staged secret scan, commit, full-tree secret scan,
+  push, and parity verification.
+
+## Previous Slice - 2026-06-08 Complete import batch aggregate validation
 
 Current Goal:
 
@@ -141,8 +245,8 @@ Research:
 
 Next Steps:
 
-- Commit and push this handoff log update, then continue to the next narrow
-  PromptVault QA/improvement slice from the clean pushed state.
+- Continue to the next narrow PromptVault QA/improvement slice from the clean,
+  pushed `main...origin/main` state.
 
 ## Previous Slice - 2026-06-08 Duplicate import batch prompt ID validation
 

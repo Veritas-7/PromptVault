@@ -1,12 +1,122 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 08:24 KST
+Updated: 2026-06-08 08:30 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Duplicate prompt record ID validation
+## Current Slice - 2026-06-08 Duplicate import batch prompt ID validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge import batch payloads whose returned `prompts` array
+  contains duplicate prompt record IDs.
+
+Context:
+
+- The previous slice added duplicate prompt ID rejection for scan/stored prompt
+  results, which feed the main prompt list, selection, and improvement flows.
+- Import batch responses also carry returned prompt records and the parser
+  currently validates their shape/counts without requiring unique
+  `prompts[].id` values.
+- Duplicate prompt IDs in import batch previews can make batch evidence
+  ambiguous and should be rejected at the same browser-bridge trust boundary.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Verified the working tree started clean at `main...origin/main` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read the relevant import batch parser/test context and confirmed the
+  prompt ID uniqueness helper is not yet connected to `parseImportBatchResult`.
+- Added a RED API test for a malformed import batch result whose returned
+  `prompts` array repeats `id: "prompt-duplicate"` while aggregate counts and
+  batch file progress remain consistent.
+- Confirmed RED first: focused API suite failed 109/110 only on the new
+  missing-rejection case.
+- Connected the existing prompt record ID uniqueness validation to import
+  batch parsing before batch preview prompt rows are trusted.
+- Confirmed GREEN after the parser change: focused API suite passes 110/110.
+- Confirmed broader UI helper and parser coverage still passes after the
+  validation change.
+- Confirmed production build still succeeds.
+- Ran local Vite preview QA with Node Playwright network routing for the
+  browser bridge. A malformed import batch response with duplicate prompt IDs
+  surfaced sanitized global and import-run failure UI, and the duplicated prompt
+  payload was not rendered as successful import result content.
+- Confirmed `/tmp/promptvault_duplicate_import_batch_prompt_id_qa.mjs` is
+  absent and preview port `5315` has no listener after the server wrapper
+  stopped the preview process.
+- Confirmed the full project check still passes after the import batch parser
+  and test changes.
+- Confirmed pre-staging whitespace, repo parity, cleanup, and GitHub privacy
+  checks before staging explicit paths.
+- Staged only the intended slice files and confirmed the staged secret scan is
+  clean.
+
+Changes:
+
+- `working.md`: records the current duplicate import batch prompt ID validation
+  slice.
+- `src/promptVaultApi.ts`: connects prompt record ID uniqueness validation to
+  browser-bridge import batch parsing.
+- `tests/promptVaultApi.test.ts`: adds the duplicate import batch prompt ID
+  rejection case.
+
+Tests:
+
+- Baseline repo verification: `git rev-parse --show-toplevel`,
+  `git status --short --branch`, `git rev-list --left-right --count HEAD...origin/main`,
+  and `git remote -v` showed repo root
+  `/Users/wj/Ai/System/10_Projects/PromptVault`, clean `main...origin/main`,
+  parity `0 0`, and only `origin`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 109/110 only on the new duplicate import batch prompt ID case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 110/110 after the parser validation change.
+- Broader UI/helper suite: `npm run test:ui` passed 274/274.
+- Production build: `npm run build` passed (`tsc && vite build`).
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5315" --port 5315 --timeout 30 node /tmp/promptvault_duplicate_import_batch_prompt_id_qa.mjs http://127.0.0.1:5315`
+  passed. The page reached `[data-browser-bridge-status="connected"]`,
+  clicking `[data-run-plan="true"]` rendered `[data-import-source-id="codex"]`,
+  clicking that import button produced `[data-import-run-error="true"]`, the
+  global error stayed sanitized, and the UI did not expose
+  `prompt-duplicate`, `Improve this prompt.`, `저장 2`, or `신규 2`.
+- Cleanup check: `/tmp/promptvault_duplicate_import_batch_prompt_id_qa.mjs` is
+  absent and port `5315` is free.
+- Full project check: `npm run check` passed. It reran UI tests 274/274,
+  production build, Rust library tests 84/84, CLI tests 16/16, doctests, and
+  clippy with `-D warnings`.
+- Pre-staging checks: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed with no output. `git rev-parse --show-toplevel` returned
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md` modified; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` showed only `origin`; GitHub reported
+  `Veritas-7/PromptVault` as `PRIVATE`; temp QA script remained absent; and
+  port `5315` remained free.
+- Staged secret scan: `gitleaks protect --staged --no-banner --redact` scanned
+  about 7.81 KB and reported no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Re-stage `working.md`, re-run the staged secret scan, then commit and push
+  the finished slice.
+
+## Previous Slice - 2026-06-08 Duplicate prompt record ID validation
 
 Current Goal:
 

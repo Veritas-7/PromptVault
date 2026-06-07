@@ -812,6 +812,7 @@ function parseImportBatchResult(value: unknown): ImportBatchResult {
     || !isNonNegativeSafeInteger(value.batch_file_count)
     || !Array.isArray(value.prompts)
     || !value.prompts.every(isPromptRecord)
+    || !promptRecordIdsAreUnique(value.prompts)
     || !isScanStats(value.stats)
     || !isImportBatchPromptCounts(value)
     || !isImportBatchFileProgress(value)

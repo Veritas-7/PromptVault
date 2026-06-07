@@ -56,7 +56,16 @@ test("scan progress label explains file discovery state", () => {
       prompts_found: 1,
       source_count: 0,
     })),
-    "Source A: discovering files · 1 found · 1 prompt · source pending · limit 10",
+    "Source A: discovering files · 1 file found · 1 prompt · source pending · limit 10",
+  );
+  assert.equal(
+    scanProgressLabel(scanProgress({
+      source_file_count: null,
+      source_files_discovered: 2,
+      prompts_found: 2,
+      source_count: 0,
+    })),
+    "Source A: discovering files · 2 files found · 2 prompts · source pending · limit 10",
   );
 });
 

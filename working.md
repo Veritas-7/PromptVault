@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 00:25 KST
+Updated: 2026-06-07 10:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -433,6 +433,52 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Tests
 
+- `npm run test:ui -- tests/scanStatus.test.ts`: first RED run failed only on
+  the intended discovery-copy mismatch: actual `discovering files · 1 found`
+  versus expected `discovering files · 1 file found`.
+- `npm run test:ui -- tests/scanStatus.test.ts`: passed after the helper fix;
+  due the package script glob this ran the full UI helper suite and reported
+  124 passing tests.
+- `npm run build`: TypeScript and Vite production build passed and refreshed
+  the static frontend bundle for the Scan Progress discovery-copy slice.
+- `npm run check`: passed after the Scan Progress discovery-copy slice. This
+  covered UI tests 124 passed, TypeScript/Vite build, Rust lib 64 passed, CLI
+  15 passed, doc-tests, and clippy with `-D warnings`.
+- Fresh verification in this session:
+  `npm run test:ui -- tests/scanStatus.test.ts` passed again with 124 UI
+  helper tests.
+- Fresh verification in this session: `npm run build` passed and rebuilt
+  `dist/assets/index-C4XxNEyM.js` for the static frontend served at
+  `127.0.0.1:5173`.
+- Fresh direct cmux diagnostics recovered the existing PromptVault browser on
+  `workspace:5`, `surface:10`:
+  - `cmux tree --all` showed `surface:10 [browser] "PromptVault"`
+    at `http://127.0.0.1:5173/?plan-panel-labels=20260606b`.
+  - `cmux browser --surface surface:10 get title` returned `PromptVault`.
+  - `cmux browser --surface surface:10 get url` returned the existing
+    PromptVault URL.
+  - `cmux browser --surface surface:10 console list` returned
+    `No console entries`.
+  - `cmux browser --surface surface:10 errors list` returned
+    `No browser errors`.
+- Fresh same-browser Computer Use QA on the existing `surface:10`:
+  - Set the visible Limit control to `1`.
+  - Clicked `Scan prompts`.
+  - Observed the real scan result notice:
+    `/Users/wj/Documents/PromptVault/promptvault.sqlite · stored 88,379 · new 1 · updated 0`.
+  - Observed export:
+    `/Users/wj/Documents/PromptVault/promptvault-export-2026-06-07-103332.md`.
+  - Observed result metrics: `Prompts 1`, `Preview 1`, `Files 2`,
+    `Words 33`, `Quality 56.0`, `Weak 1`, `DB Stored 88379`, `Dates 89`.
+  - Observed one selected Codex prompt and enabled `Improve selected prompt`.
+  - Clicked `Improve selected prompt`; GLM returned HTTP 429 and the app used
+    the local fallback, rendering `local-rules 56 -> 100 +44` with resolved
+    gaps `action_verb, constraints, verification, output_format`.
+  - Follow-up browser diagnostics returned `No console entries` and
+    `No browser errors`.
+- Fresh full gate in this session: `npm run check` passed. This covered UI
+  tests 124 passed, TypeScript/Vite build, Rust lib 64 passed, CLI 15 passed,
+  doc-tests, and clippy with `-D warnings`.
 - `npm run test:ui -- tests/scanStatus.test.ts`: passed; due the package
   script glob this ran the full UI helper suite and reported 124 passing tests,
   including the new scan progress formatter coverage.
@@ -2780,9 +2826,40 @@ stability, performance, and maintainability, then record evidence here.
   frontend returned `200`, bridge `/api/health` returned `ok:true`,
   `cmux ping` returned `PONG`, but
   `timeout 6 cmux browser --surface surface:9 get title` exited `124`.
+- Continued with the adjacent Scan Progress discovery-copy slice.
+- Added a RED focused UI test baseline for file discovery progress: the
+  previous formatter produced `discovering files · 1 found` without naming the
+  discovered unit.
+- Updated scan progress discovery copy to show `1 file found` and
+  `N files found` while preserving the existing no-count
+  `discovering files` state.
+- `npm run test:ui -- tests/scanStatus.test.ts` passed after the fix; due the
+  package script glob this ran the full UI helper suite and reported 124
+  passing tests.
+- `npm run build` passed after this Scan Progress discovery-copy slice and
+  refreshed the static frontend bundle used by `127.0.0.1:5173`.
+- `npm run check` passed after this Scan Progress discovery-copy slice: UI
+  tests 124 passed, TypeScript/Vite build passed, Rust lib 64 passed, CLI 15
+  passed, doc-tests passed, and clippy passed with `-D warnings`.
+- Recovered direct single-browser QA after discovering the existing PromptVault
+  browser had moved from stale `surface:9` to `surface:10`.
+- Did not open a new cmux browser, restart cmux, kill cmux, or use another
+  workspace's browser.
+- Reloaded the existing `surface:10` after rebuilding the static frontend.
+- Verified the direct Scan flow with Limit `1`, real SQLite persistence, real
+  Markdown export, loaded prompt/result panels, selected prompt state, and
+  Improve fallback behavior on the same browser.
+- Confirmed post-QA browser diagnostics were clean: no console entries and no
+  browser errors.
 
 ## Changes
 
+- `src/scanStatus.ts`: uses the shared count-label formatter for active scan
+  discovery progress, so discovered file counts name the unit.
+- `tests/scanStatus.test.ts`: covers singular and plural discovered-file copy
+  in scan progress labels.
+- `working.md`: records the Scan Progress discovery-copy slice, recovered
+  `surface:10` direct QA evidence, and verification evidence.
 - `src/scanStatus.ts`: exports a tested `scanProgressLabel()` helper and uses
   count-label formatting for known file totals and prompt counts.
 - `src/App.tsx`: imports the shared scan progress formatter instead of keeping
@@ -3148,13 +3225,19 @@ stability, performance, and maintainability, then record evidence here.
 
 ## Issues
 
-- Direct single-browser cmux QA remains blocked for the existing PromptVault
-  `surface:9`: after the Import Progress, Source Status, Stored Facet
-  active-filter, and Scan Progress formatter pluralization slices, frontend
-  health returned `200`, bridge `/api/health` returned `ok:true`, and
-  `cmux ping` returned `PONG`, but
-  `timeout 6 cmux browser --surface surface:9 get title` exited `124`. No
-  cmux restart, app kill, or second browser was attempted.
+- Direct single-browser cmux QA was previously blocked for stale PromptVault
+  `surface:9`, but fresh `cmux tree --all` now shows the existing PromptVault
+  browser on `workspace:5`, `surface:10`. Direct QA recovered there without a
+  cmux restart, app kill, or second browser.
+- cmux browser RPCs remain intermittent under concurrent or large DOM reads:
+  parallel `surface:10` DOM queries timed out in this session, while short
+  title/url/console/error checks worked before and after. Computer Use
+  accessibility-tree interaction was reliable on the same single browser.
+- Scan Progress discovery-copy text is covered by unit tests. The real browser
+  Scan flow completed too quickly at Limit `1` to capture the transient
+  discovery text visually, but it verified the updated static bundle, scan
+  request path, SQLite persistence, result panels, selected prompt state, and
+  Improve fallback behavior.
 - Unlimited full scan over `~/.codex/sessions` is not practical from the
   browser UI. The plan path confirms the current Codex source alone has
   `25,097` matching files and about `32.3 GiB` of JSONL. The browser Scan
@@ -3504,6 +3587,36 @@ Audit conclusion:
   improvements that can be verified by unit/full gates until direct cmux QA
   becomes available again.
 
+## Completion Audit Snapshot - 2026-06-07 10:35 KST
+
+Objective restated as concrete deliverables:
+
+1. Continue PromptVault development in `/Users/wj/Ai/System/10_Projects/PromptVault`.
+2. Use only the current session's single cmux in-app browser for direct QA.
+3. Do not restart/kill cmux and do not open a second cmux browser.
+4. Keep improving app quality in small tested slices and keep `working.md`
+   current.
+5. Commit/push only after explicit-path staging, relevant tests, staged
+   whitespace/gitleaks checks, and remote parity verification.
+
+Prompt-to-artifact checklist:
+
+| Requirement | Current evidence | Status |
+|---|---|---|
+| Target source path is PromptVault | Goal identity and repo root resolve to `/Users/wj/Ai/System/10_Projects/PromptVault`. | PASS |
+| `working.md` exists and is updated | This update records the Scan Progress discovery-copy slice, recovered `surface:10` QA, tests, issues, and next steps. | PASS |
+| Use one existing cmux browser | `cmux tree --all` showed existing `workspace:5` `surface:10 [browser] "PromptVault"`; no `cmux browser open/new`, cmux restart, app kill, or second browser was used. | PASS |
+| Direct browser QA currently works | Existing `surface:10` title/url/console/errors worked; Computer Use on the same browser completed Limit `1` Scan and Improve fallback QA. | PARTIAL |
+| Automated gates cover this slice | `npm run test:ui -- tests/scanStatus.test.ts`, `npm run build`, and `npm run check` passed. | PASS |
+| Full objective achieved | Scan/Improve was reverified directly, but the objective still requires continued broader core-flow QA and autonomous improvements. | NOT ACHIEVED |
+
+Audit conclusion:
+
+- Do not mark the thread goal complete yet.
+- Same-browser direct QA has recovered on `surface:10`; continue broader
+  stored-vault, import-plan, import-batch/queue/stop, error, and empty-state
+  flows from this surface.
+
 ## Research
 
 - No new external web research was needed. This slice used local repo state,
@@ -3512,17 +3625,17 @@ Audit conclusion:
 
 ## Next Steps
 
-1. Consider a durable background indexing worker so first-run historical import
+1. Commit and push the Scan Progress discovery-copy slice after explicit-path
+   staging, `git diff --check`, staged gitleaks, and remote parity checks.
+2. Continue same-browser direct QA on `surface:10` for Stored Vault
+   load/filter/reset/apply, Import Plan, Import Batch, Run Until Done, queue,
+   stop, and recovery states.
+3. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
-2. Harden the cmux browser diagnostics workflow for cases where the active
-   visible workspace differs from the target PromptVault surface or a hidden
-   macOS Open dialog blocks stateful RPCs.
-3. Consider making progress telemetry durable enough to reconnect to an active
+4. Harden the cmux browser diagnostics workflow for stale surface IDs and large
+   DOM-read timeouts; prefer `cmux tree --all` plus short surface-specific
+   checks before falling back to Computer Use.
+5. Consider making progress telemetry durable enough to reconnect to an active
    background scan after browser reload.
-4. Continue looking for remaining request-overlap or double-click hazards in
-   secondary UI flows before moving to larger background indexing work.
-5. Continue reviewing remaining empty and failure states in secondary panels,
-   especially recovery paths that still need scoped cleanup for global errors.
-6. The simple plural-only `rg` search now returns no matches; continue broader
-   copy/accessibility cleanup only where real UI review or tests reveal another
-   issue while direct cmux QA is unavailable.
+6. Continue looking for remaining request-overlap, double-click hazards, and
+   secondary-panel empty/failure states while direct cmux QA is available.

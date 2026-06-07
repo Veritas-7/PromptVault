@@ -12,7 +12,7 @@ export function scanProgressLabel(progress: ScanProgress | null): string {
   const source = progress.source_label ?? "Preparing source";
   const fileTotal = progress.source_file_count === null
     ? progress.source_files_discovered
-      ? `discovering files · ${progress.source_files_discovered.toLocaleString()} found`
+      ? `discovering files · ${countLabel(progress.source_files_discovered, "file")} found`
       : "discovering files"
     : `${progress.source_files_seen.toLocaleString()} / ${countLabel(progress.source_file_count, "file")}`;
   const sourcePosition = progress.source_count

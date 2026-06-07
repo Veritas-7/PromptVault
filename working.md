@@ -3991,3 +3991,72 @@ Next steps:
    commit/push if clean.
 2. Keep direct DOM QA paused until the existing `surface:10` state becomes
    reliable without restarting cmux or opening another browser.
+
+## Bridge Recovery and Same-Surface UI QA - 2026-06-07 11:46 KST
+
+Context:
+
+- The existing 5174 bridge process was still serving an older binary, so the
+  app bridge did not expose the latest `unknown-date` facet behavior.
+- The first restart attempt failed because `/tmp` and the data volume had only
+  about 116MiB free; `/tmp` writes failed with `no space left on device`.
+- `cargo clean` was run in `src-tauri` and removed 15.3GiB of generated Rust
+  build output. This restored free space to more than 20GiB without touching
+  source files or cmux.
+
+Recovery verification:
+
+- Started the latest PromptVault bridge on `127.0.0.1:5174`.
+- The long-running bridge was detached as PID 55840 with PPID 1 after the
+  verification run, so the app can continue using the latest bridge after this
+  Codex command session ends.
+- `/api/health`: PASS, using
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- `/api/prompt-facets` with `limit=50`: PASS,
+  `unknown_date={"text":"unknown-date","count":12}`.
+- `/api/prompts` with `source="Antigravity IDE conversation DB"`: PASS,
+  2 stored prompts from the IDE conversation SQLite source.
+- `cargo run --quiet --bin promptvault-cli -- plan --json`: PASS,
+  12 available sources and 28,001 matching files. The only zero-file source is
+  `Antigravity IDE alt transcripts`; Codex, Codex CX, Claude, Gemini, and
+  Antigravity CLI/IDE DB/transcript/history sources are all covered.
+
+Stored DB source counts:
+
+- `Codex`: 70,130
+- `Codex CX`: 21
+- `Claude Code projects`: 2,256
+- `Claude prompt history`: 12,334
+- `Claude transcripts`: 1,175
+- `Gemini temporary chats`: 145
+- `Antigravity CLI transcripts`: 637
+- `Antigravity IDE transcripts`: 12
+- `Antigravity prompt history`: 1,659
+- `Antigravity CLI conversation DB`: 10
+- `Antigravity IDE conversation DB`: 2
+
+cmux same-surface QA:
+
+- Used only existing `surface:10`; no new cmux browser was opened and cmux was
+  not restarted or killed.
+- `cmux browser --surface surface:10 goto` still reports an empty snapshot, but
+  direct `eval` on the same surface confirms the live PromptVault DOM is
+  present after navigation.
+- UI Stored Vault summary on `surface:10`: `88,381 stored, 11 sources, 50 dates,
+  50 workspaces`.
+- UI datalist verification on `surface:10`: `Codex`, `Codex CX`, `Claude Code
+  projects`, `Claude prompt history`, `Claude transcripts`, `Gemini temporary
+  chats`, `Antigravity CLI conversation DB`, `Antigravity IDE conversation DB`,
+  and Antigravity transcript/history sources are visible.
+- UI filter verification on `surface:10`: applying source
+  `Antigravity IDE conversation DB` loads 2 stored prompts with no load error.
+- UI date filter verification on `surface:10`: applying `unknown-date` loads 12
+  stored prompts with no load error.
+
+Remaining caveat:
+
+- Some cmux browser helper commands remain inconsistent on `surface:10`
+  (`snapshot`, `get count`, and screenshot can return empty documents or
+  internal timeouts), but direct same-surface DOM `eval`, `fill`, and `click`
+  were sufficient to verify the target UI behavior without occupying another
+  browser window.

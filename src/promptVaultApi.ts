@@ -367,6 +367,43 @@ function isImportStatesAggregate(value: unknown): boolean {
     && value.imported_prompt_count === importedPromptCount;
 }
 
+function isScanPlanAggregate(value: unknown): boolean {
+  if (!isRecord(value)
+    || !Array.isArray(value.sources)
+    || !isNonNegativeSafeInteger(value.total_sources)
+    || !isNonNegativeSafeInteger(value.available_sources)
+    || !isNonNegativeSafeInteger(value.total_files)
+    || !isNonNegativeSafeInteger(value.total_bytes)
+    || !isNonNegativeSafeInteger(value.large_file_count)
+    || !isNonNegativeSafeInteger(value.largest_file_bytes)) {
+    return false;
+  }
+  let availableSources = 0;
+  let totalFiles = 0;
+  let totalBytes = 0;
+  let largeFileCount = 0;
+  let largestFileBytes = 0;
+  for (const source of value.sources) {
+    if (!isSourcePlan(source)) return false;
+    if (source.status !== "missing") availableSources += 1;
+    totalFiles += source.file_count;
+    totalBytes += source.byte_count;
+    largeFileCount += source.large_file_count;
+    largestFileBytes = Math.max(largestFileBytes, source.largest_file_bytes);
+    if (!Number.isSafeInteger(totalFiles)
+      || !Number.isSafeInteger(totalBytes)
+      || !Number.isSafeInteger(largeFileCount)) {
+      return false;
+    }
+  }
+  return value.total_sources === value.sources.length
+    && value.available_sources === availableSources
+    && value.total_files === totalFiles
+    && value.total_bytes === totalBytes
+    && value.large_file_count === largeFileCount
+    && value.largest_file_bytes === largestFileBytes;
+}
+
 function isPersistStats(value: unknown): boolean {
   return isRecord(value)
     && typeof value.database_path === "string"
@@ -563,7 +600,8 @@ function parseScanPlan(value: unknown): ScanPlan {
     || !isNonNegativeSafeIntegerAtMost(value.largest_file_bytes, value.total_bytes)
     || !Array.isArray(value.sources)
     || !value.sources.every(isSourcePlan)
-    || !isStringArray(value.warnings)) {
+    || !isStringArray(value.warnings)
+    || !isScanPlanAggregate(value)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ScanPlan;

@@ -1467,6 +1467,58 @@ test("browser bridge cancel scan results reject malformed successful payloads", 
   );
 });
 
+test("browser bridge scan plans reject aggregate counters that mismatch source rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    total_sources: 1,
+    available_sources: 1,
+    total_files: 5,
+    total_bytes: 500,
+    large_file_count: 0,
+    largest_file_bytes: 500,
+    sources: [{
+      id: "codex",
+      label: "Codex",
+      root_path: "/tmp/codex",
+      status: "ok",
+      file_count: 5,
+      byte_count: 500,
+      large_file_count: 0,
+      largest_file_bytes: 500,
+      newest_modified_at: null,
+      notes: [],
+    }, {
+      id: "claude",
+      label: "Claude",
+      root_path: "/tmp/claude",
+      status: "missing",
+      file_count: 2,
+      byte_count: 200,
+      large_file_count: 1,
+      largest_file_bytes: 200,
+      newest_modified_at: null,
+      notes: [],
+    }],
+    warnings: [],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => planScan(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /1 \/ 1|5|500|Codex|Claude|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge import batches reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ generated_at: "2026-06-07T00:00:00Z" }), {

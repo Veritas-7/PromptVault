@@ -1,10 +1,104 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 02:53 KST
+Updated: 2026-06-08 03:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Scan plan aggregate consistency validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge `/api/plan` payloads whose aggregate summary counters
+  disagree with returned source plan rows before the UI can render an
+  impossible import-plan summary.
+
+Context:
+
+- Rust builds scan-plan aggregates from the returned source plan rows:
+  `total_sources`, `available_sources`, `total_files`, `total_bytes`,
+  `large_file_count`, and `largest_file_bytes` are all row-derived.
+- The browser parser already rejects negative plan counters and aggregate
+  counters that exceed direct totals.
+- Before this slice, `parseScanPlan()` did not require aggregate counters to
+  equal returned row counts, row sums, or row maximums.
+- cmux/in-app browser remains excluded for this runtime. Verification will use
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Confirmed the active goal identity matches PromptVault and the worktree is
+  clean at `## main...origin/main`.
+- Identified the scan-plan aggregate consistency gap from live
+  `src/promptVaultApi.ts`, `src/App.tsx`, and `src-tauri/src/lib.rs`.
+- Added RED coverage for `/api/plan` returning two source rows while the
+  aggregate summary claims one source and only the first row's file totals.
+- Added parser aggregate validation requiring scan-plan totals to match source
+  row count, available row count, row file/byte sums, large-file sums, and the
+  largest file max.
+- Verified the focused API test fails before the guard and passes after it.
+- Verified broader UI tests, production build, preview QA, and the full project
+  check.
+- Corrected the temporary preview QA script to mock the current facets/import
+  state/import event schemas and to trigger the top-level plan button before
+  the passing browser run.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds `isScanPlanAggregate()`.
+  - Requires `total_sources`, `available_sources`, `total_files`,
+    `total_bytes`, `large_file_count`, and `largest_file_bytes` to match
+    returned source rows.
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for scan-plan aggregate
+    counters that mismatch returned source rows.
+- `working.md`
+  - Records this scan plan aggregate consistency validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new scan-plan aggregate mismatch test
+    resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 45 tests, 44 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 45 tests, 45 pass.
+- `npm run test:ui`
+  - Passed: 209 tests, 209 pass.
+- `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-pM6sBULc.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - Ran Vite preview on port `5273` with `/tmp/promptvault_scan_plan_aggregate_qa.mjs`.
+  - Mocked `/api/plan` with aggregate counters that disagreed with returned
+    source rows.
+  - Passed: the UI rendered `data-plan-run-error="true"`, did not render the
+    contradictory `1 / 1` summary or source rows, and called each expected
+    bridge endpoint once.
+  - Removed `/tmp/promptvault_scan_plan_aggregate_qa.mjs` after the passing run.
+- `npm run check`
+  - Passed: UI tests, production build, Rust library tests, Rust CLI tests,
+    doc-tests, and clippy all completed with exit 0.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run explicit staged diff/security checks, commit, push, and record publication
+  evidence.
 
 ## Current Slice - 2026-06-08 Import event total count validation
 

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 10:56 KST
+Updated: 2026-06-07 11:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -569,6 +569,22 @@ stability, performance, and maintainability, then record evidence here.
     the warning clear with stored prompt metrics reloaded:
     `Prompts 1000`, `Preview 1000`, `Files 506`, `Words 99201`,
     `Quality 69.9`, `Weak 503`, `DB Stored 88379`, `Dates 89`.
+  - Follow-up diagnostics returned `No console entries` and
+    `No browser errors`.
+- Fresh same-surface Stored Vault double-click/overlap QA on existing
+  `surface:10`:
+  - Continued testing through `cmux browser --surface surface:10` without
+    opening a new browser or switching/occupying the visible cmux workspace.
+  - Installed a temporary page-local gate for `/api/prompts`, clicked
+    `Load Stored` twice in the same turn, and confirmed only one bridge request
+    was issued while the first request was pending.
+  - While the request was gated, observed `Loading Stored` disabled with
+    `Loading stored prompts`, and confirmed Scan, Plan, Apply, Improve, and
+    all Stored Vault filter inputs were disabled with lock labels that named
+    `stored prompts are loading`.
+  - Released the gate, restored the original `fetch`, and observed the UI
+    return to `Load Stored` with no Stored Vault error and the stored prompt
+    metrics still visible.
   - Follow-up diagnostics returned `No console entries` and
     `No browser errors`.
 - `npm run test:ui -- tests/scanStatus.test.ts`: passed; due the package
@@ -3345,6 +3361,11 @@ stability, performance, and maintainability, then record evidence here.
   focus and using `cmux browser --surface surface:10 goto` on the same
   browser restored the React DOM without opening a new browser or restarting
   cmux.
+- After user feedback, continue future PromptVault browser QA without taking
+  over the visible cmux workspace. Prefer surface-specific `cmux browser`
+  commands against the existing `surface:10`; use Computer Use only if the
+  user explicitly wants visible UI interaction or if surface commands cannot
+  verify a required state.
 - After Stored Vault filter/reset QA, `surface:10` title and console checks
   worked, but `cmux browser --surface surface:10 errors list` timed out once.
   This is tracked as a cmux diagnostics RPC issue because the page remained
@@ -3733,7 +3754,7 @@ Audit conclusion:
   stored-vault, import-plan, import-batch/queue/stop, error, and empty-state
   flows from this surface.
 
-## Completion Audit Snapshot - 2026-06-07 10:56 KST
+## Completion Audit Snapshot - 2026-06-07 11:03 KST
 
 Objective restated as concrete deliverables:
 
@@ -3750,18 +3771,19 @@ Prompt-to-artifact checklist:
 | Requirement | Current evidence | Status |
 |---|---|---|
 | Target source path is PromptVault | Goal identity and repo root resolve to `/Users/wj/Ai/System/10_Projects/PromptVault`. | PASS |
-| `working.md` exists and is updated | This update records same-browser Stored Vault normal/failure/retry, Import Plan, Import Batch, Import Queue Stop, and continuous Import Stop QA on `surface:10`. | PASS |
+| `working.md` exists and is updated | This update records same-surface Stored Vault normal/failure/retry, double-click/overlap lock QA, Import Plan, Import Batch, Import Queue Stop, and continuous Import Stop QA on `surface:10`. | PASS |
 | Use one existing cmux browser | `cmux tree --all` showed existing `workspace:5` `surface:10 [browser] "PromptVault"`; no `cmux browser open/new`, cmux restart, app kill, or second browser was used. | PASS |
-| Direct browser QA currently works | Existing `surface:10` completed Scan/Improve, Stored Vault filter/reset/apply plus failure/retry, Import Plan, Import Batch, selected queue Stop, and continuous Stop QA with clean follow-up console/errors diagnostics. | PARTIAL |
+| Direct browser QA currently works | Existing `surface:10` completed Scan/Improve, Stored Vault filter/reset/apply plus failure/retry and double-click/overlap locking, Import Plan, Import Batch, selected queue Stop, and continuous Stop QA with clean follow-up console/errors diagnostics. | PARTIAL |
 | Automated gates cover the latest code slice | `npm run test:ui -- tests/scanStatus.test.ts`, `npm run build`, and `npm run check` passed for the latest code change. This queue-stop update is docs-only. | PASS |
 | Full objective achieved | Core flows have broader same-browser coverage now, but the objective still calls for continued autonomous improvement and remaining recovery/error-state QA. | NOT ACHIEVED |
 
 Audit conclusion:
 
 - Do not mark the thread goal complete yet.
-- Same-browser direct QA on `surface:10` now covers Stored Vault normal and
-  failure/retry paths, Import Plan, Import Batch, selected Import Queue Stop,
-  and continuous Import Stop flows in addition to Scan and Improve fallback.
+- Same-surface direct QA on `surface:10` now covers Stored Vault normal,
+  failure/retry, and double-click/overlap locking paths, Import Plan, Import
+  Batch, selected Import Queue Stop, and continuous Import Stop flows in
+  addition to Scan and Improve fallback.
 - Continue with remaining recovery/error states and durable import/background
   indexing improvements before considering the objective complete.
 
@@ -3773,8 +3795,8 @@ Audit conclusion:
 
 ## Next Steps
 
-1. Continue same-browser direct QA on `surface:10` for remaining empty-state
-   paths and request-overlap/double-click hazards.
+1. Continue same-surface direct QA on `surface:10` for remaining empty-state
+   paths and other request-overlap hazards.
 2. Consider a durable background indexing worker so first-run historical import
    can continue after the browser tab is closed.
 3. Harden the cmux browser diagnostics workflow for stale surface IDs, large

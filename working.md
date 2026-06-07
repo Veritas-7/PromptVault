@@ -1,12 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 04:58 KST
+Updated: 2026-06-08 05:04 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Frequency label validation
+## Current Slice - 2026-06-08 Stored facet database path validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge stored-facet payloads whose successful response reports
+  an empty or whitespace-only `database_path` before the UI can trust it as a
+  current database source.
+
+Context:
+
+- The backend rejects blank requested database paths and emits a display path
+  for stored facet responses.
+- `App.tsx` uses `storedFacetsResult?.database_path` as one source for the
+  storage/database notice, so accepting a blank bridge response can create a
+  misleading empty database display.
+- `src/browserBridge.ts` already rejects blank health `database_path` values.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright.
+
+Progress:
+
+- Re-ran the goal identity guard; the active thread still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified the working tree started clean at `main...origin/main`.
+- Added RED coverage for `/api/prompt-facets` returning a structurally valid
+  stored-facet payload with `database_path: "   "`.
+- Verified the focused API test fails before the guard.
+- Added a shared non-blank string guard and applied it to stored facet
+  `database_path` validation.
+- Verified the focused API test passes after the guard.
+- Verified the broader UI suite and production build.
+- Verified the preview browser-bridge malformed stored-facet database path
+  path.
+- Verified the full project check.
+
+Changes:
+
+- `tests/promptVaultApi.test.ts`
+  - Adds browser-bridge response-shape coverage for blank stored-facet database
+    paths.
+- `src/promptVaultApi.ts`
+  - Adds `isNonBlankString` and requires stored-facet `database_path` values to
+    be non-blank.
+  - Reuses the helper for existing frequency label validation.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: the new blank stored-facet database path
+    test resolved instead of rejecting with `Missing expected rejection`.
+  - Result: 59 tests, 58 pass, 1 fail.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 59 tests, 59 pass.
+- Broader UI:
+  - `npm run test:ui`
+  - Passed: 223 tests, 223 pass.
+- Build:
+  - `npm run build`
+  - Passed. Vite output included `dist/assets/index-D81jZHaU.css` and
+    `dist/assets/index-FBZvKGFY.js`.
+- Preview QA:
+  - Ran `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`.
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5287" --port 5287 node /tmp/promptvault_stored_facets_database_path_qa.mjs`
+  - Passed. The mocked bridge returned `database_path: "   "` for
+    `/api/prompt-facets`; the UI showed the stored-facet panel failure on quiet
+    refresh, showed the sanitized malformed bridge response after manual
+    refresh, did not render `0개 저장됨`, and had no console/page errors.
+  - Removed `/tmp/promptvault_stored_facets_database_path_qa.mjs` after the
+    run.
+- Full check:
+  - `npm run check`
+  - Passed. This included `npm run test:ui` (223 tests), `npm run build`,
+    `cargo test` (84 library tests and 16 CLI tests), and
+    `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No app blocker found.
+- Closeout: stored-facet bridge responses now reject blank database paths
+  before storage status or later prompt-improvement requests can treat the blank
+  value as the current database source.
+- Closeout: preview QA confirmed the malformed path produces sanitized error
+  UI without rendering misleading stored counts or raw runtime errors.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run secrets checks, then commit and push if clean.
+- Continue autonomous QA from clean pushed `main` afterward.
+
+## Previous Slice - 2026-06-08 Frequency label validation
 
 Current Goal:
 

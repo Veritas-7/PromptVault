@@ -170,8 +170,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isFrequencyItem(value: unknown): boolean {
   return isRecord(value)
-    && typeof value.text === "string"
-    && value.text.trim().length > 0
+    && isNonBlankString(value.text)
     && isNonNegativeSafeInteger(value.count);
 }
 
@@ -195,6 +194,10 @@ function isFrequencyItemsEachWithinTotal(value: unknown, total: unknown): boolea
 
 function isStringArray(value: unknown): boolean {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isNonBlankString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function isNonNegativeFiniteNumber(value: unknown): value is number {
@@ -667,7 +670,7 @@ function parseImportEventsResult(value: unknown): ImportEventsResult {
 function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult {
   if (!isRecord(value)
     || !isTimestampString(value.generated_at)
-    || typeof value.database_path !== "string"
+    || !isNonBlankString(value.database_path)
     || !isNonNegativeSafeInteger(value.total_prompts)
     || !isFrequencyItemsWithinTotal(value.sources, value.total_prompts)
     || !isFrequencyItemsWithinTotal(value.dates, value.total_prompts)

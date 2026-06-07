@@ -204,6 +204,10 @@ function isTimestampString(value: unknown): value is string {
   return typeof value === "string" && value.trim() !== "" && Number.isFinite(Date.parse(value));
 }
 
+function isPreviewSortString(value: unknown): value is string {
+  return value === "latest" || value === "quality_asc";
+}
+
 function isPromptQuality(value: unknown): boolean {
   return isRecord(value)
     && isNonNegativeSafeInteger(value.score)
@@ -449,7 +453,7 @@ function parseScanResult(value: unknown): ScanResult {
     || !value.prompts.every(isPromptRecord)
     || !isNonNegativeSafeInteger(value.returned_prompt_count)
     || typeof value.prompts_truncated !== "boolean"
-    || typeof value.preview_sort !== "string"
+    || !isPreviewSortString(value.preview_sort)
     || typeof value.markdown_included !== "boolean"
     || typeof value.markdown_written !== "boolean"
     || !(isPersistStats(value.persistence) || value.persistence === null)

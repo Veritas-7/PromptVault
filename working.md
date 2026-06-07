@@ -1,10 +1,99 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 00:05 KST
+Updated: 2026-06-08 00:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Bridge preview sort validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan results with preview sort values the frontend UI
+  does not support before the prompt list can mislabel or misinterpret the
+  loaded preview mode.
+
+Context:
+
+- The frontend only exposes two preview modes: `latest` and `quality_asc`
+  through `previewSortForMode()`.
+- Rust can parse additional CLI/backend aliases such as `quality_desc`, but the
+  current UI has no strongest-first control or label path for that result mode.
+- Before this slice, `parseScanResult()` accepted any string in `preview_sort`,
+  which let a shape-valid but UI-unsupported browser-bridge result fall back to
+  the pending mode and potentially show prompts with the wrong preview meaning.
+- cmux/in-app browser remains excluded for this runtime. Verification used a
+  local Vite preview plus Node Playwright with mocked browser bridge
+  responses.
+
+Progress:
+
+- Added RED coverage for `/api/scan` returning otherwise valid scan results
+  with `preview_sort: "quality_desc"`.
+- Added `isPreviewSortString()` and now accepts only `latest` or
+  `quality_asc` in browser-bridge scan results.
+- Verified focused API tests, full UI/unit tests, production build, preview
+  QA, and the full project check.
+- Pending: staged checks, commit, and GitHub publication.
+
+Changes:
+
+- `src/promptVaultApi.ts`
+  - Adds preview-sort validation for scan result bridge payloads.
+- `tests/promptVaultApi.test.ts`
+  - Adds scan-result coverage for unsupported preview sort values.
+- `working.md`
+  - Records this bridge preview sort validation slice.
+
+Tests:
+
+- RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Failed for the intended reason: unsupported `quality_desc` scan results
+    resolved instead of rejecting.
+- GREEN:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  - Passed: 29 tests, 29 pass.
+- `npm run test:ui`:
+  - Passed: 193 tests, 193 pass.
+- `npm run build`:
+  - Passed.
+  - Vite production build produced `dist/index.html`,
+    `dist/assets/index-D81jZHaU.css`, and `dist/assets/index-CFNbI9is.js`.
+- Unsupported preview sort scan browser QA on preview `127.0.0.1:5257`:
+  - Patched browser `window.fetch` only for bridge endpoints before app JS
+    loaded.
+  - `/api/scan` returned HTTP 200 with valid scan shape and one prompt, but
+    `preview_sort: "quality_desc"`.
+  - Clicking `빠른 스캔` rendered the sanitized bridge response-shape error.
+  - The prompt text, raw `quality_desc`, and `1개 로드됨` loaded state were not
+    rendered.
+  - Final counts: `health=1`, `facets=2`, `importStates=1`,
+    `importEvents=1`, `progress=1`, `scan=1`.
+  - Page errors, console errors, and request failures: none.
+- `npm run check`:
+  - Passed end-to-end.
+  - UI/unit tests: 193 tests, 193 pass.
+  - Build: passed with `index-CFNbI9is.js`.
+  - Rust tests: `src/lib.rs` 84 passed, `src/bin/promptvault-cli.rs` 16
+    passed, `src/main.rs` 0 tests, doc tests 0 tests.
+  - `cargo clippy --all-targets --all-features -- -D warnings`: passed.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct code/test work plus local preview QA.
+
+Next Steps:
+
+- Stage only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then run staged diff/secret checks, commit, and push.
 
 ## Current Slice - 2026-06-07 Bridge progress counter bounds
 
@@ -38,8 +127,8 @@ Progress:
 - Added parser relation validation for import state and scan progress
   counters.
 - Verified focused API tests, full UI/unit tests, production build, preview
-  QA, the full project check, staged checks, and GitHub publication.
-- Pending: publication evidence docs commit.
+  QA, the full project check, staged checks, GitHub publication, and
+  publication evidence docs commit.
 
 Changes:
 
@@ -120,7 +209,8 @@ Next Steps:
 
 - Published robustness fix on `origin/main` as
   `c68e7a1 fix: validate bridge progress bounds`.
-- Commit and push this `working.md` publication-status update.
+- Published publication-status update on `origin/main` as
+  `9b31c2f docs: mark bridge progress bounds pushed`.
 
 ## Current Slice - 2026-06-07 Bridge timestamp validation
 

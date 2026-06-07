@@ -1,10 +1,76 @@
 # PromptVault Working Log
 
-Updated: 2026-06-07 19:29 KST
+Updated: 2026-06-07 19:32 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-07 Import refresh retry browser QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify the saved import progress and import activity panels recover from
+  failed quiet refreshes via manual retry.
+
+Context:
+
+- `refreshImportStates({ quiet: true })` and
+  `refreshImportEvents({ quiet: true })` run during browser bridge health
+  verification.
+- Unit tests cover the copy helpers, but the browser DOM flow from initial
+  quiet failure to manual retry success needed direct verification.
+- This was a report-only QA slice; no app code change was needed.
+
+Progress:
+
+- Mocked browser bridge health and facet responses as healthy.
+- Forced the first `/api/import-states` and `/api/import-events` requests to
+  return HTTP 500 during initial quiet refresh.
+- Retried each panel manually and verified the corresponding warning cleared
+  while the other panel stayed isolated until its own retry.
+
+Changes:
+
+- `working.md`
+  - Recorded this report-only QA slice.
+
+Tests:
+
+- Import refresh retry browser QA on preview `127.0.0.1:5215`:
+  - Initial request counts were two `/api/import-states` and two
+    `/api/import-events` calls: one forced failure and one retry success for
+    each panel.
+  - Initial quiet failures produced no global error (`.notice.error` count
+    `0`).
+  - Initial saved import progress warning:
+    `저장된 가져오기 진행 새로고침에 실패했습니다. 기존 데이터가 오래되었을 수 있습니다.`
+  - Initial import activity warning:
+    `가져오기 기록 새로고침에 실패했습니다. 기존 데이터가 오래되었을 수 있습니다.`
+  - After retrying saved import progress, its warning count was `0`, import
+    activity warning count remained `1`, and the saved import row rendered
+    `Codex sessions`, `4 / 8 · 재개 가능`.
+  - After retrying import activity, both warning counts were `0` and the event
+    row rendered `3개 파일 · 5개 프롬프트`, `7 / 12 · 재개 가능`, and `1개 경고`.
+  - Page errors, request failures, and unexpected HTTP failures: none.
+  - Console contained only the two expected browser resource errors for the
+    forced HTTP 500 responses.
+
+Issues:
+
+- No app blocker found.
+
+Research:
+
+- No external research. This was direct browser QA against mocked local bridge
+  responses.
+
+Next Steps:
+
+- Commit and push this report-only QA record.
+- Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Stored load failure filter-change QA
 
@@ -66,7 +132,7 @@ Research:
 
 Next Steps:
 
-- Commit and push this report-only QA record.
+- Completed and pushed as `bc1db7d docs: record stored load recovery QA`.
 - Continue autonomous QA on another still-uncovered failure or edge state.
 
 ## Current Slice - 2026-06-07 Improvement failure selection-switch QA

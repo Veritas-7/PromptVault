@@ -1,5 +1,5 @@
 use chrono::{Local, TimeZone, Utc};
-use regex::Regex;
+use regex::{Captures, Regex};
 use rusqlite::{Connection, OpenFlags, ToSql};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -2733,7 +2733,18 @@ fn detect_risks(text: &str) -> Vec<String> {
 }
 
 pub fn redact_sensitive_text(text: &str) -> String {
-    let mut redacted = text.to_string();
+    let mut redacted = quoted_curl_cookie_header_regex()
+        .replace_all(text, |captures: &Captures| {
+            if let Some(prefix) = captures.get(1) {
+                return format!("{}\"[REDACTED_POSSIBLE_API_KEY]\"", prefix.as_str());
+            }
+            let prefix = captures
+                .get(2)
+                .expect("single-quoted curl cookie header prefix")
+                .as_str();
+            format!("{}'[REDACTED_POSSIBLE_API_KEY]'", prefix)
+        })
+        .to_string();
     for (label, regex) in risk_regexes() {
         let replacement = format!("[REDACTED_{}]", label.to_ascii_uppercase());
         redacted = regex
@@ -3940,6 +3951,16 @@ fn word_regex() -> &'static Regex {
     static WORD_REGEX: OnceLock<Regex> = OnceLock::new();
     WORD_REGEX
         .get_or_init(|| Regex::new(r"[A-Za-z가-힣0-9][A-Za-z가-힣0-9_\-']*").expect("word regex"))
+}
+
+fn quoted_curl_cookie_header_regex() -> &'static Regex {
+    static QUOTED_CURL_COOKIE_HEADER_REGEX: OnceLock<Regex> = OnceLock::new();
+    QUOTED_CURL_COOKIE_HEADER_REGEX.get_or_init(|| {
+        Regex::new(
+            r#"(?m)((?:--header|-H)\s+)"(?:Cookie|cookie|Set-Cookie|set-cookie)\s*:\s*[^"\r\n]*"|((?:--header|-H)\s+)'(?:Cookie|cookie|Set-Cookie|set-cookie)\s*:\s*[^'\r\n]*'"#,
+        )
+        .expect("quoted curl cookie header regex")
+    })
 }
 
 fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
@@ -6456,6 +6477,19 @@ mod tests {
         assert_eq!(
             redact_sensitive_text(&text),
             "Run curl [REDACTED_POSSIBLE_API_KEY] https://example.com and curl [REDACTED_POSSIBLE_API_KEY] https://example.org."
+        );
+    }
+
+    #[test]
+    fn redact_sensitive_text_preserves_quoted_curl_cookie_header_shape() {
+        let value = ["short", "session", "value"].join("-");
+        let cookie = format!("session_id={value}");
+        let header_flag = ["-", "H"].join("");
+        let text = format!("Run curl {header_flag} \"Cookie: {cookie}\" https://example.com");
+
+        assert_eq!(
+            redact_sensitive_text(&text),
+            "Run curl -H \"[REDACTED_POSSIBLE_API_KEY]\" https://example.com"
         );
     }
 

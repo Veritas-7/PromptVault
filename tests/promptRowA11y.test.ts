@@ -269,6 +269,21 @@ test("prompt row previews redact curl cookie credentials", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews preserve quoted curl cookie header shape while redacting", () => {
+  const cookieValue = ["short", "session", "value"].join("-");
+  const cookiePair = `session_id=${cookieValue}`;
+  const text = `Run curl -H "Cookie: ${cookiePair}" https://example.com`;
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, 'Run curl -H "[REDACTED_POSSIBLE_SECRET]" https://example.com');
+  const leakPattern = new RegExp(`Cookie|session_id|${cookieValue}`);
+  assert.doesNotMatch(preview, leakPattern);
+  assert.doesNotMatch(label, leakPattern);
+  assert.match(label, /-H "\[REDACTED_POSSIBLE_SECRET\]" https:\/\/example\.com/);
+});
+
 test("prompt row previews redact credential and signature query params", () => {
   const text =
     "Fetch https://example.test/file?X-Amz-Credential=short-credential-value&X-Amz-Signature=short-signature-value before request.";

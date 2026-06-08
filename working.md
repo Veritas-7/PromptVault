@@ -1,12 +1,121 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 18:36 KST
+Updated: 2026-06-08 18:45 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Curl cookie credential redaction
+## Current Slice - 2026-06-08 Quoted curl cookie header redaction shape
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for quoted curl cookie headers copied as `curl -H "Cookie: ..."`
+  snippets, without leaking cookie values or producing malformed shell text.
+
+Context:
+
+- Previous curl cookie flag redaction is pushed to `origin/main` with source
+  commit `db94b99 fix: redact curl cookie credentials` and docs closeout
+  `9463eb4 docs: record curl cookie credential verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed quoted curl cookie headers hid the cookie value
+  but consumed the closing quote, rendering
+  `Run curl -H "[REDACTED_POSSIBLE_SECRET] https://example.com` instead of a
+  valid quoted `-H` argument followed by the URL.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to preserve the `-H "..."` shell shape while redacting the quoted cookie
+  header payload.
+- Added RED backend coverage requiring `redact_sensitive_text` to preserve the
+  same quoted curl header shape.
+- Confirmed RED: frontend and backend redaction both returned a malformed
+  string with the closing quote removed.
+- Added a quoted curl cookie-header pre-pass before the generic possible-secret
+  matcher in both frontend and backend redaction paths.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a raw quoted curl cookie header. It confirmed two stored
+  prompt rows, the quoted `-H "[REDACTED_POSSIBLE_SECRET]" https://example.com`
+  shape visible in row text and aria labels, no cookie name/value leak in row
+  text, aria labels, or body text, and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: adds a pre-pass that preserves quoted `-H` or
+  `--header` cookie header shell shape while replacing the header payload with
+  the possible-secret marker.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for quoted
+  curl cookie header shape preservation.
+- `src-tauri/src/lib.rs`: aligns backend redaction through a dedicated quoted
+  curl cookie-header regex and Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- Probe:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --input-type=module -e ...`
+  showed the current preview as
+  `Run curl -H "[REDACTED_POSSIBLE_SECRET] https://example.com`.
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed 29/30 because the quoted curl cookie header preview missed the
+  closing quote.
+- RED backend:
+  `cargo test redact_sensitive_text_preserves_quoted_curl_cookie_header_shape`
+  from `src-tauri` failed because backend redaction missed the closing quote.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 30/30.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_preserves_quoted_curl_cookie_header_shape`
+  from `src-tauri` passed, 1/1 focused lib test, plus zero-test main and CLI
+  targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5215" --port 5215 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_quoted_cookie_header_qa.mjs'`
+  passed with `rowCount=2`, `quotedShapeVisible=true`, `rowLeaked=false`,
+  `ariaLeaked=false`, `bodyLeaked=false`, `consoleErrors=0`, and
+  `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 336/336,
+  production build, Rust lib tests 107/107, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after preserving quoted curl cookie header shape.
+- Python Playwright is not installed, and PromptVault has no local Playwright
+  dependency. Browser QA used the installed shared workspace Playwright package
+  while still managing Vite with the approved `with_server.py` helper.
+- Initial browser QA harness attempts failed before assertions due to a
+  hard-coded nonexistent Playwright path, an outdated stored-load button label,
+  and same-origin-only bridge route fulfillment. The final route-backed QA
+  passed after correcting the harness to the live app state.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity and
+  UI/accessibility preview correctness work for copied curl header snippets.
+
+Next Steps:
+
+- Run whitespace and staged gitleaks checks, then commit and push the source
+  slice.
+- Record source-push evidence in `working.md`, then commit and push the docs
+  closeout.
+
+## Previous Slice - 2026-06-08 Curl cookie credential redaction
 
 Current Goal:
 

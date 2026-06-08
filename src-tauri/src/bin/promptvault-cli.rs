@@ -63,77 +63,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "scan" => {
-            let json = take_flag(&mut args, "--json");
-            let include_markdown = take_flag(&mut args, "--include-markdown");
-            let include_prompts = take_flag(&mut args, "--include-prompts");
-            let no_export = take_flag(&mut args, "--no-export");
-            let mut limit = None;
-            let mut output_path = None;
-            let mut preview_limit = Some(0);
-            let mut preview_sort = None;
-            let mut preview_sort_source = None;
-            let mut source_limit = None;
-            let mut source_ids = Vec::new();
-            let mut iter = args.into_iter();
-            while let Some(arg) = iter.next() {
-                match arg.as_str() {
-                    "--limit" => {
-                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
-                    }
-                    "--source-limit" => {
-                        source_limit =
-                            Some(parse_positive_usize_arg(iter.next(), "--source-limit")?);
-                    }
-                    "--output" => {
-                        output_path = Some(parse_required_arg(iter.next(), "--output")?);
-                    }
-                    "--preview-limit" => {
-                        preview_limit = Some(parse_usize_arg(iter.next(), "--preview-limit")?);
-                    }
-                    "--preview-sort" => {
-                        let value = parse_preview_sort_arg(iter.next())?;
-                        set_preview_sort(
-                            &mut preview_sort,
-                            &mut preview_sort_source,
-                            "--preview-sort",
-                            value,
-                        )?;
-                    }
-                    "--weakest-first" => {
-                        set_preview_sort(
-                            &mut preview_sort,
-                            &mut preview_sort_source,
-                            "--weakest-first",
-                            "quality-asc".to_string(),
-                        )?;
-                    }
-                    "--source" => {
-                        source_ids.extend(parse_source_ids_arg(iter.next())?);
-                    }
-                    other => {
-                        return Err(format!("unknown scan argument: {other}").into());
-                    }
-                }
-            }
-            validate_scan_output_options(&output_path, no_export)?;
-            let result = run_scan(ScanOptions {
-                limit,
-                output_path,
-                preview_limit,
-                preview_sort,
-                include_markdown: Some(include_markdown),
-                write_markdown: Some(!no_export),
-                source_limit,
-                source_ids: if source_ids.is_empty() {
-                    None
-                } else {
-                    Some(source_ids)
-                },
-                ..Default::default()
-            })?;
-            if json {
+            let parsed = parse_scan_args(args)?;
+            let result = run_scan(parsed.options)?;
+            if parsed.json {
                 let mut warnings = result.warnings.clone();
-                let prompts = json_prompt_preview(&result.prompts, include_prompts, &mut warnings);
+                let prompts =
+                    json_prompt_preview(&result.prompts, parsed.include_prompts, &mut warnings);
                 let summary = serde_json::json!({
                     "generated_at": &result.generated_at,
                     "output_path": &result.output_path,
@@ -450,6 +385,89 @@ fn reject_extra_args(args: &[String], command: &str) -> Result<(), Box<dyn std::
     Ok(())
 }
 
+struct ScanCommandArgs {
+    json: bool,
+    include_prompts: bool,
+    options: ScanOptions,
+}
+
+fn parse_scan_args(mut args: Vec<String>) -> Result<ScanCommandArgs, Box<dyn std::error::Error>> {
+    let json = take_flag(&mut args, "--json");
+    let include_markdown = take_flag(&mut args, "--include-markdown");
+    let include_prompts = take_flag(&mut args, "--include-prompts");
+    let no_export = take_flag(&mut args, "--no-export");
+    let no_persist = take_flag(&mut args, "--no-persist");
+    let mut limit = None;
+    let mut output_path = None;
+    let mut preview_limit = Some(0);
+    let mut preview_sort = None;
+    let mut preview_sort_source = None;
+    let mut source_limit = None;
+    let mut source_ids = Vec::new();
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--limit" => {
+                limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+            }
+            "--source-limit" => {
+                source_limit = Some(parse_positive_usize_arg(iter.next(), "--source-limit")?);
+            }
+            "--output" => {
+                output_path = Some(parse_required_arg(iter.next(), "--output")?);
+            }
+            "--preview-limit" => {
+                preview_limit = Some(parse_usize_arg(iter.next(), "--preview-limit")?);
+            }
+            "--preview-sort" => {
+                let value = parse_preview_sort_arg(iter.next())?;
+                set_preview_sort(
+                    &mut preview_sort,
+                    &mut preview_sort_source,
+                    "--preview-sort",
+                    value,
+                )?;
+            }
+            "--weakest-first" => {
+                set_preview_sort(
+                    &mut preview_sort,
+                    &mut preview_sort_source,
+                    "--weakest-first",
+                    "quality-asc".to_string(),
+                )?;
+            }
+            "--source" => {
+                source_ids.extend(parse_source_ids_arg(iter.next())?);
+            }
+            other => {
+                return Err(format!("unknown scan argument: {other}").into());
+            }
+        }
+    }
+    validate_scan_output_options(&output_path, no_export)?;
+
+    Ok(ScanCommandArgs {
+        json,
+        include_prompts,
+        options: ScanOptions {
+            limit,
+            output_path,
+            preview_limit,
+            preview_sort,
+            include_markdown: Some(include_markdown),
+            write_markdown: Some(!no_export),
+            persist: if no_persist { Some(false) } else { None },
+            source_limit,
+            source_ids: if source_ids.is_empty() {
+                None
+            } else {
+                Some(source_ids)
+            },
+            ..Default::default()
+        },
+    })
+}
+
 fn parse_usize_arg(value: Option<String>, flag: &str) -> Result<usize, Box<dyn std::error::Error>> {
     let value = value.ok_or_else(|| format!("{flag} requires a value"))?;
     value
@@ -635,7 +653,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1080,12 +1098,42 @@ mod tests {
         assert!(help.contains("--limit N>0"));
         assert!(help.contains("--source-limit N>0"));
         assert!(help.contains("--source-limit caps prompts read from each selected source"));
+        assert!(help.contains("--no-persist"));
+        assert!(help.contains("--no-persist keeps scan results out of the PromptVault database"));
         assert!(help.contains("--count N>0"));
         assert!(help.contains("--output cannot be combined with --no-export"));
         assert!(help.contains("--preview-sort or --weakest-first"));
         assert!(help.contains("repair --count is capped at 10"));
         assert!(help.contains("serve [--addr 127.0.0.1:5174]"));
         assert!(help.contains("browser-bridge endpoints"));
+    }
+
+    #[test]
+    fn parse_scan_args_supports_no_persist_for_side_effect_free_scans() {
+        let parsed = parse_scan_args(vec![
+            "--source".to_string(),
+            "project-progress-logs".to_string(),
+            "--limit".to_string(),
+            "3".to_string(),
+            "--preview-limit".to_string(),
+            "0".to_string(),
+            "--no-export".to_string(),
+            "--no-persist".to_string(),
+            "--json".to_string(),
+        ])
+        .expect("parse scan args");
+
+        assert!(parsed.json);
+        assert!(!parsed.include_prompts);
+        assert_eq!(parsed.options.limit, Some(3));
+        assert_eq!(parsed.options.preview_limit, Some(0));
+        assert_eq!(parsed.options.include_markdown, Some(false));
+        assert_eq!(parsed.options.write_markdown, Some(false));
+        assert_eq!(parsed.options.persist, Some(false));
+        assert_eq!(
+            parsed.options.source_ids,
+            Some(vec!["project-progress-logs".to_string()])
+        );
     }
 
     #[test]

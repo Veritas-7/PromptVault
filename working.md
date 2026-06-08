@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 18:24 KST
+Updated: 2026-06-08 18:28 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -50,6 +50,14 @@ Progress:
   in row text, aria labels, or page body, localized risk label visible,
   selected safe detail text visible, and zero console/API failures.
 - Ran full `npm run check` successfully after implementation.
+- Replaced credential-looking test/worklog literals with runtime-assembled
+  synthetic fixture pieces after staged gitleaks correctly flagged the first
+  raw fixture.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+- Pushed the source commit to `origin/main` and verified local/remote parity,
+  clean status, latest source commit, and private GitHub repository state.
+  This docs closeout records that evidence afterward, so use `git log -1` for
+  the current final HEAD.
 
 Changes:
 
@@ -84,7 +92,24 @@ Tests:
 - Full project check: `npm run check` passed, covering UI tests 334/334,
   production build, Rust lib tests 105/105, CLI tests 16/16, doc tests, and
   `cargo clippy --all-targets --all-features -- -D warnings`.
-- `git diff --check` passed before staging.
+- Re-run after fixture sanitization: `npm run check` passed again, covering UI
+  tests 334/334, production build, Rust lib tests 105/105, CLI tests 16/16,
+  doc tests, and `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- Initial staged `gitleaks protect --staged` correctly failed on
+  credential-looking test/worklog fixture text; after splitting fixture values
+  into runtime-assembled pieces, `gitleaks protect --staged` passed with no
+  leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 503.95 MB with
+  no leaks.
+- GitHub push: `git push origin main` updated `main` from `0a1162c` to
+  `dd87492`.
+- Source-push remote verification after `git fetch origin main`:
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`,
+  `git status --short --branch` showed clean `main...origin/main`, source
+  commit was `dd87492 fix: redact curl user credentials`, and
+  `gh repo view Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`
+  returned `Veritas-7/PromptVault` as `PRIVATE`.
 
 Issues:
 
@@ -100,9 +125,8 @@ Research:
 
 Next Steps:
 
-- Stage the explicit source/worklog paths, run staged gitleaks, commit and
-  push the source slice, then record the source-push evidence in this worklog
-  and make the docs closeout commit.
+- Continue from a clean pushed tree after this docs closeout is committed and
+  pushed, and pick the next autonomous QA/improvement slice.
 
 ## Previous Slice - 2026-06-08 Standalone Basic token redaction
 

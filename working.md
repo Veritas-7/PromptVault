@@ -1,12 +1,106 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 07:20 KST
+Updated: 2026-06-09 07:26 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 local Date/start-time worklog extraction
+## Current Slice - 2026-06-09 coverage Date/start-time fallback parser
+
+Current Goal:
+
+- Move the safe `Date:` / `시작 시간` progress-log parsing improvement from
+  extraction proposals into the base project/day work report and coverage
+  parser.
+- Reduce the real `work-log-coverage` unparsed backlog without duplicating
+  items that already have explicit dated headings.
+
+Context:
+
+- After the previous slice, `work-log-extract` reached
+  `candidate_count=20`, `accepted_count=20`, `rejected_count=0`.
+- However, the base work-log coverage still reported
+  `parsed_file_count=186` and `unparsed_file_count=586` because many
+  `docs/plans/*-worklog.md`, `PROJECT_STATUS.md`, and `working.md` files use
+  date fields rather than dated markdown headings.
+- Sampling showed the dominant deterministic pattern was:
+  `# Worklog Title` followed by `Date: YYYY-MM-DD ...`, plus similar
+  `last_updated` and Korean start/update fields.
+
+Progress:
+
+- Added a base project-work-item fallback that runs only when no explicit dated
+  heading items were parsed from the file.
+- Reused the existing safe local date-field extraction path, so emitted base
+  work items use only the dated field plus a safe heading/current-goal context
+  line and still pass risk detection.
+- Kept extracted status as `logged`, preserving `current`/`previous` status for
+  explicit `Current Slice` / `Previous Slice` headings.
+- Ran `cargo fmt` after `cargo fmt --check` caught same-file formatting drift.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - adds `project_progress_work_item_from_safe_date_field`;
+  - calls that fallback from
+    `project_progress_work_items_from_text_for_project` only when the normal
+    heading parser found no work items;
+  - adds `project_progress_work_items_extract_safe_date_field_fallbacks`.
+
+Tests:
+
+- RED:
+  - `cargo test project_progress_work_items_extract_safe_date_field_fallbacks`
+    failed with `date_items.len()` 0 vs expected 1.
+- Targeted GREEN:
+  - `cargo test project_progress_work_items_extract_safe_date_field_fallbacks`:
+    PASS.
+  - `cargo test project_progress_work_items`: PASS, 2 tests.
+  - `cargo fmt --check`: PASS after formatting.
+- Actual CLI verification:
+  - `work-log-coverage --json` now reports
+    `files_seen=773`, `parsed_file_count=618`,
+    `unparsed_file_count=155`, `project_count=31`,
+    `work_item_count=5758`, `warnings=[]`.
+  - `work-report --json` now reports
+    `project_count=30`, `date_count=25`, `total_items=5758`,
+    `files_seen=773`, `session_scan_prompt_count=200`,
+    `session_evidence_count=63490`,
+    `session_evidence_unique_count=198`,
+    `session_evidence_index_count=200`, `warnings=[]`.
+- Headless browser-bridge QA:
+  - `node /tmp/promptvault_work_log_coverage_date_fallback_qa.mjs`: PASS with
+    bridge on `127.0.0.1:5174` and Vite on `127.0.0.1:5177`.
+  - Observed coverage meta:
+    `773개 로그 · parsed 618개 · unparsed 155개 · 31개 프로젝트 · 작업 5,758개`.
+  - Visible coverage rows included parsed `PROJECT_STATUS.md` and parsed
+    worklog rows.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `426` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `157` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- The unparsed backlog is now much smaller but still non-zero:
+  `unparsed_file_count=155`.
+- Remaining files likely need either more deterministic patterns or a reviewed
+  AI-assisted normalization queue; do not mark full project/day management
+  complete yet.
+
+Next Steps:
+
+- Stage only `src-tauri/src/lib.rs` and `working.md`, run staged secret scan,
+  commit, and push.
+- Then sample the remaining 155 unparsed files and decide whether the next
+  slice is another deterministic parser rule or a reviewed AI queue surface.
+
+## Previous Slice - 2026-06-09 local Date/start-time worklog extraction
 
 Current Goal:
 

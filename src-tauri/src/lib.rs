@@ -3398,8 +3398,8 @@ fn build_project_progress_log_extraction_candidates(
 
 fn project_progress_log_is_pointer(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
-    let points_to_working_md = lower.contains("active") && lower.contains("worklog")
-        && lower.contains("working.md");
+    let points_to_working_md =
+        lower.contains("active") && lower.contains("worklog") && lower.contains("working.md");
     let duplicate_guard = lower.contains("do not append duplicate progress")
         || lower.contains("read and update `working.md` instead")
         || lower.contains("read and update working.md instead");
@@ -4043,9 +4043,7 @@ fn local_project_work_log_update_summary(
         if !detect_risks(&format!("{date}\n{title}\n{evidence}")).is_empty() {
             let fallback_title = local_project_work_log_generic_update_title(candidate);
             let fallback_evidence = format!("{label}: {date}");
-            if !detect_risks(&format!("{date}\n{fallback_title}\n{fallback_evidence}"))
-                .is_empty()
-            {
+            if !detect_risks(&format!("{date}\n{fallback_title}\n{fallback_evidence}")).is_empty() {
                 continue;
             }
             return Some((date, fallback_title, fallback_evidence));
@@ -4063,8 +4061,8 @@ fn local_project_work_log_update_date_line(line: &str) -> Option<(String, &'stat
         .trim_start();
     let field_lower = field.to_ascii_lowercase();
     let has_last_updated = lower.contains("last_updated") || lower.contains("last updated");
-    let has_updated_field = field_lower.starts_with("updated:")
-        || field_lower.starts_with("updated ");
+    let has_updated_field =
+        field_lower.starts_with("updated:") || field_lower.starts_with("updated ");
     let has_date_field = field_lower.starts_with("date:") || field_lower.starts_with("date ");
     let has_start_time_field = field_lower.starts_with("start time:")
         || field_lower.starts_with("start time ")
@@ -4530,8 +4528,57 @@ fn project_progress_work_items_from_text_for_project(
         item.evidence = project_work_evidence(&body);
         items.push(item);
     }
+    if items.is_empty() {
+        if let Some(item) = project_progress_work_item_from_safe_date_field(
+            path,
+            text,
+            project,
+            &source_path,
+            &source_file,
+        ) {
+            items.push(item);
+        }
+    }
 
     items
+}
+
+fn project_progress_work_item_from_safe_date_field(
+    path: &Path,
+    text: &str,
+    project: &str,
+    source_path: &str,
+    source_file: &str,
+) -> Option<ProjectWorkItem> {
+    let excerpt = project_progress_analysis_text(text);
+    let candidate = ProjectWorkLogExtractionCandidate {
+        candidate_id: format!(
+            "project-work-date-field-{}",
+            hash_text(&path.display().to_string())
+        ),
+        project: project.to_string(),
+        source_path: source_path.to_string(),
+        source_file: source_file.to_string(),
+        reason: "safe_date_field_fallback".to_string(),
+        excerpt,
+        line_count: text.lines().count(),
+        char_count: text.chars().count(),
+        risk_flags: detect_risks(text),
+        modified_at: None,
+    };
+    let (date, title, evidence) = local_project_work_log_update_summary(&candidate)?;
+    Some(ProjectWorkItem {
+        date,
+        project: project.to_string(),
+        title,
+        status: "logged".to_string(),
+        source_path: source_path.to_string(),
+        source_file: source_file.to_string(),
+        evidence,
+        session_evidence_count: 0,
+        session_sources: Vec::new(),
+        session_evidence_keys: Vec::new(),
+    })
 }
 
 fn project_work_session_prompts(
@@ -9823,6 +9870,54 @@ Progress:
     }
 
     #[test]
+    fn project_progress_work_items_extract_safe_date_field_fallbacks() {
+        let date_path =
+            PathBuf::from("/tmp/notebooklm-llm-wiki-flow/docs/plans/2026-06-02-refresh-worklog.md");
+        let date_text = "# GBrain Single-Writer Quality Rollup Report Refresh Worklog\nDate: 2026-06-02 17:39 KST\nSlice: `[REDACTED_LONG_BASE64_LIKE_TOKEN]`\nScope:\n- NAS-private report-only refresh.";
+        let start_time_path =
+            PathBuf::from("/tmp/MacMini_RAG_Project/2_Source/STT_SOTA_PROGRESS.md");
+        let start_time_text = "# SOTA 검증 진행 상황\n## Cycle 23 - 실시간 업데이트\n### 현재 상태\n- **Zeroth 457 테스트**: 진행 중\n- **시작 시간**: 2026-02-22 15:18 KST\n- **경과 시간**: 약 10분+";
+
+        let date_items = project_progress_work_items_from_text_for_project(
+            &date_path,
+            date_text,
+            "notebooklm-llm-wiki-flow",
+        );
+        let start_time_items = project_progress_work_items_from_text_for_project(
+            &start_time_path,
+            start_time_text,
+            "MacMini_RAG_Project",
+        );
+
+        assert_eq!(date_items.len(), 1);
+        assert_eq!(date_items[0].date, "2026-06-02");
+        assert_eq!(date_items[0].project, "notebooklm-llm-wiki-flow");
+        assert_eq!(date_items[0].status, "logged");
+        assert_eq!(
+            date_items[0].title,
+            "GBrain Single-Writer Quality Rollup Report Refresh Worklog"
+        );
+        assert_eq!(
+            date_items[0].evidence,
+            "Date: 2026-06-02\nGBrain Single-Writer Quality Rollup Report Refresh Worklog"
+        );
+        assert!(detect_risks(&date_items[0].evidence).is_empty());
+        assert!(!date_items[0]
+            .evidence
+            .contains("REDACTED_LONG_BASE64_LIKE_TOKEN"));
+
+        assert_eq!(start_time_items.len(), 1);
+        assert_eq!(start_time_items[0].date, "2026-02-22");
+        assert_eq!(start_time_items[0].project, "MacMini_RAG_Project");
+        assert_eq!(start_time_items[0].title, "SOTA 검증 진행 상황");
+        assert_eq!(
+            start_time_items[0].evidence,
+            "시작 시간: 2026-02-22\nSOTA 검증 진행 상황"
+        );
+        assert!(detect_risks(&start_time_items[0].evidence).is_empty());
+    }
+
+    #[test]
     fn prompt_date_uses_kst_for_utc_session_timestamps() {
         assert_eq!(prompt_date(Some("2026-06-08T15:13:32.844Z")), "2026-06-09");
     }
@@ -10714,9 +10809,8 @@ Progress:
 
         let excerpt = project_progress_log_candidate_excerpt(&text);
 
-        assert!(excerpt.starts_with(
-            "Updated: 2026-06-05\n# SnapTranslate AutoResearch Working State\n"
-        ));
+        assert!(excerpt
+            .starts_with("Updated: 2026-06-05\n# SnapTranslate AutoResearch Working State\n"));
 
         let candidate = ProjectWorkLogExtractionCandidate {
             candidate_id: "work-log-SnapTranslate-b1b2c3d4e5".to_string(),
@@ -10839,18 +10933,12 @@ Progress:
         assert_eq!(result.proposals[0].rejection_reason, None);
         assert!(result.proposals[1].accepted);
         assert_eq!(result.proposals[1].date.as_deref(), Some("2026-04-24"));
-        assert_eq!(
-            result.proposals[1].title,
-            "Project status snapshot updated"
-        );
+        assert_eq!(result.proposals[1].title, "Project status snapshot updated");
         assert_eq!(
             result.proposals[1].evidence,
             "last_updated: 2026-04-24\nGamma — Project Status"
         );
-        assert_eq!(
-            result.proposals[1].rejection_reason.as_deref(),
-            None
-        );
+        assert_eq!(result.proposals[1].rejection_reason.as_deref(), None);
     }
 
     #[test]
@@ -10938,7 +11026,9 @@ Progress:
         );
         assert!(detect_risks(&working.title).is_empty());
         assert!(detect_risks(&working.evidence).is_empty());
-        assert!(!working.evidence.contains("abcdefghijklmnopqrstuvwxyz0123456789"));
+        assert!(!working
+            .evidence
+            .contains("abcdefghijklmnopqrstuvwxyz0123456789"));
 
         let wrapped = &result.proposals[2];
         assert!(wrapped.accepted);
@@ -11052,7 +11142,9 @@ Progress:
             "Date: 2026-06-02\nGBrain Single-Writer Quality Rollup Report Refresh Worklog"
         );
         assert!(detect_risks(&date_worklog.evidence).is_empty());
-        assert!(!date_worklog.evidence.contains("REDACTED_LONG_BASE64_LIKE_TOKEN"));
+        assert!(!date_worklog
+            .evidence
+            .contains("REDACTED_LONG_BASE64_LIKE_TOKEN"));
 
         let start_time_log = &result.proposals[1];
         assert!(start_time_log.accepted);
@@ -11424,8 +11516,8 @@ Progress:
                 ProjectWorkLogExtractionProposal {
                     candidate_id: "work-log-RepoTutorStudio-a1b2c3d4e5".to_string(),
                     project: "RepoTutorStudio".to_string(),
-                    source_path:
-                        "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md"
+                        .to_string(),
                     source_file: "working.md".to_string(),
                     date: Some("2026-06-05".to_string()),
                     title: "Initialized work log parser".to_string(),
@@ -11439,7 +11531,8 @@ Progress:
             persistence: None,
             warnings: Vec::new(),
         };
-        let approved_candidate_ids = HashSet::from(["work-log-RepoTutorStudio-a1b2c3d4e5".to_string()]);
+        let approved_candidate_ids =
+            HashSet::from(["work-log-RepoTutorStudio-a1b2c3d4e5".to_string()]);
 
         let persistence = persist_project_work_log_extraction_proposals(
             &db_path,

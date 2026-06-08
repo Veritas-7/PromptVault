@@ -79,6 +79,7 @@ import {
   selectedPromptEmptyText,
 } from "./promptEmptyState";
 import { promptRowAriaLabel, promptRowPreviewText, selectedPromptMetaLabel } from "./promptRowA11y";
+import { qualityGapLabel, qualityGapSummary } from "./qualityGaps";
 import { qualityBandClass, qualityBandLabel } from "./qualityLabels";
 import { riskFlagLabel } from "./riskLabels";
 import {
@@ -173,7 +174,6 @@ const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
 const SCAN_PROGRESS_POLL_MS = 300;
-const QUALITY_GAP_DISPLAY_LIMIT = 4;
 const FREQUENCY_DISPLAY_LIMIT = 12;
 const PROMPT_LIST_DISPLAY_LIMIT = 200;
 
@@ -203,38 +203,6 @@ function formatBytes(bytes: number): string {
     unit += 1;
   }
   return unit === 0 ? `${bytes} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
-}
-
-function qualityGapLabel(gap: string): string {
-  switch (gap) {
-    case "action_verb":
-      return "작업 동사";
-    case "context":
-      return "맥락";
-    case "constraints":
-      return "제약";
-    case "output_format":
-      return "출력 형식";
-    case "sensitive_content_risk":
-      return "민감정보 위험";
-    case "specific_goal":
-      return "구체적 목표";
-    case "too_long":
-      return "과도한 길이";
-    case "verification":
-      return "검증";
-    default:
-      return gap || "알 수 없음";
-  }
-}
-
-function qualityGapSummary(gaps: string[]): string {
-  const visible = gaps
-    .slice(0, QUALITY_GAP_DISPLAY_LIMIT)
-    .map(qualityGapLabel)
-    .join(", ");
-  const hiddenCount = gaps.length - QUALITY_GAP_DISPLAY_LIMIT;
-  return hiddenCount > 0 ? `${visible} 외 ${hiddenCount.toLocaleString()}개` : visible;
 }
 
 function App() {

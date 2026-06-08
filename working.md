@@ -1,12 +1,117 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 15:35 KST
+Updated: 2026-06-08 15:42 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Medium quality band label normalization
+## Current Slice - 2026-06-08 Quality gap label normalization
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep quality gap labels consistent and localized across scan statistics and
+  recommendation quality deltas, including common bridge aliases such as
+  `success criteria`.
+
+Context:
+
+- Previous medium quality band normalization is pushed to `origin/main` as
+  `521c5fa fix: normalize medium quality bands`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- `App.tsx` had inline `qualityGapLabel` and `qualityGapSummary` helpers with
+  no direct unit tests. The bridge parser accepts any nonblank quality gap
+  string when the quality delta is internally consistent, so common aliases
+  like `success criteria`, `success_criteria`, and `Output Format` could appear
+  as raw English UI copy.
+
+Progress:
+
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree was clean at `main...origin/main` and parity was
+  `0 0` before this slice.
+- Re-read workspace, test-driven-development, and webapp-testing instructions
+  before implementation/verification.
+- Added RED coverage in `tests/qualityGaps.test.ts` for backend quality gap
+  identifiers, common bridge aliases, trimmed fallback values, and summary
+  overflow copy.
+- Confirmed RED: focused test failed because `src/qualityGaps.ts` did not
+  exist.
+- Extracted quality gap label/summary logic to `src/qualityGaps.ts`, preserving
+  existing backend ID labels and adding normalized alias handling for spaces,
+  hyphens, casing, and `success criteria`.
+- Updated `App.tsx` to import `qualityGapLabel` and `qualityGapSummary` from
+  the shared helper module.
+- Confirmed focused GREEN for `tests/qualityGaps.test.ts`.
+- Browser QA rendered the actual app with controlled bridge responses for scan
+  and improvement. It confirmed `Output Format` and `success criteria` were
+  rendered as "출력 형식" and "성공 기준" in quality gap stats, recommendation
+  delta showed "해결됨: 맥락" and "남음: 성공 기준", raw alias text was absent
+  from the checked UI surfaces, and there were zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+
+Changes:
+
+- `src/qualityGaps.ts`: adds shared quality gap label/summary helpers with
+  backend ID localization and common alias normalization.
+- `src/App.tsx`: removes inline quality gap helper logic and uses
+  `qualityGaps.ts`.
+- `tests/qualityGaps.test.ts`: adds unit coverage for quality gap labels,
+  aliases, fallbacks, and summary overflow.
+- `working.md`: records this slice.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/qualityGaps.test.ts`
+  failed with `ERR_MODULE_NOT_FOUND` because `src/qualityGaps.ts` was not yet
+  implemented.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/qualityGaps.test.ts`
+  passed, 4/4.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5217" --port 5217 --timeout 120 -- /bin/bash -lc ...`
+  passed with scan and improve route fulfillment, localized quality gap stats
+  and quality delta labels, raw alias text absent from checked UI surfaces, and
+  zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 316/316,
+  production build, Rust lib tests 86/86, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- `gitleaks protect --staged` passed with no leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 701.53 MB with
+  no leaks.
+
+Issues:
+
+- No product blocker after extracting and normalizing quality gap labels.
+
+Research:
+
+- No external research. This is direct UI localization and helper coverage work
+  for already accepted bridge payload values.
+
+Next Steps:
+
+- Push this closeout commit to `origin/main`, run final parity/status checks,
+  then continue from a clean pushed tree and pick the next autonomous
+  QA/improvement slice.
+
+## Previous Slice - 2026-06-08 Medium quality band label normalization
 
 Current Goal:
 

@@ -1,5 +1,5 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
-import { sourceLabelDisplayText } from "./promptRowA11y.ts";
+import { redactSensitiveDisplayText, sourceLabelDisplayText } from "./promptRowA11y.ts";
 
 function normalizedSourceStatus(status: string): string {
   return status.trim().toLowerCase();
@@ -19,8 +19,12 @@ function sourceStatusName(status: string): string {
     case "stored":
       return "저장됨";
     default:
-      return status.trim() || "알 수 없음";
+      return compactSourceStatus(redactSensitiveDisplayText(status.trim())) || "알 수 없음";
   }
+}
+
+function compactSourceStatus(status: string): string {
+  return status.replace(/\s+/g, " ").trim();
 }
 
 const SOURCE_STATUS_CLASSES: Record<string, string> = {

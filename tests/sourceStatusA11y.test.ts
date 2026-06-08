@@ -132,6 +132,24 @@ test("source summary status labels preserve unknown backend statuses", () => {
   );
 });
 
+test("source status labels redact secret-like unknown backend statuses", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["status", "secret", "value"].join("-");
+  const status = `degraded ${apiFlag} ${secretValue}`;
+
+  const labels = [
+    planSourceStatusLabel("Claude", status, 5, "5.0 KiB"),
+    planSourceSelectionLabel("Claude", status, 5, "5.0 KiB"),
+    planSourceActionLabel("continuous", "Claude", status, 5, "5.0 KiB"),
+    sourceSummaryStatusLabel("Claude", status, 12),
+  ];
+
+  for (const label of labels) {
+    assert.match(label, /Claude 소스 degraded \[REDACTED_POSSIBLE_SECRET\]/);
+    assert.doesNotMatch(label, new RegExp(`${apiFlag}|${secretValue}`));
+  }
+});
+
 test("source status labels redact secret-like source names", () => {
   const apiFlag = ["--api", "key"].join("-");
   const secretValue = ["source", "label", "secret"].join("-");

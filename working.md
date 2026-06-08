@@ -1,12 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 21:58 KST
+Updated: 2026-06-08 22:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Provider display secret masking
+## Current Slice - 2026-06-08 Source status display secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent unknown backend source status strings from rendering raw secret-like
+  text in source status labels, source selection labels, and source action
+  labels.
+
+Context:
+
+- Previous provider label masking is pushed to `origin/main` with source commit
+  `eec401e fix: mask provider label secrets` and docs closeout
+  `1875e71 docs: record provider label masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for the quick scan/source panel
+  user flow.
+- Existing display redaction covered source names and path values, but
+  `sourceStatusName()` preserved unknown backend status strings verbatim.
+  Those status names feed aria labels and action labels.
+- This slice changes display copy only. Known status localization, status
+  classes, backend payload validation, and import/scan behavior remain
+  unchanged.
+
+Progress:
+
+- Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
+  persisted/current/first objective all point at PromptVault.
+- Re-read workspace policies, `working.md`, `src/sourceStatusA11y.ts`,
+  `tests/sourceStatusA11y.test.ts`, and source panel rendering in `src/App.tsx`
+  from a clean `origin/main` tree.
+- Added a RED test in `tests/sourceStatusA11y.test.ts` requiring secret-like
+  unknown backend statuses to be redacted in plan/source summary labels. RED
+  failed as intended because unknown status strings rendered raw.
+- Routed unknown `sourceStatusName()` fallbacks through the existing display
+  redactor and whitespace compaction while preserving known Korean status
+  labels and safe unknown status text such as `degraded`.
+- Ran a browser smoke with a Tauri-like invoke shim. Quick scan loaded a source
+  summary whose unknown status contained a synthetic secret-like value; the
+  source panel status `aria-label` rendered the redacted status and the body
+  omitted raw synthetic fragments.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/sourceStatusA11y.ts`: redacts and compacts unknown source status labels
+  before display.
+- `tests/sourceStatusA11y.test.ts`: adds RED/GREEN coverage for secret-like
+  unknown backend source statuses.
+- `working.md`: records this slice and updates the previous slice handoff state.
+
+Tests:
+
+- RED helper test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/sourceStatusA11y.test.ts`
+  failed as intended because unknown source status labels exposed raw synthetic
+  secret-like fragments.
+- Targeted GREEN:
+  same command passed with `tests/sourceStatusA11y.test.ts` 16/16 after masking
+  unknown status fallbacks.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5239" --port 5239 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_source_status_secret_qa.mjs'`
+  passed with exit code `0`; quick scan invoked `scan_prompts`, the source
+  panel status `aria-label` showed `Status QA 소스 degraded
+  [REDACTED_POSSIBLE_SECRET]`, raw synthetic status fragments were absent from
+  the body and aria-label, and there were no page errors, console errors, or
+  failed responses.
+- Full project check: `npm run check` passed, covering UI tests 360/360,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after source status display masking.
+- Source commit/push is pending staged and full-tree gitleaks verification.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Run `git diff --check`, stage explicit paths only, run staged gitleaks, commit
+  the source change, run full-tree gitleaks, push to private `origin/main`, and
+  verify fetch parity plus GitHub private visibility.
+
+## Previous Slice - 2026-06-08 Provider display secret masking
 
 Current Goal:
 
@@ -55,6 +143,9 @@ Progress:
 - Repository visibility was rechecked with `gh repo view
   Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`:
   `visibility=PRIVATE`, `isPrivate=true`.
+- Docs closeout commit `1875e71 docs: record provider label masking verification`
+  was pushed to `origin/main`; final fetch parity was `0 0` and
+  `git status --short --branch` reported `## main...origin/main`.
 
 Changes:
 
@@ -90,6 +181,13 @@ Tests:
 - Source push verification: `git push origin main` advanced `main` from
   `26e457f` to `eec401e`; after fetch, parity was `0 0` and
   `git status --short --branch` reported `## main...origin/main`.
+- Docs staged secret scan: `gitleaks protect --staged` scanned about 1.09 KB
+  and found no leaks before the docs closeout commit.
+- Docs full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.15 MB and found no leaks before the docs closeout push.
+- Docs push verification: `git push origin main` advanced `main` from
+  `eec401e` to `1875e71`; after fetch, parity was `0 0` and
+  `git status --short --branch` reported `## main...origin/main`.
 
 Issues:
 
@@ -103,9 +201,7 @@ Research:
 
 Next Steps:
 
-- Commit this closeout `working.md` update after staged gitleaks, run full-tree
-  gitleaks again, push to private `origin/main`, and verify final fetch parity
-  plus GitHub private visibility.
+- Continue autonomous QA/improvement from this clean pushed tree.
 
 ## Previous Slice - 2026-06-08 Quality gap display secret masking
 

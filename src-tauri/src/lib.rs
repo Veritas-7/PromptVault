@@ -1,4 +1,4 @@
-use chrono::{Local, TimeZone, Utc};
+use chrono::{FixedOffset, Local, TimeZone, Utc};
 use regex::{Captures, Regex};
 use rusqlite::{Connection, OpenFlags, ToSql};
 use serde::{Deserialize, Serialize};
@@ -25,6 +25,14 @@ const LARGE_FILE_BYTES: u64 = 50 * 1024 * 1024;
 const PROJECT_PROGRESS_MAX_DEPTH: usize = 4;
 const PROJECT_PROGRESS_HEAD_CHARS: usize = 24_000;
 const PROJECT_PROGRESS_TAIL_CHARS: usize = 8_000;
+const DEFAULT_PROJECT_WORK_SESSION_LIMIT: usize = 200;
+const PROJECT_WORK_SESSION_SOURCE_IDS: &[&str] = &[
+    "codex",
+    "codex-cx",
+    "claude-code-projects",
+    "claude-code-history",
+    "antigravity-cli-history",
+];
 const DEFAULT_IMPORT_EVENT_LIMIT: usize = 20;
 const MAX_IMPORT_EVENT_LIMIT: usize = 100;
 const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
@@ -108,6 +116,8 @@ pub struct ProjectWorkItem {
     pub source_path: String,
     pub source_file: String,
     pub evidence: String,
+    pub session_evidence_count: usize,
+    pub session_sources: Vec<FrequencyItem>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,6 +129,10 @@ pub struct ProjectWorkReport {
     pub files_seen: usize,
     pub items_by_date: Vec<FrequencyItem>,
     pub items_by_project: Vec<FrequencyItem>,
+    pub session_scan_prompt_count: usize,
+    pub session_scan_sources: Vec<FrequencyItem>,
+    pub session_evidence_count: usize,
+    pub session_sources: Vec<FrequencyItem>,
     pub items: Vec<ProjectWorkItem>,
     pub warnings: Vec<String>,
 }
@@ -126,6 +140,7 @@ pub struct ProjectWorkReport {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkReportOptions {
     pub limit: Option<usize>,
+    pub session_limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -847,11 +862,28 @@ pub fn run_project_work_report(
     if matches!(options.limit, Some(0)) {
         return Err("work-report limit requires a positive integer".into());
     }
+    if matches!(options.session_limit, Some(0)) {
+        return Err("work-report session_limit requires a positive integer".into());
+    }
     let source = source_specs()
         .into_iter()
         .find(|source| source.id == "project-progress-logs")
         .ok_or("project progress log source is unavailable")?;
-    build_project_progress_work_report(&source, options.limit)
+    let mut report = build_project_progress_work_report(&source, options.limit)?;
+    let session_limit = options
+        .session_limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_LIMIT);
+    let sessions = project_work_session_prompts(session_limit, &mut report.warnings)?;
+    report.session_scan_prompt_count = sessions.len();
+    report.session_scan_sources = prompt_source_counts(&sessions);
+    attach_session_evidence(&mut report.items, &sessions);
+    refresh_project_work_session_summary(&mut report);
+    if report.session_scan_prompt_count > 0 && report.session_evidence_count == 0 {
+        report.warnings.push(
+            "Session evidence: scanned raw session prompts, but none matched the selected project/date work items.".to_string(),
+        );
+    }
+    Ok(report)
 }
 
 pub fn run_import_batch(
@@ -2513,6 +2545,10 @@ fn build_project_progress_work_report(
         files_seen,
         items_by_date,
         items_by_project,
+        session_scan_prompt_count: 0,
+        session_scan_sources: Vec::new(),
+        session_evidence_count: 0,
+        session_sources: Vec::new(),
         items,
         warnings,
     })
@@ -2550,6 +2586,8 @@ fn project_progress_work_items_from_text(path: &Path, text: &str) -> Vec<Project
                 source_path: source_path.clone(),
                 source_file: source_file.clone(),
                 evidence: String::new(),
+                session_evidence_count: 0,
+                session_sources: Vec::new(),
             });
             continue;
         }
@@ -2565,6 +2603,104 @@ fn project_progress_work_items_from_text(path: &Path, text: &str) -> Vec<Project
     }
 
     items
+}
+
+fn project_work_session_prompts(
+    limit: usize,
+    warnings: &mut Vec<String>,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let source_ids = source_specs()
+        .into_iter()
+        .filter(|source| PROJECT_WORK_SESSION_SOURCE_IDS.contains(&source.id))
+        .map(|source| source.id.to_string())
+        .collect::<Vec<_>>();
+    if source_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let scan = run_scan(ScanOptions {
+        limit: Some(limit),
+        preview_limit: None,
+        include_markdown: Some(false),
+        write_markdown: Some(false),
+        persist: Some(false),
+        source_ids: Some(source_ids),
+        ..Default::default()
+    })?;
+    warnings.extend(
+        scan.warnings
+            .into_iter()
+            .map(|warning| format!("Session evidence: {warning}")),
+    );
+    Ok(scan.prompts)
+}
+
+fn attach_session_evidence(items: &mut [ProjectWorkItem], prompts: &[PromptRecord]) {
+    for item in items {
+        let mut source_counts = HashMap::new();
+        for prompt in prompts {
+            if prompt_date(prompt.timestamp.as_deref()) != item.date {
+                continue;
+            }
+            if !prompt_matches_project(prompt, item) {
+                continue;
+            }
+            *source_counts.entry(prompt.source.clone()).or_default() += 1;
+        }
+        item.session_sources = rank_counts(source_counts, usize::MAX);
+        item.session_evidence_count = item.session_sources.iter().map(|entry| entry.count).sum();
+    }
+}
+
+fn prompt_source_counts(prompts: &[PromptRecord]) -> Vec<FrequencyItem> {
+    let mut source_counts = HashMap::new();
+    for prompt in prompts {
+        *source_counts.entry(prompt.source.clone()).or_default() += 1;
+    }
+    rank_counts(source_counts, usize::MAX)
+}
+
+fn refresh_project_work_session_summary(report: &mut ProjectWorkReport) {
+    let mut source_counts = HashMap::new();
+    let mut evidence_count = 0usize;
+    for item in &report.items {
+        evidence_count += item.session_evidence_count;
+        for source in &item.session_sources {
+            *source_counts.entry(source.text.clone()).or_default() += source.count;
+        }
+    }
+    report.session_evidence_count = evidence_count;
+    report.session_sources = rank_counts(source_counts, usize::MAX);
+}
+
+fn workspace_matches_project(cwd: &str, project: &str) -> bool {
+    Path::new(cwd).components().any(|component| {
+        component
+            .as_os_str()
+            .to_str()
+            .is_some_and(|name| name == project)
+    })
+}
+
+fn prompt_matches_project(prompt: &PromptRecord, item: &ProjectWorkItem) -> bool {
+    if prompt
+        .cwd
+        .as_deref()
+        .is_some_and(|cwd| workspace_matches_project(cwd, &item.project))
+    {
+        return true;
+    }
+    if prompt.path.contains(&item.project) || prompt.path.contains(&item.source_path) {
+        return true;
+    }
+    project_text_matches(&prompt.text, &item.project, &item.source_path)
+}
+
+fn project_text_matches(text: &str, project: &str, source_path: &str) -> bool {
+    text.contains(source_path)
+        || text.contains(&format!("/{project}"))
+        || text.contains(&format!(" {project}"))
+        || text.contains(&format!("`{project}`"))
 }
 
 fn parse_project_work_heading(line: &str) -> Option<(String, String, String)> {
@@ -3465,6 +3601,12 @@ fn prompt_date(timestamp: Option<&str>) -> String {
     let Some(timestamp) = timestamp.map(str::trim).filter(|value| !value.is_empty()) else {
         return "unknown-date".to_string();
     };
+    if let (Ok(parsed), Some(kst)) = (
+        chrono::DateTime::parse_from_rfc3339(timestamp),
+        FixedOffset::east_opt(9 * 60 * 60),
+    ) {
+        return parsed.with_timezone(&kst).format("%Y-%m-%d").to_string();
+    }
     if timestamp.len() >= 10 {
         let date = &timestamp[..10];
         if date.chars().enumerate().all(|(idx, ch)| {
@@ -6588,12 +6730,80 @@ Progress:
         assert_eq!(items[0].source_file, "working.md");
         assert_eq!(items[0].status, "current");
         assert_eq!(items[0].title, "workingd.md progress log coverage");
+        assert_eq!(items[0].session_evidence_count, 0);
         assert!(items[0]
             .evidence
             .contains("Include real project-local `workingd.md`"));
         assert_eq!(items[1].date, "2026-06-08");
         assert_eq!(items[1].status, "previous");
         assert_eq!(items[1].title, "Project progress log source");
+    }
+
+    #[test]
+    fn prompt_date_uses_kst_for_utc_session_timestamps() {
+        assert_eq!(prompt_date(Some("2026-06-08T15:13:32.844Z")), "2026-06-09");
+    }
+
+    #[test]
+    fn project_work_items_attach_session_evidence_by_project_and_date() {
+        let path = PathBuf::from("/tmp/ExampleProject/working.md");
+        let text = "## Current Slice - 2026-06-09 Session join\n\n- Connect sessions.\n";
+        let mut items = project_progress_work_items_from_text(&path, text);
+        let mut matching = dated_record("matching-session", "2026-06-09T12:00:00Z");
+        matching.source = "Codex".to_string();
+        matching.cwd = Some("/tmp/ExampleProject".to_string());
+        let mut wrong_date = dated_record("wrong-date", "2026-06-08T12:00:00Z");
+        wrong_date.source = "Codex".to_string();
+        wrong_date.cwd = Some("/tmp/ExampleProject".to_string());
+        let mut wrong_project = dated_record("wrong-project", "2026-06-09T12:00:00Z");
+        wrong_project.source = "Claude Code projects".to_string();
+        wrong_project.cwd = Some("/tmp/OtherProject".to_string());
+
+        attach_session_evidence(&mut items, &[matching, wrong_date, wrong_project]);
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].session_evidence_count, 1);
+        assert_eq!(items[0].session_sources.len(), 1);
+        assert_eq!(items[0].session_sources[0].text, "Codex");
+        assert_eq!(items[0].session_sources[0].count, 1);
+    }
+
+    #[test]
+    fn project_work_items_attach_session_evidence_from_prompt_text_project_path() {
+        let path = PathBuf::from("/tmp/ExampleProject/working.md");
+        let text = "## Current Slice - 2026-06-09 Session text join\n\n- Connect text paths.\n";
+        let mut items = project_progress_work_items_from_text(&path, text);
+        let mut matching = dated_record("matching-session-text", "2026-06-09T12:00:00Z");
+        matching.source = "Codex".to_string();
+        matching.cwd = Some("/Users/wj".to_string());
+        matching.text =
+            "Continue work in /tmp/ExampleProject and verify the project report.".to_string();
+        let mut wrong_project = matching.clone();
+        wrong_project.id = "wrong-project-text".to_string();
+        wrong_project.text = "Continue work in /tmp/OtherProject.".to_string();
+
+        attach_session_evidence(&mut items, &[matching, wrong_project]);
+
+        assert_eq!(items[0].session_evidence_count, 1);
+        assert_eq!(items[0].session_sources[0].text, "Codex");
+    }
+
+    #[test]
+    fn project_work_report_counts_scanned_session_sources() {
+        let mut codex = dated_record("scan-codex", "2026-06-09T12:00:00Z");
+        codex.source = "Codex".to_string();
+        let mut codex_again = dated_record("scan-codex-again", "2026-06-09T13:00:00Z");
+        codex_again.source = "Codex".to_string();
+        let mut claude = dated_record("scan-claude", "2026-06-09T14:00:00Z");
+        claude.source = "Claude Code projects".to_string();
+
+        let sources = prompt_source_counts(&[codex, codex_again, claude]);
+
+        assert_eq!(sources.len(), 2);
+        assert_eq!(sources[0].text, "Codex");
+        assert_eq!(sources[0].count, 2);
+        assert_eq!(sources[1].text, "Claude Code projects");
+        assert_eq!(sources[1].count, 1);
     }
 
     #[test]

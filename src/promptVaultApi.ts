@@ -856,6 +856,11 @@ function isSourceLessScanProgressCounterConsistent(value: Record<string, unknown
     );
 }
 
+function isFinalizedScanProgressSourceCountConsistent(value: Record<string, unknown>): boolean {
+  return value.source_file_count === null
+    || value.source_files_discovered === value.source_file_count;
+}
+
 function matchesRequestedRunId(value: { run_id: string }, requestedRunId: string): boolean {
   return value.run_id === requestedRunId.trim();
 }
@@ -1028,6 +1033,7 @@ function parseScanProgressResult(value: unknown): ScanProgress {
     || !isScanProgressSourceIdentityConsistent(value)
     || !isScanProgressSourcePositionConsistent(value)
     || !isSourceLessScanProgressCounterConsistent(value)
+    || !isFinalizedScanProgressSourceCountConsistent(value)
     || value.source_files_seen > value.files_seen
     || value.source_files_seen > value.source_files_discovered
     || (value.source_file_count !== null && !isNonNegativeSafeIntegerAtMost(value.source_files_seen, value.source_file_count))

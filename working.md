@@ -1,10 +1,129 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 10:36 KST
+Updated: 2026-06-08 10:39 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Scan progress discovered-count validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan progress snapshots whose finalized source file
+  count disagrees with the discovered source file count.
+
+Context:
+
+- Recent slices hardened scan progress source identity, source position,
+  source-less counters, current-source-vs-aggregate counters, and finite prompt
+  limits.
+- Backend source collection updates `source_files_discovered` during traversal,
+  then finalizes both `source_files_discovered` and `source_file_count` to
+  `files.len()` before processing candidates.
+- Therefore once `source_file_count` is non-null, valid progress should have
+  `source_files_discovered === source_file_count`. A bridge payload with a
+  larger or smaller discovered count can hide contradictory progress data
+  behind the UI's finalized `seen / total` copy.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `e16df05 docs: close scan progress prompt limit handoff` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read `ScanProgress` parser/tests and backend scan source traversal/finalize
+  lifecycle. Confirmed finalized source file count should match discovered
+  source files exactly.
+- Adding a RED API test for active source progress snapshots where
+  `source_files_discovered` disagrees with non-null `source_file_count`.
+- Confirmed RED first: focused API suite failed 126/127 only on the new
+  discovered-count mismatch rejection case with `Missing expected rejection`.
+- Tightened the scan progress parser so finalized source progress cannot
+  report a discovered source file count that differs from `source_file_count`.
+- Confirmed GREEN: focused API suite passed 127/127 after the parser change.
+- Ran the broader UI test suite and production build successfully after the
+  parser change.
+- Verified the local preview quick-scan flow with Node Playwright: a malformed
+  finalized source progress snapshot with `source_files_discovered !== source_file_count`
+  is not rendered, the next valid `Codex` progress snapshot renders normal
+  source progress copy, and the scan completes without console or page errors.
+- Removed the temporary preview QA script.
+- Confirmed preview cleanup: temp script was absent and port 5329 was free.
+- Ran the full project check successfully after preview QA.
+- Pre-staging verification passed with only the expected three modified files:
+  parser, API test, and working log.
+- Staged the three explicit paths and confirmed the staged secret scan found no
+  leaks.
+- Restaged `working.md` after recording the staged scan result and reran the
+  staged secret scan; no leaks were found.
+
+Changes:
+
+- `working.md`: records the current scan progress discovered-count validation
+  slice.
+- `tests/promptVaultApi.test.ts`: adds a malformed discovered-count rejection
+  case for scan progress bridge responses.
+- `src/promptVaultApi.ts`: rejects finalized scan progress snapshots whose
+  discovered source file count does not match the finalized source file count.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 126/127 only on the new finalized `source_files_discovered !== source_file_count`
+  rejection case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 127/127 after rejecting finalized discovered-count mismatches.
+- Broader UI suite: `npm run test:ui` passed 291/291.
+- Production build: `npm run build` passed; Vite emitted
+  `dist/assets/index-ffNI67uu.js` and `dist/assets/index-D81jZHaU.css`.
+- Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  printed usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5329" --port 5329 --timeout 30 node /tmp/promptvault_scan_progress_discovered_count_qa.mjs http://127.0.0.1:5329`
+  passed. The script confirmed connected browser bridge status, clicked quick
+  scan, served a named-source progress snapshot with `source_files_discovered: 3`
+  and `source_file_count: 2` first, verified the malformed `Codex: 2 / 2개 파일`
+  progress was not rendered, then served valid `Codex` progress and verified
+  normal scan completion.
+- Preview cleanup: `test ! -e /tmp/promptvault_scan_progress_discovered_count_qa.mjs`
+  exited 0; `lsof -nP -iTCP:5329 -sTCP:LISTEN` produced no listener.
+- Full project check: `npm run check` passed. It reran `npm run test:ui`
+  291/291, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
+  and `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  produced no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only the three expected modified files; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` lists only
+  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned private GitHub visibility; temp script remained absent and port 5329
+  remained free.
+- Staged explicit paths only:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security scan: `gitleaks protect --staged --no-banner --redact`
+  scanned about 7.05 KB and found no leaks.
+- Restaged `working.md` after recording the staged scan result and reran
+  `gitleaks protect --staged --no-banner --redact`; it scanned about 7.44 KB
+  and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run the final staged secret scan, then commit the implementation.
 
 ## Previous Slice - 2026-06-08 Scan progress prompt-limit validation
 

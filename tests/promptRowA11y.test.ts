@@ -185,6 +185,19 @@ test("prompt row previews redact authorization scheme headers", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact cookie headers", () => {
+  const text =
+    "Headers:\nCookie: session_id=short-session-value; csrf=short-csrf-value\nbefore request.";
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "Headers: [REDACTED_POSSIBLE_SECRET] before request.");
+  assert.doesNotMatch(preview, /Cookie|session_id|short-session-value|csrf|short-csrf-value/);
+  assert.doesNotMatch(label, /Cookie|session_id|short-session-value|csrf|short-csrf-value/);
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact private key blocks case-insensitively", () => {
   const text = [
     "-----begin test private key-----",

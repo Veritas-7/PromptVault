@@ -1,12 +1,116 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 16:50 KST
+Updated: 2026-06-08 16:57 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Authorization scheme header redaction
+## Current Slice - 2026-06-08 Cookie header redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep frontend prompt row preview/accessibility redaction aligned with backend
+  scan redaction for HTTP cookie headers that can contain short session/CSRF
+  credentials, including multi-pair line-delimited `Cookie:` snippets.
+
+Context:
+
+- Previous authorization scheme header redaction is pushed to `origin/main` as
+  `4f08b97 fix: redact authorization scheme headers`, with docs closeout
+  `cb692b9 docs: record authorization scheme verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- Existing key-value redaction covered authorization and secret assignment
+  names, but not HTTP `Cookie:` headers. A line-delimited cookie header with
+  short session and CSRF values could therefore remain visible in prompt row
+  previews/accessibility labels and backend scan redaction.
+
+Progress:
+
+- Confirmed the working tree was clean at `main...origin/main` after the
+  previous push before this slice.
+- Added RED frontend coverage in `tests/promptRowA11y.test.ts` requiring prompt
+  row preview and row accessible labels to redact a multi-pair `Cookie:`
+  header.
+- Added RED backend coverage in `src-tauri/src/lib.rs` requiring
+  `redact_sensitive_text` to redact the same cookie header shape.
+- Confirmed RED: both focused frontend and backend tests left the cookie header
+  and short credential values visible.
+- Updated frontend and backend possible-secret regexes to redact
+  line-delimited `Cookie:` / `Set-Cookie:` headers, and to treat cookie as a
+  sensitive key in the existing key-value path.
+- Confirmed focused GREEN for the new frontend and backend cookie redaction
+  cases.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a synthetic cookie header. It confirmed the prompt row
+  preview and row `aria-label` contained `[REDACTED_POSSIBLE_SECRET]`, the
+  synthetic cookie header text was absent from checked UI surfaces, the
+  localized risk label was visible, and there were zero console/page/API
+  failures.
+- Ran full `npm run check` successfully after implementation. The first
+  focused Rust retry hit a transient missing `target/debug` dep-info artifact,
+  then passed on a no-clean rerun with no source changes.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts line-delimited cookie headers in prompt row
+  previews and accessible names, and treats cookie as a sensitive key.
+- `tests/promptRowA11y.test.ts`: adds regression coverage for cookie header
+  preview and accessible-name redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-key redaction with the cookie
+  header behavior and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on `prompt row previews redact cookie headers` because the cookie
+  header and short credential values remained visible.
+- RED:
+  `cargo test redact_sensitive_text_redacts_cookie_headers` run from
+  `src-tauri` failed because backend redaction returned the original cookie
+  header.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 19/19.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text` passed, 12/12, after one no-clean rerun
+  recovered from a transient missing incremental build artifact.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5204" --port 5204 --timeout 120 -- /bin/bash -lc ...`
+  passed with one synthetic stored prompt row, preview and `aria-label`
+  redacted, synthetic cookie header text absent from checked UI surfaces,
+  localized risk label visible, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 325/325,
+  production build, Rust lib tests 96/96, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after aligning cookie header redaction.
+- A focused Rust test run briefly failed on a missing `target/debug` dep-info
+  artifact. No source changes or cleanup were needed; a rerun completed
+  normally and the full `npm run check` later passed.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for common HTTP cookie header snippets.
+
+Next Steps:
+
+- Run whitespace and secret checks, then stage explicit changed paths, commit,
+  push to the private GitHub `origin/main`, and verify final parity.
+
+## Previous Slice - 2026-06-08 Authorization scheme header redaction
 
 Current Goal:
 

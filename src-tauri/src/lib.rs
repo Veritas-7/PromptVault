@@ -3384,10 +3384,28 @@ fn project_progress_log_is_pointer(text: &str) -> bool {
 }
 
 fn project_progress_log_candidate_excerpt(text: &str) -> String {
+    let anchor = project_progress_log_candidate_update_anchor(text);
     let text = project_progress_analysis_text(text);
     let text = normalize_prompt_text(&text);
     let text = redact_sensitive_text(&text);
-    truncate_chars(text.trim(), 2_000)
+    let body = truncate_chars(text.trim(), 2_000);
+    match anchor {
+        Some(anchor) if !normalized_contains(&body, &anchor) => format!("{anchor}\n{body}"),
+        _ => body,
+    }
+}
+
+fn project_progress_log_candidate_update_anchor(text: &str) -> Option<String> {
+    for line in text.lines() {
+        let Some((date, label)) = local_project_work_log_update_date_line(line) else {
+            continue;
+        };
+        let anchor = format!("{label}: {date}");
+        if detect_risks(&anchor).is_empty() {
+            return Some(anchor);
+        }
+    }
+    None
 }
 
 #[derive(Debug, Deserialize)]
@@ -4004,7 +4022,8 @@ fn local_project_work_log_update_summary(
 fn local_project_work_log_update_date_line(line: &str) -> Option<(String, &'static str)> {
     let lower = line.to_ascii_lowercase();
     let has_last_updated = lower.contains("last_updated") || lower.contains("last updated");
-    let has_korean_updated = line.contains("마지막 업데이트");
+    let has_korean_last_updated = line.contains("마지막 업데이트");
+    let has_korean_updated = has_korean_last_updated || line.contains("업데이트");
     if !has_last_updated && !has_korean_updated {
         return None;
     }
@@ -4012,8 +4031,10 @@ fn local_project_work_log_update_date_line(line: &str) -> Option<(String, &'stat
     let date = line[date_start..date_start + 10].to_string();
     let label = if lower.contains("last_updated") {
         "last_updated"
-    } else if has_korean_updated {
+    } else if has_korean_last_updated {
         "마지막 업데이트"
+    } else if has_korean_updated {
+        "업데이트"
     } else {
         "Last updated"
     };
@@ -10536,6 +10557,43 @@ Progress:
     }
 
     #[test]
+    fn project_progress_log_candidate_excerpt_preserves_safe_update_anchor_from_long_logs() {
+        let noisy_status = "private API-key endpoint excluded ".repeat(160);
+        let text = format!(
+            "# SnapTranslate — 프로젝트 상태\n> **상태**: {noisy_status}| **업데이트**: 2026-06-08\n"
+        );
+
+        let excerpt = project_progress_log_candidate_excerpt(&text);
+
+        assert!(excerpt.starts_with("업데이트: 2026-06-08\n"));
+        assert!(excerpt.contains("SnapTranslate — 프로젝트 상태"));
+
+        let candidate = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-SnapTranslate-a1b2c3d4e5".to_string(),
+            project: "SnapTranslate".to_string(),
+            source_path: "/tmp/SnapTranslate/PROJECT_STATUS.md".to_string(),
+            source_file: "PROJECT_STATUS.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt,
+            line_count: 2,
+            char_count: text.chars().count(),
+            risk_flags: vec!["long_base64_like_token".to_string()],
+            modified_at: None,
+        };
+
+        let proposal = local_project_work_log_extraction_proposal(&candidate);
+
+        assert!(proposal.accepted);
+        assert_eq!(proposal.date.as_deref(), Some("2026-06-08"));
+        assert_eq!(
+            proposal.evidence,
+            "업데이트: 2026-06-08\nSnapTranslate — 프로젝트 상태"
+        );
+        assert!(detect_risks(&proposal.evidence).is_empty());
+        assert!(!proposal.evidence.contains("private API-key endpoint"));
+    }
+
+    #[test]
     fn project_work_log_extraction_proposals_reject_invented_dates() {
         let candidate = ProjectWorkLogExtractionCandidate {
             candidate_id: "work-log-Beta-a1b2c3d4e5".to_string(),
@@ -10743,6 +10801,48 @@ Progress:
             wrapped.evidence,
             "Last updated: 2026-06-09\nOperator correction: manage what work was done by date and by project."
         );
+    }
+
+    #[test]
+    fn local_work_log_extraction_accepts_korean_status_update_field_with_safe_evidence() {
+        let candidates = ProjectWorkLogExtractionCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/tmp".to_string(),
+            files_seen: 1,
+            skipped_parsed_file_count: 0,
+            skipped_unreadable_file_count: 0,
+            skipped_empty_file_count: 0,
+            skipped_pointer_file_count: 0,
+            candidate_count: 1,
+            candidates: vec![ProjectWorkLogExtractionCandidate {
+                candidate_id: "work-log-SnapTranslate-a1b2c3d4e5".to_string(),
+                project: "SnapTranslate".to_string(),
+                source_path: "/tmp/SnapTranslate/PROJECT_STATUS.md".to_string(),
+                source_file: "PROJECT_STATUS.md".to_string(),
+                reason: "missing_dated_heading".to_string(),
+                excerpt: "# SnapTranslate — 프로젝트 상태\n> **버전**: 1.3.316 | **상태**: private API-key endpoint excluded | **업데이트**: 2026-06-08"
+                    .to_string(),
+                line_count: 2,
+                char_count: 128,
+                risk_flags: vec!["long_base64_like_token".to_string()],
+                modified_at: None,
+            }],
+            warnings: Vec::new(),
+        };
+
+        let result = local_project_work_log_extraction_proposals(candidates, Vec::new());
+
+        assert_eq!(result.accepted_count, 1);
+        let proposal = &result.proposals[0];
+        assert!(proposal.accepted);
+        assert_eq!(proposal.date.as_deref(), Some("2026-06-08"));
+        assert_eq!(proposal.title, "Project status snapshot updated");
+        assert_eq!(
+            proposal.evidence,
+            "업데이트: 2026-06-08\nSnapTranslate — 프로젝트 상태"
+        );
+        assert!(detect_risks(&proposal.evidence).is_empty());
+        assert!(!proposal.evidence.contains("private API-key endpoint"));
     }
 
     #[test]

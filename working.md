@@ -1,12 +1,103 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 06:27 KST
+Updated: 2026-06-09 06:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-management overview work counts
+## Current Slice - 2026-06-09 SnapTranslate status update extraction
+
+Current Goal:
+
+- Reduce remaining progress-log extraction gaps by accepting safe Korean
+  `업데이트: YYYY-MM-DD` status fields from long `PROJECT_STATUS.md` files.
+- Preserve only a short, safe update anchor in extraction candidates so risk
+  strings from long status lines are not copied into accepted proposal evidence.
+
+Context:
+
+- Actual `work-log-extract` still returned `candidate_count=15`,
+  `accepted_count=13`, and `rejected_count=2`.
+- Both rejected rows were SnapTranslate files with risk flags.
+- Live source inspection showed `SnapTranslate/PROJECT_STATUS.md` contains a
+  clear `**업데이트**: 2026-06-08` field, but it appears at the end of an
+  extremely long status line and was truncated out of the 2,000-character
+  candidate excerpt.
+- `SnapTranslate/working.md` remains harder because its safe `Updated:` line is
+  not in the displayed candidate excerpt and the top snapshot evidence contains
+  redacted hashes.
+
+Progress:
+
+- Added RED coverage for Korean `업데이트` fields in local extraction.
+- Added RED coverage for preserving a safe update anchor from a long progress
+  log before excerpt truncation.
+- Updated candidate excerpt generation to scan the full source text for a safe
+  update anchor and prepend only `label: YYYY-MM-DD` when that anchor would
+  otherwise be absent from the truncated excerpt.
+- Extended update-line recognition from `last_updated`, `Last updated`, and
+  `마지막 업데이트` to include Korean `업데이트` when an ISO date is present.
+- Verified actual local extraction now accepts SnapTranslate `PROJECT_STATUS.md`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - adds `project_progress_log_candidate_update_anchor`;
+  - prepends safe update anchors before candidate excerpt truncation;
+  - recognizes Korean `업데이트` update fields;
+  - adds regression tests for long status lines and Korean update fields.
+
+Tests:
+
+- RED:
+  - `cargo test local_work_log_extraction_accepts_korean_status_update_field_with_safe_evidence`:
+    failed because `accepted_count` was `0` instead of `1`.
+  - `cargo test project_progress_log_candidate_excerpt_preserves_safe_update_anchor_from_long_logs`:
+    failed because the excerpt did not start with `업데이트: 2026-06-08`.
+- Targeted GREEN:
+  - `cargo test project_progress_log_candidate_excerpt_preserves_safe_update_anchor_from_long_logs`:
+    PASS.
+  - `cargo test local_work_log_extraction_accepts_korean_status_update_field_with_safe_evidence`:
+    PASS.
+- Actual CLI verification:
+  - `cargo run --quiet --bin promptvault-cli -- work-log-extract --json`:
+    `candidate_count=15`, `accepted_count=14`, `rejected_count=1`.
+  - Newly accepted SnapTranslate row:
+    `date=2026-06-08`, `evidence="업데이트: 2026-06-08\nSnapTranslate — 프로젝트 상태"`.
+- Headless browser-bridge QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 220 -- /bin/bash -lc 'node /tmp/promptvault_work_management_overview_counts_qa.mjs'`:
+    PASS.
+  - Observed overview meta:
+    `관리 30개 · 26개 프로젝트 · 14일 · 현재요약 0 · 스냅샷 0 · 추출제안 14 · 저장추출 0 · 진행로그 16`.
+  - Browser QA captured no console errors, page errors, or failed requests.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `423` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `153` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- One rejected candidate remains: `SnapTranslate/working.md`, still rejected as
+  `candidate_has_risk_flags`.
+- Candidate IDs for files whose excerpt now gains an update anchor changed
+  because candidate IDs are derived from `source_path:excerpt` hashes.
+
+Research:
+
+- Used TDD and incremental implementation workflows.
+- No external web research was used.
+
+Next Steps:
+
+- Commit and push this extraction improvement.
+- Continue with a reviewed/safe strategy for `SnapTranslate/working.md`.
+
+## Previous Slice - 2026-06-09 work-management overview work counts
 
 Current Goal:
 

@@ -1,12 +1,122 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 22:38 KST
+Updated: 2026-06-08 22:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Stored filter suggestion metadata redaction
+## Current Slice - 2026-06-08 Prompt timestamp display consistency
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make prompt timestamps render consistently in prompt row accessibility labels,
+  selected prompt metadata accessibility labels, and the selected prompt visible
+  metadata chips.
+- Avoid leaking invalid raw timestamp-like strings if a future malformed prompt
+  reaches display helpers outside the normal API validator path.
+
+Context:
+
+- Previous stored filter suggestion metadata redaction is pushed to
+  `origin/main` with source commit `a832858 fix: redact stored filter
+  suggestions` and docs closeout `4870482 docs: record stored filter suggestion
+  verification`; final fetch parity was `0 0`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for the quick scan -> selected
+  prompt detail DOM.
+- The API boundary already rejects invalid prompt timestamps, but display
+  helpers previously used raw `timestamp?.trim()` in row and selected metadata
+  labels while the selected prompt visible chip rendered `selectedPrompt.timestamp`
+  directly. Other generated timestamps in the app already use local date/time
+  formatting.
+
+Progress:
+
+- Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
+  persisted/current/first objective all point at PromptVault.
+- Re-read the clean pushed repo state, `working.md`, prompt metadata display
+  helpers, prompt API timestamp validation, and selected prompt rendering in
+  `src/App.tsx`.
+- Added RED tests in `tests/promptRowA11y.test.ts` requiring a new
+  `promptTimestampDisplayText()` helper to trim parseable values, render them
+  with local date/time formatting, return `시간 없음` for missing values, and
+  redact invalid secret-like fallback strings. RED failed as intended because
+  the helper export did not exist.
+- Added `promptTimestampDisplayText()` in `src/promptRowA11y.ts`.
+- Routed `promptRowAriaLabel()`, `selectedPromptMetaLabel()`, and the selected
+  prompt visible metadata timestamp chip through the same helper.
+- Ran a browser smoke with a Tauri-like invoke shim for quick scan -> selected
+  prompt detail. The prompt row `aria-label`, selected metadata `aria-label`,
+  and visible timestamp chip all used the browser's localized timestamp string
+  and omitted the raw ISO timestamp.
+- Deleted the temporary browser QA script after verification.
+- Source commit `b176c34 fix: normalize prompt timestamp display` was pushed
+  to private `origin/main`; final fetch parity was `0 0`.
+- Repository visibility was rechecked with `gh repo view
+  Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`:
+  `visibility=PRIVATE`, `isPrivate=true`.
+
+Changes:
+
+- `src/promptRowA11y.ts`: adds `promptTimestampDisplayText()` and uses it for
+  prompt row and selected metadata accessibility labels.
+- `src/App.tsx`: uses the same helper for the selected prompt visible timestamp
+  chip.
+- `tests/promptRowA11y.test.ts`: updates timestamp label expectations and adds
+  RED/GREEN coverage for local formatting, missing values, and invalid
+  secret-like fallbacks.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED helper test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed as intended because `promptTimestampDisplayText` was not exported.
+- Targeted GREEN:
+  same command passed with `tests/promptRowA11y.test.ts` 49/49 after adding the
+  helper and wiring row/selected metadata labels.
+- Related regression checks:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts tests/promptVaultApi.test.ts tests/storedFilters.test.ts`
+  passed with 197/197.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5245" --port 5245 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_timestamp_display_qa.mjs'`
+  passed with exit code `0`; row `aria-label`, selected metadata `aria-label`,
+  and visible timestamp chip used the localized timestamp, raw ISO timestamp was
+  absent from the body/labels, and there were no page errors, console errors,
+  failed responses, or failed requests.
+- Full project check: `npm run check` passed, covering UI tests 367/367,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Source staged secret scan: `gitleaks protect --staged` scanned about 2.21 KB
+  and found no leaks before `b176c34`.
+- Source full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.19 MB and found no leaks before the source push.
+- Source push verification: `git push origin main` advanced `main` from
+  `4870482` to `b176c34`; after fetch, parity was `0 0` and
+  `git status --short --branch` reported `## main...origin/main` with only
+  `working.md` modified.
+
+Issues:
+
+- No product blocker after prompt timestamp display consistency.
+- No source push blocker after staged and full-tree gitleaks verification.
+- Docs closeout commit is still pending for this slice.
+
+Research:
+
+- No external research. This is direct UI/UX consistency hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Commit this closeout `working.md` update after staged gitleaks, run full-tree
+  gitleaks again, push to private `origin/main`, and verify final fetch parity
+  plus GitHub private visibility.
+
+## Previous Slice - 2026-06-08 Stored filter suggestion metadata redaction
 
 Current Goal:
 
@@ -104,9 +214,7 @@ Research:
 
 Next Steps:
 
-- Commit this closeout `working.md` update after staged gitleaks, run full-tree
-  gitleaks again, push to private `origin/main`, and verify final fetch parity
-  plus GitHub private visibility.
+- Continue autonomous QA/improvement from this clean pushed tree.
 
 ## Previous Slice - 2026-06-08 Improvement context metadata redaction
 

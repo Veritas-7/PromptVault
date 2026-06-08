@@ -1,12 +1,116 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 18:28 KST
+Updated: 2026-06-08 18:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Curl user credential redaction
+## Current Slice - 2026-06-08 Curl cookie credential redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for command-line cookie credentials copied as curl `-b` or
+  `--cookie` arguments.
+
+Context:
+
+- Previous curl user credential redaction is pushed to `origin/main` with
+  source commit `dd87492 fix: redact curl user credentials` and docs closeout
+  `8e11d2a docs: record curl user credential verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- URL userinfo and cookie header redaction were already covered. A live
+  frontend probe showed spaced curl cookie flags still leaked their
+  `name=value` cookie argument in prompt row previews. The quoted
+  header-cookie command shape also has a separate formatting cleanup
+  opportunity, but this slice is scoped to the curl cookie flag arguments.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact curl `-b` and `--cookie` cookie arguments.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same command-line cookie argument shapes.
+- Confirmed RED: frontend prompt row preview and backend redaction returned the
+  original cookie arguments.
+- Extended frontend and backend possible-secret matchers with a minimal curl
+  cookie flag branch that preserves the surrounding command text.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing raw curl cookie arguments in a prompt row while selecting
+  a safe prompt row. It confirmed two stored prompt rows, possible secret
+  redaction marker visible, no cookie credential pieces in row text, aria
+  labels, or page body, localized risk label visible, selected safe detail text
+  visible, and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts curl `-b name=value` and
+  `--cookie name=value` arguments in prompt row previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for curl
+  cookie credential redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-secret redaction with the
+  frontend matcher and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on curl cookie credential redaction because the original cookie
+  arguments remained visible.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_curl_cookie_credentials` failed
+  from `src-tauri` because backend redaction returned the original cookie
+  arguments.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 29/29.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_curl_cookie_credentials` passed,
+  1/1 focused lib test, plus zero-test main and CLI targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5214" --port 5214 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_curl_cookie_redaction_qa.mjs'`
+  passed with `rowCount=2`, `redactionCount=1`, `rowLeaked=false`,
+  `ariaLeaked=false`, `bodyLeaked=false`, `riskVisible=true`,
+  `selectedSafe=true`, `consoleErrors=0`, and `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 335/335,
+  production build, Rust lib tests 106/106, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after aligning curl cookie credential redaction.
+- Python Playwright is not installed in this environment, so browser QA used
+  the repo's available Node Playwright package while still managing Vite with
+  the approved `with_server.py` helper.
+- Quoted `-H "Cookie: ..."` command snippets still have a separate preview
+  formatting cleanup opportunity from the probe and were not part of this
+  slice.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for copied command-line cookie arguments.
+
+Next Steps:
+
+- Run whitespace and staged gitleaks checks, then commit and push the source
+  slice.
+- Record source-push evidence in `working.md`, then commit and push the docs
+  closeout.
+
+## Previous Slice - 2026-06-08 Curl user credential redaction
 
 Current Goal:
 

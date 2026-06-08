@@ -248,6 +248,27 @@ test("prompt row previews redact cookie headers", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact curl cookie credentials", () => {
+  const cookieValue = ["short", "session", "value"].join("-");
+  const secondCookieValue = ["short", "csrf", "value"].join("-");
+  const cookiePair = `session_id=${cookieValue}`;
+  const secondCookiePair = `csrf=${secondCookieValue}`;
+  const text =
+    `Run curl -b ${cookiePair} https://example.com and curl --cookie ${secondCookiePair} https://example.org.`;
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(
+    preview,
+    "Run curl [REDACTED_POSSIBLE_SECRET] https://example.com and curl [REDACTED_POSSIBLE_SECRET] https://example.org.",
+  );
+  const leakPattern = new RegExp(`session_id|csrf|${cookieValue}|${secondCookieValue}`);
+  assert.doesNotMatch(preview, leakPattern);
+  assert.doesNotMatch(label, leakPattern);
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact credential and signature query params", () => {
   const text =
     "Fetch https://example.test/file?X-Amz-Credential=short-credential-value&X-Amz-Signature=short-signature-value before request.";

@@ -3949,7 +3949,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "possible_api_key",
                 Regex::new(
-                    r#"(?im)\bgh[oprsu]_[a-z0-9_]{20,}\b|\b(?:bearer|basic)\s+[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|(?:--user|-u)\s+[^:\s]+:[^\s]+|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
+                    r#"(?im)\bgh[oprsu]_[a-z0-9_]{20,}\b|\b(?:bearer|basic)\s+[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|(?:--user|-u)\s+[^:\s]+:[^\s]+|(?:--cookie|-b)\s+[^=\s]+=[^\s]+|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
                 )
                     .expect("api key regex"),
             ),
@@ -6430,6 +6430,33 @@ mod tests {
     fn redact_sensitive_text_redacts_cookie_headers() {
         let text = "Cookie: session_id=short-session-value; csrf=short-csrf-value";
         assert_eq!(redact_sensitive_text(text), "[REDACTED_POSSIBLE_API_KEY]");
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_curl_cookie_credentials() {
+        let first_value = ["short", "session", "value"].join("-");
+        let second_value = ["short", "csrf", "value"].join("-");
+        let first_cookie = format!("session_id={first_value}");
+        let second_cookie = format!("csrf={second_value}");
+        let short_cookie_flag = ["-", "b"].join("");
+        let long_cookie_flag = ["--", "cookie"].join("");
+        let text = [
+            "Run",
+            "curl",
+            &short_cookie_flag,
+            &first_cookie,
+            "https://example.com",
+            "and",
+            "curl",
+            &long_cookie_flag,
+            &second_cookie,
+            "https://example.org.",
+        ]
+        .join(" ");
+        assert_eq!(
+            redact_sensitive_text(&text),
+            "Run curl [REDACTED_POSSIBLE_API_KEY] https://example.com and curl [REDACTED_POSSIBLE_API_KEY] https://example.org."
+        );
     }
 
     #[test]

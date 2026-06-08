@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 13:37 KST
+Updated: 2026-06-08 13:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -73,6 +73,14 @@ Progress:
 - Staged secret scan passed with
   `gitleaks protect --staged --no-banner --redact` after scanning about
   10.08 KB and finding no leaks.
+- Restaged `working.md` after recording the staged scan and reran the staged
+  secret scan; about 10.58 KB was scanned and no leaks were found.
+- Committed the implementation as
+  `fdd7edc fix: support browser bridge URL overrides`.
+- Ran full-tree `gitleaks dir . --no-banner --redact`; about 701.43 MB was
+  scanned and no leaks were found.
+- Pushed `fdd7edc` to `origin/main` and confirmed `HEAD...origin/main`
+  returned `0 0` after a fresh fetch.
 
 Changes:
 
@@ -123,12 +131,23 @@ Tests:
   `src/browserBridge.ts`, `tests/browserBridge.test.ts`, and `working.md`.
 - Staged security: `gitleaks protect --staged --no-banner --redact` passed
   after scanning about 10.08 KB and finding no leaks.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+- Implementation commit:
+  `git commit -m "fix: support browser bridge URL overrides"` produced
+  `fdd7edc`.
+- Full-tree security: `gitleaks dir . --no-banner --redact` passed with no
+  leaks found after scanning about 701.43 MB.
+- Push/parity: `git push origin main` updated `c21b084..fdd7edc`; fresh fetch
+  plus `git rev-list --left-right --count HEAD...origin/main` returned `0 0`.
 
 Issues:
 
-- Default bridge port 5174 can be occupied by another local service. Without a
-  validated override, the app keeps polling that service and the recovery
-  command still points users at the occupied port.
+- No blockers.
+- Ambient ports 5173 and 5174 were occupied by unrelated Python services during
+  this QA pass, so future browser QA should pick known-free Vite/bridge ports
+  rather than assuming defaults are available.
 
 Research:
 
@@ -136,10 +155,8 @@ Research:
 
 Next Steps:
 
-- Add RED tests for a safe local bridge URL override.
-- Implement validated dynamic bridge URL and recovery command copy.
-- Re-run focused tests, browser QA on an alternate free port, full project
-  checks, explicit-path staging, gitleaks, commit, and push.
+- Commit this `working.md` closeout, run docs-only security/parity checks, then
+  continue to the next narrow PromptVault improvement slice.
 
 ## Previous Slice - 2026-06-08 Prompt timestamp validation
 

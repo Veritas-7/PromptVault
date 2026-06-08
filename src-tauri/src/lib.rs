@@ -3957,7 +3957,7 @@ fn quoted_curl_sensitive_header_regex() -> &'static Regex {
     static QUOTED_CURL_SENSITIVE_HEADER_REGEX: OnceLock<Regex> = OnceLock::new();
     QUOTED_CURL_SENSITIVE_HEADER_REGEX.get_or_init(|| {
         Regex::new(
-            r#"(?im)((?:--header(?:\s+|=)|-H\s+))"(?:authorization|cookie|set-cookie)\s*:\s*[^"\r\n]*"|((?:--header(?:\s+|=)|-H\s+))'(?:authorization|cookie|set-cookie)\s*:\s*[^'\r\n]*'"#,
+            r#"(?im)((?:--header(?:\s+|=)|-H\s*))"(?:authorization|cookie|set-cookie)\s*:\s*[^"\r\n]*"|((?:--header(?:\s+|=)|-H\s*))'(?:authorization|cookie|set-cookie)\s*:\s*[^'\r\n]*'"#,
         )
         .expect("quoted curl sensitive header regex")
     })
@@ -6570,6 +6570,27 @@ mod tests {
         assert_eq!(
             redact_sensitive_text(&set_cookie_text),
             "Run curl --header='[REDACTED_POSSIBLE_API_KEY]' https://example.net"
+        );
+    }
+
+    #[test]
+    fn redact_sensitive_text_preserves_glued_short_curl_header_flag_shape() {
+        let auth_scheme = ["Bear", "er"].join("");
+        let token = ["short", "bearer", "value"].join("-");
+        let cookie_value = ["short", "session", "value"].join("-");
+        let header_flag = ["-", "H"].join("");
+        let auth_text =
+            format!("Run curl {header_flag}\"Authorization: {auth_scheme} {token}\" https://example.com");
+        let cookie_text =
+            format!("Run curl {header_flag}'Cookie: session_id={cookie_value}' https://example.org");
+
+        assert_eq!(
+            redact_sensitive_text(&auth_text),
+            "Run curl -H\"[REDACTED_POSSIBLE_API_KEY]\" https://example.com"
+        );
+        assert_eq!(
+            redact_sensitive_text(&cookie_text),
+            "Run curl -H'[REDACTED_POSSIBLE_API_KEY]' https://example.org"
         );
     }
 

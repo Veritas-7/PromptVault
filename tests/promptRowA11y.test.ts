@@ -384,6 +384,33 @@ test("prompt row previews preserve quoted curl header shape case-insensitively",
   }
 });
 
+test("prompt row previews preserve glued short curl header flag shape while redacting", () => {
+  const authScheme = ["Bear", "er"].join("");
+  const tokenValue = ["short", "bearer", "value"].join("-");
+  const cookieValue = ["short", "session", "value"].join("-");
+  const cases = [
+    {
+      text: `Run curl -H"Authorization: ${authScheme} ${tokenValue}" https://example.com`,
+      expected: 'Run curl -H"[REDACTED_POSSIBLE_SECRET]" https://example.com',
+      leakPattern: new RegExp(`Authorization|${authScheme}|${tokenValue}`),
+    },
+    {
+      text: `Run curl -H'Cookie: session_id=${cookieValue}' https://example.org`,
+      expected: "Run curl -H'[REDACTED_POSSIBLE_SECRET]' https://example.org",
+      leakPattern: new RegExp(`Cookie|session_id|${cookieValue}`),
+    },
+  ];
+
+  for (const { text, expected, leakPattern } of cases) {
+    const preview = promptRowPreviewText(text);
+    const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+    assert.equal(preview, expected);
+    assert.doesNotMatch(preview, leakPattern);
+    assert.doesNotMatch(label, leakPattern);
+  }
+});
+
 test("prompt row previews redact credential and signature query params", () => {
   const text =
     "Fetch https://example.test/file?X-Amz-Credential=short-credential-value&X-Amz-Signature=short-signature-value before request.";

@@ -1,12 +1,116 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 19:17 KST
+Updated: 2026-06-08 19:26 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Standalone alphanumeric auth token redaction
+## Current Slice - 2026-06-08 Glued short curl header flag redaction shape
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for glued quoted curl short header flags such as `-H"..."` and
+  `-H'...'`, preserving shell shape while hiding sensitive header contents.
+
+Context:
+
+- Previous standalone alphanumeric auth token fix is pushed to `origin/main`
+  with source commit `072d9a9 fix: redact alphanumeric auth scheme tokens` and
+  docs closeout `ac43bdc docs: record alphanumeric auth token verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed glued curl flags like
+  `-H"Authorization: Bearer short-bearer-value"` and
+  `-H'Cookie: session_id=short-session-value'` hid the sensitive header content
+  but consumed the closing quote, rendering malformed shell text.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to preserve glued quoted curl short header flag shape.
+- Added RED backend coverage requiring `redact_sensitive_text` to preserve the
+  same glued `-H"..."` and `-H'...'` shape.
+- Confirmed RED: frontend and backend redaction both returned malformed strings
+  with the closing quote removed.
+- Extended the quoted curl sensitive-header matcher to allow `-H` with optional
+  whitespace before the quote, while preserving existing `-H "..."` and
+  `--header` behavior.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a raw glued curl `-H"Authorization: ..."` header. It
+  confirmed two stored prompt rows, the
+  `-H"[REDACTED_POSSIBLE_SECRET]" https://example.com` shape visible in row
+  text and aria labels, no authorization token leak in row text, aria labels,
+  or body text, and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: treats glued `-H"..."` and `-H'...'` curl sensitive
+  headers as quoted header arguments and preserves their closing quote.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for glued
+  short curl authorization and cookie header flags.
+- `src-tauri/src/lib.rs`: aligns backend redaction with the same glued `-H`
+  matcher and Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- Probe:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --input-type=module -e ...`
+  showed glued short curl authorization/cookie snippets redacted but missing
+  the closing quote.
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed 34/35 because the glued `-H"Authorization: ..."` preview missed the
+  closing quote.
+- RED backend:
+  `cargo test redact_sensitive_text_preserves_glued_short_curl_header_flag_shape`
+  from `src-tauri` failed because backend redaction missed the closing quote.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 35/35.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_preserves_glued_short_curl_header_flag_shape`
+  from `src-tauri` passed, 1/1 focused lib test, plus zero-test main and CLI
+  targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5220" --port 5220 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_glued_short_header_qa.mjs'`
+  passed with `rowCount=2`, expected preview
+  `Run curl -H"[REDACTED_POSSIBLE_SECRET]" https://example.com`,
+  `consoleErrors=[]`, and `apiErrors=[]`.
+- Full project check: `npm run check` passed, covering UI tests 341/341,
+  production build, Rust lib tests 112/112, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after preserving glued quoted curl header flag shape.
+- Python Playwright is not installed, and PromptVault has no local Playwright
+  dependency. Browser QA used the installed shared workspace Playwright package
+  while still managing Vite with the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity and
+  UI/accessibility preview correctness work for quoted curl header snippets.
+
+Next Steps:
+
+- Run whitespace and staged gitleaks checks, commit this source slice, run a
+  full-tree gitleaks scan, push to the private GitHub remote, verify parity,
+  then record the push evidence in this worklog.
+
+## Previous Slice - 2026-06-08 Standalone alphanumeric auth token redaction
 
 Current Goal:
 

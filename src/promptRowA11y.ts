@@ -16,7 +16,7 @@ function redactSensitivePromptPreview(text: string): string {
       "[REDACTED_PRIVATE_KEY]",
     )
     .replace(
-      /((?:--header(?:\s+|=)|-H\s+))(["'])(?:authorization|cookie|set-cookie)\s*:\s*[^"'\r\n]*\2/gi,
+      /((?:--header(?:\s+|=)|-H\s*))(["'])(?:authorization|cookie|set-cookie)\s*:\s*[^"'\r\n]*\2/gi,
       (_match, prefix: string, quote: string) => `${prefix}${quote}[REDACTED_POSSIBLE_SECRET]${quote}`,
     )
     .replace(

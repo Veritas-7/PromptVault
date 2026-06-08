@@ -4065,9 +4065,21 @@ fn local_project_work_log_update_date_line(line: &str) -> Option<(String, &'stat
     let has_last_updated = lower.contains("last_updated") || lower.contains("last updated");
     let has_updated_field = field_lower.starts_with("updated:")
         || field_lower.starts_with("updated ");
+    let has_date_field = field_lower.starts_with("date:") || field_lower.starts_with("date ");
+    let has_start_time_field = field_lower.starts_with("start time:")
+        || field_lower.starts_with("start time ")
+        || field_lower.starts_with("started:")
+        || field_lower.starts_with("started ");
     let has_korean_last_updated = line.contains("마지막 업데이트");
     let has_korean_updated = has_korean_last_updated || line.contains("업데이트");
-    if !has_last_updated && !has_updated_field && !has_korean_updated {
+    let has_korean_start_time = line.contains("시작 시간") || line.contains("시작시각");
+    if !has_last_updated
+        && !has_updated_field
+        && !has_date_field
+        && !has_start_time_field
+        && !has_korean_updated
+        && !has_korean_start_time
+    {
         return None;
     }
     let date_start = find_iso_date_start(line)?;
@@ -4076,8 +4088,14 @@ fn local_project_work_log_update_date_line(line: &str) -> Option<(String, &'stat
         "last_updated"
     } else if has_korean_last_updated {
         "마지막 업데이트"
+    } else if has_korean_start_time {
+        "시작 시간"
     } else if has_korean_updated {
         "업데이트"
+    } else if has_date_field {
+        "Date"
+    } else if has_start_time_field {
+        "Start time"
     } else if has_updated_field {
         "Updated"
     } else {
@@ -10975,6 +10993,76 @@ Progress:
         );
         assert!(detect_risks(&proposal.evidence).is_empty());
         assert!(!proposal.evidence.contains("private API-key endpoint"));
+    }
+
+    #[test]
+    fn local_work_log_extraction_accepts_worklog_date_and_start_time_fields() {
+        let candidates = ProjectWorkLogExtractionCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/tmp".to_string(),
+            files_seen: 2,
+            skipped_parsed_file_count: 0,
+            skipped_unreadable_file_count: 0,
+            skipped_empty_file_count: 0,
+            skipped_pointer_file_count: 0,
+            candidate_count: 2,
+            candidates: vec![
+                ProjectWorkLogExtractionCandidate {
+                    candidate_id: "work-log-Veritas-a1b2c3d4e5".to_string(),
+                    project: "notebooklm-llm-wiki-flow".to_string(),
+                    source_path: "/tmp/notebooklm-llm-wiki-flow/docs/plans/2026-06-02-refresh-worklog.md".to_string(),
+                    source_file: "2026-06-02-refresh-worklog.md".to_string(),
+                    reason: "missing_dated_heading".to_string(),
+                    excerpt: "# GBrain Single-Writer Quality Rollup Report Refresh Worklog\nDate: 2026-06-02 17:39 KST\nSlice: `[REDACTED_LONG_BASE64_LIKE_TOKEN]`\nScope:\n- NAS-private report-only refresh.".to_string(),
+                    line_count: 5,
+                    char_count: 184,
+                    risk_flags: vec!["long_base64_like_token".to_string()],
+                    modified_at: None,
+                },
+                ProjectWorkLogExtractionCandidate {
+                    candidate_id: "work-log-MacMini-b1b2c3d4e5".to_string(),
+                    project: "MacMini_RAG_Project".to_string(),
+                    source_path: "/tmp/MacMini_RAG_Project/2_Source/STT_SOTA_PROGRESS.md".to_string(),
+                    source_file: "STT_SOTA_PROGRESS.md".to_string(),
+                    reason: "missing_dated_heading".to_string(),
+                    excerpt: "# SOTA 검증 진행 상황\n## Cycle 23 - 실시간 업데이트\n### 현재 상태\n- **Zeroth 457 테스트**: 진행 중\n- **시작 시간**: 2026-02-22 15:18 KST\n- **경과 시간**: 약 10분+".to_string(),
+                    line_count: 6,
+                    char_count: 140,
+                    risk_flags: Vec::new(),
+                    modified_at: None,
+                },
+            ],
+            warnings: Vec::new(),
+        };
+
+        let result = local_project_work_log_extraction_proposals(candidates, Vec::new());
+
+        assert_eq!(result.accepted_count, 2);
+        assert_eq!(result.rejected_count, 0);
+
+        let date_worklog = &result.proposals[0];
+        assert!(date_worklog.accepted);
+        assert_eq!(date_worklog.date.as_deref(), Some("2026-06-02"));
+        assert_eq!(
+            date_worklog.title,
+            "GBrain Single-Writer Quality Rollup Report Refresh Worklog"
+        );
+        assert_eq!(
+            date_worklog.evidence,
+            "Date: 2026-06-02\nGBrain Single-Writer Quality Rollup Report Refresh Worklog"
+        );
+        assert!(detect_risks(&date_worklog.evidence).is_empty());
+        assert!(!date_worklog.evidence.contains("REDACTED_LONG_BASE64_LIKE_TOKEN"));
+
+        let start_time_log = &result.proposals[1];
+        assert!(start_time_log.accepted);
+        assert_eq!(start_time_log.date.as_deref(), Some("2026-02-22"));
+        assert_eq!(start_time_log.title, "SOTA 검증 진행 상황");
+        assert_eq!(
+            start_time_log.evidence,
+            "시작 시간: 2026-02-22\nSOTA 검증 진행 상황"
+        );
+        assert!(detect_risks(&start_time_log.evidence).is_empty());
     }
 
     #[test]

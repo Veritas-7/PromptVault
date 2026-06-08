@@ -1,12 +1,114 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 07:10 KST
+Updated: 2026-06-09 07:20 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 saved extraction proposal state
+## Current Slice - 2026-06-09 local Date/start-time worklog extraction
+
+Current Goal:
+
+- Reduce the real rejected work-log extraction set by converting safe
+  project-local `Date:` worklogs and Korean `시작 시간` progress logs into
+  deterministic local project/day work proposals.
+- Keep the fail-closed boundary: do not send risk-flagged candidate bodies to
+  external AI, and only emit short safe evidence copied from the dated field
+  plus a safe heading/context line.
+
+Context:
+
+- Latest local extraction had 20 candidates, 16 accepted, and 4 rejected.
+- The rejected set was concrete:
+  - one safe `MacMini_RAG_Project` progress log with `시작 시간: 2026-02-22`;
+  - three risk-flagged `notebooklm-llm-wiki-flow/docs/plans/*-worklog.md`
+    logs with `Date: 2026-06-02` and redacted slice/body content.
+- These do not require a full external AI call when the local parser can use
+  the dated field and a safe heading as evidence.
+
+Progress:
+
+- Added TDD coverage for local extraction of:
+  - `Date: 2026-06-02 ...` worklog headers with redacted/risk-flagged body
+    content;
+  - Korean `시작 시간: 2026-02-22 ...` progress logs.
+- Extended the local date-field detector to accept:
+  - `Date:` / `date ...`;
+  - `Start time:` / `started:`;
+  - Korean `시작 시간` / `시작시각`.
+- The existing safe context pipeline still builds title/evidence from safe
+  headings or current-goal lines and re-runs risk detection on the emitted
+  proposal fields.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - expands `local_project_work_log_update_date_line`;
+  - adds `local_work_log_extraction_accepts_worklog_date_and_start_time_fields`.
+
+Tests:
+
+- RED:
+  - `cargo test local_work_log_extraction_accepts_worklog_date_and_start_time_fields`
+    failed with `accepted_count` 0 vs expected 2.
+- Targeted GREEN:
+  - `cargo test local_work_log_extraction_accepts_worklog_date_and_start_time_fields`:
+    PASS.
+  - `cargo test local_work_log_extraction`: PASS, 4 tests.
+- Actual CLI verification:
+  - `work-log-extract --json` now reports
+    `candidate_count=20`, `accepted_count=20`, `rejected_count=0`.
+  - Newly accepted examples:
+    - `MacMini_RAG_Project`: `2026-02-22`,
+      evidence `시작 시간: 2026-02-22\nCycle 23 - 실시간 업데이트`;
+    - `notebooklm-llm-wiki-flow`: three `Date: 2026-06-02` worklog rows,
+      each using only the `Date` field plus worklog title.
+  - `work-summary --include-extractions --json` reports
+    `extraction_merge.accepted_count=20`,
+    `extraction_merge.rejected_count=0`, and
+    `extraction_merge.merged_item_count=20`.
+  - `work-log-coverage --json` reports
+    `files_seen=772`, `parsed_file_count=186`,
+    `unparsed_file_count=586`, `project_count=31`,
+    `work_item_count=5323`, `warnings=[]`.
+- Headless browser-bridge QA:
+  - `node /tmp/promptvault_work_log_zero_rejected_qa.mjs`: PASS with bridge
+    on `127.0.0.1:5174` and Vite on `127.0.0.1:5177`.
+  - Observed extraction meta:
+    `로컬 local-extraction-rules · 후보 20개 · accepted 20개 · rejected 0개`.
+  - Observed approval meta:
+    `저장 대기 20개 / accepted 20개`.
+  - Rejection summary hidden; visible rejected rows 0.
+  - `notebooklm-llm-wiki-flow` preview filter shows 3 `Date: 2026-06-02`
+    worklog rows and 0 rejected rows.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `426` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `156` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- This eliminates the current 4 rejected local extraction proposals, but the
+  larger project-log normalization problem remains: 586 progress-log files are
+  still unparsed by the structured parser and should be triaged with a reviewed
+  AI-assisted normalization queue.
+- The AI provider path remains fail-closed and direct HTTP-based; no Codex SDK
+  or GLM SDK replacement was added in this slice because the current blocker
+  was deterministic local date-field coverage.
+
+Next Steps:
+
+- Stage only `src-tauri/src/lib.rs` and `working.md`, run staged secret scan,
+  commit, and push.
+- Later: add a review queue for remaining unparsed logs that batches safe
+  excerpts, provider results, validation failures, and operator-approved saves.
+
+## Previous Slice - 2026-06-09 saved extraction proposal state
 
 Current Goal:
 

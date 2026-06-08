@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ActionLockState } from "../src/actionLocks.ts";
+import type { PromptRecord } from "../src/types.ts";
 import {
   activeImprovementForSelection,
+  buildImprovePromptRequest,
   improvementActionLabel,
   improvementFailureText,
   improvementRequestStarted,
@@ -11,6 +13,29 @@ import {
 } from "../src/improvementSelection.ts";
 
 const improvement = { revised_prompt: "better" };
+
+function promptRecord(overrides: Partial<PromptRecord> = {}): PromptRecord {
+  return {
+    id: "prompt-a",
+    source: "Codex",
+    session_id: "session-a",
+    path: "/tmp/prompt.md",
+    timestamp: "2026-06-08T04:00:00Z",
+    cwd: "/tmp/project",
+    text: "Improve this prompt",
+    word_count: 3,
+    char_count: 19,
+    hash: "hash-a",
+    risk_flags: [],
+    quality: {
+      score: 74,
+      band: "good",
+      missing: [],
+      suggestions: [],
+    },
+    ...overrides,
+  };
+}
 
 function lockState(overrides: Partial<ActionLockState> = {}): ActionLockState {
   return {
@@ -77,6 +102,26 @@ test("improvement action label explains disabled and active states", () => {
     "저장된 프롬프트 불러오는 중에는 선택한 프롬프트 추천을 생성할 수 없습니다",
   );
   assert.equal(improvementActionLabel(true, false, lockState()), "선택한 프롬프트 추천 생성");
+});
+
+test("local improvement request includes force local only when enabled", () => {
+  assert.deepEqual(buildImprovePromptRequest(promptRecord(), "/tmp/promptvault.sqlite", true), {
+    prompt: "Improve this prompt",
+    context: "Codex · /tmp/project",
+    prompt_id: "prompt-a",
+    source: "Codex",
+    persist: true,
+    database_path: "/tmp/promptvault.sqlite",
+    force_local: true,
+  });
+
+  assert.deepEqual(buildImprovePromptRequest(promptRecord({ cwd: null }), null, false), {
+    prompt: "Improve this prompt",
+    context: "Codex · 작업공간 없음",
+    prompt_id: "prompt-a",
+    source: "Codex",
+    persist: true,
+  });
 });
 
 test("selection change clears recommendation state and matching improve error", () => {

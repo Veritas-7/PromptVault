@@ -31,6 +31,7 @@ import {
 import { importEventBatchSummary, importEventStatusLabel, importEventWarningSummary } from "./importEvents";
 import {
   activeImprovementForSelection,
+  buildImprovePromptRequest,
   improvementActionLabel,
   improvementFailureText,
   improvementRequestStarted,
@@ -90,7 +91,6 @@ import {
   planScan,
   scanProgress,
   scanPrompts,
-  type ImprovePromptRequest,
 } from "./promptVaultApi";
 import {
   MAX_SCAN_LIMIT,
@@ -290,6 +290,7 @@ function App() {
   const [browserBridgeDatabasePath, setBrowserBridgeDatabasePath] = useState<string | null>(null);
   const [browserBridgeFailureText, setBrowserBridgeFailureText] = useState<string | null>(null);
   const [improving, setImproving] = useState(false);
+  const [forceLocalImprove, setForceLocalImprove] = useState(false);
   const [improvement, setImprovement] = useState<ImproveResult | null>(null);
   const [improvementPromptId, setImprovementPromptId] = useState<string | null>(null);
   const [improvementFailurePromptId, setImprovementFailurePromptId] = useState<string | null>(null);
@@ -943,16 +944,7 @@ function App() {
     try {
       const databasePath =
         browserBridgeDatabasePath ?? storedFacetsResult?.database_path ?? result?.persistence?.database_path;
-      const request: ImprovePromptRequest = {
-        prompt: prompt.text,
-        context: `${prompt.source} · ${prompt.cwd ?? "작업공간 없음"}`,
-        prompt_id: prompt.id,
-        source: prompt.source,
-        persist: true,
-      };
-      if (databasePath) {
-        request.database_path = databasePath;
-      }
+      const request = buildImprovePromptRequest(prompt, databasePath, forceLocalImprove);
       const next = await improvePrompt(request);
       setImprovement(next);
       setImprovementPromptId(prompt.id);
@@ -1957,16 +1949,28 @@ function App() {
         <section className="panel detail-panel">
           <div className="panel-heading">
             <h2>선택 항목</h2>
-            <button
-              aria-label={improvementActionLabel(selectedPrompt !== null, improving, actionLockState)}
-              data-run-improve="true"
-              disabled={!selectedPrompt || improving || isTopLevelActionLocked}
-              onClick={() => runImprove(selectedPrompt)}
-              type="button"
-            >
-              <Sparkles size={17} />
-              {improving ? "추천 생성 중" : "추천 생성"}
-            </button>
+            <div className="detail-panel-actions">
+              <label className="local-recommendation-toggle">
+                <input
+                  aria-label="로컬 규칙 추천만 사용"
+                  checked={forceLocalImprove}
+                  disabled={improving || isTopLevelActionLocked}
+                  onChange={(event) => setForceLocalImprove(event.currentTarget.checked)}
+                  type="checkbox"
+                />
+                <span>로컬 추천</span>
+              </label>
+              <button
+                aria-label={improvementActionLabel(selectedPrompt !== null, improving, actionLockState)}
+                data-run-improve="true"
+                disabled={!selectedPrompt || improving || isTopLevelActionLocked}
+                onClick={() => runImprove(selectedPrompt)}
+                type="button"
+              >
+                <Sparkles size={17} />
+                {improving ? "추천 생성 중" : "추천 생성"}
+              </button>
+            </div>
           </div>
           {selectedPrompt ? (
             <>

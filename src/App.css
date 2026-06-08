@@ -705,6 +705,39 @@ h3 {
   white-space: nowrap;
 }
 
+.detail-panel-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.local-recommendation-toggle {
+  align-items: center;
+  background: #f7faf6;
+  border: 1px solid #d8e1d6;
+  border-radius: 8px;
+  color: #3d4d42;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.local-recommendation-toggle input {
+  accent-color: #213629;
+  flex: 0 0 auto;
+}
+
+.local-recommendation-toggle:has(input:disabled) {
+  opacity: 0.62;
+}
+
 .sources,
 .prompt-list {
   overflow: auto;

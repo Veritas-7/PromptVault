@@ -1,4 +1,6 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
+import type { ImprovePromptRequest } from "./promptVaultApi.ts";
+import type { PromptRecord } from "./types.ts";
 
 export function activeImprovementForSelection<T>(
   improvement: T | null,
@@ -44,6 +46,27 @@ export function improvementActionLabel(
   const reason = activeActionLockReason(lockState);
   if (reason) return `${reason}에는 선택한 프롬프트 추천을 생성할 수 없습니다`;
   return "선택한 프롬프트 추천 생성";
+}
+
+export function buildImprovePromptRequest(
+  prompt: PromptRecord,
+  databasePath: string | null | undefined,
+  forceLocal: boolean,
+): ImprovePromptRequest {
+  const request: ImprovePromptRequest = {
+    prompt: prompt.text,
+    context: `${prompt.source} · ${prompt.cwd ?? "작업공간 없음"}`,
+    prompt_id: prompt.id,
+    source: prompt.source,
+    persist: true,
+  };
+  if (databasePath) {
+    request.database_path = databasePath;
+  }
+  if (forceLocal) {
+    request.force_local = true;
+  }
+  return request;
 }
 
 export interface ImprovementSelectionChange<T> {

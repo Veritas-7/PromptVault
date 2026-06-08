@@ -81,6 +81,7 @@ export interface ImprovePromptRequest {
   source?: string;
   database_path?: string;
   persist?: boolean;
+  force_local?: boolean;
 }
 
 export async function planScan(options: ScanPlanOptions = {}): Promise<ScanPlan> {

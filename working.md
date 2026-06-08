@@ -1,12 +1,163 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 13:42 KST
+Updated: 2026-06-08 13:57 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Stored prompt truncation compatibility
+## Current Slice - 2026-06-08 Local recommendation mode
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Add a browser/UI path to force local rule-based prompt recommendations so QA
+  and privacy-sensitive runs do not hang on external model calls or secret-file
+  API key discovery.
+
+Context:
+
+- Previous stored prompt truncation compatibility slice is pushed to
+  `origin/main`: implementation
+  `08e980f fix: accept stored prompt preview truncation` and closeout
+  `16076a7 docs: close stored prompt truncation handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`,
+  and `gh repo view` reported the repository as `PRIVATE`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+- Connected bridge QA with Vite on 5180 and CLI bridge on 5181 confirmed the
+  stored plan and stored filter flows are healthy: `/api/plan` returned 200,
+  the plan section rendered, source filter `Codex` applied through
+  `/api/prompts` 200, reset cleared the filter inputs, and console/page errors
+  stayed empty.
+- Recommendation QA against the same browser bridge showed the selected prompt
+  action is enabled and posts `/api/improve`, but the request did not respond
+  within the short QA window and the UI stayed at `추천 생성 중`.
+- Backend and CLI already support `force_local`, but `runImprove` in
+  `src/App.tsx` never sends it. Blank bridge process API key env vars are not a
+  reliable local-only QA control because backend secret-file lookup may still
+  find API keys.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `16076a7 docs: close stored prompt truncation handoff`.
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree is clean at `main...origin/main`.
+- Recorded the next slice before editing.
+- Confirmed RED first:
+  `tests/improvementSelection.test.ts` expected a local recommendation request
+  helper to send `force_local: true` only when local mode is enabled, and the
+  test failed because `buildImprovePromptRequest` did not exist.
+- Added `buildImprovePromptRequest` in `src/improvementSelection.ts` and wired
+  `runImprove` to use it instead of constructing recommendation requests inline.
+- Added `force_local?: boolean` to `ImprovePromptRequest` so browser bridge and
+  Tauri invocations can pass the backend's existing `force_local` field.
+- Added a compact `로컬 추천` checkbox in the selected-prompt detail panel.
+  When enabled, the recommendation request includes `force_local: true`; when
+  disabled, the field is omitted.
+- Confirmed GREEN with the focused request-building test, then ran broader
+  improvement selection tests and browser bridge improvement parser regressions.
+- Ran production frontend build successfully.
+- Re-ran connected browser QA with Vite on 5180 and CLI bridge on 5181. The UI
+  loaded stored prompts, selected a prompt, checked `로컬 추천`, posted
+  `/api/improve` with `force_local: true`, received HTTP 200 from
+  `local-rules`, showed the persistence notice, and had no console
+  error/warning or page errors.
+- Ran full `npm run check` successfully after the local recommendation mode
+  implementation.
+- Pre-staging verification passed with only the expected six modified files:
+  `src/App.css`, `src/App.tsx`, `src/improvementSelection.ts`,
+  `src/promptVaultApi.ts`, `tests/improvementSelection.test.ts`, and
+  `working.md`.
+- Explicitly staged only the six expected files.
+- Staged secret scan passed with
+  `gitleaks protect --staged --no-banner --redact` after scanning about
+  12.06 KB and finding no leaks.
+- Restaged `working.md` after recording staged results and reran staged secret
+  scan; it passed after scanning about 12.58 KB and finding no leaks.
+
+Changes:
+
+- `working.md`: records the current local recommendation mode slice and the
+  connected browser QA evidence that motivated it.
+- `tests/improvementSelection.test.ts`: adds RED/GREEN coverage for local
+  recommendation request construction.
+- `src/improvementSelection.ts`: adds a typed helper for recommendation request
+  construction, including optional `force_local`.
+- `src/promptVaultApi.ts`: exposes `force_local` on `ImprovePromptRequest`.
+- `src/App.tsx`: adds local recommendation state, uses the request helper, and
+  renders the selected-prompt `로컬 추천` checkbox.
+- `src/App.css`: styles the new selected-prompt action group and compact local
+  recommendation checkbox.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- Browser QA stored plan/filter check:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5180" --port 5180 --timeout 90 -- bash -lc ...`
+  with CLI bridge on 5181 passed `/api/plan` 200, stored prompt load
+  `/api/prompts` 200, source filter apply `/api/prompts` 200, filter reset,
+  and empty console/page errors.
+- Browser QA recommendation diagnostic:
+  the selected prompt recommendation button existed, was enabled, posted
+  `/api/improve`, then remained in `추천 생성 중` with no response within the
+  diagnostic window and no console/page errors.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "local improvement request" tests/improvementSelection.test.ts`
+  failed because `buildImprovePromptRequest` was not exported yet.
+- GREEN:
+  the same focused test passed after implementation.
+- Focused regression:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/improvementSelection.test.ts`
+  passed 12/12.
+- Focused API parser regression:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "browser bridge improvements" tests/promptVaultApi.test.ts`
+  passed 14/14.
+- Production frontend build: `npm run build` passed (`tsc && vite build`).
+- Browser QA local recommendation verification:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5180" --port 5180 --timeout 90 -- bash -lc ...`
+  with CLI bridge on 5181 returned stored load HTTP 200 and improve HTTP 200;
+  request payload had `force_local: true`; response provider was
+  `local-rules`, `used_ai` was false, persistence was present, provider text
+  rendered as `local-rules`, the local toggle stayed checked, alert text was
+  null, and console error/warning plus page errors were empty.
+- Full project check: `npm run check` passed, covering UI tests 304/304,
+  production build, Rust lib tests 85/85, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/App.css src/App.tsx src/improvementSelection.ts src/promptVaultApi.ts tests/improvementSelection.test.ts working.md`
+  passed; `git status --short --branch` showed only the expected six modified
+  files; `git rev-list --left-right --count HEAD...origin/main` returned
+  `0 0`.
+- Staged paths: `git diff --cached --name-only` listed only `src/App.css`,
+  `src/App.tsx`, `src/improvementSelection.ts`, `src/promptVaultApi.ts`,
+  `tests/improvementSelection.test.ts`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed
+  after scanning about 12.06 KB and finding no leaks.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test/QA work.
+
+Next Steps:
+
+- Commit the implementation, run full-tree secret scan, push, and final parity
+  checks.
+
+## Previous Slice - 2026-06-08 Stored prompt truncation compatibility
 
 Current Goal:
 
@@ -37,115 +188,34 @@ Context:
 
 Progress:
 
-- Started from a clean pushed tree at
-  `ea24dd5 docs: close bridge URL override handoff`.
-- Reproduced the issue with headless browser QA: bridge status stayed
-  connected, console/page errors were empty, `/api/prompts` returned HTTP 200,
-  and only the frontend parser rejected the payload.
-- Confirmed the likely parser mismatch in `src/promptVaultApi.ts`:
-  `parseStoredPromptsResult` calls `parseScanResult`, which applies scan
-  truncation semantics to stored-load payloads.
-- Confirmed RED first: a stored-load parser test with one returned preview
-  prompt, `stats.total_prompts: 1`, `prompts_truncated: true`, and
-  `persistence.stored_prompt_count: 2` failed with the malformed bridge
-  response error.
+- Reproduced the stored prompt load parser failure in connected browser QA.
+- Added parser coverage for truncated stored preview payloads.
 - Split stored-load truncation validation from scan truncation validation.
-  Scan payloads still require
-  `prompts_truncated === (returned_prompt_count < stats.total_prompts)`;
-  stored-load payloads require preview stats to match returned prompts and allow
-  `prompts_truncated: true` only when persistence shows more stored prompts
-  than the returned preview.
-- Confirmed GREEN: the new stored-load parser test passed, and the existing
-  scan truncation rejection tests still passed.
-- Re-ran the connected browser stored-load QA. The UI stayed connected, clicking
-  `저장된 프롬프트 불러오기` reached a loaded state with `1,000개 로드됨`,
-  the malformed bridge response text disappeared, alert text was null, and
-  console/page errors were empty.
-- Ran the full project check successfully after stored prompt truncation
-  compatibility.
-- Pre-staging verification passed with only the expected three modified files:
-  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
-- Explicitly staged only `src/promptVaultApi.ts`,
-  `tests/promptVaultApi.test.ts`, and `working.md`.
-- Staged secret scan passed with
-  `gitleaks protect --staged --no-banner --redact` after scanning about
-  9.10 KB and finding no leaks.
-- Restaged `working.md` after recording the staged scan and reran the staged
-  secret scan; about 9.60 KB was scanned and no leaks were found.
-- Committed the implementation as
-  `08e980f fix: accept stored prompt preview truncation`.
-- Ran full-tree `gitleaks dir . --no-banner --redact`; about 701.44 MB was
-  scanned and no leaks were found.
-- Pushed `08e980f` to `origin/main` and confirmed `HEAD...origin/main`
-  returned `0 0` after a fresh fetch.
+- Verified focused parser tests, connected stored-load browser QA, and full
+  `npm run check`.
+- Committed `08e980f fix: accept stored prompt preview truncation`.
+- Committed closeout `16076a7 docs: close stored prompt truncation handoff`.
+- Pushed to `origin/main` and confirmed `HEAD...origin/main` parity returned
+  `0 0`.
 
 Changes:
 
-- `working.md`: records the current stored prompt truncation compatibility
-  slice.
-- `tests/promptVaultApi.test.ts`: adds truncated stored preview acceptance
-  coverage.
 - `src/promptVaultApi.ts`: validates stored-load truncation with stored preview
-  semantics instead of scan response semantics.
+  semantics.
+- `tests/promptVaultApi.test.ts`: covers truncated stored preview acceptance.
+- `working.md`: recorded the stored prompt truncation compatibility slice.
 
 Tests:
 
-- Baseline repo verification: `git status --short --branch` showed clean
-  `main...origin/main`.
-- Connected browser QA repro:
-  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 90 -- bash -lc ...`
-  clicked `저장된 프롬프트 불러오기`; `/api/prompts` responded 200 from 5176,
-  console/page errors were empty, but the UI showed the malformed bridge
-  response error.
-- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "truncated stored previews" tests/promptVaultApi.test.ts`
-  failed with `PromptVault 브라우저 브리지 응답 형식이 올바르지 않습니다.`
-- GREEN: the same targeted stored-load parser test passed after the parser
-  split.
-- Focused regression:
-  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "truncated previews|stored prompt loads accept truncated stored previews" tests/promptVaultApi.test.ts`
-  passed the two scan truncation rejection tests plus the new stored-load
-  acceptance test.
-- Browser QA fix verification:
-  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 90 -- bash -lc ...`
-  clicked `저장된 프롬프트 불러오기`; `/api/prompts` responded 200 from 5176,
-  the UI showed `1,000개 로드됨`, `bodyHasMalformedError` was false,
-  `alertText` was null, and `consoleMessages` / `pageErrors` were empty.
-- Full project check: `npm run check` passed, covering UI tests 303/303,
-  production build, Rust lib tests 85/85, CLI tests 16/16, doc tests, and
-  `cargo clippy --all-targets --all-features -- -D warnings`.
-- Pre-staging: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
-  passed; `git status --short --branch` showed only `src/promptVaultApi.ts`,
-  `tests/promptVaultApi.test.ts`, and `working.md` modified;
-  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
-  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
-  reported `PRIVATE`.
-- Staged paths: `git diff --cached --name-only` listed only
-  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
-- Staged security: `gitleaks protect --staged --no-banner --redact` passed
-  after scanning about 9.10 KB and finding no leaks.
-- Final staged security before implementation commit:
-  `gitleaks protect --staged --no-banner --redact` passed after restaging
-  `working.md`.
-- Implementation commit:
-  `git commit -m "fix: accept stored prompt preview truncation"` produced
-  `08e980f`.
-- Full-tree security: `gitleaks dir . --no-banner --redact` passed with no
-  leaks found after scanning about 701.44 MB.
-- Push/parity: `git push origin main` updated `ea24dd5..08e980f`; fresh fetch
-  plus `git rev-list --left-right --count HEAD...origin/main` returned `0 0`.
+- Focused stored-load parser RED/GREEN and scan truncation regression passed.
+- Connected browser QA loaded stored prompts and showed `1,000개 로드됨` without
+  malformed bridge response text.
+- Full `npm run check` passed.
+- Staged and full-tree gitleaks checks passed.
 
 Issues:
 
 - No blockers.
-
-Research:
-
-- No external research. This is direct code/test/QA work.
-
-Next Steps:
-
-- Commit this `working.md` closeout, run docs-only security/parity checks, then
-  continue to the next narrow PromptVault improvement slice.
 
 ## Previous Slice - 2026-06-08 Browser bridge URL override
 

@@ -1,4 +1,5 @@
 import type { ScanProgress } from "./types";
+import { sourceLabelDisplayText } from "./promptRowA11y.ts";
 
 export type ScanRunState = "idle" | "scanning" | "canceling" | "ready" | "failed";
 export type ScanStopFailure = "not_active" | "request_failed";
@@ -9,7 +10,7 @@ function countLabel(count: number, singular: string): string {
 
 export function scanProgressLabel(progress: ScanProgress | null): string {
   if (!progress) return "스캔 진행 상황을 준비 중입니다.";
-  const source = progress.source_label ?? "소스 준비 중";
+  const source = progress.source_label ? sourceLabelDisplayText(progress.source_label) : "소스 준비 중";
   const fileTotal = progress.source_file_count === null
     ? progress.source_files_discovered
       ? `파일 찾는 중 · ${countLabel(progress.source_files_discovered, "파일")} 발견`

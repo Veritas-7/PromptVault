@@ -1,12 +1,98 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 21:31 KST
+Updated: 2026-06-08 21:36 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Source label display secret masking
+## Current Slice - 2026-06-08 Scan progress source label masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent active scan progress labels from rendering raw source labels when the
+  backend progress payload contains secret-like source names.
+
+Context:
+
+- Previous source-label display masking is pushed to `origin/main` with source
+  commit `9325e11 fix: mask source label display secrets` and docs closeout
+  `1edb245 docs: record source label masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for the scan user flow.
+- Earlier source-label masking covered plan rows, import progress, source
+  summaries, import activity, aria labels, failure text, and stop notices.
+  `scanProgressLabel()` still read `progress.source_label` directly while a
+  scan was active.
+- This slice changes display copy only. Raw scan progress payloads, run IDs,
+  source IDs, scan options, and backend matching remain unchanged.
+
+Progress:
+
+- Re-read `working.md`, `src/scanStatus.ts`, `tests/scanStatus.test.ts`, and
+  `App.tsx` scan progress usage from a clean `origin/main` tree.
+- Added a RED test in `tests/scanStatus.test.ts` for secret-like
+  `source_label` values in active scan progress labels. RED failed as intended
+  because the label rendered raw synthetic secret-like fragments.
+- Routed `scanProgressLabel()` through existing `sourceLabelDisplayText()` for
+  non-empty source labels while preserving the existing "소스 준비 중" fallback.
+- Re-ran targeted scan status tests and confirmed 11/11 passed.
+- Ran a browser smoke with a Tauri-like invoke shim. The first attempt failed
+  because the temporary `/tmp` Node script could not resolve `playwright`; the
+  script resolver was corrected to use the PromptVault package context. The
+  second run passed: clicking quick scan showed a redacted scan progress notice,
+  no raw synthetic source label fragments were present in the progress notice or
+  final page body, and no page errors, console errors, or failed responses were
+  observed.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/scanStatus.ts`: masks scan progress source labels with
+  `sourceLabelDisplayText()`.
+- `tests/scanStatus.test.ts`: adds RED/GREEN coverage for secret-like scan
+  progress source labels.
+- `working.md`: records this slice and its RED/GREEN/browser/full-check
+  evidence.
+
+Tests:
+
+- RED scan status test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/scanStatus.test.ts`
+  failed as intended because `scanProgressLabel()` exposed raw synthetic
+  secret-like source label fragments.
+- Targeted GREEN:
+  same command passed with `tests/scanStatus.test.ts` 11/11 after masking scan
+  progress source labels.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5235" --port 5235 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_scan_progress_secret_qa.mjs'`
+  passed on the corrected script with exit code `0`; quick scan progress and
+  completion rendered the redacted source label with no raw synthetic source
+  label fragments, page errors, console errors, or failed responses.
+- Full project check: `npm run check` passed, covering UI tests 356/356,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after scan progress source-label masking.
+- The browser smoke had one environment-only retry because `/tmp` module
+  resolution could not find Playwright until the script used the project package
+  resolver.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Commit and push this scan progress source-label masking slice, then record
+  docs closeout from the clean pushed tree.
+
+## Previous Slice - 2026-06-08 Source label display secret masking
 
 Current Goal:
 

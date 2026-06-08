@@ -69,6 +69,18 @@ test("scan progress label explains file discovery state", () => {
   );
 });
 
+test("scan progress label redacts secret-like source names", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["scan", "label", "secret"].join("-");
+  const label = scanProgressLabel(scanProgress({
+    source_label: `Codex ${apiFlag} ${secretValue}`,
+  }));
+
+  assert.equal(label, "Codex [REDACTED_POSSIBLE_SECRET]: 1 / 1개 파일 · 1개 프롬프트 · 소스 1 / 2 · 제한 10");
+  assert.ok(!label.includes(apiFlag));
+  assert.ok(!label.includes(secretValue));
+});
+
 test("scan failure text is hidden outside failed scans", () => {
   assert.equal(scanRunFailureText("idle", false), null);
   assert.equal(scanRunFailureText("scanning", false), null);

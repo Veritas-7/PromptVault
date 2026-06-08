@@ -33,6 +33,7 @@ const PROJECT_WORK_SESSION_SOURCE_IDS: &[&str] = &[
     "claude-code-history",
     "antigravity-cli-history",
 ];
+const PROJECT_WORK_CODEX_METADATA_SOURCE_IDS: &[&str] = &["codex", "codex-cx"];
 const DEFAULT_IMPORT_EVENT_LIMIT: usize = 20;
 const MAX_IMPORT_EVENT_LIMIT: usize = 100;
 const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
@@ -2632,7 +2633,153 @@ fn project_work_session_prompts(
             .into_iter()
             .map(|warning| format!("Session evidence: {warning}")),
     );
-    Ok(scan.prompts)
+    let mut prompts = scan.prompts;
+    prompts.extend(project_work_codex_metadata_prompts(limit, warnings)?);
+    Ok(prompts)
+}
+
+fn project_work_codex_metadata_prompts(
+    limit: usize,
+    warnings: &mut Vec<String>,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut prompts = Vec::new();
+    for source in source_specs()
+        .into_iter()
+        .filter(|source| PROJECT_WORK_CODEX_METADATA_SOURCE_IDS.contains(&source.id))
+    {
+        if !source.root.exists() {
+            continue;
+        }
+        let candidates = matching_source_file_candidates(&source.root, source.kind);
+        for candidate in candidates.into_iter().take(limit) {
+            match candidate {
+                Ok(candidate) => {
+                    let modified_at = timestamp_millis_to_rfc3339(candidate.modified_ms);
+                    match parse_codex_project_metadata_prompt(&source, &candidate.path, modified_at)
+                    {
+                        Ok(Some(prompt)) => prompts.push(prompt),
+                        Ok(None) => {}
+                        Err(err) => warnings.push(format!(
+                            "Session evidence metadata: {}: {err}",
+                            candidate.path.display()
+                        )),
+                    }
+                }
+                Err(err) => warnings.push(format!("Session evidence metadata: {err}")),
+            }
+        }
+    }
+    Ok(prompts)
+}
+
+fn parse_codex_project_metadata_prompt(
+    source: &SourceSpec,
+    path: &Path,
+    modified_timestamp: Option<String>,
+) -> Result<Option<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut project_paths = BTreeSet::new();
+    let mut session_id = path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| "unknown-session".to_string());
+    let mut cwd = None;
+    let mut last_timestamp = None;
+
+    for line in jsonl_lines(path)? {
+        let value: Value = serde_json::from_str(&line)?;
+        if let Some(timestamp) = extract_timestamp(&value) {
+            last_timestamp = Some(timestamp);
+        }
+        match value.get("type").and_then(Value::as_str) {
+            Some("session_meta") => {
+                if let Some(id) = value.pointer("/payload/id").and_then(Value::as_str) {
+                    session_id = id.to_string();
+                }
+                if cwd.is_none() {
+                    cwd = value
+                        .pointer("/payload/cwd")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                }
+                if let Some(text) = value
+                    .pointer("/payload/user_instructions")
+                    .and_then(Value::as_str)
+                {
+                    project_paths.extend(project_paths_from_text(text));
+                }
+            }
+            Some("turn_context") => {
+                if cwd.is_none() {
+                    cwd = value
+                        .pointer("/payload/cwd")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                }
+            }
+            Some("response_item")
+                if matches!(
+                    value.pointer("/payload/role").and_then(Value::as_str),
+                    Some("developer" | "user")
+                ) =>
+            {
+                let text = text_from_value(value.pointer("/payload/content"));
+                project_paths.extend(project_paths_from_text(&text));
+            }
+            _ => {}
+        }
+    }
+
+    if project_paths.is_empty() {
+        return Ok(None);
+    }
+
+    let text = format!(
+        "{} session project targets: {}",
+        source.label,
+        project_paths.into_iter().collect::<Vec<_>>().join(", ")
+    );
+    let timestamp = modified_timestamp.or(last_timestamp);
+    let hash = hash_text(&format!("{}:{}:{}", source.id, session_id, text));
+    let risk_flags = detect_risks(&text);
+    let quality = assess_prompt_quality(&text, &risk_flags);
+
+    Ok(Some(PromptRecord {
+        id: hash.chars().take(16).collect(),
+        source: format!("{} session metadata", source.label),
+        session_id,
+        path: path.display().to_string(),
+        timestamp,
+        cwd,
+        word_count: count_words(&text),
+        char_count: text.chars().count(),
+        text,
+        hash,
+        risk_flags,
+        quality,
+    }))
+}
+
+fn project_paths_from_text(text: &str) -> Vec<String> {
+    project_path_regex()
+        .find_iter(text)
+        .filter_map(|matched| normalize_project_path_match(matched.as_str()))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn normalize_project_path_match(text: &str) -> Option<String> {
+    let trimmed = text.trim_end_matches(|ch: char| {
+        matches!(
+            ch,
+            '.' | ',' | ';' | ':' | ')' | ']' | '}' | '\'' | '"' | '`'
+        )
+    });
+    if trimmed.ends_with("/10_Projects") {
+        return None;
+    }
+    Some(trimmed.to_string())
 }
 
 fn attach_session_evidence(items: &mut [ProjectWorkItem], prompts: &[PromptRecord]) {
@@ -4488,6 +4635,14 @@ fn word_regex() -> &'static Regex {
     static WORD_REGEX: OnceLock<Regex> = OnceLock::new();
     WORD_REGEX
         .get_or_init(|| Regex::new(r"[A-Za-z가-힣0-9][A-Za-z가-힣0-9_\-']*").expect("word regex"))
+}
+
+fn project_path_regex() -> &'static Regex {
+    static PROJECT_PATH_REGEX: OnceLock<Regex> = OnceLock::new();
+    PROJECT_PATH_REGEX.get_or_init(|| {
+        Regex::new(r#"/Users/wj/Ai/System/10_Projects/[^\s`"'<>\]\)}]+"#)
+            .expect("project path regex")
+    })
 }
 
 fn quoted_curl_sensitive_header_regex() -> &'static Regex {
@@ -6786,6 +6941,62 @@ Progress:
 
         assert_eq!(items[0].session_evidence_count, 1);
         assert_eq!(items[0].session_sources[0].text, "Codex");
+    }
+
+    #[test]
+    fn codex_session_metadata_prompt_extracts_project_target_from_objective() {
+        let root =
+            std::env::temp_dir().join(format!("promptvault-codex-metadata-{}", std::process::id()));
+        std::fs::create_dir_all(&root).expect("create metadata root");
+        let path = root.join("rollout-test.jsonl");
+        std::fs::write(
+            &path,
+            r#"{"timestamp":"2026-06-08T12:00:00Z","type":"session_meta","payload":{"id":"session-target","cwd":"/Users/wj"}}
+{"timestamp":"2026-06-08T12:01:00Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject. Continue autonomously."}]}}
+"#,
+        )
+        .expect("write metadata jsonl");
+        let source = SourceSpec {
+            id: "codex",
+            label: "Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let record = parse_codex_project_metadata_prompt(
+            &source,
+            &path,
+            Some("2026-06-08T15:30:00Z".to_string()),
+        )
+        .expect("parse metadata")
+        .expect("metadata prompt");
+
+        assert_eq!(record.source, "Codex session metadata");
+        assert_eq!(record.session_id, "session-target");
+        assert_eq!(record.timestamp.as_deref(), Some("2026-06-08T15:30:00Z"));
+        assert_eq!(record.cwd.as_deref(), Some("/Users/wj"));
+        assert!(record
+            .text
+            .contains("/Users/wj/Ai/System/10_Projects/ExampleProject"));
+
+        std::fs::remove_dir_all(root).expect("remove metadata root");
+    }
+
+    #[test]
+    fn project_work_items_attach_session_evidence_from_codex_metadata_prompt() {
+        let path = PathBuf::from("/tmp/ExampleProject/working.md");
+        let text = "## Current Slice - 2026-06-09 Metadata join\n\n- Connect thread metadata.\n";
+        let mut items = project_progress_work_items_from_text(&path, text);
+        let mut matching = dated_record("matching-metadata", "2026-06-08T15:30:00Z");
+        matching.source = "Codex session metadata".to_string();
+        matching.text =
+            "Codex session project targets: /Users/wj/Ai/System/10_Projects/ExampleProject"
+                .to_string();
+
+        attach_session_evidence(&mut items, &[matching]);
+
+        assert_eq!(items[0].session_evidence_count, 1);
+        assert_eq!(items[0].session_sources[0].text, "Codex session metadata");
     }
 
     #[test]

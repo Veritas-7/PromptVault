@@ -1,12 +1,116 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 09:00 KST
+Updated: 2026-06-08 09:08 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Improvement gap delta validation
+## Current Slice - 2026-06-08 Scan markdown flag validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/stored-prompt payloads whose `markdown_included`
+  flag contradicts the returned `markdown` body.
+
+Context:
+
+- Recent slices hardened browser-bridge improvement quality deltas and import
+  aggregate invariants.
+- Backend scan responses set `response_markdown` to an empty string whenever
+  `include_markdown` is false. Stored prompt loads also always return
+  `markdown: ""` with `markdown_included: false`.
+- The browser-bridge scan result parser currently validates only that
+  `markdown` is a string and `markdown_included` is a boolean. A malformed
+  bridge response could therefore send a large or sensitive markdown body while
+  claiming markdown was not included.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at `227c618` with `HEAD...origin/main`
+  returning `0 0`.
+- Re-read backend scan response construction and stored prompt load response
+  construction, confirming non-included markdown bodies should be empty.
+- Added RED API tests for scan and stored-prompt bridge payloads that set
+  `markdown_included: false` while returning non-empty `markdown`.
+- Confirmed RED first: focused API suite failed 114/116 only on the two new
+  missing-rejection cases.
+- Added parser validation requiring `markdown` to be empty whenever
+  `markdown_included` is false.
+- Confirmed GREEN after the parser change: focused API suite passes 116/116.
+- Confirmed the broader UI/helper suite still passes 280/280 and the production
+  Vite build succeeds after the parser change.
+- Verified the local preview stored-prompt load flow with Node Playwright: a
+  malformed `/api/prompts` response with `markdown_included: false` and a
+  non-empty hidden markdown body is rejected as a sanitized bridge error, and
+  the hidden markdown body does not render.
+- Removed the temporary preview QA script and confirmed port 5319 was free.
+- Confirmed the full project check passes after the markdown flag parser/test
+  change.
+- Confirmed pre-staging whitespace, repo root, origin parity, private GitHub
+  visibility, remote list, and cleanup checks before staging explicit paths.
+- Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then confirmed the staged secret scan found no leaks.
+
+Changes:
+
+- `working.md`: records the current scan markdown flag validation slice.
+- `src/promptVaultApi.ts`: adds `markdown_included`/`markdown` consistency
+  validation for scan-result parser responses.
+- `tests/promptVaultApi.test.ts`: adds hidden markdown body rejection cases for
+  scan and stored-prompt bridge responses.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 114/116 only on the new hidden markdown body rejection cases.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 116/116 after the parser validation change.
+- Broader UI/helper suite: `npm run test:ui` passed 280/280.
+- Production build: `npm run build` passed.
+- Preview QA helper: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  returned usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5319" --port 5319 --timeout 30 node /tmp/promptvault_markdown_flag_qa.mjs http://127.0.0.1:5319`
+  passed.
+- Cleanup: `test ! -e /tmp/promptvault_markdown_flag_qa.mjs && echo temp_absent`
+  returned `temp_absent`; `! lsof -nP -iTCP:5319 -sTCP:LISTEN && echo port_5319_free`
+  returned `port_5319_free`.
+- Full project check: `npm run check` passed, including `npm run test:ui`
+  280/280, `npm run build`, `cargo test` 84 lib tests and 16 CLI tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; `git rev-parse --show-toplevel` returned
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md` modified; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` showed only `origin`;
+  `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `PRIVATE` and `isPrivate: true`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` scanned
+  about 7.11 KB and found no leaks before the implementation commit.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Restage `working.md`, rerun staged security checks, commit, push, and parity
+  verification.
+
+## Previous Slice - 2026-06-08 Improvement gap delta validation
 
 Current Goal:
 
@@ -127,7 +231,7 @@ Research:
 Next Steps:
 
 - Slice is clean and pushed through
-  `18af281 docs: close improvement gap delta handoff`. Continue with the next
+  `227c618 docs: update improvement gap next steps`. Continue with the next
   narrow autonomous QA hardening slice from the clean tree.
 
 ## Previous Slice - 2026-06-08 Improvement score delta validation

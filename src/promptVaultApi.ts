@@ -724,6 +724,12 @@ function isScanOutputPathState(outputPath: unknown, markdownWritten: unknown): b
   return markdownWritten === true && isNonBlankString(outputPath);
 }
 
+function isMarkdownBodyState(markdown: unknown, markdownIncluded: unknown): boolean {
+  return typeof markdown === "string"
+    && typeof markdownIncluded === "boolean"
+    && (markdownIncluded || markdown.length === 0);
+}
+
 function isImportBatchPromptCounts(value: unknown): boolean {
   return isRecord(value)
     && Array.isArray(value.prompts)
@@ -938,7 +944,7 @@ function parseScanResult(value: unknown): ScanResult {
   if (!isRecord(value)
     || !isTimestampString(value.generated_at)
     || !isScanOutputPathState(value.output_path, value.markdown_written)
-    || typeof value.markdown !== "string"
+    || !isMarkdownBodyState(value.markdown, value.markdown_included)
     || !isScanStats(value.stats)
     || !Array.isArray(value.prompts)
     || !value.prompts.every(isPromptRecord)
@@ -952,7 +958,6 @@ function parseScanResult(value: unknown): ScanResult {
     || !isUntruncatedSourcePromptCounts(value)
     || !isUntruncatedSourceWeakCounts(value)
     || !isPreviewSortString(value.preview_sort)
-    || typeof value.markdown_included !== "boolean"
     || typeof value.markdown_written !== "boolean"
     || !(isPersistStats(value.persistence) || value.persistence === null)
     || !isNonBlankStringArray(value.warnings)) {

@@ -1497,6 +1497,54 @@ test("browser bridge scan results reject output paths when markdown was not writ
   );
 });
 
+test("browser bridge scan results reject hidden markdown bodies", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanResult({
+    markdown: "# Hidden PromptVault export\n\nPrompt body should not be serialized.",
+    markdown_included: false,
+    markdown_written: false,
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Hidden PromptVault export|Prompt body should not be serialized|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge stored prompt loads reject hidden markdown bodies", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanResult({
+    markdown: "# Hidden stored prompt export\n\nStored prompt body should stay omitted.",
+    markdown_included: false,
+    markdown_written: false,
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadStoredPrompts(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Hidden stored prompt export|Stored prompt body should stay omitted|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject written markdown without output paths", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

@@ -145,12 +145,64 @@ pub struct ProjectWorkReport {
     pub warnings: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSummaryCitation {
+    pub id: String,
+    pub date: String,
+    pub project: String,
+    pub title: String,
+    pub status: String,
+    pub source_path: String,
+    pub source_file: String,
+    pub evidence: String,
+    pub session_evidence_count: usize,
+    pub session_sources: Vec<FrequencyItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSummary {
+    pub date: String,
+    pub project: String,
+    pub headline: String,
+    pub work_item_count: usize,
+    pub session_evidence_count: usize,
+    pub unique_session_evidence_count: usize,
+    pub citations: Vec<ProjectWorkSummaryCitation>,
+    pub next_actions: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSummaryNarrative {
+    pub provider: String,
+    pub used_ai: bool,
+    pub markdown: String,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSummaryResult {
+    pub generated_at: String,
+    pub provider: String,
+    pub used_ai: bool,
+    pub narrative_markdown: String,
+    pub summaries: Vec<ProjectWorkSummary>,
+    pub report: ProjectWorkReport,
+    pub warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkReportOptions {
     pub limit: Option<usize>,
     pub session_limit: Option<usize>,
     pub database_path: Option<String>,
     pub refresh_session_index: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSummaryOptions {
+    pub report: ProjectWorkReportOptions,
+    pub summary_limit: Option<usize>,
+    pub force_local: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -912,6 +964,34 @@ pub fn run_project_work_report(
         );
     }
     Ok(report)
+}
+
+pub async fn run_project_work_summary(
+    options: ProjectWorkSummaryOptions,
+) -> Result<ProjectWorkSummaryResult, Box<dyn std::error::Error>> {
+    if matches!(options.summary_limit, Some(0)) {
+        return Err("work-summary summary_limit requires a positive integer".into());
+    }
+    let report = run_project_work_report(options.report)?;
+    let summaries = build_project_work_summaries(&report, options.summary_limit.unwrap_or(20));
+    let narrative = project_work_summary_narrative_with_env(
+        &summaries,
+        options.force_local.unwrap_or(true),
+        load_improve_env(),
+    )
+    .await?;
+    let mut warnings = report.warnings.clone();
+    warnings.extend(narrative.warnings.clone());
+
+    Ok(ProjectWorkSummaryResult {
+        generated_at: Utc::now().to_rfc3339(),
+        provider: narrative.provider,
+        used_ai: narrative.used_ai,
+        narrative_markdown: narrative.markdown,
+        summaries,
+        report,
+        warnings,
+    })
 }
 
 pub fn run_import_batch(
@@ -3043,6 +3123,387 @@ fn refresh_project_work_session_summary(report: &mut ProjectWorkReport) {
     report.session_sources = rank_counts(source_counts, usize::MAX);
     report.session_evidence_unique_count = unique_keys.len();
     report.session_evidence_unique_sources = rank_counts(unique_source_counts, usize::MAX);
+}
+
+fn build_project_work_summaries(
+    report: &ProjectWorkReport,
+    limit: usize,
+) -> Vec<ProjectWorkSummary> {
+    let mut group_order = Vec::<(String, String)>::new();
+    let mut grouped = BTreeMap::<(String, String), Vec<&ProjectWorkItem>>::new();
+    for item in &report.items {
+        let key = (item.date.clone(), item.project.clone());
+        if !grouped.contains_key(&key) {
+            group_order.push(key.clone());
+        }
+        grouped.entry(key).or_default().push(item);
+    }
+
+    group_order
+        .into_iter()
+        .filter_map(|key| grouped.remove(&key).map(|items| (key, items)))
+        .take(limit)
+        .map(|((date, project), items)| {
+            let mut unique_session_keys = BTreeSet::new();
+            let mut citations = Vec::new();
+            for (index, item) in items.iter().enumerate() {
+                unique_session_keys.extend(item.session_evidence_keys.iter().cloned());
+                citations.push(ProjectWorkSummaryCitation {
+                    id: format!("{}-{}-{}", date, summary_id_segment(&project), index + 1),
+                    date: item.date.clone(),
+                    project: item.project.clone(),
+                    title: item.title.clone(),
+                    status: item.status.clone(),
+                    source_path: item.source_path.clone(),
+                    source_file: item.source_file.clone(),
+                    evidence: item.evidence.clone(),
+                    session_evidence_count: item.session_evidence_count,
+                    session_sources: item.session_sources.clone(),
+                });
+            }
+
+            let work_item_count = items.len();
+            let session_evidence_count = items
+                .iter()
+                .map(|item| item.session_evidence_count)
+                .sum::<usize>();
+            let title_list = citations
+                .iter()
+                .map(|citation| citation.title.as_str())
+                .take(4)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let headline = if title_list.is_empty() {
+                format!("{project} recorded {work_item_count} work item(s) on {date}.")
+            } else {
+                format!("{project}: {title_list}")
+            };
+            let next_actions = if citations.iter().any(|citation| {
+                citation.status == "current"
+                    && citation.evidence.to_ascii_lowercase().contains("next")
+            }) {
+                vec!["Review current slice next-step evidence before continuing.".to_string()]
+            } else {
+                Vec::new()
+            };
+
+            ProjectWorkSummary {
+                date,
+                project,
+                headline: truncate_chars(&headline, 220),
+                work_item_count,
+                session_evidence_count,
+                unique_session_evidence_count: unique_session_keys.len(),
+                citations,
+                next_actions,
+            }
+        })
+        .collect()
+}
+
+fn summary_id_segment(text: &str) -> String {
+    let segment = text
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    let segment = segment.trim_matches('-');
+    if segment.is_empty() {
+        "project".to_string()
+    } else {
+        segment.to_string()
+    }
+}
+
+async fn project_work_summary_narrative_with_env(
+    summaries: &[ProjectWorkSummary],
+    force_local: bool,
+    env: HashMap<String, String>,
+) -> Result<ProjectWorkSummaryNarrative, Box<dyn std::error::Error>> {
+    if force_local {
+        return Ok(local_project_work_summary_narrative(summaries, Vec::new()));
+    }
+
+    let digest = project_work_summary_digest(summaries);
+    if digest.trim().is_empty() {
+        return Ok(local_project_work_summary_narrative(summaries, Vec::new()));
+    }
+    let flags = detect_risks(&digest);
+    if !flags.is_empty() {
+        return Ok(local_project_work_summary_narrative(
+            summaries,
+            vec![format!(
+                "요약 근거에 위험 패턴 텍스트({})가 있어 외부 AI provider 대신 로컬 fallback을 사용했습니다.",
+                flags.join(", ")
+            )],
+        ));
+    }
+
+    let mut warnings = Vec::new();
+    if let Some(api_key) = openai_api_key_from_env(&env) {
+        match request_openai_project_work_summary(&digest, &env, &api_key).await {
+            Ok(mut narrative) => {
+                narrative.warnings.extend(warnings);
+                return Ok(narrative);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    }
+    if let Some(api_key) = glm_api_key_from_env(&env) {
+        match request_glm_project_work_summary(&digest, &env, &api_key).await {
+            Ok(mut narrative) => {
+                narrative.warnings.extend(warnings);
+                return Ok(narrative);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    }
+    if openai_api_key_from_env(&env).is_none() && glm_api_key_from_env(&env).is_none() {
+        warnings.push(
+            "OPENAI_API_KEY 및 GLM_API_KEY/GLM_API_KEY_2가 없어 로컬 fallback을 사용했습니다."
+                .to_string(),
+        );
+    }
+    Ok(local_project_work_summary_narrative(summaries, warnings))
+}
+
+async fn request_openai_project_work_summary(
+    digest: &str,
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkSummaryNarrative, String> {
+    let endpoint = normalize_openai_responses_endpoint(
+        &env.get("OPENAI_RESPONSES_ENDPOINT")
+            .or_else(|| env.get("OPENAI_BASE_URL"))
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_OPENAI_RESPONSES_ENDPOINT.to_string()),
+    );
+    let model = openai_model_from_env(env);
+    let (system, user) = project_work_summary_messages(digest);
+    let body = serde_json::json!({
+        "model": model,
+        "input": [
+            {
+                "role": "developer",
+                "content": [
+                    { "type": "input_text", "text": system }
+                ]
+            },
+            {
+                "role": "user",
+                "content": [
+                    { "type": "input_text", "text": user }
+                ]
+            }
+        ],
+        "temperature": 0.2,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "project_work_summary",
+                "strict": true,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "summary_markdown": { "type": "string" }
+                    },
+                    "required": ["summary_markdown"]
+                }
+            }
+        }
+    });
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|err| {
+            format!("OpenAI work-summary 요청 실패: {err}; 다음 provider 또는 로컬 fallback을 사용합니다.")
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "OpenAI work-summary가 HTTP {status}를 반환해 다음 provider 또는 로컬 fallback을 사용합니다."
+        ));
+    }
+    let value = response.json::<Value>().await.map_err(|err| {
+        format!("OpenAI work-summary 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용합니다.")
+    })?;
+    let content = openai_response_content(&value).ok_or_else(|| {
+        "OpenAI work-summary 응답에 summary_markdown이 없어 다음 provider 또는 로컬 fallback을 사용합니다."
+            .to_string()
+    })?;
+    project_work_summary_from_content("openai", &content).ok_or_else(|| {
+        "OpenAI work-summary 응답에 비어 있지 않은 summary_markdown이 없어 다음 provider 또는 로컬 fallback을 사용합니다."
+            .to_string()
+    })
+}
+
+async fn request_glm_project_work_summary(
+    digest: &str,
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkSummaryNarrative, String> {
+    let endpoint = normalize_chat_endpoint(
+        &env.get("GLM_CODING_ENDPOINT")
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_GLM_CHAT_ENDPOINT.to_string()),
+    );
+    let model = glm_model_from_env(env);
+    let (system, user) = project_work_summary_messages(digest);
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [
+            { "role": "system", "content": system },
+            { "role": "user", "content": user }
+        ],
+        "temperature": 0.2,
+        "response_format": { "type": "json_object" }
+    });
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|err| format!("GLM work-summary 요청 실패: {err}; 로컬 fallback을 사용했습니다."))?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "GLM work-summary가 HTTP {status}를 반환해 로컬 fallback을 사용했습니다."
+        ));
+    }
+    let value = response
+        .json::<Value>()
+        .await
+        .map_err(|err| format!("GLM work-summary 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용했습니다."))?;
+    let content = value
+        .pointer("/choices/0/message/content")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "GLM work-summary 응답 content가 없어 로컬 fallback을 사용했습니다.".to_string())?;
+    project_work_summary_from_content("glm", content).ok_or_else(|| {
+        "GLM work-summary 응답에 비어 있지 않은 summary_markdown이 없어 로컬 fallback을 사용했습니다.".to_string()
+    })
+}
+
+fn project_work_summary_messages(digest: &str) -> (&'static str, String) {
+    let system = "You summarize project work evidence for an engineering operator. Use Korean. Use only the supplied evidence. Preserve citation IDs exactly. Do not invent dates, projects, tasks, sessions, or next actions. Return JSON with key summary_markdown.";
+    let mut user = String::new();
+    user.push_str("Evidence digest:\n");
+    user.push_str(digest.trim());
+    user.push_str("\n\nReturn JSON: {\"summary_markdown\":\"...\"}.");
+    (system, user)
+}
+
+fn project_work_summary_from_content(
+    provider: &str,
+    content: &str,
+) -> Option<ProjectWorkSummaryNarrative> {
+    if let Ok(parsed) = serde_json::from_str::<Value>(content) {
+        let markdown = parsed
+            .get("summary_markdown")
+            .or_else(|| parsed.get("summary"))
+            .and_then(Value::as_str)?
+            .trim()
+            .to_string();
+        if markdown.is_empty() {
+            return None;
+        }
+        return Some(ProjectWorkSummaryNarrative {
+            provider: provider.to_string(),
+            used_ai: true,
+            markdown,
+            warnings: Vec::new(),
+        });
+    }
+    let markdown = content.trim().to_string();
+    if markdown.is_empty() {
+        return None;
+    }
+    Some(ProjectWorkSummaryNarrative {
+        provider: provider.to_string(),
+        used_ai: true,
+        markdown,
+        warnings: vec![format!(
+            "{provider} provider가 JSON이 아닌 work-summary 텍스트를 반환해 모델 출력을 그대로 보존했습니다."
+        )],
+    })
+}
+
+fn local_project_work_summary_narrative(
+    summaries: &[ProjectWorkSummary],
+    warnings: Vec<String>,
+) -> ProjectWorkSummaryNarrative {
+    let markdown = if summaries.is_empty() {
+        "요약할 프로젝트 작업 항목이 없습니다.".to_string()
+    } else {
+        summaries
+            .iter()
+            .map(|summary| {
+                let citation_ids = summary
+                    .citations
+                    .iter()
+                    .map(|citation| citation.id.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "- {} {}: {} (작업 {}개, 세션 증거 {}개, citations: {})",
+                    summary.date,
+                    summary.project,
+                    summary.headline,
+                    summary.work_item_count,
+                    summary.session_evidence_count,
+                    citation_ids
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    ProjectWorkSummaryNarrative {
+        provider: "local-citation-rules".to_string(),
+        used_ai: false,
+        markdown,
+        warnings,
+    }
+}
+
+fn project_work_summary_digest(summaries: &[ProjectWorkSummary]) -> String {
+    let mut out = String::new();
+    for summary in summaries {
+        out.push_str(&format!(
+            "Project: {}\nDate: {}\nHeadline: {}\nItems: {}\nSession evidence: {} unique {}\n",
+            summary.project,
+            summary.date,
+            redact_sensitive_text(&summary.headline),
+            summary.work_item_count,
+            summary.session_evidence_count,
+            summary.unique_session_evidence_count
+        ));
+        for citation in &summary.citations {
+            out.push_str(&format!(
+                "- Citation {} [{}] {}: {} | evidence: {} | source: {}\n",
+                citation.id,
+                citation.status,
+                redact_sensitive_text(&citation.title),
+                citation.session_evidence_count,
+                redact_sensitive_text(&citation.evidence),
+                citation.source_path
+            ));
+        }
+        out.push('\n');
+    }
+    truncate_chars(&out, 24_000)
 }
 
 fn workspace_matches_project(cwd: &str, project: &str) -> bool {
@@ -7380,6 +7841,126 @@ Progress:
         assert!(warnings.is_empty());
 
         let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn project_work_summaries_group_items_by_date_project_with_citations() {
+        let path = PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md");
+        let text = r#"## Current Slice - 2026-06-09 Parser repair
+
+- Fixed parser state mismatch.
+
+## Previous Slice - 2026-06-09 Browser QA
+
+- Verified bridge retry flow.
+"#;
+        let mut items = project_progress_work_items_from_text(&path, text);
+        let mut prompt = dated_record("summary-session", "2026-06-08T15:30:00Z");
+        prompt.source = "Codex session metadata".to_string();
+        prompt.text =
+            "Codex session project targets: /Users/wj/Ai/System/10_Projects/ExampleProject"
+                .to_string();
+        attach_session_evidence(&mut items, &[prompt]);
+        let mut report = ProjectWorkReport {
+            generated_at: "2026-06-09T01:00:00Z".to_string(),
+            total_items: items.len(),
+            project_count: 1,
+            date_count: 1,
+            files_seen: 1,
+            items_by_date: vec![FrequencyItem {
+                text: "2026-06-09".to_string(),
+                count: 2,
+            }],
+            items_by_project: vec![FrequencyItem {
+                text: "ExampleProject".to_string(),
+                count: 2,
+            }],
+            session_scan_prompt_count: 1,
+            session_scan_sources: Vec::new(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_unique_count: 0,
+            session_evidence_unique_sources: Vec::new(),
+            session_evidence_index_used: true,
+            session_evidence_index_updated: false,
+            session_evidence_index_count: 1,
+            items,
+            warnings: Vec::new(),
+        };
+        refresh_project_work_session_summary(&mut report);
+
+        let summaries = build_project_work_summaries(&report, 10);
+
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].date, "2026-06-09");
+        assert_eq!(summaries[0].project, "ExampleProject");
+        assert_eq!(summaries[0].work_item_count, 2);
+        assert_eq!(summaries[0].session_evidence_count, 2);
+        assert_eq!(summaries[0].citations.len(), 2);
+        assert_eq!(summaries[0].citations[0].id, "2026-06-09-ExampleProject-1");
+        assert!(summaries[0]
+            .headline
+            .contains("Parser repair, Browser QA"));
+        assert!(summaries[0].citations[0]
+            .evidence
+            .contains("Fixed parser state mismatch"));
+        assert_eq!(summaries[0].citations[0].session_sources[0].text, "Codex session metadata");
+    }
+
+    #[tokio::test]
+    async fn project_work_summary_with_env_uses_glm_provider() {
+        let response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": "{\"summary_markdown\":\"- ExampleProject: Parser repair and Browser QA\\n- Citation: 2026-06-09-ExampleProject-1\"}"
+                }
+            }]
+        });
+        let (base_url, request_rx) = spawn_json_server(200, response);
+        let summary = ProjectWorkSummary {
+            date: "2026-06-09".to_string(),
+            project: "ExampleProject".to_string(),
+            headline: "ExampleProject: Parser repair, Browser QA".to_string(),
+            work_item_count: 2,
+            session_evidence_count: 2,
+            unique_session_evidence_count: 1,
+            citations: vec![ProjectWorkSummaryCitation {
+                id: "2026-06-09-ExampleProject-1".to_string(),
+                date: "2026-06-09".to_string(),
+                project: "ExampleProject".to_string(),
+                title: "Parser repair".to_string(),
+                status: "current".to_string(),
+                source_path: "/Users/wj/Ai/System/10_Projects/ExampleProject/working.md"
+                    .to_string(),
+                source_file: "working.md".to_string(),
+                evidence: "Fixed parser state mismatch.".to_string(),
+                session_evidence_count: 1,
+                session_sources: vec![FrequencyItem {
+                    text: "Codex session metadata".to_string(),
+                    count: 1,
+                }],
+            }],
+            next_actions: Vec::new(),
+        };
+        let mut env = HashMap::new();
+        env.insert("GLM_API_KEY".to_string(), "mock-glm-key".to_string());
+        env.insert("GLM_CODING_MODEL".to_string(), "mock-glm-model".to_string());
+        env.insert("GLM_CODING_ENDPOINT".to_string(), base_url);
+
+        let narrative = project_work_summary_narrative_with_env(&[summary], false, env)
+            .await
+            .expect("summary narrative");
+
+        let request = request_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("captured glm request");
+        assert_eq!(narrative.provider, "glm");
+        assert!(narrative.used_ai);
+        assert!(narrative.markdown.contains("ExampleProject"));
+        assert!(narrative.markdown.contains("2026-06-09-ExampleProject-1"));
+        assert!(request.starts_with("POST /chat/completions HTTP/1.1"));
+        assert!(request.contains("authorization: Bearer mock-glm-key"));
+        assert!(request.contains("\"json_object\""));
     }
 
     #[test]

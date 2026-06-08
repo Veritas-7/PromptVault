@@ -1,5 +1,6 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import { qualityBandLabel } from "./qualityLabels.ts";
+import { riskFlagLabel } from "./riskLabels.ts";
 import type { PromptRecord } from "./types";
 
 const PROMPT_ROW_SNIPPET_LENGTH = 120;
@@ -36,7 +37,10 @@ export function promptRowAriaLabel(
 ): string {
   const position = `프롬프트 ${index + 1} / ${total}`;
   const timestamp = prompt.timestamp?.trim() || "시간 없음";
-  const label = `${position}: ${prompt.source}, ${timestamp}, ${prompt.word_count.toLocaleString()}개 단어, 품질 ${prompt.quality.score} ${qualityBandLabel(prompt.quality.band)}, ${promptRowPreviewText(prompt.text)}`;
+  const riskLabel = prompt.risk_flags.length
+    ? `, 위험 패턴: ${prompt.risk_flags.map(riskFlagLabel).join(", ")}`
+    : "";
+  const label = `${position}: ${prompt.source}, ${timestamp}, ${prompt.word_count.toLocaleString()}개 단어, 품질 ${prompt.quality.score} ${qualityBandLabel(prompt.quality.band)}${riskLabel}, ${promptRowPreviewText(prompt.text)}`;
   const reason = lockState ? activeActionLockReason(lockState) : null;
   if (reason) return `${label}. ${reason}에는 다른 프롬프트를 선택할 수 없습니다`;
   return label;

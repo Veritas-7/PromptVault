@@ -79,6 +79,17 @@ test("prompt row previews redact secret-like tokens", () => {
   assert.match(label, /\[REDACTED_LONG_TOKEN\]/);
 });
 
+test("prompt row labels include localized risk flags", () => {
+  const label = promptRowAriaLabel(
+    promptRecord({ risk_flags: ["possible_api_key", "private_key"] }),
+    0,
+    1,
+  );
+
+  assert.match(label, /위험 패턴: 비밀값 형태 할당, 비공개 키 표식/);
+  assert.doesNotMatch(label, /possible_api_key|private_key/);
+});
+
 test("prompt row labels handle missing timestamps and empty prompts", () => {
   assert.equal(
     promptRowAriaLabel(promptRecord({ timestamp: null, text: "   ", word_count: 0 }), 0, 1),

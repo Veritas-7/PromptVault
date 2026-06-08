@@ -1,12 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 15:13 KST
+Updated: 2026-06-08 15:19 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Risk flag label alignment
+## Current Slice - 2026-06-08 Risky row aria label
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make risky prompt rows expose the same localized risk information through
+  their accessible name that sighted users see in the row.
+
+Context:
+
+- Previous risk flag label alignment is pushed to `origin/main` as
+  `560649a fix: align risk flag labels`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus the CLI browser bridge and Playwright.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- Prompt rows render visible `.risk` content, but each row button also has an
+  explicit `aria-label`. That accessible name replaced the row contents and did
+  not include the risk segment, so screen-reader users could miss the warning.
+
+Progress:
+
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree was clean at `main...origin/main` and parity was
+  `0 0` before this slice.
+- Re-read test-driven-development and webapp-testing instructions before
+  implementation/verification.
+- Added RED coverage to `tests/promptRowA11y.test.ts` requiring risky row
+  `aria-label` text to include localized risk labels and omit raw backend risk
+  identifiers.
+- Confirmed RED: the focused prompt-row test failed because the label was only
+  `프롬프트 1 / 1: Codex, ... Return exactly OK` without `위험 패턴`.
+- Updated `promptRowAriaLabel` to append `위험 패턴: ...` with the shared
+  `riskFlagLabel` mapping whenever `prompt.risk_flags` is non-empty.
+- Confirmed focused GREEN with prompt-row and risk-label tests.
+- Browser QA loaded stored prompts through the local bridge, found 12 risky
+  rows, and confirmed the first risky row's `aria-label` includes localized
+  risk information, does not expose raw backend risk IDs, and had zero
+  console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+
+Changes:
+
+- `src/promptRowA11y.ts`: includes localized risk labels in risky prompt row
+  accessible names.
+- `tests/promptRowA11y.test.ts`: adds regression coverage for localized risky
+  row aria labels and raw backend ID suppression.
+- `working.md`: records this slice.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on `prompt row labels include localized risk flags` because the label
+  lacked `위험 패턴`.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts tests/riskLabels.test.ts`
+  passed, 11/11.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5213" --port 5213 --server "npm run dev -- --host 127.0.0.1 --port 5214" --port 5214 --timeout 120 -- /bin/bash -lc ...`
+  passed with 200 rows loaded, 12 risky rows, risky row aria label containing
+  localized risk text, no raw backend risk IDs in the aria label, and zero
+  console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 311/311,
+  production build, Rust lib tests 86/86, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- `gitleaks protect --staged` passed with no leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 701.51 MB with
+  no leaks.
+
+Issues:
+
+- No product blocker after the risky row aria label fix.
+- Browser harness note remains: seed `promptvault.browserBridgeUrl` in
+  localStorage before navigation when using non-default bridge ports.
+
+Research:
+
+- No external research. This is direct accessibility QA and implementation work.
+
+Next Steps:
+
+- Push this closeout commit to `origin/main`, run final parity/status checks,
+  then continue from a clean pushed tree and pick the next autonomous
+  QA/improvement slice.
+
+## Previous Slice - 2026-06-08 Risk flag label alignment
 
 Current Goal:
 

@@ -362,6 +362,17 @@ function importEventIdsAreUnique(events: unknown): boolean {
   return recordNumberFieldValuesAreUnique(events, "id");
 }
 
+function importEventIdsAreDescending(events: unknown): boolean {
+  if (!Array.isArray(events)) return false;
+  let previousId: number | null = null;
+  for (const event of events) {
+    if (!isRecord(event) || !isNonNegativeSafeInteger(event.id)) return false;
+    if (previousId !== null && event.id >= previousId) return false;
+    previousId = event.id;
+  }
+  return true;
+}
+
 function frequencyTextsAreUnique(items: unknown): boolean {
   return recordStringFieldValuesAreUnique(items, "text");
 }
@@ -898,6 +909,7 @@ function parseImportEventsResult(value: unknown): ImportEventsResult {
     || !Array.isArray(value.events)
     || !value.events.every(isImportEvent)
     || !importEventIdsAreUnique(value.events)
+    || !importEventIdsAreDescending(value.events)
     || !isNonNegativeSafeInteger(value.total_events)
     || value.total_events < value.events.length) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);

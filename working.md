@@ -1,10 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 09:20 KST
+Updated: 2026-06-08 09:29 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Import event ordering validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge import event payloads whose event rows are not ordered
+  newest-first by event id.
+
+Context:
+
+- Recent slices hardened scan/stored-load response-state invariants.
+- Backend `read_import_events` returns rows using `ORDER BY id DESC`, so the UI
+  can treat the first row as the latest import event.
+- The frontend browser-bridge import event parser currently validates duplicate
+  ids and event counters, but does not reject valid-looking rows returned in an
+  older-first or mixed order.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `8c3cfaf docs: close stored load state handoff` with `HEAD...origin/main`
+  returning `0 0`.
+- Re-read backend import event loading and frontend import event parsing,
+  confirming the descending event id order contract is not enforced by the
+  bridge parser.
+- Added a RED API test for import event payloads whose rows are individually
+  valid but ordered with an older event before a newer event.
+- Confirmed RED first: focused API suite failed 118/119 only on the new
+  non-descending event id missing-rejection case.
+- Added the minimal frontend parser validation requiring import event ids to be
+  strictly descending, matching the backend newest-first query contract.
+- Confirmed GREEN: focused API suite passed 119/119 after the parser change.
+- Verified the local preview import-event refresh flow with Node Playwright: a
+  malformed non-descending `/api/import-events` response shows the sanitized
+  bridge format error and does not leak raw event labels or formatting errors.
+- Removed the temporary preview QA script and confirmed port 5321 was free.
+
+Changes:
+
+- `working.md`: records the current import event ordering validation slice.
+- `src/promptVaultApi.ts`: rejects import event bridge responses unless event
+  ids are strictly descending.
+- `tests/promptVaultApi.test.ts`: adds a non-descending event id rejection case
+  for import event bridge responses.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 118/119 only on the new non-descending import event id rejection case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 119/119 after adding the descending event id parser check.
+- Broader UI suite: `npm run test:ui` passed 283/283.
+- Production build: `npm run build` passed; Vite emitted
+  `dist/assets/index-BbLSrzAq.js` and `dist/assets/index-D81jZHaU.css`.
+- Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  printed usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5321" --port 5321 --timeout 30 node /tmp/promptvault_import_event_order_qa.mjs http://127.0.0.1:5321`
+  passed. The script confirmed connected browser bridge status, clicked import
+  event refresh, saw the sanitized malformed-response error, and verified the
+  page omitted raw `Codex older`, `Claude newer`, aggregate event/prompt copy,
+  `toLocaleString`, `RangeError`, `TypeError`, and `undefined`.
+- Preview cleanup: `test ! -e /tmp/promptvault_import_event_order_qa.mjs`
+  returned `temp_absent`; `! lsof -nP -iTCP:5321 -sTCP:LISTEN` returned
+  `port_5321_free`.
+- Full project check: `npm run check` passed. It reran `npm run test:ui`
+  283/283, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
+  and `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  produced no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only the three expected modified files; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` lists only
+  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned private GitHub visibility; temp script remained absent and port 5321
+  remained free.
+- Staged explicit paths only:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security scan: `gitleaks protect --staged --no-banner --redact`
+  scanned about 7.83 KB and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run broader UI tests, production build, local preview QA for the malformed
+  import event order flow, full project check, security scans, commit, and push.
 
 ## Previous Slice - 2026-06-08 Stored prompt load response-state validation
 
@@ -66,6 +166,11 @@ Progress:
   found.
 - Pushed the implementation commit to `origin main`, fetched `origin main`, and
   confirmed `HEAD...origin/main` parity returned `0 0`.
+- Committed the closeout update as
+  `8c3cfaf docs: close stored load state handoff`.
+- Ran a full-tree secret scan after the closeout commit; no leaks were found.
+- Pushed the closeout commit to `origin main`, fetched `origin main`, and
+  confirmed `HEAD...origin/main` parity returned `0 0`.
 
 Changes:
 
@@ -118,6 +223,16 @@ Tests:
   701.23 MB and found no leaks before push.
 - Push/parity: `git push origin main` updated `main` from `5894264` to
   `5469e26`; `git fetch origin main` completed; `git status --short --branch`
+  showed clean `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Closeout staged security: `gitleaks protect --staged --no-banner --redact`
+  scanned about 1.16 KB and found no leaks before the docs closeout commit.
+- Closeout commit:
+  `8c3cfaf docs: close stored load state handoff`.
+- Closeout full-tree security: `gitleaks dir . --no-banner --redact` scanned
+  about 701.23 MB and found no leaks before the docs closeout push.
+- Closeout push/parity: `git push origin main` updated `main` from `5469e26`
+  to `8c3cfaf`; `git fetch origin main` completed; `git status --short --branch`
   showed clean `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
   returned `0 0`.
 

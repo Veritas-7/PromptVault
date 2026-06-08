@@ -79,6 +79,18 @@ test("prompt row previews redact secret-like tokens", () => {
   assert.match(label, /\[REDACTED_LONG_TOKEN\]/);
 });
 
+test("prompt row previews redact quoted secret assignments with spaces", () => {
+  const text = `Use api_key="alpha beta gamma" only in local secrets.`;
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "Use [REDACTED_POSSIBLE_SECRET] only in local secrets.");
+  assert.doesNotMatch(preview, /alpha|beta|gamma/);
+  assert.doesNotMatch(label, /alpha|beta|gamma/);
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact private key blocks case-insensitively", () => {
   const text = [
     "-----begin test private key-----",

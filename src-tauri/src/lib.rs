@@ -3948,7 +3948,9 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
         vec![
             (
                 "possible_api_key",
-                Regex::new(r"(?i)(api[_-]?key|secret|token|password)\s*[:=](\s*\S+)?")
+                Regex::new(
+                    r#"(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|\S+)?"#,
+                )
                     .expect("api key regex"),
             ),
             (
@@ -6328,6 +6330,12 @@ mod tests {
     fn redact_sensitive_text_redacts_key_value_pairs() {
         let text = format!("api_key={}", "short-secret-value");
         assert_eq!(redact_sensitive_text(&text), "[REDACTED_POSSIBLE_API_KEY]");
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_quoted_key_value_pairs_with_spaces() {
+        let text = r#"api_key="alpha beta gamma""#;
+        assert_eq!(redact_sensitive_text(text), "[REDACTED_POSSIBLE_API_KEY]");
     }
 
     #[test]

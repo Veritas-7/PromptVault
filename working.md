@@ -1,12 +1,111 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 15:42 KST
+Updated: 2026-06-08 15:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Quality gap label normalization
+## Current Slice - 2026-06-08 Quoted secret assignment redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep frontend prompt row preview/accessibility redaction aligned with backend
+  scan redaction for quoted key-value secret assignments that contain spaces.
+
+Context:
+
+- Previous quality gap label normalization is pushed to `origin/main` as
+  `a3ccfce fix: normalize quality gap labels`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- The frontend preview regex and backend risk/redaction regex both handled
+  unquoted key-value secret tokens, but a quoted value with spaces left the
+  trailing words visible after the redaction marker.
+
+Progress:
+
+- Confirmed the working tree was clean at `main...origin/main` before this
+  slice.
+- Added RED frontend coverage in `tests/promptRowA11y.test.ts` requiring prompt
+  row preview and row accessible labels to redact a quoted secret assignment
+  with spaces.
+- Added RED backend coverage in `src-tauri/src/lib.rs` requiring
+  `redact_sensitive_text` to redact the same quoted assignment shape fully.
+- Confirmed RED: the focused frontend and Rust tests left the trailing quoted
+  value words visible after the redaction marker.
+- Updated frontend and backend key-value secret regexes to consume quoted
+  double-quoted or single-quoted values with spaces while preserving the
+  unquoted token path.
+- Confirmed focused GREEN for the new frontend and backend redaction cases.
+- Confirmed related regression tests for prompt row accessibility, risk labels,
+  and backend redaction remain green.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a quoted secret assignment. It confirmed the prompt row
+  preview and row `aria-label` contained `[REDACTED_POSSIBLE_SECRET]`, the
+  synthetic quoted value terms were absent from checked UI surfaces, the
+  localized risk label was visible, and there were zero console/page/API
+  failures.
+- Ran full `npm run check` successfully after implementation.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts quoted key-value secret assignments with
+  spaces in prompt row previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds regression coverage for quoted
+  assignment preview and accessible-name redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-key redaction with the
+  quoted value behavior and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 11/11.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_quoted_key_value_pairs_with_spaces`
+  passed, 1/1.
+- Related regression checks:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts tests/riskLabels.test.ts`
+  passed, 13/13.
+- Related backend redaction checks:
+  `cargo test redact_sensitive_text_redacts` passed, 3/3.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5196" --port 5196 --timeout 120 -- /bin/bash -lc ...`
+  passed with one synthetic stored prompt row, preview and `aria-label`
+  redacted, synthetic raw value terms absent from checked UI surfaces,
+  localized risk label visible, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 317/317,
+  production build, Rust lib tests 87/87, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- `gitleaks protect --staged` passed with no leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 701.53 MB with
+  no leaks.
+
+Issues:
+
+- No product blocker after aligning quoted value redaction.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for already detected secret-like key assignments.
+
+Next Steps:
+
+- Push this closeout commit to `origin/main`, run final parity/status checks,
+  then continue from a clean pushed tree and pick the next autonomous
+  QA/improvement slice.
+
+## Previous Slice - 2026-06-08 Quality gap label normalization
 
 Current Goal:
 

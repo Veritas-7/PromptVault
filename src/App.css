@@ -314,6 +314,11 @@ h3 {
   flex: 0 0 auto;
 }
 
+.work-log-proposal-approval.is-saved {
+  color: #276749;
+  font-weight: 600;
+}
+
 .work-log-candidate-excerpt {
   max-height: 8.5rem;
   overflow: auto;

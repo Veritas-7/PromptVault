@@ -315,6 +315,29 @@ function workLogExtractionRejectionSummaryLabel(reason: string | null): string {
   return labels[reason] ?? (reason.trim() ? "검증 실패" : "거절 사유 없음");
 }
 
+export function workLogExtractionSavedCandidateIds(
+  result: ProjectWorkLogExtractionItemsResult | null,
+): Set<string> {
+  return new Set((result?.items ?? []).map((item) => item.candidate_id));
+}
+
+export function workLogExtractionUnsavedAcceptedIds(
+  result: ProjectWorkLogExtractionProposalsResult | null,
+  savedCandidateIds: ReadonlySet<string>,
+): string[] {
+  return (result?.proposals ?? [])
+    .filter((proposal) => proposal.accepted && !savedCandidateIds.has(proposal.candidate_id))
+    .map((proposal) => proposal.candidate_id);
+}
+
+export function workLogProposalSaveStateText(
+  proposal: ProjectWorkLogExtractionProposal,
+  savedCandidateIds: ReadonlySet<string>,
+): string | null {
+  if (!proposal.accepted) return null;
+  return savedCandidateIds.has(proposal.candidate_id) ? "저장됨" : "저장 승인";
+}
+
 export function workLogExtractionFailureText(state: WorkLogExtractionState): string | null {
   if (state !== "failed") return null;
   return "AI 작업 추출 제안을 불러오지 못했습니다. provider 설정, 진행 로그 경로, 브리지 상태를 확인하세요.";

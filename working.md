@@ -1,10 +1,93 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 07:00 KST
+Updated: 2026-06-09 07:10 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 saved extraction proposal state
+
+Current Goal:
+
+- After accepted work-log extraction proposals are saved, stop showing those
+  already-managed rows as pending `저장 승인` checkboxes.
+- Keep only accepted-but-unsaved proposals selectable for the save action, and
+  disable the save button once every accepted proposal in view is already
+  represented in managed work-log items.
+
+Context:
+
+- The previous slice made rejected candidates visible, but accepted proposals
+  could still look saveable after the bridge returned persisted extraction
+  items.
+- This made the UI overstate remaining operator work: managed rows and
+  accepted-but-unsaved proposals used the same approval control.
+
+Progress:
+
+- Added shared helpers that derive saved candidate ids from managed extraction
+  items and compute the accepted-but-unsaved proposal set.
+- Changed the extraction approval selection logic to initialize and retain only
+  unsaved accepted proposal ids.
+- After saving proposals, the UI refreshes managed extraction items and clears
+  candidate ids that are now persisted.
+- Accepted persisted proposal rows now show a green `저장됨` badge; rejected
+  rows still show no save control.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - adds `workLogExtractionSavedCandidateIds`;
+  - adds `workLogExtractionUnsavedAcceptedIds`;
+  - adds `workLogProposalSaveStateText`.
+- `src/App.tsx`:
+  - excludes saved candidate ids from selected save counts and save payloads;
+  - renders `data-work-log-proposal-saved` for persisted accepted rows.
+- `src/App.css`:
+  - styles the persisted `저장됨` badge.
+- `tests/workSummaryStatus.test.ts`:
+  - covers saved accepted rows, unsaved accepted rows, and rejected rows.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts` failed because
+    `workLogExtractionSavedCandidateIds` was not exported.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts`: PASS, 426 tests.
+- Headless browser QA with mocked bridge persistence:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_saved_proposal_state_qa.mjs'`: PASS.
+  - Before save: observed 2 `저장 승인` checkboxes.
+  - After save: observed 2 `저장됨` badges, 0 approval checkboxes, and a disabled
+    save button.
+  - Save request included exactly the two approved candidate ids.
+  - Observed approval meta:
+    `저장 완료 2개 · 저장 대기 0개 / accepted 2개`.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `426` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `155` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- This slice verifies the save-state transition with a deterministic bridge
+  mock so it does not write to the user's SQLite state.
+- The broader completion gap remains: rejected candidates still need an
+  reviewed AI extraction path, and unparsed project-local logs still need
+  broader AI-assisted normalization before the app can claim full daily/project
+  work management coverage.
+
+Next Steps:
+
+- Stage only this slice's changed PromptVault paths, run staged secret scan,
+  commit, and push.
+- Later: add the reviewed AI path for rejected candidates and extend ingestion
+  coverage for project-local working/progress logs.
 
 ## Current Slice - 2026-06-09 rejected extraction reason visibility
 

@@ -234,10 +234,13 @@ import {
   workLogExtractionProviderNoticeText,
   workLogExtractionRejectionSummaryText,
   workLogExtractionReviewLabel,
+  workLogExtractionSavedCandidateIds,
+  workLogExtractionUnsavedAcceptedIds,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
   workLogCoverageMetaText,
+  workLogProposalSaveStateText,
   workSummaryActionLabel,
   workSummaryFailureText,
   workSummaryIndexStatusText,
@@ -650,10 +653,15 @@ function App() {
   );
   const visibleWorkLogExtractionProposals =
     filteredWorkLogExtractionProposals.slice(0, WORK_LOG_EXTRACTION_DISPLAY_LIMIT);
-  const acceptedWorkLogExtractionCandidateIds = workLogExtractionResult
-    ? acceptedWorkLogExtractionIds(workLogExtractionResult)
-    : [];
-  const selectedApprovedWorkLogExtractionCandidateIds = acceptedWorkLogExtractionCandidateIds
+  const savedWorkLogExtractionCandidateIds = useMemo(
+    () => workLogExtractionSavedCandidateIds(workLogExtractionItemsResult),
+    [workLogExtractionItemsResult],
+  );
+  const unsavedAcceptedWorkLogExtractionCandidateIds = workLogExtractionUnsavedAcceptedIds(
+    workLogExtractionResult,
+    savedWorkLogExtractionCandidateIds,
+  );
+  const selectedApprovedWorkLogExtractionCandidateIds = unsavedAcceptedWorkLogExtractionCandidateIds
     .filter((candidateId) => approvedWorkLogExtractionCandidateIds.has(candidateId));
   const selectedApprovedWorkLogExtractionCount = selectedApprovedWorkLogExtractionCandidateIds.length;
   const workLogExtractionApprovalStatus = workLogExtractionApprovalText(
@@ -1003,7 +1011,7 @@ function App() {
       const nextAcceptedIds = new Set(acceptedWorkLogExtractionIds(next));
       setWorkLogExtractionResult(next);
       setApprovedWorkLogExtractionCandidateIds((current) => {
-        if (!save) return nextAcceptedIds;
+        if (!save) return new Set(workLogExtractionUnsavedAcceptedIds(next, savedWorkLogExtractionCandidateIds));
         return new Set([...current].filter((candidateId) => nextAcceptedIds.has(candidateId)));
       });
       setWorkLogExtractionState("ready");
@@ -1011,6 +1019,12 @@ function App() {
         setWorkLogExtractionItemsState("loading");
         const savedItems = await listProjectWorkLogExtractionItems(workLogExtractionItemOptions());
         setWorkLogExtractionItemsResult(savedItems);
+        const nextSavedIds = workLogExtractionSavedCandidateIds(savedItems);
+        setApprovedWorkLogExtractionCandidateIds((current) =>
+          new Set([...current].filter((candidateId) =>
+            nextAcceptedIds.has(candidateId) && !nextSavedIds.has(candidateId)
+          )),
+        );
         setWorkLogExtractionItemsState("ready");
       }
     } catch (err) {
@@ -2388,47 +2402,61 @@ function App() {
         {workLogExtractionResult ? (
           visibleWorkLogExtractionProposals.length ? (
             <div className="work-summary-list" data-work-log-extraction="true">
-              {visibleWorkLogExtractionProposals.map((proposal) => (
-                <article
-                  className="work-summary-row work-log-proposal-row"
-                  key={proposal.candidate_id}
-                >
-                  <div>
-                    <strong>{proposal.project}</strong>
-                    <span>{proposal.date ?? "날짜 미확정"}</span>
-                    {proposal.accepted ? (
-                      <label className="work-log-proposal-approval">
-                        <input
-                          checked={approvedWorkLogExtractionCandidateIds.has(proposal.candidate_id)}
-                          data-work-log-proposal-approval={proposal.candidate_id}
-                          onChange={(event) =>
-                            toggleApprovedWorkLogExtractionCandidate(
-                              proposal.candidate_id,
-                              event.currentTarget.checked,
-                            )}
-                          type="checkbox"
-                        />
-                        <span>저장 승인</span>
-                      </label>
-                    ) : null}
-                  </div>
-                  <p>{proposal.title}</p>
-                  <p className="work-log-proposal-evidence">{proposal.evidence}</p>
-                  <span>
-                    {proposal.accepted ? "accepted" : "rejected"} · {proposal.status} · confidence{" "}
-                    {proposal.confidence.toFixed(2)} · {proposal.candidate_id}
-                  </span>
-                  <span data-work-log-proposal-review={proposal.candidate_id}>
-                    {workLogExtractionReviewLabel(proposal, workLogExtractionResult)}
-                  </span>
-                  <span>
-                    {proposal.rejection_reason
-                      ? `reason ${proposal.rejection_reason} · `
-                      : ""}
-                    {proposal.source_path}
-                  </span>
-                </article>
-              ))}
+              {visibleWorkLogExtractionProposals.map((proposal) => {
+                const saveStateText = workLogProposalSaveStateText(
+                  proposal,
+                  savedWorkLogExtractionCandidateIds,
+                );
+                return (
+                  <article
+                    className="work-summary-row work-log-proposal-row"
+                    key={proposal.candidate_id}
+                  >
+                    <div>
+                      <strong>{proposal.project}</strong>
+                      <span>{proposal.date ?? "날짜 미확정"}</span>
+                      {saveStateText === "저장됨" ? (
+                        <span
+                          className="work-log-proposal-approval is-saved"
+                          data-work-log-proposal-saved={proposal.candidate_id}
+                        >
+                          <CheckCircle2 size={14} />
+                          {saveStateText}
+                        </span>
+                      ) : saveStateText ? (
+                        <label className="work-log-proposal-approval">
+                          <input
+                            checked={approvedWorkLogExtractionCandidateIds.has(proposal.candidate_id)}
+                            data-work-log-proposal-approval={proposal.candidate_id}
+                            onChange={(event) =>
+                              toggleApprovedWorkLogExtractionCandidate(
+                                proposal.candidate_id,
+                                event.currentTarget.checked,
+                              )}
+                            type="checkbox"
+                          />
+                          <span>{saveStateText}</span>
+                        </label>
+                      ) : null}
+                    </div>
+                    <p>{proposal.title}</p>
+                    <p className="work-log-proposal-evidence">{proposal.evidence}</p>
+                    <span>
+                      {proposal.accepted ? "accepted" : "rejected"} · {proposal.status} · confidence{" "}
+                      {proposal.confidence.toFixed(2)} · {proposal.candidate_id}
+                    </span>
+                    <span data-work-log-proposal-review={proposal.candidate_id}>
+                      {workLogExtractionReviewLabel(proposal, workLogExtractionResult)}
+                    </span>
+                    <span>
+                      {proposal.rejection_reason
+                        ? `reason ${proposal.rejection_reason} · `
+                        : ""}
+                      {proposal.source_path}
+                    </span>
+                  </article>
+                );
+              })}
               {hiddenWorkLogExtractionProposalCount ? (
                 <div className="work-summary-overflow">
                   그 외 AI 작업 추출 제안 {hiddenWorkLogExtractionProposalCount.toLocaleString()}개

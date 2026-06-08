@@ -17,6 +17,9 @@ import {
   workLogExtractionProviderNoticeText,
   workLogExtractionRejectionSummaryText,
   workLogExtractionReviewLabel,
+  workLogExtractionSavedCandidateIds,
+  workLogExtractionUnsavedAcceptedIds,
+  workLogProposalSaveStateText,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
@@ -737,6 +740,37 @@ test("saved work log extraction item labels describe managed extraction rows", (
     "저장된 AI 작업 추출 항목을 불러오지 못했습니다. 데이터베이스 경로나 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogExtractionItemsFailureText("ready"), null);
+});
+
+test("work log extraction save state excludes already managed rows", () => {
+  const proposals = extractionResult({
+    accepted_count: 2,
+    rejected_count: 1,
+    proposals: [
+      extractionProposal({ candidate_id: "work-log-PromptVault-saved" }),
+      extractionProposal({ candidate_id: "work-log-CareVault-unsaved" }),
+      extractionProposal({
+        accepted: false,
+        candidate_id: "work-log-CareVault-rejected",
+        date: null,
+        rejection_reason: "missing_date",
+      }),
+    ],
+  });
+  const savedIds = workLogExtractionSavedCandidateIds(extractionItemsResult({
+    items: [{
+      ...extractionItemsResult().items[0],
+      candidate_id: "work-log-PromptVault-saved",
+    }],
+  }));
+
+  assert.deepEqual(
+    workLogExtractionUnsavedAcceptedIds(proposals, savedIds),
+    ["work-log-CareVault-unsaved"],
+  );
+  assert.equal(workLogProposalSaveStateText(proposals.proposals[0], savedIds), "저장됨");
+  assert.equal(workLogProposalSaveStateText(proposals.proposals[1], savedIds), "저장 승인");
+  assert.equal(workLogProposalSaveStateText(proposals.proposals[2], savedIds), null);
 });
 
 test("work summary snapshot helpers expose bounded project/day drill-down", () => {

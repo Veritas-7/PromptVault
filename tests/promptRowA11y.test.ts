@@ -262,18 +262,34 @@ test("prompt row previews redact URL userinfo credentials", () => {
 });
 
 test("prompt row previews redact private key blocks case-insensitively", () => {
-  const text = [
-    "-----begin test private key-----",
-    "short-body",
-    "-----end test private key-----",
-  ].join("\n");
+  const pgpPrivateKeyBlock = ["PGP", "PRIVATE", "KEY", "BLOCK"].join(" ");
+  const cases = [
+    {
+      text: [
+        "-----begin test private key-----",
+        "short-body",
+        "-----end test private key-----",
+      ].join("\n"),
+      leakPattern: /begin test private key|short-body|end test private key/i,
+    },
+    {
+      text: [
+        `-----BEGIN ${pgpPrivateKeyBlock}-----`,
+        "short-pgp-body",
+        `-----END ${pgpPrivateKeyBlock}-----`,
+      ].join("\n"),
+      leakPattern: /PGP PRIVATE KEY BLOCK|short-pgp-body/i,
+    },
+  ];
 
-  const preview = promptRowPreviewText(text);
-  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+  for (const { text, leakPattern } of cases) {
+    const preview = promptRowPreviewText(text);
+    const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
 
-  assert.equal(preview, "[REDACTED_PRIVATE_KEY]");
-  assert.doesNotMatch(label, /begin test private key|short-body|end test private key/i);
-  assert.match(label, /\[REDACTED_PRIVATE_KEY\]/);
+    assert.equal(preview, "[REDACTED_PRIVATE_KEY]");
+    assert.doesNotMatch(label, leakPattern);
+    assert.match(label, /\[REDACTED_PRIVATE_KEY\]/);
+  }
 });
 
 test("prompt row labels include localized risk flags", () => {

@@ -1,12 +1,117 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 17:35 KST
+Updated: 2026-06-08 17:42 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 URL userinfo credential redaction
+## Current Slice - 2026-06-08 PGP private key block redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for PGP private key block headers, so stored prompt list surfaces do
+  not expose key material or PGP block markers.
+
+Context:
+
+- Previous URL userinfo credential redaction is pushed to `origin/main` with
+  source commit `e3f2bb9 fix: redact URL userinfo credentials` and docs
+  closeout `fa36531 docs: record URL userinfo credential verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed `PGP PRIVATE KEY BLOCK` prompts could remain
+  visible because the existing private-key block matcher only accepted headers
+  ending immediately after `PRIVATE KEY`.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact both regular private key blocks and PGP private key block variants.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same PGP private key block variant.
+- Confirmed RED: frontend prompt row preview returned the original PGP private
+  key block text, and backend redaction returned the original block text.
+- Extended the shared private-key block matcher with an optional ` BLOCK`
+  suffix after `PRIVATE KEY`.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a raw PGP private key block in a prompt row while selecting
+  a safe second prompt. It confirmed two stored prompt rows, private-key
+  redaction marker visible, no PGP block markers/body in row text, aria labels,
+  or page body, localized risk label visible, and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+- Initial staged gitleaks flagged the literal synthetic armored header fixture.
+  The frontend test now constructs that marker from fragments, preserving the
+  regression while keeping staged secret scanning clean.
+- Re-ran full `npm run check` after the synthetic fixture adjustment; it still
+  passed.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts `PGP PRIVATE KEY BLOCK` variants in prompt
+  row previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for PGP
+  private key block redaction.
+- `src-tauri/src/lib.rs`: aligns backend private-key block redaction with the
+  frontend matcher and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on PGP private key block redaction because the original block remained
+  visible.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_private_key_blocks` failed from
+  `src-tauri` because backend redaction returned the original PGP block text.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 23/23.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_private_key_blocks` passed, 1/1
+  focused lib test, plus zero-test main and CLI targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5208" --port 5208 --timeout 120 -- /bin/bash -lc ...`
+  passed with `rowCount=2`, `redactionCount=1`, `rowLeaked=false`,
+  `ariaLeaked=false`, `bodyLeaked=false`, `riskVisible=true`,
+  `consoleErrors=0`, and `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 329/329,
+  production build, Rust lib tests 100/100, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- After converting the synthetic fixture to fragment construction, focused
+  frontend GREEN was re-run and passed, 23/23.
+- Final full project check after fixture adjustment: `npm run check` passed,
+  covering UI tests 329/329, production build, Rust lib tests 100/100, CLI
+  tests 16/16, doc tests, and `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after aligning PGP private key block redaction.
+- Python Playwright is not installed in this environment, so browser QA used
+  the repo's available Node Playwright package while still managing Vite with
+  the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for common armored PGP private key block markers.
+
+Next Steps:
+
+- Run whitespace and staged secret checks, then commit and push this source
+  slice with explicit path staging.
+
+## Previous Slice - 2026-06-08 URL userinfo credential redaction
 
 Current Goal:
 

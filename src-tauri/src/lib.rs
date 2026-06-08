@@ -3956,7 +3956,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "private_key",
                 Regex::new(
-                    r"(?is)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
+                    r"(?is)-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----.*?-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----",
                 )
                 .expect("private key regex"),
             ),
@@ -6438,13 +6438,14 @@ mod tests {
 
     #[test]
     fn redact_sensitive_text_redacts_private_key_blocks() {
-        let marker = "TEST PRIVATE KEY";
-        let text = format!(
-            "-----BEGIN {marker}-----\n{}\n-----END {marker}-----",
-            "short-body"
-        );
+        for (marker, body) in [
+            ("TEST PRIVATE KEY", "short-body"),
+            ("PGP PRIVATE KEY BLOCK", "short-pgp-body"),
+        ] {
+            let text = format!("-----BEGIN {marker}-----\n{body}\n-----END {marker}-----");
 
-        assert_eq!(redact_sensitive_text(&text), "[REDACTED_PRIVATE_KEY]");
+            assert_eq!(redact_sensitive_text(&text), "[REDACTED_PRIVATE_KEY]");
+        }
     }
 
     #[test]

@@ -112,6 +112,7 @@ import {
   loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
   loadProjectWorkLogExtractionProposals,
+  listProjectWorkLogExtractionItems,
   loadProjectWorkSummary,
   listProjectWorkSummarySnapshots,
   listImportEvents,
@@ -121,6 +122,7 @@ import {
   planScan,
   scanProgress,
   scanPrompts,
+  type ProjectWorkLogExtractionItemsOptions,
   type ProjectWorkSummarySnapshotsOptions,
 } from "./promptVaultApi";
 import {
@@ -191,6 +193,7 @@ import type {
   ImproveResult,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
+  ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
   PromptRecord,
   ProjectWorkSummaryResult,
@@ -206,6 +209,9 @@ import {
   workLogCandidatesMetaText,
   workLogExtractionActionLabel,
   workLogExtractionFailureText,
+  workLogExtractionItemsActionLabel,
+  workLogExtractionItemsFailureText,
+  workLogExtractionItemsMetaText,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
   workLogCoverageActionLabel,
@@ -226,6 +232,7 @@ import {
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
   type WorkLogExtractionState,
+  type WorkLogExtractionItemsState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "./workSummaryStatus";
@@ -241,6 +248,7 @@ const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
 const WORK_LOG_CANDIDATE_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_DISPLAY_LIMIT = 5;
+const WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT = 5;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
@@ -286,6 +294,8 @@ function App() {
   const [workLogCoverageState, setWorkLogCoverageState] = useState<WorkLogCoverageState>("idle");
   const [workLogCandidatesState, setWorkLogCandidatesState] = useState<WorkLogCandidatesState>("idle");
   const [workLogExtractionState, setWorkLogExtractionState] = useState<WorkLogExtractionState>("idle");
+  const [workLogExtractionItemsState, setWorkLogExtractionItemsState] =
+    useState<WorkLogExtractionItemsState>("idle");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -303,10 +313,14 @@ function App() {
     useState<ProjectWorkLogExtractionCandidatesResult | null>(null);
   const [workLogExtractionResult, setWorkLogExtractionResult] =
     useState<ProjectWorkLogExtractionProposalsResult | null>(null);
+  const [workLogExtractionItemsResult, setWorkLogExtractionItemsResult] =
+    useState<ProjectWorkLogExtractionItemsResult | null>(null);
   const [workSummarySnapshotsResult, setWorkSummarySnapshotsResult] =
     useState<ProjectWorkSummarySnapshotsResult | null>(null);
   const [workSummarySnapshotDateFilter, setWorkSummarySnapshotDateFilter] = useState("");
   const [workSummarySnapshotProjectFilter, setWorkSummarySnapshotProjectFilter] = useState("");
+  const [workLogExtractionItemDateFilter, setWorkLogExtractionItemDateFilter] = useState("");
+  const [workLogExtractionItemProjectFilter, setWorkLogExtractionItemProjectFilter] = useState("");
   const [expandedWorkSummarySnapshotIds, setExpandedWorkSummarySnapshotIds] = useState<Set<number>>(
     () => new Set(),
   );
@@ -530,6 +544,11 @@ function App() {
   const workLogExtractionPersistenceStatus = workLogExtractionResult
     ? workLogExtractionPersistenceText(workLogExtractionResult)
     : null;
+  const workLogExtractionItemsFailureMessage = workLogExtractionItemsFailureText(workLogExtractionItemsState);
+  const workLogExtractionItemsMeta = workLogExtractionItemsMetaText(
+    workLogExtractionItemsState,
+    workLogExtractionItemsResult,
+  );
   const workSummarySnapshotsFailureMessage = workSummarySnapshotsFailureText(workSummarySnapshotsState);
   const workSummarySnapshotsMeta = workSummarySnapshotsMetaText(
     workSummarySnapshotsState,
@@ -537,8 +556,12 @@ function App() {
   );
   const hasWorkSummarySnapshotFilters =
     workSummarySnapshotDateFilter.trim() !== "" || workSummarySnapshotProjectFilter.trim() !== "";
+  const hasWorkLogExtractionItemFilters =
+    workLogExtractionItemDateFilter.trim() !== "" || workLogExtractionItemProjectFilter.trim() !== "";
   const workSummarySnapshotDateSuggestions = workSummarySnapshotsResult?.available_dates ?? [];
   const workSummarySnapshotProjectSuggestions = workSummarySnapshotsResult?.available_projects ?? [];
+  const workLogExtractionItemDateSuggestions = workLogExtractionItemsResult?.available_dates ?? [];
+  const workLogExtractionItemProjectSuggestions = workLogExtractionItemsResult?.available_projects ?? [];
   const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
   const hiddenWorkSummaryCount = Math.max(
     0,
@@ -563,6 +586,12 @@ function App() {
   const hiddenWorkLogExtractionProposalCount = Math.max(
     0,
     (workLogExtractionResult?.proposals.length ?? 0) - WORK_LOG_EXTRACTION_DISPLAY_LIMIT,
+  );
+  const visibleWorkLogExtractionItems =
+    workLogExtractionItemsResult?.items.slice(0, WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT) ?? [];
+  const hiddenWorkLogExtractionItemCount = Math.max(
+    0,
+    (workLogExtractionItemsResult?.items.length ?? 0) - WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT,
   );
   const storedFacetSummary = storedFacetSummaryText(
     storedFacetsState,
@@ -728,6 +757,19 @@ function App() {
     };
   }
 
+  function workLogExtractionItemOptions({
+    date = workLogExtractionItemDateFilter,
+    project = workLogExtractionItemProjectFilter,
+  }: { date?: string; project?: string } = {}): ProjectWorkLogExtractionItemsOptions {
+    const trimmedDate = date.trim();
+    const trimmedProject = project.trim();
+    return {
+      limit: WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT,
+      ...(trimmedDate ? { date: trimmedDate } : {}),
+      ...(trimmedProject ? { project: trimmedProject } : {}),
+    };
+  }
+
   async function refreshWorkSummarySnapshots(options = workSummarySnapshotOptions()) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
@@ -741,6 +783,24 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkSummarySnapshotsState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function refreshWorkLogExtractionItems(options = workLogExtractionItemOptions()) {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkLogExtractionItemsState("loading");
+    try {
+      const next = await listProjectWorkLogExtractionItems(options);
+      setWorkLogExtractionItemsResult(next);
+      setWorkLogExtractionItemsState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogExtractionItemsState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -816,11 +876,20 @@ function App() {
       const next = await loadProjectWorkLogExtractionProposals({ ai: true, save });
       setWorkLogExtractionResult(next);
       setWorkLogExtractionState("ready");
+      if (save) {
+        setWorkLogExtractionItemsState("loading");
+        const savedItems = await listProjectWorkLogExtractionItems(workLogExtractionItemOptions());
+        setWorkLogExtractionItemsResult(savedItems);
+        setWorkLogExtractionItemsState("ready");
+      }
     } catch (err) {
       const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkLogExtractionState("failed");
+      if (save) {
+        setWorkLogExtractionItemsState("failed");
+      }
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -1513,6 +1582,25 @@ function App() {
               <Database size={15} />
               accepted 저장
             </button>
+            <button
+              aria-label={workLogExtractionItemsActionLabel(
+                workLogExtractionItemsState,
+                workLogExtractionItemsResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-log-items="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void refreshWorkLogExtractionItems()}
+              type="button"
+            >
+              <FileText size={15} />
+              {workLogExtractionItemsState === "loading"
+                ? "불러오는 중"
+                : workLogExtractionItemsResult
+                  ? "저장 목록 새로고침"
+                  : "저장 목록"}
+            </button>
           </div>
         </div>
         {workSummaryFailureMessage ? (
@@ -1563,6 +1651,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workLogExtractionFailureMessage}</span>
+          </div>
+        ) : null}
+        {workLogExtractionItemsFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-log-items-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workLogExtractionItemsFailureMessage}</span>
           </div>
         ) : null}
         <form
@@ -1635,6 +1733,76 @@ function App() {
             <option key={project} value={project} />
           ))}
         </datalist>
+        <form
+          className="work-summary-filter-row"
+          data-work-log-items-filters="true"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void refreshWorkLogExtractionItems();
+          }}
+        >
+          <label>
+            <span>추출 날짜</span>
+            <input
+              aria-label="저장된 AI 작업 추출 항목 날짜 필터"
+              data-work-log-items-date-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-item-date-options"
+              onChange={(event) => setWorkLogExtractionItemDateFilter(event.target.value)}
+              placeholder="2026-06-04"
+              type="text"
+              value={workLogExtractionItemDateFilter}
+            />
+          </label>
+          <label>
+            <span>프로젝트</span>
+            <input
+              aria-label="저장된 AI 작업 추출 항목 프로젝트 필터"
+              data-work-log-items-project-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-item-project-options"
+              onChange={(event) => setWorkLogExtractionItemProjectFilter(event.target.value)}
+              placeholder="CareVault"
+              type="text"
+              value={workLogExtractionItemProjectFilter}
+            />
+          </label>
+          <button
+            aria-label="저장된 AI 작업 추출 항목 필터 적용"
+            className="inline-action"
+            data-apply-work-log-items-filters="true"
+            disabled={isTopLevelActionLocked}
+            type="submit"
+          >
+            <Search size={15} />
+            필터 적용
+          </button>
+          <button
+            aria-label="저장된 AI 작업 추출 항목 필터 초기화"
+            className="inline-action"
+            data-clear-work-log-items-filters="true"
+            disabled={isTopLevelActionLocked || !hasWorkLogExtractionItemFilters}
+            onClick={() => {
+              setWorkLogExtractionItemDateFilter("");
+              setWorkLogExtractionItemProjectFilter("");
+              void refreshWorkLogExtractionItems({ limit: WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT });
+            }}
+            type="button"
+          >
+            <XCircle size={15} />
+            초기화
+          </button>
+        </form>
+        <datalist id="work-log-item-date-options">
+          {workLogExtractionItemDateSuggestions.map((date) => (
+            <option key={date} value={date} />
+          ))}
+        </datalist>
+        <datalist id="work-log-item-project-options">
+          {workLogExtractionItemProjectSuggestions.map((project) => (
+            <option key={project} value={project} />
+          ))}
+        </datalist>
         {workSummaryIndexStatus ? (
           <div className="work-summary-index" data-work-summary-index="true">
             <ShieldCheck size={15} />
@@ -1675,6 +1843,12 @@ function App() {
           <div className="work-summary-index" data-work-log-extraction-persistence="true">
             <Database size={15} />
             <span>{workLogExtractionPersistenceStatus}</span>
+          </div>
+        ) : null}
+        {workLogExtractionItemsResult || workLogExtractionItemsState !== "idle" ? (
+          <div className="work-summary-index" data-work-log-items-meta="true">
+            <FileText size={15} />
+            <span>{workLogExtractionItemsMeta}</span>
           </div>
         ) : null}
         {workSummaryResult ? (
@@ -1810,6 +1984,45 @@ function App() {
           ) : (
             <div className="empty compact" data-empty-work-log-extraction="true">
               검증된 AI 작업 추출 제안 없음
+            </div>
+          )
+        ) : null}
+        {workLogExtractionItemsResult ? (
+          visibleWorkLogExtractionItems.length ? (
+            <div className="work-summary-list" data-work-log-items="true">
+              {visibleWorkLogExtractionItems.map((item) => (
+                <article
+                  className="work-summary-row work-log-proposal-row"
+                  key={item.id}
+                >
+                  <div>
+                    <strong>{item.project}</strong>
+                    <span>{item.date}</span>
+                  </div>
+                  <p>{item.title}</p>
+                  <p className="work-log-proposal-evidence">{item.evidence}</p>
+                  <span>
+                    #{item.id.toLocaleString()} · {item.provider}
+                    {item.used_ai ? " · AI" : " · local"} · {item.status} · confidence{" "}
+                    {item.confidence.toFixed(2)}
+                  </span>
+                  <span>
+                    {item.source_file} · saved {item.saved_at} · {item.source_path}
+                  </span>
+                  {item.warnings.length ? (
+                    <span>warnings {item.warnings.join("; ")}</span>
+                  ) : null}
+                </article>
+              ))}
+              {hiddenWorkLogExtractionItemCount ? (
+                <div className="work-summary-overflow">
+                  그 외 저장 추출 작업 {hiddenWorkLogExtractionItemCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-log-items="true">
+              저장된 AI 작업 추출 항목 없음
             </div>
           )
         ) : null}

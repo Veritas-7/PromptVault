@@ -7,6 +7,9 @@ import {
   workLogCandidatesMetaText,
   workLogExtractionActionLabel,
   workLogExtractionFailureText,
+  workLogExtractionItemsActionLabel,
+  workLogExtractionItemsFailureText,
+  workLogExtractionItemsMetaText,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
   workLogCoverageActionLabel,
@@ -28,12 +31,14 @@ import {
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
   type WorkLogExtractionState,
+  type WorkLogExtractionItemsState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "../src/workSummaryStatus.ts";
 import type {
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
+  ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
@@ -146,6 +151,22 @@ function extractionResult(
     rejected_count: 10,
     proposals: [],
     persistence: null,
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function extractionItemsResult(
+  overrides: Partial<ProjectWorkLogExtractionItemsResult> = {},
+): ProjectWorkLogExtractionItemsResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_items: 12,
+    returned_item_count: 5,
+    available_dates: ["2026-06-04", "2026-06-09"],
+    available_projects: ["CareVault", "PromptVault"],
+    items: [],
     warnings: [],
     ...overrides,
   };
@@ -409,6 +430,31 @@ test("work log extraction persistence text is only shown after accepted proposal
     })),
     "accepted 제안 1개 저장 · 총 3개",
   );
+});
+
+test("saved work log extraction item labels describe managed extraction rows", () => {
+  const failed: WorkLogExtractionItemsState = "failed";
+  assert.equal(workLogExtractionItemsActionLabel("idle", false, lockState()), "저장된 추출 작업 보기");
+  assert.equal(
+    workLogExtractionItemsActionLabel("ready", true, lockState()),
+    "저장된 추출 작업 새로고침",
+  );
+  assert.equal(
+    workLogExtractionItemsActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 저장된 추출 작업을 새로고침할 수 없습니다",
+  );
+  assert.equal(workLogExtractionItemsMetaText("idle", null), "아직 불러온 저장 추출 작업 없음");
+  assert.equal(workLogExtractionItemsMetaText("loading", extractionItemsResult()), "저장 추출 작업 불러오는 중");
+  assert.equal(
+    workLogExtractionItemsMetaText("ready", extractionItemsResult()),
+    "저장 12개 · 표시 5개 · 2일 · 2개 프로젝트",
+  );
+  assert.equal(workLogExtractionItemsMetaText(failed, null), "저장 추출 작업을 사용할 수 없음");
+  assert.equal(
+    workLogExtractionItemsFailureText(failed),
+    "저장된 AI 작업 추출 항목을 불러오지 못했습니다. 데이터베이스 경로나 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workLogExtractionItemsFailureText("ready"), null);
 });
 
 test("work summary snapshot helpers expose bounded project/day drill-down", () => {

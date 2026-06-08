@@ -13,6 +13,7 @@ import type {
   ImproveResult,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
+  ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkReport,
   ProjectWorkSummaryResult,
@@ -109,6 +110,13 @@ export interface ProjectWorkLogExtractionOptions {
   ai?: boolean;
   database_path?: string;
   save?: boolean;
+}
+
+export interface ProjectWorkLogExtractionItemsOptions {
+  database_path?: string;
+  limit?: number;
+  date?: string;
+  project?: string;
 }
 
 export interface ImprovePromptRequest {
@@ -248,6 +256,19 @@ export async function loadProjectWorkLogExtractionProposals(
     "/api/work-log-extract",
     { options },
     parseProjectWorkLogExtractionProposalsResult,
+  );
+}
+
+export async function listProjectWorkLogExtractionItems(
+  options: ProjectWorkLogExtractionItemsOptions = {},
+): Promise<ProjectWorkLogExtractionItemsResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogExtractionItemsResult>("project_work_log_items", { options });
+  }
+  return postBridge<ProjectWorkLogExtractionItemsResult>(
+    "/api/work-log-items",
+    { options },
+    parseProjectWorkLogExtractionItemsResult,
   );
 }
 
@@ -1334,6 +1355,47 @@ function parseProjectWorkLogExtractionProposalsResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkLogExtractionProposalsResult;
+}
+
+function isProjectWorkLogExtractionItem(value: unknown): boolean {
+  return isRecord(value)
+    && isPositiveSafeInteger(value.id)
+    && isTimestampString(value.saved_at)
+    && isTimestampString(value.run_generated_at)
+    && isNonBlankString(value.provider)
+    && typeof value.used_ai === "boolean"
+    && isNonBlankString(value.candidate_id)
+    && isNonBlankString(value.project)
+    && isNonBlankString(value.source_path)
+    && isNonBlankString(value.source_file)
+    && isNonBlankString(value.date)
+    && isNonBlankString(value.title)
+    && isNonBlankString(value.status)
+    && isNonBlankString(value.evidence)
+    && isFiniteNumber(value.confidence)
+    && value.confidence >= 0
+    && value.confidence <= 1
+    && isNonBlankStringArray(value.warnings);
+}
+
+function parseProjectWorkLogExtractionItemsResult(
+  value: unknown,
+): ProjectWorkLogExtractionItemsResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !isNonNegativeSafeInteger(value.total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.returned_item_count, value.total_items)
+    || !isUniqueNonBlankStringArray(value.available_dates)
+    || !isUniqueNonBlankStringArray(value.available_projects)
+    || !Array.isArray(value.items)
+    || value.items.length !== value.returned_item_count
+    || !value.items.every(isProjectWorkLogExtractionItem)
+    || !recordNumberFieldValuesAreUnique(value.items, "id")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkLogExtractionItemsResult;
 }
 
 function isProjectWorkLogExtractionMergeResult(value: unknown): boolean {

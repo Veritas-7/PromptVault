@@ -7,6 +7,7 @@ import {
   loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
   loadProjectWorkLogExtractionProposals,
+  listProjectWorkLogExtractionItems,
   loadStoredPrompts,
   loadProjectWorkSummary,
   listProjectWorkSummarySnapshots,
@@ -398,6 +399,36 @@ function projectWorkLogExtractionProposalsPayload(overrides = {}) {
   };
 }
 
+function projectWorkLogExtractionItemsPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_items: 1,
+    returned_item_count: 1,
+    available_dates: ["2026-06-04"],
+    available_projects: ["CareVault"],
+    items: [{
+      id: 4,
+      saved_at: "2026-06-09T01:00:00Z",
+      run_generated_at: "2026-06-09T00:00:00Z",
+      provider: "glm",
+      used_ai: true,
+      candidate_id: "work-log-CareVault-a1b2c3d4e5",
+      project: "CareVault",
+      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      source_file: "workingd.md",
+      date: "2026-06-04",
+      title: "Backfilled workingd notes",
+      status: "proposed",
+      evidence: "2026-06-04: Backfilled workingd notes",
+      confidence: 0.91,
+      warnings: ["provider warning"],
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
 test("browser bridge work summary posts options and validates citation payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   let requestPath = "";
@@ -673,6 +704,56 @@ test("browser bridge work log extraction posts save option and validates persist
   assert.deepEqual(JSON.parse(requestBody), { options: { limit: 5, ai: true, save: true } });
   assert.equal(result.persistence?.saved_item_count, 1);
   assert.equal(result.persistence?.total_saved_item_count, 3);
+});
+
+test("browser bridge work log extraction items posts filters and validates saved rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogExtractionItemsPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await listProjectWorkLogExtractionItems({
+    limit: 5,
+    date: "2026-06-04",
+    project: "CareVault",
+  });
+
+  assert.match(requestPath, /\/api\/work-log-items$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: { limit: 5, date: "2026-06-04", project: "CareVault" },
+  });
+  assert.equal(result.returned_item_count, 1);
+  assert.equal(result.items[0].project, "CareVault");
+  assert.equal(result.items[0].date, "2026-06-04");
+  assert.equal(result.items[0].source_file, "workingd.md");
+  assert.deepEqual(result.items[0].warnings, ["provider warning"]);
+});
+
+test("browser bridge work log extraction items reject impossible counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkLogExtractionItemsPayload({
+    returned_item_count: 2,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listProjectWorkLogExtractionItems({ limit: 5 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /returned_item_count|workingd\.md|undefined/);
+      return true;
+    },
+  );
 });
 
 test("browser bridge work log extraction rejects impossible proposal counters", async (t) => {

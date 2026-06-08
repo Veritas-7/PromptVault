@@ -40,6 +40,8 @@ const DEFAULT_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT: usize = 10;
 const MAX_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT: usize = 100;
 const DEFAULT_PROJECT_WORK_LOG_CANDIDATE_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT: usize = 100;
+const DEFAULT_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT: usize = 20;
+const MAX_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT: usize = 200;
 const PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS: u64 = 12;
 const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
 const MAX_STORED_PROMPT_LIMIT: usize = 1_000;
@@ -249,6 +251,45 @@ pub struct ProjectWorkLogExtractionPersistence {
     pub database_path: String,
     pub saved_item_count: usize,
     pub total_saved_item_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogExtractionItem {
+    pub id: i64,
+    pub saved_at: String,
+    pub run_generated_at: String,
+    pub provider: String,
+    pub used_ai: bool,
+    pub candidate_id: String,
+    pub project: String,
+    pub source_path: String,
+    pub source_file: String,
+    pub date: String,
+    pub title: String,
+    pub status: String,
+    pub evidence: String,
+    pub confidence: f64,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkLogExtractionItemsOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub date: Option<String>,
+    pub project: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogExtractionItemsResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub total_items: usize,
+    pub returned_item_count: usize,
+    pub available_dates: Vec<String>,
+    pub available_projects: Vec<String>,
+    pub items: Vec<ProjectWorkLogExtractionItem>,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -748,6 +789,14 @@ async fn project_work_log_extract(
         .map_err(|err| err.to_string())
 }
 
+#[tauri::command]
+fn project_work_log_items(
+    options: Option<ProjectWorkLogExtractionItemsOptions>,
+) -> Result<ProjectWorkLogExtractionItemsResult, String> {
+    run_list_project_work_log_extraction_items(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
+}
+
 fn scan_cancel_flags() -> &'static Mutex<HashMap<String, ScanCancelFlag>> {
     SCAN_CANCEL_FLAGS.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -1241,6 +1290,52 @@ pub async fn run_project_work_log_extraction_proposals(
         )?);
     }
     Ok(result)
+}
+
+pub fn run_list_project_work_log_extraction_items(
+    options: ProjectWorkLogExtractionItemsOptions,
+) -> Result<ProjectWorkLogExtractionItemsResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-log item limit requires a positive integer".into());
+    }
+    let date_filter = normalized_optional_filter(
+        options.date.as_deref(),
+        "work-log item date filter requires a non-empty value",
+    )?;
+    let project_filter = normalized_optional_filter(
+        options.project.as_deref(),
+        "work-log item project filter requires a non-empty value",
+    )?;
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT)
+        .min(MAX_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT);
+    let conn = open_promptvault_database(&database_path)?;
+    let item_rows = read_project_work_log_extraction_items(
+        &conn,
+        limit,
+        date_filter.as_deref(),
+        project_filter.as_deref(),
+    )?;
+    Ok(ProjectWorkLogExtractionItemsResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        total_items: item_rows.total_items,
+        returned_item_count: item_rows.items.len(),
+        available_dates: item_rows.available_dates,
+        available_projects: item_rows.available_projects,
+        items: item_rows.items,
+        warnings: Vec::new(),
+    })
 }
 
 pub async fn run_project_work_summary(
@@ -5951,6 +6046,85 @@ fn persist_project_work_log_extraction_proposals(
     })
 }
 
+struct ProjectWorkLogExtractionItemRows {
+    total_items: usize,
+    items: Vec<ProjectWorkLogExtractionItem>,
+    available_dates: Vec<String>,
+    available_projects: Vec<String>,
+}
+
+fn read_project_work_log_extraction_items(
+    conn: &Connection,
+    limit: usize,
+    date_filter: Option<&str>,
+    project_filter: Option<&str>,
+) -> Result<ProjectWorkLogExtractionItemRows, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, saved_at, run_generated_at, provider, used_ai, candidate_id, project,
+            source_path, source_file, proposal_date, title, status, evidence, confidence,
+            warnings_json
+         FROM project_work_log_extraction_items
+         ORDER BY id DESC",
+    )?;
+    let mut rows = stmt.query([])?;
+    let mut total_items = 0usize;
+    let mut items = Vec::new();
+    let mut available_dates = BTreeSet::new();
+    let mut available_projects = BTreeSet::new();
+    while let Some(row) = rows.next()? {
+        let date: String = row.get(9)?;
+        let project: String = row.get(6)?;
+        if !project_work_log_extraction_item_matches_filters(
+            &date,
+            &project,
+            date_filter,
+            project_filter,
+        ) {
+            continue;
+        }
+        total_items += 1;
+        available_dates.insert(date.clone());
+        available_projects.insert(project.clone());
+        if items.len() >= limit {
+            continue;
+        }
+        let warnings_json: String = row.get(14)?;
+        items.push(ProjectWorkLogExtractionItem {
+            id: row.get(0)?,
+            saved_at: row.get(1)?,
+            run_generated_at: row.get(2)?,
+            provider: row.get(3)?,
+            used_ai: row.get::<_, i64>(4)? != 0,
+            candidate_id: row.get(5)?,
+            project,
+            source_path: row.get(7)?,
+            source_file: row.get(8)?,
+            date,
+            title: row.get(10)?,
+            status: row.get(11)?,
+            evidence: row.get(12)?,
+            confidence: row.get(13)?,
+            warnings: serde_json::from_str(&warnings_json)?,
+        });
+    }
+    Ok(ProjectWorkLogExtractionItemRows {
+        total_items,
+        items,
+        available_dates: available_dates.into_iter().collect(),
+        available_projects: available_projects.into_iter().collect(),
+    })
+}
+
+fn project_work_log_extraction_item_matches_filters(
+    date: &str,
+    project: &str,
+    date_filter: Option<&str>,
+    project_filter: Option<&str>,
+) -> bool {
+    date_filter.is_none_or(|filter| date == filter)
+        && project_filter.is_none_or(|filter| project == filter)
+}
+
 fn persist_project_work_summary_snapshot(
     database_path: &Path,
     result: &ProjectWorkSummaryResult,
@@ -7333,7 +7507,8 @@ pub fn run() {
             project_work_summary_snapshots,
             project_work_log_coverage,
             project_work_log_candidates,
-            project_work_log_extract
+            project_work_log_extract,
+            project_work_log_items
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -10180,6 +10355,82 @@ Progress:
         assert!(stored.4.contains("provider warning"));
 
         std::fs::remove_file(db_path).expect("remove extraction db");
+    }
+
+    #[test]
+    fn project_work_log_extraction_items_list_saved_rows_with_filters() {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-project-work-log-extraction-items-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let conn = open_promptvault_database(&db_path).expect("open extraction items db");
+        for (saved_at, project, date, title) in [
+            (
+                "2026-06-09T00:00:00Z",
+                "PromptVault",
+                "2026-06-09",
+                "Persisted extraction listing",
+            ),
+            (
+                "2026-06-09T01:00:00Z",
+                "CareVault",
+                "2026-06-04",
+                "Backfilled workingd notes",
+            ),
+            (
+                "2026-06-09T02:00:00Z",
+                "CareVault",
+                "2026-06-05",
+                "Reviewed worklog notes",
+            ),
+        ] {
+            conn.execute(
+                "INSERT INTO project_work_log_extraction_items (
+                    saved_at, run_generated_at, provider, used_ai, candidate_id, project,
+                    source_path, source_file, proposal_date, title, status, evidence,
+                    confidence, warnings_json
+                ) VALUES (?1, '2026-06-09T00:00:00Z', 'glm', 1, ?2, ?3, ?4, 'workingd.md',
+                    ?5, ?6, 'proposed', ?7, 0.91, ?8)",
+                params![
+                    saved_at,
+                    format!("work-log-{project}-{date}"),
+                    project,
+                    format!("/Users/wj/Ai/System/10_Projects/{project}/workingd.md"),
+                    date,
+                    title,
+                    format!("{date}: {title}"),
+                    serde_json::json!(["provider warning"]).to_string(),
+                ],
+            )
+            .expect("insert extraction item row");
+        }
+        drop(conn);
+
+        let result = run_list_project_work_log_extraction_items(
+            ProjectWorkLogExtractionItemsOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(5),
+                date: Some("2026-06-04".to_string()),
+                project: Some("CareVault".to_string()),
+            },
+        )
+        .expect("list extraction items");
+
+        assert_eq!(result.database_path, db_path.display().to_string());
+        assert_eq!(result.total_items, 1);
+        assert_eq!(result.returned_item_count, 1);
+        assert_eq!(result.available_dates, vec!["2026-06-04"]);
+        assert_eq!(result.available_projects, vec!["CareVault"]);
+        assert_eq!(result.items[0].project, "CareVault");
+        assert_eq!(result.items[0].date, "2026-06-04");
+        assert_eq!(result.items[0].source_file, "workingd.md");
+        assert_eq!(result.items[0].warnings, vec!["provider warning"]);
+
+        std::fs::remove_file(db_path).expect("remove extraction items db");
     }
 
     #[tokio::test]

@@ -291,6 +291,35 @@ export interface ProjectWorkLogExtractionPersistence {
   total_saved_item_count: number;
 }
 
+export interface ProjectWorkLogExtractionItem {
+  id: number;
+  saved_at: string;
+  run_generated_at: string;
+  provider: string;
+  used_ai: boolean;
+  candidate_id: string;
+  project: string;
+  source_path: string;
+  source_file: string;
+  date: string;
+  title: string;
+  status: string;
+  evidence: string;
+  confidence: number;
+  warnings: string[];
+}
+
+export interface ProjectWorkLogExtractionItemsResult {
+  generated_at: string;
+  database_path: string;
+  total_items: number;
+  returned_item_count: number;
+  available_dates: string[];
+  available_projects: string[];
+  items: ProjectWorkLogExtractionItem[];
+  warnings: string[];
+}
+
 export interface ProjectWorkLogExtractionMergeResult {
   provider: string;
   used_ai: boolean;

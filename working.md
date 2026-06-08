@@ -1,12 +1,134 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 04:09 KST
+Updated: 2026-06-09 04:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 AI extraction proposal persistence
+## Current Slice - 2026-06-09 saved extraction item browser
+
+Current Goal:
+
+- Make accepted AI work-log extraction rows visible and filterable after they
+  are saved to SQLite.
+- Keep the saved-row browser read-only: do not re-read or mutate original
+  `workingd.md` files while listing managed extraction data.
+- Give the operator project/date filters so saved extraction data can start
+  behaving like project/day management data.
+
+Context:
+
+- The previous slice created `project_work_log_extraction_items` and persisted
+  accepted/date-bearing AI extraction proposals.
+- The stored data was not yet discoverable from the CLI, bridge, or UI.
+- The current live PromptVault database still has 0 saved extraction items
+  because the live provider path fell back to local extraction rules and accepted
+  0 proposals. Non-empty row behavior is covered by synthetic SQLite tests.
+
+Progress:
+
+- Added a `work-log-items` CLI command with `--limit`, `--database`, `--date`,
+  `--project`, and `--json`.
+- Added backend read models for saved extraction rows, including provider,
+  source file/path, proposal date, confidence, warnings, and saved timestamp.
+- Added date/project filtering and available date/project suggestions based on
+  the filtered saved rows.
+- Added `/api/work-log-items` to the local browser bridge and Tauri
+  `project_work_log_items`.
+- Added TypeScript API/types/validator for saved extraction item responses.
+- Added UI controls:
+  - `저장 목록` button.
+  - saved extraction item date/project filter form.
+  - saved extraction item meta row.
+  - saved extraction item list and empty state.
+- Connected `accepted 저장` so a save run refreshes the saved extraction item
+  list immediately afterward.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds
+  `ProjectWorkLogExtractionItem(s)` structs, list options/result, read-only
+  SQLite query, filtering, Tauri command, and tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds `work-log-items`, bridge route,
+  validation tests, and help text.
+- `src/types.ts` and `src/promptVaultApi.ts`: expose saved extraction item
+  types, API call, and fail-closed bridge response validation.
+- `src/workSummaryStatus.ts`: adds saved extraction item state labels, meta
+  text, and failure text.
+- `src/App.tsx`: adds saved-row button, filters, status row, list, and empty
+  state.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`: cover
+  bridge request/options, malformed counters, and UI helper text.
+
+Tests:
+
+- RED baseline:
+  `cargo test project_work_log_extraction_items_list_saved_rows_with_filters --lib`
+  failed before implementation because
+  `ProjectWorkLogExtractionItemsOptions` and
+  `run_list_project_work_log_extraction_items` did not exist.
+- RED baseline:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before `workLogExtractionItemsActionLabel` existed.
+- RED baseline:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed before `listProjectWorkLogExtractionItems` existed.
+- GREEN:
+  `cargo test project_work_log_extraction_items_list_saved_rows_with_filters --lib`
+  passed 1/1.
+- GREEN:
+  `cargo test work_log --lib --bin promptvault-cli` passed 6 lib tests and 1
+  CLI bridge validation test.
+- GREEN:
+  `cargo test help --bin promptvault-cli` passed 2/2.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  passed 14/14.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 153/153.
+- GREEN:
+  `npm run build` passed.
+- Live CLI verification against the operating database:
+  `work-log-items --limit 5 --json` returned database
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`, `total_items=0`,
+  `returned_item_count=0`, and empty date/project suggestions.
+- Browser QA without cmux:
+  started the PromptVault bridge on `127.0.0.1:5174` and Vite on
+  `127.0.0.1:1420`, clicked `[data-load-work-log-items="true"]`, verified the
+  request body `{"options":{"limit":5}}`, verified meta text
+  `저장 0개 · 표시 0개 · 0일 · 0개 프로젝트`, verified empty state
+  `저장된 AI 작업 추출 항목 없음`, verified filters are visible, and observed
+  no browser errors.
+- Full gate:
+  `npm run check` passed: UI tests 405/405, Vite build, Rust library tests
+  146/146, CLI tests 21/21, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- The live database has 0 saved extraction rows until the AI/provider path
+  accepts real dated proposals. Non-empty listing is verified with synthetic
+  SQLite rows.
+- Saved extraction rows are visible and filterable, but project/day summaries do
+  not yet consume saved rows by default.
+- There is still no per-proposal operator review queue before persistence.
+
+Next Steps:
+
+- Feed saved accepted extraction items into `work-summary` without re-running
+  AI extraction.
+- Add provider health/timeout visibility so GLM/OpenAI fallback behavior is
+  obvious before extraction runs.
+- Add a review queue that lets the operator accept/reject individual extraction
+  proposals before saving.
+
+Research:
+
+- No external research. This slice used live repo state, synthetic SQLite row
+  tests, live CLI, and headless UI verification.
+
+## Previous Slice - 2026-06-09 AI extraction proposal persistence
 
 Current Goal:
 

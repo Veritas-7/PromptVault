@@ -2,6 +2,7 @@ import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import type {
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
+  ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
@@ -14,6 +15,7 @@ export type WorkSummarySnapshotsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCoverageState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCandidatesState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogExtractionItemsState = "idle" | "loading" | "ready" | "failed";
 
 export const WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT = 3;
 
@@ -216,6 +218,40 @@ export function workLogExtractionPersistenceText(
 export function workLogExtractionFailureText(state: WorkLogExtractionState): string | null {
   if (state !== "failed") return null;
   return "AI 작업 추출 제안을 불러오지 못했습니다. provider 설정, 진행 로그 경로, 브리지 상태를 확인하세요.";
+}
+
+export function workLogExtractionItemsActionLabel(
+  state: WorkLogExtractionItemsState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "저장된 추출 작업 불러오는 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 저장된 추출 작업을 ${hasResult ? "새로고침" : "불러오기"}할 수 없습니다`;
+  }
+  return hasResult ? "저장된 추출 작업 새로고침" : "저장된 추출 작업 보기";
+}
+
+export function workLogExtractionItemsMetaText(
+  state: WorkLogExtractionItemsState,
+  result: ProjectWorkLogExtractionItemsResult | null,
+): string {
+  if (state === "loading") return "저장 추출 작업 불러오는 중";
+  if (!result) return state === "failed" ? "저장 추출 작업을 사용할 수 없음" : "아직 불러온 저장 추출 작업 없음";
+  return [
+    `저장 ${result.total_items.toLocaleString()}개`,
+    `표시 ${result.returned_item_count.toLocaleString()}개`,
+    `${result.available_dates.length.toLocaleString()}일`,
+    `${result.available_projects.length.toLocaleString()}개 프로젝트`,
+  ].join(" · ");
+}
+
+export function workLogExtractionItemsFailureText(
+  state: WorkLogExtractionItemsState,
+): string | null {
+  if (state !== "failed") return null;
+  return "저장된 AI 작업 추출 항목을 불러오지 못했습니다. 데이터베이스 경로나 브리지 상태를 확인하세요.";
 }
 
 export function workSummarySnapshotVisibleSummaries(

@@ -3962,7 +3962,10 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             ),
             (
                 "long_base64_like_token",
-                Regex::new(r"[A-Za-z0-9_\-]{48,}").expect("token regex"),
+                Regex::new(
+                    r"\b[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b|[A-Za-z0-9_\-]{48,}",
+                )
+                .expect("token regex"),
             ),
         ]
     })
@@ -6446,6 +6449,22 @@ mod tests {
 
             assert_eq!(redact_sensitive_text(&text), "[REDACTED_PRIVATE_KEY]");
         }
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_compact_jwt_like_tokens() {
+        let token = format!(
+            "eyJ{}.{}.{}",
+            "a".repeat(18),
+            "b".repeat(18),
+            "c".repeat(18)
+        );
+        let text = format!("Use {token} for the request.");
+
+        assert_eq!(
+            redact_sensitive_text(&text),
+            "Use [REDACTED_LONG_BASE64_LIKE_TOKEN] for the request."
+        );
     }
 
     #[test]

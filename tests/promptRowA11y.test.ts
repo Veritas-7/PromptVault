@@ -79,6 +79,19 @@ test("prompt row previews redact secret-like tokens", () => {
   assert.match(label, /\[REDACTED_LONG_TOKEN\]/);
 });
 
+test("prompt row previews redact compact JWT-like tokens", () => {
+  const syntheticToken = `eyJ${"a".repeat(18)}.${"b".repeat(18)}.${"c".repeat(18)}`;
+  const text = `Use ${syntheticToken} for the request.`;
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "Use [REDACTED_LONG_TOKEN] for the request.");
+  assert.doesNotMatch(preview, new RegExp(syntheticToken.replaceAll(".", "\\.")));
+  assert.doesNotMatch(label, new RegExp(syntheticToken.replaceAll(".", "\\.")));
+  assert.match(label, /\[REDACTED_LONG_TOKEN\]/);
+});
+
 test("prompt row previews redact quoted secret assignments with spaces", () => {
   const text = `Use api_key="alpha beta gamma" only in local secrets.`;
 

@@ -1,12 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 17:43 KST
+Updated: 2026-06-08 17:49 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 PGP private key block redaction
+## Current Slice - 2026-06-08 Compact JWT token redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for compact JWT-like tokens, so stored prompt list surfaces do not
+  expose bearer-style dot-separated credential material.
+
+Context:
+
+- Previous PGP private key block redaction is pushed to `origin/main` with
+  source commit `98a68e0 fix: redact PGP private key blocks` and docs
+  closeout `809f0b4 docs: record PGP private key verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed a compact JWT-like prompt could remain visible
+  because the existing long-token matcher only covered one contiguous 48+
+  character base64url-like token, not three dot-separated base64url segments.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact compact JWT-like tokens.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same compact JWT-like token shape.
+- Confirmed RED: frontend prompt row preview returned the original
+  dot-separated token, and backend redaction returned the original token.
+- Extended frontend and backend long-token matchers with a compact JWT-like
+  branch requiring three base64url segments separated by dots.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a raw compact JWT-like prompt in a prompt row while
+  selecting a safe second prompt. It confirmed two stored prompt rows, long
+  token redaction marker visible, no token in row text, aria labels, or page
+  body, localized risk label visible, and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts compact JWT-like tokens in prompt row
+  previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for compact
+  JWT-like token redaction.
+- `src-tauri/src/lib.rs`: aligns backend long-token redaction with the
+  frontend matcher and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on compact JWT-like token redaction because the original token
+  remained visible.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_compact_jwt_like_tokens` failed
+  from `src-tauri` because backend redaction returned the original token.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 24/24.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_compact_jwt_like_tokens` passed,
+  1/1 focused lib test, plus zero-test main and CLI targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5209" --port 5209 --timeout 120 -- /bin/bash -lc ...`
+  passed with `rowCount=2`, `redactionCount=1`, `rowLeaked=false`,
+  `ariaLeaked=false`, `bodyLeaked=false`, `riskVisible=true`,
+  `consoleErrors=0`, and `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 330/330,
+  production build, Rust lib tests 101/101, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after aligning compact JWT-like token redaction.
+- Python Playwright is not installed in this environment, so browser QA used
+  the repo's available Node Playwright package while still managing Vite with
+  the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for common compact JWT-like bearer token shapes.
+
+Next Steps:
+
+- Run whitespace/staged secret checks, commit and push the source slice, then
+  record final push evidence in a docs closeout.
+
+## Previous Slice - 2026-06-08 PGP private key block redaction
 
 Current Goal:
 

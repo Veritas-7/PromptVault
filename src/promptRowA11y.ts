@@ -19,7 +19,10 @@ function redactSensitivePromptPreview(text: string): string {
       /\b[A-Za-z][A-Za-z0-9+.-]*:\/\/(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[A-Za-z0-9]+[_-])*(?:(?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|(?:[A-Za-z]+\s+)?\S+)?/gim,
       "[REDACTED_POSSIBLE_SECRET]",
     )
-    .replace(/\b[A-Za-z0-9_-]{48,}\b/g, "[REDACTED_LONG_TOKEN]");
+    .replace(
+      /\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b|\b[A-Za-z0-9_-]{48,}\b/g,
+      "[REDACTED_LONG_TOKEN]",
+    );
 }
 
 export function promptRowPreviewText(text: string): string {

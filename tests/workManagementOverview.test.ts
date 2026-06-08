@@ -266,7 +266,7 @@ test("work management overview merges source evidence by project and date", () =
   assert.equal(promptVault.saved_extraction_count, 1);
   assert.equal(promptVault.extraction_proposal_count, 0);
   assert.equal(promptVault.progress_log_count, 1);
-  assert.equal(promptVault.work_item_count, 4);
+  assert.equal(promptVault.work_item_count, 5);
   assert.equal(promptVault.session_evidence_count, 2);
   assert.equal(promptVault.latest_title, "PromptVault management slice");
 
@@ -308,6 +308,22 @@ test("work management overview does not double count saved extraction proposals"
   assert.equal(promptVault.extraction_proposal_count, 0);
   assert.equal(overview.saved_extraction_count, 2);
   assert.equal(overview.extraction_proposal_count, 1);
+});
+
+test("work management overview counts saved extractions and parsed logs as work items", () => {
+  const savedOnly = buildWorkManagementOverview({
+    extractionItems: extractionItemsResult(),
+  });
+  const repoTutorStudio = savedOnly.rows.find((row) => row.key === "2026-06-04::RepoTutorStudio");
+  assert.ok(repoTutorStudio);
+  assert.equal(repoTutorStudio.work_item_count, 1);
+
+  const progressOnly = buildWorkManagementOverview({
+    coverage: coverageResult(),
+  });
+  const promptVault = progressOnly.rows.find((row) => row.key === "2026-06-09::PromptVault");
+  assert.ok(promptVault);
+  assert.equal(promptVault.work_item_count, 5);
 });
 
 test("work management overview status text exposes management coverage", () => {

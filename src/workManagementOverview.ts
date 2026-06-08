@@ -96,6 +96,7 @@ export function buildWorkManagementOverview(
   for (const item of input.extractionItems?.items ?? []) {
     const row = upsertRow(rowsByKey, item.date, item.project);
     row.saved_extraction_count += 1;
+    row.work_item_count = Math.max(row.work_item_count, row.saved_extraction_count);
     row.latest_title ??= item.title;
     row.sourceSet.add("saved_extraction");
   }
@@ -108,7 +109,7 @@ export function buildWorkManagementOverview(
     if (!proposal.accepted || !proposal.date) continue;
     const row = upsertRow(rowsByKey, proposal.date, proposal.project);
     row.extraction_proposal_count += 1;
-    row.work_item_count = Math.max(row.work_item_count, 1);
+    row.work_item_count = Math.max(row.work_item_count, row.extraction_proposal_count);
     row.latest_title ??= proposal.title;
     row.sourceSet.add("extraction_proposal");
   }
@@ -117,6 +118,7 @@ export function buildWorkManagementOverview(
     if (file.status !== "parsed" || !file.latest_date) continue;
     const row = upsertRow(rowsByKey, file.latest_date, file.project);
     row.progress_log_count += 1;
+    row.work_item_count = Math.max(row.work_item_count, file.work_item_count);
     row.latest_title ??= file.latest_title;
     row.sourceSet.add("progress_log");
   }

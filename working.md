@@ -1,12 +1,101 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 06:21 KST
+Updated: 2026-06-09 06:27 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 progress-log pointer candidate skip
+## Current Slice - 2026-06-09 work-management overview work counts
+
+Current Goal:
+
+- Make the project/day work management overview count managed work items from
+  all loaded evidence types, not only current summaries or snapshots.
+- Prevent saved extraction-only, accepted proposal-only, and parsed progress
+  log-only rows from displaying `작업 0개` when they have real managed work
+  evidence.
+
+Context:
+
+- The app already builds a combined project/day overview from current summary,
+  saved snapshots, live extraction proposals, saved extraction rows, and parsed
+  progress-log coverage.
+- The overview previously updated `work_item_count` from current summaries,
+  snapshots, and accepted live proposals only.
+- Saved extraction-only rows and parsed progress-log-only rows could therefore
+  appear in the management table with `작업 0개`, which made the project/day
+  ledger look less complete than the underlying evidence.
+
+Progress:
+
+- Added a RED UI-unit test for saved extraction-only and parsed
+  progress-log-only rows.
+- Updated overview aggregation so:
+  - saved extraction rows count as managed work items;
+  - accepted extraction proposal rows count as managed work items by proposal
+    count;
+  - parsed progress-log coverage rows use the parsed file `work_item_count`.
+- Verified the real browser-bridge flow by clicking `로그 범위` and `로컬 제안`
+  and reading the rendered management overview.
+
+Changes:
+
+- `src/workManagementOverview.ts`:
+  - reflects saved extractions, accepted proposals, and parsed progress-log
+    work counts in each project/day row's `work_item_count`.
+- `tests/workManagementOverview.test.ts`:
+  - adds regression coverage for saved extraction-only and parsed
+    progress-log-only management rows;
+  - updates the mixed-source expectation so parsed progress-log evidence can
+    raise the representative work count.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workManagementOverview.test.ts`: failed at the
+    new saved extraction-only assertion because `work_item_count` was `0`
+    instead of `1`.
+- GREEN:
+  - `npm run test:ui -- tests/workManagementOverview.test.ts`: PASS, `423`
+    tests.
+- Headless browser-bridge QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 220 -- /bin/bash -lc 'node /tmp/promptvault_work_management_overview_counts_qa.mjs'`:
+    PASS.
+  - Observed overview meta:
+    `관리 29개 · 25개 프로젝트 · 14일 · 현재요약 0 · 스냅샷 0 · 추출제안 13 · 저장추출 0 · 진행로그 16`.
+  - Displayed management rows contained no `작업 0개` rows for 진행로그,
+    추출제안, or 저장추출 evidence.
+  - Browser QA captured no console errors, page errors, or failed requests.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `423` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `151` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- The overview now counts loaded evidence correctly, but the broader ledger is
+  still not fully complete until the two SnapTranslate risk-flagged progress
+  logs are reviewed or explicitly skipped.
+- The browser QA only covered the visible first page of overview rows; unit
+  tests cover the aggregation behavior for all loaded rows.
+
+Research:
+
+- Used TDD, incremental implementation, and webapp-testing workflows.
+- No external web research was used.
+
+Next Steps:
+
+- Commit and push this overview count slice.
+- Continue with risk-flag diagnostics or a reviewed path for the two remaining
+  SnapTranslate logs.
+
+## Previous Slice - 2026-06-09 progress-log pointer candidate skip
 
 Current Goal:
 

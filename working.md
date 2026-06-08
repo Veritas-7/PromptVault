@@ -1,12 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 18:19 KST
+Updated: 2026-06-08 18:24 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Standalone Basic token redaction
+## Current Slice - 2026-06-08 Curl user credential redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for command-line HTTP basic-auth credentials copied as
+  `curl -u user:pass` or `curl --user user:pass`.
+
+Context:
+
+- Previous standalone Basic token redaction is pushed to `origin/main` with
+  source commit `d458e13 fix: redact standalone basic tokens` and docs
+  closeout `0a1162c docs: record standalone basic token verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed URL userinfo credentials are already redacted,
+  but curl `-u` and `--user` user/password arguments remained visible in
+  prompt row previews.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact curl `-u` and `--user` credentials.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same command-line user credential shapes.
+- Confirmed RED: frontend prompt row preview returned the original curl
+  credentials, and backend redaction returned the original credentials.
+- Extended frontend and backend possible-secret matchers with a minimal curl
+  user-credential flag branch that preserves the surrounding command text.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing raw curl `-u` and `--user` credentials in a prompt row
+  while selecting a safe prompt row. It confirmed two stored prompt rows,
+  possible secret redaction marker visible, no user/password credential pieces
+  in row text, aria labels, or page body, localized risk label visible,
+  selected safe detail text visible, and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts curl `-u user:pass` and
+  `--user user:pass` values in prompt row previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for curl
+  user credential redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-secret redaction with the
+  frontend matcher and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on curl user credential redaction because the original credentials
+  remained visible.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_curl_user_credentials` failed from
+  `src-tauri` because backend redaction returned the original credentials.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 28/28.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_curl_user_credentials` passed, 1/1
+  focused lib test, plus zero-test main and CLI targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5213" --port 5213 --timeout 120 -- /bin/bash -lc ...`
+  passed with `rowCount=2`, `redactionCount=1`, `rowLeaked=false`,
+  `ariaLeaked=false`, `bodyLeaked=false`, `riskVisible=true`,
+  `selectedSafe=true`, `consoleErrors=0`, and `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 334/334,
+  production build, Rust lib tests 105/105, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` passed before staging.
+
+Issues:
+
+- No product blocker after aligning curl user credential redaction.
+- Python Playwright is not installed in this environment, so browser QA used
+  the repo's available Node Playwright package while still managing Vite with
+  the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for copied command-line credential values.
+
+Next Steps:
+
+- Stage the explicit source/worklog paths, run staged gitleaks, commit and
+  push the source slice, then record the source-push evidence in this worklog
+  and make the docs closeout commit.
+
+## Previous Slice - 2026-06-08 Standalone Basic token redaction
 
 Current Goal:
 

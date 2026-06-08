@@ -3949,7 +3949,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "possible_api_key",
                 Regex::new(
-                    r#"(?im)\bgh[oprsu]_[a-z0-9_]{20,}\b|\b(?:bearer|basic)\s+[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
+                    r#"(?im)\bgh[oprsu]_[a-z0-9_]{20,}\b|\b(?:bearer|basic)\s+[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|(?:--user|-u)\s+[^:\s]+:[^\s]+|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
                 )
                     .expect("api key regex"),
             ),
@@ -6466,6 +6466,33 @@ mod tests {
                 "Open redis://:short-redis-pass@cache.example:6379/0 before request."
             ),
             "Open [REDACTED_POSSIBLE_API_KEY] before request."
+        );
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_curl_user_credentials() {
+        let first_password = ["short", "secret", "value"].join("-");
+        let second_password = ["short", "basic", "value"].join("-");
+        let short_user_flag = ["-", "u"].join("");
+        let long_user_flag = ["--", "user"].join("");
+        let first_credential = format!("alice:{first_password}");
+        let second_credential = format!("bob:{second_password}");
+        let text = [
+            "Run",
+            "curl",
+            &short_user_flag,
+            &first_credential,
+            "https://example.com",
+            "and",
+            "curl",
+            &long_user_flag,
+            &second_credential,
+            "https://example.org.",
+        ]
+        .join(" ");
+        assert_eq!(
+            redact_sensitive_text(&text),
+            "Run curl [REDACTED_POSSIBLE_API_KEY] https://example.com and curl [REDACTED_POSSIBLE_API_KEY] https://example.org."
         );
     }
 

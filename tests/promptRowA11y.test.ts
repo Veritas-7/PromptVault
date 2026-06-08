@@ -311,6 +311,25 @@ test("prompt row previews redact URL userinfo credentials", () => {
   }
 });
 
+test("prompt row previews redact curl user credentials", () => {
+  const firstPassword = ["short", "secret", "value"].join("-");
+  const secondPassword = ["short", "basic", "value"].join("-");
+  const text =
+    `Run curl -u alice:${firstPassword} https://example.com and curl --user bob:${secondPassword} https://example.org.`;
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(
+    preview,
+    "Run curl [REDACTED_POSSIBLE_SECRET] https://example.com and curl [REDACTED_POSSIBLE_SECRET] https://example.org.",
+  );
+  const leakPattern = new RegExp(`alice|bob|${firstPassword}|${secondPassword}`);
+  assert.doesNotMatch(preview, leakPattern);
+  assert.doesNotMatch(label, leakPattern);
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact private key blocks case-insensitively", () => {
   const pgpPrivateKeyBlock = ["PGP", "PRIVATE", "KEY", "BLOCK"].join(" ");
   const cases = [

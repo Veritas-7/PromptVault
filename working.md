@@ -1,12 +1,114 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 12:46 KST
+Updated: 2026-06-08 12:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Import event list overflow visibility
+## Current Slice - 2026-06-08 Prompt list display cap visibility
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make the prompt list disclose when more loaded/filter-matching prompts exist
+  than the compact 200-row UI list currently displays.
+
+Context:
+
+- Previous import-events overflow slice is pushed to `origin/main`:
+  implementation `ba26fb5 fix: show import event overflow count` and closeout
+  `96f7ef9 docs: close import event overflow handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`.
+- The backend preview can return up to `PREVIEW_LIMIT` prompts, while the UI
+  applies a second list cap of 200 rows through `matches.slice(0, 200)` or
+  `matches.slice(-200).reverse()`.
+- The panel header says how many prompts were loaded, but the list currently
+  gives no direct cue when loaded/filter-matching rows exceed the rendered 200.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `96f7ef9 docs: close import event overflow handoff`.
+- Re-read the prompt filtering and list rendering path. Confirmed the rendered
+  list is capped at 200 even when more prompts are loaded and match the filter.
+- Preparing a RED Playwright QA that expects a visible prompt-list overflow
+  summary when 201 prompts are loaded and 200 rows are rendered.
+- Confirmed RED first after fixing mock aggregate counts: dev-mode QA rendered
+  200 prompt rows but timed out waiting for
+  `[data-prompt-list-overflow="true"]`.
+- Added a named prompt-list display limit, preserved the full match count, and
+  rendered a compact overflow row when matching prompts exceed the 200-row UI
+  list.
+- Confirmed GREEN: the same dev-mode Playwright QA rendered the hidden prompt
+  count for the 201st loaded prompt with no browser console/page errors.
+- Removed `/tmp/promptvault_prompt_list_overflow_qa.mjs` after QA and
+  confirmed port 5342 had no listener.
+- Ran the full project check successfully after prompt-list overflow QA.
+- Pre-staging verification passed with only the expected three modified files:
+  `src/App.tsx`, `src/App.css`, and `working.md`.
+- Explicitly staged only `src/App.tsx`, `src/App.css`, and `working.md`.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 5.41 KB and finding no leaks.
+- Restaged `working.md` after recording the staged scan and reran the staged
+  secret scan; about 5.82 KB was scanned and no leaks were found.
+
+Changes:
+
+- `working.md`: records the current prompt-list display cap visibility slice.
+- `src/App.tsx`: separates full prompt matches from rendered prompt rows and
+  renders `data-prompt-list-overflow` when the 200-row UI cap hides matches.
+- `src/App.css`: styles the prompt-list overflow summary inside the scrollable
+  prompt list.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5342" --port 5342 --timeout 30 node /tmp/promptvault_prompt_list_overflow_qa.mjs http://127.0.0.1:5342`
+  initially exposed a mock payload aggregate mismatch, then failed correctly
+  because `[data-prompt-list-overflow="true"]` was not visible after 201
+  prompts were loaded and 200 rows were rendered.
+- GREEN: the same dev-mode Playwright QA passed after the prompt-list overflow
+  row was rendered.
+- Cleanup: `/tmp/promptvault_prompt_list_overflow_qa.mjs` removed and
+  `lsof -nP -iTCP:5342 -sTCP:LISTEN` returned no listener.
+- Full project check: `npm run check` passed, covering UI tests 297/297,
+  production build, Rust lib tests 84/84, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/App.tsx src/App.css working.md`
+  passed; repo root was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only `src/App.css`, `src/App.tsx`,
+  and `working.md` modified;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`; the temp QA file was absent; port 5342 was free.
+- Staged paths: `git diff --cached --name-only` listed only `src/App.css`,
+  `src/App.tsx`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed
+  after scanning about 5.41 KB and finding no leaks.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit the implementation, run full-tree secret scan, push, and verify final
+  parity.
+
+## Previous Slice - 2026-06-08 Import event list overflow visibility
 
 Current Goal:
 

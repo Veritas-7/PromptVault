@@ -871,6 +871,15 @@ h3 {
   padding: 16px 14px;
 }
 
+.prompt-list-overflow {
+  background: #f8faf7;
+  border-bottom: 1px solid #edf2eb;
+  color: #536158;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 10px 14px;
+}
+
 .prompt-row {
   align-items: start;
   border: 0;

@@ -173,6 +173,7 @@ const CONTINUOUS_IMPORT_PAUSE_MS = 200;
 const SCAN_PROGRESS_POLL_MS = 300;
 const QUALITY_GAP_DISPLAY_LIMIT = 4;
 const FREQUENCY_DISPLAY_LIMIT = 12;
+const PROMPT_LIST_DISPLAY_LIMIT = 200;
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -333,9 +334,9 @@ function App() {
 
   const prompts = result?.prompts ?? [];
   const promptListMode = effectivePromptListMode(result?.preview_sort, previewMode);
-  const filteredPrompts = useMemo(() => {
+  const promptMatches = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const matches = needle
+    return needle
       ? prompts.filter((prompt) => {
           return (
             prompt.text.toLowerCase().includes(needle) ||
@@ -344,10 +345,13 @@ function App() {
           );
         })
       : prompts;
+  }, [prompts, query]);
 
-    if (promptListMode === "weakest") return matches.slice(0, 200);
-    return matches.slice(-200).reverse();
-  }, [promptListMode, prompts, query]);
+  const filteredPrompts = useMemo(() => {
+    if (promptListMode === "weakest") return promptMatches.slice(0, PROMPT_LIST_DISPLAY_LIMIT);
+    return promptMatches.slice(-PROMPT_LIST_DISPLAY_LIMIT).reverse();
+  }, [promptListMode, promptMatches]);
+  const hiddenPromptListCount = Math.max(0, promptMatches.length - filteredPrompts.length);
 
   const selectedPrompt = useMemo(() => {
     return selectedPromptForView(filteredPrompts, selectedId);
@@ -1940,6 +1944,11 @@ function App() {
             {filteredPrompts.length === 0 && promptListEmptyMessage ? (
               <div className="empty compact" data-empty-prompts="true">
                 {promptListEmptyMessage}
+              </div>
+            ) : null}
+            {hiddenPromptListCount > 0 ? (
+              <div className="prompt-list-overflow" data-prompt-list-overflow="true">
+                프롬프트 외 {hiddenPromptListCount.toLocaleString()}개 항목이 더 있습니다.
               </div>
             ) : null}
           </div>

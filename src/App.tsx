@@ -28,6 +28,7 @@ import {
   browserBridgeStatusText,
   checkBrowserBridgeHealth,
 } from "./browserBridge";
+import { displayErrorText } from "./errorDisplay";
 import { importEventBatchSummary, importEventStatusLabel, importEventWarningSummary } from "./importEvents";
 import {
   activeImprovementForSelection,
@@ -182,10 +183,6 @@ const CONTINUOUS_IMPORT_PAUSE_MS = 200;
 const SCAN_PROGRESS_POLL_MS = 300;
 const FREQUENCY_DISPLAY_LIMIT = 12;
 const PROMPT_LIST_DISPLAY_LIMIT = 200;
-
-function errorText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 function waitForNextImportBatch(): Promise<void> {
   return new Promise((resolve) => {
@@ -512,7 +509,7 @@ function App() {
       }
       return true;
     } catch (err) {
-      const message = errorText(err);
+      const message = displayErrorText(err);
       setBrowserBridgeDatabasePath(null);
       setBrowserBridgeFailureText(message);
       setBrowserBridgeStatus("disconnected");
@@ -538,9 +535,9 @@ function App() {
       setStoredFacetsState("ready");
       setError((current) => refreshGlobalErrorAfterSuccess(quiet, current));
     } catch (err) {
-      syncBrowserBridgeFailure(errorText(err));
+      syncBrowserBridgeFailure(displayErrorText(err));
       setStoredFacetsState("failed");
-      if (!quiet) setError(errorText(err));
+      if (!quiet) setError(displayErrorText(err));
     } finally {
       releaseExclusiveAction(storedFacetsRefreshClaimRef);
     }
@@ -555,9 +552,9 @@ function App() {
       setImportStatesState("ready");
       setError((current) => refreshGlobalErrorAfterSuccess(quiet, current));
     } catch (err) {
-      syncBrowserBridgeFailure(errorText(err));
+      syncBrowserBridgeFailure(displayErrorText(err));
       setImportStatesState("failed");
-      if (!quiet) setError(errorText(err));
+      if (!quiet) setError(displayErrorText(err));
     } finally {
       releaseExclusiveAction(importStatesRefreshClaimRef);
     }
@@ -572,9 +569,9 @@ function App() {
       setImportEventsState("ready");
       setError((current) => refreshGlobalErrorAfterSuccess(quiet, current));
     } catch (err) {
-      syncBrowserBridgeFailure(errorText(err));
+      syncBrowserBridgeFailure(displayErrorText(err));
       setImportEventsState("failed");
-      if (!quiet) setError(errorText(err));
+      if (!quiet) setError(displayErrorText(err));
     } finally {
       releaseExclusiveAction(importEventsRefreshClaimRef);
     }
@@ -590,7 +587,7 @@ function App() {
       setSelectedImportSourceIds((current) => plannedQueueSourceIds(current, next.sources));
       setPlanState("ready");
     } catch (err) {
-      const message = errorText(err);
+      const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
       setError(message);
       setPlanState("failed");
@@ -634,7 +631,7 @@ function App() {
         importStopRequestedRef.current && !next?.state.completed ? "stopped" : "ready",
       );
     } catch (err) {
-      const message = errorText(err);
+      const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
       setError(message);
       setImportState("failed");
@@ -684,7 +681,7 @@ function App() {
       setCompletedQueueSourceCount(finalState.completedSourceCount);
       setImportState(finalState.state);
     } catch (err) {
-      const message = errorText(err);
+      const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
       setError(message);
       setImportState("failed");
@@ -746,7 +743,7 @@ function App() {
       setScanFailureErrorText(null);
       setScanStopFailure(null);
     } catch (err) {
-      const message = errorText(err);
+      const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
       setError(message);
       setScanFailureErrorText(message);
@@ -773,7 +770,7 @@ function App() {
         setScanState("scanning");
       }
     } catch (err) {
-      const message = errorText(err);
+      const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
       setError(message);
       setScanStopFailure("request_failed");
@@ -813,7 +810,7 @@ function App() {
       setStoredLoadState("ready");
       setStoredLoadFailureErrorText(null);
     } catch (err) {
-      const message = errorText(err);
+      const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
       setError(message);
       setStoredLoadFailureErrorText(message);
@@ -914,7 +911,7 @@ function App() {
       setImprovementFailurePromptId(null);
       setImprovementFailureErrorText(null);
     } catch (err) {
-      const message = errorText(err);
+      const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
       setError(message);
       setImprovementFailurePromptId(prompt.id);

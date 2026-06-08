@@ -1,12 +1,96 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 20:58 KST
+Updated: 2026-06-08 21:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Scan and import success warning secret masking
+## Current Slice - 2026-06-08 Global error notice secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent native/Tauri rejected errors or string rejections from re-exposing
+  sensitive values in the global visible error notice.
+
+Context:
+
+- Previous scan/import success warning masking is pushed to `origin/main` with
+  source commit `d5dd7eb fix: mask success warning secrets` and docs closeout
+  `78e71e4 docs: record success warning masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment or Tauri-like browser shims for
+  controlled user flows.
+- Browser bridge HTTP/body/JSON failures already discard raw response details,
+  but native `invoke()` rejections can still arrive as an `Error` or string and
+  were previously converted by `errorText(err)` directly into UI state.
+
+Progress:
+
+- Added a failing unit test for display-error masking before production code.
+  RED failed because `src/errorDisplay.ts` did not exist yet.
+- Added `displayErrorText(err)` to normalize `Error` objects and non-Error
+  string rejections through the existing `redactSensitiveDisplayText()` display
+  redactor.
+- Replaced App-level error conversion with `displayErrorText()` so global
+  errors and scoped failure strings use the same masked display copy.
+- Ran a browser smoke with a Tauri-like `window.__TAURI_INTERNALS__.invoke`
+  rejection and clicked the quick scan action. The first smoke attempt failed
+  only because the temporary script resolved `playwright` from `/tmp`; corrected
+  the script to resolve modules from the project package and re-ran it.
+- Confirmed the global `.notice.error` and full page body no longer contained
+  the raw synthetic secret flag or value after the quick scan failure, with no
+  page errors, console errors, or failed responses.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/errorDisplay.ts`: new display-error helper that masks sensitive error
+  text before UI rendering.
+- `src/App.tsx`: routes native/browser error conversion through
+  `displayErrorText()`.
+- `tests/errorDisplay.test.ts`: covers `Error` messages and string rejection
+  messages with secret-like content.
+- `working.md`: records this slice and its RED/GREEN/browser/full-check
+  evidence.
+
+Tests:
+
+- RED unit test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/errorDisplay.test.ts`
+  failed before implementation with `ERR_MODULE_NOT_FOUND` for
+  `src/errorDisplay.ts`.
+- Targeted GREEN:
+  same command passed with 2/2 tests after adding `displayErrorText()`.
+- Browser click smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5231" --port 5231 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_display_error_secret_qa.mjs'`
+  passed after correcting the temporary script's module resolution; it clicked
+  the quick scan button against a Tauri-like rejected invoke and verified the
+  global error notice/body were masked.
+- UI test suite: `npm run test:ui` passed with 350/350 tests.
+- Full project check: `npm run check` passed, covering UI tests 350/350,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after global error display masking.
+- This slice changes display text only. It does not mutate backend/native error
+  values, bridge payloads, or persisted records.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Commit and push the global error notice masking slice, then update docs
+  closeout from a clean source-pushed tree.
+
+## Previous Slice - 2026-06-08 Scan and import success warning secret masking
 
 Current Goal:
 

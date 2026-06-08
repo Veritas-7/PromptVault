@@ -270,20 +270,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let count = bounded_count(count, MAX_REPAIR_COUNT, "Repair", &mut warnings);
-            let scan = run_scan(ScanOptions {
-                limit,
-                output_path: None,
-                preview_limit: Some(count),
-                preview_sort: Some("quality-asc".to_string()),
-                include_markdown: Some(false),
-                write_markdown: Some(false),
-                source_ids: if source_ids.is_empty() {
-                    None
-                } else {
-                    Some(source_ids)
-                },
-                ..Default::default()
-            })?;
+            let scan = run_scan(repair_scan_options(limit, count, source_ids))?;
             warnings.extend(scan.warnings.clone());
 
             let mut repairs = Vec::new();
@@ -466,6 +453,24 @@ fn parse_scan_args(mut args: Vec<String>) -> Result<ScanCommandArgs, Box<dyn std
             ..Default::default()
         },
     })
+}
+
+fn repair_scan_options(limit: Option<usize>, count: usize, source_ids: Vec<String>) -> ScanOptions {
+    ScanOptions {
+        limit,
+        output_path: None,
+        preview_limit: Some(count),
+        preview_sort: Some("quality-asc".to_string()),
+        include_markdown: Some(false),
+        write_markdown: Some(false),
+        persist: Some(false),
+        source_ids: if source_ids.is_empty() {
+            None
+        } else {
+            Some(source_ids)
+        },
+        ..Default::default()
+    }
 }
 
 fn parse_usize_arg(value: Option<String>, flag: &str) -> Result<usize, Box<dyn std::error::Error>> {
@@ -653,7 +658,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1104,6 +1109,7 @@ mod tests {
         assert!(help.contains("--output cannot be combined with --no-export"));
         assert!(help.contains("--preview-sort or --weakest-first"));
         assert!(help.contains("repair --count is capped at 10"));
+        assert!(help.contains("repair scans are side-effect-free"));
         assert!(help.contains("serve [--addr 127.0.0.1:5174]"));
         assert!(help.contains("browser-bridge endpoints"));
     }
@@ -1132,6 +1138,21 @@ mod tests {
         assert_eq!(parsed.options.persist, Some(false));
         assert_eq!(
             parsed.options.source_ids,
+            Some(vec!["project-progress-logs".to_string()])
+        );
+    }
+
+    #[test]
+    fn repair_scan_options_do_not_persist_prompt_records() {
+        let options = repair_scan_options(Some(7), 3, vec!["project-progress-logs".to_string()]);
+
+        assert_eq!(options.limit, Some(7));
+        assert_eq!(options.preview_limit, Some(3));
+        assert_eq!(options.preview_sort, Some("quality-asc".to_string()));
+        assert_eq!(options.write_markdown, Some(false));
+        assert_eq!(options.persist, Some(false));
+        assert_eq!(
+            options.source_ids,
             Some(vec!["project-progress-logs".to_string()])
         );
     }

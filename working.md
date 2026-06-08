@@ -1,12 +1,113 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 23:34 KST
+Updated: 2026-06-08 23:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Plan source note label redaction
+## Current Slice - 2026-06-08 Project progress log source
+
+Current Goal:
+
+- Add a conservative PromptVault source for project-local progress markdown
+  logs under `/Users/wj/Ai/System/10_Projects`.
+- Treat `working.md`, `WORKING.md`, `Working.md`, `WORKLOG.md`,
+  `PROJECT_STATUS.md`, `PROGRESS_LOG.md`, and `progress.md` style files as
+  project evidence, without scanning dependency/build output trees.
+- Keep this as a PromptVault evidence source only. Full date/project work
+  management remains the WorklogTracker / Worklog system responsibility.
+
+Context:
+
+- Operator asked whether project/day work management is actually complete,
+  whether real raw sessions were parsed, and whether project-local
+  `working.md` / work progress logs are being incorporated.
+- Direct Worklog verification earlier in this thread confirmed raw-session
+  parsing/indexing is working for the separate Worklog lane, but project-local
+  progress markdown ingestion was still a missing integration layer.
+- PromptVault's current shape is prompt/session capture and prompt-quality
+  analysis. A local project progress source is useful evidence, but it is not
+  yet a full daily work manager.
+
+Progress:
+
+- Added `project-progress-logs` as a new source rooted at
+  `~/Ai/System/10_Projects`.
+- Added `SourceKind::ProjectProgressMarkdown` with filename matching for
+  project progress markdown files.
+- Added traversal pruning for `node_modules`, `.git`, `target`, `dist`,
+  `build`, `.next`, `.venv`, cache/coverage, and related heavy output
+  directories.
+- Added a bounded max traversal depth for this source so actual project-log
+  discovery does not walk deep dependency/output trees.
+- Added a parser that reads a project progress markdown file into a
+  `PromptRecord`, sets `cwd` to the project directory, and uses
+  `<project>:<filename>` as the session id.
+- Added a text snapshot limit for large logs: keep the head and tail with an
+  explicit truncation marker before PromptVault quality/risk analysis. This
+  prevents multi-MB `working.md` files from hanging scan analysis while keeping
+  the original file path as evidence.
+- Actual project scan discovered 29 candidate progress log files under
+  `/Users/wj/Ai/System/10_Projects`. Largest files include CareVault,
+  NuancedNarrator, WorklogTracker, PromptVault, RepoTutorStudio, ResearchFlowAI,
+  notebooklm-llm-wiki-flow, and LocalMind logs.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds the project-progress source spec, matching,
+  traversal pruning, max-depth bound, parser, and large-log analysis snapshot.
+- `src-tauri/src/lib.rs`: adds tests for source-spec path safety, filename
+  matching, dependency/build-dir pruning, large-log truncation, and parser
+  workspace/session preservation.
+- `working.md`: records this project progress log source slice.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_progress --lib`
+  failed before implementation because `SourceKind::ProjectProgressMarkdown`
+  and `parse_project_progress_markdown()` did not exist.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_progress --lib`
+  passed with 4/4 after implementation.
+- Source-spec regression:
+  `cargo test --manifest-path src-tauri/Cargo.toml source_specs_are_home_relative_without_user_literal_paths --lib`
+  passed.
+- Actual plan verification:
+  `src-tauri/target/debug/promptvault-cli plan --source project-progress-logs --json`
+  passed with `total_files=29`, `available_sources=1`, `large_file_count=0`,
+  `largest_file_bytes=3874314`, and no warnings. Direct binary runtime was
+  about `0.674s` after pruning and max-depth limiting.
+- Actual parse verification:
+  `src-tauri/target/debug/promptvault-cli scan --source project-progress-logs --limit 3 --preview-limit 0 --no-export --json`
+  passed with `total_files=3`, `total_prompts=3`,
+  `source_summaries[0].id=project-progress-logs`, and warning only for the
+  intentional `limit=3`. Direct binary runtime was about `2.886s`.
+
+Issues:
+
+- The CLI scan command currently persists by default; the parse verification
+  inserted/updated a few `Project progress logs` rows in the local PromptVault
+  SQLite database at `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- This slice does not yet split project progress markdown into dated work
+  sections. PromptVault can now discover and parse project progress evidence,
+  but WorklogTracker still needs the AI-assisted daily/project/task structuring
+  layer for the operator's full management goal.
+- Large progress logs are represented as bounded analysis snapshots, not full
+  stored source text. The authoritative source remains the file path.
+
+Next Steps:
+
+- Add a no-persist CLI scan option or temp-database option for side-effect-free
+  source verification.
+- Add a WorklogTracker-side importer/summarizer that reads these 29 progress
+  logs plus raw session indexes and outputs date/project/task records.
+- Consider date-heading section extraction for progress markdown, but do it in
+  WorklogTracker or a dedicated worklog parser rather than overloading
+  PromptVault prompt-quality records.
+
+## Previous Slice - 2026-06-08 Plan source note label redaction
 
 Current Goal:
 

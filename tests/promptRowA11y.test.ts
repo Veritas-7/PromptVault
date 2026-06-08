@@ -210,6 +210,32 @@ test("prompt row previews redact standalone basic tokens", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact standalone alphanumeric auth scheme tokens", () => {
+  const bearerToken = ["short", "bearer", "value", "1"].join("");
+  const basicToken = ["short", "basic", "value", "1"].join("");
+  const cases = [
+    {
+      text: `Use Bearer ${bearerToken} for the request.`,
+      expected: "Use [REDACTED_POSSIBLE_SECRET] for the request.",
+      leakPattern: new RegExp(`Bearer|${bearerToken}`),
+    },
+    {
+      text: `Use Basic ${basicToken} for the request.`,
+      expected: "Use [REDACTED_POSSIBLE_SECRET] for the request.",
+      leakPattern: new RegExp(`Basic|${basicToken}`),
+    },
+  ];
+
+  for (const { text, expected, leakPattern } of cases) {
+    const preview = promptRowPreviewText(text);
+    const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+    assert.equal(preview, expected);
+    assert.doesNotMatch(preview, leakPattern);
+    assert.doesNotMatch(label, leakPattern);
+  }
+});
+
 test("prompt row previews redact standalone provider-prefixed tokens", () => {
   const syntheticToken = `${["g", "h", "p"].join("")}_${"A".repeat(36)}`;
   const text = `Use ${syntheticToken} for repo access.`;

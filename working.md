@@ -1,12 +1,116 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 19:11 KST
+Updated: 2026-06-08 19:15 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Case-insensitive quoted curl header redaction shape
+## Current Slice - 2026-06-08 Standalone alphanumeric auth token redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for standalone `Bearer`/`Basic` auth scheme tokens, including
+  sufficiently long alphanumeric tokens that do not contain punctuation.
+
+Context:
+
+- Previous case-insensitive quoted curl header shape fix is pushed to
+  `origin/main` with source commit
+  `17a1722 fix: preserve curl header redaction shape case-insensitively` and
+  docs closeout
+  `45531f4 docs: record curl header case redaction verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed `Use Bearer shortbearervalue for the request.`
+  and `Use Basic shortbasicvalue for the request.` rendered unchanged, because
+  the standalone auth scheme matcher only caught tokens containing a separator
+  character.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact standalone `Bearer`/`Basic` alphanumeric tokens.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same standalone alphanumeric auth scheme tokens.
+- Confirmed RED: frontend and backend redaction leaked the auth scheme and
+  token unchanged.
+- Extended the auth scheme token matcher to preserve the existing separator
+  token behavior and also redact 16+ character alphanumeric scheme tokens.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a raw standalone alphanumeric `Bearer` token. It confirmed
+  two stored prompt rows, the `Use [REDACTED_POSSIBLE_SECRET] for the request.`
+  shape visible in row text and aria labels, no `Bearer` token leak in row
+  text, aria labels, or body text, and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: extends standalone `Bearer`/`Basic` token matching to
+  include long alphanumeric token values.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for
+  standalone alphanumeric auth scheme tokens.
+- `src-tauri/src/lib.rs`: aligns backend redaction with the same matcher and
+  Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- Probe:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --input-type=module -e ...`
+  showed standalone alphanumeric `Bearer` and `Basic` tokens rendered unchanged.
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed 33/34 because the alphanumeric `Bearer` token was not redacted.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_standalone_alphanumeric_auth_scheme_tokens`
+  from `src-tauri` failed because backend redaction leaked the alphanumeric
+  `Bearer` token.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 34/34.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_standalone_alphanumeric_auth_scheme_tokens`
+  from `src-tauri` passed, 1/1 focused lib test, plus zero-test main and CLI
+  targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5219" --port 5219 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_alphanumeric_auth_qa.mjs'`
+  passed with `rowCount=2`, `alphanumericAuthVisible=true`,
+  `rowLeaked=false`, `ariaLeaked=false`, `bodyLeaked=false`,
+  `consoleErrors=0`, and `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 340/340,
+  production build, Rust lib tests 111/111, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after redacting long standalone alphanumeric auth scheme
+  tokens.
+- Python Playwright is not installed, and PromptVault has no local Playwright
+  dependency. Browser QA used the installed shared workspace Playwright package
+  while still managing Vite with the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity and
+  UI/accessibility preview correctness work for auth scheme token snippets.
+
+Next Steps:
+
+- Run whitespace and staged secret checks, commit the source slice, push to the
+  private GitHub repository, verify local/remote parity, then record final
+  source-push evidence in this log.
+
+## Previous Slice - 2026-06-08 Case-insensitive quoted curl header redaction shape
 
 Current Goal:
 

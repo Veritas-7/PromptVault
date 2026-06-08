@@ -232,6 +232,7 @@ import {
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
   workLogExtractionProviderNoticeText,
+  workLogExtractionRejectionSummaryText,
   workLogExtractionReviewLabel,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
@@ -588,6 +589,8 @@ function App() {
   );
   const workLogExtractionProviderNotice =
     workLogExtractionProviderNoticeText(workLogExtractionResult, workLogExtractionRunMode);
+  const workLogExtractionRejectionSummary =
+    workLogExtractionRejectionSummaryText(workLogExtractionResult);
   const workLogExtractionPersistenceStatus = workLogExtractionResult
     ? workLogExtractionPersistenceText(workLogExtractionResult)
     : null;
@@ -2205,6 +2208,12 @@ function App() {
           <div className="work-summary-index" data-work-log-extraction-meta="true">
             <Sparkles size={15} />
             <span>{workLogExtractionMeta}</span>
+          </div>
+        ) : null}
+        {workLogExtractionRejectionSummary ? (
+          <div className="work-summary-index" data-work-log-extraction-rejection-summary="true">
+            <AlertTriangle size={15} />
+            <span>{workLogExtractionRejectionSummary}</span>
           </div>
         ) : null}
         {workLogCandidatesResult || workLogExtractionResult ? (

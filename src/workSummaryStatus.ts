@@ -285,6 +285,36 @@ export function workLogExtractionApprovalText(
   ].join(" · ");
 }
 
+export function workLogExtractionRejectionSummaryText(
+  result: ProjectWorkLogExtractionProposalsResult | null,
+): string | null {
+  if (!result || result.rejected_count <= 0) return null;
+  const counts = new Map<string, number>();
+  for (const proposal of result.proposals) {
+    if (proposal.accepted) continue;
+    const label = workLogExtractionRejectionSummaryLabel(proposal.rejection_reason);
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  if (!counts.size) return null;
+  const orderedLabels = ["AI 검토 필요", "위험 제외", "검증 실패", "거절 사유 없음", "기타"];
+  const parts = orderedLabels
+    .filter((label) => counts.has(label))
+    .map((label) => `${label} ${counts.get(label)?.toLocaleString()}개`);
+  return `보류 사유 ${parts.join(" · ")}`;
+}
+
+function workLogExtractionRejectionSummaryLabel(reason: string | null): string {
+  if (!reason) return "거절 사유 없음";
+  const labels: Record<string, string> = {
+    candidate_has_risk_flags: "위험 제외",
+    evidence_has_risk_flags: "위험 제외",
+    local_fallback_requires_ai_review: "AI 검토 필요",
+    missing_ai_proposal: "AI 검토 필요",
+    title_has_risk_flags: "위험 제외",
+  };
+  return labels[reason] ?? (reason.trim() ? "검증 실패" : "거절 사유 없음");
+}
+
 export function workLogExtractionFailureText(state: WorkLogExtractionState): string | null {
   if (state !== "failed") return null;
   return "AI 작업 추출 제안을 불러오지 못했습니다. provider 설정, 진행 로그 경로, 브리지 상태를 확인하세요.";

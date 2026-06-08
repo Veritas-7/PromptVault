@@ -1,12 +1,99 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 06:53 KST
+Updated: 2026-06-09 07:00 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 extraction save-state clarity and nested worklog discovery
+## Current Slice - 2026-06-09 rejected extraction reason visibility
+
+Current Goal:
+
+- Make rejected work-log extraction candidates visible as a grouped blocker
+  summary instead of leaving the operator to infer status from `rejected N`.
+- Keep extraction fail-closed: do not save rejected proposals automatically and
+  do not relax the validation rules for risky or AI-review-required logs.
+
+Context:
+
+- Actual local extraction now scans nested project work/progress logs and returns
+  `candidate_count=20`, `accepted_count=16`, and `rejected_count=4`.
+- The UI already showed accepted/rejected totals and per-row review labels, but
+  did not summarize why the 4 rejected rows were not manageable yet.
+- The rejected set currently consists of one local-rule limitation requiring AI
+  review and three risky `notebooklm-llm-wiki-flow/docs/plans/*-worklog.md`
+  candidates blocked by risk flags.
+
+Progress:
+
+- Added a shared UI status helper that groups rejected extraction proposals into
+  operator-facing reason buckets:
+  `AI 검토 필요`, `위험 제외`, `검증 실패`, `거절 사유 없음`, and `기타`.
+- Added the grouped rejection summary to the work management metadata area when
+  a work-log extraction result has rejected proposals.
+- Kept the accepted proposal save state unchanged: accepted rows remain
+  selected for save, and rejected rows remain blocked.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - adds `workLogExtractionRejectionSummaryText`;
+  - maps known backend rejection reasons into concise Korean blocker buckets.
+- `src/App.tsx`:
+  - renders `data-work-log-extraction-rejection-summary` next to extraction
+    metadata.
+- `tests/workSummaryStatus.test.ts`:
+  - covers grouped rejection summary output for local AI-review and risk-flag
+    blocked proposals.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts` failed because
+    `workLogExtractionRejectionSummaryText` was not exported.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts`: PASS, 425 tests.
+- Headless browser-bridge QA:
+  - `node /tmp/promptvault_work_log_save_state_qa.mjs`: PASS after starting
+    Vite on `127.0.0.1:5177` and the local bridge on `127.0.0.1:5174`.
+  - Observed approval meta:
+    `저장 대기 16개 / accepted 16개`.
+  - Observed extraction meta:
+    `로컬 local-extraction-rules · 후보 20개 · accepted 16개 · rejected 4개`.
+  - Observed rejection summary:
+    `보류 사유 AI 검토 필요 1개 · 위험 제외 3개`.
+  - Persistence badge stayed hidden before saving proposals.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `425` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `155` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- This is visibility only. It does not yet convert rejected candidates into
+  managed project/day rows.
+- The remaining functional gap is a reviewed AI extraction path for rejected
+  candidates, plus an operator save flow when the accepted proposal set should
+  be persisted to SQLite.
+
+Research:
+
+- Used existing local code and prior Worklog/PromptVault context. No external
+  web research was used.
+
+Next Steps:
+
+- Stage only this slice's changed PromptVault paths, run staged secret scan,
+  commit, and push.
+- Later: add an explicit AI-review action for the `AI 검토 필요` bucket and a
+  separate reviewed-risk workflow for `위험 제외` rows.
+
+## Previous Slice - 2026-06-09 extraction save-state clarity and nested worklog discovery
 
 Current Goal:
 

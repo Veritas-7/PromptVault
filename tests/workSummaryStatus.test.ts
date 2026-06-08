@@ -15,6 +15,7 @@ import {
   workLogExtractionApprovalText,
   workLogExtractionPersistenceText,
   workLogExtractionProviderNoticeText,
+  workLogExtractionRejectionSummaryText,
   workLogExtractionReviewLabel,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
@@ -664,6 +665,52 @@ test("work log extraction approval text separates pending and persisted rows", (
       1,
     ),
     "저장 완료 2개 · 저장 대기 1개 / accepted 3개",
+  );
+});
+
+test("work log extraction rejection summary groups blocked proposals by reason", () => {
+  assert.equal(workLogExtractionRejectionSummaryText(null), null);
+  assert.equal(workLogExtractionRejectionSummaryText(extractionResult({ rejected_count: 0 })), null);
+  assert.equal(
+    workLogExtractionRejectionSummaryText(extractionResult({
+      accepted_count: 1,
+      rejected_count: 4,
+      proposals: [
+        extractionProposal(),
+        extractionProposal({
+          accepted: false,
+          date: null,
+          rejection_reason: "local_fallback_requires_ai_review",
+        }),
+        extractionProposal({
+          accepted: false,
+          date: null,
+          rejection_reason: "candidate_has_risk_flags",
+        }),
+        extractionProposal({
+          accepted: false,
+          date: null,
+          rejection_reason: "candidate_has_risk_flags",
+        }),
+        extractionProposal({
+          accepted: false,
+          date: null,
+          rejection_reason: "candidate_has_risk_flags",
+        }),
+      ],
+    })),
+    "보류 사유 AI 검토 필요 1개 · 위험 제외 3개",
+  );
+  assert.equal(
+    workLogExtractionRejectionSummaryText(extractionResult({
+      accepted_count: 0,
+      rejected_count: 2,
+      proposals: [
+        extractionProposal({ accepted: false, date: null, rejection_reason: "missing_date" }),
+        extractionProposal({ accepted: false, date: null, rejection_reason: null }),
+      ],
+    })),
+    "보류 사유 검증 실패 1개 · 거절 사유 없음 1개",
   );
 });
 

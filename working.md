@@ -1,10 +1,121 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 09:11 KST
+Updated: 2026-06-08 09:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Stored prompt load response-state validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge stored-prompt load payloads whose response state
+  contradicts the `/api/prompts` backend contract.
+
+Context:
+
+- Recent slices hardened shared scan-result parser invariants around markdown
+  body inclusion and improvement delta consistency.
+- Backend `load_stored_prompts` always returns a non-null `persistence` snapshot,
+  `output_path: null`, `markdown: ""`, `markdown_included: false`, and
+  `markdown_written: false`.
+- The frontend browser bridge currently routes `loadStoredPrompts()` through the
+  shared scan-result parser, which correctly allows scan responses with
+  nullable persistence and export/markdown state. That is too permissive for the
+  stored-load endpoint.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `5894264 docs: update scan markdown next steps` with `HEAD...origin/main`
+  returning `0 0`.
+- Re-read backend `load_stored_prompts` response construction and frontend
+  `loadStoredPrompts()` bridge parsing, confirming the stored-load endpoint
+  needs entry-point-specific state validation.
+- Added RED API tests for stored-load payloads that omit `persistence` or claim
+  scan-style markdown export state.
+- Confirmed RED first: focused API suite failed 116/118 only on the two new
+  missing-rejection cases.
+- Added a stored-load-only parser wrapper requiring non-null `persistence`,
+  null `output_path`, empty `markdown`, and disabled markdown flags for
+  `/api/prompts` bridge responses.
+- Confirmed GREEN after the parser wrapper change: focused API suite passes
+  118/118.
+- Confirmed the broader UI/helper suite still passes 282/282 and the production
+  Vite build succeeds after the parser wrapper change.
+- Verified the local preview stored-prompt load flow with Node Playwright: a
+  malformed `/api/prompts` response with scan-style markdown export state is
+  rejected as a sanitized bridge error, and the export path/markdown body does
+  not render.
+- Removed the temporary preview QA script and confirmed port 5320 was free.
+- Confirmed the full project check passes after the stored-load parser/test
+  change.
+- Confirmed pre-staging whitespace, repo root, origin parity, private GitHub
+  visibility, remote list, and cleanup checks before staging explicit paths.
+- Staged only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`, then confirmed the staged secret scan found no leaks.
+
+Changes:
+
+- `working.md`: records the current stored prompt load response-state
+  validation slice.
+- `src/promptVaultApi.ts`: routes `loadStoredPrompts()` bridge responses through
+  a stored-load-specific parser wrapper.
+- `tests/promptVaultApi.test.ts`: adds missing-persistence and scan-export
+  state rejection cases for stored-prompt bridge responses.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 116/118 only on the new stored-load missing persistence and scan export
+  response-state rejection cases.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 118/118 after the stored-load parser wrapper change.
+- Broader UI/helper suite: `npm run test:ui` passed 282/282.
+- Production build: `npm run build` passed.
+- Preview QA helper: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  returned usage successfully. Python Playwright was unavailable in this
+  environment, so the preview check used the project's Node Playwright package.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5320" --port 5320 --timeout 30 node /tmp/promptvault_stored_load_state_qa.mjs http://127.0.0.1:5320`
+  passed.
+- Cleanup: `test ! -e /tmp/promptvault_stored_load_state_qa.mjs && echo temp_absent`
+  returned `temp_absent`; `! lsof -nP -iTCP:5320 -sTCP:LISTEN && echo port_5320_free`
+  returned `port_5320_free`.
+- Full project check: `npm run check` passed, including `npm run test:ui`
+  282/282, `npm run build`, `cargo test` 84 lib tests and 16 CLI tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; `git rev-parse --show-toplevel` returned
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md` modified; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` showed only `origin`;
+  `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned `PRIVATE` and `isPrivate: true`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` scanned
+  about 8.54 KB and found no leaks before the implementation commit.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Restage `working.md`, rerun staged security checks, commit, push, and parity
+  verification.
 
 ## Previous Slice - 2026-06-08 Scan markdown flag validation
 
@@ -67,6 +178,11 @@ Progress:
 - Ran a full-tree secret scan after the closeout commit; no leaks were found.
 - Pushed the closeout commit to `origin main`, fetched `origin main`, and
   confirmed `HEAD...origin/main` parity returned `0 0`.
+- Committed the final Next Steps update as
+  `5894264 docs: update scan markdown next steps`.
+- Ran a full-tree secret scan after that update; no leaks were found.
+- Pushed the final Next Steps update to `origin main`, fetched `origin main`,
+  and confirmed `HEAD...origin/main` parity returned `0 0`.
 
 Changes:
 
@@ -128,6 +244,15 @@ Tests:
   to `8bed582`; `git fetch origin main` completed; `git status --short --branch`
   showed clean `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
   returned `0 0`.
+- Final next-steps staged security: `gitleaks protect --staged --no-banner --redact`
+  scanned about 1.20 KB and found no leaks before
+  `5894264 docs: update scan markdown next steps`.
+- Final next-steps full-tree security: `gitleaks dir . --no-banner --redact`
+  scanned about 701.22 MB and found no leaks before push.
+- Final next-steps push/parity: `git push origin main` updated `main` from
+  `8bed582` to `5894264`; `git fetch origin main` completed;
+  `git status --short --branch` showed clean `main...origin/main`;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`.
 
 Issues:
 
@@ -140,7 +265,7 @@ Research:
 Next Steps:
 
 - Slice is clean and pushed through
-  `8bed582 docs: close scan markdown flag handoff`. Continue with the next
+  `5894264 docs: update scan markdown next steps`. Continue with the next
   narrow autonomous QA hardening slice from the clean pushed tree.
 
 ## Previous Slice - 2026-06-08 Improvement gap delta validation

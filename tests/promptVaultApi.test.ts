@@ -3909,6 +3909,58 @@ test("browser bridge stored prompt loads reject malformed successful payloads", 
   );
 });
 
+test("browser bridge stored prompt loads reject missing persistence snapshots", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanResult()), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadStoredPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /database|persistence|null|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge stored prompt loads reject scan export response state", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanResult({
+    output_path: "/tmp/promptvault.md",
+    markdown: "# PromptVault export\n\nStored prompt details should not be attached.",
+    markdown_included: true,
+    markdown_written: true,
+    persistence: {
+      database_path: "/tmp/promptvault.sqlite",
+      stored_prompt_count: 0,
+      inserted_prompt_count: 0,
+      updated_prompt_count: 0,
+      date_count: 0,
+    },
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadStoredPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /promptvault\.md|PromptVault export|Stored prompt details|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge stored prompt loads reject blank prompt metadata", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

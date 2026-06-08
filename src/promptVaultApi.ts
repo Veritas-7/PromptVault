@@ -124,7 +124,7 @@ export async function loadStoredPrompts(options: StoredPromptsOptions = {}): Pro
   if (hasTauriInvoke()) {
     return invoke<ScanResult>("load_stored_prompts", { options });
   }
-  return postBridge<ScanResult>("/api/prompts", { options }, parseScanResult);
+  return postBridge<ScanResult>("/api/prompts", { options }, parseStoredPromptsResult);
 }
 
 export async function scanPrompts(options: ScanPromptOptions): Promise<ScanResult> {
@@ -964,6 +964,18 @@ function parseScanResult(value: unknown): ScanResult {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ScanResult;
+}
+
+function parseStoredPromptsResult(value: unknown): ScanResult {
+  const result = parseScanResult(value);
+  if (result.output_path !== null
+    || result.markdown !== ""
+    || result.markdown_included !== false
+    || result.markdown_written !== false
+    || result.persistence === null) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return result;
 }
 
 function parseScanProgressResult(value: unknown): ScanProgress {

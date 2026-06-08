@@ -106,7 +106,7 @@ export interface SourcePlan {
   byte_count: number;
   large_file_count: number;
   largest_file_bytes: number;
-  newest_modified_at?: string | null;
+  newest_modified_at: string | null;
   notes: string[];
 }
 

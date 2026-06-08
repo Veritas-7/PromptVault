@@ -1,10 +1,127 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 09:40 KST
+Updated: 2026-06-08 09:52 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Source plan metadata presence validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan/import source plans that omit the backend-required
+  nullable `newest_modified_at` field.
+
+Context:
+
+- Recent slices hardened import event ordering and prompt nullable metadata
+  invariants.
+- Backend `SourcePlan` serializes `newest_modified_at` as an explicit
+  `Option<String>` field whose value may be `null`.
+- The frontend `SourcePlan` type and browser-bridge parser currently allow the
+  field to be omitted entirely, which is looser than the backend contract and
+  can let malformed source metadata reach plan/import UI fallback paths.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `ae6d06c docs: close prompt metadata handoff` with `HEAD...origin/main`
+  returning `0 0`.
+- Re-read `SourcePlan` type/parser and backend Rust `SourcePlan`, confirming
+  the parser permits missing `newest_modified_at` even though backend
+  serialization emits the field as explicit nullable metadata.
+- Added a RED API test for scan plan source rows whose
+  `newest_modified_at` property is omitted instead of explicitly set to a
+  timestamp string or `null`.
+- Confirmed RED first: focused API suite failed 120/121 only on the new
+  missing nullable source metadata rejection case.
+- Tightened the shared source plan parser so `newest_modified_at` must be
+  present and either `null` or a valid timestamp string.
+- Updated the frontend `SourcePlan` type to match the backend serialized
+  nullable-field contract.
+- Confirmed GREEN: focused API suite passed 121/121 after the parser/type
+  change.
+- Ran the broader UI test suite and production build successfully after the
+  parser/type change.
+- Verified the local preview plan flow with Node Playwright: a malformed
+  `/api/plan` source row without `newest_modified_at` shows the sanitized bridge
+  format error and does not leak the raw source label/path/id into the UI.
+- Removed the temporary preview QA script and confirmed port 5323 was free.
+- Ran the full project check successfully after preview QA.
+
+Changes:
+
+- `working.md`: records the current source plan metadata presence validation
+  slice.
+- `src/promptVaultApi.ts`: requires explicit nullable `newest_modified_at` on
+  browser-bridge source plan rows.
+- `src/types.ts`: makes `SourcePlan.newest_modified_at` required nullable
+  instead of optional.
+- `tests/promptVaultApi.test.ts`: adds a missing nullable source metadata
+  rejection case for scan plan bridge responses.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 120/121 only on the new missing nullable source metadata rejection
+  case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 121/121 after requiring explicit nullable source plan metadata.
+- Broader UI suite: `npm run test:ui` passed 285/285.
+- Production build: `npm run build` passed; Vite emitted
+  `dist/assets/index-UvGLuJo_.js` and `dist/assets/index-D81jZHaU.css`.
+- Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  printed usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5323" --port 5323 --timeout 30 node /tmp/promptvault_source_plan_metadata_qa.mjs http://127.0.0.1:5323`
+  passed. The script confirmed connected browser bridge status, clicked the
+  plan button, saw the sanitized malformed-response error, and verified the page
+  omitted raw `Source Metadata Canary`, `/tmp/source-metadata-canary`,
+  `source-metadata-canary`, `toLocaleString`, `RangeError`, `TypeError`, and
+  `undefined`.
+- Preview cleanup: `test ! -e /tmp/promptvault_source_plan_metadata_qa.mjs`
+  returned `temp_absent`; `! lsof -nP -iTCP:5323 -sTCP:LISTEN` returned
+  `port_5323_free`.
+- Full project check: `npm run check` passed. It reran `npm run test:ui`
+  285/285, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
+  and `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts src/types.ts tests/promptVaultApi.test.ts working.md`
+  produced no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only the four expected modified files; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` lists only
+  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned private GitHub visibility; temp script remained absent and port 5323
+  remained free.
+- Staged explicit paths only:
+  `src/promptVaultApi.ts`, `src/types.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`.
+- Staged security scan: `gitleaks protect --staged --no-banner --redact`
+  scanned about 6.87 KB and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Add a RED API test that rejects scan plan source rows with omitted
+  `newest_modified_at`.
+- Tighten the shared source plan parser/type, then verify focused tests,
+  broader UI/build checks, preview QA, full `npm run check`, security scans,
+  commit, push, and final parity.
 
 ## Previous Slice - 2026-06-08 Prompt metadata presence validation
 

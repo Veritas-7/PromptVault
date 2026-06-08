@@ -265,6 +265,10 @@ function isTimestampString(value: unknown): value is string {
   return typeof value === "string" && value.trim() !== "" && Number.isFinite(Date.parse(value));
 }
 
+function isNullableTimestampString(value: unknown): boolean {
+  return value === null || isTimestampString(value);
+}
+
 function isPreviewSortString(value: unknown): value is string {
   return value === "latest" || value === "quality_asc";
 }
@@ -425,11 +429,7 @@ function isSourcePlan(value: unknown): boolean {
     || !isNonNegativeSafeInteger(value.byte_count)
     || !isNonNegativeSafeInteger(value.large_file_count)
     || !isNonNegativeSafeInteger(value.largest_file_bytes)
-    || !(
-      typeof value.newest_modified_at === "undefined"
-      || value.newest_modified_at === null
-      || isTimestampString(value.newest_modified_at)
-    )
+    || !isNullableTimestampString(value.newest_modified_at)
     || !isNonBlankStringArray(value.notes)) {
     return false;
   }

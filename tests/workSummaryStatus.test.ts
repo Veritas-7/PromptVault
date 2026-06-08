@@ -7,9 +7,13 @@ import {
   workSummaryIndexStatusText,
   workSummaryMetaText,
   workSummaryPersistenceText,
+  workSummarySnapshotsActionLabel,
+  workSummarySnapshotsFailureText,
+  workSummarySnapshotsMetaText,
+  type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "../src/workSummaryStatus.ts";
-import type { ProjectWorkSummaryResult } from "../src/types.ts";
+import type { ProjectWorkSummaryResult, ProjectWorkSummarySnapshotsResult } from "../src/types.ts";
 
 function lockState(overrides: Partial<ActionLockState> = {}): ActionLockState {
   return {
@@ -51,6 +55,18 @@ function summaryResult(overrides: Partial<ProjectWorkSummaryResult> = {}): Proje
       items: [],
       warnings: [],
     },
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function snapshotsResult(overrides: Partial<ProjectWorkSummarySnapshotsResult> = {}): ProjectWorkSummarySnapshotsResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_snapshots: 12,
+    returned_snapshot_count: 5,
+    snapshots: [],
     warnings: [],
     ...overrides,
   };
@@ -114,4 +130,36 @@ test("work summary failure text is only shown after failed loads", () => {
     "프로젝트 작업 요약을 불러오지 못했습니다. 브리지 상태나 진행 로그 스캔 범위를 확인하세요.",
   );
   assert.equal(workSummaryFailureText("ready"), null);
+});
+
+test("work summary snapshot labels explain history state and locks", () => {
+  assert.equal(
+    workSummarySnapshotsActionLabel("idle", false, lockState()),
+    "작업 요약 스냅샷 기록 불러오기",
+  );
+  assert.equal(
+    workSummarySnapshotsActionLabel("ready", true, lockState()),
+    "작업 요약 스냅샷 기록 새로고침",
+  );
+  assert.equal(
+    workSummarySnapshotsActionLabel("loading", true, lockState({ workSummaryRunning: true })),
+    "작업 요약 스냅샷 기록 불러오는 중",
+  );
+  assert.equal(
+    workSummarySnapshotsActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 작업 요약 스냅샷 기록을 새로고침할 수 없습니다",
+  );
+});
+
+test("work summary snapshot meta and failure text describe saved history", () => {
+  const failed: WorkSummarySnapshotsState = "failed";
+  assert.equal(workSummarySnapshotsMetaText("idle", null), "아직 불러온 스냅샷 기록 없음");
+  assert.equal(workSummarySnapshotsMetaText("loading", snapshotsResult()), "스냅샷 기록 불러오는 중");
+  assert.equal(workSummarySnapshotsMetaText("ready", snapshotsResult()), "저장 12개 · 표시 5개");
+  assert.equal(workSummarySnapshotsMetaText(failed, null), "스냅샷 기록을 사용할 수 없음");
+  assert.equal(
+    workSummarySnapshotsFailureText(failed),
+    "저장된 프로젝트 작업 요약 스냅샷을 불러오지 못했습니다. 브리지 상태나 데이터베이스 경로를 확인하세요.",
+  );
+  assert.equal(workSummarySnapshotsFailureText("ready"), null);
 });

@@ -1,7 +1,8 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
-import type { ProjectWorkSummaryResult } from "./types.ts";
+import type { ProjectWorkSummaryResult, ProjectWorkSummarySnapshotsResult } from "./types.ts";
 
 export type WorkSummaryState = "idle" | "loading" | "ready" | "failed";
+export type WorkSummarySnapshotsState = "idle" | "loading" | "ready" | "failed";
 
 export function workSummaryActionLabel(
   state: WorkSummaryState,
@@ -54,4 +55,34 @@ export function workSummaryPersistenceText(result: ProjectWorkSummaryResult): st
     `스냅샷 #${result.persistence.snapshot_id.toLocaleString()} 저장`,
     `총 ${result.persistence.snapshot_count.toLocaleString()}개`,
   ].join(" · ");
+}
+
+export function workSummarySnapshotsActionLabel(
+  state: WorkSummarySnapshotsState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "작업 요약 스냅샷 기록 불러오는 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 작업 요약 스냅샷 기록을 ${hasResult ? "새로고침" : "불러오기"}할 수 없습니다`;
+  }
+  return hasResult ? "작업 요약 스냅샷 기록 새로고침" : "작업 요약 스냅샷 기록 불러오기";
+}
+
+export function workSummarySnapshotsMetaText(
+  state: WorkSummarySnapshotsState,
+  result: ProjectWorkSummarySnapshotsResult | null,
+): string {
+  if (state === "loading") return "스냅샷 기록 불러오는 중";
+  if (!result) return state === "failed" ? "스냅샷 기록을 사용할 수 없음" : "아직 불러온 스냅샷 기록 없음";
+  return [
+    `저장 ${result.total_snapshots.toLocaleString()}개`,
+    `표시 ${result.returned_snapshot_count.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+export function workSummarySnapshotsFailureText(state: WorkSummarySnapshotsState): string | null {
+  if (state !== "failed") return null;
+  return "저장된 프로젝트 작업 요약 스냅샷을 불러오지 못했습니다. 브리지 상태나 데이터베이스 경로를 확인하세요.";
 }

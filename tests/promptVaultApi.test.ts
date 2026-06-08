@@ -6,6 +6,7 @@ import {
   improvePrompt,
   loadStoredPrompts,
   loadProjectWorkSummary,
+  listProjectWorkSummarySnapshots,
   listImportEvents,
   listImportStates,
   listStoredPromptFacets,
@@ -276,6 +277,33 @@ function projectWorkSummaryPayload(overrides = {}) {
   };
 }
 
+function projectWorkSummarySnapshotsPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_snapshots: 1,
+    returned_snapshot_count: 1,
+    snapshots: [{
+      id: 7,
+      created_at: "2026-06-09T00:00:00Z",
+      provider: "local-citation-rules",
+      used_ai: false,
+      narrative_markdown: "- 2026-06-09 PromptVault: saved summary",
+      total_items: 1,
+      project_count: 1,
+      date_count: 1,
+      files_seen: 1,
+      session_evidence_count: 1,
+      session_evidence_unique_count: 1,
+      summary_count: 1,
+      summaries: projectWorkSummaryPayload().summaries,
+      warnings: [],
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
 test("browser bridge work summary posts options and validates citation payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   let requestPath = "";
@@ -302,6 +330,48 @@ test("browser bridge work summary posts options and validates citation payloads"
   assert.equal(result.provider, "local-citation-rules");
   assert.equal(result.summaries[0].citations[0].id, "2026-06-09-PromptVault-1");
   assert.equal(result.report.session_evidence_index_used, true);
+});
+
+test("browser bridge work summary snapshots posts options and validates saved rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSummarySnapshotsPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await listProjectWorkSummarySnapshots({ limit: 5 });
+
+  assert.match(requestPath, /\/api\/work-summary-snapshots$/);
+  assert.deepEqual(JSON.parse(requestBody), { options: { limit: 5 } });
+  assert.equal(result.returned_snapshot_count, 1);
+  assert.equal(result.snapshots[0].id, 7);
+  assert.equal(result.snapshots[0].summaries[0].citations[0].id, "2026-06-09-PromptVault-1");
+});
+
+test("browser bridge work summary snapshots reject impossible counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSummarySnapshotsPayload({
+    returned_snapshot_count: 2,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listProjectWorkSummarySnapshots({ limit: 5 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /returned_snapshot_count|promptvault.sqlite|undefined/);
+      return true;
+    },
+  );
 });
 
 test("browser bridge work summary rejects impossible session evidence counts", async (t) => {

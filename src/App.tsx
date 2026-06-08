@@ -108,6 +108,7 @@ import {
   improvePrompt,
   isBrowserQaMode,
   loadProjectWorkSummary,
+  listProjectWorkSummarySnapshots,
   listImportEvents,
   listImportStates,
   listStoredPromptFacets,
@@ -184,6 +185,7 @@ import type {
   ImproveResult,
   PromptRecord,
   ProjectWorkSummaryResult,
+  ProjectWorkSummarySnapshotsResult,
   ScanPlan,
   ScanProgress,
   ScanResult,
@@ -195,6 +197,10 @@ import {
   workSummaryIndexStatusText,
   workSummaryMetaText,
   workSummaryPersistenceText,
+  workSummarySnapshotsActionLabel,
+  workSummarySnapshotsFailureText,
+  workSummarySnapshotsMetaText,
+  type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "./workSummaryStatus";
 
@@ -205,6 +211,7 @@ const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
 const WORK_SUMMARY_SESSION_LIMIT = 20;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
+const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
@@ -246,6 +253,7 @@ function App() {
   const [importEventsState, setImportEventsState] = useState<ImportEventsState>("idle");
   const [storedFacetsState, setStoredFacetsState] = useState<StoredFacetsState>("idle");
   const [workSummaryState, setWorkSummaryState] = useState<WorkSummaryState>("idle");
+  const [workSummarySnapshotsState, setWorkSummarySnapshotsState] = useState<WorkSummarySnapshotsState>("idle");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -258,6 +266,8 @@ function App() {
   const [importEventsResult, setImportEventsResult] = useState<ImportEventsResult | null>(null);
   const [storedFacetsResult, setStoredFacetsResult] = useState<StoredPromptFacetsResult | null>(null);
   const [workSummaryResult, setWorkSummaryResult] = useState<ProjectWorkSummaryResult | null>(null);
+  const [workSummarySnapshotsResult, setWorkSummarySnapshotsResult] =
+    useState<ProjectWorkSummarySnapshotsResult | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [resultOrigin, setResultOrigin] = useState<PromptResultOrigin | null>(null);
   const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
@@ -296,7 +306,7 @@ function App() {
   const isPlanRunning = planState === "planning";
   const isScanRunning = scanState === "scanning" || scanState === "canceling";
   const isStoredLoadRunning = storedLoadState === "loading";
-  const isWorkSummaryRunning = workSummaryState === "loading";
+  const isWorkSummaryRunning = workSummaryState === "loading" || workSummarySnapshotsState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
   const isBrowserBridgeDisconnected = browserQaMode && browserBridgeStatus === "disconnected";
   const actionLockState = {
@@ -465,11 +475,18 @@ function App() {
   const workSummaryMeta = workSummaryMetaText(workSummaryState, workSummaryResult);
   const workSummaryIndexStatus = workSummaryResult ? workSummaryIndexStatusText(workSummaryResult) : null;
   const workSummaryPersistenceStatus = workSummaryResult ? workSummaryPersistenceText(workSummaryResult) : null;
+  const workSummarySnapshotsFailureMessage = workSummarySnapshotsFailureText(workSummarySnapshotsState);
+  const workSummarySnapshotsMeta = workSummarySnapshotsMetaText(
+    workSummarySnapshotsState,
+    workSummarySnapshotsResult,
+  );
   const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
   const hiddenWorkSummaryCount = Math.max(
     0,
     (workSummaryResult?.summaries.length ?? 0) - WORK_SUMMARY_DISPLAY_LIMIT,
   );
+  const visibleWorkSummarySnapshots =
+    workSummarySnapshotsResult?.snapshots.slice(0, WORK_SUMMARY_HISTORY_LIMIT) ?? [];
   const storedFacetSummary = storedFacetSummaryText(
     storedFacetsState,
     storedFilterCount,
@@ -621,6 +638,42 @@ function App() {
     }
   }
 
+  async function refreshWorkSummarySnapshots() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSummarySnapshotsState("loading");
+    try {
+      const next = await listProjectWorkSummarySnapshots({
+        limit: WORK_SUMMARY_HISTORY_LIMIT,
+      });
+      setWorkSummarySnapshotsResult(next);
+      setWorkSummarySnapshotsState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSummarySnapshotsState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function refreshWorkSummarySnapshotsAfterSave() {
+    setWorkSummarySnapshotsState("loading");
+    try {
+      const next = await listProjectWorkSummarySnapshots({
+        limit: WORK_SUMMARY_HISTORY_LIMIT,
+      });
+      setWorkSummarySnapshotsResult(next);
+      setWorkSummarySnapshotsState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSummarySnapshotsState("failed");
+    }
+  }
+
   async function refreshWorkSummary({
     refreshSessionIndex = false,
     saveSnapshot = false,
@@ -638,6 +691,9 @@ function App() {
       });
       setWorkSummaryResult(next);
       setWorkSummaryState("ready");
+      if (saveSnapshot) {
+        await refreshWorkSummarySnapshotsAfterSave();
+      }
     } catch (err) {
       const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
@@ -1193,6 +1249,25 @@ function App() {
               <Database size={15} />
               스냅샷 저장
             </button>
+            <button
+              aria-label={workSummarySnapshotsActionLabel(
+                workSummarySnapshotsState,
+                workSummarySnapshotsResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-summary-snapshots="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => refreshWorkSummarySnapshots()}
+              type="button"
+            >
+              <FileText size={15} />
+              {workSummarySnapshotsState === "loading"
+                ? "기록 로딩"
+                : workSummarySnapshotsResult
+                  ? "기록 새로고침"
+                  : "기록 보기"}
+            </button>
           </div>
         </div>
         {workSummaryFailureMessage ? (
@@ -1205,6 +1280,16 @@ function App() {
             <span>{workSummaryFailureMessage}</span>
           </div>
         ) : null}
+        {workSummarySnapshotsFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-summary-snapshots-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workSummarySnapshotsFailureMessage}</span>
+          </div>
+        ) : null}
         {workSummaryIndexStatus ? (
           <div className="work-summary-index" data-work-summary-index="true">
             <ShieldCheck size={15} />
@@ -1215,6 +1300,12 @@ function App() {
           <div className="work-summary-index" data-work-summary-persistence="true">
             <Database size={15} />
             <span>{workSummaryPersistenceStatus}</span>
+          </div>
+        ) : null}
+        {workSummarySnapshotsResult || workSummarySnapshotsState !== "idle" ? (
+          <div className="work-summary-index" data-work-summary-snapshots-meta="true">
+            <FileText size={15} />
+            <span>{workSummarySnapshotsMeta}</span>
           </div>
         ) : null}
         {workSummaryResult ? (
@@ -1247,6 +1338,32 @@ function App() {
             프로젝트 진행 로그와 세션 근거 요약 대기 중
           </div>
         )}
+        {workSummarySnapshotsResult ? (
+          visibleWorkSummarySnapshots.length ? (
+            <div className="work-summary-list" data-work-summary-snapshots="true">
+              {visibleWorkSummarySnapshots.map((snapshot) => (
+                <article className="work-summary-row" key={snapshot.id}>
+                  <div>
+                    <strong>스냅샷 #{snapshot.id.toLocaleString()}</strong>
+                    <span>{snapshot.created_at}</span>
+                  </div>
+                  <p>{snapshot.narrative_markdown.split("\n")[0]}</p>
+                  <span>
+                    {snapshot.provider}
+                    {snapshot.used_ai ? " · AI" : " · local"} · 프로젝트{" "}
+                    {snapshot.project_count.toLocaleString()}개 · {snapshot.date_count.toLocaleString()}일 · 작업{" "}
+                    {snapshot.total_items.toLocaleString()}개 · 세션 근거{" "}
+                    {snapshot.session_evidence_count.toLocaleString()}건
+                  </span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-summary-snapshots="true">
+              저장된 프로젝트 작업 요약 스냅샷 없음
+            </div>
+          )
+        ) : null}
       </section>
 
       <section className="panel stored-filter-panel">

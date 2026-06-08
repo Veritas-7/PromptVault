@@ -36,6 +36,8 @@ const PROJECT_WORK_SESSION_SOURCE_IDS: &[&str] = &[
 const PROJECT_WORK_CODEX_METADATA_SOURCE_IDS: &[&str] = &["codex", "codex-cx"];
 const DEFAULT_IMPORT_EVENT_LIMIT: usize = 20;
 const MAX_IMPORT_EVENT_LIMIT: usize = 100;
+const DEFAULT_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT: usize = 10;
+const MAX_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT: usize = 100;
 const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
 const MAX_STORED_PROMPT_LIMIT: usize = 1_000;
 const DEFAULT_STORED_FACET_LIMIT: usize = 50;
@@ -195,6 +197,40 @@ pub struct ProjectWorkSummaryResult {
     pub summaries: Vec<ProjectWorkSummary>,
     pub report: ProjectWorkReport,
     pub persistence: Option<ProjectWorkSummaryPersistence>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSummarySnapshot {
+    pub id: i64,
+    pub created_at: String,
+    pub provider: String,
+    pub used_ai: bool,
+    pub narrative_markdown: String,
+    pub total_items: usize,
+    pub project_count: usize,
+    pub date_count: usize,
+    pub files_seen: usize,
+    pub session_evidence_count: usize,
+    pub session_evidence_unique_count: usize,
+    pub summary_count: usize,
+    pub summaries: Vec<ProjectWorkSummary>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSummarySnapshotsOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSummarySnapshotsResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub total_snapshots: usize,
+    pub returned_snapshot_count: usize,
+    pub snapshots: Vec<ProjectWorkSummarySnapshot>,
     pub warnings: Vec<String>,
 }
 
@@ -555,6 +591,14 @@ async fn project_work_summary(
 ) -> Result<ProjectWorkSummaryResult, String> {
     run_project_work_summary(options.unwrap_or_default())
         .await
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_summary_snapshots(
+    options: Option<ProjectWorkSummarySnapshotsOptions>,
+) -> Result<ProjectWorkSummarySnapshotsResult, String> {
+    run_list_project_work_summary_snapshots(options.unwrap_or_default())
         .map_err(|err| err.to_string())
 }
 
@@ -1019,9 +1063,48 @@ pub async fn run_project_work_summary(
         warnings,
     };
     if save_snapshot {
-        result.persistence = Some(persist_project_work_summary_snapshot(&database_path, &result)?);
+        result.persistence = Some(persist_project_work_summary_snapshot(
+            &database_path,
+            &result,
+        )?);
     }
     Ok(result)
+}
+
+pub fn run_list_project_work_summary_snapshots(
+    options: ProjectWorkSummarySnapshotsOptions,
+) -> Result<ProjectWorkSummarySnapshotsResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-summary snapshot limit requires a positive integer".into());
+    }
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT)
+        .min(MAX_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT);
+    let conn = open_promptvault_database(&database_path)?;
+    let total_snapshots = conn.query_row(
+        "SELECT COUNT(*) FROM project_work_summary_snapshots",
+        [],
+        |row| row.get::<_, i64>(0),
+    )? as usize;
+    let snapshots = read_project_work_summary_snapshots(&conn, limit)?;
+    Ok(ProjectWorkSummarySnapshotsResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        total_snapshots,
+        returned_snapshot_count: snapshots.len(),
+        snapshots,
+        warnings: Vec::new(),
+    })
 }
 
 pub fn run_import_batch(
@@ -3407,21 +3490,24 @@ async fn request_glm_project_work_summary(
         .json(&body)
         .send()
         .await
-        .map_err(|err| format!("GLM work-summary 요청 실패: {err}; 로컬 fallback을 사용했습니다."))?;
+        .map_err(|err| {
+            format!("GLM work-summary 요청 실패: {err}; 로컬 fallback을 사용했습니다.")
+        })?;
     let status = response.status();
     if !status.is_success() {
         return Err(format!(
             "GLM work-summary가 HTTP {status}를 반환해 로컬 fallback을 사용했습니다."
         ));
     }
-    let value = response
-        .json::<Value>()
-        .await
-        .map_err(|err| format!("GLM work-summary 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용했습니다."))?;
+    let value = response.json::<Value>().await.map_err(|err| {
+        format!("GLM work-summary 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용했습니다.")
+    })?;
     let content = value
         .pointer("/choices/0/message/content")
         .and_then(Value::as_str)
-        .ok_or_else(|| "GLM work-summary 응답 content가 없어 로컬 fallback을 사용했습니다.".to_string())?;
+        .ok_or_else(|| {
+            "GLM work-summary 응답 content가 없어 로컬 fallback을 사용했습니다.".to_string()
+        })?;
     project_work_summary_from_content("glm", content).ok_or_else(|| {
         "GLM work-summary 응답에 비어 있지 않은 summary_markdown이 없어 로컬 fallback을 사용했습니다.".to_string()
     })
@@ -4680,6 +4766,43 @@ fn persist_project_work_summary_snapshot(
     })
 }
 
+fn read_project_work_summary_snapshots(
+    conn: &Connection,
+    limit: usize,
+) -> Result<Vec<ProjectWorkSummarySnapshot>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, created_at, provider, used_ai, narrative_markdown, total_items,
+            project_count, date_count, files_seen, session_evidence_count,
+            session_evidence_unique_count, summary_count, summaries_json, warnings_json
+         FROM project_work_summary_snapshots
+         ORDER BY id DESC
+         LIMIT ?1",
+    )?;
+    let mut rows = stmt.query([limit as i64])?;
+    let mut snapshots = Vec::new();
+    while let Some(row) = rows.next()? {
+        let summaries_json: String = row.get(12)?;
+        let warnings_json: String = row.get(13)?;
+        snapshots.push(ProjectWorkSummarySnapshot {
+            id: row.get(0)?,
+            created_at: row.get(1)?,
+            provider: row.get(2)?,
+            used_ai: row.get::<_, i64>(3)? != 0,
+            narrative_markdown: row.get(4)?,
+            total_items: row.get::<_, i64>(5)? as usize,
+            project_count: row.get::<_, i64>(6)? as usize,
+            date_count: row.get::<_, i64>(7)? as usize,
+            files_seen: row.get::<_, i64>(8)? as usize,
+            session_evidence_count: row.get::<_, i64>(9)? as usize,
+            session_evidence_unique_count: row.get::<_, i64>(10)? as usize,
+            summary_count: row.get::<_, i64>(11)? as usize,
+            summaries: serde_json::from_str(&summaries_json)?,
+            warnings: serde_json::from_str(&warnings_json)?,
+        });
+    }
+    Ok(snapshots)
+}
+
 fn read_import_state(
     conn: &Connection,
     source_id: &str,
@@ -5928,7 +6051,8 @@ pub fn run() {
             list_stored_prompt_facets,
             load_stored_prompts,
             improve_prompt,
-            project_work_summary
+            project_work_summary,
+            project_work_summary_snapshots
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -7876,8 +8000,8 @@ Progress:
         raw.source = "Codex".to_string();
         raw.session_id = "thread-123".to_string();
         raw.cwd = Some("/Users/wj".to_string());
-        raw.text = "SECRET RAW USER TEXT /Users/wj/Ai/System/10_Projects/ExampleProject"
-            .to_string();
+        raw.text =
+            "SECRET RAW USER TEXT /Users/wj/Ai/System/10_Projects/ExampleProject".to_string();
         raw.word_count = count_words(&raw.text);
         raw.char_count = raw.text.chars().count();
         raw.hash = hash_text(&raw.text);
@@ -7989,13 +8113,14 @@ Progress:
         assert_eq!(summaries[0].session_evidence_count, 2);
         assert_eq!(summaries[0].citations.len(), 2);
         assert_eq!(summaries[0].citations[0].id, "2026-06-09-ExampleProject-1");
-        assert!(summaries[0]
-            .headline
-            .contains("Parser repair, Browser QA"));
+        assert!(summaries[0].headline.contains("Parser repair, Browser QA"));
         assert!(summaries[0].citations[0]
             .evidence
             .contains("Fixed parser state mismatch"));
-        assert_eq!(summaries[0].citations[0].session_sources[0].text, "Codex session metadata");
+        assert_eq!(
+            summaries[0].citations[0].session_sources[0].text,
+            "Codex session metadata"
+        );
     }
 
     #[tokio::test]
@@ -8154,6 +8279,79 @@ Progress:
         assert_eq!(stored.1, 0);
         assert_eq!(stored.2, 1);
         assert!(stored.3.contains("\"total_items\":1"));
+
+        std::fs::remove_file(db_path).expect("remove snapshot db");
+    }
+
+    #[test]
+    fn project_work_summary_snapshots_list_saved_rows_latest_first() {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-work-summary-snapshot-list-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let conn = open_promptvault_database(&db_path).expect("open snapshot db");
+        let summaries_json = serde_json::json!([{
+            "date": "2026-06-09",
+            "project": "PromptVault",
+            "headline": "PromptVault: saved summary",
+            "work_item_count": 1,
+            "session_evidence_count": 1,
+            "unique_session_evidence_count": 1,
+            "citations": [{
+                "id": "2026-06-09-PromptVault-1",
+                "date": "2026-06-09",
+                "project": "PromptVault",
+                "title": "saved summary",
+                "status": "done",
+                "source_path": "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+                "source_file": "working.md",
+                "evidence": "- saved summary",
+                "session_evidence_count": 1,
+                "session_sources": [{ "text": "Codex local sessions", "count": 1 }]
+            }],
+            "next_actions": []
+        }])
+        .to_string();
+        for (created_at, provider) in [
+            ("2026-06-09T00:00:00Z", "local-citation-rules"),
+            ("2026-06-09T01:00:00Z", "glm"),
+        ] {
+            conn.execute(
+                "INSERT INTO project_work_summary_snapshots (
+                    created_at, provider, used_ai, narrative_markdown, total_items, project_count,
+                    date_count, files_seen, session_evidence_count, session_evidence_unique_count,
+                    summary_count, report_json, summaries_json, warnings_json
+                ) VALUES (?1, ?2, ?3, ?4, 1, 1, 1, 1, 1, 1, 1, ?5, ?6, ?7)",
+                params![
+                    created_at,
+                    provider,
+                    if provider == "glm" { 1_i64 } else { 0_i64 },
+                    "- 2026-06-09 PromptVault: saved summary",
+                    r#"{"total_items":1}"#,
+                    &summaries_json,
+                    "[]",
+                ],
+            )
+            .expect("insert snapshot row");
+        }
+        drop(conn);
+
+        let result = run_list_project_work_summary_snapshots(ProjectWorkSummarySnapshotsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(1),
+        })
+        .expect("list snapshots");
+
+        assert_eq!(result.total_snapshots, 2);
+        assert_eq!(result.returned_snapshot_count, 1);
+        assert_eq!(result.snapshots[0].id, 2);
+        assert_eq!(result.snapshots[0].provider, "glm");
+        assert!(result.snapshots[0].used_ai);
+        assert_eq!(result.snapshots[0].summaries[0].project, "PromptVault");
 
         std::fs::remove_file(db_path).expect("remove snapshot db");
     }

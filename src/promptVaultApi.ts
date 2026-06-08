@@ -13,6 +13,7 @@ import type {
   ImproveResult,
   ProjectWorkReport,
   ProjectWorkSummaryResult,
+  ProjectWorkSummarySnapshotsResult,
   PromptQuality,
   ScanPlan,
   ScanProgress,
@@ -84,6 +85,11 @@ export interface ProjectWorkSummaryOptions {
   refresh_session_index?: boolean;
   save_snapshot?: boolean;
   ai?: boolean;
+}
+
+export interface ProjectWorkSummarySnapshotsOptions {
+  database_path?: string;
+  limit?: number;
 }
 
 export interface ImprovePromptRequest {
@@ -191,6 +197,19 @@ export async function loadProjectWorkSummary(
     });
   }
   return postBridge<ProjectWorkSummaryResult>("/api/work-summary", { options }, parseProjectWorkSummaryResult);
+}
+
+export async function listProjectWorkSummarySnapshots(
+  options: ProjectWorkSummarySnapshotsOptions = {},
+): Promise<ProjectWorkSummarySnapshotsResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkSummarySnapshotsResult>("project_work_summary_snapshots", { options });
+  }
+  return postBridge<ProjectWorkSummarySnapshotsResult>(
+    "/api/work-summary-snapshots",
+    { options },
+    parseProjectWorkSummarySnapshotsResult,
+  );
 }
 
 export function isBrowserQaMode(): boolean {
@@ -1174,6 +1193,74 @@ function parseProjectWorkSummaryResult(value: unknown): ProjectWorkSummaryResult
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkSummaryResult;
+}
+
+function projectWorkSummarySnapshotIdsAreUnique(snapshots: unknown): boolean {
+  return recordNumberFieldValuesAreUnique(snapshots, "id");
+}
+
+function projectWorkSummarySnapshotSummariesWithinSnapshot(value: unknown): boolean {
+  if (!isRecord(value)
+    || !Array.isArray(value.summaries)
+    || !isNonNegativeSafeInteger(value.total_items)
+    || !isNonNegativeSafeInteger(value.session_evidence_count)) {
+    return false;
+  }
+  let workItemCount = 0;
+  let sessionEvidenceCount = 0;
+  for (const summary of value.summaries) {
+    if (!isRecord(summary)
+      || !isPositiveSafeInteger(summary.work_item_count)
+      || !isNonNegativeSafeInteger(summary.session_evidence_count)) {
+      return false;
+    }
+    workItemCount += summary.work_item_count;
+    sessionEvidenceCount += summary.session_evidence_count;
+    if (!Number.isSafeInteger(workItemCount)
+      || !Number.isSafeInteger(sessionEvidenceCount)
+      || workItemCount > value.total_items
+      || sessionEvidenceCount > value.session_evidence_count) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isProjectWorkSummarySnapshot(value: unknown): boolean {
+  return isRecord(value)
+    && isPositiveSafeInteger(value.id)
+    && isTimestampString(value.created_at)
+    && isNonBlankString(value.provider)
+    && typeof value.used_ai === "boolean"
+    && typeof value.narrative_markdown === "string"
+    && isNonNegativeSafeInteger(value.total_items)
+    && isNonNegativeSafeIntegerAtMost(value.project_count, value.total_items)
+    && isNonNegativeSafeIntegerAtMost(value.date_count, value.total_items)
+    && isNonNegativeSafeInteger(value.files_seen)
+    && isNonNegativeSafeInteger(value.session_evidence_count)
+    && isNonNegativeSafeIntegerAtMost(value.session_evidence_unique_count, value.session_evidence_count)
+    && isNonNegativeSafeIntegerAtMost(value.summary_count, value.total_items)
+    && Array.isArray(value.summaries)
+    && value.summaries.length === value.summary_count
+    && value.summaries.every(isProjectWorkSummary)
+    && projectWorkSummarySnapshotSummariesWithinSnapshot(value)
+    && isNonBlankStringArray(value.warnings);
+}
+
+function parseProjectWorkSummarySnapshotsResult(value: unknown): ProjectWorkSummarySnapshotsResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !isNonNegativeSafeInteger(value.total_snapshots)
+    || !isNonNegativeSafeIntegerAtMost(value.returned_snapshot_count, value.total_snapshots)
+    || !Array.isArray(value.snapshots)
+    || value.snapshots.length !== value.returned_snapshot_count
+    || !value.snapshots.every(isProjectWorkSummarySnapshot)
+    || !projectWorkSummarySnapshotIdsAreUnique(value.snapshots)
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkSummarySnapshotsResult;
 }
 
 function parseImportStatesResult(value: unknown): ImportStatesResult {

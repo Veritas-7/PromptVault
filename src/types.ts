@@ -251,6 +251,32 @@ export interface ProjectWorkSummaryResult {
   warnings: string[];
 }
 
+export interface ProjectWorkSummarySnapshot {
+  id: number;
+  created_at: string;
+  provider: string;
+  used_ai: boolean;
+  narrative_markdown: string;
+  total_items: number;
+  project_count: number;
+  date_count: number;
+  files_seen: number;
+  session_evidence_count: number;
+  session_evidence_unique_count: number;
+  summary_count: number;
+  summaries: ProjectWorkSummary[];
+  warnings: string[];
+}
+
+export interface ProjectWorkSummarySnapshotsResult {
+  generated_at: string;
+  database_path: string;
+  total_snapshots: number;
+  returned_snapshot_count: number;
+  snapshots: ProjectWorkSummarySnapshot[];
+  warnings: string[];
+}
+
 export interface ImportBatchResult {
   generated_at: string;
   source: SourcePlan;

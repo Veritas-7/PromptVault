@@ -1,12 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 01:41 KST
+Updated: 2026-06-09 01:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-summary snapshot persistence
+## Current Slice - 2026-06-09 work-summary snapshot history view
+
+Current Goal:
+
+- Let operators browse saved project/day work-summary snapshots from the CLI,
+  local browser bridge, Tauri command layer, and main app panel.
+- Keep the saved-history path sanitized: return saved summaries, counters, and
+  warnings, but not raw session prompt bodies.
+
+Context:
+
+- The previous slice added durable `project_work_summary_snapshots` rows and a
+  UI `스냅샷 저장` action, but the app could not yet browse saved rows.
+- This slice completes the next thin vertical feature: DB read -> CLI ->
+  browser bridge -> TypeScript validation -> app history list.
+
+Progress:
+
+- Added `ProjectWorkSummarySnapshot`, `ProjectWorkSummarySnapshotsOptions`, and
+  `ProjectWorkSummarySnapshotsResult`.
+- Added `run_list_project_work_summary_snapshots()` and a Tauri
+  `project_work_summary_snapshots` command.
+- Added CLI `work-summary-snapshots [--limit N>0] [--database PATH] [--json]`.
+- Added `/api/work-summary-snapshots` bridge route and route validation test.
+- Added `listProjectWorkSummarySnapshots()` and strict TypeScript bridge
+  validation for snapshot rows, counters, IDs, and nested summaries.
+- Added app panel `기록 보기` / `기록 새로고침`, saved-history meta, failure
+  notice, and recent snapshot rows.
+- After `스냅샷 저장`, the app now refreshes the saved-history list.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: snapshot history structs, DB reader, Tauri command,
+  command registration, and list test.
+- `src-tauri/src/bin/promptvault-cli.rs`: CLI command, bridge route, help text,
+  and validation coverage.
+- `src/types.ts`, `src/promptVaultApi.ts`: snapshot history API contract and
+  parser.
+- `src/workSummaryStatus.ts`, `tests/workSummaryStatus.test.ts`: history action,
+  meta, and failure copy helpers.
+- `src/App.tsx`: history load button, state, post-save refresh, and saved
+  snapshot rows.
+- `tests/promptVaultApi.test.ts`: RED/GREEN coverage for history endpoint
+  options and impossible counter rejection.
+
+Tests:
+
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed before implementation because `listProjectWorkSummarySnapshots` was
+  not exported.
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_summary_snapshots_list_saved_rows_latest_first --lib`
+  failed before implementation because `ProjectWorkSummarySnapshotsOptions` and
+  `run_list_project_work_summary_snapshots()` did not exist.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed with 141/141.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  passed with 6/6.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_summary_snapshots_list_saved_rows_latest_first --lib`
+  passed with 1/1.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli bridge_routes_work_summary_snapshot_validation_errors`
+  passed with 1/1.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli help_text_documents_cli_validation_rules`
+  passed with 1/1.
+- Actual history smoke:
+  created a temporary DB by running
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-summary --limit 20 --session-limit 1 --summary-limit 2 --database /tmp/promptvault-work-summary-history-smoke.sqlite --save-snapshot --json`,
+  then listed it with
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-summary-snapshots --limit 5 --database /tmp/promptvault-work-summary-history-smoke.sqlite --json`.
+  The list response returned `total_snapshots: 1`, `returned_snapshot_count: 1`,
+  and snapshot `id: 1`.
+- Full gate:
+  `npm run check` passed: UI tests 385/385, Vite build, Rust library tests
+  136/136, CLI tests 20/20, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- cmux/in-app browser click testing remains excluded in this runtime. The app
+  path was verified through unit tests, Vite build, CLI smoke, bridge route
+  tests, and the Tauri command layer.
+- The history view lists recent snapshots only; deeper filtering by date or
+  project remains a possible follow-up if the saved row count grows.
+
+Next Steps:
+
+- Add date/project filters for saved work-summary snapshots if operators need
+  to browse more than the recent history.
+- Run a browser automation pass against the work-summary panel when a permitted
+  local browser target is available.
+
+## Previous Slice - 2026-06-09 work-summary snapshot persistence
 
 Current Goal:
 

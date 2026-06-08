@@ -1,12 +1,96 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 21:37 KST
+Updated: 2026-06-08 21:42 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Scan progress source label masking
+## Current Slice - 2026-06-08 Quality suggestion display secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent selected prompt quality suggestions from rendering raw secret-like
+  text returned in prompt quality metadata.
+
+Context:
+
+- Previous scan progress source-label masking is pushed to `origin/main` with
+  source commit `ac4f6ee fix: mask scan progress source labels` and docs
+  closeout `e43f6c1 docs: record scan progress masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for the selected prompt panel.
+- Existing display redaction covered prompt text, prompt metadata, paths,
+  source labels, warnings, import progress, scan progress, and improvement
+  recommendation text. The selected prompt `quality.suggestions` list still
+  rendered raw strings in the quality box.
+- This slice changes display copy only. Raw backend prompt quality metadata and
+  selection/filter behavior remain unchanged.
+
+Progress:
+
+- Re-read `working.md`, visible warning/list rendering in `App.tsx`, and
+  display helper coverage in `promptRowA11y.ts`.
+- Identified that `selectedPrompt.quality.suggestions` rendered directly while
+  adjacent user-visible prompt text and improvement strings were already
+  redacted.
+- Added a RED test in `tests/promptRowA11y.test.ts` requiring
+  `promptQualitySuggestionText()`. RED failed as intended because the helper
+  did not exist.
+- Added `promptQualitySuggestionText()` using the existing display redactor plus
+  whitespace compaction.
+- Routed selected prompt quality suggestions through the new helper.
+- Ran a browser smoke with a Tauri-like invoke shim whose scan result carried a
+  synthetic secret-like quality suggestion. Quick scan completed, the selected
+  prompt quality box showed the redacted suggestion, the body omitted raw
+  synthetic fragments, and there were no page errors, console errors, or failed
+  responses.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/promptRowA11y.ts`: adds `promptQualitySuggestionText()` for selected
+  prompt quality suggestion display.
+- `src/App.tsx`: masks selected prompt quality suggestions before rendering.
+- `tests/promptRowA11y.test.ts`: adds RED/GREEN coverage for secret-like
+  quality suggestions.
+- `working.md`: records this slice and its RED/GREEN/browser/full-check
+  evidence.
+
+Tests:
+
+- RED helper test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed as intended because `promptQualitySuggestionText` was not exported.
+- Targeted GREEN:
+  same command passed with `tests/promptRowA11y.test.ts` 46/46 after adding the
+  helper.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5236" --port 5236 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_quality_suggestion_secret_qa.mjs'`
+  passed with exit code `0`; quick scan completed, selected prompt quality
+  suggestions were redacted, raw synthetic fragments were absent from the body,
+  and there were no page errors, console errors, or failed responses.
+- Full project check: `npm run check` passed, covering UI tests 357/357,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after quality suggestion display masking.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Commit and push this quality suggestion display masking slice, then record
+  docs closeout from the clean pushed tree.
+
+## Previous Slice - 2026-06-08 Scan progress source label masking
 
 Current Goal:
 

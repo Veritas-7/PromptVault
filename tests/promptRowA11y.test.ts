@@ -3,6 +3,7 @@ import test from "node:test";
 import type { ActionLockState } from "../src/actionLocks.ts";
 import {
   pathDisplayText,
+  promptQualitySuggestionText,
   promptRowAriaLabel,
   promptRowPreviewText,
   redactSensitiveDisplayText,
@@ -92,6 +93,17 @@ test("generic sensitive display redacts improvement text", () => {
   const displayText = redactSensitiveDisplayText(text);
 
   assert.equal(displayText, "추천 결과: keep [REDACTED_POSSIBLE_SECRET] out of visible output.");
+  assert.doesNotMatch(displayText, new RegExp(`${apiFlag}|${secretValue}`));
+});
+
+test("quality suggestion display redacts secret-like text", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["quality", "suggestion", "secret"].join("-");
+  const text = `Add context but do not show ${apiFlag} ${secretValue}.`;
+
+  const displayText = promptQualitySuggestionText(text);
+
+  assert.equal(displayText, "Add context but do not show [REDACTED_POSSIBLE_SECRET]");
   assert.doesNotMatch(displayText, new RegExp(`${apiFlag}|${secretValue}`));
 });
 

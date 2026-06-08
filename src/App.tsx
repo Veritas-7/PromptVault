@@ -81,6 +81,7 @@ import {
 } from "./promptEmptyState";
 import {
   pathDisplayText,
+  promptQualitySuggestionText,
   promptRowAriaLabel,
   promptMetadataDisplayText,
   promptRowPreviewText,
@@ -1976,7 +1977,7 @@ function App() {
               {selectedPrompt.quality.suggestions.length ? (
                 <div className="quality-box">
                   {selectedPrompt.quality.suggestions.map((suggestion, index) => (
-                    <p key={textListItemKey(suggestion, index)}>{suggestion}</p>
+                    <p key={textListItemKey(suggestion, index)}>{promptQualitySuggestionText(suggestion)}</p>
                   ))}
                 </div>
               ) : null}

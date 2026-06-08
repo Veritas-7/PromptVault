@@ -2097,7 +2097,7 @@ function FrequencyColumn({
         <>
           {visibleItems.map((item) => (
             <div className="frequency-item" key={`${title}-${item.text}`}>
-              <span>{item.text}</span>
+              <span>{redactSensitiveDisplayText(item.text)}</span>
               <strong>{item.count}</strong>
             </div>
           ))}

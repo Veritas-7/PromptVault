@@ -1,12 +1,91 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 20:33 KST
+Updated: 2026-06-08 20:41 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Improvement output secret masking
+## Current Slice - 2026-06-08 Frequency statistic secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent scan frequency/statistic panels from re-exposing sensitive strings
+  that arrive through browser bridge scan result stats.
+
+Context:
+
+- Previous recommendation output secret masking is pushed to `origin/main` with
+  source commit `22b1a95 fix: mask improvement output secrets` and docs
+  closeout `999b678 docs: record improvement output masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- Rust scan stats already avoid sensitive frequency text, but browser bridge
+  success payloads can still supply arbitrary stats text. The frontend should
+  not render raw secret-like frequency values.
+
+Progress:
+
+- Reproduced a frequency statistic leak by routing `/api/scan` to a valid
+  synthetic scan result where `stats.top_words`, `stats.top_phrases`, and
+  `stats.repeated_prompts` contained a raw CLI secret option.
+- The first RED browser script run failed for the wrong reason because the
+  app used the default bridge URL; the script was corrected to seed
+  `promptvault.browserBridgeUrl` in localStorage for the test port.
+- The corrected RED browser QA failed as expected because the frequency grid
+  rendered raw `--api-key frequency-secret-value`.
+- Updated the `FrequencyColumn` renderer so visible statistic labels pass
+  through the existing `redactSensitiveDisplayText()` helper.
+- Re-ran the same browser flow with `/api/scan/progress` route fulfillment and
+  confirmed the frequency grid and page body no longer include the raw flag or
+  raw value.
+- Ran production build successfully after implementation.
+
+Changes:
+
+- `src/App.tsx`: masks visible frequency/statistic item text before rendering
+  frequency rows.
+- `working.md`: records this slice and its RED/GREEN/browser/build evidence.
+
+Tests:
+
+- RED browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5228" --port 5228 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_frequency_secret_red_qa.mjs'`
+  failed because the frequency grid did not contain `[REDACTED_POSSIBLE_SECRET]`
+  and instead rendered raw `--api-key frequency-secret-value`.
+- Browser QA after the fix:
+  same `with_server.py` command on port `5228` passed with exit code `0`; the
+  scan frequency grid and page body no longer included the raw flag or raw
+  value, and the script observed no page errors, console errors, or failed
+  responses after route-completing `/api/scan/progress`.
+- Build check: `npm run build` passed.
+- Full project check: `npm run check` passed, covering UI tests 348/348,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after masking frequency statistic display.
+- This slice changes only visible statistic rendering. It does not mutate
+  original scan payloads, persistence, or React keys.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on a
+  reproducible local browser flow.
+
+Next Steps:
+
+- Commit and push the source changes for this frequency statistic masking
+  slice, then update and push the docs closeout from a clean source-pushed tree.
+
+## Previous Slice - 2026-06-08 Improvement output secret masking
 
 Current Goal:
 

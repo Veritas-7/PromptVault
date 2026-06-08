@@ -1,12 +1,105 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 06:33 KST
+Updated: 2026-06-09 06:37 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 SnapTranslate status update extraction
+## Current Slice - 2026-06-09 generic Updated anchor extraction
+
+Current Goal:
+
+- Finish the remaining progress-log extraction gap by accepting safe generic
+  `Updated: YYYY-MM-DD` fields.
+- Preserve the nearby safe heading with the update anchor so local extraction
+  does not attach the date to an unrelated first heading in very large logs.
+
+Context:
+
+- After preserving Korean `업데이트` anchors, actual extraction improved to
+  `candidate_count=15`, `accepted_count=14`, `rejected_count=1`.
+- The only rejected row was `SnapTranslate/working.md`.
+- Live source inspection showed `SnapTranslate/working.md` contains
+  `Updated: 2026-06-05` under `# SnapTranslate AutoResearch Working State`,
+  but the original excerpt front matter contains many installed QA snapshot
+  hashes and no generic `Updated:` recognition.
+
+Progress:
+
+- Added RED coverage for long logs where a generic `Updated:` field appears
+  after noisy/risky snapshot evidence.
+- Updated the update-date parser to accept `Updated:` only when it appears as a
+  line-start field with an ISO date.
+- Updated candidate update anchors to preserve the nearest preceding safe
+  heading as a heading line, allowing the local extractor to pair the date with
+  the correct context.
+- Verified actual local extraction now accepts all 15 progress-log candidates.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - recognizes generic `Updated:` fields;
+  - preserves safe preceding heading context in candidate update anchors;
+  - adds regression coverage for SnapTranslate-style large working logs.
+
+Tests:
+
+- RED:
+  - `cargo test project_progress_log_candidate_excerpt_preserves_generic_updated_anchor_context`:
+    failed because the excerpt did not preserve
+    `Updated: 2026-06-05` with `SnapTranslate AutoResearch Working State`.
+  - The first GREEN attempt still failed because the preserved context lacked a
+    heading marker and the extractor chose the unrelated first snapshot
+    heading; the anchor now stores context as `# ...`.
+- Targeted GREEN:
+  - `cargo test project_progress_log_candidate_excerpt_preserves_generic_updated_anchor_context`:
+    PASS.
+  - `cargo test project_progress_log_candidate_excerpt_preserves_safe_update_anchor_from_long_logs`:
+    PASS.
+  - `cargo test local_work_log_extraction_accepts_korean_status_update_field_with_safe_evidence`:
+    PASS.
+- Actual CLI verification:
+  - `cargo run --quiet --bin promptvault-cli -- work-log-extract --json`:
+    `candidate_count=15`, `accepted_count=15`, `rejected_count=0`.
+  - Newly accepted SnapTranslate working row:
+    `date=2026-06-05`, `title="SnapTranslate AutoResearch Working State"`,
+    `evidence="Updated: 2026-06-05\nSnapTranslate AutoResearch Working State"`.
+- Headless browser-bridge QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 220 -- /bin/bash -lc 'node /tmp/promptvault_work_management_overview_counts_qa.mjs'`:
+    PASS.
+  - Observed overview meta:
+    `관리 31개 · 26개 프로젝트 · 14일 · 현재요약 0 · 스냅샷 0 · 추출제안 15 · 저장추출 0 · 진행로그 16`.
+  - Browser QA captured no console errors, page errors, or failed requests.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `423` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `154` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- Candidate IDs for anchor-enhanced files changed because IDs are derived from
+  `source_path:excerpt` hashes.
+- This completes local-rule extraction for current candidates, but it does not
+  automatically save those accepted proposals to SQLite without an explicit
+  save action.
+
+Research:
+
+- Used TDD and incremental implementation workflows.
+- No external web research was used.
+
+Next Steps:
+
+- Commit and push this final current-candidate extraction improvement.
+- Consider a future UI affordance that distinguishes "all candidates locally
+  accepted" from "accepted candidates saved to managed SQLite rows".
+
+## Previous Slice - 2026-06-09 SnapTranslate status update extraction
 
 Current Goal:
 

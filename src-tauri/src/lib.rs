@@ -3396,11 +3396,24 @@ fn project_progress_log_candidate_excerpt(text: &str) -> String {
 }
 
 fn project_progress_log_candidate_update_anchor(text: &str) -> Option<String> {
-    for line in text.lines() {
+    let lines = text.lines().collect::<Vec<_>>();
+    for (index, line) in lines.iter().enumerate() {
         let Some((date, label)) = local_project_work_log_update_date_line(line) else {
             continue;
         };
-        let anchor = format!("{label}: {date}");
+        let mut anchor = format!("{label}: {date}");
+        if let Some(context) = lines[..index].iter().rev().find_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.starts_with('#') {
+                local_project_work_log_safe_context_line(trimmed)
+            } else {
+                None
+            }
+        }) {
+            anchor.push('\n');
+            anchor.push_str("# ");
+            anchor.push_str(&context);
+        }
         if detect_risks(&anchor).is_empty() {
             return Some(anchor);
         }
@@ -4021,10 +4034,17 @@ fn local_project_work_log_update_summary(
 
 fn local_project_work_log_update_date_line(line: &str) -> Option<(String, &'static str)> {
     let lower = line.to_ascii_lowercase();
+    let field = line
+        .trim_start()
+        .trim_start_matches(['#', '-', '*', '>', ' ', '\t'])
+        .trim_start();
+    let field_lower = field.to_ascii_lowercase();
     let has_last_updated = lower.contains("last_updated") || lower.contains("last updated");
+    let has_updated_field = field_lower.starts_with("updated:")
+        || field_lower.starts_with("updated ");
     let has_korean_last_updated = line.contains("마지막 업데이트");
     let has_korean_updated = has_korean_last_updated || line.contains("업데이트");
-    if !has_last_updated && !has_korean_updated {
+    if !has_last_updated && !has_updated_field && !has_korean_updated {
         return None;
     }
     let date_start = find_iso_date_start(line)?;
@@ -4035,6 +4055,8 @@ fn local_project_work_log_update_date_line(line: &str) -> Option<(String, &'stat
         "마지막 업데이트"
     } else if has_korean_updated {
         "업데이트"
+    } else if has_updated_field {
+        "Updated"
     } else {
         "Last updated"
     };
@@ -10591,6 +10613,44 @@ Progress:
         );
         assert!(detect_risks(&proposal.evidence).is_empty());
         assert!(!proposal.evidence.contains("private API-key endpoint"));
+    }
+
+    #[test]
+    fn project_progress_log_candidate_excerpt_preserves_generic_updated_anchor_context() {
+        let noisy_snapshot = "- Installed SHA: abcdefghijklmnopqrstuvwxyz0123456789\n".repeat(120);
+        let text = format!(
+            "# Current Installed QA Snapshot - fe8a0398\n{noisy_snapshot}\n# SnapTranslate AutoResearch Working State\nUpdated: 2026-06-05\n## Objective\nReturn to original app parity.\n"
+        );
+
+        let excerpt = project_progress_log_candidate_excerpt(&text);
+
+        assert!(excerpt.starts_with(
+            "Updated: 2026-06-05\n# SnapTranslate AutoResearch Working State\n"
+        ));
+
+        let candidate = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-SnapTranslate-b1b2c3d4e5".to_string(),
+            project: "SnapTranslate".to_string(),
+            source_path: "/tmp/SnapTranslate/working.md".to_string(),
+            source_file: "working.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt,
+            line_count: text.lines().count(),
+            char_count: text.chars().count(),
+            risk_flags: vec!["long_base64_like_token".to_string()],
+            modified_at: None,
+        };
+
+        let proposal = local_project_work_log_extraction_proposal(&candidate);
+
+        assert!(proposal.accepted);
+        assert_eq!(proposal.date.as_deref(), Some("2026-06-05"));
+        assert_eq!(proposal.title, "SnapTranslate AutoResearch Working State");
+        assert_eq!(
+            proposal.evidence,
+            "Updated: 2026-06-05\nSnapTranslate AutoResearch Working State"
+        );
+        assert!(detect_risks(&proposal.evidence).is_empty());
     }
 
     #[test]

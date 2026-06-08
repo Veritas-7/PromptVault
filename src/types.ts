@@ -177,6 +177,73 @@ export interface StoredPromptFacetsResult {
   workspaces: FrequencyItem[];
 }
 
+export interface ProjectWorkItem {
+  date: string;
+  project: string;
+  title: string;
+  status: string;
+  source_path: string;
+  source_file: string;
+  evidence: string;
+  session_evidence_count: number;
+  session_sources: FrequencyItem[];
+}
+
+export interface ProjectWorkReport {
+  generated_at: string;
+  total_items: number;
+  project_count: number;
+  date_count: number;
+  files_seen: number;
+  items_by_date: FrequencyItem[];
+  items_by_project: FrequencyItem[];
+  session_scan_prompt_count: number;
+  session_scan_sources: FrequencyItem[];
+  session_evidence_count: number;
+  session_sources: FrequencyItem[];
+  session_evidence_unique_count: number;
+  session_evidence_unique_sources: FrequencyItem[];
+  session_evidence_index_used: boolean;
+  session_evidence_index_updated: boolean;
+  session_evidence_index_count: number;
+  items: ProjectWorkItem[];
+  warnings: string[];
+}
+
+export interface ProjectWorkSummaryCitation {
+  id: string;
+  date: string;
+  project: string;
+  title: string;
+  status: string;
+  source_path: string;
+  source_file: string;
+  evidence: string;
+  session_evidence_count: number;
+  session_sources: FrequencyItem[];
+}
+
+export interface ProjectWorkSummary {
+  date: string;
+  project: string;
+  headline: string;
+  work_item_count: number;
+  session_evidence_count: number;
+  unique_session_evidence_count: number;
+  citations: ProjectWorkSummaryCitation[];
+  next_actions: string[];
+}
+
+export interface ProjectWorkSummaryResult {
+  generated_at: string;
+  provider: string;
+  used_ai: boolean;
+  narrative_markdown: string;
+  summaries: ProjectWorkSummary[];
+  report: ProjectWorkReport;
+  warnings: string[];
+}
+
 export interface ImportBatchResult {
   generated_at: string;
   source: SourcePlan;

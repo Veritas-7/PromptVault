@@ -107,6 +107,7 @@ import {
   importBatch,
   improvePrompt,
   isBrowserQaMode,
+  loadProjectWorkSummary,
   listImportEvents,
   listImportStates,
   listStoredPromptFacets,
@@ -182,16 +183,27 @@ import type {
   ImportStatesResult,
   ImproveResult,
   PromptRecord,
+  ProjectWorkSummaryResult,
   ScanPlan,
   ScanProgress,
   ScanResult,
   StoredPromptFacetsResult,
 } from "./types";
+import {
+  workSummaryActionLabel,
+  workSummaryFailureText,
+  workSummaryIndexStatusText,
+  workSummaryMetaText,
+  type WorkSummaryState,
+} from "./workSummaryStatus";
 
 type ScanState = ScanRunState;
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
+const WORK_SUMMARY_LIMIT = 80;
+const WORK_SUMMARY_SESSION_LIMIT = 20;
+const WORK_SUMMARY_DISPLAY_LIMIT = 5;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
@@ -232,6 +244,7 @@ function App() {
   const [importStatesState, setImportStatesState] = useState<ImportStatesState>("idle");
   const [importEventsState, setImportEventsState] = useState<ImportEventsState>("idle");
   const [storedFacetsState, setStoredFacetsState] = useState<StoredFacetsState>("idle");
+  const [workSummaryState, setWorkSummaryState] = useState<WorkSummaryState>("idle");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -243,6 +256,7 @@ function App() {
   const [importStatesResult, setImportStatesResult] = useState<ImportStatesResult | null>(null);
   const [importEventsResult, setImportEventsResult] = useState<ImportEventsResult | null>(null);
   const [storedFacetsResult, setStoredFacetsResult] = useState<StoredPromptFacetsResult | null>(null);
+  const [workSummaryResult, setWorkSummaryResult] = useState<ProjectWorkSummaryResult | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [resultOrigin, setResultOrigin] = useState<PromptResultOrigin | null>(null);
   const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
@@ -281,6 +295,7 @@ function App() {
   const isPlanRunning = planState === "planning";
   const isScanRunning = scanState === "scanning" || scanState === "canceling";
   const isStoredLoadRunning = storedLoadState === "loading";
+  const isWorkSummaryRunning = workSummaryState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
   const isBrowserBridgeDisconnected = browserQaMode && browserBridgeStatus === "disconnected";
   const actionLockState = {
@@ -291,6 +306,7 @@ function App() {
     planRunning: isPlanRunning,
     scanRunning: isScanRunning,
     storedLoadRunning: isStoredLoadRunning,
+    workSummaryRunning: isWorkSummaryRunning,
   };
   const isTopLevelActionLocked = topLevelActionLocked(actionLockState);
   const isImportActionLocked = importActionLocked(actionLockState);
@@ -444,6 +460,14 @@ function App() {
     );
   }, [storedFacetsResult?.workspaces]);
   const storedFacetsFailureMessage = storedFacetsFailureText(storedFacetsState);
+  const workSummaryFailureMessage = workSummaryFailureText(workSummaryState);
+  const workSummaryMeta = workSummaryMetaText(workSummaryState, workSummaryResult);
+  const workSummaryIndexStatus = workSummaryResult ? workSummaryIndexStatusText(workSummaryResult) : null;
+  const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
+  const hiddenWorkSummaryCount = Math.max(
+    0,
+    (workSummaryResult?.summaries.length ?? 0) - WORK_SUMMARY_DISPLAY_LIMIT,
+  );
   const storedFacetSummary = storedFacetSummaryText(
     storedFacetsState,
     storedFilterCount,
@@ -592,6 +616,29 @@ function App() {
       if (!quiet) setError(displayErrorText(err));
     } finally {
       releaseExclusiveAction(importEventsRefreshClaimRef);
+    }
+  }
+
+  async function refreshWorkSummary({ refreshSessionIndex = false }: { refreshSessionIndex?: boolean } = {}) {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSummaryState("loading");
+    try {
+      const next = await loadProjectWorkSummary({
+        limit: WORK_SUMMARY_LIMIT,
+        session_limit: WORK_SUMMARY_SESSION_LIMIT,
+        summary_limit: WORK_SUMMARY_DISPLAY_LIMIT,
+        refresh_session_index: refreshSessionIndex,
+      });
+      setWorkSummaryResult(next);
+      setWorkSummaryState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSummaryState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
 
@@ -1091,6 +1138,93 @@ function App() {
           <span>{scanStopFailureMessage}</span>
         </section>
       ) : null}
+
+      <section className="panel work-summary-panel">
+        <div className="panel-heading">
+          <div>
+            <h2>프로젝트 작업 요약</h2>
+            <span data-work-summary-meta="true">{workSummaryMeta}</span>
+          </div>
+          <div className="panel-heading-actions">
+            <button
+              aria-label={workSummaryActionLabel(
+                workSummaryState,
+                workSummaryResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-summary="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => refreshWorkSummary()}
+              type="button"
+            >
+              <ClipboardList size={15} />
+              {workSummaryState === "loading"
+                ? "생성 중"
+                : workSummaryResult
+                  ? "새로고침"
+                  : "요약 생성"}
+            </button>
+            <button
+              aria-label="실제 Codex 세션을 다시 파싱해 작업 요약 세션 인덱스 갱신"
+              className="inline-action"
+              data-refresh-work-summary-session-index="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => refreshWorkSummary({ refreshSessionIndex: true })}
+              type="button"
+            >
+              <RefreshCw size={15} />
+              세션 재스캔
+            </button>
+          </div>
+        </div>
+        {workSummaryFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-summary-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workSummaryFailureMessage}</span>
+          </div>
+        ) : null}
+        {workSummaryIndexStatus ? (
+          <div className="work-summary-index" data-work-summary-index="true">
+            <ShieldCheck size={15} />
+            <span>{workSummaryIndexStatus}</span>
+          </div>
+        ) : null}
+        {workSummaryResult ? (
+          <div className="work-summary-content">
+            <pre data-work-summary-narrative="true">{workSummaryResult.narrative_markdown}</pre>
+            <div className="work-summary-list">
+              {visibleWorkSummaries.map((summary) => (
+                <article className="work-summary-row" key={`${summary.date}-${summary.project}`}>
+                  <div>
+                    <strong>{summary.project}</strong>
+                    <span>{summary.date}</span>
+                  </div>
+                  <p>{summary.headline}</p>
+                  <span>
+                    작업 {summary.work_item_count.toLocaleString()}개 · 세션 근거{" "}
+                    {summary.session_evidence_count.toLocaleString()}건 · citations{" "}
+                    {summary.citations.length.toLocaleString()}개
+                  </span>
+                </article>
+              ))}
+              {hiddenWorkSummaryCount ? (
+                <div className="work-summary-overflow">
+                  그 외 요약 {hiddenWorkSummaryCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div className="empty compact" data-empty-work-summary="true">
+            프로젝트 진행 로그와 세션 근거 요약 대기 중
+          </div>
+        )}
+      </section>
 
       <section className="panel stored-filter-panel">
         <div className="panel-heading">

@@ -540,6 +540,15 @@ async fn improve_prompt(request: ImproveRequest) -> Result<ImproveResult, String
         .map_err(|err| err.to_string())
 }
 
+#[tauri::command]
+async fn project_work_summary(
+    options: Option<ProjectWorkSummaryOptions>,
+) -> Result<ProjectWorkSummaryResult, String> {
+    run_project_work_summary(options.unwrap_or_default())
+        .await
+        .map_err(|err| err.to_string())
+}
+
 fn scan_cancel_flags() -> &'static Mutex<HashMap<String, ScanCancelFlag>> {
     SCAN_CANCEL_FLAGS.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -5837,7 +5846,8 @@ pub fn run() {
             list_import_events,
             list_stored_prompt_facets,
             load_stored_prompts,
-            improve_prompt
+            improve_prompt,
+            project_work_summary
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

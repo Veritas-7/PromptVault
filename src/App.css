@@ -169,6 +169,96 @@ h3 {
   padding-bottom: 14px;
 }
 
+.work-summary-panel {
+  gap: 12px;
+  padding: 14px;
+}
+
+.work-summary-content {
+  display: grid;
+  gap: 12px;
+}
+
+.work-summary-content pre {
+  background: #f8faf7;
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  color: #1f2d23;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.work-summary-index {
+  align-items: center;
+  background: #edf4ff;
+  border: 1px solid #c7d6ec;
+  border-radius: 8px;
+  color: #27496f;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 10px;
+}
+
+.work-summary-list {
+  display: grid;
+  gap: 8px;
+}
+
+.work-summary-row {
+  align-items: start;
+  border-bottom: 1px solid #edf2ec;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(130px, 0.25fr) minmax(260px, 1fr) minmax(220px, auto);
+  min-height: 56px;
+  padding-bottom: 8px;
+}
+
+.work-summary-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.work-summary-row strong {
+  color: #1c2a21;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-summary-row p {
+  color: #1f2d23;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.work-summary-row span {
+  color: #68766b;
+  font-size: 12px;
+}
+
+.work-summary-overflow {
+  background: #f8faf7;
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  color: #536158;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 9px 10px;
+}
+
 .stored-filter-grid {
   align-items: end;
   display: grid;
@@ -1163,6 +1253,7 @@ h3 {
   }
 
   .saved-import-row,
+  .work-summary-row,
   .import-activity-row,
   .import-activity-summary {
     align-items: stretch;

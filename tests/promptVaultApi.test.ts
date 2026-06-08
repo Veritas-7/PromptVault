@@ -5,6 +5,7 @@ import {
   importBatch,
   improvePrompt,
   loadStoredPrompts,
+  loadProjectWorkSummary,
   listImportEvents,
   listImportStates,
   listStoredPromptFacets,
@@ -211,6 +212,136 @@ function improveResult(overrides = {}) {
     ...overrides,
   };
 }
+
+function projectWorkSummaryPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    provider: "local-citation-rules",
+    used_ai: false,
+    narrative_markdown: "- 2026-06-09 PromptVault: Bridge summary (작업 1개, 세션 증거 1개)",
+    summaries: [{
+      date: "2026-06-09",
+      project: "PromptVault",
+      headline: "PromptVault: Bridge summary",
+      work_item_count: 1,
+      session_evidence_count: 1,
+      unique_session_evidence_count: 1,
+      citations: [{
+        id: "2026-06-09-PromptVault-1",
+        date: "2026-06-09",
+        project: "PromptVault",
+        title: "Bridge summary",
+        status: "done",
+        source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+        source_file: "working.md",
+        evidence: "- Bridge summary",
+        session_evidence_count: 1,
+        session_sources: [{ text: "Codex local sessions", count: 1 }],
+      }],
+      next_actions: [],
+    }],
+    report: {
+      generated_at: "2026-06-09T00:00:00Z",
+      total_items: 1,
+      project_count: 1,
+      date_count: 1,
+      files_seen: 1,
+      items_by_project: [{ text: "PromptVault", count: 1 }],
+      items_by_date: [{ text: "2026-06-09", count: 1 }],
+      session_sources: [{ text: "Project progress logs", count: 1 }],
+      session_scan_sources: [{ text: "Codex local sessions", count: 1 }],
+      session_scan_prompt_count: 1,
+      session_evidence_count: 1,
+      session_evidence_unique_count: 1,
+      session_evidence_unique_sources: [{ text: "Codex local sessions", count: 1 }],
+      session_evidence_index_used: true,
+      session_evidence_index_updated: false,
+      session_evidence_index_count: 20,
+      items: [{
+        date: "2026-06-09",
+        project: "PromptVault",
+        title: "Bridge summary",
+        status: "done",
+        source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+        source_file: "working.md",
+        evidence: "- Bridge summary",
+        session_evidence_count: 1,
+        session_sources: [{ text: "Codex local sessions", count: 1 }],
+      }],
+      warnings: [],
+    },
+    warnings: [],
+    ...overrides,
+  };
+}
+
+test("browser bridge work summary posts options and validates citation payloads", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSummaryPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkSummary({ limit: 80, session_limit: 20, summary_limit: 5 });
+
+  assert.match(requestPath, /\/api\/work-summary$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      limit: 80,
+      session_limit: 20,
+      summary_limit: 5,
+    },
+  });
+  assert.equal(result.provider, "local-citation-rules");
+  assert.equal(result.summaries[0].citations[0].id, "2026-06-09-PromptVault-1");
+  assert.equal(result.report.session_evidence_index_used, true);
+});
+
+test("browser bridge work summary rejects impossible session evidence counts", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSummaryPayload({
+    summaries: [{
+      date: "2026-06-09",
+      project: "PromptVault",
+      headline: "PromptVault: malformed bridge summary",
+      work_item_count: 1,
+      session_evidence_count: 1,
+      unique_session_evidence_count: 2,
+      citations: [{
+        id: "2026-06-09-PromptVault-1",
+        date: "2026-06-09",
+        project: "PromptVault",
+        title: "Malformed bridge summary",
+        status: "done",
+        source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+        source_file: "working.md",
+        evidence: "- Malformed bridge summary",
+        session_evidence_count: 1,
+        session_sources: [{ text: "Codex local sessions", count: 1 }],
+      }],
+      next_actions: [],
+    }],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkSummary({ limit: 80 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /malformed bridge summary|Malformed bridge summary|undefined/);
+      return true;
+    },
+  );
+});
 
 test("browser bridge responses report malformed JSON without raw parser errors", async (t) => {
   const originalFetch = globalThis.fetch;

@@ -901,6 +901,36 @@ struct ImproveBridgePayload {
     request: ImproveRequest,
 }
 
+#[derive(serde::Deserialize, Default)]
+struct ProjectWorkSummaryBridgeOptions {
+    limit: Option<usize>,
+    session_limit: Option<usize>,
+    database_path: Option<String>,
+    refresh_session_index: Option<bool>,
+    summary_limit: Option<usize>,
+    ai: Option<bool>,
+}
+
+#[derive(serde::Deserialize)]
+struct ProjectWorkSummaryBridgePayload {
+    options: Option<ProjectWorkSummaryBridgeOptions>,
+}
+
+impl ProjectWorkSummaryBridgeOptions {
+    fn into_project_work_summary_options(self) -> ProjectWorkSummaryOptions {
+        ProjectWorkSummaryOptions {
+            report: ProjectWorkReportOptions {
+                limit: self.limit,
+                session_limit: self.session_limit,
+                database_path: self.database_path,
+                refresh_session_index: self.refresh_session_index,
+            },
+            summary_limit: self.summary_limit,
+            force_local: Some(!self.ai.unwrap_or(false)),
+        }
+    }
+}
+
 struct HttpRequest {
     method: String,
     path: String,
@@ -1006,6 +1036,18 @@ fn handle_bridge_route(
                 .enable_all()
                 .build()?;
             let result = runtime.block_on(improve_prompt_inner(payload.request))?;
+            write_json_response(stream, 200, &result)
+        }
+        ("POST", "/api/work-summary") => {
+            let payload = serde_json::from_str::<ProjectWorkSummaryBridgePayload>(&request.body)?;
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            let options = payload
+                .options
+                .unwrap_or_default()
+                .into_project_work_summary_options();
+            let result = runtime.block_on(run_project_work_summary(options))?;
             write_json_response(stream, 200, &result)
         }
         _ => write_response(stream, 404, "text/plain", "Not found"),
@@ -1233,6 +1275,18 @@ mod tests {
 
         assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
         assert!(response.contains("scan limit requires a positive integer"));
+        assert!(response.contains("Access-Control-Allow-Origin: *"));
+    }
+
+    #[test]
+    fn bridge_routes_work_summary_validation_errors() {
+        let response = bridge_response_for(
+            "/api/work-summary",
+            r#"{"options":{"limit":1,"session_limit":1,"summary_limit":0}}"#,
+        );
+
+        assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(response.contains("work-summary summary_limit requires a positive integer"));
         assert!(response.contains("Access-Control-Allow-Origin: *"));
     }
 

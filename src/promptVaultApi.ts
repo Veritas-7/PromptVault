@@ -11,6 +11,8 @@ import type {
   ImportEventsResult,
   ImportStatesResult,
   ImproveResult,
+  ProjectWorkReport,
+  ProjectWorkSummaryResult,
   PromptQuality,
   ScanPlan,
   ScanProgress,
@@ -72,6 +74,15 @@ export interface StoredPromptsOptions {
 export interface StoredPromptFacetsOptions {
   database_path?: string;
   limit?: number;
+}
+
+export interface ProjectWorkSummaryOptions {
+  database_path?: string;
+  limit?: number;
+  session_limit?: number;
+  summary_limit?: number;
+  refresh_session_index?: boolean;
+  ai?: boolean;
 }
 
 export interface ImprovePromptRequest {
@@ -170,6 +181,17 @@ export async function improvePrompt(request: ImprovePromptRequest): Promise<Impr
   return postBridge<ImproveResult>("/api/improve", { request }, parseImproveResult);
 }
 
+export async function loadProjectWorkSummary(
+  options: ProjectWorkSummaryOptions = {},
+): Promise<ProjectWorkSummaryResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkSummaryResult>("project_work_summary", {
+      options: nativeProjectWorkSummaryOptions(options),
+    });
+  }
+  return postBridge<ProjectWorkSummaryResult>("/api/work-summary", { options }, parseProjectWorkSummaryResult);
+}
+
 export function isBrowserQaMode(): boolean {
   return !hasTauriInvoke();
 }
@@ -204,6 +226,17 @@ function isFrequencyItemsEachWithinTotal(value: unknown, total: unknown): boolea
   return Array.isArray(value)
     && isNonNegativeSafeInteger(total)
     && value.every((item) => isFrequencyItem(item) && item.count <= total);
+}
+
+function frequencyItemCountsSumTo(value: unknown, total: unknown): boolean {
+  if (!Array.isArray(value) || !isNonNegativeSafeInteger(total)) return false;
+  let countSum = 0;
+  for (const item of value) {
+    if (!isFrequencyItem(item)) return false;
+    countSum += item.count;
+    if (!Number.isSafeInteger(countSum) || countSum > total) return false;
+  }
+  return countSum === total;
 }
 
 function isNonBlankStringArray(value: unknown): value is string[] {
@@ -994,6 +1027,143 @@ function parseImproveResult(value: unknown): ImproveResult {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ImproveResult;
+}
+
+function nativeProjectWorkSummaryOptions(options: ProjectWorkSummaryOptions) {
+  return {
+    report: {
+      limit: options.limit,
+      session_limit: options.session_limit,
+      database_path: options.database_path,
+      refresh_session_index: options.refresh_session_index,
+    },
+    summary_limit: options.summary_limit,
+    force_local: options.ai === true ? false : undefined,
+  };
+}
+
+function isProjectWorkItem(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.date)
+    && isNonBlankString(value.project)
+    && isNonBlankString(value.title)
+    && isNonBlankString(value.status)
+    && isNonBlankString(value.source_path)
+    && isNonBlankString(value.source_file)
+    && isNonBlankString(value.evidence)
+    && isNonNegativeSafeInteger(value.session_evidence_count)
+    && isFrequencyItemsWithinTotal(value.session_sources, value.session_evidence_count);
+}
+
+function isProjectWorkReport(value: unknown): value is ProjectWorkReport {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonNegativeSafeInteger(value.total_items)
+    || !isNonNegativeSafeInteger(value.project_count)
+    || !isNonNegativeSafeInteger(value.date_count)
+    || !isNonNegativeSafeInteger(value.files_seen)
+    || !frequencyItemCountsSumTo(value.items_by_date, value.total_items)
+    || !frequencyItemCountsSumTo(value.items_by_project, value.total_items)
+    || !isNonNegativeSafeInteger(value.session_scan_prompt_count)
+    || !isFrequencyItemsWithinTotal(value.session_scan_sources, value.session_scan_prompt_count)
+    || !isNonNegativeSafeInteger(value.session_evidence_count)
+    || !isFrequencyItemsWithinTotal(value.session_sources, value.session_evidence_count)
+    || !isNonNegativeSafeIntegerAtMost(value.session_evidence_unique_count, value.session_evidence_count)
+    || !isFrequencyItemsWithinTotal(value.session_evidence_unique_sources, value.session_evidence_unique_count)
+    || typeof value.session_evidence_index_used !== "boolean"
+    || typeof value.session_evidence_index_updated !== "boolean"
+    || !isNonNegativeSafeInteger(value.session_evidence_index_count)
+    || !Array.isArray(value.items)
+    || !value.items.every(isProjectWorkItem)
+    || value.items.length !== value.total_items
+    || !isNonBlankStringArray(value.warnings)) {
+    return false;
+  }
+  return value.project_count <= value.total_items
+    && value.date_count <= value.total_items;
+}
+
+function isProjectWorkSummaryCitation(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.id)
+    && isNonBlankString(value.date)
+    && isNonBlankString(value.project)
+    && isNonBlankString(value.title)
+    && isNonBlankString(value.status)
+    && isNonBlankString(value.source_path)
+    && isNonBlankString(value.source_file)
+    && isNonBlankString(value.evidence)
+    && isNonNegativeSafeInteger(value.session_evidence_count)
+    && isFrequencyItemsWithinTotal(value.session_sources, value.session_evidence_count);
+}
+
+function summaryCitationIdsAreUnique(citations: unknown): boolean {
+  return recordStringFieldValuesAreUnique(citations, "id");
+}
+
+function isProjectWorkSummary(value: unknown): boolean {
+  if (!isRecord(value)
+    || !isNonBlankString(value.date)
+    || !isNonBlankString(value.project)
+    || !isNonBlankString(value.headline)
+    || !isPositiveSafeInteger(value.work_item_count)
+    || !isNonNegativeSafeInteger(value.session_evidence_count)
+    || !isNonNegativeSafeIntegerAtMost(value.unique_session_evidence_count, value.session_evidence_count)
+    || !Array.isArray(value.citations)
+    || !value.citations.every(isProjectWorkSummaryCitation)
+    || !summaryCitationIdsAreUnique(value.citations)
+    || value.citations.length !== value.work_item_count
+    || !isNonBlankStringArray(value.next_actions)) {
+    return false;
+  }
+  let sessionEvidenceCount = 0;
+  for (const citation of value.citations) {
+    if (!isRecord(citation) || !isNonNegativeSafeInteger(citation.session_evidence_count)) return false;
+    if (citation.date !== value.date || citation.project !== value.project) return false;
+    sessionEvidenceCount += citation.session_evidence_count;
+    if (!Number.isSafeInteger(sessionEvidenceCount) || sessionEvidenceCount > value.session_evidence_count) {
+      return false;
+    }
+  }
+  return sessionEvidenceCount === value.session_evidence_count;
+}
+
+function projectWorkSummariesWithinReport(value: unknown, report: ProjectWorkReport): boolean {
+  if (!Array.isArray(value) || value.length > report.total_items) return false;
+  let workItemCount = 0;
+  let sessionEvidenceCount = 0;
+  for (const summary of value) {
+    if (!isRecord(summary)
+      || !isPositiveSafeInteger(summary.work_item_count)
+      || !isNonNegativeSafeInteger(summary.session_evidence_count)) {
+      return false;
+    }
+    workItemCount += summary.work_item_count;
+    sessionEvidenceCount += summary.session_evidence_count;
+    if (!Number.isSafeInteger(workItemCount)
+      || !Number.isSafeInteger(sessionEvidenceCount)
+      || workItemCount > report.total_items
+      || sessionEvidenceCount > report.session_evidence_count) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function parseProjectWorkSummaryResult(value: unknown): ProjectWorkSummaryResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.provider)
+    || typeof value.used_ai !== "boolean"
+    || typeof value.narrative_markdown !== "string"
+    || !Array.isArray(value.summaries)
+    || !value.summaries.every(isProjectWorkSummary)
+    || !isProjectWorkReport(value.report)
+    || !projectWorkSummariesWithinReport(value.summaries, value.report)
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkSummaryResult;
 }
 
 function parseImportStatesResult(value: unknown): ImportStatesResult {

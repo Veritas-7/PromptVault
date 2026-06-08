@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 13:44 KST
+Updated: 2026-06-08 13:42 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -70,6 +70,14 @@ Progress:
 - Staged secret scan passed with
   `gitleaks protect --staged --no-banner --redact` after scanning about
   9.10 KB and finding no leaks.
+- Restaged `working.md` after recording the staged scan and reran the staged
+  secret scan; about 9.60 KB was scanned and no leaks were found.
+- Committed the implementation as
+  `08e980f fix: accept stored prompt preview truncation`.
+- Ran full-tree `gitleaks dir . --no-banner --redact`; about 701.44 MB was
+  scanned and no leaks were found.
+- Pushed `08e980f` to `origin/main` and confirmed `HEAD...origin/main`
+  returned `0 0` after a fresh fetch.
 
 Changes:
 
@@ -115,11 +123,20 @@ Tests:
   `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
 - Staged security: `gitleaks protect --staged --no-banner --redact` passed
   after scanning about 9.10 KB and finding no leaks.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+- Implementation commit:
+  `git commit -m "fix: accept stored prompt preview truncation"` produced
+  `08e980f`.
+- Full-tree security: `gitleaks dir . --no-banner --redact` passed with no
+  leaks found after scanning about 701.44 MB.
+- Push/parity: `git push origin main` updated `ea24dd5..08e980f`; fresh fetch
+  plus `git rev-list --left-right --count HEAD...origin/main` returned `0 0`.
 
 Issues:
 
-- Stored prompt loading fails against the real local database whenever the
-  returned preview is truncated relative to the total stored matches.
+- No blockers.
 
 Research:
 
@@ -127,12 +144,8 @@ Research:
 
 Next Steps:
 
-- Add RED parser coverage for a stored-load response with
-  `prompts_truncated: true`, `returned_prompt_count === stats.total_prompts`,
-  and a larger `persistence.stored_prompt_count`.
-- Patch stored-load parser validation without weakening scan payload validation.
-- Re-run focused tests, browser QA, full project checks, explicit-path staging,
-  gitleaks, commit, and push.
+- Commit this `working.md` closeout, run docs-only security/parity checks, then
+  continue to the next narrow PromptVault improvement slice.
 
 ## Previous Slice - 2026-06-08 Browser bridge URL override
 

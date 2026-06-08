@@ -3349,6 +3349,56 @@ test("browser bridge scan results reject untruncated weak count mismatches", asy
   );
 });
 
+test("browser bridge scan results reject duplicate stats frequency labels", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanResult({
+    stats: emptyScanStats({
+      total_prompts: 1,
+      total_files: 1,
+      total_words: 3,
+      average_words: 3,
+      average_quality: 42,
+      weak_prompt_count: 1,
+      top_words: [{
+        text: "Improve",
+        count: 1,
+      }, {
+        text: "Improve",
+        count: 1,
+      }],
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: 1,
+        prompts_found: 1,
+        average_quality: 42,
+        weak_prompt_count: 1,
+        status: "ok",
+        notes: [],
+      }],
+    }),
+    prompts: [promptRecord()],
+    returned_prompt_count: 1,
+    prompts_truncated: false,
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Improve|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject untruncated source average quality mismatches", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify(emptyScanResult({

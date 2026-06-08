@@ -1,12 +1,134 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 11:23 KST
+Updated: 2026-06-08 11:27 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Missing source summary metadata validation
+## Current Slice - 2026-06-08 Scan stats frequency uniqueness validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan results whose stats frequency lists contain
+  duplicate labels that backend map-based aggregation cannot produce.
+
+Context:
+
+- Recent slices hardened scan progress, scan plan, and scan result source
+  metadata invariants.
+- Backend scan stats build `top_words`, `top_phrases`, `repeated_prompts`,
+  `top_quality_gaps`, and `prompts_by_date` from keyed maps/counters, so a
+  valid payload cannot repeat the same frequency `text` within one list.
+- The browser-bridge parser already validates item shape and count bounds, but
+  only the stored-facet parser currently rejects duplicate frequency labels.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `8301ec0 docs: close missing source summary metadata handoff` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read scan stats parser/tests and backend `build_stats()`. Confirmed
+  duplicate stats frequency labels are impossible from backend aggregation but
+  still weakly validated in browser-bridge scan result payloads.
+- Adding a RED API test for duplicate `top_words` labels whose counts stay
+  within `total_words`, so the failure targets uniqueness rather than
+  aggregate overflow.
+- Confirmed RED first: focused API suite failed 130/131 only on the new
+  duplicate stats frequency label rejection case with
+  `Missing expected rejection`.
+- Tightened the scan stats parser so each frequency list rejects duplicate
+  `text` labels.
+- Confirmed GREEN: focused API suite passed 131/131 after the parser change.
+- Ran the broader UI test suite and production build successfully after the
+  parser change.
+- Verified the local preview quick-scan flow with Node Playwright: a malformed
+  result with duplicate `top_words` was rejected and did not render frequency
+  items, the retry rendered one valid `Improve` word-frequency item, and there
+  were no console or page errors.
+- Removed the temporary preview QA script.
+- Confirmed preview cleanup: temp script was absent and port 5333 was free.
+- Ran the full project check successfully after preview QA.
+- Pre-staging verification passed with only the expected three modified files:
+  parser, API test, and working log.
+- Staged the three explicit paths and confirmed the staged secret scan found no
+  leaks.
+- Restaged `working.md` after recording the staged scan result and reran the
+  staged secret scan; no leaks were found.
+- Ran the final staged secret scan before the implementation commit; no leaks
+  were found.
+
+Changes:
+
+- `working.md`: records the current scan stats frequency uniqueness validation
+  slice.
+- `tests/promptVaultApi.test.ts`: adds a malformed duplicate stats frequency
+  label rejection case.
+- `src/promptVaultApi.ts`: rejects duplicate frequency `text` labels in scan
+  stats lists.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 130/131 only on the new duplicate stats frequency label rejection
+  case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 131/131 after rejecting duplicate stats frequency labels.
+- Broader UI suite: `npm run test:ui` passed 295/295.
+- Production build: `npm run build` passed; Vite emitted
+  `dist/assets/index-D_jcdTlk.js` and `dist/assets/index-D81jZHaU.css`.
+- Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  printed usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5333" --port 5333 --timeout 30 node /tmp/promptvault_frequency_uniqueness_qa.mjs http://127.0.0.1:5333`
+  passed. The script clicked quick scan, served duplicate `top_words` first,
+  verified the scan error state without rendering frequency items, retried
+  with a valid single `Improve` word-frequency item, and observed no console or
+  page errors.
+- Preview cleanup: `test ! -e /tmp/promptvault_frequency_uniqueness_qa.mjs`
+  exited 0; `lsof -nP -iTCP:5333 -sTCP:LISTEN` produced no listener.
+- Full project check: `npm run check` passed. It reran `npm run test:ui`
+  295/295, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
+  and `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  produced no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only the three expected modified files; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` lists only
+  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned private GitHub visibility; temp script remained absent and port 5333
+  remained free.
+- Staged explicit paths only:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security scan: `gitleaks protect --staged --no-banner --redact`
+  scanned about 7 KB and found no leaks.
+- Restaged `working.md` after recording the staged scan result and reran
+  `gitleaks protect --staged --no-banner --redact`; it scanned about 7.34 KB
+  and found no leaks.
+- Final staged security scan before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` scanned about 7.61 KB and
+  found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit the implementation.
+
+## Previous Slice - 2026-06-08 Missing source summary metadata validation
 
 Current Goal:
 

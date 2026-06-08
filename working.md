@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 22:36 KST
+Updated: 2026-06-08 22:38 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -48,6 +48,11 @@ Progress:
   workspace `<datalist>` option values were redacted, date options were
   trimmed/deduped, and the page HTML omitted the raw synthetic fragments.
 - Deleted the temporary browser QA script after verification.
+- Source commit `a832858 fix: redact stored filter suggestions` was pushed to
+  private `origin/main`; final fetch parity was `0 0`.
+- Repository visibility was rechecked with `gh repo view
+  Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`:
+  `visibility=PRIVATE`, `isPrivate=true`.
 
 Changes:
 
@@ -79,12 +84,18 @@ Tests:
 - Full project check: `npm run check` passed, covering UI tests 365/365,
   production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
   `cargo clippy --all-targets --all-features -- -D warnings`.
+- Source staged secret scan: `gitleaks protect --staged` scanned about 6.74 KB
+  and found no leaks before `a832858`.
+- Source full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.19 MB and found no leaks before the source push.
+- Source push verification: `git push origin main` advanced `main` from
+  `d75380e` to `a832858`; after fetch, parity was `0 0` and
+  `git status --short --branch` reported `## main...origin/main`.
 
 Issues:
 
 - No product blocker after stored filter suggestion metadata redaction.
-- Source commit/push and final closeout are still pending staged/full-tree
-  secret scans.
+- No source push blocker after staged and full-tree gitleaks verification.
 
 Research:
 
@@ -93,9 +104,9 @@ Research:
 
 Next Steps:
 
-- Stage explicit source/test/log paths, run staged gitleaks, commit and push the
-  source slice to private `origin/main`, verify fetch parity and private
-  visibility, then close out `working.md` in a separate docs commit.
+- Commit this closeout `working.md` update after staged gitleaks, run full-tree
+  gitleaks again, push to private `origin/main`, and verify final fetch parity
+  plus GitHub private visibility.
 
 ## Previous Slice - 2026-06-08 Improvement context metadata redaction
 

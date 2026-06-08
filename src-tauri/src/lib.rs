@@ -40,6 +40,7 @@ const DEFAULT_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT: usize = 10;
 const MAX_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT: usize = 100;
 const DEFAULT_PROJECT_WORK_LOG_CANDIDATE_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT: usize = 100;
+const PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS: u64 = 12;
 const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
 const MAX_STORED_PROMPT_LIMIT: usize = 1_000;
 const DEFAULT_STORED_FACET_LIMIT: usize = 50;
@@ -179,6 +180,12 @@ pub struct ProjectWorkLogExtractionCandidatesOptions {
     pub limit: Option<usize>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkLogExtractionProposalsOptions {
+    pub limit: Option<usize>,
+    pub ai: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkLogExtractionCandidate {
     pub candidate_id: String,
@@ -203,6 +210,34 @@ pub struct ProjectWorkLogExtractionCandidatesResult {
     pub skipped_empty_file_count: usize,
     pub candidate_count: usize,
     pub candidates: Vec<ProjectWorkLogExtractionCandidate>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogExtractionProposal {
+    pub candidate_id: String,
+    pub project: String,
+    pub source_path: String,
+    pub source_file: String,
+    pub date: Option<String>,
+    pub title: String,
+    pub status: String,
+    pub evidence: String,
+    pub confidence: f64,
+    pub accepted: bool,
+    pub rejection_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogExtractionProposalsResult {
+    pub generated_at: String,
+    pub root_path: String,
+    pub provider: String,
+    pub used_ai: bool,
+    pub candidate_count: usize,
+    pub accepted_count: usize,
+    pub rejected_count: usize,
+    pub proposals: Vec<ProjectWorkLogExtractionProposal>,
     pub warnings: Vec<String>,
 }
 
@@ -678,6 +713,15 @@ fn project_work_log_candidates(
         .map_err(|err| err.to_string())
 }
 
+#[tauri::command]
+async fn project_work_log_extract(
+    options: Option<ProjectWorkLogExtractionProposalsOptions>,
+) -> Result<ProjectWorkLogExtractionProposalsResult, String> {
+    run_project_work_log_extraction_proposals(options.unwrap_or_default())
+        .await
+        .map_err(|err| err.to_string())
+}
+
 fn scan_cancel_flags() -> &'static Mutex<HashMap<String, ScanCancelFlag>> {
     SCAN_CANCEL_FLAGS.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -1132,6 +1176,29 @@ pub fn run_project_work_log_extraction_candidates(
                 .min(MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT),
         ),
     )
+}
+
+pub async fn run_project_work_log_extraction_proposals(
+    options: ProjectWorkLogExtractionProposalsOptions,
+) -> Result<ProjectWorkLogExtractionProposalsResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-log-extract limit requires a positive integer".into());
+    }
+    let candidates =
+        run_project_work_log_extraction_candidates(ProjectWorkLogExtractionCandidatesOptions {
+            limit: Some(
+                options
+                    .limit
+                    .unwrap_or(DEFAULT_PROJECT_WORK_LOG_CANDIDATE_LIMIT)
+                    .min(MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT),
+            ),
+        })?;
+    project_work_log_extraction_proposals_with_env(
+        candidates,
+        !options.ai.unwrap_or(false),
+        load_improve_env(),
+    )
+    .await
 }
 
 pub async fn run_project_work_summary(
@@ -1880,7 +1947,7 @@ async fn request_openai_improvement(
         }
     });
 
-    let client = reqwest::Client::new();
+    let client = project_work_log_extraction_http_client("OpenAI")?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -1932,7 +1999,7 @@ async fn request_glm_improvement(
         "response_format": { "type": "json_object" }
     });
 
-    let client = reqwest::Client::new();
+    let client = project_work_log_extraction_http_client("GLM")?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -2954,9 +3021,11 @@ fn build_project_progress_log_coverage(
                     &text,
                     &project,
                 );
-                let latest = items
-                    .iter()
-                    .max_by(|left, right| left.date.cmp(&right.date).then_with(|| left.title.cmp(&right.title)));
+                let latest = items.iter().max_by(|left, right| {
+                    left.date
+                        .cmp(&right.date)
+                        .then_with(|| left.title.cmp(&right.title))
+                });
                 let latest_date = latest.map(|item| item.date.clone());
                 let latest_title = latest.map(|item| item.title.clone());
                 files.push(ProjectWorkLogCoverageFile {
@@ -2997,10 +3066,7 @@ fn build_project_progress_log_coverage(
     });
     let files_seen = files.len();
     let parsed_file_count = files.iter().filter(|file| file.status == "parsed").count();
-    let unparsed_file_count = files
-        .iter()
-        .filter(|file| file.status != "parsed")
-        .count();
+    let unparsed_file_count = files.iter().filter(|file| file.status != "parsed").count();
     let project_count = files
         .iter()
         .map(|file| file.project.as_str())
@@ -3056,11 +3122,8 @@ fn build_project_progress_log_extraction_candidates(
                 continue;
             }
         };
-        let items = project_progress_work_items_from_text_for_project(
-            &candidate.path,
-            &text,
-            &project,
-        );
+        let items =
+            project_progress_work_items_from_text_for_project(&candidate.path, &text, &project);
         if !items.is_empty() {
             skipped_parsed_file_count += 1;
             continue;
@@ -3115,6 +3178,575 @@ fn project_progress_log_candidate_excerpt(text: &str) -> String {
     let text = normalize_prompt_text(&text);
     let text = redact_sensitive_text(&text);
     truncate_chars(text.trim(), 2_000)
+}
+
+#[derive(Debug, Deserialize)]
+struct AiProjectWorkLogExtractionEnvelope {
+    proposals: Vec<AiProjectWorkLogExtractionProposal>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AiProjectWorkLogExtractionProposal {
+    candidate_id: String,
+    date: String,
+    title: String,
+    status: String,
+    evidence: String,
+    confidence: f64,
+}
+
+async fn project_work_log_extraction_proposals_with_env(
+    candidates: ProjectWorkLogExtractionCandidatesResult,
+    force_local: bool,
+    env: HashMap<String, String>,
+) -> Result<ProjectWorkLogExtractionProposalsResult, Box<dyn std::error::Error>> {
+    if force_local || candidates.candidates.is_empty() {
+        return Ok(local_project_work_log_extraction_proposals(
+            candidates,
+            if force_local {
+                vec!["AI 추출이 비활성화되어 로컬 검토 후보만 반환했습니다.".to_string()]
+            } else {
+                Vec::new()
+            },
+        ));
+    }
+
+    let mut warnings = candidates.warnings.clone();
+    let (blocked_candidates, safe_candidates): (Vec<_>, Vec<_>) = candidates
+        .candidates
+        .iter()
+        .cloned()
+        .partition(|candidate| !candidate.risk_flags.is_empty());
+    if !blocked_candidates.is_empty() {
+        warnings.push(format!(
+            "위험 패턴이 감지된 후보 {}개는 외부 AI provider로 보내지 않고 rejected로 남겼습니다.",
+            blocked_candidates.len()
+        ));
+    }
+    if safe_candidates.is_empty() {
+        return Ok(finish_project_work_log_extraction_proposals(
+            candidates.root_path,
+            "local-extraction-rules",
+            false,
+            candidates.candidate_count,
+            blocked_candidates
+                .iter()
+                .map(|candidate| {
+                    rejected_project_work_log_extraction_proposal(
+                        candidate,
+                        "candidate_has_risk_flags",
+                    )
+                })
+                .collect(),
+            warnings,
+        ));
+    }
+
+    if let Some(api_key) = openai_api_key_from_env(&env) {
+        match request_openai_project_work_log_extraction(
+            &candidates.root_path,
+            &safe_candidates,
+            &env,
+            &api_key,
+        )
+        .await
+        {
+            Ok(mut result) => {
+                result.warnings.extend(warnings);
+                append_blocked_work_log_extraction_proposals(
+                    &mut result,
+                    &blocked_candidates,
+                    candidates.candidate_count,
+                );
+                return Ok(result);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    }
+    if let Some(api_key) = glm_api_key_from_env(&env) {
+        match request_glm_project_work_log_extraction(
+            &candidates.root_path,
+            &safe_candidates,
+            &env,
+            &api_key,
+        )
+        .await
+        {
+            Ok(mut result) => {
+                result.warnings.extend(warnings);
+                append_blocked_work_log_extraction_proposals(
+                    &mut result,
+                    &blocked_candidates,
+                    candidates.candidate_count,
+                );
+                return Ok(result);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    }
+    if openai_api_key_from_env(&env).is_none() && glm_api_key_from_env(&env).is_none() {
+        warnings.push(
+            "OPENAI_API_KEY 및 GLM_API_KEY/GLM_API_KEY_2가 없어 로컬 fallback을 사용했습니다."
+                .to_string(),
+        );
+    }
+    Ok(local_project_work_log_extraction_proposals(
+        candidates, warnings,
+    ))
+}
+
+async fn request_openai_project_work_log_extraction(
+    root_path: &str,
+    candidates: &[ProjectWorkLogExtractionCandidate],
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkLogExtractionProposalsResult, String> {
+    let endpoint = normalize_openai_responses_endpoint(
+        &env.get("OPENAI_RESPONSES_ENDPOINT")
+            .or_else(|| env.get("OPENAI_BASE_URL"))
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_OPENAI_RESPONSES_ENDPOINT.to_string()),
+    );
+    let model = openai_model_from_env(env);
+    let (system, user) = project_work_log_extraction_messages(candidates);
+    let body = serde_json::json!({
+        "model": model,
+        "input": [
+            {
+                "role": "developer",
+                "content": [
+                    { "type": "input_text", "text": system }
+                ]
+            },
+            {
+                "role": "user",
+                "content": [
+                    { "type": "input_text", "text": user }
+                ]
+            }
+        ],
+        "temperature": 0.0,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "project_work_log_extraction",
+                "strict": true,
+                "schema": project_work_log_extraction_json_schema()
+            }
+        }
+    });
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|err| {
+            format!("OpenAI work-log extraction 요청 실패: {err}; 다음 provider 또는 로컬 fallback을 사용합니다.")
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "OpenAI work-log extraction이 HTTP {status}를 반환해 다음 provider 또는 로컬 fallback을 사용합니다."
+        ));
+    }
+    let value = response.json::<Value>().await.map_err(|err| {
+        format!(
+            "OpenAI work-log extraction 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용합니다."
+        )
+    })?;
+    let content = openai_response_content(&value).ok_or_else(|| {
+        "OpenAI work-log extraction 응답 content가 없어 다음 provider 또는 로컬 fallback을 사용합니다."
+            .to_string()
+    })?;
+    project_work_log_extraction_proposals_from_content(
+        "openai",
+        root_path,
+        candidates,
+        &content,
+        Vec::new(),
+        true,
+    )
+    .map_err(|err| {
+        format!("OpenAI work-log extraction 검증 실패: {err}; 로컬 fallback을 사용합니다.")
+    })
+}
+
+async fn request_glm_project_work_log_extraction(
+    root_path: &str,
+    candidates: &[ProjectWorkLogExtractionCandidate],
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkLogExtractionProposalsResult, String> {
+    let endpoint = normalize_chat_endpoint(
+        &env.get("GLM_CODING_ENDPOINT")
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_GLM_CHAT_ENDPOINT.to_string()),
+    );
+    let model = glm_model_from_env(env);
+    let (system, user) = project_work_log_extraction_messages(candidates);
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [
+            { "role": "system", "content": system },
+            { "role": "user", "content": user }
+        ],
+        "temperature": 0.0,
+        "response_format": { "type": "json_object" }
+    });
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|err| {
+            format!("GLM work-log extraction 요청 실패: {err}; 로컬 fallback을 사용했습니다.")
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "GLM work-log extraction이 HTTP {status}를 반환해 로컬 fallback을 사용했습니다."
+        ));
+    }
+    let value = response.json::<Value>().await.map_err(|err| {
+        format!("GLM work-log extraction 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용했습니다.")
+    })?;
+    let content = value
+        .pointer("/choices/0/message/content")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            "GLM work-log extraction 응답 content가 없어 로컬 fallback을 사용했습니다.".to_string()
+        })?;
+    project_work_log_extraction_proposals_from_content(
+        "glm",
+        root_path,
+        candidates,
+        content,
+        Vec::new(),
+        true,
+    )
+    .map_err(|err| {
+        format!("GLM work-log extraction 검증 실패: {err}; 로컬 fallback을 사용했습니다.")
+    })
+}
+
+fn project_work_log_extraction_json_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "proposals": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "candidate_id": { "type": "string" },
+                        "date": { "type": "string" },
+                        "title": { "type": "string" },
+                        "status": { "type": "string" },
+                        "evidence": { "type": "string" },
+                        "confidence": { "type": "number" }
+                    },
+                    "required": [
+                        "candidate_id",
+                        "date",
+                        "title",
+                        "status",
+                        "evidence",
+                        "confidence"
+                    ]
+                }
+            }
+        },
+        "required": ["proposals"]
+    })
+}
+
+fn project_work_log_extraction_messages(
+    candidates: &[ProjectWorkLogExtractionCandidate],
+) -> (&'static str, String) {
+    let system = "You extract dated project work items from progress-log candidates for an engineering operator. Use only supplied candidate excerpts. Do not invent dates, projects, tasks, or evidence. Return JSON only with key proposals. Each accepted proposal must use a candidate_id exactly as supplied, a YYYY-MM-DD date that appears verbatim in that candidate excerpt, concise title, status proposed, evidence copied verbatim from the excerpt, and confidence from 0 to 1. Omit candidates that do not contain a clear dated work item.";
+    let mut user = String::new();
+    user.push_str("Candidates:\n");
+    for candidate in candidates {
+        user.push_str(&format!(
+            "Candidate ID: {}\nProject: {}\nSource: {}\nReason: {}\nExcerpt:\n{}\n\n",
+            candidate.candidate_id,
+            candidate.project,
+            candidate.source_path,
+            candidate.reason,
+            candidate.excerpt
+        ));
+    }
+    user.push_str("Return JSON: {\"proposals\":[{\"candidate_id\":\"...\",\"date\":\"YYYY-MM-DD\",\"title\":\"...\",\"status\":\"proposed\",\"evidence\":\"verbatim excerpt\",\"confidence\":0.0}]}.");
+    (system, truncate_chars(&user, 24_000))
+}
+
+fn project_work_log_extraction_http_client(provider: &str) -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(
+            PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS,
+        ))
+        .build()
+        .map_err(|err| {
+            format!(
+                "{provider} work-log extraction HTTP client 생성 실패: {err}; 로컬 fallback을 사용합니다."
+            )
+        })
+}
+
+fn project_work_log_extraction_proposals_from_content(
+    provider: &str,
+    root_path: &str,
+    candidates: &[ProjectWorkLogExtractionCandidate],
+    content: &str,
+    warnings: Vec<String>,
+    used_ai: bool,
+) -> Result<ProjectWorkLogExtractionProposalsResult, Box<dyn std::error::Error>> {
+    let envelope: AiProjectWorkLogExtractionEnvelope = serde_json::from_str(content)?;
+    let mut proposals_by_candidate = BTreeMap::<String, AiProjectWorkLogExtractionProposal>::new();
+    let mut duplicate_candidate_ids = BTreeSet::<String>::new();
+    for proposal in envelope.proposals {
+        let candidate_id = proposal.candidate_id.clone();
+        if proposals_by_candidate
+            .insert(candidate_id.clone(), proposal)
+            .is_some()
+        {
+            duplicate_candidate_ids.insert(candidate_id);
+        }
+    }
+
+    let mut result_warnings = warnings;
+    if !duplicate_candidate_ids.is_empty() {
+        result_warnings.push(format!(
+            "{} provider returned duplicate candidate IDs: {}",
+            provider,
+            duplicate_candidate_ids
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    let mut proposals = Vec::new();
+    for candidate in candidates {
+        if let Some(ai) = proposals_by_candidate.remove(&candidate.candidate_id) {
+            proposals.push(project_work_log_extraction_proposal_from_ai(candidate, ai));
+        } else {
+            proposals.push(rejected_project_work_log_extraction_proposal(
+                candidate,
+                "missing_ai_proposal",
+            ));
+        }
+    }
+    if !proposals_by_candidate.is_empty() {
+        result_warnings.push(format!(
+            "{} provider returned unknown candidate IDs: {}",
+            provider,
+            proposals_by_candidate
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    Ok(finish_project_work_log_extraction_proposals(
+        root_path.to_string(),
+        provider,
+        used_ai,
+        candidates.len(),
+        proposals,
+        result_warnings,
+    ))
+}
+
+fn project_work_log_extraction_proposal_from_ai(
+    candidate: &ProjectWorkLogExtractionCandidate,
+    ai: AiProjectWorkLogExtractionProposal,
+) -> ProjectWorkLogExtractionProposal {
+    let date = ai.date.trim().to_string();
+    let title = truncate_chars(ai.title.trim(), 160);
+    let status = ai.status.trim().to_ascii_lowercase();
+    let evidence = truncate_chars(ai.evidence.trim(), 240);
+    let rejection_reason = validate_project_work_log_extraction_proposal(
+        candidate,
+        &date,
+        &title,
+        &status,
+        &evidence,
+        ai.confidence,
+    );
+    ProjectWorkLogExtractionProposal {
+        candidate_id: candidate.candidate_id.clone(),
+        project: candidate.project.clone(),
+        source_path: candidate.source_path.clone(),
+        source_file: candidate.source_file.clone(),
+        date: if date.is_empty() { None } else { Some(date) },
+        title,
+        status: if status.is_empty() {
+            "proposed".to_string()
+        } else {
+            status
+        },
+        evidence,
+        confidence: ai.confidence,
+        accepted: rejection_reason.is_none(),
+        rejection_reason,
+    }
+}
+
+fn validate_project_work_log_extraction_proposal(
+    candidate: &ProjectWorkLogExtractionCandidate,
+    date: &str,
+    title: &str,
+    status: &str,
+    evidence: &str,
+    confidence: f64,
+) -> Option<String> {
+    if !candidate.risk_flags.is_empty() {
+        return Some("candidate_has_risk_flags".to_string());
+    }
+    if date.len() != 10 || find_iso_date_start(date) != Some(0) {
+        return Some("invalid_date".to_string());
+    }
+    if !normalized_contains(&candidate.excerpt, date) {
+        return Some("date_not_in_candidate_excerpt".to_string());
+    }
+    if title.trim().is_empty() {
+        return Some("empty_title".to_string());
+    }
+    if status != "proposed" {
+        return Some("invalid_status".to_string());
+    }
+    if evidence.trim().is_empty() {
+        return Some("empty_evidence".to_string());
+    }
+    if !normalized_contains(&candidate.excerpt, evidence) {
+        return Some("evidence_not_in_candidate_excerpt".to_string());
+    }
+    if !confidence.is_finite() || !(0.0..=1.0).contains(&confidence) {
+        return Some("invalid_confidence".to_string());
+    }
+    if confidence < 0.65 {
+        return Some("low_confidence".to_string());
+    }
+    if !detect_risks(&format!("{date}\n{title}\n{evidence}")).is_empty() {
+        return Some("proposal_has_risk_flags".to_string());
+    }
+    None
+}
+
+fn normalized_contains(haystack: &str, needle: &str) -> bool {
+    haystack.contains(needle)
+        || normalize_prompt_text(haystack).contains(normalize_prompt_text(needle).trim())
+}
+
+fn local_project_work_log_extraction_proposals(
+    candidates: ProjectWorkLogExtractionCandidatesResult,
+    mut warnings: Vec<String>,
+) -> ProjectWorkLogExtractionProposalsResult {
+    warnings.extend(candidates.warnings);
+    let proposals = candidates
+        .candidates
+        .iter()
+        .map(|candidate| {
+            rejected_project_work_log_extraction_proposal(
+                candidate,
+                if candidate.risk_flags.is_empty() {
+                    "local_fallback_requires_ai_review"
+                } else {
+                    "candidate_has_risk_flags"
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    finish_project_work_log_extraction_proposals(
+        candidates.root_path,
+        "local-extraction-rules",
+        false,
+        candidates.candidate_count,
+        proposals,
+        warnings,
+    )
+}
+
+fn rejected_project_work_log_extraction_proposal(
+    candidate: &ProjectWorkLogExtractionCandidate,
+    reason: &str,
+) -> ProjectWorkLogExtractionProposal {
+    ProjectWorkLogExtractionProposal {
+        candidate_id: candidate.candidate_id.clone(),
+        project: candidate.project.clone(),
+        source_path: candidate.source_path.clone(),
+        source_file: candidate.source_file.clone(),
+        date: find_iso_date_start(&candidate.excerpt)
+            .map(|start| candidate.excerpt[start..start + 10].to_string()),
+        title: "Needs structured extraction review".to_string(),
+        status: "rejected".to_string(),
+        evidence: truncate_chars(candidate.excerpt.trim(), 240),
+        confidence: 0.0,
+        accepted: false,
+        rejection_reason: Some(reason.to_string()),
+    }
+}
+
+fn append_blocked_work_log_extraction_proposals(
+    result: &mut ProjectWorkLogExtractionProposalsResult,
+    blocked_candidates: &[ProjectWorkLogExtractionCandidate],
+    candidate_count: usize,
+) {
+    result
+        .proposals
+        .extend(blocked_candidates.iter().map(|candidate| {
+            rejected_project_work_log_extraction_proposal(candidate, "candidate_has_risk_flags")
+        }));
+    result.candidate_count = candidate_count;
+    refresh_project_work_log_extraction_counts(result);
+}
+
+fn finish_project_work_log_extraction_proposals(
+    root_path: String,
+    provider: &str,
+    used_ai: bool,
+    candidate_count: usize,
+    proposals: Vec<ProjectWorkLogExtractionProposal>,
+    warnings: Vec<String>,
+) -> ProjectWorkLogExtractionProposalsResult {
+    let mut result = ProjectWorkLogExtractionProposalsResult {
+        generated_at: Utc::now().to_rfc3339(),
+        root_path,
+        provider: provider.to_string(),
+        used_ai,
+        candidate_count,
+        accepted_count: 0,
+        rejected_count: 0,
+        proposals,
+        warnings,
+    };
+    refresh_project_work_log_extraction_counts(&mut result);
+    result
+}
+
+fn refresh_project_work_log_extraction_counts(
+    result: &mut ProjectWorkLogExtractionProposalsResult,
+) {
+    result.accepted_count = result
+        .proposals
+        .iter()
+        .filter(|proposal| proposal.accepted)
+        .count();
+    result.rejected_count = result
+        .proposals
+        .iter()
+        .filter(|proposal| !proposal.accepted)
+        .count();
 }
 
 #[cfg(test)]
@@ -6445,7 +7077,8 @@ pub fn run() {
             project_work_summary,
             project_work_summary_snapshots,
             project_work_log_coverage,
-            project_work_log_candidates
+            project_work_log_candidates,
+            project_work_log_extract
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -8899,8 +9532,11 @@ Progress:
             "## Current Slice - 2026-06-09 Nested alpha\n\n- Verified nested log.\n",
         )
         .expect("write alpha progress");
-        std::fs::write(beta_dir.join("worklog.md"), "# Worklog\n\nNo dated heading yet.\n")
-            .expect("write beta worklog");
+        std::fs::write(
+            beta_dir.join("worklog.md"),
+            "# Worklog\n\nNo dated heading yet.\n",
+        )
+        .expect("write beta worklog");
         let source = SourceSpec {
             id: "project-progress-logs",
             label: "Project progress logs",
@@ -8920,7 +9556,10 @@ Progress:
         assert_eq!(coverage.files[0].status, "parsed");
         assert_eq!(coverage.files[0].work_item_count, 1);
         assert_eq!(coverage.files[0].latest_date.as_deref(), Some("2026-06-09"));
-        assert_eq!(coverage.files[0].latest_title.as_deref(), Some("Nested alpha"));
+        assert_eq!(
+            coverage.files[0].latest_title.as_deref(),
+            Some("Nested alpha")
+        );
         assert_eq!(coverage.files[1].project, "Beta");
         assert_eq!(coverage.files[1].status, "unparsed");
         assert_eq!(coverage.files[1].work_item_count, 0);
@@ -8968,7 +9607,9 @@ Progress:
         assert!(result.candidates[0]
             .candidate_id
             .starts_with("work-log-Beta-"));
-        assert!(result.candidates[0].excerpt.contains("Backfill older work notes"));
+        assert!(result.candidates[0]
+            .excerpt
+            .contains("Backfill older work notes"));
         assert!(!result.candidates[0].excerpt.contains("short-secret-value"));
         assert!(result.candidates[0]
             .risk_flags
@@ -8976,6 +9617,118 @@ Progress:
             .any(|flag| flag == "possible_api_key"));
 
         std::fs::remove_dir_all(root).expect("remove candidates fixture");
+    }
+
+    #[test]
+    fn project_work_log_extraction_proposals_reject_invented_dates() {
+        let candidate = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-Beta-a1b2c3d4e5".to_string(),
+            project: "Beta".to_string(),
+            source_path: "/tmp/Beta/workingd.md".to_string(),
+            source_file: "workingd.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt: "Backfill migration notes without a dated heading.".to_string(),
+            line_count: 1,
+            char_count: 49,
+            risk_flags: Vec::new(),
+            modified_at: None,
+        };
+        let content = r#"{"proposals":[{"candidate_id":"work-log-Beta-a1b2c3d4e5","date":"2026-06-09","title":"Migration notes","status":"proposed","evidence":"Backfill migration notes","confidence":0.91}]}"#;
+
+        let result = project_work_log_extraction_proposals_from_content(
+            "glm",
+            "/tmp",
+            &[candidate],
+            content,
+            Vec::new(),
+            true,
+        )
+        .expect("parse AI extraction proposal");
+
+        assert_eq!(result.provider, "glm");
+        assert!(result.used_ai);
+        assert_eq!(result.accepted_count, 0);
+        assert_eq!(result.rejected_count, 1);
+        assert!(!result.proposals[0].accepted);
+        assert_eq!(
+            result.proposals[0].rejection_reason.as_deref(),
+            Some("date_not_in_candidate_excerpt")
+        );
+    }
+
+    #[tokio::test]
+    async fn project_work_log_extraction_with_env_uses_glm_provider() {
+        let candidate = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-Beta-a1b2c3d4e5".to_string(),
+            project: "Beta".to_string(),
+            source_path: "/tmp/Beta/workingd.md".to_string(),
+            source_file: "workingd.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt: "Current State\n- 2026-06-04: Created project root and initialized a new git repository.".to_string(),
+            line_count: 2,
+            char_count: 90,
+            risk_flags: Vec::new(),
+            modified_at: None,
+        };
+        let content = serde_json::json!({
+            "proposals": [
+                {
+                    "candidate_id": "work-log-Beta-a1b2c3d4e5",
+                    "date": "2026-06-04",
+                    "title": "Created project root",
+                    "status": "proposed",
+                    "evidence": "2026-06-04: Created project root and initialized a new git repository.",
+                    "confidence": 0.92
+                }
+            ]
+        })
+        .to_string();
+        let (endpoint, request_rx) = spawn_json_server(
+            200,
+            serde_json::json!({
+                "choices": [
+                    {
+                        "message": {
+                            "content": content
+                        }
+                    }
+                ]
+            }),
+        );
+        let mut env = HashMap::new();
+        env.insert("GLM_API_KEY".to_string(), "glm-key".to_string());
+        env.insert("GLM_CODING_MODEL".to_string(), "glm-test-model".to_string());
+        env.insert("GLM_CODING_ENDPOINT".to_string(), endpoint);
+        let candidates = ProjectWorkLogExtractionCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/tmp".to_string(),
+            files_seen: 1,
+            skipped_parsed_file_count: 0,
+            skipped_unreadable_file_count: 0,
+            skipped_empty_file_count: 0,
+            candidate_count: 1,
+            candidates: vec![candidate],
+            warnings: Vec::new(),
+        };
+
+        let result = project_work_log_extraction_proposals_with_env(candidates, false, env)
+            .await
+            .expect("GLM extraction proposals");
+        let request = request_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("capture GLM request");
+
+        assert_eq!(result.provider, "glm");
+        assert!(result.used_ai);
+        assert_eq!(result.candidate_count, 1);
+        assert_eq!(result.accepted_count, 1);
+        assert_eq!(result.rejected_count, 0);
+        assert!(result.proposals[0].accepted);
+        assert_eq!(result.proposals[0].date.as_deref(), Some("2026-06-04"));
+        assert_eq!(result.proposals[0].rejection_reason, None);
+        assert!(request.contains("authorization: Bearer glm-key"));
+        assert!(request.contains("\"model\":\"glm-test-model\""));
+        assert!(request.contains("work-log-Beta-a1b2c3d4e5"));
     }
 
     #[test]

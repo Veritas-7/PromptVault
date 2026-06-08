@@ -111,6 +111,7 @@ import {
   isBrowserQaMode,
   loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
+  loadProjectWorkLogExtractionProposals,
   loadProjectWorkSummary,
   listProjectWorkSummarySnapshots,
   listImportEvents,
@@ -190,6 +191,7 @@ import type {
   ImproveResult,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
+  ProjectWorkLogExtractionProposalsResult,
   PromptRecord,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
@@ -202,6 +204,9 @@ import {
   workLogCandidatesActionLabel,
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
+  workLogExtractionActionLabel,
+  workLogExtractionFailureText,
+  workLogExtractionMetaText,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
   workLogCoverageMetaText,
@@ -218,6 +223,7 @@ import {
   workSummarySnapshotSummaryOverflowText,
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
+  type WorkLogExtractionState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "./workSummaryStatus";
@@ -232,6 +238,7 @@ const WORK_SUMMARY_DISPLAY_LIMIT = 5;
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
 const WORK_LOG_CANDIDATE_DISPLAY_LIMIT = 5;
+const WORK_LOG_EXTRACTION_DISPLAY_LIMIT = 5;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
@@ -276,6 +283,7 @@ function App() {
   const [workSummarySnapshotsState, setWorkSummarySnapshotsState] = useState<WorkSummarySnapshotsState>("idle");
   const [workLogCoverageState, setWorkLogCoverageState] = useState<WorkLogCoverageState>("idle");
   const [workLogCandidatesState, setWorkLogCandidatesState] = useState<WorkLogCandidatesState>("idle");
+  const [workLogExtractionState, setWorkLogExtractionState] = useState<WorkLogExtractionState>("idle");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -291,6 +299,8 @@ function App() {
   const [workLogCoverageResult, setWorkLogCoverageResult] = useState<ProjectWorkLogCoverageResult | null>(null);
   const [workLogCandidatesResult, setWorkLogCandidatesResult] =
     useState<ProjectWorkLogExtractionCandidatesResult | null>(null);
+  const [workLogExtractionResult, setWorkLogExtractionResult] =
+    useState<ProjectWorkLogExtractionProposalsResult | null>(null);
   const [workSummarySnapshotsResult, setWorkSummarySnapshotsResult] =
     useState<ProjectWorkSummarySnapshotsResult | null>(null);
   const [workSummarySnapshotDateFilter, setWorkSummarySnapshotDateFilter] = useState("");
@@ -513,6 +523,8 @@ function App() {
   const workLogCoverageMeta = workLogCoverageMetaText(workLogCoverageState, workLogCoverageResult);
   const workLogCandidatesFailureMessage = workLogCandidatesFailureText(workLogCandidatesState);
   const workLogCandidatesMeta = workLogCandidatesMetaText(workLogCandidatesState, workLogCandidatesResult);
+  const workLogExtractionFailureMessage = workLogExtractionFailureText(workLogExtractionState);
+  const workLogExtractionMeta = workLogExtractionMetaText(workLogExtractionState, workLogExtractionResult);
   const workSummarySnapshotsFailureMessage = workSummarySnapshotsFailureText(workSummarySnapshotsState);
   const workSummarySnapshotsMeta = workSummarySnapshotsMetaText(
     workSummarySnapshotsState,
@@ -540,6 +552,12 @@ function App() {
   const hiddenWorkLogCandidateCount = Math.max(
     0,
     (workLogCandidatesResult?.candidates.length ?? 0) - WORK_LOG_CANDIDATE_DISPLAY_LIMIT,
+  );
+  const visibleWorkLogExtractionProposals =
+    workLogExtractionResult?.proposals.slice(0, WORK_LOG_EXTRACTION_DISPLAY_LIMIT) ?? [];
+  const hiddenWorkLogExtractionProposalCount = Math.max(
+    0,
+    (workLogExtractionResult?.proposals.length ?? 0) - WORK_LOG_EXTRACTION_DISPLAY_LIMIT,
   );
   const storedFacetSummary = storedFacetSummaryText(
     storedFacetsState,
@@ -780,6 +798,24 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkLogCandidatesState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function refreshWorkLogExtraction() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkLogExtractionState("loading");
+    try {
+      const next = await loadProjectWorkLogExtractionProposals({ ai: true });
+      setWorkLogExtractionResult(next);
+      setWorkLogExtractionState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogExtractionState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -1417,6 +1453,25 @@ function App() {
                   ? "후보 새로고침"
                   : "추출 후보"}
             </button>
+            <button
+              aria-label={workLogExtractionActionLabel(
+                workLogExtractionState,
+                workLogExtractionResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-log-extraction="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void refreshWorkLogExtraction()}
+              type="button"
+            >
+              <Sparkles size={15} />
+              {workLogExtractionState === "loading"
+                ? "생성 중"
+                : workLogExtractionResult
+                  ? "제안 새로고침"
+                  : "AI 제안"}
+            </button>
           </div>
         </div>
         {workSummaryFailureMessage ? (
@@ -1457,6 +1512,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workLogCandidatesFailureMessage}</span>
+          </div>
+        ) : null}
+        {workLogExtractionFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-log-extraction-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workLogExtractionFailureMessage}</span>
           </div>
         ) : null}
         <form
@@ -1559,6 +1624,12 @@ function App() {
             <span>{workLogCandidatesMeta}</span>
           </div>
         ) : null}
+        {workLogExtractionResult || workLogExtractionState !== "idle" ? (
+          <div className="work-summary-index" data-work-log-extraction-meta="true">
+            <Sparkles size={15} />
+            <span>{workLogExtractionMeta}</span>
+          </div>
+        ) : null}
         {workSummaryResult ? (
           <div className="work-summary-content">
             <pre data-work-summary-narrative="true">{workSummaryResult.narrative_markdown}</pre>
@@ -1654,6 +1725,44 @@ function App() {
           ) : (
             <div className="empty compact" data-empty-work-log-candidates="true">
               AI 추출 후보로 보낼 unparsed 진행 로그 없음
+            </div>
+          )
+        ) : null}
+        {workLogExtractionResult ? (
+          visibleWorkLogExtractionProposals.length ? (
+            <div className="work-summary-list" data-work-log-extraction="true">
+              {visibleWorkLogExtractionProposals.map((proposal) => (
+                <article
+                  className="work-summary-row work-log-proposal-row"
+                  key={proposal.candidate_id}
+                >
+                  <div>
+                    <strong>{proposal.project}</strong>
+                    <span>{proposal.date ?? "날짜 미확정"}</span>
+                  </div>
+                  <p>{proposal.title}</p>
+                  <p className="work-log-proposal-evidence">{proposal.evidence}</p>
+                  <span>
+                    {proposal.accepted ? "accepted" : "rejected"} · {proposal.status} · confidence{" "}
+                    {proposal.confidence.toFixed(2)} · {proposal.candidate_id}
+                  </span>
+                  <span>
+                    {proposal.rejection_reason
+                      ? `reason ${proposal.rejection_reason} · `
+                      : ""}
+                    {proposal.source_path}
+                  </span>
+                </article>
+              ))}
+              {hiddenWorkLogExtractionProposalCount ? (
+                <div className="work-summary-overflow">
+                  그 외 AI 작업 추출 제안 {hiddenWorkLogExtractionProposalCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-log-extraction="true">
+              검증된 AI 작업 추출 제안 없음
             </div>
           )
         ) : null}

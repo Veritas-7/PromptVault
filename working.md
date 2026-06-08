@@ -1,12 +1,143 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 03:02 KST
+Updated: 2026-06-09 03:28 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 AI extraction candidate inputs
+## Current Slice - 2026-06-09 AI work-log extraction proposals
+
+Current Goal:
+
+- Turn unparsed project progress-log candidates into reviewed extraction
+  proposals with provider, accepted/rejected state, date, title, evidence,
+  confidence, source candidate ID, and rejection reason.
+- Use OpenAI/GLM only when explicitly requested and only for safe candidates;
+  keep risk-flagged candidates local and rejected.
+- Expose the proposal preview through backend, CLI, browser bridge, and UI
+  without merging unverified AI output into project/day summaries.
+
+Context:
+
+- The project/day work management layer already parses dated progress-log
+  headings and bounded Codex session metadata.
+- Live coverage on `/Users/wj/Ai/System/10_Projects` currently finds 32
+  progress-log files across 26 projects: 16 parsed files, 16 unparsed files,
+  and 3,613 parsed dated work items.
+- A bounded live session refresh with
+  `work-report --limit 5 --session-limit 5 --refresh-session-index --json`
+  scanned actual Codex session metadata and attached session evidence to the
+  selected CareVault work items.
+- The unparsed-file layer produces redacted candidate excerpts first; this
+  slice adds the AI proposal/validation layer on top.
+
+Progress:
+
+- Added strict extraction proposal payloads for unparsed progress-log
+  candidates.
+- Added OpenAI Responses and GLM chat provider paths for work-log extraction,
+  using strict JSON schema / JSON object outputs and local fallback.
+- Added validation that rejects invented dates, dates missing from the source
+  excerpt, evidence missing from the source excerpt, invalid status, invalid or
+  low confidence, proposal risk flags, and risk-flagged source candidates.
+- Split safe and blocked candidates before external AI calls; candidates with
+  risk flags are never sent to a provider and are returned as rejected.
+- Added a provider timeout for work-log extraction calls so UI/CLI fallback does
+  not depend on unbounded external waits.
+- Added CLI, browser bridge, Tauri, TypeScript API, UI labels, and React preview
+  rows for accepted/rejected proposals.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds
+  `ProjectWorkLogExtractionProposals*` types,
+  `run_project_work_log_extraction_proposals()`, OpenAI/GLM request helpers,
+  strict proposal parser/validator, local fallback proposals, provider timeout,
+  and Tauri command `project_work_log_extract`.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds
+  `work-log-extract [--limit N>0] [--ai] [--json]`, bridge route
+  `/api/work-log-extract`, help text, and JSON/plain rendering.
+- `src/types.ts` and `src/promptVaultApi.ts`: add proposal result types,
+  `loadProjectWorkLogExtractionProposals()`, bridge route support, and
+  fail-closed payload validation.
+- `src/workSummaryStatus.ts`: adds extraction action/meta/failure copy helpers.
+- `src/App.tsx` and `src/App.css`: add the `AI 제안` action, loading/error/meta
+  states, accepted/rejected proposal preview rows, and long evidence/path
+  wrapping.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`: add
+  proposal bridge validation and UI copy coverage.
+
+Tests:
+
+- RED:
+  `cargo test project_work_log_extraction_proposals_reject_invented_dates`
+  failed before implementation because
+  `project_work_log_extraction_proposals_from_content` did not exist.
+- GREEN:
+  `cargo test project_work_log_extraction_proposals_reject_invented_dates`
+  passed after the validator rejected `date_not_in_candidate_excerpt`.
+- GREEN:
+  `cargo test project_work_log_extraction` passed 2/2, including a GLM mock
+  provider test that verifies model, bearer auth, candidate ID payload, and an
+  accepted proposal.
+- GREEN:
+  `cargo test help_text_documents_cli_validation_rules` passed.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 148/148.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  passed 11/11.
+- GREEN:
+  `npm run build` passed.
+- Live CLI verification:
+  `./src-tauri/target/debug/promptvault-cli work-log-extract --limit 3 --json`
+  returned provider `local-extraction-rules`, `used_ai=false`, 3 candidates,
+  0 accepted, and 3 rejected proposals.
+- Live AI/fallback verification:
+  `./src-tauri/target/debug/promptvault-cli work-log-extract --limit 1 --ai --json`
+  attempted the configured GLM endpoint, then returned local fallback with 1
+  rejected proposal after provider failure.
+- Browser QA without cmux:
+  started the PromptVault bridge on `127.0.0.1:5174` and Vite on
+  `127.0.0.1:1420`, opened the app with headless Chromium, waited for
+  `[data-browser-bridge-status="connected"]`, clicked
+  `[data-load-work-log-extraction="true"]`, and verified
+  `[data-work-log-extraction-meta="true"]` plus proposal rows under
+  `[data-work-log-extraction="true"]`. The rendered meta showed
+  `로컬 local-extraction-rules · 후보 16개 · accepted 0개 · rejected 16개`,
+  5 proposal rows rendered, and there were no console or page errors.
+- Full gate:
+  `npm run check` passed: UI tests 397/397, Vite build, Rust library tests
+  142/142, CLI tests 20/20, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- Current AI provider configuration attempted a GLM endpoint but failed, so live
+  AI extraction fell back locally. The app now reports this instead of silently
+  claiming AI extraction succeeded.
+- This slice previews accepted/rejected proposals only. It intentionally does
+  not merge accepted proposals into project/day summaries yet.
+- Current validation requires the date and evidence to appear verbatim in the
+  source excerpt. This is conservative and may reject useful paraphrased
+  provider output until a safer evidence-span strategy is added.
+
+Research:
+
+- No external research was needed. This was an implementation and verification
+  slice using the existing OpenAI/GLM provider infrastructure.
+
+Next Steps:
+
+- Add an operator-reviewed merge path from accepted extraction proposals into
+  project/day summaries or saved snapshots.
+- Add provider health/timeout visibility to the UI so failed GLM/OpenAI
+  attempts are easier to diagnose.
+- Improve candidate classification so status-pointer files and low-value
+  `PROJECT_STATUS.md` rows can be rejected before provider calls.
+
+## Previous Slice - 2026-06-09 AI extraction candidate inputs
 
 Current Goal:
 

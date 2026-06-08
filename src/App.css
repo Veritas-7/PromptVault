@@ -293,9 +293,18 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.work-log-proposal-row span {
+  overflow-wrap: anywhere;
+}
+
 .work-log-candidate-excerpt {
   max-height: 8.5rem;
   overflow: auto;
+  white-space: pre-wrap;
+}
+
+.work-log-proposal-evidence {
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 

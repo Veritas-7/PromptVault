@@ -3,12 +3,13 @@ use promptvault_lib::{
     redact_sensitive_text, run_import_batch, run_list_import_events, run_list_import_states,
     run_list_project_work_summary_snapshots, run_list_stored_prompt_facets,
     run_load_stored_prompts, run_project_work_log_coverage,
-    run_project_work_log_extraction_candidates, run_project_work_report, run_project_work_summary,
-    run_scan,
-    source_specs, CancelScanOptions, ImportBatchOptions, ImportEventsOptions, ImportStatesOptions,
-    ImproveRequest, ProjectWorkLogExtractionCandidatesOptions, ProjectWorkReportOptions,
-    ProjectWorkSummaryOptions, ProjectWorkSummarySnapshotsOptions, PromptRecord, ScanOptions,
-    ScanPlanOptions, ScanProgressOptions, StoredPromptFacetsOptions, StoredPromptsOptions,
+    run_project_work_log_extraction_candidates, run_project_work_log_extraction_proposals,
+    run_project_work_report, run_project_work_summary, run_scan, source_specs, CancelScanOptions,
+    ImportBatchOptions, ImportEventsOptions, ImportStatesOptions, ImproveRequest,
+    ProjectWorkLogExtractionCandidatesOptions, ProjectWorkLogExtractionProposalsOptions,
+    ProjectWorkReportOptions, ProjectWorkSummaryOptions, ProjectWorkSummarySnapshotsOptions,
+    PromptRecord, ScanOptions, ScanPlanOptions, ScanProgressOptions, StoredPromptFacetsOptions,
+    StoredPromptsOptions,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -409,7 +410,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("files_seen: {}", result.files_seen);
             println!("candidates: {}", result.candidate_count);
             println!("skipped_parsed: {}", result.skipped_parsed_file_count);
-            println!("skipped_unreadable: {}", result.skipped_unreadable_file_count);
+            println!(
+                "skipped_unreadable: {}",
+                result.skipped_unreadable_file_count
+            );
             println!("skipped_empty: {}", result.skipped_empty_file_count);
             if !result.warnings.is_empty() {
                 println!("warnings:");
@@ -431,6 +435,68 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 println!("- reason: {}", candidate.reason);
                 println!("- excerpt: {}", candidate.excerpt);
                 println!("  {}", candidate.source_path);
+            }
+        }
+        "work-log-extract" => {
+            let json = take_flag(&mut args, "--json");
+            let ai = take_flag(&mut args, "--ai");
+            let mut limit = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    other => {
+                        return Err(format!("unknown work-log-extract argument: {other}").into())
+                    }
+                }
+            }
+            let result = run_project_work_log_extraction_proposals(
+                ProjectWorkLogExtractionProposalsOptions {
+                    limit,
+                    ai: Some(ai),
+                },
+            )
+            .await?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+
+            println!("PromptVault project work log extraction proposals");
+            println!("root: {}", result.root_path);
+            println!("provider: {}", result.provider);
+            println!("used_ai: {}", result.used_ai);
+            println!("candidates: {}", result.candidate_count);
+            println!("accepted: {}", result.accepted_count);
+            println!("rejected: {}", result.rejected_count);
+            if !result.warnings.is_empty() {
+                println!("warnings:");
+                for warning in &result.warnings {
+                    println!("- {warning}");
+                }
+            }
+            for proposal in &result.proposals {
+                println!(
+                    "\n{} · {} · {} · {}",
+                    proposal.candidate_id,
+                    proposal.project,
+                    proposal.date.as_deref().unwrap_or("undated"),
+                    if proposal.accepted {
+                        "accepted"
+                    } else {
+                        "rejected"
+                    }
+                );
+                println!("- title: {}", proposal.title);
+                println!("- status: {}", proposal.status);
+                println!("- confidence: {:.2}", proposal.confidence);
+                if let Some(reason) = &proposal.rejection_reason {
+                    println!("- rejection_reason: {reason}");
+                }
+                println!("- evidence: {}", proposal.evidence);
+                println!("  {}", proposal.source_path);
             }
         }
         "work-summary" => {
@@ -989,7 +1055,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-log-coverage [--json]\n  work-log-candidates [--limit N>0] [--json]\n  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--ai] [--json]\n  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-log-coverage lists parsed and unparsed project progress logs by project.\n  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  work-summary builds project/date summaries with citation IDs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-log-coverage [--json]\n  work-log-candidates [--limit N>0] [--json]\n  work-log-extract [--limit N>0] [--ai] [--json]\n  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--ai] [--json]\n  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-log-coverage lists parsed and unparsed project progress logs by project.\n  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n  work-log-extract validates AI extraction proposals before they can become dated work items; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  work-summary builds project/date summaries with citation IDs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1076,6 +1142,11 @@ struct ProjectWorkSummaryBridgePayload {
 #[derive(serde::Deserialize)]
 struct ProjectWorkLogCandidatesBridgePayload {
     options: Option<ProjectWorkLogExtractionCandidatesOptions>,
+}
+
+#[derive(serde::Deserialize)]
+struct ProjectWorkLogExtractionBridgePayload {
+    options: Option<ProjectWorkLogExtractionProposalsOptions>,
 }
 
 #[derive(serde::Deserialize, Default)]
@@ -1252,12 +1323,21 @@ fn handle_bridge_route(
             write_json_response(stream, 200, &result)
         }
         ("POST", "/api/work-log-candidates") => {
-            let payload = serde_json::from_str::<ProjectWorkLogCandidatesBridgePayload>(
-                &request.body,
-            )?;
-            let result = run_project_work_log_extraction_candidates(
+            let payload =
+                serde_json::from_str::<ProjectWorkLogCandidatesBridgePayload>(&request.body)?;
+            let result =
+                run_project_work_log_extraction_candidates(payload.options.unwrap_or_default())?;
+            write_json_response(stream, 200, &result)
+        }
+        ("POST", "/api/work-log-extract") => {
+            let payload =
+                serde_json::from_str::<ProjectWorkLogExtractionBridgePayload>(&request.body)?;
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            let result = runtime.block_on(run_project_work_log_extraction_proposals(
                 payload.options.unwrap_or_default(),
-            )?;
+            ))?;
             write_json_response(stream, 200, &result)
         }
         _ => write_response(stream, 404, "text/plain", "Not found"),
@@ -1564,6 +1644,7 @@ mod tests {
         ));
         assert!(help.contains("work-log-coverage [--json]"));
         assert!(help.contains("work-log-candidates [--limit N>0] [--json]"));
+        assert!(help.contains("work-log-extract [--limit N>0] [--ai] [--json]"));
         assert!(help.contains(
             "work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--ai] [--json]"
         ));
@@ -1573,6 +1654,7 @@ mod tests {
         assert!(help.contains("work-report reads project progress logs"));
         assert!(help.contains("work-log-coverage lists parsed and unparsed"));
         assert!(help.contains("work-log-candidates prepares unparsed progress logs"));
+        assert!(help.contains("work-log-extract validates AI extraction proposals"));
         assert!(help.contains("work-report stores only sanitized session evidence"));
         assert!(help.contains("--refresh-session-index to rescan raw sessions"));
         assert!(help.contains("work-summary builds project/date summaries with citation IDs"));

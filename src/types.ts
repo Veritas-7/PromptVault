@@ -258,6 +258,32 @@ export interface ProjectWorkLogExtractionCandidatesResult {
   warnings: string[];
 }
 
+export interface ProjectWorkLogExtractionProposal {
+  candidate_id: string;
+  project: string;
+  source_path: string;
+  source_file: string;
+  date: string | null;
+  title: string;
+  status: string;
+  evidence: string;
+  confidence: number;
+  accepted: boolean;
+  rejection_reason: string | null;
+}
+
+export interface ProjectWorkLogExtractionProposalsResult {
+  generated_at: string;
+  root_path: string;
+  provider: string;
+  used_ai: boolean;
+  candidate_count: number;
+  accepted_count: number;
+  rejected_count: number;
+  proposals: ProjectWorkLogExtractionProposal[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSummaryCitation {
   id: string;
   date: string;

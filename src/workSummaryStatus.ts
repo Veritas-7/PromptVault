@@ -2,6 +2,7 @@ import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import type {
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
+  ProjectWorkLogExtractionProposalsResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
@@ -12,6 +13,7 @@ export type WorkSummaryState = "idle" | "loading" | "ready" | "failed";
 export type WorkSummarySnapshotsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCoverageState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCandidatesState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogExtractionState = "idle" | "loading" | "ready" | "failed";
 
 export const WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT = 3;
 
@@ -161,6 +163,38 @@ export function workLogCandidatesMetaText(
 export function workLogCandidatesFailureText(state: WorkLogCandidatesState): string | null {
   if (state !== "failed") return null;
   return "AI 추출 후보를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.";
+}
+
+export function workLogExtractionActionLabel(
+  state: WorkLogExtractionState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "AI 작업 추출 제안 생성 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 AI 작업 추출 제안을 ${hasResult ? "새로고침" : "생성"}할 수 없습니다`;
+  }
+  return hasResult ? "AI 작업 추출 제안 새로고침" : "AI 작업 추출 제안";
+}
+
+export function workLogExtractionMetaText(
+  state: WorkLogExtractionState,
+  result: ProjectWorkLogExtractionProposalsResult | null,
+): string {
+  if (state === "loading") return "AI 작업 추출 제안 생성 중";
+  if (!result) return state === "failed" ? "AI 작업 추출 제안을 사용할 수 없음" : "아직 생성한 AI 작업 추출 제안 없음";
+  return [
+    result.used_ai ? `AI ${result.provider}` : `로컬 ${result.provider}`,
+    `후보 ${result.candidate_count.toLocaleString()}개`,
+    `accepted ${result.accepted_count.toLocaleString()}개`,
+    `rejected ${result.rejected_count.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+export function workLogExtractionFailureText(state: WorkLogExtractionState): string | null {
+  if (state !== "failed") return null;
+  return "AI 작업 추출 제안을 불러오지 못했습니다. provider 설정, 진행 로그 경로, 브리지 상태를 확인하세요.";
 }
 
 export function workSummarySnapshotVisibleSummaries(

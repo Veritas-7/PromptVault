@@ -6,6 +6,7 @@ import {
   improvePrompt,
   loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
+  loadProjectWorkLogExtractionProposals,
   loadStoredPrompts,
   loadProjectWorkSummary,
   listProjectWorkSummarySnapshots,
@@ -367,6 +368,33 @@ function projectWorkLogCandidatesPayload(overrides = {}) {
   };
 }
 
+function projectWorkLogExtractionProposalsPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    root_path: "/Users/wj/Ai/System/10_Projects",
+    provider: "glm",
+    used_ai: true,
+    candidate_count: 1,
+    accepted_count: 1,
+    rejected_count: 0,
+    proposals: [{
+      candidate_id: "work-log-CareVault-a1b2c3d4e5",
+      project: "CareVault",
+      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      source_file: "workingd.md",
+      date: "2026-06-04",
+      title: "Backfilled older work notes",
+      status: "proposed",
+      evidence: "2026-06-04: Backfilled older work notes",
+      confidence: 0.91,
+      accepted: true,
+      rejection_reason: null,
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
 test("browser bridge work summary posts options and validates citation payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   let requestPath = "";
@@ -513,6 +541,52 @@ test("browser bridge work log candidates rejects impossible counters", async (t)
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /candidate_count|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work log extraction posts AI option and validates proposals", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogExtractionProposalsPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkLogExtractionProposals({ limit: 5, ai: true });
+
+  assert.match(requestPath, /\/api\/work-log-extract$/);
+  assert.deepEqual(JSON.parse(requestBody), { options: { limit: 5, ai: true } });
+  assert.equal(result.provider, "glm");
+  assert.equal(result.used_ai, true);
+  assert.equal(result.accepted_count, 1);
+  assert.equal(result.rejected_count, 0);
+  assert.equal(result.proposals[0].accepted, true);
+  assert.equal(result.proposals[0].date, "2026-06-04");
+  assert.equal(result.proposals[0].rejection_reason, null);
+});
+
+test("browser bridge work log extraction rejects impossible proposal counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkLogExtractionProposalsPayload({
+    accepted_count: 2,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkLogExtractionProposals({ limit: 5, ai: true }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /accepted_count|workingd\.md|undefined/);
       return true;
     },
   );

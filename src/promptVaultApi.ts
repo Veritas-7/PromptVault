@@ -13,6 +13,7 @@ import type {
   ImproveResult,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
+  ProjectWorkLogExtractionProposalsResult,
   ProjectWorkReport,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
@@ -98,6 +99,11 @@ export interface ProjectWorkSummarySnapshotsOptions {
 
 export interface ProjectWorkLogCandidatesOptions {
   limit?: number;
+}
+
+export interface ProjectWorkLogExtractionOptions {
+  limit?: number;
+  ai?: boolean;
 }
 
 export interface ImprovePromptRequest {
@@ -224,6 +230,19 @@ export async function loadProjectWorkLogCandidates(
     "/api/work-log-candidates",
     { options },
     parseProjectWorkLogExtractionCandidatesResult,
+  );
+}
+
+export async function loadProjectWorkLogExtractionProposals(
+  options: ProjectWorkLogExtractionOptions = {},
+): Promise<ProjectWorkLogExtractionProposalsResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogExtractionProposalsResult>("project_work_log_extract", { options });
+  }
+  return postBridge<ProjectWorkLogExtractionProposalsResult>(
+    "/api/work-log-extract",
+    { options },
+    parseProjectWorkLogExtractionProposalsResult,
   );
 }
 
@@ -1247,6 +1266,57 @@ function parseProjectWorkLogExtractionCandidatesResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkLogExtractionCandidatesResult;
+}
+
+function isProjectWorkLogExtractionProposal(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.candidate_id)
+    && isNonBlankString(value.project)
+    && isNonBlankString(value.source_path)
+    && isNonBlankString(value.source_file)
+    && isNullableNonBlankString(value.date)
+    && isNonBlankString(value.title)
+    && isNonBlankString(value.status)
+    && isNonBlankString(value.evidence)
+    && isFiniteNumber(value.confidence)
+    && value.confidence >= 0
+    && value.confidence <= 1
+    && typeof value.accepted === "boolean"
+    && isNullableNonBlankString(value.rejection_reason);
+}
+
+function projectWorkLogExtractionProposalsWithinResult(value: unknown): boolean {
+  if (!isRecord(value)
+    || !Array.isArray(value.proposals)
+    || !isNonNegativeSafeInteger(value.candidate_count)
+    || !isNonNegativeSafeInteger(value.accepted_count)
+    || !isNonNegativeSafeInteger(value.rejected_count)) {
+    return false;
+  }
+  const acceptedCount = value.proposals.filter((proposal) => isRecord(proposal) && proposal.accepted === true).length;
+  const rejectedCount = value.proposals.filter((proposal) => isRecord(proposal) && proposal.accepted === false).length;
+  return value.accepted_count === acceptedCount
+    && value.rejected_count === rejectedCount
+    && value.proposals.length <= value.candidate_count
+    && acceptedCount + rejectedCount === value.proposals.length;
+}
+
+function parseProjectWorkLogExtractionProposalsResult(
+  value: unknown,
+): ProjectWorkLogExtractionProposalsResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.root_path)
+    || !isNonBlankString(value.provider)
+    || typeof value.used_ai !== "boolean"
+    || !Array.isArray(value.proposals)
+    || !value.proposals.every(isProjectWorkLogExtractionProposal)
+    || !recordStringFieldValuesAreUnique(value.proposals, "candidate_id")
+    || !projectWorkLogExtractionProposalsWithinResult(value)
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkLogExtractionProposalsResult;
 }
 
 function isProjectWorkSummaryCitation(value: unknown): boolean {

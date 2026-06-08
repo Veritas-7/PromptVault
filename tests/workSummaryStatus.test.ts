@@ -5,6 +5,9 @@ import {
   workLogCandidatesActionLabel,
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
+  workLogExtractionActionLabel,
+  workLogExtractionFailureText,
+  workLogExtractionMetaText,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
   workLogCoverageMetaText,
@@ -22,12 +25,14 @@ import {
   workSummarySnapshotVisibleSummaries,
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
+  type WorkLogExtractionState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "../src/workSummaryStatus.ts";
 import type {
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
+  ProjectWorkLogExtractionProposalsResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
@@ -120,6 +125,23 @@ function candidatesResult(
     skipped_empty_file_count: 2,
     candidate_count: 13,
     candidates: [],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function extractionResult(
+  overrides: Partial<ProjectWorkLogExtractionProposalsResult> = {},
+): ProjectWorkLogExtractionProposalsResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    root_path: "/Users/wj/Ai/System/10_Projects",
+    provider: "glm",
+    used_ai: true,
+    candidate_count: 13,
+    accepted_count: 3,
+    rejected_count: 10,
+    proposals: [],
     warnings: [],
     ...overrides,
   };
@@ -306,6 +328,36 @@ test("work log candidate labels describe AI extraction inputs", () => {
     "AI 추출 후보를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogCandidatesFailureText("ready"), null);
+});
+
+test("work log extraction labels describe accepted and rejected AI proposals", () => {
+  const failed: WorkLogExtractionState = "failed";
+  assert.equal(workLogExtractionActionLabel("idle", false, lockState()), "AI 작업 추출 제안");
+  assert.equal(workLogExtractionActionLabel("ready", true, lockState()), "AI 작업 추출 제안 새로고침");
+  assert.equal(
+    workLogExtractionActionLabel("loading", true, lockState({ workSummaryRunning: true })),
+    "AI 작업 추출 제안 생성 중",
+  );
+  assert.equal(
+    workLogExtractionActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 AI 작업 추출 제안을 새로고침할 수 없습니다",
+  );
+  assert.equal(workLogExtractionMetaText("idle", null), "아직 생성한 AI 작업 추출 제안 없음");
+  assert.equal(workLogExtractionMetaText("loading", extractionResult()), "AI 작업 추출 제안 생성 중");
+  assert.equal(
+    workLogExtractionMetaText("ready", extractionResult()),
+    "AI glm · 후보 13개 · accepted 3개 · rejected 10개",
+  );
+  assert.equal(
+    workLogExtractionMetaText("ready", extractionResult({ used_ai: false, provider: "local-extraction-rules" })),
+    "로컬 local-extraction-rules · 후보 13개 · accepted 3개 · rejected 10개",
+  );
+  assert.equal(workLogExtractionMetaText(failed, null), "AI 작업 추출 제안을 사용할 수 없음");
+  assert.equal(
+    workLogExtractionFailureText(failed),
+    "AI 작업 추출 제안을 불러오지 못했습니다. provider 설정, 진행 로그 경로, 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workLogExtractionFailureText("ready"), null);
 });
 
 test("work summary snapshot helpers expose bounded project/day drill-down", () => {

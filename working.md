@@ -1,12 +1,92 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 00:39 KST
+Updated: 2026-06-09 00:46 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-report session evidence join
+## Current Slice - 2026-06-09 Codex session metadata evidence
+
+Current Goal:
+
+- Use Codex thread/session metadata as first-class project evidence for
+  `work-report`, without polluting the normal prompt scan with synthetic
+  records.
+- Fix the verified gap where raw user prompt text and `cwd` often do not expose
+  the target project name even though the Codex thread objective does.
+
+Context:
+
+- The prior session evidence join scanned real raw prompts but initially found
+  `session_evidence_count: 0` because recent user prompts were ambiguous.
+- The active Codex session is anchored to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`, but the raw prompt `cwd` is
+  often `/Users/wj`.
+- For project work reporting, it is safer to extract only project path hints
+  from Codex metadata/objective text and store a sanitized synthetic evidence
+  record than to expose or persist full injected session context.
+
+Progress:
+
+- Added a work-report-only Codex metadata evidence path.
+- Extracted safe `/Users/wj/Ai/System/10_Projects/<project>` path hints from
+  Codex `session_meta`, `turn_context`, and user/developer message metadata.
+- Used session file modified timestamp as the metadata evidence timestamp so
+  long-running sessions can support the current KST work date.
+- Kept normal prompt scans unchanged; metadata evidence is appended only inside
+  `run_project_work_report()`.
+- Verified actual local `work-report` output now includes matched session
+  evidence for PromptVault work items.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds Codex metadata project path extraction,
+  sanitized synthetic metadata prompt records, metadata source counts, and
+  tests.
+- `working.md`: records the metadata-evidence follow-up slice.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml codex_session_metadata_prompt_extracts_project_target_from_objective --lib`
+  failed before implementation because
+  `parse_codex_project_metadata_prompt()` did not exist.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work --lib`
+  passed with 5/5.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml codex_session_metadata_prompt_extracts_project_target_from_objective --lib`
+  passed.
+- Actual metadata smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-report --limit 80 --session-limit 20 --json`
+  returned `session_scan_prompt_count: 40`,
+  `session_scan_sources: Codex 20, Codex session metadata 20`,
+  `session_evidence_count: 29`, and PromptVault's four selected 2026-06-09
+  work items each had `Codex session metadata` evidence.
+- Actual DB safety check:
+  `sqlite3 /Users/wj/Documents/PromptVault/promptvault.sqlite "select count(*) from prompts where source='Project progress logs';"`
+  returned `4` before and after the report smoke.
+
+Issues:
+
+- `session_evidence_count` is currently an item-support count, not a unique
+  session count. One session metadata record can support multiple work items on
+  the same project/date.
+- Raw session scans are still slow at larger limits. A persistent incremental
+  evidence index remains the next scaling improvement.
+- The AI/GLM/OpenAI summarization layer is still not implemented. It should be
+  added only after deterministic source grouping and traceability are stable.
+
+Next Steps:
+
+- Add unique session/thread counts alongside item-support counts so report
+  totals are easier to interpret.
+- Add a persistent session-evidence index to avoid repeated raw session scans.
+- Add AI-assisted daily/project summaries with source citations after the
+  deterministic evidence model is stable.
+
+## Previous Slice - 2026-06-09 work-report session evidence join
 
 Current Goal:
 

@@ -1,7 +1,7 @@
 export const BROWSER_BRIDGE_URL = "http://127.0.0.1:5174";
+export const BROWSER_BRIDGE_URL_STORAGE_KEY = "promptvault.browserBridgeUrl";
 
-export const BROWSER_BRIDGE_COMMAND =
-  "cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174";
+export const BROWSER_BRIDGE_COMMAND = browserBridgeCommandForUrl(BROWSER_BRIDGE_URL);
 
 export const BROWSER_BRIDGE_NOTICE =
   "브라우저 브리지 모드: Tauri IPC를 사용할 수 없어 로컬 PromptVault 브리지를 호출하고 실제 파싱 프롬프트를 SQLite에 저장합니다.";
@@ -14,7 +14,7 @@ export interface BrowserBridgeHealth {
 export type BrowserBridgeStatus = "native" | "checking" | "connected" | "disconnected";
 
 export function browserBridgeUnavailableMessage(): string {
-  return `브라우저 브리지가 실행 중이 아닙니다. 터미널에서 다음 명령을 실행한 뒤 브리지 다시 확인을 누르세요: ${BROWSER_BRIDGE_COMMAND}`;
+  return `브라우저 브리지가 실행 중이 아닙니다. 터미널에서 다음 명령을 실행한 뒤 브리지 다시 확인을 누르세요: ${browserBridgeCommand()}`;
 }
 
 export function browserBridgeHttpErrorMessage(status: number): string {
@@ -42,7 +42,48 @@ export function hasTauriInvoke(): boolean {
 }
 
 export function bridgeEndpoint(path: string): string {
-  return `${BROWSER_BRIDGE_URL}${path}`;
+  return `${browserBridgeUrl()}${path}`;
+}
+
+export function browserBridgeUrl(): string {
+  return storedBrowserBridgeUrl() ?? BROWSER_BRIDGE_URL;
+}
+
+export function browserBridgeCommand(): string {
+  return browserBridgeCommandForUrl(browserBridgeUrl());
+}
+
+function browserBridgeCommandForUrl(url: string): string {
+  const parsed = new URL(url);
+  return `cd src-tauri && cargo run --bin promptvault-cli -- serve --addr ${parsed.hostname}:${parsed.port}`;
+}
+
+function storedBrowserBridgeUrl(): string | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    return normalizeLocalBrowserBridgeUrl(window.localStorage?.getItem(BROWSER_BRIDGE_URL_STORAGE_KEY) ?? null);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeLocalBrowserBridgeUrl(value: string | null): string | null {
+  const rawValue = value?.trim();
+  if (!rawValue) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawValue);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== "http:") return null;
+  if (parsed.port.trim() === "") return null;
+  if (!["127.0.0.1", "localhost"].includes(parsed.hostname)) return null;
+
+  return parsed.origin;
 }
 
 function parseBrowserBridgeHealth(text: string): BrowserBridgeHealth {

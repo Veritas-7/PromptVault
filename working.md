@@ -1,12 +1,147 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 13:20 KST
+Updated: 2026-06-08 13:37 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Prompt timestamp validation
+## Current Slice - 2026-06-08 Browser bridge URL override
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Let browser-mode users recover from a default bridge port collision by
+  configuring a validated local browser bridge URL, and make endpoint calls plus
+  recovery copy use the same configured port.
+
+Context:
+
+- Previous prompt timestamp validation slice is pushed to `origin/main`:
+  implementation `b802333 fix: validate prompt timestamps` and closeout
+  `c21b084 docs: close prompt timestamp handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`,
+  and `gh repo view` reported the repository as `PRIVATE`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+- Headless browser QA found the app rendered the disconnected bridge state
+  sensibly, but the console logged CORS errors from
+  `http://127.0.0.1:5174/api/health`.
+- `lsof -nP -iTCP:5174 -sTCP:LISTEN` showed port 5174 was occupied by a
+  Python process rather than the PromptVault CLI bridge. The CLI bridge already
+  emits CORS headers, so the issue is recovery from a local port collision, not
+  missing CORS support in PromptVault.
+- `src/browserBridge.ts` currently hardcodes both `BROWSER_BRIDGE_URL` and
+  `BROWSER_BRIDGE_COMMAND` to port 5174, leaving no safe way for the UI to
+  target an alternate local bridge port.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `c21b084 docs: close prompt timestamp handoff`.
+- Confirmed thread identity and persisted objective still target
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Re-read browser bridge status/copy tests and confirmed they currently cover
+  sanitized error text but not configurable local bridge URLs.
+- Confirmed RED first: new focused bridge override tests failed because
+  `bridgeEndpoint("/api/health")` still returned
+  `http://127.0.0.1:5174/api/health`, and `browserBridgeUnavailableMessage()`
+  still advertised `--addr 127.0.0.1:5174` despite a
+  `promptvault.browserBridgeUrl` localStorage override.
+- Added a validated dynamic bridge URL path:
+  `promptvault.browserBridgeUrl` can override the default bridge origin only
+  when it is an HTTP localhost/127.0.0.1 URL with an explicit port.
+- Confirmed GREEN: the focused override tests passed after endpoints and
+  recovery copy began using the same normalized configured bridge URL.
+- Existing browser bridge tests all passed, covering default copy, override
+  copy, invalid override fallback, health parsing, and sanitized failures.
+- Headless browser QA with Vite on free port 5177 and PromptVault CLI bridge on
+  5176 passed: localStorage override was present, the UI reached
+  `data-browser-bridge-status="connected"`, bridge-dependent top actions were
+  enabled, `/api/*` requests targeted 5176, and there were no console errors or
+  page errors.
+- Confirmed the earlier failed browser QA was environmental: port 5173 was
+  already occupied by a Python process, so `with_server.py` attached to that
+  pre-existing server. Re-running on free Vite port 5177 served the updated
+  source and validated the change.
+- Ran the full project check successfully after browser bridge URL override.
+- Pre-staging verification passed with only the expected three modified files:
+  `src/browserBridge.ts`, `tests/browserBridge.test.ts`, and `working.md`.
+- Explicitly staged only `src/browserBridge.ts`, `tests/browserBridge.test.ts`,
+  and `working.md`.
+- Staged secret scan passed with
+  `gitleaks protect --staged --no-banner --redact` after scanning about
+  10.08 KB and finding no leaks.
+
+Changes:
+
+- `working.md`: records the current browser bridge URL override slice.
+- `tests/browserBridge.test.ts`: adds RED coverage for safe local bridge URL
+  overrides and invalid override fallback.
+- `src/browserBridge.ts`: reads a validated local bridge URL override for
+  browser-mode endpoint calls and recovery command copy, while preserving the
+  default port 5174 constants for compatibility.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`.
+- Focused scan progress tests before this slice:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "scan progress" tests/promptVaultApi.test.ts`
+  passed 14 scan-progress parser tests.
+- Headless Vite/Playwright QA before this slice showed disconnected bridge UI
+  state with disabled bridge-dependent controls and no page errors, but console
+  CORS errors against the occupied default port 5174.
+- Port diagnosis: `lsof -nP -iTCP:5174 -sTCP:LISTEN` showed a Python process
+  listening on 127.0.0.1:5174; `lsof -nP -iTCP:5175 -sTCP:LISTEN` showed a
+  node process on 5175.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "bridge .*override|bridge URL override" tests/browserBridge.test.ts`
+  failed as expected because the endpoint and recovery command stayed on the
+  hardcoded default port 5174.
+- GREEN: the same focused override command passed after the dynamic bridge URL
+  implementation.
+- Focused bridge regression:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/browserBridge.test.ts`
+  passed all 14 browser bridge tests.
+- Headless browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 90 -- bash -lc ...`
+  passed with status `connected`, `storedBridgeUrl` set to
+  `http://127.0.0.1:5176`, scan/load/plan disabled states all `false`,
+  `/api/health` responses from 5176, and empty `consoleMessages` /
+  `pageErrors`.
+- Full project check: `npm run check` passed, covering UI tests 302/302,
+  production build, Rust lib tests 85/85, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/browserBridge.ts tests/browserBridge.test.ts working.md`
+  passed; `git status --short --branch` showed only `src/browserBridge.ts`,
+  `tests/browserBridge.test.ts`, and `working.md` modified;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`.
+- Staged paths: `git diff --cached --name-only` listed only
+  `src/browserBridge.ts`, `tests/browserBridge.test.ts`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed
+  after scanning about 10.08 KB and finding no leaks.
+
+Issues:
+
+- Default bridge port 5174 can be occupied by another local service. Without a
+  validated override, the app keeps polling that service and the recovery
+  command still points users at the occupied port.
+
+Research:
+
+- No external research. This is direct code/test/QA work.
+
+Next Steps:
+
+- Add RED tests for a safe local bridge URL override.
+- Implement validated dynamic bridge URL and recovery command copy.
+- Re-run focused tests, browser QA on an alternate free port, full project
+  checks, explicit-path staging, gitleaks, commit, and push.
+
+## Previous Slice - 2026-06-08 Prompt timestamp validation
 
 Current Goal:
 

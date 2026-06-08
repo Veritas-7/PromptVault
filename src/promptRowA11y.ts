@@ -52,6 +52,10 @@ export function promptMetadataDisplayText(text: string): string {
   return compactPromptText(redactSensitiveDisplayText(text));
 }
 
+export function pathDisplayText(text: string): string {
+  return compactPromptText(redactSensitiveDisplayText(text));
+}
+
 export function promptRowAriaLabel(
   prompt: PromptRecord,
   index: number,

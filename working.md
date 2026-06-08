@@ -1,12 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 21:13 KST
+Updated: 2026-06-08 21:20 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Prompt metadata display secret masking
+## Current Slice - 2026-06-08 Path display secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent path-like display strings from bypassing sensitive text redaction in
+  database path, export path, source root path, and import persistence notices.
+
+Context:
+
+- Previous prompt metadata display masking is pushed to `origin/main` with
+  source commit `9d2b1b9 fix: mask prompt metadata secrets` and docs closeout
+  `cd64057 docs: record prompt metadata masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment or Tauri-like browser shims for
+  controlled user flows.
+- Prompt text, warnings, errors, and prompt source/workspace metadata were
+  already display-masked, but path-like UI fields still rendered raw values:
+  import state DB path, scan persistence DB path, export output path, import
+  event DB path, plan source root path, import persistence DB path, and source
+  summary root path.
+- This slice changes display copy only. Raw API payloads and database paths
+  used for backend requests remain unchanged.
+
+Progress:
+
+- Searched `App.tsx`, API types, and tests for raw `database_path`,
+  `output_path`, and `root_path` rendering.
+- Added a RED unit test for `pathDisplayText()`. It first failed because
+  `src/promptRowA11y.ts` did not export the helper.
+- Added a browser RED smoke using a Tauri-like invoke shim with synthetic
+  secret-like query parameters in DB/export/root paths. The first attempt had a
+  Playwright JS API typo in the temporary script; after fixing it, the RED
+  failed as intended because the body showed raw `access_token` path fragments
+  across saved import progress, scan notices, plan rows, import result, and
+  source summaries.
+- Added `pathDisplayText()` using the existing display redactor plus whitespace
+  compaction.
+- Routed visible path rendering through `pathDisplayText()` for saved import
+  progress, scan persistence notice, export output notice, recent import
+  activity, plan source root rows, import persistence notice, source summary
+  root rows, and browser bridge database context.
+- Re-ran the same browser flow after implementation: startup import panels,
+  quick scan click, plan click, and batch import click all completed with no
+  raw path secret fragments in the page body and no page/console/network
+  errors.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/promptRowA11y.ts`: adds `pathDisplayText()` for path-like display
+  strings.
+- `src/App.tsx`: masks visible database/export/root path display surfaces.
+- `tests/promptRowA11y.test.ts`: adds RED/GREEN coverage for secret-like path
+  query parameters.
+- `working.md`: records this slice and its RED/GREEN/browser/full-check
+  evidence.
+
+Tests:
+
+- RED unit test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed with `does not provide an export named 'pathDisplayText'`.
+- RED browser click smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5233" --port 5233 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_path_display_secret_qa.mjs'`
+  first failed for a temporary script API typo, then failed as intended because
+  the page body exposed raw `access_token` fragments in DB/export/root paths.
+- Targeted GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed with 45/45 tests after adding `pathDisplayText()`.
+- Browser click smoke after the fix:
+  same `with_server.py` command passed with exit code `0`; startup import
+  panels, quick scan, plan, and batch import completed without raw path secret
+  fragments in the body, and with no page errors, console errors, or failed
+  responses.
+- Full project check: `npm run check` passed, covering UI tests 353/353,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after path display masking.
+- This slice intentionally does not mutate raw paths needed for persistence,
+  filtering, import, export, or improvement request context.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Commit and push the source slice, then record docs closeout from the clean
+  pushed tree.
+
+## Previous Slice - 2026-06-08 Prompt metadata display secret masking
 
 Current Goal:
 

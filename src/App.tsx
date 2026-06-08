@@ -80,6 +80,7 @@ import {
   selectedPromptEmptyText,
 } from "./promptEmptyState";
 import {
+  pathDisplayText,
   promptRowAriaLabel,
   promptMetadataDisplayText,
   promptRowPreviewText,
@@ -433,15 +434,16 @@ function App() {
     storedFilterCount,
     storedFacetsResult,
   );
-  const displayDatabasePath =
-    result?.persistence?.database_path ?? storedFacetsResult?.database_path ?? "데이터베이스 미갱신";
+  const displayDatabasePath = pathDisplayText(
+    result?.persistence?.database_path ?? storedFacetsResult?.database_path ?? "데이터베이스 미갱신",
+  );
   const displayStoredPromptCount =
     result?.persistence?.stored_prompt_count ?? storedFacetsResult?.total_prompts ?? 0;
   const displayStoredDateCount =
     result?.persistence?.date_count ?? storedFacetsResult?.dates.length ?? 0;
   const browserBridgeNoticeText = browserBridgeStatusText(
     browserBridgeStatus,
-    browserBridgeDatabasePath,
+    browserBridgeDatabasePath ? pathDisplayText(browserBridgeDatabasePath) : null,
     browserBridgeFailureText,
   );
   const hiddenImportEventCount = Math.max(
@@ -1269,7 +1271,7 @@ function App() {
                 </div>
                 <div className="summary-path-card">
                   <span>데이터베이스</span>
-                  <strong>{importStatesResult.database_path}</strong>
+                  <strong>{pathDisplayText(importStatesResult.database_path)}</strong>
                 </div>
               </div>
               {importStatesResult.states.length ? (
@@ -1329,7 +1331,7 @@ function App() {
         <section className="notice secondary" {...STATUS_NOTICE_PROPS}>
           <FileText size={18} />
           <span>
-            내보내기 {result.output_path} · 미리보기 {result.returned_prompt_count.toLocaleString()} /{" "}
+            내보내기 {pathDisplayText(result.output_path)} · 미리보기 {result.returned_prompt_count.toLocaleString()} /{" "}
             {result.stats.total_prompts.toLocaleString()}
           </span>
         </section>
@@ -1388,7 +1390,7 @@ function App() {
                 </div>
                 <div className="summary-path-card">
                   <span>데이터베이스</span>
-                  <strong>{importEventsResult.database_path}</strong>
+                  <strong>{pathDisplayText(importEventsResult.database_path)}</strong>
                 </div>
               </div>
               {importEventsResult.events.length ? (
@@ -1565,7 +1567,7 @@ function App() {
                           />
                           <strong>{source.label}</strong>
                         </label>
-                        <span>{source.root_path}</span>
+                        <span>{pathDisplayText(source.root_path)}</span>
                         {displayNotes.length ? <span className="source-meta">{displayNotes.join(" ")}</span> : null}
                       </div>
                       <div
@@ -1724,7 +1726,7 @@ function App() {
             <div className="notice secondary" {...STATUS_NOTICE_PROPS}>
               <FileText size={18} />
               <span>
-                {importResult.persistence.database_path} · 저장{" "}
+                {pathDisplayText(importResult.persistence.database_path)} · 저장{" "}
                 {importResult.persistence.stored_prompt_count.toLocaleString()} · 신규{" "}
                 {importResult.persistence.inserted_prompt_count.toLocaleString()} · 갱신{" "}
                 {importResult.persistence.updated_prompt_count.toLocaleString()}
@@ -1776,7 +1778,7 @@ function App() {
                 <div className="source-row" key={source.id}>
                   <div>
                     <strong>{source.label}</strong>
-                    <span>{source.root_path}</span>
+                    <span>{pathDisplayText(source.root_path)}</span>
                     <span className="source-meta">
                       품질 {source.average_quality.toFixed(1)} · 약함 {source.weak_prompt_count}
                     </span>

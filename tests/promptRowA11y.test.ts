@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ActionLockState } from "../src/actionLocks.ts";
 import {
+  pathDisplayText,
   promptRowAriaLabel,
   promptRowPreviewText,
   redactSensitiveDisplayText,
@@ -740,6 +741,15 @@ test("prompt metadata display redacts secret-like source text", () => {
 
   assert.doesNotMatch(label, new RegExp(`${apiFlag}|${secretValue}`));
   assert.match(label, /Codex \[REDACTED_POSSIBLE_SECRET\]/);
+});
+
+test("path display redacts secret-like query parameters", () => {
+  const tokenName = ["access", "token"].join("_");
+  const secretValue = ["path", "display", "secret"].join("-");
+  const displayText = pathDisplayText(`/tmp/promptvault.sqlite?${tokenName}=${secretValue}`);
+
+  assert.match(displayText, /\[REDACTED_POSSIBLE_SECRET\]/);
+  assert.doesNotMatch(displayText, new RegExp(`${tokenName}|${secretValue}`));
 });
 
 test("prompt row labels explain active-work selection locks", () => {

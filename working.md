@@ -1,10 +1,127 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 10:08 KST
+Updated: 2026-06-08 10:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Source-less scan progress counter validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan progress snapshots that claim files/prompts were
+  already processed while no active source is selected.
+
+Context:
+
+- Recent slices hardened scan progress source identity and source position
+  invariants.
+- Backend scan progress starts active before source selection with
+  `source_id: null`, `source_label: null`, `source_index: 0`, and all
+  file/prompt counters at zero/null.
+- Backend only advances `files_seen`, `source_files_seen`,
+  `source_files_discovered`, `source_file_count`, and `prompts_found` after a
+  concrete source has been selected and source identity is populated.
+- The frontend parser currently allows an active source-less snapshot with
+  nonzero counters, which can render misleading "소스 준비 중" progress with
+  processed files or prompts.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `5a71c27 docs: close scan progress position handoff` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read `ScanProgress` parser/tests, backend scan progress initialization and
+  update lifecycle, and `scanProgressLabel`. Confirmed active source-less
+  progress should not have advanced file or prompt counters.
+- Added a RED API test for active source-less scan progress snapshots with
+  nonzero file/prompt counters.
+- Confirmed RED first: focused API suite failed 123/124 only on the new
+  source-less counter rejection case with `Missing expected rejection`.
+- Tightened the scan progress parser so source-less active snapshots must keep
+  all file/prompt counters at their initial zero/null values.
+- Confirmed GREEN: focused API suite passed 124/124 after the parser change.
+- Ran the broader UI test suite and production build successfully after the
+  parser change.
+- Verified the local preview quick-scan flow with Node Playwright: a malformed
+  source-less progress snapshot with nonzero counters is not rendered, a valid
+  source-less pre-source progress snapshot renders expected "소스 준비 중" copy,
+  the next valid `Codex` source progress renders normally, and the scan
+  completes without console or page errors.
+- Removed the temporary preview QA script and confirmed port 5326 was free.
+- Ran the full project check successfully after preview QA.
+- Pre-staging verification passed with only the expected three modified files:
+  parser, API test, and working log.
+- Staged the three explicit paths and confirmed the staged secret scan found no
+  leaks.
+
+Changes:
+
+- `working.md`: records the current source-less scan progress counter
+  validation slice.
+- `src/promptVaultApi.ts`: rejects source-less scan progress snapshots with
+  advanced file or prompt counters.
+- `tests/promptVaultApi.test.ts`: adds a malformed source-less counter
+  rejection case for scan progress bridge responses.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 123/124 only on the new active source-less counter rejection case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 124/124 after requiring source-less progress counters to stay at the
+  initial zero/null values.
+- Broader UI suite: `npm run test:ui` passed 288/288.
+- Production build: `npm run build` passed; Vite emitted
+  `dist/assets/index-BgEoRGJh.js` and `dist/assets/index-D81jZHaU.css`.
+- Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  printed usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5326" --port 5326 --timeout 30 node /tmp/promptvault_sourceless_progress_counters_qa.mjs http://127.0.0.1:5326`
+  passed. The script confirmed connected browser bridge status, clicked quick
+  scan, served a source-less progress snapshot with nonzero counters first,
+  verified that malformed `소스 준비 중` progress with `1 / 1개 파일` and
+  `1개 프롬프트` was not rendered, then served valid source-less and valid
+  `Codex` progress and verified normal scan completion.
+- Preview cleanup: `test ! -e /tmp/promptvault_sourceless_progress_counters_qa.mjs`
+  returned `temp_absent`; `! lsof -nP -iTCP:5326 -sTCP:LISTEN` returned
+  `port_5326_free`.
+- Full project check: `npm run check` passed. It reran `npm run test:ui`
+  288/288, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
+  and `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  produced no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only the three expected modified files; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` lists only
+  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned private GitHub visibility; temp script remained absent and port 5326
+  remained free.
+- Staged explicit paths only:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security scan: `gitleaks protect --staged --no-banner --redact`
+  scanned about 7.23 KB and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Stage explicit paths, run staged and full-tree secret scans, then commit and
+  push this slice if all checks stay green.
 
 ## Previous Slice - 2026-06-08 Scan progress source position validation
 

@@ -845,6 +845,17 @@ function isScanProgressSourcePositionConsistent(value: Record<string, unknown>):
   return (value.source_id === null) === (value.source_index === 0);
 }
 
+function isSourceLessScanProgressCounterConsistent(value: Record<string, unknown>): boolean {
+  return value.source_id !== null
+    || (
+      value.files_seen === 0
+      && value.source_files_seen === 0
+      && value.source_files_discovered === 0
+      && value.source_file_count === null
+      && value.prompts_found === 0
+    );
+}
+
 function matchesRequestedRunId(value: { run_id: string }, requestedRunId: string): boolean {
   return value.run_id === requestedRunId.trim();
 }
@@ -1016,6 +1027,7 @@ function parseScanProgressResult(value: unknown): ScanProgress {
     || !isTimestampString(value.updated_at)
     || !isScanProgressSourceIdentityConsistent(value)
     || !isScanProgressSourcePositionConsistent(value)
+    || !isSourceLessScanProgressCounterConsistent(value)
     || value.source_files_seen > value.source_files_discovered
     || (value.source_file_count !== null && !isNonNegativeSafeIntegerAtMost(value.source_files_seen, value.source_file_count))
     || (value.source_index !== 0 && !isNonNegativeSafeIntegerAtMost(value.source_index, value.source_count))

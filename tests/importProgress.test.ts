@@ -197,8 +197,8 @@ test("import status reports failed state first", () => {
 test("import stop action label explains continuous and queue stop targets", () => {
   assert.equal(importStopActionLabel("continuous", false), "현재 배치 후 가져오기 중지");
   assert.equal(importStopActionLabel("continuous", true), "현재 배치 후 가져오기 중지 중");
-  assert.equal(importStopActionLabel("queue", false), "현재 소스 후 가져오기 대기열 중지");
-  assert.equal(importStopActionLabel("queue", true), "현재 소스 후 가져오기 대기열 중지 중");
+  assert.equal(importStopActionLabel("queue", false), "현재 배치 후 가져오기 대기열 중지");
+  assert.equal(importStopActionLabel("queue", true), "현재 배치 후 가져오기 대기열 중지 중");
 });
 
 test("import failure text keeps a failed no-result run visible", () => {
@@ -227,15 +227,15 @@ test("import stop notice explains continuous resume path", () => {
 test("import stop notice explains partial queue resume path", () => {
   assert.equal(
     importStopNoticeText("stopped", "queue", null, 1, 3),
-    "가져오기 대기열이 현재 소스 후 중지되었습니다. 3개 소스 중 1개 완료. 계속하려면 선택 실행을 다시 누르세요.",
+    "가져오기 대기열이 현재 배치 후 중지되었습니다. 3개 소스 중 1개 완료. 계속하려면 선택 실행을 다시 누르세요.",
   );
   assert.equal(
     importStopNoticeText("stopped", "queue", null, 5, 3),
-    "가져오기 대기열이 현재 소스 후 중지되었습니다. 3개 소스 중 3개 완료. 계속하려면 선택 실행을 다시 누르세요.",
+    "가져오기 대기열이 현재 배치 후 중지되었습니다. 3개 소스 중 3개 완료. 계속하려면 선택 실행을 다시 누르세요.",
   );
   assert.equal(
     importStopNoticeText("stopped", "queue", null, 1, 1),
-    "가져오기 대기열이 현재 소스 후 중지되었습니다. 1개 소스 중 1개 완료. 계속하려면 선택 실행을 다시 누르세요.",
+    "가져오기 대기열이 현재 배치 후 중지되었습니다. 1개 소스 중 1개 완료. 계속하려면 선택 실행을 다시 누르세요.",
   );
 });
 

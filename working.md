@@ -1,12 +1,134 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 14:22 KST
+Updated: 2026-06-08 14:26 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Import plan default selection
+## Current Slice - 2026-06-08 Queue import stop copy accuracy
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Align the selected-source import queue stop copy with actual runtime
+  behavior: queue stop requests stop after the current batch, not after the
+  entire current source.
+
+Context:
+
+- Previous import plan default selection slice is pushed to `origin/main`:
+  implementation `4231ed6 feat: default import plan selection` and closeout
+  `efb4df8 docs: close import plan handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`,
+  and `gh repo view --json visibility --jq .visibility` returned `PRIVATE`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus the CLI browser bridge and Playwright.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- Connected browser QA for continuous import stop was correct: the button said
+  `현재 배치 후 가져오기 중지`, one more batch finished, and the stop warning
+  said `현재 배치 후 중지되었습니다`.
+- Connected browser QA for the selected-source queue found a UX mismatch:
+  queue stop also stopped after one current batch, but the button said
+  `현재 소스 후 가져오기 대기열 중지` and the warning said
+  `현재 소스 후 중지되었습니다`.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `efb4df8 docs: close import plan handoff`.
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree is clean at `main...origin/main` and parity is
+  `0 0`.
+- Ran connected browser QA for continuous import stop with Codex. It showed
+  correct batch-stop copy, returned `/api/import-batch` HTTP 200, hid the stop
+  button after stopping, and had no global/console/page errors. This created
+  one real Codex import event in the PromptVault DB.
+- Ran connected browser QA for selected-source queue stop. It started from
+  11 selected sources, showed stop label `현재 소스 후 가져오기 대기열 중지`,
+  processed one additional 5-file batch, stopped with 0/11 sources completed,
+  and displayed `가져오기 대기열이 현재 소스 후 중지되었습니다...`.
+- Confirmed RED first:
+  `tests/importProgress.test.ts` expected queue stop action and stop notice
+  copy to say `현재 배치 후`, and the focused test failed on the old
+  `현재 소스 후` strings.
+- Updated queue stop action label and queue stop notice text to use
+  `현재 배치 후`, matching the actual stop behavior.
+- Confirmed GREEN with the focused queue stop copy tests.
+- Ran `tests/importProgress.test.ts`; 16/16 passed.
+- Re-ran connected browser selected-source queue stop QA. The stop button
+  aria-label was `현재 배치 후 가져오기 대기열 중지`, the warning said
+  `가져오기 대기열이 현재 배치 후 중지되었습니다. 11개 소스 중 0개 완료...`,
+  and there were no global/console/page errors. This created one additional
+  real Codex import event in the PromptVault DB.
+- Ran full `npm run check` successfully after the queue stop copy change.
+
+Changes:
+
+- `working.md`: records the queue import stop copy accuracy slice.
+- `tests/importProgress.test.ts`: updates expected queue stop copy from
+  `현재 소스 후` to `현재 배치 후`.
+- `src/importProgress.ts`: updates queue stop action and warning copy to match
+  actual batch-stop behavior.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- Continuous import stop browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5185" --port 5185 --server "npm run dev -- --host 127.0.0.1 --port 5184" --port 5184 --timeout 120 -- /bin/bash -lc ...`
+  confirmed correct batch-stop copy and no errors.
+- Queue stop browser QA before fix:
+  same Vite/bridge harness on ports 5186/5187 confirmed queue stop stopped
+  after the current batch while saying `현재 소스 후`.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "import stop action label|partial queue resume" tests/importProgress.test.ts`
+  failed on the old `현재 소스 후` queue strings.
+- GREEN:
+  the same focused test passed after implementation.
+- Import progress regression:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/importProgress.test.ts`
+  passed 16/16.
+- Browser queue stop copy verification:
+  same Vite/bridge harness confirmed `stopLabel:
+  "현재 배치 후 가져오기 대기열 중지"`, `stopWarning:
+  "가져오기 대기열이 현재 배치 후 중지되었습니다. 11개 소스 중 0개 완료..."`,
+  and no global/console/page errors.
+- Full project check: `npm run check` passed, covering UI tests 307/307,
+  production build, Rust lib tests 85/85, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/importProgress.ts tests/importProgress.test.ts working.md`
+  passed; `git status --short --branch` showed only `src/importProgress.ts`,
+  `tests/importProgress.test.ts`, and `working.md` modified.
+- Staged paths: `git diff --cached --name-only` listed only
+  `src/importProgress.ts`, `tests/importProgress.test.ts`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed
+  after scanning about 7.02 KB and finding no leaks.
+
+Issues:
+
+- No blockers. Commit, full-tree secret scan, push, and final parity checks are
+  pending.
+- QA side effects in the real local PromptVault database: two additional Codex
+  import events were created while verifying continuous and queue stop flows.
+
+Research:
+
+- No external research. This is direct code/test/QA work.
+
+Next Steps:
+
+- Commit the implementation, run full-tree secret scan, push, and record final
+  parity.
+
+## Previous Slice - 2026-06-08 Import plan default selection
 
 Current Goal:
 

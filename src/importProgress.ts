@@ -86,7 +86,7 @@ export function importStatusLabel(
 }
 
 export function importStopActionLabel(mode: ImportRunMode | null, stopRequested: boolean): string {
-  const target = mode === "queue" ? "현재 소스 후 가져오기 대기열" : "현재 배치 후 가져오기";
+  const target = mode === "queue" ? "현재 배치 후 가져오기 대기열" : "현재 배치 후 가져오기";
   return stopRequested ? `${target} 중지 중` : `${target} 중지`;
 }
 
@@ -118,7 +118,7 @@ export function importStopNoticeText(
     const progressText = queueLength > 0
       ? ` ${countLabel(queueLength, "소스")} 중 ${boundedCompletedSourceCount.toLocaleString()}개 완료.`
       : "";
-    return `가져오기 대기열이 현재 소스 후 중지되었습니다.${progressText} 계속하려면 선택 실행을 다시 누르세요.`;
+    return `가져오기 대기열이 현재 배치 후 중지되었습니다.${progressText} 계속하려면 선택 실행을 다시 누르세요.`;
   }
 
   const target = sourceLabel?.trim();

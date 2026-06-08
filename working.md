@@ -1,12 +1,93 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 23:56 KST
+Updated: 2026-06-09 00:01 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 CLI no-persist scan flag
+## Current Slice - 2026-06-09 CLI repair side-effect-free scan
+
+Current Goal:
+
+- Make CLI `repair` inspections side-effect-free so repair suggestions can scan
+  real local evidence without inserting/updating prompt rows in the default
+  PromptVault SQLite DB.
+- Preserve `repair` output behavior: it still returns weak prompt repair
+  candidates, but the supporting scan no longer persists records.
+
+Context:
+
+- The previous CLI `scan --no-persist` slice made direct scan verification safe,
+  but `repair` still called `run_scan()` with default persistence behavior.
+- This mattered because project progress logs and future raw-session sources are
+  real local evidence. Diagnostic/repair commands should be able to inspect them
+  repeatedly without changing the managed prompt database.
+- cmux/in-app browser remains excluded in this runtime; verification is by CLI
+  unit tests and real CLI smoke checks against local project progress logs.
+
+Progress:
+
+- Added repair scan-options coverage before implementation.
+- Extracted `repair_scan_options()` so `repair` sets `persist: Some(false)` in
+  the backend `ScanOptions`.
+- Updated CLI help text to document that repair scans are side-effect-free and
+  do not update the PromptVault database.
+- Verified `repair --source project-progress-logs --limit 1 --count 1 --json`
+  returns one repair candidate while the local `Project progress logs` DB row
+  count remains unchanged at `4`.
+
+Changes:
+
+- `src-tauri/src/bin/promptvault-cli.rs`: routes `repair` through
+  `repair_scan_options()` with `persist: Some(false)`.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds repair scan-options and help-text
+  tests for side-effect-free repair scans.
+- `working.md`: records this repair no-persist slice.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml repair_scan_options_do_not_persist_prompt_records --bin promptvault-cli`
+  failed before implementation because `repair_scan_options()` did not exist.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml repair_scan_options_do_not_persist_prompt_records --bin promptvault-cli`
+  passed.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules --bin promptvault-cli`
+  passed.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
+  passed with 18/18.
+- Actual DB baseline:
+  `sqlite3 /Users/wj/Documents/PromptVault/promptvault.sqlite "select count(*) from prompts where source='Project progress logs';"`
+  returned `4`.
+- Actual repair smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- repair --source project-progress-logs --limit 1 --count 1 --json`
+  returned `repair_count: 1`, `scanned_prompt_count: 1`,
+  `markdown_written: false`, and `output_path: null`.
+- Post-smoke DB count remained `4`.
+- Full verification:
+  `npm run check` passed with UI tests 374/374, Rust library tests 121/121,
+  CLI tests 18/18, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- This is still not the full daily/project/task work-management layer. It only
+  guarantees that repair verification can inspect real evidence without DB side
+  effects.
+- Project progress markdown is currently represented as bounded source evidence.
+  Date/project/task extraction and AI summarization should be implemented in the
+  WorklogTracker/worklog-management layer, not as prompt-quality repair output.
+
+Next Steps:
+
+- Commit and push this side-effect-free repair slice after staged/full secret
+  scans.
+- Continue toward WorklogTracker-side daily/project/task structuring using raw
+  sessions plus project-local progress logs.
+
+## Previous Slice - 2026-06-08 CLI no-persist scan flag
 
 Current Goal:
 
@@ -65,9 +146,6 @@ Tests:
 
 Issues:
 
-- `repair` still calls `run_scan()` with default persistence behavior. This may
-  be worth a later explicit `persist=false` review, but it was not changed in
-  this slice to avoid altering repair semantics without a focused test.
 - Full daily/project/task structuring still belongs in WorklogTracker or a
   dedicated worklog parser; this slice only prevents PromptVault CLI
   verification scans from touching the DB.

@@ -1,10 +1,122 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 09:53 KST
+Updated: 2026-06-08 09:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Scan progress source identity validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan progress snapshots whose source identity is only
+  partially populated (`source_id` without `source_label`, or the reverse).
+
+Context:
+
+- Recent slices hardened browser-bridge nullable metadata and ordering
+  invariants.
+- Backend `ScanProgress` initializes `source_id` and `source_label` together as
+  `None`, then sets both together when an active source starts.
+- The frontend scan progress parser currently validates both fields as
+  individually nullable strings, but does not require the pair to be present or
+  absent together. A malformed active progress snapshot can therefore look like
+  a legitimate "source preparing" or partially labeled scan in UI copy.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `8f7e7f8 docs: close source plan metadata handoff` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read frontend `ScanProgress` type/parser, scan progress tests, backend
+  `ScanProgress` serialization, and the backend progress update path. Confirmed
+  source identity fields are written together by backend code but are only
+  independently nullable in the browser-bridge parser.
+- Added a RED API test for active scan progress snapshots whose `source_id` is
+  present but `source_label` is `null`.
+- Confirmed RED first: focused API suite failed 121/122 only on the new partial
+  source identity rejection case.
+- Tightened the scan progress parser so `source_id` and `source_label` must be
+  both `null` or both non-blank strings.
+- Confirmed GREEN: focused API suite passed 122/122 after the parser change.
+- Ran the broader UI test suite and production build successfully after the
+  parser change.
+- Verified the local preview quick-scan flow with Node Playwright: a malformed
+  partial source identity progress snapshot is not rendered, the next valid
+  progress snapshot renders normally, and the scan completes without console or
+  page errors.
+- Removed the temporary preview QA script and confirmed port 5324 was free.
+- Ran the full project check successfully after preview QA.
+
+Changes:
+
+- `working.md`: records the current scan progress source identity validation
+  slice.
+- `src/promptVaultApi.ts`: rejects scan progress snapshots with only one source
+  identity field populated.
+- `tests/promptVaultApi.test.ts`: adds a partial source identity rejection case
+  for scan progress bridge responses.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 121/122 only on the new partial source identity rejection case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 122/122 after requiring source identity fields to be paired.
+- Broader UI suite: `npm run test:ui` passed 286/286.
+- Production build: `npm run build` passed; Vite emitted
+  `dist/assets/index-BnZ0OhoY.js` and `dist/assets/index-D81jZHaU.css`.
+- Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  printed usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5324" --port 5324 --timeout 30 node /tmp/promptvault_scan_progress_identity_qa.mjs http://127.0.0.1:5324`
+  passed. The script confirmed connected browser bridge status, clicked quick
+  scan, served a partial `source_id`/`source_label` progress snapshot first,
+  verified the partial source state was not rendered, then served a valid
+  progress snapshot and verified normal `Codex` progress rendering and scan
+  completion with no scan error, console error, or page error.
+- Preview cleanup: `test ! -e /tmp/promptvault_scan_progress_identity_qa.mjs`
+  returned `temp_absent`; `! lsof -nP -iTCP:5324 -sTCP:LISTEN` returned
+  `port_5324_free`.
+- Full project check: `npm run check` passed. It reran `npm run test:ui`
+  286/286, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
+  and `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  produced no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only the three expected modified files; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` lists only
+  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned private GitHub visibility; temp script remained absent and port 5324
+  remained free.
+- Staged explicit paths only:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security scan: `gitleaks protect --staged --no-banner --redact`
+  scanned about 6.84 KB and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Add a RED API test that rejects scan progress snapshots with only one source
+  identity field populated.
+- Tighten the shared scan progress parser, then verify focused tests, broader
+  UI/build checks, preview QA, full `npm run check`, security scans, commit,
+  push, and final parity.
 
 ## Previous Slice - 2026-06-08 Source plan metadata presence validation
 

@@ -837,6 +837,10 @@ function isInactiveScanProgressSnapshot(value: Record<string, unknown>): boolean
     );
 }
 
+function isScanProgressSourceIdentityConsistent(value: Record<string, unknown>): boolean {
+  return (value.source_id === null) === (value.source_label === null);
+}
+
 function matchesRequestedRunId(value: { run_id: string }, requestedRunId: string): boolean {
   return value.run_id === requestedRunId.trim();
 }
@@ -1006,6 +1010,7 @@ function parseScanProgressResult(value: unknown): ScanProgress {
     || !isNonNegativeSafeInteger(value.prompts_found)
     || !isNullableNonNegativeSafeInteger(value.limit)
     || !isTimestampString(value.updated_at)
+    || !isScanProgressSourceIdentityConsistent(value)
     || value.source_files_seen > value.source_files_discovered
     || (value.source_file_count !== null && !isNonNegativeSafeIntegerAtMost(value.source_files_seen, value.source_file_count))
     || (value.source_index !== 0 && !isNonNegativeSafeIntegerAtMost(value.source_index, value.source_count))

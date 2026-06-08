@@ -172,6 +172,7 @@ const IMPORT_STATES_DISPLAY_LIMIT = 8;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
 const SCAN_PROGRESS_POLL_MS = 300;
 const QUALITY_GAP_DISPLAY_LIMIT = 4;
+const FREQUENCY_DISPLAY_LIMIT = 12;
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -2087,16 +2088,25 @@ function FrequencyColumn({
   emptyText: string;
   items: { text: string; count: number }[];
 }) {
+  const visibleItems = items.slice(0, FREQUENCY_DISPLAY_LIMIT);
+  const hiddenItemCount = Math.max(0, items.length - FREQUENCY_DISPLAY_LIMIT);
   return (
     <div className="frequency-column">
       <h3>{title}</h3>
       {items.length ? (
-        items.slice(0, 12).map((item) => (
-          <div className="frequency-item" key={`${title}-${item.text}`}>
-            <span>{item.text}</span>
-            <strong>{item.count}</strong>
-          </div>
-        ))
+        <>
+          {visibleItems.map((item) => (
+            <div className="frequency-item" key={`${title}-${item.text}`}>
+              <span>{item.text}</span>
+              <strong>{item.count}</strong>
+            </div>
+          ))}
+          {hiddenItemCount > 0 ? (
+            <p className="frequency-overflow" data-frequency-overflow={title}>
+              {title} 외 {hiddenItemCount.toLocaleString()}개 항목이 더 있습니다.
+            </p>
+          ) : null}
+        </>
       ) : (
         <p className="empty compact" data-empty-frequency={title}>
           {emptyText}

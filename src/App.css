@@ -820,6 +820,17 @@ h3 {
   font-size: 12px;
 }
 
+.frequency-overflow {
+  background: #eef5ec;
+  border: 1px solid #dce7d9;
+  border-radius: 8px;
+  color: #536158;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 8px;
+  padding: 7px 8px;
+}
+
 .searchbox {
   align-items: center;
   background: #f7faf6;

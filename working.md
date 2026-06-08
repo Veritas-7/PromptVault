@@ -1,12 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 12:28 KST
+Updated: 2026-06-08 12:36 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Import state list overflow visibility
+## Current Slice - 2026-06-08 Frequency column overflow visibility
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make the stats frequency columns disclose when more frequency items exist
+  than the compact column displays.
+
+Context:
+
+- Previous import-state overflow slice is pushed to `origin/main`:
+  implementation `57935f0 fix: show import state overflow count` and closeout
+  `fa499f9 docs: close import state overflow handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`.
+- `FrequencyColumn` renders `items.slice(0, 12)` for words, phrases,
+  repeated prompts, dates, and quality gaps, but currently gives no indication
+  when additional items are hidden.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `fa499f9 docs: close import state overflow handoff`.
+- Re-read `FrequencyColumn` rendering. Confirmed each column caps at twelve
+  rows with no overflow indicator.
+- Preparing a RED Playwright QA that expects a visible overflow summary when a
+  scan result returns thirteen top-word frequency items.
+- Confirmed RED first: dev-mode Playwright QA rendered twelve word frequency
+  rows but timed out waiting for `[data-frequency-overflow="단어"]`.
+- Added a shared frequency display limit and compact overflow row for frequency
+  columns.
+- Confirmed GREEN: the same dev-mode Playwright QA rendered the word-column
+  overflow row for the thirteenth item with no browser console/page errors.
+- Removed `/tmp/promptvault_frequency_overflow_qa.mjs` after QA and confirmed
+  port 5340 had no listener.
+- Ran the full project check successfully after frequency overflow QA.
+- Pre-staging verification passed with only the expected three modified files:
+  `src/App.tsx`, `src/App.css`, and `working.md`.
+- Explicitly staged only `src/App.tsx`, `src/App.css`, and `working.md`.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 4.90 KB and finding no leaks.
+- Restaged `working.md` after recording the staged scan and reran the staged
+  secret scan; about 5.30 KB was scanned and no leaks were found.
+
+Changes:
+
+- `working.md`: records the current frequency-column overflow visibility slice.
+- `src/App.tsx`: renders a `data-frequency-overflow` row when any frequency
+  column has more than twelve items.
+- `src/App.css`: styles the compact frequency overflow summary.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5340" --port 5340 --timeout 30 node /tmp/promptvault_frequency_overflow_qa.mjs http://127.0.0.1:5340`
+  failed because `[data-frequency-overflow="단어"]` was not visible after
+  thirteen top-word frequency items were returned.
+- GREEN: the same dev-mode Playwright QA passed after the overflow row was
+  rendered.
+- Cleanup: `/tmp/promptvault_frequency_overflow_qa.mjs` removed and
+  `lsof -nP -iTCP:5340 -sTCP:LISTEN` returned no listener.
+- Full project check: `npm run check` passed, covering UI tests 297/297,
+  production build, Rust lib tests 84/84, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/App.tsx src/App.css working.md`
+  passed; repo root was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only `src/App.css`, `src/App.tsx`,
+  and `working.md` modified;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`; the temp QA file was absent; port 5340 was free.
+- Staged paths: `git diff --cached --name-only` listed only `src/App.css`,
+  `src/App.tsx`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed
+  after scanning about 4.90 KB and finding no leaks.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit the implementation, run full-tree secret scan, push, and verify final
+  parity.
+
+## Previous Slice - 2026-06-08 Import state list overflow visibility
 
 Current Goal:
 

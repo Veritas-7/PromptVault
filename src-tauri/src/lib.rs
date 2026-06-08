@@ -100,6 +100,35 @@ pub struct ScanStats {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkItem {
+    pub date: String,
+    pub project: String,
+    pub title: String,
+    pub status: String,
+    pub source_path: String,
+    pub source_file: String,
+    pub evidence: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkReport {
+    pub generated_at: String,
+    pub total_items: usize,
+    pub project_count: usize,
+    pub date_count: usize,
+    pub files_seen: usize,
+    pub items_by_date: Vec<FrequencyItem>,
+    pub items_by_project: Vec<FrequencyItem>,
+    pub items: Vec<ProjectWorkItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkReportOptions {
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistStats {
     pub database_path: String,
     pub stored_prompt_count: usize,
@@ -810,6 +839,19 @@ pub fn build_scan_plan(options: ScanPlanOptions) -> Result<ScanPlan, Box<dyn std
     let generated_at = Utc::now().to_rfc3339();
     let sources = selected_source_specs(options.source_ids.as_deref());
     Ok(build_scan_plan_for_sources(generated_at, sources))
+}
+
+pub fn run_project_work_report(
+    options: ProjectWorkReportOptions,
+) -> Result<ProjectWorkReport, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-report limit requires a positive integer".into());
+    }
+    let source = source_specs()
+        .into_iter()
+        .find(|source| source.id == "project-progress-logs")
+        .ok_or("project progress log source is unavailable")?;
+    build_project_progress_work_report(&source, options.limit)
 }
 
 pub fn run_import_batch(
@@ -2421,6 +2463,217 @@ fn project_progress_analysis_text(text: &str) -> String {
         .rev()
         .collect::<String>();
     format!("{head}\n\n[... project progress log truncated for prompt analysis ...]\n\n{tail}")
+}
+
+fn build_project_progress_work_report(
+    source: &SourceSpec,
+    limit: Option<usize>,
+) -> Result<ProjectWorkReport, Box<dyn std::error::Error>> {
+    let mut items = Vec::new();
+    let mut warnings = Vec::new();
+    let mut files_seen = 0usize;
+
+    for candidate in matching_source_file_candidates(&source.root, source.kind) {
+        let candidate = match candidate {
+            Ok(candidate) => candidate,
+            Err(err) => {
+                warnings.push(format!("순회 항목을 건너뜀: {err}"));
+                continue;
+            }
+        };
+        files_seen += 1;
+        match fs::read_to_string(&candidate.path) {
+            Ok(text) => items.extend(project_progress_work_items_from_text(
+                &candidate.path,
+                &text,
+            )),
+            Err(err) => warnings.push(format!("{} 건너뜀: {err}", candidate.path.display())),
+        }
+    }
+
+    items.sort_by(|left, right| {
+        right
+            .date
+            .cmp(&left.date)
+            .then_with(|| left.project.cmp(&right.project))
+            .then_with(|| left.title.cmp(&right.title))
+            .then_with(|| left.source_path.cmp(&right.source_path))
+    });
+    if let Some(limit) = limit {
+        items.truncate(limit);
+    }
+
+    let items_by_date = work_item_counts_by_date(&items);
+    let items_by_project = work_item_counts_by_project(&items);
+    Ok(ProjectWorkReport {
+        generated_at: Utc::now().to_rfc3339(),
+        total_items: items.len(),
+        project_count: items_by_project.len(),
+        date_count: items_by_date.len(),
+        files_seen,
+        items_by_date,
+        items_by_project,
+        items,
+        warnings,
+    })
+}
+
+fn project_progress_work_items_from_text(path: &Path, text: &str) -> Vec<ProjectWorkItem> {
+    let project = path
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown-project")
+        .to_string();
+    let source_file = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("progress.md")
+        .to_string();
+    let source_path = path.display().to_string();
+    let mut items = Vec::new();
+    let mut current: Option<ProjectWorkItem> = None;
+    let mut body = Vec::new();
+
+    for line in text.lines() {
+        if let Some((date, status, title)) = parse_project_work_heading(line) {
+            if let Some(mut item) = current.take() {
+                item.evidence = project_work_evidence(&body);
+                items.push(item);
+                body.clear();
+            }
+            current = Some(ProjectWorkItem {
+                date,
+                project: project.clone(),
+                title,
+                status,
+                source_path: source_path.clone(),
+                source_file: source_file.clone(),
+                evidence: String::new(),
+            });
+            continue;
+        }
+
+        if current.is_some() {
+            body.push(line.to_string());
+        }
+    }
+
+    if let Some(mut item) = current {
+        item.evidence = project_work_evidence(&body);
+        items.push(item);
+    }
+
+    items
+}
+
+fn parse_project_work_heading(line: &str) -> Option<(String, String, String)> {
+    let heading = line.trim();
+    if !heading.starts_with('#') {
+        return None;
+    }
+    let heading = heading.trim_start_matches('#').trim();
+    if heading.is_empty() {
+        return None;
+    }
+
+    let mut status = "logged";
+    let lower = heading.to_ascii_lowercase();
+    let rest = if lower.starts_with("current slice - ") {
+        status = "current";
+        heading["current slice - ".len()..].trim()
+    } else if lower.starts_with("previous slice - ") {
+        status = "previous";
+        heading["previous slice - ".len()..].trim()
+    } else {
+        heading
+    };
+
+    let date_start = find_iso_date_start(rest)?;
+    let date = rest[date_start..date_start + 10].to_string();
+    let title = rest[date_start + 10..]
+        .trim_start_matches(|ch: char| ch == '-' || ch == ':' || ch.is_whitespace())
+        .trim();
+    let title = if title.is_empty() {
+        rest[..date_start].trim()
+    } else {
+        title
+    };
+    let title = if title.is_empty() {
+        "Untitled work"
+    } else {
+        title
+    };
+    Some((date, status.to_string(), truncate_chars(title, 160)))
+}
+
+fn find_iso_date_start(text: &str) -> Option<usize> {
+    let bytes = text.as_bytes();
+    if bytes.len() < 10 {
+        return None;
+    }
+    for index in 0..=bytes.len() - 10 {
+        let date = &bytes[index..index + 10];
+        if date[4] == b'-'
+            && date[7] == b'-'
+            && date[..4].iter().all(u8::is_ascii_digit)
+            && date[5..7].iter().all(u8::is_ascii_digit)
+            && date[8..10].iter().all(u8::is_ascii_digit)
+        {
+            return Some(index);
+        }
+    }
+    None
+}
+
+fn project_work_evidence(lines: &[String]) -> String {
+    for line in lines {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.ends_with(':') || trimmed.starts_with('#') {
+            continue;
+        }
+        let evidence = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+            .unwrap_or(trimmed)
+            .trim();
+        if !evidence.is_empty() {
+            return truncate_chars(evidence, 240);
+        }
+    }
+    String::new()
+}
+
+fn truncate_chars(text: &str, limit: usize) -> String {
+    if text.chars().count() <= limit {
+        return text.to_string();
+    }
+    let suffix = "...";
+    let take = limit.saturating_sub(suffix.chars().count());
+    let mut out = text.chars().take(take).collect::<String>();
+    out.push_str(suffix);
+    out
+}
+
+fn work_item_counts_by_date(items: &[ProjectWorkItem]) -> Vec<FrequencyItem> {
+    let mut counts = HashMap::new();
+    for item in items {
+        *counts.entry(item.date.clone()).or_default() += 1;
+    }
+    let mut out = counts
+        .into_iter()
+        .map(|(text, count)| FrequencyItem { text, count })
+        .collect::<Vec<_>>();
+    out.sort_by(|left, right| right.text.cmp(&left.text));
+    out
+}
+
+fn work_item_counts_by_project(items: &[ProjectWorkItem]) -> Vec<FrequencyItem> {
+    let mut counts = HashMap::new();
+    for item in items {
+        *counts.entry(item.project.clone()).or_default() += 1;
+    }
+    rank_counts(counts, usize::MAX)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -6303,6 +6556,88 @@ mod tests {
             snapshot.chars().count()
                 <= PROJECT_PROGRESS_HEAD_CHARS + PROJECT_PROGRESS_TAIL_CHARS + 80
         );
+    }
+
+    #[test]
+    fn project_progress_work_items_extract_slice_headings_by_date_project_and_status() {
+        let path = PathBuf::from("/tmp/ExampleProject/working.md");
+        let text = r#"# PromptVault Working Log
+
+## Current Slice - 2026-06-09 workingd.md progress log coverage
+
+Current Goal:
+
+- Include real project-local `workingd.md` progress logs.
+
+Progress:
+
+- Verified a freshly built CLI project-progress-logs plan now reports 31 files.
+
+## Previous Slice - 2026-06-08 Project progress log source
+
+Progress:
+
+- Added `project-progress-logs` as a new source.
+"#;
+
+        let items = project_progress_work_items_from_text(&path, text);
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].date, "2026-06-09");
+        assert_eq!(items[0].project, "ExampleProject");
+        assert_eq!(items[0].source_file, "working.md");
+        assert_eq!(items[0].status, "current");
+        assert_eq!(items[0].title, "workingd.md progress log coverage");
+        assert!(items[0]
+            .evidence
+            .contains("Include real project-local `workingd.md`"));
+        assert_eq!(items[1].date, "2026-06-08");
+        assert_eq!(items[1].status, "previous");
+        assert_eq!(items[1].title, "Project progress log source");
+    }
+
+    #[test]
+    fn project_progress_work_report_summarizes_dates_and_projects() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-project-work-report-{}",
+            std::process::id()
+        ));
+        let alpha_dir = root.join("Alpha");
+        let beta_dir = root.join("Beta");
+        std::fs::create_dir_all(&alpha_dir).expect("create alpha dir");
+        std::fs::create_dir_all(&beta_dir).expect("create beta dir");
+        std::fs::write(
+            alpha_dir.join("working.md"),
+            "## Current Slice - 2026-06-09 Alpha polish\n\n- Verified alpha flow.\n",
+        )
+        .expect("write alpha");
+        std::fs::write(
+            beta_dir.join("workingd.md"),
+            "## Current Slice - 2026-06-09 Beta repair\n\n- Fixed beta repair.\n\n## Previous Slice - 2026-06-08 Beta source\n\n- Added beta source.\n",
+        )
+        .expect("write beta");
+        let source = SourceSpec {
+            id: "project-progress-logs",
+            label: "Project progress logs",
+            root: root.clone(),
+            kind: SourceKind::ProjectProgressMarkdown,
+        };
+
+        let report =
+            build_project_progress_work_report(&source, Some(10)).expect("build work report");
+
+        assert_eq!(report.total_items, 3);
+        assert_eq!(report.project_count, 2);
+        assert_eq!(report.date_count, 2);
+        assert_eq!(report.items_by_date[0].text, "2026-06-09");
+        assert_eq!(report.items_by_date[0].count, 2);
+        assert!(report
+            .items_by_project
+            .iter()
+            .any(|item| item.text == "Beta" && item.count == 2));
+        assert_eq!(report.items[0].date, "2026-06-09");
+
+        std::fs::remove_dir_all(root).expect("remove work report fixture");
     }
 
     #[test]

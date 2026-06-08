@@ -1,10 +1,10 @@
 use promptvault_lib::{
     build_scan_plan, cancel_scan_run, default_database_path, improve_prompt_inner,
     redact_sensitive_text, run_import_batch, run_list_import_events, run_list_import_states,
-    run_list_stored_prompt_facets, run_load_stored_prompts, run_scan, source_specs,
-    CancelScanOptions, ImportBatchOptions, ImportEventsOptions, ImportStatesOptions,
-    ImproveRequest, PromptRecord, ScanOptions, ScanPlanOptions, ScanProgressOptions,
-    StoredPromptFacetsOptions, StoredPromptsOptions,
+    run_list_stored_prompt_facets, run_load_stored_prompts, run_project_work_report, run_scan,
+    source_specs, CancelScanOptions, ImportBatchOptions, ImportEventsOptions, ImportStatesOptions,
+    ImproveRequest, ProjectWorkReportOptions, PromptRecord, ScanOptions, ScanPlanOptions,
+    ScanProgressOptions, StoredPromptFacetsOptions, StoredPromptsOptions,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -245,6 +245,55 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 for warning in result.warnings {
                     println!("- {warning}");
                 }
+            }
+        }
+        "work-report" => {
+            let json = take_flag(&mut args, "--json");
+            let mut limit = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    other => return Err(format!("unknown work-report argument: {other}").into()),
+                }
+            }
+
+            let report = run_project_work_report(ProjectWorkReportOptions { limit })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+                return Ok(());
+            }
+
+            println!("PromptVault project work report");
+            println!("items: {}", report.total_items);
+            println!("projects: {}", report.project_count);
+            println!("dates: {}", report.date_count);
+            println!("files_seen: {}", report.files_seen);
+            if !report.warnings.is_empty() {
+                println!("warnings:");
+                for warning in &report.warnings {
+                    println!("- {warning}");
+                }
+            }
+            println!("dates:");
+            for item in &report.items_by_date {
+                println!("- {}: {}", item.text, item.count);
+            }
+            println!("projects:");
+            for item in &report.items_by_project {
+                println!("- {}: {}", item.text, item.count);
+            }
+            for item in &report.items {
+                println!(
+                    "\n{} · {} · {} · {}",
+                    item.date, item.project, item.status, item.title
+                );
+                if !item.evidence.is_empty() {
+                    println!("- {}", item.evidence);
+                }
+                println!("  {}", item.source_path);
             }
         }
         "repair" => {
@@ -658,7 +707,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project without database writes.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1100,6 +1149,8 @@ mod tests {
         assert!(help.contains("plan inventories matching source files"));
         assert!(help.contains("import-batch --source ID [--files N>0]"));
         assert!(help.contains("import-batch persists one resumable source slice"));
+        assert!(help.contains("work-report [--limit N>0] [--json]"));
+        assert!(help.contains("work-report reads project progress logs"));
         assert!(help.contains("--limit N>0"));
         assert!(help.contains("--source-limit N>0"));
         assert!(help.contains("--source-limit caps prompts read from each selected source"));

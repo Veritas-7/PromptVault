@@ -1,12 +1,102 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 00:50 KST
+Updated: 2026-06-09 01:04 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 unique session evidence counts
+## Current Slice - 2026-06-09 persistent sanitized session evidence index
+
+Current Goal:
+
+- Avoid repeated raw Codex/session file scans when generating `work-report`.
+- Keep session evidence persistent but sanitized, so project/date/work reports
+  can be regenerated quickly without storing raw session prompt bodies.
+
+Context:
+
+- The prior slice made session evidence counts clearer, but bounded raw scans
+  still took about 49-52 seconds.
+- `work-report` now needs a deterministic cache/index layer before AI summaries
+  are added.
+- The index must stay separate from normal stored prompts so project progress
+  log records and prompt-management records are not mixed.
+
+Progress:
+
+- Added a dedicated SQLite table, `project_work_session_evidence`.
+- Added sanitized project-work session evidence persistence helpers.
+- Added cache-first session evidence selection for `work-report`.
+- Added `--refresh-session-index` to force a raw session rescan and index
+  refresh.
+- Added `--database PATH` for CLI work-report tests and alternate DBs.
+- Exposed `session_evidence_index_used`,
+  `session_evidence_index_updated`, and `session_evidence_index_count` in the
+  report output.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds session-evidence index schema, sanitized
+  read/write helpers, cache-first report wiring, and RED/GREEN tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds CLI flags and plain-output index
+  status lines.
+- `working.md`: records this indexed session evidence slice.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_index_round_trips_sanitized_project_evidence --lib`
+  failed before implementation because `persist_project_work_session_index()`
+  and `project_work_session_prompts_from_index()` did not exist.
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_evidence_prefers_existing_index --lib`
+  failed before implementation because `project_work_session_evidence()` did
+  not exist.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work --lib`
+  passed with 8/8.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
+  passed with 18/18.
+- Actual refresh-index smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-report --limit 80 --session-limit 20 --refresh-session-index --json`
+  returned `session_scan_prompt_count: 40`,
+  `session_evidence_count: 41`,
+  `session_evidence_unique_count: 3`,
+  `session_evidence_index_used: false`,
+  `session_evidence_index_updated: true`,
+  `session_evidence_index_count: 20`, and took about `51.19s`.
+- Actual cached-index smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-report --limit 80 --session-limit 20 --json`
+  returned `session_scan_prompt_count: 20`,
+  `session_evidence_count: 41`,
+  `session_evidence_unique_count: 3`,
+  `session_evidence_index_used: true`,
+  `session_evidence_index_updated: false`,
+  `session_evidence_index_count: 20`, and took about `3.20s`.
+- Actual DB safety check:
+  `sqlite3 /Users/wj/Documents/PromptVault/promptvault.sqlite "select count(*) from prompts where source='Project progress logs';"`
+  returned `4`.
+- Actual index isolation check:
+  `sqlite3 /Users/wj/Documents/PromptVault/promptvault.sqlite "select count(*), sum(case when text like '%SECRET RAW USER TEXT%' then 1 else 0 end) from project_work_session_evidence;"`
+  returned `20|0`.
+
+Issues:
+
+- Cached reports are fast enough for iterative use, but they can be stale until
+  `--refresh-session-index` is run.
+- AI-assisted daily/project summaries are still pending. They should consume
+  the indexed, sanitized evidence rather than raw session files.
+
+Next Steps:
+
+- Add AI-assisted project/day/work summaries with citations to progress-log
+  items and indexed session evidence.
+- Consider UI surfacing for `session_evidence_index_used` and refresh status if
+  work reports move from CLI into the app.
+
+## Previous Slice - 2026-06-09 unique session evidence counts
 
 Current Goal:
 

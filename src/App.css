@@ -297,6 +297,10 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.work-management-overview-row span {
+  overflow-wrap: anywhere;
+}
+
 .work-log-proposal-approval {
   align-items: center;
   color: #3f5748;

@@ -1,12 +1,127 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 05:19 KST
+Updated: 2026-06-09 05:25 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 saved extraction project/date grouping
+## Current Slice - 2026-06-09 consolidated work management overview
+
+Current Goal:
+
+- Add a visible project/day management overview that combines currently loaded
+  work summary rows, saved summary snapshots, saved reviewed extraction rows,
+  and parsed project progress-log coverage.
+- Make the state of “what is actually managed by project/day” inspectable in
+  the UI without claiming that full automatic AI consolidation across every raw
+  session and every project-local log is complete.
+- Keep this as a frontend composition slice over existing verified APIs; do not
+  add new persistence or provider behavior.
+
+Context:
+
+- Existing backend/API paths already expose:
+  - `work-summary`: parses project progress logs and bounded real session
+    evidence into project/date summaries;
+  - `work-summary-snapshots`: reads saved daily/project summary snapshots;
+  - `work-log-items`: reads reviewed saved extraction rows by project/date;
+  - `work-log-coverage`: lists parsed/unparsed project-local progress logs such
+    as `working.md`.
+- The missing user-facing piece was a single UI surface that merges these
+  loaded sources into one project/date management status list.
+- This slice still depends on the user/operator loading or generating the
+  source panels; it is not yet a background all-session/all-log scheduler.
+
+Progress:
+
+- Added a `workManagementOverview` helper that merges loaded sources by
+  `date::project`.
+- The overview row tracks whether each project/day has current summary,
+  snapshot, saved extraction, and/or parsed progress-log evidence.
+- The project work panel now shows:
+  - overview meta: managed row count, project count, date count, source counts;
+  - up to six project/day rows with source labels, work count, session evidence
+    count, and saved extraction count;
+  - an empty state when sources are loaded but produce no project/day rows.
+- Verified against real current operating data through the browser bridge:
+  `17` managed rows, `15` projects, `10` dates, `2` current summaries, `4`
+  snapshot summaries, `1` saved extraction, and `16` parsed progress-log rows.
+
+Changes:
+
+- `src/workManagementOverview.ts`:
+  - new frontend composition helper for project/day management overview rows.
+- `tests/workManagementOverview.test.ts`:
+  - RED/GREEN coverage for source merging, sort order, source labels, and meta
+    text.
+- `src/App.tsx`:
+  - computes the overview from currently loaded work summary, snapshots, saved
+    extractions, and progress-log coverage;
+  - renders overview meta and rows in the project work panel.
+- `src/App.css`:
+  - adds overflow-safe text handling for overview row metadata.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workManagementOverview.test.ts` failed with
+    `ERR_MODULE_NOT_FOUND` before `src/workManagementOverview.ts` existed.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workManagementOverview.test.ts`: PASS, `418`
+    tests.
+  - `npm run build`: PASS.
+- Headless UI check against temporary bridge/Vite:
+  - started bridge on `127.0.0.1:5174` and Vite on `127.0.0.1:5177`;
+  - loaded browser QA mode and confirmed bridge connected;
+  - clicked `저장 병합 요약`, `기록 보기`, `로그 범위`, and `저장 목록`;
+  - verified `data-work-management-overview-meta` and
+    `data-work-management-overview` rendered;
+  - observed overview meta:
+    `관리 17개 · 15개 프로젝트 · 10일 · 현재요약 2 · 스냅샷 4 · 저장추출 1 · 진행로그 16`;
+  - verified overview rows included real projects such as `CareVault`,
+    `enterprise_diagnosis_flutter`, and `novel-source-collector`;
+  - no browser console errors, failed requests, or page errors were observed.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `418` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `149` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- The overview only combines sources that are loaded in the current UI session;
+  it does not automatically scan every raw Codex session or every project log
+  in the background.
+- AI-assisted normalization over all project-local logs is still pending; the
+  existing GLM/OpenAI abstraction remains available, but provider reliability
+  must be hardened before bulk automation is trustworthy.
+- Some progress-log coverage rows only expose a latest date/title from parsed
+  files; unparsed files still require the reviewed extraction workflow before
+  they can become managed dated work items.
+
+Research:
+
+- Used the local `incremental-implementation`, `test-driven-development`, and
+  `webapp-testing` skill workflows.
+- Used the `webapp-testing` `with_server.py` helper for server lifecycle.
+- Python Playwright was unavailable, so browser proof used repo-resolved Node
+  Playwright.
+- No external web research used.
+
+Next Steps:
+
+- Add a one-click “전체 관리 새로고침” workflow that sequentially loads summary,
+  snapshots, progress-log coverage, and saved extraction rows without requiring
+  separate operator clicks.
+- Add a persisted overview/snapshot option once the UI flow proves stable.
+- Harden provider health reporting before enabling SDK-backed AI normalization
+  over all unparsed project-local logs.
+
+## Previous Slice - 2026-06-09 saved extraction project/date grouping
 
 Current Goal:
 

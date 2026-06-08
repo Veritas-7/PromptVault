@@ -179,6 +179,11 @@ import {
 } from "./workLogPreviewFilters";
 import { groupWorkLogExtractionItemsByProjectDate } from "./workLogExtractionItemGroups";
 import {
+  buildWorkManagementOverview,
+  workManagementOverviewMetaText,
+  workManagementOverviewSourceText,
+} from "./workManagementOverview";
+import {
   storedFacetSummaryText,
   storedFacetsFailureText,
   type StoredFacetsState,
@@ -261,6 +266,7 @@ const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
 const WORK_LOG_CANDIDATE_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT = 5;
+const WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT = 6;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
@@ -642,6 +648,28 @@ function App() {
   const hiddenWorkLogExtractionItemCount = Math.max(
     0,
     (workLogExtractionItemsResult?.items.length ?? 0) - WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT,
+  );
+  const workManagementOverviewLoaded =
+    workSummaryResult !== null
+    || workSummarySnapshotsResult !== null
+    || workLogExtractionItemsResult !== null
+    || workLogCoverageResult !== null;
+  const workManagementOverview = useMemo(() => buildWorkManagementOverview({
+    coverage: workLogCoverageResult,
+    extractionItems: workLogExtractionItemsResult,
+    snapshots: workSummarySnapshotsResult,
+    summary: workSummaryResult,
+  }), [
+    workLogCoverageResult,
+    workLogExtractionItemsResult,
+    workSummaryResult,
+    workSummarySnapshotsResult,
+  ]);
+  const visibleWorkManagementOverviewRows =
+    workManagementOverview.rows.slice(0, WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT);
+  const hiddenWorkManagementOverviewRowCount = Math.max(
+    0,
+    workManagementOverview.rows.length - WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT,
   );
   const storedFacetSummary = storedFacetSummaryText(
     storedFacetsState,
@@ -2064,6 +2092,41 @@ function App() {
             <FileText size={15} />
             <span>{workLogExtractionItemsMeta}</span>
           </div>
+        ) : null}
+        {workManagementOverviewLoaded ? (
+          <div className="work-summary-index" data-work-management-overview-meta="true">
+            <ClipboardList size={15} />
+            <span>{workManagementOverviewMetaText(workManagementOverview)}</span>
+          </div>
+        ) : null}
+        {workManagementOverviewLoaded ? (
+          visibleWorkManagementOverviewRows.length ? (
+            <div className="work-summary-list" data-work-management-overview="true">
+              {visibleWorkManagementOverviewRows.map((row) => (
+                <article className="work-summary-row work-management-overview-row" key={row.key}>
+                  <div>
+                    <strong>{row.project}</strong>
+                    <span>{row.date}</span>
+                  </div>
+                  <p>{row.latest_title ?? "제목 없는 작업 관리 row"}</p>
+                  <span>
+                    {workManagementOverviewSourceText(row)} · 작업 {row.work_item_count.toLocaleString()}개 ·
+                    세션 근거 {row.session_evidence_count.toLocaleString()}건 · 저장추출{" "}
+                    {row.saved_extraction_count.toLocaleString()}개
+                  </span>
+                </article>
+              ))}
+              {hiddenWorkManagementOverviewRowCount ? (
+                <div className="work-summary-overflow">
+                  그 외 관리 row {hiddenWorkManagementOverviewRowCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-management-overview="true">
+              로드된 프로젝트/일자 관리 근거 없음
+            </div>
+          )
         ) : null}
         {workSummaryResult ? (
           <div className="work-summary-content">

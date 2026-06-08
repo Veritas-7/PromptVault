@@ -1,12 +1,97 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 07:44 KST
+Updated: 2026-06-09 07:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 coverage pointer status parser
+## Current Slice - 2026-06-09 inline dated bullet parser
+
+Current Goal:
+
+- Parse cumulative project `working.md` files that record work as inline dated
+  bullets such as `- 2026-06-04: ...`.
+- Reduce the true `work-log-coverage` unparsed backlog from two files to one
+  without invoking AI for deterministic date/title lines.
+
+Context:
+
+- After the pointer status slice, true unparsed coverage was only:
+  `RepoTutorStudio/working.md` and `SnapTranslate/working.md`.
+- `RepoTutorStudio/working.md` is a long cumulative state log. It does not use
+  `Current Slice` headings or a single `Date:` field, but it has many safe
+  inline dated bullets.
+
+Progress:
+
+- Added a fallback that runs only when heading and date-field parsing found no
+  items.
+- The fallback scans safe markdown item lines with ISO dates and emits one
+  `logged` work item per safe dated bullet.
+- Risk detection is run on the emitted `date/title/evidence`, not blindly on
+  the full body.
+- Actual coverage before this note:
+  `files_seen=774`, `parsed_file_count=772`, `pointer=1`,
+  `unparsed_file_count=1`, `work_item_count=8270`, `warnings=[]`.
+- Remaining true unparsed project is now only `SnapTranslate`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - adds `project_progress_work_items_from_safe_dated_lines`;
+  - calls it from `project_progress_work_items_from_text_for_project` only when
+    no prior parser produced items;
+  - adds `project_progress_work_items_extract_inline_dated_bullets`.
+
+Tests:
+
+- RED:
+  - `cargo test project_progress_work_items_extract_inline_dated_bullets`
+    failed with `items.len()` 0 vs expected 2.
+- Targeted GREEN:
+  - `cargo test project_progress_work_items_extract_inline_dated_bullets`: PASS.
+  - `cargo test project_progress_work_items`: PASS, 3 tests.
+  - `cargo fmt --check`: PASS after `cargo fmt`.
+- Actual CLI verification before this note:
+  - `work-log-coverage --json`: `parsed=772`, `pointer=1`,
+    `unparsed=1`, `work_item_count=8270`, `warnings=[]`.
+  - `RepoTutorStudio/working.md`: `status=parsed`, `work_item_count=2345`.
+  - `work-report --json`: `project_count=31`, `total_items=8270`,
+    `session_evidence_count=65909`, `warnings=[]`.
+- Headless browser-bridge QA:
+  - `node /tmp/promptvault_work_log_coverage_timestamp_qa.mjs`: PASS with
+    bridge on `127.0.0.1:5174` and Vite on `127.0.0.1:5177`.
+  - Observed coverage meta:
+    `774개 로그 · parsed 772개 · unparsed 1개 · 31개 프로젝트 · 작업 8,270개`.
+  - Visible coverage rows included exactly one pointer row.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `427` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `159` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- The remaining unparsed backlog is now one file:
+  `SnapTranslate/working.md`.
+- SnapTranslate uses installed QA snapshots, run IDs, and build hashes rather
+  than ordinary ISO dated worklog bullets; it needs a domain-specific parser or
+  reviewed AI-assisted normalization.
+- RepoTutorStudio contributes a large number of dated bullet items because its
+  cumulative log is very detailed. This is expected for project/day accounting
+  but should be summarized in UI surfaces rather than displayed exhaustively.
+
+Next Steps:
+
+- Commit the inline dated bullet parser slice.
+- Decide whether `SnapTranslate/working.md` should be handled by a
+  domain-specific QA snapshot parser or by the reviewed AI normalization queue.
+
+## Previous Slice - 2026-06-09 coverage pointer status parser
 
 Current Goal:
 

@@ -4552,6 +4552,14 @@ fn project_progress_work_items_from_text_for_project(
             items.push(item);
         }
     }
+    if items.is_empty() {
+        items.extend(project_progress_work_items_from_safe_dated_lines(
+            text,
+            project,
+            &source_path,
+            &source_file,
+        ));
+    }
 
     items
 }
@@ -4592,6 +4600,54 @@ fn project_progress_work_item_from_safe_date_field(
         session_sources: Vec::new(),
         session_evidence_keys: Vec::new(),
     })
+}
+
+fn project_progress_work_items_from_safe_dated_lines(
+    text: &str,
+    project: &str,
+    source_path: &str,
+    source_file: &str,
+) -> Vec<ProjectWorkItem> {
+    let mut items = Vec::new();
+    let mut seen = BTreeSet::new();
+    for raw_line in text.lines() {
+        let line = raw_line.trim();
+        let Some(date_start) = find_iso_date_start(line) else {
+            continue;
+        };
+        let prefix = line[..date_start].trim();
+        if !local_project_work_log_date_prefix_is_item_marker(prefix) {
+            continue;
+        }
+        let date = line[date_start..date_start + 10].to_string();
+        let Some(title) = local_project_work_log_title_after_date(&line[date_start + 10..]) else {
+            continue;
+        };
+        let evidence = truncate_chars(
+            line.trim_start_matches(|ch: char| ch == '-' || ch == '*' || ch.is_whitespace())
+                .trim(),
+            240,
+        );
+        if !detect_risks(&format!("{date}\n{title}\n{evidence}")).is_empty() {
+            continue;
+        }
+        if !seen.insert((date.clone(), title.clone(), evidence.clone())) {
+            continue;
+        }
+        items.push(ProjectWorkItem {
+            date,
+            project: project.to_string(),
+            title,
+            status: "logged".to_string(),
+            source_path: source_path.to_string(),
+            source_file: source_file.to_string(),
+            evidence,
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_keys: Vec::new(),
+        });
+    }
+    items
 }
 
 fn project_work_session_prompts(
@@ -9950,6 +10006,34 @@ Progress:
             "Timestamp: 2026-06-06\nReport Recertification Status Summary Surface Worklog"
         );
         assert!(detect_risks(&timestamp_items[0].evidence).is_empty());
+    }
+
+    #[test]
+    fn project_progress_work_items_extract_inline_dated_bullets() {
+        let path = PathBuf::from("/tmp/RepoTutorStudio/working.md");
+        let text = "# RepoTutor Studio Working Log\n\n## Current State\n\n- 2026-06-04: Created project root and initialized a new git repository.\n- 2026-06-04: Added pnpm workspace, shared schemas, and initial tests.\n- Keep api_key=short-secret-value local only.\n";
+
+        let items =
+            project_progress_work_items_from_text_for_project(&path, text, "RepoTutorStudio");
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].date, "2026-06-04");
+        assert_eq!(items[0].project, "RepoTutorStudio");
+        assert_eq!(items[0].status, "logged");
+        assert_eq!(
+            items[0].title,
+            "Created project root and initialized a new git repository."
+        );
+        assert_eq!(
+            items[0].evidence,
+            "2026-06-04: Created project root and initialized a new git repository."
+        );
+        assert_eq!(
+            items[1].title,
+            "Added pnpm workspace, shared schemas, and initial tests."
+        );
+        assert!(detect_risks(&items[0].evidence).is_empty());
+        assert!(detect_risks(&items[1].evidence).is_empty());
     }
 
     #[test]

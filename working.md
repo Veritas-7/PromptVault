@@ -1,12 +1,89 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 01:04 KST
+Updated: 2026-06-09 01:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 persistent sanitized session evidence index
+## Current Slice - 2026-06-09 AI-assisted work summaries with citations
+
+Current Goal:
+
+- Add project/date/work summaries that cite concrete work-log items and indexed
+  session evidence.
+- Make the summary path AI-capable through configured OpenAI/GLM providers,
+  while keeping local fallback safe and deterministic.
+
+Context:
+
+- The previous slice added the persistent sanitized session-evidence index.
+- The user specifically asked that project-local `workingd.md` and other
+  progress logs be managed by day/project/work, and noted that AI capability
+  can be used for this layer.
+- Summary generation must consume progress-log items plus sanitized indexed
+  evidence, not raw session prompt bodies.
+
+Progress:
+
+- Added `ProjectWorkSummary`, `ProjectWorkSummaryCitation`,
+  `ProjectWorkSummaryNarrative`, and `ProjectWorkSummaryResult`.
+- Added citation-safe grouping by `(date, project)`.
+- Added summary citation IDs such as `2026-06-09-PromptVault-1`.
+- Added local deterministic narrative fallback with citation IDs.
+- Added GLM/OpenAI-capable summary narrative provider path using the existing
+  secret/env model-routing pattern.
+- Added CLI command `work-summary` with `--summary-limit`, `--ai`,
+  `--database`, `--session-limit`, and `--refresh-session-index`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: builds grouped summaries, citations, digest,
+  local fallback narrative, OpenAI/GLM summary narrative requests, and tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds the `work-summary` command and
+  help text.
+- `working.md`: records this summary/citation slice.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_summaries_group_items_by_date_project_with_citations --lib`
+  failed before implementation because `build_project_work_summaries()` did
+  not exist.
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_summary_with_env_uses_glm_provider --lib`
+  failed before implementation because
+  `project_work_summary_narrative_with_env()` did not exist.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work --lib`
+  passed with 10/10.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
+  passed with 18/18.
+- Actual cached summary smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-summary --limit 80 --session-limit 20 --summary-limit 5 --json`
+  returned `provider: local-citation-rules`, `used_ai: false`,
+  `summary_count: 5`, `session_index_used: true`,
+  `session_index_updated: false`, and citation-bearing summaries.
+- Actual smoke timing:
+  the cached summary command took about `6.30s` including dev binary startup
+  and compilation check.
+
+Issues:
+
+- Actual external OpenAI/GLM provider behavior is covered by a local mock GLM
+  server test, not by a real paid API call.
+- The first local summary can be long when a project has many same-day work
+  items; future UI rendering should cap citation display or use expandable
+  groups.
+
+Next Steps:
+
+- Surface `work-summary` in the UI/bridge if project work reports become an
+  in-app workflow.
+- Add optional persisted summary snapshots if summary history becomes useful.
+
+## Previous Slice - 2026-06-09 persistent sanitized session evidence index
 
 Current Goal:
 

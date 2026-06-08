@@ -1,12 +1,114 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 17:10 KST
+Updated: 2026-06-08 17:19 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Credential/signature query param redaction
+## Current Slice - 2026-06-08 Cloud access key redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for cloud access key identifiers in URL query parameters and
+  environment-style assignments.
+
+Context:
+
+- Previous signed URL credential/signature redaction is pushed to
+  `origin/main` with source commit
+  `8ee0210 fix: redact signed URL credentials` and docs closeout
+  `af73606 docs: record signed URL credential verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed `AWSAccessKeyId`, `aws_access_key_id`, and
+  `access_key_id` shapes could remain visible even though adjacent
+  `Signature` keys were redacted.
+
+Progress:
+
+- Confirmed goal identity against Codex thread
+  `019ea10c-fbe8-7b60-8889-6f00b5a91a68`; persisted and current objectives
+  both target PromptVault, with no mismatch warning.
+- Confirmed clean repo state and local/remote parity before this slice:
+  clean `main...origin/main`, parity `0 0`.
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact cloud access key URL query params and assignment-style keys.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same cloud access key families.
+- Confirmed RED: frontend leaked the access key query and assignment keys;
+  backend returned those original strings or only redacted adjacent `Signature`.
+- Extended the shared possible-secret matcher to classify `access key`,
+  `access key id`, and `secret access key` forms, with optional `aws` prefix
+  and case/space/underscore/hyphen/camel variants.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing synthetic cloud access key assignments. It confirmed one
+  stored prompt row, multiple `[REDACTED_POSSIBLE_SECRET]` markers in checked
+  row surfaces, no cloud access key terms in checked row surfaces, localized
+  risk label visible, and zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts cloud access key id and secret access key
+  families in prompt row previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for cloud
+  access key query params and assignment-style keys.
+- `src-tauri/src/lib.rs`: aligns backend possible-secret redaction with the
+  frontend matcher and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on cloud access key query params and assignments because key names and
+  values remained visible.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_cloud_access_key` failed from
+  `src-tauri` because backend redaction returned original cloud access key
+  assignments and only redacted adjacent signature fields in query strings.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 22/22.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text` passed, 15/15 focused lib tests, plus
+  zero-test main and CLI targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5206" --port 5206 --timeout 120 -- /bin/bash -lc ...`
+  passed with `rowCount=1`, `redactionCount=4`, `leaked=false`,
+  `riskVisible=true`, `consoleErrors=0`, `pageErrors=0`, and `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 328/328,
+  production build, Rust lib tests 99/99, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after aligning cloud access key redaction.
+- Python Playwright is not installed in this environment, so browser QA used
+  the repo's available Node Playwright package while still managing Vite with
+  the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for common cloud access key shapes.
+
+Next Steps:
+
+- Run whitespace and staged secret checks, commit the code/docs slice, push to
+  `origin/main`, then add push/parity evidence to this log.
+
+## Previous Slice - 2026-06-08 Credential/signature query param redaction
 
 Current Goal:
 

@@ -211,6 +211,31 @@ test("prompt row previews redact credential and signature query params", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact cloud access key query params", () => {
+  const text =
+    "Fetch https://example.test/file?AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE&Signature=short-signature before request.";
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "Fetch https://example.test/file?[REDACTED_POSSIBLE_SECRET] before request.");
+  assert.doesNotMatch(preview, /AWSAccessKeyId|AKIAIOSFODNN7EXAMPLE|Signature|short-signature/);
+  assert.doesNotMatch(label, /AWSAccessKeyId|AKIAIOSFODNN7EXAMPLE|Signature|short-signature/);
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
+test("prompt row previews redact cloud access key assignments", () => {
+  const text = "Credentials: aws_access_key_id=AKIAIOSFODNN7EXAMPLE aws_secret_access_key=short-secret";
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "Credentials: [REDACTED_POSSIBLE_SECRET] [REDACTED_POSSIBLE_SECRET]");
+  assert.doesNotMatch(preview, /aws_access_key_id|aws_secret_access_key|AKIAIOSFODNN7EXAMPLE|short-secret/);
+  assert.doesNotMatch(label, /aws_access_key_id|aws_secret_access_key|AKIAIOSFODNN7EXAMPLE|short-secret/);
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact private key blocks case-insensitively", () => {
   const text = [
     "-----begin test private key-----",

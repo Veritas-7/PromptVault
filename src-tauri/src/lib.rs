@@ -3949,7 +3949,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "possible_api_key",
                 Regex::new(
-                    r#"(?i)(api[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|secret|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|\S+)?"#,
+                    r#"(?i)((?:[a-z0-9]+[_-])?api[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|secret|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|\S+)?"#,
                 )
                     .expect("api key regex"),
             ),
@@ -6348,6 +6348,21 @@ mod tests {
     fn redact_sensitive_text_redacts_prefixed_token_pairs() {
         let text = "access_token=short-secret-value";
         assert_eq!(redact_sensitive_text(text), "[REDACTED_POSSIBLE_API_KEY]");
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_prefixed_api_key_pairs() {
+        let text = "openai_api_key=short-secret-value";
+        assert_eq!(redact_sensitive_text(text), "[REDACTED_POSSIBLE_API_KEY]");
+    }
+
+    #[test]
+    fn redact_sensitive_text_preserves_leading_words_before_api_key_pairs() {
+        let text = "Use api_key=short-secret-value only in local secrets.";
+        assert_eq!(
+            redact_sensitive_text(text),
+            "Use [REDACTED_POSSIBLE_API_KEY] only in local secrets."
+        );
     }
 
     #[test]

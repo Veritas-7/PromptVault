@@ -115,6 +115,18 @@ test("prompt row previews redact prefixed token assignments", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact prefixed api key assignments", () => {
+  const text = "Store openai_api_key=short-secret-value only in local secrets.";
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "Store [REDACTED_POSSIBLE_SECRET] only in local secrets.");
+  assert.doesNotMatch(preview, /openai_api_key|short-secret-value/);
+  assert.doesNotMatch(label, /openai_api_key|short-secret-value/);
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact private key blocks case-insensitively", () => {
   const text = [
     "-----begin test private key-----",

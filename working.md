@@ -1,12 +1,104 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 14:29 KST
+Updated: 2026-06-08 14:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Queue import stop copy accuracy
+## Current Slice - 2026-06-08 Bridge recovery and scan-limit QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Directly verify failure-state UX that had not been covered in the latest
+  pushed slice: browser bridge disconnect/recovery and invalid scan-limit
+  handling.
+
+Context:
+
+- Previous queue import stop copy accuracy slice is pushed to `origin/main`:
+  implementation `02f926c fix: align queue stop copy` and closeout
+  `b933652 docs: close queue stop handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`,
+  and `gh repo view --json visibility --jq .visibility` returned `PRIVATE`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus the CLI browser bridge and Playwright.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `b933652 docs: close queue stop handoff`.
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree is clean at `main...origin/main` and parity is
+  `0 0`.
+- Re-read the active webapp-testing and TDD skill instructions before running
+  QA-first checks.
+- Ran browser bridge disconnected/recovery QA with a deliberately invalid
+  bridge URL override, then changed the override to the running bridge and
+  clicked `브리지 다시 확인`.
+- The disconnected state showed the recovery command for
+  `127.0.0.1:5192`, disabled quick scan, stored load, and plan actions, kept
+  the bridge recheck button enabled, and used aria-labels explaining
+  `브라우저 브리지 연결 전`.
+- After switching the override to the live bridge on `127.0.0.1:5191`, the
+  app returned to `connected`, showed the database path, restored top-level
+  actions, and had no page errors or unexpected request failures. Chromium did
+  log expected `Failed to load resource: net::ERR_CONNECTION_REFUSED` entries
+  for the deliberately dead bridge port.
+- Ran connected browser QA for invalid scan limits. Blank and `0` limit clicks
+  showed the correct validation errors and scan-run warning, did not enter
+  progress state, and made no `/api/scan` calls.
+- Editing the failed limit value cleared the error and scan-run warning; a
+  valid replacement value restored the normal quick-scan aria-label and left
+  the action enabled.
+
+Changes:
+
+- `working.md`: records this QA-only bridge recovery and scan-limit validation
+  slice.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- Browser bridge recovery QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5191" --port 5191 --server "npm run dev -- --host 127.0.0.1 --port 5190" --port 5190 --timeout 120 -- /bin/bash -lc ...`
+  confirmed disconnected action locks, recovery copy, connected recovery, and
+  restored actions. The only console entries were expected browser resource
+  errors from intentionally requesting the dead `127.0.0.1:5192` bridge.
+- Invalid scan-limit browser QA:
+  same Vite/bridge harness on ports 5193/5194 confirmed blank and zero limit
+  validation, no progress notice, no `/api/scan` calls, error clearing after
+  input edit, restored quick-scan aria-label, and no console or page errors.
+
+Issues:
+
+- No code blockers found in these failure-state flows.
+- The deliberate dead-port bridge check naturally creates Chromium resource
+  error log entries; these were treated as expected evidence for the
+  disconnected-state test, not as app exceptions.
+
+Research:
+
+- No external research. This is direct browser QA work.
+
+Next Steps:
+
+- Finish this QA-only closeout with docs-only verification, staged secret scan,
+  commit, push, and final parity checks.
+- Continue from a clean pushed tree and pick the next autonomous QA/improvement
+  slice.
+
+## Previous Slice - 2026-06-08 Queue import stop copy accuracy
 
 Current Goal:
 

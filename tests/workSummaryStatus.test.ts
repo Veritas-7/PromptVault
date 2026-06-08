@@ -327,7 +327,7 @@ test("work summary status text uses report counts and index state", () => {
   assert.equal(workSummaryMetaText("failed", null), "작업 요약을 사용할 수 없음");
   assert.equal(
     workSummaryIndexStatusText(result),
-    "세션 인덱스 사용 · 20개 근거 보관 · 고유 근거 11건",
+    "세션 인덱스 사용 · 스캔 20개 · 보관 20개 · 매칭 541건 · 고유 11건",
   );
   assert.equal(
     workSummaryIndexStatusText(summaryResult({
@@ -337,7 +337,18 @@ test("work summary status text uses report counts and index state", () => {
         session_evidence_index_updated: true,
       },
     })),
-    "세션 인덱스 갱신 · 20개 근거 보관 · 고유 근거 11건",
+    "세션 인덱스 갱신 · 스캔 20개 · 보관 20개 · 매칭 541건 · 고유 11건",
+  );
+  assert.equal(
+    workSummaryIndexStatusText(summaryResult({
+      report: {
+        ...result.report,
+        session_evidence_index_count: 0,
+        session_evidence_index_used: false,
+        session_evidence_index_updated: false,
+      },
+    })),
+    "세션 직접 스캔 · 스캔 20개 · 보관 0개 · 매칭 541건 · 고유 11건",
   );
 });
 

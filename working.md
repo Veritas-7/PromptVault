@@ -1,12 +1,105 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 06:06 KST
+Updated: 2026-06-09 06:15 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 last-updated progress-log local extraction
+## Current Slice - 2026-06-09 work-summary session coverage visibility
+
+Current Goal:
+
+- Make the project/day work management UI show clearer evidence that real
+  Codex session prompts were scanned or indexed.
+- Expose scanned prompt count, stored index count, matched session evidence
+  count, and unique session evidence count in the work-summary index status.
+- Keep the change small and limited to UI status copy plus tests.
+
+Context:
+
+- The backend `work-report` and `work-summary` results already include session
+  scan/index counters: `session_scan_prompt_count`,
+  `session_evidence_index_count`, `session_evidence_count`, and
+  `session_evidence_unique_count`.
+- The previous UI status text only showed whether the session index was used or
+  refreshed, stored index count, and unique evidence count.
+- The user specifically asked whether actual sessions are parsed and verified,
+  so the rendered UI should make that coverage visible without requiring CLI
+  inspection.
+
+Progress:
+
+- Extended `workSummaryIndexStatusText` so it now reports:
+  - session index mode: direct scan, index use, or index refresh;
+  - scanned session prompt count;
+  - stored session index count;
+  - matched session evidence count;
+  - unique session evidence count.
+- Added test coverage for all three states: index used, index refreshed, and
+  direct scan.
+- Verified the actual browser-bridge flow by clicking the session rescan button
+  in headless Playwright and reading the rendered DOM.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - changed work-summary index status copy from
+    `20개 근거 보관 · 고유 근거 11건` to a fuller
+    `스캔 20개 · 보관 20개 · 매칭 541건 · 고유 11건` shape.
+- `tests/workSummaryStatus.test.ts`:
+  - updates expectations for index-used and index-refreshed states;
+  - adds a direct-scan expectation.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts`: failed as expected
+    because the existing UI status omitted `스캔` and `매칭` counts.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts`: PASS, `422`
+    tests.
+- Headless browser-bridge QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 220 -- /bin/bash -lc 'node /tmp/promptvault_work_summary_session_status_qa.mjs'`:
+    PASS.
+  - Observed rendered index text:
+    `세션 인덱스 갱신 · 스캔 40개 · 보관 21개 · 매칭 80건 · 고유 1건`.
+  - Observed summary meta:
+    `1개 프로젝트 · 1일 · 80개 작업 · 세션 근거 80건`.
+  - Browser QA captured no console errors, page errors, or failed requests.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `422` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `150` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- The UI now exposes scan/index coverage more clearly, but this does not by
+  itself make the ledger complete.
+- Remaining completeness gaps are still the same larger areas:
+  - richer AI/provider extraction for ambiguous or risk-flagged progress logs;
+  - durable snapshot promotion and filtering flows for accepted extraction rows;
+  - broader full-corpus session verification beyond bounded UI/CLI checks.
+
+Research:
+
+- Used TDD, incremental implementation, and webapp-testing workflows.
+- Python Playwright was unavailable in this environment, so browser QA used the
+  existing Node Playwright dependency with the same `with_server.py` lifecycle
+  helper.
+- No external web research was used.
+
+Next Steps:
+
+- Commit and push this visibility slice.
+- Continue with provider health diagnostics/retry controls for GLM/OpenAI
+  extraction or richer AI-assisted parsing for remaining progress-log gaps.
+
+## Previous Slice - 2026-06-09 last-updated progress-log local extraction
 
 Current Goal:
 

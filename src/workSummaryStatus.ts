@@ -81,8 +81,10 @@ export function workSummaryIndexStatusText(result: ProjectWorkSummaryResult): st
       : "세션 직접 스캔";
   return [
     indexState,
-    `${result.report.session_evidence_index_count.toLocaleString()}개 근거 보관`,
-    `고유 근거 ${result.report.session_evidence_unique_count.toLocaleString()}건`,
+    `스캔 ${result.report.session_scan_prompt_count.toLocaleString()}개`,
+    `보관 ${result.report.session_evidence_index_count.toLocaleString()}개`,
+    `매칭 ${result.report.session_evidence_count.toLocaleString()}건`,
+    `고유 ${result.report.session_evidence_unique_count.toLocaleString()}건`,
   ].join(" · ");
 }
 

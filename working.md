@@ -1,12 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 16:37 KST
+Updated: 2026-06-08 16:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Authorization bearer header redaction
+## Current Slice - 2026-06-08 Authorization scheme header redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep frontend prompt row preview/accessibility redaction aligned with backend
+  scan redaction for authorization headers that use non-Bearer schemes such as
+  Basic authentication, including short synthetic credential values that are
+  not long enough for long-token redaction.
+
+Context:
+
+- Previous authorization bearer header redaction is pushed to `origin/main` as
+  `dd91fcc fix: redact authorization bearer headers`, with docs closeout
+  `f92ef2f docs: record authorization bearer verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- Existing authorization redaction handled `Bearer` as a two-token value, but
+  other common single-word schemes could leave the credential token visible in
+  frontend previews/accessibility labels and backend scan redaction.
+
+Progress:
+
+- Confirmed the working tree was clean at `main...origin/main` after the
+  previous push before this slice.
+- Added RED frontend coverage in `tests/promptRowA11y.test.ts` requiring prompt
+  row preview and row accessible labels to redact authorization headers with a
+  non-Bearer scheme.
+- Added RED backend coverage in `src-tauri/src/lib.rs` requiring
+  `redact_sensitive_text` to redact authorization headers with a non-Bearer
+  scheme.
+- Confirmed RED: both focused frontend and backend tests redacted only the
+  authorization key plus scheme and left the credential token visible.
+- Updated frontend and backend key-value secret regexes to consume an optional
+  single-word authorization scheme plus the following token as one redaction
+  unit.
+- Confirmed focused GREEN for the new frontend and backend redaction cases.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a synthetic non-Bearer authorization header. It confirmed
+  the prompt row preview and row `aria-label` contained
+  `[REDACTED_POSSIBLE_SECRET]`, the synthetic header text was absent from
+  checked UI surfaces, the localized risk label was visible, and there were
+  zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts authorization headers with generic
+  single-word schemes in prompt row previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds regression coverage for non-Bearer
+  authorization header preview and accessible-name redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-key redaction with the
+  generic authorization scheme behavior and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on `prompt row previews redact authorization scheme headers` because
+  the credential token remained visible after partial redaction.
+- RED:
+  `cargo test redact_sensitive_text_redacts_authorization_scheme_headers`
+  run from `src-tauri` failed because backend redaction returned a partial
+  redaction plus the credential token.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 18/18.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text` passed, 11/11.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5203" --port 5203 --timeout 120 -- /bin/bash -lc ...`
+  passed with one synthetic stored prompt row, preview and `aria-label`
+  redacted, synthetic header text absent from checked UI surfaces, localized
+  risk label visible, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 324/324,
+  production build, Rust lib tests 95/95, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after aligning generic authorization scheme redaction.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for common authorization header snippets.
+
+Next Steps:
+
+- Run whitespace and secret checks, then stage explicit changed paths, commit,
+  push to the private GitHub `origin/main`, and verify final parity.
+
+## Previous Slice - 2026-06-08 Authorization bearer header redaction
 
 Current Goal:
 

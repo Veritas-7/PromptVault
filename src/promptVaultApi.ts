@@ -736,14 +736,17 @@ function isUntruncatedSourceAverageQuality(value: Record<string, unknown>): bool
     return false;
   }
   for (const source of value.stats.source_summaries) {
-    if (!isRecord(source) || !isNonBlankString(source.id) || !isQualityAverage(source.average_quality)) {
+    if (!isRecord(source)
+      || !isNonBlankString(source.id)
+      || !isNonBlankString(source.label)
+      || !isQualityAverage(source.average_quality)) {
       return false;
     }
     let sourcePromptCount = 0;
     let totalQuality = 0;
     for (const prompt of value.prompts) {
       if (!isRecord(prompt) || !isNonBlankString(prompt.source) || !isPromptQuality(prompt.quality)) return false;
-      if (prompt.source !== source.id) continue;
+      if (!promptMatchesSourceSummary(prompt.source, source)) continue;
       sourcePromptCount += 1;
       totalQuality += prompt.quality.score;
       if (!Number.isSafeInteger(sourcePromptCount) || !Number.isSafeInteger(totalQuality)) return false;
@@ -760,13 +763,16 @@ function isUntruncatedSourcePromptCounts(value: Record<string, unknown>): boolea
     return false;
   }
   for (const source of value.stats.source_summaries) {
-    if (!isRecord(source) || !isNonBlankString(source.id) || !isNonNegativeSafeInteger(source.prompts_found)) {
+    if (!isRecord(source)
+      || !isNonBlankString(source.id)
+      || !isNonBlankString(source.label)
+      || !isNonNegativeSafeInteger(source.prompts_found)) {
       return false;
     }
     let sourcePromptCount = 0;
     for (const prompt of value.prompts) {
       if (!isRecord(prompt) || !isNonBlankString(prompt.source)) return false;
-      if (prompt.source !== source.id) continue;
+      if (!promptMatchesSourceSummary(prompt.source, source)) continue;
       sourcePromptCount += 1;
       if (!Number.isSafeInteger(sourcePromptCount)) return false;
     }
@@ -781,19 +787,29 @@ function isUntruncatedSourceWeakCounts(value: Record<string, unknown>): boolean 
     return false;
   }
   for (const source of value.stats.source_summaries) {
-    if (!isRecord(source) || !isNonBlankString(source.id) || !isNonNegativeSafeInteger(source.weak_prompt_count)) {
+    if (!isRecord(source)
+      || !isNonBlankString(source.id)
+      || !isNonBlankString(source.label)
+      || !isNonNegativeSafeInteger(source.weak_prompt_count)) {
       return false;
     }
     let sourceWeakCount = 0;
     for (const prompt of value.prompts) {
       if (!isRecord(prompt) || !isNonBlankString(prompt.source) || !isPromptQuality(prompt.quality)) return false;
-      if (prompt.source !== source.id) continue;
+      if (!promptMatchesSourceSummary(prompt.source, source)) continue;
       if (prompt.quality.band === "weak") sourceWeakCount += 1;
       if (!Number.isSafeInteger(sourceWeakCount)) return false;
     }
     if (sourceWeakCount !== source.weak_prompt_count) return false;
   }
   return true;
+}
+
+function promptMatchesSourceSummary(
+  promptSource: string,
+  source: Record<string, unknown>,
+): boolean {
+  return promptSource === source.id || promptSource === source.label;
 }
 
 function isScanOutputPathState(outputPath: unknown, markdownWritten: unknown): boolean {

@@ -1610,6 +1610,33 @@ test("browser bridge scan results reject malformed successful payloads", async (
   );
 });
 
+test("browser bridge scan results accept canceled source label aggregates", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(scanResultWithPrompt({
+    source: "Codex",
+  }, {
+    persistence: null,
+    warnings: [
+      "사용자 요청으로 스캔이 취소되어 일부 결과만 반환합니다.",
+      "취소된 스캔은 저장소에 저장하지 않았습니다.",
+    ],
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await scanPrompts({ limit: 1 });
+
+  assert.equal(result.persistence, null);
+  assert.equal(result.prompts[0]?.source, "Codex");
+  assert.deepEqual(result.warnings, [
+    "사용자 요청으로 스캔이 취소되어 일부 결과만 반환합니다.",
+    "취소된 스캔은 저장소에 저장하지 않았습니다.",
+  ]);
+});
+
 test("browser bridge scan results reject invalid generated timestamps", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

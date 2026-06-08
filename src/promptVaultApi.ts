@@ -1031,6 +1031,7 @@ function parseScanProgressResult(value: unknown): ScanProgress {
     || value.source_files_seen > value.files_seen
     || value.source_files_seen > value.source_files_discovered
     || (value.source_file_count !== null && !isNonNegativeSafeIntegerAtMost(value.source_files_seen, value.source_file_count))
+    || (value.limit !== null && !isNonNegativeSafeIntegerAtMost(value.prompts_found, value.limit))
     || (value.source_index !== 0 && !isNonNegativeSafeIntegerAtMost(value.source_index, value.source_count))
     || !isInactiveScanProgressSnapshot(value)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);

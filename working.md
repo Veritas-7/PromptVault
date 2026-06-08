@@ -1,10 +1,131 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 10:27 KST
+Updated: 2026-06-08 10:29 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Scan progress prompt-limit validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan progress snapshots whose prompt counter exceeds
+  the configured scan prompt limit.
+
+Context:
+
+- Recent slices hardened scan progress source identity, source position,
+  source-less counters, and source-vs-aggregate file counters.
+- Backend scan progress starts with `limit` populated when the scan request
+  has a finite limit, then calls source collection with
+  `limit.saturating_sub(prompts.len())`.
+- During collection, progress updates set `prompts_found` to the aggregate
+  prompt offset plus prompts found in the current source, so a valid finite
+  limit scan cannot report `prompts_found > limit`.
+- The frontend parser currently validates nonnegative numeric progress fields
+  and several file counter relationships, but it does not compare
+  `prompts_found` with finite `limit`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `6fdcc2e docs: close scan progress source total handoff` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read `ScanProgress` parser/tests, scan progress UI copy, and backend scan
+  limit/update lifecycle. Confirmed finite-limit progress should not report
+  more prompts found than the configured limit.
+- Added a RED API test for active finite-limit progress snapshots where
+  `prompts_found` exceeds `limit`.
+- Confirmed RED first: focused API suite failed 125/126 only on the new
+  prompt-limit rejection case with `Missing expected rejection`.
+- Tightened the scan progress parser so finite-limit progress cannot report
+  more prompts found than the configured limit.
+- Confirmed GREEN: focused API suite passed 126/126 after the parser change.
+- Ran the broader UI test suite and production build successfully after the
+  parser change.
+- Verified the local preview quick-scan flow with Node Playwright: a malformed
+  `prompts_found > limit` progress snapshot is not rendered, the next valid
+  `Codex` progress snapshot renders normal finite-limit prompt progress copy,
+  and the scan completes without console or page errors.
+- Removed the temporary preview QA script.
+- Confirmed preview cleanup: temp script was absent and port 5328 was free.
+- Ran the full project check successfully after preview QA.
+- Pre-staging verification passed with only the expected three modified files:
+  parser, API test, and working log.
+- Staged the three explicit paths and confirmed the staged secret scan found no
+  leaks.
+- Restaged `working.md` after recording the staged scan result and reran the
+  staged secret scan; no leaks were found.
+
+Changes:
+
+- `working.md`: records the current scan progress prompt-limit validation
+  slice.
+- `tests/promptVaultApi.test.ts`: adds a malformed prompt-limit rejection case
+  for scan progress bridge responses.
+- `src/promptVaultApi.ts`: rejects finite-limit scan progress snapshots whose
+  prompt counter exceeds the configured limit.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 125/126 only on the new finite-limit `prompts_found > limit`
+  rejection case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 126/126 after rejecting prompt counters beyond finite scan limits.
+- Broader UI suite: `npm run test:ui` passed 290/290.
+- Production build: `npm run build` passed; Vite emitted
+  `dist/assets/index-BkGWfU0Y.js` and `dist/assets/index-D81jZHaU.css`.
+- Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  printed usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5328" --port 5328 --timeout 30 node /tmp/promptvault_scan_progress_prompt_limit_qa.mjs http://127.0.0.1:5328`
+  passed. The script confirmed connected browser bridge status, clicked quick
+  scan, served a named-source progress snapshot with `prompts_found: 2` and
+  `limit: 1` first, verified the malformed `2개 프롬프트 · 제한 1` progress was
+  not rendered, then served valid `Codex` progress and verified normal scan
+  completion.
+- Preview cleanup: `test ! -e /tmp/promptvault_scan_progress_prompt_limit_qa.mjs`
+  returned `temp_absent`; `! lsof -nP -iTCP:5328 -sTCP:LISTEN` returned
+  `port_5328_free`.
+- Full project check: `npm run check` passed. It reran `npm run test:ui`
+  290/290, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
+  and `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  produced no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only the three expected modified files; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` lists only
+  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned private GitHub visibility; temp script remained absent and port 5328
+  remained free.
+- Staged explicit paths only:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security scan: `gitleaks protect --staged --no-banner --redact`
+  scanned about 6.76 KB and found no leaks.
+- Restaged `working.md` after recording the staged scan result and reran
+  `gitleaks protect --staged --no-banner --redact`; it scanned about 7.09 KB
+  and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit the implementation slice.
 
 ## Previous Slice - 2026-06-08 Scan progress source-total counter validation
 

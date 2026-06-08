@@ -1,6 +1,6 @@
 use chrono::{FixedOffset, Local, TimeZone, Utc};
 use regex::{Captures, Regex};
-use rusqlite::{Connection, OpenFlags, ToSql};
+use rusqlite::{params, Connection, OpenFlags, ToSql};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -180,6 +180,13 @@ pub struct ProjectWorkSummaryNarrative {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSummaryPersistence {
+    pub database_path: String,
+    pub snapshot_id: i64,
+    pub snapshot_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkSummaryResult {
     pub generated_at: String,
     pub provider: String,
@@ -187,6 +194,7 @@ pub struct ProjectWorkSummaryResult {
     pub narrative_markdown: String,
     pub summaries: Vec<ProjectWorkSummary>,
     pub report: ProjectWorkReport,
+    pub persistence: Option<ProjectWorkSummaryPersistence>,
     pub warnings: Vec<String>,
 }
 
@@ -203,6 +211,7 @@ pub struct ProjectWorkSummaryOptions {
     pub report: ProjectWorkReportOptions,
     pub summary_limit: Option<usize>,
     pub force_local: Option<bool>,
+    pub save_snapshot: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -981,6 +990,13 @@ pub async fn run_project_work_summary(
     if matches!(options.summary_limit, Some(0)) {
         return Err("work-summary summary_limit requires a positive integer".into());
     }
+    let database_path = options
+        .report
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let save_snapshot = options.save_snapshot.unwrap_or(false);
     let report = run_project_work_report(options.report)?;
     let summaries = build_project_work_summaries(&report, options.summary_limit.unwrap_or(20));
     let narrative = project_work_summary_narrative_with_env(
@@ -992,15 +1008,20 @@ pub async fn run_project_work_summary(
     let mut warnings = report.warnings.clone();
     warnings.extend(narrative.warnings.clone());
 
-    Ok(ProjectWorkSummaryResult {
+    let mut result = ProjectWorkSummaryResult {
         generated_at: Utc::now().to_rfc3339(),
         provider: narrative.provider,
         used_ai: narrative.used_ai,
         narrative_markdown: narrative.markdown,
         summaries,
         report,
+        persistence: None,
         warnings,
-    })
+    };
+    if save_snapshot {
+        result.persistence = Some(persist_project_work_summary_snapshot(&database_path, &result)?);
+    }
+    Ok(result)
 }
 
 pub fn run_import_batch(
@@ -4594,9 +4615,69 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             ON project_work_session_evidence(prompt_date);
         CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_source
             ON project_work_session_evidence(source);
+        CREATE TABLE IF NOT EXISTS project_work_summary_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            used_ai INTEGER NOT NULL,
+            narrative_markdown TEXT NOT NULL,
+            total_items INTEGER NOT NULL,
+            project_count INTEGER NOT NULL,
+            date_count INTEGER NOT NULL,
+            files_seen INTEGER NOT NULL,
+            session_evidence_count INTEGER NOT NULL,
+            session_evidence_unique_count INTEGER NOT NULL,
+            summary_count INTEGER NOT NULL,
+            report_json TEXT NOT NULL,
+            summaries_json TEXT NOT NULL,
+            warnings_json TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_work_summary_snapshots_created_at
+            ON project_work_summary_snapshots(created_at DESC);
         ",
     )?;
     Ok(())
+}
+
+fn persist_project_work_summary_snapshot(
+    database_path: &Path,
+    result: &ProjectWorkSummaryResult,
+) -> Result<ProjectWorkSummaryPersistence, Box<dyn std::error::Error>> {
+    let conn = open_promptvault_database(database_path)?;
+    conn.execute(
+        "INSERT INTO project_work_summary_snapshots (
+            created_at, provider, used_ai, narrative_markdown, total_items, project_count,
+            date_count, files_seen, session_evidence_count, session_evidence_unique_count,
+            summary_count, report_json, summaries_json, warnings_json
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        params![
+            Utc::now().to_rfc3339(),
+            &result.provider,
+            if result.used_ai { 1_i64 } else { 0_i64 },
+            &result.narrative_markdown,
+            result.report.total_items as i64,
+            result.report.project_count as i64,
+            result.report.date_count as i64,
+            result.report.files_seen as i64,
+            result.report.session_evidence_count as i64,
+            result.report.session_evidence_unique_count as i64,
+            result.summaries.len() as i64,
+            serde_json::to_string(&result.report)?,
+            serde_json::to_string(&result.summaries)?,
+            serde_json::to_string(&result.warnings)?,
+        ],
+    )?;
+    let snapshot_id = conn.last_insert_rowid();
+    let snapshot_count = conn.query_row(
+        "SELECT COUNT(*) FROM project_work_summary_snapshots",
+        [],
+        |row| row.get::<_, i64>(0),
+    )? as usize;
+    Ok(ProjectWorkSummaryPersistence {
+        database_path: database_path.display().to_string(),
+        snapshot_id,
+        snapshot_count,
+    })
 }
 
 fn read_import_state(
@@ -7971,6 +8052,110 @@ Progress:
         assert!(request.starts_with("POST /chat/completions HTTP/1.1"));
         assert!(request.contains("authorization: Bearer mock-glm-key"));
         assert!(request.contains("\"json_object\""));
+    }
+
+    #[test]
+    fn project_work_summary_snapshot_persists_sanitized_summary_metadata() {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-work-summary-snapshot-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let result = ProjectWorkSummaryResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            provider: "local-citation-rules".to_string(),
+            used_ai: false,
+            narrative_markdown: "- 2026-06-09 PromptVault: persisted summary".to_string(),
+            summaries: vec![ProjectWorkSummary {
+                date: "2026-06-09".to_string(),
+                project: "PromptVault".to_string(),
+                headline: "PromptVault: persisted summary".to_string(),
+                work_item_count: 1,
+                session_evidence_count: 1,
+                unique_session_evidence_count: 1,
+                citations: vec![ProjectWorkSummaryCitation {
+                    id: "2026-06-09-PromptVault-1".to_string(),
+                    date: "2026-06-09".to_string(),
+                    project: "PromptVault".to_string(),
+                    title: "persisted summary".to_string(),
+                    status: "done".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md"
+                        .to_string(),
+                    source_file: "working.md".to_string(),
+                    evidence: "- persisted summary".to_string(),
+                    session_evidence_count: 1,
+                    session_sources: vec![FrequencyItem {
+                        text: "Codex local sessions".to_string(),
+                        count: 1,
+                    }],
+                }],
+                next_actions: Vec::new(),
+            }],
+            report: ProjectWorkReport {
+                generated_at: "2026-06-09T00:00:00Z".to_string(),
+                total_items: 1,
+                project_count: 1,
+                date_count: 1,
+                files_seen: 1,
+                items_by_date: vec![FrequencyItem {
+                    text: "2026-06-09".to_string(),
+                    count: 1,
+                }],
+                items_by_project: vec![FrequencyItem {
+                    text: "PromptVault".to_string(),
+                    count: 1,
+                }],
+                session_scan_prompt_count: 1,
+                session_scan_sources: vec![FrequencyItem {
+                    text: "Codex local sessions".to_string(),
+                    count: 1,
+                }],
+                session_evidence_count: 1,
+                session_sources: vec![FrequencyItem {
+                    text: "Codex local sessions".to_string(),
+                    count: 1,
+                }],
+                session_evidence_unique_count: 1,
+                session_evidence_unique_sources: vec![FrequencyItem {
+                    text: "Codex local sessions".to_string(),
+                    count: 1,
+                }],
+                session_evidence_index_used: true,
+                session_evidence_index_updated: false,
+                session_evidence_index_count: 1,
+                items: Vec::new(),
+                warnings: Vec::new(),
+            },
+            warnings: Vec::new(),
+            persistence: None,
+        };
+
+        let persistence =
+            persist_project_work_summary_snapshot(&db_path, &result).expect("persist snapshot");
+
+        assert_eq!(persistence.snapshot_id, 1);
+        assert_eq!(persistence.snapshot_count, 1);
+        assert_eq!(persistence.database_path, db_path.display().to_string());
+
+        let conn = Connection::open(&db_path).expect("open snapshot db");
+        let stored: (String, i64, i64, String) = conn
+            .query_row(
+                "SELECT provider, used_ai, total_items, report_json
+                 FROM project_work_summary_snapshots
+                 WHERE id = ?1",
+                [persistence.snapshot_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("read snapshot");
+        assert_eq!(stored.0, "local-citation-rules");
+        assert_eq!(stored.1, 0);
+        assert_eq!(stored.2, 1);
+        assert!(stored.3.contains("\"total_items\":1"));
+
+        std::fs::remove_file(db_path).expect("remove snapshot db");
     }
 
     #[test]

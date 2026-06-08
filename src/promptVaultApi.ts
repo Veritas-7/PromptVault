@@ -82,6 +82,7 @@ export interface ProjectWorkSummaryOptions {
   session_limit?: number;
   summary_limit?: number;
   refresh_session_index?: boolean;
+  save_snapshot?: boolean;
   ai?: boolean;
 }
 
@@ -1039,6 +1040,7 @@ function nativeProjectWorkSummaryOptions(options: ProjectWorkSummaryOptions) {
     },
     summary_limit: options.summary_limit,
     force_local: options.ai === true ? false : undefined,
+    save_snapshot: options.save_snapshot,
   };
 }
 
@@ -1150,6 +1152,13 @@ function projectWorkSummariesWithinReport(value: unknown, report: ProjectWorkRep
   return true;
 }
 
+function isProjectWorkSummaryPersistence(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.database_path)
+    && isPositiveSafeInteger(value.snapshot_id)
+    && isPositiveSafeInteger(value.snapshot_count);
+}
+
 function parseProjectWorkSummaryResult(value: unknown): ProjectWorkSummaryResult {
   if (!isRecord(value)
     || !isTimestampString(value.generated_at)
@@ -1160,6 +1169,7 @@ function parseProjectWorkSummaryResult(value: unknown): ProjectWorkSummaryResult
     || !value.summaries.every(isProjectWorkSummary)
     || !isProjectWorkReport(value.report)
     || !projectWorkSummariesWithinReport(value.summaries, value.report)
+    || !(value.persistence === null || isProjectWorkSummaryPersistence(value.persistence))
     || !isNonBlankStringArray(value.warnings)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }

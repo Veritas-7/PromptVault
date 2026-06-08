@@ -234,6 +234,12 @@ export interface ProjectWorkSummary {
   next_actions: string[];
 }
 
+export interface ProjectWorkSummaryPersistence {
+  database_path: string;
+  snapshot_id: number;
+  snapshot_count: number;
+}
+
 export interface ProjectWorkSummaryResult {
   generated_at: string;
   provider: string;
@@ -241,6 +247,7 @@ export interface ProjectWorkSummaryResult {
   narrative_markdown: string;
   summaries: ProjectWorkSummary[];
   report: ProjectWorkReport;
+  persistence: ProjectWorkSummaryPersistence | null;
   warnings: string[];
 }
 

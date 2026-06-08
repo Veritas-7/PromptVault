@@ -1,12 +1,111 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 01:29 KST
+Updated: 2026-06-09 01:41 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 in-app project work summary panel
+## Current Slice - 2026-06-09 work-summary snapshot persistence
+
+Current Goal:
+
+- Persist generated project/date work summaries as point-in-time SQLite
+  snapshots.
+- Keep the work-summary pipeline source-backed: project-local `working.md`,
+  `workingd.md`, `worklog.md`, `progress.md`, `project_status.md`, and
+  `progress_log.md` logs provide dated work items; bounded Codex/session
+  evidence provides session support counts; AI/GLM/OpenAI providers may
+  summarize only after those citations are built.
+
+Context:
+
+- The prior UI slice exposed current `work-summary` results, but did not keep a
+  durable history of summary runs.
+- The operator asked whether project/day/task management is complete, whether
+  real sessions were parsed, and whether project-local `workingd.md` style logs
+  are covered. The current answer is: extraction and current summaries exist;
+  real session parsing has been verified; historical summary persistence is now
+  being added in this slice.
+
+Progress:
+
+- Added `ProjectWorkSummaryPersistence` and `persistence` metadata to
+  `ProjectWorkSummaryResult`.
+- Added `ProjectWorkSummaryOptions.save_snapshot`.
+- Added `project_work_summary_snapshots` SQLite table with provider, AI usage,
+  narrative, aggregate counters, report JSON, summaries JSON, and warnings JSON.
+- Added `persist_project_work_summary_snapshot()` and wired
+  `run_project_work_summary()` to save only when requested.
+- Added CLI `work-summary --save-snapshot` and `/api/work-summary`
+  `save_snapshot` bridge support.
+- Added strict TypeScript validation for work-summary snapshot persistence
+  metadata.
+- Added an app panel `스냅샷 저장` action and visible snapshot status text.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: summary persistence type, schema, save helper, and
+  option wiring.
+- `src-tauri/src/bin/promptvault-cli.rs`: CLI flag, help text, plain output, and
+  bridge option mapping.
+- `src/types.ts`, `src/promptVaultApi.ts`: snapshot persistence API contract and
+  bridge response validation.
+- `src/workSummaryStatus.ts`, `tests/workSummaryStatus.test.ts`: snapshot
+  status text helper and coverage.
+- `src/App.tsx`: save-snapshot button and saved snapshot status row.
+- `tests/promptVaultApi.test.ts`: RED/GREEN validation that impossible snapshot
+  persistence metadata is rejected.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_summary_snapshot_persists_sanitized_summary_metadata --lib`
+  failed before implementation because `ProjectWorkSummaryResult.persistence`
+  and `persist_project_work_summary_snapshot()` did not exist.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed before implementation because `/api/work-summary` parsing accepted an
+  impossible `snapshot_id: 0`.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_summary_snapshot_persists_sanitized_summary_metadata --lib`
+  passed with 1/1.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed with 139/139.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  passed with 4/4.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli help_text_documents_cli_validation_rules`
+  passed with 1/1.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli bridge_routes_work_summary_validation_errors`
+  passed with 1/1.
+- Actual snapshot smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-summary --limit 20 --session-limit 1 --summary-limit 2 --database /tmp/promptvault-work-summary-snapshot-smoke.sqlite --save-snapshot --json`
+  returned `persistence.snapshot_id: 1`, `snapshot_count: 1`, and
+  `database_path: /tmp/promptvault-work-summary-snapshot-smoke.sqlite`.
+- Actual DB check:
+  `sqlite3 /tmp/promptvault-work-summary-snapshot-smoke.sqlite "select count(*), provider, used_ai, total_items, project_count, date_count, summary_count from project_work_summary_snapshots;"`
+  returned `1|local-citation-rules|0|20|1|1|1`.
+- Full gate:
+  `npm run check` passed: UI tests 381/381, Vite build, Rust library tests
+  135/135, CLI tests 19/19, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- Historical snapshots can now be saved, but there is not yet a UI/history view
+  for browsing older saved summaries.
+- Live paid OpenAI/GLM calls were not executed in this slice; provider wiring is
+  covered by existing mock-provider tests and local deterministic fallback.
+
+Next Steps:
+
+- Add a saved-summary history view if users need to browse or compare previous
+  daily/project snapshots inside the app.
+
+## Previous Slice - 2026-06-09 in-app project work summary panel
 
 Current Goal:
 

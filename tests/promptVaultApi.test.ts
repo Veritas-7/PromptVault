@@ -270,6 +270,7 @@ function projectWorkSummaryPayload(overrides = {}) {
       }],
       warnings: [],
     },
+    persistence: null,
     warnings: [],
     ...overrides,
   };
@@ -338,6 +339,30 @@ test("browser bridge work summary rejects impossible session evidence counts", a
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /malformed bridge summary|Malformed bridge summary|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work summary rejects impossible snapshot persistence", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSummaryPayload({
+    persistence: {
+      database_path: "/tmp/promptvault.sqlite",
+      snapshot_id: 0,
+      snapshot_count: 1,
+    },
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkSummary({ limit: 80 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /snapshot_id|promptvault.sqlite|undefined/);
       return true;
     },
   );

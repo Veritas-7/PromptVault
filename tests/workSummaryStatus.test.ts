@@ -6,6 +6,7 @@ import {
   workSummaryFailureText,
   workSummaryIndexStatusText,
   workSummaryMetaText,
+  workSummaryPersistenceText,
   type WorkSummaryState,
 } from "../src/workSummaryStatus.ts";
 import type { ProjectWorkSummaryResult } from "../src/types.ts";
@@ -29,6 +30,7 @@ function summaryResult(overrides: Partial<ProjectWorkSummaryResult> = {}): Proje
     used_ai: false,
     narrative_markdown: "- 2026-06-09 PromptVault: 요약",
     summaries: [],
+    persistence: null,
     report: {
       generated_at: "2026-06-09T00:00:00Z",
       total_items: 3532,
@@ -88,6 +90,20 @@ test("work summary status text uses report counts and index state", () => {
       },
     })),
     "세션 인덱스 갱신 · 20개 근거 보관 · 고유 근거 11건",
+  );
+});
+
+test("work summary persistence text is only shown after snapshot saves", () => {
+  assert.equal(workSummaryPersistenceText(summaryResult()), null);
+  assert.equal(
+    workSummaryPersistenceText(summaryResult({
+      persistence: {
+        database_path: "/tmp/promptvault.sqlite",
+        snapshot_id: 12,
+        snapshot_count: 15,
+      },
+    })),
+    "스냅샷 #12 저장 · 총 15개",
   );
 });
 

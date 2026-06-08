@@ -47,3 +47,11 @@ export function workSummaryIndexStatusText(result: ProjectWorkSummaryResult): st
     `고유 근거 ${result.report.session_evidence_unique_count.toLocaleString()}건`,
   ].join(" · ");
 }
+
+export function workSummaryPersistenceText(result: ProjectWorkSummaryResult): string | null {
+  if (!result.persistence) return null;
+  return [
+    `스냅샷 #${result.persistence.snapshot_id.toLocaleString()} 저장`,
+    `총 ${result.persistence.snapshot_count.toLocaleString()}개`,
+  ].join(" · ");
+}

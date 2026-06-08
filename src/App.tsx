@@ -194,6 +194,7 @@ import {
   workSummaryFailureText,
   workSummaryIndexStatusText,
   workSummaryMetaText,
+  workSummaryPersistenceText,
   type WorkSummaryState,
 } from "./workSummaryStatus";
 
@@ -463,6 +464,7 @@ function App() {
   const workSummaryFailureMessage = workSummaryFailureText(workSummaryState);
   const workSummaryMeta = workSummaryMetaText(workSummaryState, workSummaryResult);
   const workSummaryIndexStatus = workSummaryResult ? workSummaryIndexStatusText(workSummaryResult) : null;
+  const workSummaryPersistenceStatus = workSummaryResult ? workSummaryPersistenceText(workSummaryResult) : null;
   const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
   const hiddenWorkSummaryCount = Math.max(
     0,
@@ -619,7 +621,10 @@ function App() {
     }
   }
 
-  async function refreshWorkSummary({ refreshSessionIndex = false }: { refreshSessionIndex?: boolean } = {}) {
+  async function refreshWorkSummary({
+    refreshSessionIndex = false,
+    saveSnapshot = false,
+  }: { refreshSessionIndex?: boolean; saveSnapshot?: boolean } = {}) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkSummaryState("loading");
@@ -629,6 +634,7 @@ function App() {
         session_limit: WORK_SUMMARY_SESSION_LIMIT,
         summary_limit: WORK_SUMMARY_DISPLAY_LIMIT,
         refresh_session_index: refreshSessionIndex,
+        save_snapshot: saveSnapshot,
       });
       setWorkSummaryResult(next);
       setWorkSummaryState("ready");
@@ -1176,6 +1182,17 @@ function App() {
               <RefreshCw size={15} />
               세션 재스캔
             </button>
+            <button
+              aria-label="현재 프로젝트 작업 요약을 SQLite 스냅샷으로 저장"
+              className="inline-action"
+              data-save-work-summary-snapshot="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => refreshWorkSummary({ saveSnapshot: true })}
+              type="button"
+            >
+              <Database size={15} />
+              스냅샷 저장
+            </button>
           </div>
         </div>
         {workSummaryFailureMessage ? (
@@ -1192,6 +1209,12 @@ function App() {
           <div className="work-summary-index" data-work-summary-index="true">
             <ShieldCheck size={15} />
             <span>{workSummaryIndexStatus}</span>
+          </div>
+        ) : null}
+        {workSummaryPersistenceStatus ? (
+          <div className="work-summary-index" data-work-summary-persistence="true">
+            <Database size={15} />
+            <span>{workSummaryPersistenceStatus}</span>
           </div>
         ) : null}
         {workSummaryResult ? (

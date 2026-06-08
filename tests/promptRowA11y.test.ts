@@ -3,6 +3,7 @@ import test from "node:test";
 import type { ActionLockState } from "../src/actionLocks.ts";
 import {
   pathDisplayText,
+  promptProviderDisplayText,
   promptQualitySuggestionText,
   promptRowAriaLabel,
   promptRowPreviewText,
@@ -104,6 +105,17 @@ test("quality suggestion display redacts secret-like text", () => {
   const displayText = promptQualitySuggestionText(text);
 
   assert.equal(displayText, "Add context but do not show [REDACTED_POSSIBLE_SECRET]");
+  assert.doesNotMatch(displayText, new RegExp(`${apiFlag}|${secretValue}`));
+});
+
+test("provider display redacts secret-like text", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["provider", "secret", "value"].join("-");
+  const text = `local ${apiFlag} ${secretValue}`;
+
+  const displayText = promptProviderDisplayText(text);
+
+  assert.equal(displayText, "local [REDACTED_POSSIBLE_SECRET]");
   assert.doesNotMatch(displayText, new RegExp(`${apiFlag}|${secretValue}`));
 });
 

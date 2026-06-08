@@ -56,6 +56,10 @@ export function promptQualitySuggestionText(text: string): string {
   return compactPromptText(redactSensitiveDisplayText(text));
 }
 
+export function promptProviderDisplayText(text: string): string {
+  return compactPromptText(redactSensitiveDisplayText(text));
+}
+
 export function sourceLabelDisplayText(text: string): string {
   return compactPromptText(redactSensitiveDisplayText(text));
 }

@@ -81,6 +81,7 @@ import {
 } from "./promptEmptyState";
 import {
   pathDisplayText,
+  promptProviderDisplayText,
   promptQualitySuggestionText,
   promptRowAriaLabel,
   promptMetadataDisplayText,
@@ -1993,7 +1994,9 @@ function App() {
         <section className="panel improve-panel">
           <div className="panel-heading">
             <h2>추천</h2>
-            <span>{activeImprovement?.provider ?? "local/OpenAI/GLM"}</span>
+            <span>
+              {activeImprovement ? promptProviderDisplayText(activeImprovement.provider) : "local/OpenAI/GLM"}
+            </span>
           </div>
           {improvementFailureMessage ? (
             <div

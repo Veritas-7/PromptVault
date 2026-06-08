@@ -1,12 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 21:52 KST
+Updated: 2026-06-08 21:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Quality gap display secret masking
+## Current Slice - 2026-06-08 Provider display secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent recommendation provider labels from rendering raw secret-like text
+  returned by backend or bridge improvement payloads.
+
+Context:
+
+- Previous quality gap masking is pushed to `origin/main` with source commit
+  `f7e86fc fix: mask quality gap secrets` and docs closeout
+  `26e457f docs: record quality gap masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for the scan and recommendation
+  user flow.
+- Existing display redaction covered prompt text, prompt metadata, paths,
+  source labels, warnings, import/scan progress, quality suggestions, and
+  quality gap summaries. The recommendation panel heading still rendered
+  `activeImprovement.provider` directly.
+- This slice changes display copy only. Raw improvement payload validation and
+  provider selection behavior remain unchanged.
+
+Progress:
+
+- Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
+  persisted/current/first objective all point at PromptVault.
+- Re-read workspace policies, `working.md`, `src/App.tsx`, `src/promptRowA11y.ts`,
+  and `tests/promptRowA11y.test.ts` from a clean `origin/main` tree.
+- Added a RED test in `tests/promptRowA11y.test.ts` requiring
+  `promptProviderDisplayText()`. RED failed as intended because the helper did
+  not exist.
+- Added `promptProviderDisplayText()` using the existing display redactor plus
+  whitespace compaction.
+- Routed the recommendation panel heading through the new helper when an active
+  improvement exists, preserving the existing `local/OpenAI/GLM` empty-state
+  label.
+- Ran a browser smoke with a Tauri-like invoke shim. Quick scan loaded a prompt,
+  recommendation generation returned a synthetic secret-like provider string,
+  and the recommendation panel heading rendered the redacted provider without
+  raw synthetic fragments.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/promptRowA11y.ts`: adds `promptProviderDisplayText()` for provider label
+  display.
+- `src/App.tsx`: masks active recommendation provider labels before rendering.
+- `tests/promptRowA11y.test.ts`: adds RED/GREEN coverage for secret-like
+  provider labels.
+- `working.md`: records this slice and updates the previous slice handoff state.
+
+Tests:
+
+- RED helper test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed as intended because `promptProviderDisplayText` was not exported.
+- Targeted GREEN:
+  same command passed with `tests/promptRowA11y.test.ts` 47/47 after adding the
+  helper.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5238" --port 5238 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_provider_secret_qa.mjs'`
+  passed with exit code `0`; quick scan and recommendation generation invoked
+  `scan_prompts` and `improve_prompt`, the recommendation heading showed
+  `local [REDACTED_POSSIBLE_SECRET]`, raw synthetic provider fragments were
+  absent from the body, and there were no page errors, console errors, or failed
+  responses.
+- Full project check: `npm run check` passed, covering UI tests 359/359,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after provider display masking.
+- Source commit/push is pending staged and full-tree gitleaks verification.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Run `git diff --check`, stage explicit paths only, run staged gitleaks, commit
+  the source change, run full-tree gitleaks, push to private `origin/main`, and
+  verify fetch parity plus GitHub private visibility.
+
+## Previous Slice - 2026-06-08 Quality gap display secret masking
 
 Current Goal:
 
@@ -54,6 +142,9 @@ Progress:
 - Repository visibility was rechecked with `gh repo view
   Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`:
   `visibility=PRIVATE`, `isPrivate=true`.
+- Docs closeout commit `26e457f docs: record quality gap masking verification`
+  was pushed to `origin/main`; final fetch parity was `0 0` and
+  `git status --short --branch` reported `## main...origin/main`.
 
 Changes:
 
@@ -90,6 +181,13 @@ Tests:
 - Source push verification: `git push origin main` advanced `main` from
   `7604a10` to `f7e86fc`; after fetch, parity was `0 0` and
   `git status --short --branch` reported `## main...origin/main`.
+- Docs staged secret scan: `gitleaks protect --staged` scanned about 1.08 KB
+  and found no leaks before the docs closeout commit.
+- Docs full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.15 MB and found no leaks before the docs closeout push.
+- Docs push verification: `git push origin main` advanced `main` from
+  `f7e86fc` to `26e457f`; after fetch, parity was `0 0` and
+  `git status --short --branch` reported `## main...origin/main`.
 
 Issues:
 
@@ -103,9 +201,7 @@ Research:
 
 Next Steps:
 
-- Commit this closeout `working.md` update after staged gitleaks, run full-tree
-  gitleaks again, push to private `origin/main`, and verify final fetch parity
-  plus GitHub private visibility.
+- Continue autonomous QA/improvement from this clean pushed tree.
 
 ## Previous Slice - 2026-06-08 Quality suggestion display secret masking
 

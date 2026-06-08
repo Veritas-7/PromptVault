@@ -1,12 +1,75 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 00:01 KST
+Updated: 2026-06-09 00:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 CLI repair side-effect-free scan
+## Current Slice - 2026-06-09 workingd.md progress log coverage
+
+Current Goal:
+
+- Include real project-local `workingd.md` progress logs in the
+  `project-progress-logs` source.
+- Preserve the existing conservative project progress source behavior: bounded
+  traversal, dependency/build-dir pruning, and side-effect-free verification.
+
+Context:
+
+- Operator explicitly called out `workingd.md` alongside project-local progress
+  logs.
+- A live `rg --files` check found two real `workingd.md` files under
+  `/Users/wj/Ai/System/10_Projects`: `enterprise_diagnosis_flutter` and
+  `CareVault`.
+- The existing matcher handled `working.md`, `worklog.md`,
+  `PROJECT_STATUS.md`, `PROGRESS_LOG.md`, and `progress.md`, but missed the
+  `workingd.md` variant.
+
+Progress:
+
+- Added a RED test case for `workingd.md` in the project progress log matcher.
+- Updated `is_project_progress_log_name()` to include `workingd.md`.
+- Verified the focused matcher test passes after implementation.
+- Verified a freshly built CLI `project-progress-logs` plan now reports 31
+  files, up from the previous 29, matching the two real `workingd.md` files.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: includes `workingd.md` as a project progress log
+  filename.
+- `src-tauri/src/lib.rs`: adds matcher coverage for the `workingd.md` variant.
+- `working.md`: records the `workingd.md` coverage slice.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_progress_log_matching_finds_only_known_progress_markdown_files --lib`
+  failed before implementation because `workingd.md` did not match
+  `ProjectProgressMarkdown`.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_progress_log_matching_finds_only_known_progress_markdown_files --lib`
+  passed.
+- Actual plan verification:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- plan --source project-progress-logs --json`
+  reported `total_files: 31`, `available_sources: 1`, and
+  `total_bytes: 16942276`.
+- Full verification:
+  `npm run check` passed with UI tests 374/374, Rust library tests 121/121,
+  CLI tests 18/18, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- This still records each project progress markdown file as source evidence. It
+  does not yet split those files into normalized daily/task records.
+
+Next Steps:
+
+- Commit and push this coverage fix after staged/full secret scans.
+- Continue toward daily/project/task extraction over actual sessions plus all
+  project-local progress logs.
+
+## Previous Slice - 2026-06-09 CLI repair side-effect-free scan
 
 Current Goal:
 

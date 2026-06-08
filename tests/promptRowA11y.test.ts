@@ -236,6 +236,31 @@ test("prompt row previews redact cloud access key assignments", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact URL userinfo credentials", () => {
+  const cases = [
+    {
+      text: "Connect postgres://app_user:short-db-pass@db.example/app before request.",
+      expected: "Connect [REDACTED_POSSIBLE_SECRET] before request.",
+      leakPattern: /postgres|app_user|short-db-pass|db\.example/,
+    },
+    {
+      text: "Open redis://:short-redis-pass@cache.example:6379/0 before request.",
+      expected: "Open [REDACTED_POSSIBLE_SECRET] before request.",
+      leakPattern: /redis|short-redis-pass|cache\.example/,
+    },
+  ];
+
+  for (const { text, expected, leakPattern } of cases) {
+    const preview = promptRowPreviewText(text);
+    const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+    assert.equal(preview, expected);
+    assert.doesNotMatch(preview, leakPattern);
+    assert.doesNotMatch(label, leakPattern);
+    assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+  }
+});
+
 test("prompt row previews redact private key blocks case-insensitively", () => {
   const text = [
     "-----begin test private key-----",

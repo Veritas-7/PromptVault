@@ -3949,7 +3949,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "possible_api_key",
                 Regex::new(
-                    r#"(?im)^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
+                    r#"(?im)\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
                 )
                     .expect("api key regex"),
             ),
@@ -6417,6 +6417,22 @@ mod tests {
         assert_eq!(
             redact_sensitive_text(text),
             "[REDACTED_POSSIBLE_API_KEY] [REDACTED_POSSIBLE_API_KEY]"
+        );
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_url_userinfo_credentials() {
+        assert_eq!(
+            redact_sensitive_text(
+                "Connect postgres://app_user:short-db-pass@db.example/app before request."
+            ),
+            "Connect [REDACTED_POSSIBLE_API_KEY] before request."
+        );
+        assert_eq!(
+            redact_sensitive_text(
+                "Open redis://:short-redis-pass@cache.example:6379/0 before request."
+            ),
+            "Open [REDACTED_POSSIBLE_API_KEY] before request."
         );
     }
 

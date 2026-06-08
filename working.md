@@ -1,12 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 17:21 KST
+Updated: 2026-06-08 17:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Cloud access key redaction
+## Current Slice - 2026-06-08 URL userinfo credential redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for URL userinfo credentials in DSN-style connection strings and
+  HTTP URLs.
+
+Context:
+
+- Previous cloud access key redaction is pushed to `origin/main` with source
+  commit `3bc106e fix: redact cloud access keys` and docs closeout
+  `2c3f694 docs: record cloud access key verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed DSN-style URL userinfo credentials could remain
+  visible in prompt row preview text.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact URL userinfo credentials without exposing scheme, user, password,
+  or host details.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same URL userinfo credential forms.
+- Confirmed RED: frontend prompt row preview returned the original DSN text,
+  and backend redaction returned the original DSN text.
+- Extended the shared possible-secret matcher to classify URL userinfo spans
+  with a required password component before `@`, replacing the full URL span
+  with the existing sensitive marker.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload reflecting backend-redacted URL userinfo text. It confirmed one
+  stored prompt row, redaction markers visible, no URL userinfo substrings in
+  rendered text, localized risk label visible, and zero console/page/API
+  failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts URL userinfo credentials in prompt row
+  previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for
+  DSN-style URL userinfo credential redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-secret redaction with the
+  frontend matcher and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on URL userinfo credentials because the original DSN text remained
+  visible.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_url_userinfo_credentials` failed
+  from `src-tauri` because backend redaction returned the original DSN text.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 23/23.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text` passed, 16/16 focused lib tests, plus
+  zero-test main and CLI targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5207" --port 5207 --timeout 120 -- /bin/bash -lc ...`
+  passed with `rowCount=1`, `redactionCount=2`, `leaked=false`,
+  `riskVisible=true`, `consoleErrors=0`, and `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 329/329,
+  production build, Rust lib tests 100/100, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after aligning URL userinfo credential redaction.
+- Python Playwright is not installed in this environment, so browser QA used
+  the repo's available Node Playwright package while still managing Vite with
+  the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for common URL userinfo credential forms.
+
+Next Steps:
+
+- Run whitespace and staged secret checks, then commit and push this source
+  slice with explicit path staging.
+
+## Previous Slice - 2026-06-08 Cloud access key redaction
 
 Current Goal:
 

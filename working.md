@@ -1,12 +1,111 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 12:38 KST
+Updated: 2026-06-08 12:44 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Frequency column overflow visibility
+## Current Slice - 2026-06-08 Import event list overflow visibility
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make the recent import-events panel disclose when the API has more stored
+  events than the currently loaded preview list displays.
+
+Context:
+
+- Previous frequency-column overflow slice is pushed to `origin/main`:
+  implementation `69ad31d fix: show frequency overflow counts` and closeout
+  `c5587b2 docs: close frequency overflow handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`.
+- `refreshImportEvents` requests `listImportEvents({ limit: 20 })`; the UI
+  displays `total_events` and renders `events`, but gives no direct cue when
+  `total_events > events.length`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `c5587b2 docs: close frequency overflow handoff`.
+- Re-read the recent import-events panel and bridge parser. Confirmed the API
+  accepts `total_events` above the returned row count, but the panel currently
+  lists only returned rows without an overflow notice.
+- Preparing a RED Playwright QA that expects a visible overflow summary when
+  twenty-one total import events exist but only twenty preview rows are loaded.
+- Confirmed RED first after fixing a Playwright script typo: dev-mode QA
+  rendered twenty import activity rows but timed out waiting for
+  `[data-import-events-overflow="true"]`.
+- Added a compact import-events overflow row for hidden historical events.
+- Confirmed GREEN: the same dev-mode Playwright QA rendered the overflow row
+  for the twenty-first hidden event with no browser console/page errors.
+- Removed `/tmp/promptvault_import_events_overflow_qa.mjs` after QA and
+  confirmed port 5341 had no listener.
+- Ran the full project check successfully after import-events overflow QA.
+- Pre-staging verification passed with only the expected three modified files:
+  `src/App.tsx`, `src/App.css`, and `working.md`.
+- Explicitly staged only `src/App.tsx`, `src/App.css`, and `working.md`.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 4.83 KB and finding no leaks.
+- Restaged `working.md` after recording the staged scan and reran the staged
+  secret scan; about 5.24 KB was scanned and no leaks were found.
+
+Changes:
+
+- `working.md`: records the current import-event overflow visibility slice.
+- `src/App.tsx`: calculates hidden import-event count from `total_events`
+  versus returned preview rows and renders `data-import-events-overflow`.
+- `src/App.css`: styles the import-events overflow row with the existing import
+  panel overflow treatment.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5341" --port 5341 --timeout 30 node /tmp/promptvault_import_events_overflow_qa.mjs http://127.0.0.1:5341`
+  first errored on a test-only `new_page` typo, then failed correctly because
+  `[data-import-events-overflow="true"]` was not visible after twenty-one
+  total events with twenty returned rows.
+- GREEN: the same dev-mode Playwright QA passed after the overflow row was
+  rendered.
+- Cleanup: `/tmp/promptvault_import_events_overflow_qa.mjs` removed and
+  `lsof -nP -iTCP:5341 -sTCP:LISTEN` returned no listener.
+- Full project check: `npm run check` passed, covering UI tests 297/297,
+  production build, Rust lib tests 84/84, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/App.tsx src/App.css working.md`
+  passed; repo root was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only `src/App.css`, `src/App.tsx`,
+  and `working.md` modified;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`; the temp QA file was absent; port 5341 was free.
+- Staged paths: `git diff --cached --name-only` listed only `src/App.css`,
+  `src/App.tsx`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed
+  after scanning about 4.83 KB and finding no leaks.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit the implementation, run full-tree secret scan, push, and verify final
+  parity.
+
+## Previous Slice - 2026-06-08 Frequency column overflow visibility
 
 Current Goal:
 

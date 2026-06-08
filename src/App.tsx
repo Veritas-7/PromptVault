@@ -478,6 +478,10 @@ function App() {
     browserBridgeDatabasePath,
     browserBridgeFailureText,
   );
+  const hiddenImportEventCount = Math.max(
+    0,
+    (importEventsResult?.total_events ?? 0) - (importEventsResult?.events.length ?? 0),
+  );
 
   useEffect(() => {
     if (browserQaMode) {
@@ -1450,6 +1454,11 @@ function App() {
               ) : (
                 <div className="empty compact">기록된 가져오기 활동이 아직 없습니다.</div>
               )}
+              {hiddenImportEventCount > 0 ? (
+                <p className="import-activity-overflow" data-import-events-overflow="true">
+                  가져오기 기록 외 {hiddenImportEventCount.toLocaleString()}개 항목이 더 있습니다.
+                </p>
+              ) : null}
             </>
           ) : (
             <div className="empty compact" data-empty-import-events="true">

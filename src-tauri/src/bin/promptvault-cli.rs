@@ -435,6 +435,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let json = take_flag(&mut args, "--json");
             let mut limit = None;
             let mut database_path = None;
+            let mut date = None;
+            let mut project = None;
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
@@ -443,6 +445,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     "--database" => {
                         database_path = Some(parse_required_arg(iter.next(), "--database")?);
+                    }
+                    "--date" => {
+                        date = Some(parse_required_arg(iter.next(), "--date")?);
+                    }
+                    "--project" => {
+                        project = Some(parse_required_arg(iter.next(), "--project")?);
                     }
                     other => {
                         return Err(
@@ -455,6 +463,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 run_list_project_work_summary_snapshots(ProjectWorkSummarySnapshotsOptions {
                     database_path,
                     limit,
+                    date,
+                    project,
                 })?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
@@ -889,7 +899,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--ai] [--json]\n  work-summary-snapshots [--limit N>0] [--database PATH] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  work-summary builds project/date summaries with citation IDs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--ai] [--json]\n  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  work-summary builds project/date summaries with citation IDs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -977,6 +987,8 @@ struct ProjectWorkSummaryBridgePayload {
 struct ProjectWorkSummarySnapshotsBridgeOptions {
     database_path: Option<String>,
     limit: Option<usize>,
+    date: Option<String>,
+    project: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -1005,6 +1017,8 @@ impl ProjectWorkSummarySnapshotsBridgeOptions {
         ProjectWorkSummarySnapshotsOptions {
             database_path: self.database_path,
             limit: self.limit,
+            date: self.date,
+            project: self.project,
         }
     }
 }
@@ -1386,6 +1400,16 @@ mod tests {
         assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
         assert!(response.contains("work-summary snapshot limit requires a positive integer"));
         assert!(response.contains("Access-Control-Allow-Origin: *"));
+
+        let date_response = bridge_response_for(
+            "/api/work-summary-snapshots",
+            r#"{"options":{"date":"   "}}"#,
+        );
+
+        assert!(date_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(
+            date_response.contains("work-summary snapshot date filter requires a non-empty value")
+        );
     }
 
     fn bridge_response_for(path: &str, body: &str) -> String {
@@ -1433,7 +1457,9 @@ mod tests {
         assert!(help.contains(
             "work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--ai] [--json]"
         ));
-        assert!(help.contains("work-summary-snapshots [--limit N>0] [--database PATH] [--json]"));
+        assert!(help.contains(
+            "work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]"
+        ));
         assert!(help.contains("work-report reads project progress logs"));
         assert!(help.contains("work-report stores only sanitized session evidence"));
         assert!(help.contains("--refresh-session-index to rescan raw sessions"));

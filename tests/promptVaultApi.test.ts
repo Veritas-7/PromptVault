@@ -345,10 +345,20 @@ test("browser bridge work summary snapshots posts options and validates saved ro
     globalThis.fetch = originalFetch;
   });
 
-  const result = await listProjectWorkSummarySnapshots({ limit: 5 });
+  const result = await listProjectWorkSummarySnapshots({
+    limit: 5,
+    date: "2026-06-09",
+    project: "PromptVault",
+  });
 
   assert.match(requestPath, /\/api\/work-summary-snapshots$/);
-  assert.deepEqual(JSON.parse(requestBody), { options: { limit: 5 } });
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      limit: 5,
+      date: "2026-06-09",
+      project: "PromptVault",
+    },
+  });
   assert.equal(result.returned_snapshot_count, 1);
   assert.equal(result.snapshots[0].id, 7);
   assert.equal(result.snapshots[0].summaries[0].citations[0].id, "2026-06-09-PromptVault-1");

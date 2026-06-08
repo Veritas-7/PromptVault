@@ -1,12 +1,115 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 01:50 KST
+Updated: 2026-06-09 02:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-summary snapshot history view
+## Current Slice - 2026-06-09 work-summary snapshot filters
+
+Current Goal:
+
+- Let operators narrow saved project/day work-summary snapshots by date and
+  project from CLI, browser bridge, Tauri/native options, and the main app UI.
+- Keep filtering source-backed and sanitized: filters match nested
+  `summaries_json` project/date evidence, not raw session prompt bodies.
+
+Context:
+
+- The previous slice added a recent saved-history view, but it only listed the
+  newest rows. Once multiple days/projects are saved, operators need direct
+  date/project lookup instead of relying on recency.
+- Snapshot rows store summary groups as JSON, so the filter is implemented by
+  parsing existing structured `ProjectWorkSummary` objects in Rust rather than
+  depending on SQLite JSON extensions or substring matching.
+
+Progress:
+
+- Added `date` and `project` options to saved work-summary snapshot listing.
+- Added server-side validation for blank snapshot filters.
+- Added Rust filtering over parsed snapshot summaries with filtered
+  `total_snapshots` and limit-bounded returned rows.
+- Added CLI `work-summary-snapshots --date YYYY-MM-DD --project NAME`.
+- Added browser bridge option plumbing and TypeScript API option coverage.
+- Added main app snapshot filter controls with apply/reset actions and
+  responsive layout.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: extends snapshot options, validates filter strings,
+  filters parsed `summaries_json`, and adds filter coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds CLI/bridge date/project options,
+  help text, and blank-filter validation coverage.
+- `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`: extends
+  `ProjectWorkSummarySnapshotsOptions` and verifies browser bridge request
+  payloads include filter values.
+- `src/App.tsx`, `src/App.css`: adds saved-history filter inputs, apply/reset
+  buttons, and responsive filter layout.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_summary_snapshots_filter_saved_rows_by_summary_date_and_project --lib`
+  failed before implementation because `ProjectWorkSummarySnapshotsOptions`
+  did not have `date` or `project` fields.
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli bridge_routes_work_summary_snapshot_validation_errors`
+  failed before implementation because blank `date` filters were ignored.
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli help_text_documents_cli_validation_rules`
+  failed before implementation because CLI help did not document
+  `--date/--project`.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_summary_snapshots_filter_saved_rows_by_summary_date_and_project --lib`
+  passed with 1/1.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli bridge_routes_work_summary_snapshot_validation_errors`
+  passed with 1/1.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli help_text_documents_cli_validation_rules`
+  passed with 1/1.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed with 141/141.
+- GREEN:
+  `npm run build` passed (`tsc && vite build`).
+- Actual filtered snapshot smoke:
+  created `/tmp/promptvault-work-summary-filter-smoke.sqlite` via
+  `work-summary --save-snapshot`, then listed it with
+  `work-summary-snapshots --date 2026-06-09 --project CareVault --json`.
+  The response returned `total_snapshots: 1`, `returned_snapshot_count: 1`,
+  `first_snapshot_id: 1`, and first summary `date: 2026-06-09`,
+  `project: CareVault`.
+- Full gate:
+  `npm run check` passed: UI tests 385/385, Vite build, Rust library tests
+  137/137, CLI tests 20/20, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- cmux/in-app browser click testing remains excluded in this runtime by the
+  active goal's latest environment note. This slice was verified through CLI,
+  bridge tests, TypeScript tests, Vite build, Rust tests, and clippy.
+- Saved snapshot filtering is exact-match for normalized non-empty strings.
+  A future enhancement can add project/date suggestions from saved snapshot
+  contents if browsing grows beyond manual filter entry.
+
+Research:
+
+- No external research was needed. The implementation followed the existing
+  local structured JSON parser path and avoided new dependencies.
+
+Next Steps:
+
+- Add saved snapshot filter suggestions or saved-history comparison if the
+  history grows beyond manual date/project lookup.
+- Continue improving project/day/task management by adding AI-assisted
+  structure extraction for ambiguous progress-log sections while preserving
+  citation-backed evidence.
+- Run a browser automation pass against the work-summary panel when a
+  permitted local browser target is available.
+
+## Previous Slice - 2026-06-09 work-summary snapshot history view
 
 Current Goal:
 

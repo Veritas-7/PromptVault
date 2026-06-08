@@ -90,6 +90,8 @@ export interface ProjectWorkSummaryOptions {
 export interface ProjectWorkSummarySnapshotsOptions {
   database_path?: string;
   limit?: number;
+  date?: string;
+  project?: string;
 }
 
 export interface ImprovePromptRequest {

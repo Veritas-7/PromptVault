@@ -116,6 +116,7 @@ import {
   planScan,
   scanProgress,
   scanPrompts,
+  type ProjectWorkSummarySnapshotsOptions,
 } from "./promptVaultApi";
 import {
   MAX_SCAN_LIMIT,
@@ -268,6 +269,8 @@ function App() {
   const [workSummaryResult, setWorkSummaryResult] = useState<ProjectWorkSummaryResult | null>(null);
   const [workSummarySnapshotsResult, setWorkSummarySnapshotsResult] =
     useState<ProjectWorkSummarySnapshotsResult | null>(null);
+  const [workSummarySnapshotDateFilter, setWorkSummarySnapshotDateFilter] = useState("");
+  const [workSummarySnapshotProjectFilter, setWorkSummarySnapshotProjectFilter] = useState("");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [resultOrigin, setResultOrigin] = useState<PromptResultOrigin | null>(null);
   const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
@@ -480,6 +483,8 @@ function App() {
     workSummarySnapshotsState,
     workSummarySnapshotsResult,
   );
+  const hasWorkSummarySnapshotFilters =
+    workSummarySnapshotDateFilter.trim() !== "" || workSummarySnapshotProjectFilter.trim() !== "";
   const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
   const hiddenWorkSummaryCount = Math.max(
     0,
@@ -638,14 +643,25 @@ function App() {
     }
   }
 
-  async function refreshWorkSummarySnapshots() {
+  function workSummarySnapshotOptions({
+    date = workSummarySnapshotDateFilter,
+    project = workSummarySnapshotProjectFilter,
+  }: { date?: string; project?: string } = {}): ProjectWorkSummarySnapshotsOptions {
+    const trimmedDate = date.trim();
+    const trimmedProject = project.trim();
+    return {
+      limit: WORK_SUMMARY_HISTORY_LIMIT,
+      ...(trimmedDate ? { date: trimmedDate } : {}),
+      ...(trimmedProject ? { project: trimmedProject } : {}),
+    };
+  }
+
+  async function refreshWorkSummarySnapshots(options = workSummarySnapshotOptions()) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkSummarySnapshotsState("loading");
     try {
-      const next = await listProjectWorkSummarySnapshots({
-        limit: WORK_SUMMARY_HISTORY_LIMIT,
-      });
+      const next = await listProjectWorkSummarySnapshots(options);
       setWorkSummarySnapshotsResult(next);
       setWorkSummarySnapshotsState("ready");
     } catch (err) {
@@ -661,9 +677,7 @@ function App() {
   async function refreshWorkSummarySnapshotsAfterSave() {
     setWorkSummarySnapshotsState("loading");
     try {
-      const next = await listProjectWorkSummarySnapshots({
-        limit: WORK_SUMMARY_HISTORY_LIMIT,
-      });
+      const next = await listProjectWorkSummarySnapshots(workSummarySnapshotOptions());
       setWorkSummarySnapshotsResult(next);
       setWorkSummarySnapshotsState("ready");
     } catch (err) {
@@ -1290,6 +1304,64 @@ function App() {
             <span>{workSummarySnapshotsFailureMessage}</span>
           </div>
         ) : null}
+        <form
+          className="work-summary-filter-row"
+          data-work-summary-snapshots-filters="true"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void refreshWorkSummarySnapshots();
+          }}
+        >
+          <label>
+            <span>기록 날짜</span>
+            <input
+              aria-label="저장된 작업 요약 스냅샷 날짜 필터"
+              data-work-summary-snapshots-date-filter="true"
+              disabled={isTopLevelActionLocked}
+              onChange={(event) => setWorkSummarySnapshotDateFilter(event.target.value)}
+              placeholder="2026-06-09"
+              type="text"
+              value={workSummarySnapshotDateFilter}
+            />
+          </label>
+          <label>
+            <span>프로젝트</span>
+            <input
+              aria-label="저장된 작업 요약 스냅샷 프로젝트 필터"
+              data-work-summary-snapshots-project-filter="true"
+              disabled={isTopLevelActionLocked}
+              onChange={(event) => setWorkSummarySnapshotProjectFilter(event.target.value)}
+              placeholder="PromptVault"
+              type="text"
+              value={workSummarySnapshotProjectFilter}
+            />
+          </label>
+          <button
+            aria-label="저장된 작업 요약 스냅샷 필터 적용"
+            className="inline-action"
+            data-apply-work-summary-snapshot-filters="true"
+            disabled={isTopLevelActionLocked}
+            type="submit"
+          >
+            <Search size={15} />
+            필터 적용
+          </button>
+          <button
+            aria-label="저장된 작업 요약 스냅샷 필터 초기화"
+            className="inline-action"
+            data-clear-work-summary-snapshot-filters="true"
+            disabled={isTopLevelActionLocked || !hasWorkSummarySnapshotFilters}
+            onClick={() => {
+              setWorkSummarySnapshotDateFilter("");
+              setWorkSummarySnapshotProjectFilter("");
+              void refreshWorkSummarySnapshots({ limit: WORK_SUMMARY_HISTORY_LIMIT });
+            }}
+            type="button"
+          >
+            <XCircle size={15} />
+            초기화
+          </button>
+        </form>
         {workSummaryIndexStatus ? (
           <div className="work-summary-index" data-work-summary-index="true">
             <ShieldCheck size={15} />

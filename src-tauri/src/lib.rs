@@ -222,6 +222,8 @@ pub struct ProjectWorkSummarySnapshot {
 pub struct ProjectWorkSummarySnapshotsOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
+    pub date: Option<String>,
+    pub project: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1080,6 +1082,14 @@ pub fn run_list_project_work_summary_snapshots(
     if matches!(options.limit, Some(0)) {
         return Err("work-summary snapshot limit requires a positive integer".into());
     }
+    let date_filter = normalized_optional_filter(
+        options.date.as_deref(),
+        "work-summary snapshot date filter requires a non-empty value",
+    )?;
+    let project_filter = normalized_optional_filter(
+        options.project.as_deref(),
+        "work-summary snapshot project filter requires a non-empty value",
+    )?;
     let generated_at = Utc::now().to_rfc3339();
     let database_path = options
         .database_path
@@ -1091,12 +1101,12 @@ pub fn run_list_project_work_summary_snapshots(
         .unwrap_or(DEFAULT_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT)
         .min(MAX_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT);
     let conn = open_promptvault_database(&database_path)?;
-    let total_snapshots = conn.query_row(
-        "SELECT COUNT(*) FROM project_work_summary_snapshots",
-        [],
-        |row| row.get::<_, i64>(0),
-    )? as usize;
-    let snapshots = read_project_work_summary_snapshots(&conn, limit)?;
+    let (total_snapshots, snapshots) = read_project_work_summary_snapshots(
+        &conn,
+        limit,
+        date_filter.as_deref(),
+        project_filter.as_deref(),
+    )?;
     Ok(ProjectWorkSummarySnapshotsResult {
         generated_at,
         database_path: database_path.display().to_string(),
@@ -1105,6 +1115,17 @@ pub fn run_list_project_work_summary_snapshots(
         snapshots,
         warnings: Vec::new(),
     })
+}
+
+fn normalized_optional_filter(
+    value: Option<&str>,
+    empty_message: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    match value.map(str::trim) {
+        Some("") => Err(empty_message.into()),
+        Some(trimmed) => Ok(Some(trimmed.to_string())),
+        None => Ok(None),
+    }
 }
 
 pub fn run_import_batch(
@@ -4769,21 +4790,23 @@ fn persist_project_work_summary_snapshot(
 fn read_project_work_summary_snapshots(
     conn: &Connection,
     limit: usize,
-) -> Result<Vec<ProjectWorkSummarySnapshot>, Box<dyn std::error::Error>> {
+    date_filter: Option<&str>,
+    project_filter: Option<&str>,
+) -> Result<(usize, Vec<ProjectWorkSummarySnapshot>), Box<dyn std::error::Error>> {
     let mut stmt = conn.prepare(
         "SELECT id, created_at, provider, used_ai, narrative_markdown, total_items,
             project_count, date_count, files_seen, session_evidence_count,
             session_evidence_unique_count, summary_count, summaries_json, warnings_json
          FROM project_work_summary_snapshots
-         ORDER BY id DESC
-         LIMIT ?1",
+         ORDER BY id DESC",
     )?;
-    let mut rows = stmt.query([limit as i64])?;
+    let mut rows = stmt.query([])?;
+    let mut total_snapshots = 0usize;
     let mut snapshots = Vec::new();
     while let Some(row) = rows.next()? {
         let summaries_json: String = row.get(12)?;
         let warnings_json: String = row.get(13)?;
-        snapshots.push(ProjectWorkSummarySnapshot {
+        let snapshot = ProjectWorkSummarySnapshot {
             id: row.get(0)?,
             created_at: row.get(1)?,
             provider: row.get(2)?,
@@ -4798,9 +4821,29 @@ fn read_project_work_summary_snapshots(
             summary_count: row.get::<_, i64>(11)? as usize,
             summaries: serde_json::from_str(&summaries_json)?,
             warnings: serde_json::from_str(&warnings_json)?,
-        });
+        };
+        if project_work_summary_snapshot_matches_filters(&snapshot, date_filter, project_filter) {
+            total_snapshots += 1;
+            if snapshots.len() < limit {
+                snapshots.push(snapshot);
+            }
+        }
     }
-    Ok(snapshots)
+    Ok((total_snapshots, snapshots))
+}
+
+fn project_work_summary_snapshot_matches_filters(
+    snapshot: &ProjectWorkSummarySnapshot,
+    date_filter: Option<&str>,
+    project_filter: Option<&str>,
+) -> bool {
+    if date_filter.is_none() && project_filter.is_none() {
+        return true;
+    }
+    snapshot.summaries.iter().any(|summary| {
+        date_filter.is_none_or(|date| summary.date == date)
+            && project_filter.is_none_or(|project| summary.project == project)
+    })
 }
 
 fn read_import_state(
@@ -8343,6 +8386,8 @@ Progress:
         let result = run_list_project_work_summary_snapshots(ProjectWorkSummarySnapshotsOptions {
             database_path: Some(db_path.display().to_string()),
             limit: Some(1),
+            date: None,
+            project: None,
         })
         .expect("list snapshots");
 
@@ -8352,6 +8397,80 @@ Progress:
         assert_eq!(result.snapshots[0].provider, "glm");
         assert!(result.snapshots[0].used_ai);
         assert_eq!(result.snapshots[0].summaries[0].project, "PromptVault");
+
+        std::fs::remove_file(db_path).expect("remove snapshot db");
+    }
+
+    #[test]
+    fn project_work_summary_snapshots_filter_saved_rows_by_summary_date_and_project() {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-work-summary-snapshot-filter-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let conn = open_promptvault_database(&db_path).expect("open snapshot db");
+        for (created_at, date, project) in [
+            ("2026-06-09T00:00:00Z", "2026-06-09", "PromptVault"),
+            ("2026-06-09T01:00:00Z", "2026-06-09", "CareVault"),
+            ("2026-06-10T00:00:00Z", "2026-06-10", "PromptVault"),
+        ] {
+            let summaries_json = serde_json::json!([{
+                "date": date,
+                "project": project,
+                "headline": format!("{project}: filtered summary"),
+                "work_item_count": 1,
+                "session_evidence_count": 1,
+                "unique_session_evidence_count": 1,
+                "citations": [{
+                    "id": format!("{date}-{project}-1"),
+                    "date": date,
+                    "project": project,
+                    "title": "filtered summary",
+                    "status": "done",
+                    "source_path": "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+                    "source_file": "working.md",
+                    "evidence": "- filtered summary",
+                    "session_evidence_count": 1,
+                    "session_sources": [{ "text": "Codex session metadata", "count": 1 }]
+                }],
+                "next_actions": []
+            }])
+            .to_string();
+            conn.execute(
+                "INSERT INTO project_work_summary_snapshots (
+                    created_at, provider, used_ai, narrative_markdown, total_items, project_count,
+                    date_count, files_seen, session_evidence_count, session_evidence_unique_count,
+                    summary_count, report_json, summaries_json, warnings_json
+                ) VALUES (?1, 'local-citation-rules', 0, ?2, 1, 1, 1, 1, 1, 1, 1, ?3, ?4, '[]')",
+                params![
+                    created_at,
+                    format!("- {date} {project}: filtered summary"),
+                    r#"{"total_items":1}"#,
+                    summaries_json,
+                ],
+            )
+            .expect("insert snapshot row");
+        }
+        drop(conn);
+
+        let result = run_list_project_work_summary_snapshots(ProjectWorkSummarySnapshotsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(5),
+            date: Some("2026-06-09".to_string()),
+            project: Some("PromptVault".to_string()),
+        })
+        .expect("list filtered snapshots");
+
+        assert_eq!(result.total_snapshots, 1);
+        assert_eq!(result.returned_snapshot_count, 1);
+        assert_eq!(result.snapshots[0].summaries[0].date, "2026-06-09");
+        assert_eq!(result.snapshots[0].summaries[0].project, "PromptVault");
+        assert!(result.snapshots[0]
+            .narrative_markdown
+            .contains("PromptVault"));
 
         std::fs::remove_file(db_path).expect("remove snapshot db");
     }

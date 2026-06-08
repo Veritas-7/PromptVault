@@ -1,12 +1,117 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 21:22 KST
+Updated: 2026-06-08 21:28 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Path display secret masking
+## Current Slice - 2026-06-08 Source label display secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent source label strings from bypassing sensitive text redaction in
+  visible source names, progress labels, action aria labels, failure text, and
+  stop notices.
+
+Context:
+
+- Previous path display secret masking is pushed to `origin/main` with source
+  commit `e141eb2 fix: mask path display secrets` and docs closeout
+  `5a843c4 docs: record path display masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment or Tauri-like browser shims for
+  controlled user flows.
+- Prompt text, warnings, errors, prompt metadata, and path-like display fields
+  were already masked. Source labels were still rendered raw in saved import
+  progress rows, import activity rows, plan rows, import progress copy, source
+  summaries, and several aria/failure/stop labels.
+- This slice changes display and accessibility copy only. Raw source IDs,
+  backend payloads, selection IDs, import requests, and stored filter behavior
+  remain unchanged.
+
+Progress:
+
+- Searched `App.tsx`, `sourceStatusA11y.ts`, `importProgress.ts`, and related
+  tests for raw `source_label`, `source.label`, and import progress label
+  rendering.
+- Added RED tests in `tests/sourceStatusA11y.test.ts` for secret-like source
+  names in plan/source-summary aria labels. RED failed as intended because raw
+  `--api-key source-label-secret` appeared in the label.
+- Added RED tests in `tests/importProgress.test.ts` for secret-like source
+  names in import progress, failure, and stop notice copy. RED failed as
+  intended because raw label fragments were preserved.
+- Added `sourceLabelDisplayText()` using the existing display redactor plus
+  whitespace compaction.
+- Routed source status aria labels, source summary aria labels, import progress
+  labels, import failure/stop notices, and visible source labels through the
+  source-label display helper.
+- Ran a browser smoke with a Tauri-like invoke shim whose source labels carried
+  synthetic secret-like content. Startup import panels, quick scan, plan, and
+  batch import completed; plan checkbox/button aria labels and page body
+  contained the redacted source label and no raw source label secret fragments.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/promptRowA11y.ts`: adds `sourceLabelDisplayText()` for source-label
+  display strings.
+- `src/sourceStatusA11y.ts`: masks source names in plan/source-summary aria
+  labels.
+- `src/importProgress.ts`: masks source names in progress labels, displayed
+  import progress state, failure copy, and stop notices.
+- `src/App.tsx`: masks visible source names in saved import progress, recent
+  import activity, plan rows, import summary, and source summaries.
+- `tests/sourceStatusA11y.test.ts`: adds source-label redaction coverage for
+  plan/source-summary aria labels.
+- `tests/importProgress.test.ts`: adds source-label redaction coverage for
+  import progress/failure/stop copy.
+- `working.md`: records this slice and its RED/GREEN/browser/full-check
+  evidence.
+
+Tests:
+
+- RED source status test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/sourceStatusA11y.test.ts`
+  failed as intended because source status labels exposed raw
+  `--api-key source-label-secret`.
+- RED import progress test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/importProgress.test.ts`
+  failed as intended because import progress/failure/stop labels preserved raw
+  secret-like source label text.
+- Targeted GREEN:
+  same commands passed with `tests/sourceStatusA11y.test.ts` 15/15 and
+  `tests/importProgress.test.ts` 17/17 after masking source-label display
+  paths.
+- Browser click smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5234" --port 5234 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_source_label_secret_qa.mjs'`
+  passed with exit code `0`; startup import panels, quick scan, plan, and batch
+  import completed, plan checkbox/button aria labels were masked, the body did
+  not include raw source label secret fragments, and there were no page errors,
+  console errors, or failed responses.
+- Full project check: `npm run check` passed, covering UI tests 355/355,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after source-label display masking.
+- This slice intentionally does not mutate raw source labels used for persisted
+  filters or backend source identity matching.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Commit and push the source slice, then record docs closeout from the clean
+  pushed tree.
+
+## Previous Slice - 2026-06-08 Path display secret masking
 
 Current Goal:
 

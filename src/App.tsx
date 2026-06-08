@@ -87,6 +87,7 @@ import {
   redactSensitiveDisplayText,
   selectedPromptDisplayText,
   selectedPromptMetaLabel,
+  sourceLabelDisplayText,
 } from "./promptRowA11y";
 import { qualityGapLabel, qualityGapSummary } from "./qualityGaps";
 import { qualityBandClass, qualityBandLabel } from "./qualityLabels";
@@ -1279,7 +1280,7 @@ function App() {
                   {visibleImportStates.map((state) => (
                     <div className="saved-import-row" key={state.source_id}>
                       <div>
-                        <strong>{state.source_label}</strong>
+                        <strong>{sourceLabelDisplayText(state.source_label)}</strong>
                         <span>{state.updated_at}</span>
                       </div>
                       <progress
@@ -1398,7 +1399,7 @@ function App() {
                   {importEventsResult.events.map((event) => (
                     <div className="import-activity-row" key={event.id}>
                       <div>
-                        <strong>{event.source_label}</strong>
+                        <strong>{sourceLabelDisplayText(event.source_label)}</strong>
                         <span>{new Date(event.generated_at).toLocaleString()}</span>
                       </div>
                       <span>{importEventBatchSummary(event)}</span>
@@ -1565,7 +1566,7 @@ function App() {
                             }}
                             type="checkbox"
                           />
-                          <strong>{source.label}</strong>
+                          <strong>{sourceLabelDisplayText(source.label)}</strong>
                         </label>
                         <span>{pathDisplayText(source.root_path)}</span>
                         {displayNotes.length ? <span className="source-meta">{displayNotes.join(" ")}</span> : null}
@@ -1692,7 +1693,7 @@ function App() {
           <div className="import-summary">
             <div>
               <span>소스</span>
-              <strong>{currentImportProgress.sourceLabel}</strong>
+              <strong>{sourceLabelDisplayText(currentImportProgress.sourceLabel)}</strong>
             </div>
             <div>
               <span>처리됨</span>
@@ -1777,7 +1778,7 @@ function App() {
               sourceSummaries.map((source) => (
                 <div className="source-row" key={source.id}>
                   <div>
-                    <strong>{source.label}</strong>
+                    <strong>{sourceLabelDisplayText(source.label)}</strong>
                     <span>{pathDisplayText(source.root_path)}</span>
                     <span className="source-meta">
                       품질 {source.average_quality.toFixed(1)} · 약함 {source.weak_prompt_count}

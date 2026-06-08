@@ -1,4 +1,5 @@
 import type { ImportBatchResult, ImportState } from "./types";
+import { sourceLabelDisplayText } from "./promptRowA11y.ts";
 
 export type ImportRunState = "idle" | "importing" | "stopped" | "ready" | "failed";
 export type ImportRunMode = "single" | "continuous" | "queue";
@@ -34,7 +35,9 @@ export function importProgressValueText(processedFiles: number, totalFiles: numb
 }
 
 export function importProgressLabel(sourceLabel: string | null | undefined): string {
-  const target = sourceLabel?.trim() || "선택한 소스";
+  const target = sourceLabel?.trim()
+    ? sourceLabelDisplayText(sourceLabel)
+    : "선택한 소스";
   return `${target} 가져오기 진행`;
 }
 
@@ -63,7 +66,7 @@ export function importProgressDisplay(
     batchSummary,
     percent,
     processedFiles,
-    sourceLabel,
+    sourceLabel: sourceLabelDisplayText(sourceLabel),
     totalFiles,
   };
 }
@@ -97,7 +100,7 @@ export function importRunFailureText(
   if (runState !== "failed") return null;
   const target = sourceLabel?.trim();
   return target
-    ? `${target} 가져오기에 실패했습니다. 위 오류를 확인한 뒤 가져오기 계획에서 다시 시도하세요.`
+    ? `${sourceLabelDisplayText(target)} 가져오기에 실패했습니다. 위 오류를 확인한 뒤 가져오기 계획에서 다시 시도하세요.`
     : "선택한 소스를 가져오지 못했습니다. 위 오류를 확인한 뒤 가져오기 계획에서 다시 시도하세요.";
 }
 
@@ -124,11 +127,11 @@ export function importStopNoticeText(
   const target = sourceLabel?.trim();
   if (mode === "continuous") {
     return target
-      ? `${target} 가져오기가 현재 배치 후 중지되었습니다. 저장된 커서에서 재개하려면 끝까지 실행을 다시 누르세요.`
+      ? `${sourceLabelDisplayText(target)} 가져오기가 현재 배치 후 중지되었습니다. 저장된 커서에서 재개하려면 끝까지 실행을 다시 누르세요.`
       : "가져오기가 현재 배치 후 중지되었습니다. 저장된 커서에서 재개하려면 끝까지 실행을 다시 누르세요.";
   }
 
   return target
-    ? `${target} 가져오기가 중지되었습니다. 재개하려면 가져오기 계획에서 다시 시도하세요.`
+    ? `${sourceLabelDisplayText(target)} 가져오기가 중지되었습니다. 재개하려면 가져오기 계획에서 다시 시도하세요.`
     : "선택한 소스 가져오기가 중지되었습니다. 재개하려면 가져오기 계획에서 다시 시도하세요.";
 }

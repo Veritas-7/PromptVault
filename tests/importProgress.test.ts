@@ -175,6 +175,23 @@ test("import progress label names the source in Korean", () => {
   assert.equal(importProgressLabel(null), "선택한 소스 가져오기 진행");
 });
 
+test("import progress labels redact secret-like source names", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["import", "label", "secret"].join("-");
+  const sourceLabel = `Codex ${apiFlag} ${secretValue}`;
+
+  const labels = [
+    importProgressLabel(sourceLabel),
+    importRunFailureText("failed", sourceLabel),
+    importStopNoticeText("stopped", "continuous", sourceLabel),
+  ];
+
+  for (const label of labels) {
+    assert.equal(label?.includes("Codex [REDACTED_POSSIBLE_SECRET]"), true);
+    assert.doesNotMatch(label ?? "", new RegExp(`${apiFlag}|${secretValue}`));
+  }
+});
+
 test("import status explains continuous stop requests", () => {
   assert.equal(importStatusLabel(importResult(5, 10), "importing", "continuous", false), "실행 중");
   assert.equal(

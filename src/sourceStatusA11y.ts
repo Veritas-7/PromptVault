@@ -1,4 +1,5 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
+import { sourceLabelDisplayText } from "./promptRowA11y.ts";
 
 function normalizedSourceStatus(status: string): string {
   return status.trim().toLowerCase();
@@ -57,8 +58,9 @@ export function planSourceStatusLabel(
   byteText: string,
   notes: string[] = [],
 ): string {
+  const displaySourceLabel = sourceLabelDisplayText(sourceLabel);
   const noteText = notes.length ? `. ${notes.join(" ")}` : "";
-  return `${sourceLabel} 소스 ${sourceStatusName(status)}: ${countLabel(fileCount, "파일")}, ${byteText}${noteText}`;
+  return `${displaySourceLabel} 소스 ${sourceStatusName(status)}: ${countLabel(fileCount, "파일")}, ${byteText}${noteText}`;
 }
 
 export function planSourceSelectionLabel(
@@ -114,5 +116,6 @@ export function sourceSummaryStatusLabel(
   status: string,
   promptCount: number,
 ): string {
-  return `${sourceLabel} 소스 ${sourceStatusName(status)}: ${countLabel(promptCount, "프롬프트")} 발견`;
+  const displaySourceLabel = sourceLabelDisplayText(sourceLabel);
+  return `${displaySourceLabel} 소스 ${sourceStatusName(status)}: ${countLabel(promptCount, "프롬프트")} 발견`;
 }

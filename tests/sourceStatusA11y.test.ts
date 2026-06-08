@@ -132,6 +132,24 @@ test("source summary status labels preserve unknown backend statuses", () => {
   );
 });
 
+test("source status labels redact secret-like source names", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["source", "label", "secret"].join("-");
+  const sourceLabel = `Codex ${apiFlag} ${secretValue}`;
+
+  const labels = [
+    planSourceStatusLabel(sourceLabel, "ok", 5, "5.0 KiB"),
+    planSourceSelectionLabel(sourceLabel, "ok", 5, "5.0 KiB"),
+    planSourceActionLabel("batch", sourceLabel, "ok", 5, "5.0 KiB"),
+    sourceSummaryStatusLabel(sourceLabel, "stored", 5),
+  ];
+
+  for (const label of labels) {
+    assert.match(label, /Codex \[REDACTED_POSSIBLE_SECRET\]/);
+    assert.doesNotMatch(label, new RegExp(`${apiFlag}|${secretValue}`));
+  }
+});
+
 test("source status labels normalize known statuses and trim unknown values", () => {
   assert.equal(
     planSourceStatusLabel("Codex", " OK ", 5, "5.0 KiB"),

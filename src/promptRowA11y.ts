@@ -16,7 +16,7 @@ function redactSensitivePromptPreview(text: string): string {
       "[REDACTED_PRIVATE_KEY]",
     )
     .replace(
-      /^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[A-Za-z0-9]+[_-])?(?:api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|secret|token|password)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|(?:[A-Za-z]+\s+)?\S+)?/gim,
+      /^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[A-Za-z0-9]+[_-])*(?:api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|(?:[A-Za-z]+\s+)?\S+)?/gim,
       "[REDACTED_POSSIBLE_SECRET]",
     )
     .replace(/\b[A-Za-z0-9_-]{48,}\b/g, "[REDACTED_LONG_TOKEN]");

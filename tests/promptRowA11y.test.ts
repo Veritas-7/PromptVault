@@ -198,6 +198,19 @@ test("prompt row previews redact cookie headers", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact credential and signature query params", () => {
+  const text =
+    "Fetch https://example.test/file?X-Amz-Credential=short-credential-value&X-Amz-Signature=short-signature-value before request.";
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "Fetch https://example.test/file?[REDACTED_POSSIBLE_SECRET] before request.");
+  assert.doesNotMatch(preview, /X-Amz|Credential|Signature|short-credential-value|short-signature-value/);
+  assert.doesNotMatch(label, /X-Amz|Credential|Signature|short-credential-value|short-signature-value/);
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact private key blocks case-insensitively", () => {
   const text = [
     "-----begin test private key-----",

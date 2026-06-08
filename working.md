@@ -1,12 +1,111 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 16:59 KST
+Updated: 2026-06-08 17:09 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Cookie header redaction
+## Current Slice - 2026-06-08 Credential/signature query param redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for signed URL credential/signature query parameters, including
+  multi-segment vendor prefixes.
+
+Context:
+
+- Previous cookie header redaction is pushed to `origin/main` with source
+  commit `034c976 fix: redact cookie headers` and docs closeout
+  `ee1bec0 docs: clarify cookie header closeout state`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- The existing possible-secret matcher handled one optional prefix segment and
+  common key names. A probe showed signed URL credential/signature query
+  parameters could remain visible in frontend prompt row preview text.
+
+Progress:
+
+- Confirmed goal identity against Codex thread
+  `019ea10c-fbe8-7b60-8889-6f00b5a91a68`; persisted and current objectives
+  both target PromptVault, with no mismatch warning.
+- Confirmed RED on the frontend: the focused prompt row accessibility test
+  failed because signed URL credential/signature query parameters remained
+  visible in the preview.
+- Confirmed RED on the backend: the focused Rust redaction test returned the
+  original credential/signature query parameter text.
+- Extended the shared possible-secret matcher to allow zero-or-more key prefix
+  segments and to classify `credential` and `signature` keys as sensitive.
+  Existing cookie header handling remains unchanged.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a synthetic signed URL. It confirmed exactly one stored
+  prompt row, `[REDACTED_POSSIBLE_SECRET]` in checked row surfaces, no signed
+  URL credential/signature terms in checked row surfaces, localized risk label
+  visible, and zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: recognizes multi-segment prefixed sensitive keys and
+  redacts credential/signature assignments in prompt row previews and
+  accessible names.
+- `tests/promptRowA11y.test.ts`: adds regression coverage for signed URL
+  credential/signature query parameter redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-secret redaction with the
+  frontend matcher and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on `prompt row previews redact credential and signature query params`
+  because the credential/signature query parameters remained visible.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_credential_and_signature_params`
+  failed from `src-tauri` because backend redaction returned the original query
+  parameter text.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 20/20.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text` passed, 13/13 focused lib tests, plus
+  zero-test main and CLI targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5205" --port 5205 --timeout 120 -- /bin/bash -lc ...`
+  passed with `rowCount=1`, `redacted=true`, `leaked=false`,
+  `riskVisible=true`, `consoleErrors=0`, `pageErrors=0`, and `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 326/326,
+  production build, Rust lib tests 97/97, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after aligning signed URL credential/signature redaction.
+- Python Playwright is not installed in this environment, so browser QA used
+  the repo's available Node Playwright package while still managing Vite with
+  the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for common signed URL query parameters.
+
+Next Steps:
+
+- Run whitespace and staged secret checks, commit the code/docs slice, push to
+  `origin/main`, then add push/parity evidence to this log.
+
+## Previous Slice - 2026-06-08 Cookie header redaction
 
 Current Goal:
 

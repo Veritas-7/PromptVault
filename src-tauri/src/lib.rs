@@ -3949,7 +3949,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "possible_api_key",
                 Regex::new(
-                    r#"(?im)^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])?(api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|secret|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
+                    r#"(?im)^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*(api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
                 )
                     .expect("api key regex"),
             ),
@@ -6396,6 +6396,12 @@ mod tests {
     #[test]
     fn redact_sensitive_text_redacts_cookie_headers() {
         let text = "Cookie: session_id=short-session-value; csrf=short-csrf-value";
+        assert_eq!(redact_sensitive_text(text), "[REDACTED_POSSIBLE_API_KEY]");
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_credential_and_signature_params() {
+        let text = "X-Amz-Credential=short-credential-value&X-Amz-Signature=short-signature-value";
         assert_eq!(redact_sensitive_text(text), "[REDACTED_POSSIBLE_API_KEY]");
     }
 

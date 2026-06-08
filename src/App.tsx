@@ -2014,6 +2014,13 @@ function App() {
                   <p key={textListItemKey(item, index)}>{item}</p>
                 ))}
               </div>
+              {activeImprovement.checklist.length ? (
+                <div className="checklist-list" data-improvement-checklist="true">
+                  {activeImprovement.checklist.map((item, index) => (
+                    <p key={textListItemKey(item, index)}>{item}</p>
+                  ))}
+                </div>
+              ) : null}
               {activeImprovement.warnings.length ? (
                 <div className="warning-list">
                   {activeImprovement.warnings.map((warning, index) => (

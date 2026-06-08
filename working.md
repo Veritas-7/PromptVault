@@ -1,12 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 11:52 KST
+Updated: 2026-06-08 11:58 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Repeated helper text key stability
+## Current Slice - 2026-06-08 Improvement checklist visibility
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Render improvement `checklist` items in the recommendation panel so the
+  verification guidance returned by local/external providers is visible to the
+  user.
+
+Context:
+
+- Previous repeated helper text key stability slice is pushed to `origin/main`:
+  implementation `ea9672a fix: stabilize repeated helper text keys` and
+  closeout `3a5b466 docs: close text key stability handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`.
+- `ImproveResult` includes `checklist`, `parseImproveResult()` validates it,
+  and the Rust backend persists it, but the recommendation panel currently
+  renders only `rationale` and `warnings`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `3a5b466 docs: close text key stability handoff`.
+- Re-read `ImproveResult`, `parseImproveResult()`, and recommendation panel
+  rendering. Confirmed checklist data is accepted and stored but not displayed.
+- Preparing a RED Playwright QA that expects returned checklist rows to be
+  visible after running a recommendation.
+- Confirmed RED first: dev-mode Playwright QA timed out waiting for
+  `[data-improvement-checklist="true"]`, proving recommendation checklist rows
+  were not rendered.
+- Added a checklist block to the recommendation panel and styled it alongside
+  rationale and warning helper lists.
+- Confirmed GREEN: the same dev-mode Playwright QA rendered the two returned
+  checklist items and observed no browser console/page errors.
+- Removed `/tmp/promptvault_improvement_checklist_qa.mjs` after QA and
+  confirmed port 5336 had no listener.
+- Ran the full project check successfully after checklist QA.
+- Pre-staging verification passed with only the expected three modified files:
+  `src/App.tsx`, `src/App.css`, and `working.md`.
+- Explicitly staged only those three paths.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 3.92 KB and finding no leaks.
+- Restaged `working.md` after recording the staged scan and reran the staged
+  secret scan; about 4.88 KB was scanned and no leaks were found.
+
+Changes:
+
+- `working.md`: records the current checklist visibility slice.
+- `src/App.tsx`: renders `activeImprovement.checklist` rows with stable
+  `textListItemKey(...)` keys and `data-improvement-checklist="true"`.
+- `src/App.css`: adds checklist row styling that matches the recommendation
+  panel density.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5336" --port 5336 --timeout 30 node /tmp/promptvault_improvement_checklist_qa.mjs http://127.0.0.1:5336`
+  failed with a timeout waiting for `[data-improvement-checklist="true"]`.
+- GREEN: the same dev-mode Playwright QA passed after rendering checklist rows.
+- Cleanup: `/tmp/promptvault_improvement_checklist_qa.mjs` removed and
+  `lsof -nP -iTCP:5336 -sTCP:LISTEN` returned no listener.
+- Full project check: `npm run check` passed, covering UI tests 297/297,
+  production build, Rust lib tests 84/84, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/App.tsx src/App.css working.md`
+  passed; repo root was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only the three expected modified files;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`; the temp QA file was absent; port 5336 was free.
+- Staged paths: `git diff --cached --name-only` listed only `src/App.css`,
+  `src/App.tsx`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed with
+  no leaks found.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit, full-tree secret scan, push, and final parity verification.
+
+## Previous Slice - 2026-06-08 Repeated helper text key stability
 
 Current Goal:
 

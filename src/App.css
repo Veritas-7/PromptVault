@@ -1017,6 +1017,7 @@ h3 {
 }
 
 .advice,
+.checklist-list,
 .warning-list {
   display: grid;
   gap: 8px;
@@ -1024,6 +1025,7 @@ h3 {
 }
 
 .advice p,
+.checklist-list p,
 .warning-list p {
   border-radius: 8px;
   font-size: 13px;
@@ -1034,6 +1036,11 @@ h3 {
 .advice p {
   background: #eef4ec;
   color: #243629;
+}
+
+.checklist-list p {
+  background: #edf4f8;
+  color: #213744;
 }
 
 .warning-list p {

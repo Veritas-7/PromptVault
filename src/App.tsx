@@ -207,6 +207,7 @@ import {
   workLogCandidatesActionLabel,
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
+  workLogCandidateReviewLabel,
   workLogExtractionActionLabel,
   workLogExtractionFailureText,
   workLogExtractionItemsActionLabel,
@@ -214,6 +215,7 @@ import {
   workLogExtractionItemsMetaText,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
+  workLogExtractionReviewLabel,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
   workLogCoverageMetaText,
@@ -1960,6 +1962,9 @@ function App() {
                     {candidate.reason} · {candidate.line_count.toLocaleString()}줄 ·{" "}
                     {candidate.char_count.toLocaleString()}자 · {candidate.candidate_id}
                   </span>
+                  <span data-work-log-candidate-review={candidate.candidate_id}>
+                    {workLogCandidateReviewLabel(candidate)}
+                  </span>
                   <span>
                     risk{" "}
                     {candidate.risk_flags.length
@@ -1998,6 +2003,9 @@ function App() {
                   <span>
                     {proposal.accepted ? "accepted" : "rejected"} · {proposal.status} · confidence{" "}
                     {proposal.confidence.toFixed(2)} · {proposal.candidate_id}
+                  </span>
+                  <span data-work-log-proposal-review={proposal.candidate_id}>
+                    {workLogExtractionReviewLabel(proposal, workLogExtractionResult)}
                   </span>
                   <span>
                     {proposal.rejection_reason

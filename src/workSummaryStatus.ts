@@ -1,8 +1,11 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
+import { riskFlagLabel } from "./riskLabels.ts";
 import type {
   ProjectWorkLogCoverageResult,
+  ProjectWorkLogExtractionCandidate,
   ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkLogExtractionItemsResult,
+  ProjectWorkLogExtractionProposal,
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
@@ -185,6 +188,16 @@ export function workLogCandidatesFailureText(state: WorkLogCandidatesState): str
   return "AI 추출 후보를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.";
 }
 
+export function workLogCandidateReviewLabel(
+  candidate: ProjectWorkLogExtractionCandidate,
+): string {
+  const riskFlags = candidate.risk_flags.map(riskFlagLabel).filter((label) => label !== "알 수 없음");
+  if (riskFlags.length) {
+    return `문서 위험 패턴 있음 · 줄 단위 안전 추출만 허용: ${riskFlags.join(", ")}`;
+  }
+  return "AI 검토 가능 · 로컬 날짜 bullet 탐색";
+}
+
 export function workLogExtractionActionLabel(
   state: WorkLogExtractionState,
   hasResult: boolean,
@@ -225,6 +238,35 @@ export function workLogExtractionPersistenceText(
 export function workLogExtractionFailureText(state: WorkLogExtractionState): string | null {
   if (state !== "failed") return null;
   return "AI 작업 추출 제안을 불러오지 못했습니다. provider 설정, 진행 로그 경로, 브리지 상태를 확인하세요.";
+}
+
+export function workLogExtractionReviewLabel(
+  proposal: ProjectWorkLogExtractionProposal,
+  result: ProjectWorkLogExtractionProposalsResult,
+): string {
+  if (proposal.accepted) {
+    if (result.used_ai) return "AI 검증 저장 가능";
+    if (result.provider === "local-extraction-rules") return "로컬 규칙 저장 가능";
+    return "로컬 저장 가능";
+  }
+  return workLogExtractionRejectionReviewLabel(proposal.rejection_reason);
+}
+
+function workLogExtractionRejectionReviewLabel(reason: string | null): string {
+  if (!reason) return "검증 실패 · 거절 사유 없음";
+  const labels: Record<string, string> = {
+    candidate_has_risk_flags: "건너뜀 · 위험 패턴 포함",
+    date_not_in_source: "검증 실패 · 날짜가 원문에 없음",
+    evidence_has_risk_flags: "건너뜀 · 근거 위험 패턴 포함",
+    evidence_not_in_source: "검증 실패 · 근거가 원문에 없음",
+    invalid_date: "검증 실패 · 날짜 형식 오류",
+    local_fallback_requires_ai_review: "AI 검토 필요 · 로컬 확정 불가",
+    missing_ai_proposal: "AI 검토 필요 · 제안 없음",
+    missing_date: "검증 실패 · 날짜 없음",
+    title_has_risk_flags: "건너뜀 · 제목 위험 패턴 포함",
+    title_not_in_source: "검증 실패 · 제목이 원문에 없음",
+  };
+  return labels[reason] ?? `검증 실패 · ${reason}`;
 }
 
 export function workLogExtractionItemsActionLabel(

@@ -5,6 +5,7 @@ import {
   workLogCandidatesActionLabel,
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
+  workLogCandidateReviewLabel,
   workLogExtractionActionLabel,
   workLogExtractionFailureText,
   workLogExtractionItemsActionLabel,
@@ -12,6 +13,7 @@ import {
   workLogExtractionItemsMetaText,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
+  workLogExtractionReviewLabel,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
   workLogCoverageMetaText,
@@ -37,8 +39,10 @@ import {
 } from "../src/workSummaryStatus.ts";
 import type {
   ProjectWorkLogCoverageResult,
+  ProjectWorkLogExtractionCandidate,
   ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkLogExtractionItemsResult,
+  ProjectWorkLogExtractionProposal,
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
@@ -138,6 +142,24 @@ function candidatesResult(
   };
 }
 
+function extractionCandidate(
+  overrides: Partial<ProjectWorkLogExtractionCandidate> = {},
+): ProjectWorkLogExtractionCandidate {
+  return {
+    candidate_id: "work-log-RepoTutorStudio-a1b2c3d4",
+    project: "RepoTutorStudio",
+    source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md",
+    source_file: "working.md",
+    reason: "unparsed_work_log",
+    excerpt: "- 2026-06-04: Created project root.",
+    line_count: 1,
+    char_count: 36,
+    risk_flags: [],
+    modified_at: "2026-06-04T00:00:00Z",
+    ...overrides,
+  };
+}
+
 function extractionResult(
   overrides: Partial<ProjectWorkLogExtractionProposalsResult> = {},
 ): ProjectWorkLogExtractionProposalsResult {
@@ -152,6 +174,25 @@ function extractionResult(
     proposals: [],
     persistence: null,
     warnings: [],
+    ...overrides,
+  };
+}
+
+function extractionProposal(
+  overrides: Partial<ProjectWorkLogExtractionProposal> = {},
+): ProjectWorkLogExtractionProposal {
+  return {
+    candidate_id: "work-log-RepoTutorStudio-a1b2c3d4",
+    project: "RepoTutorStudio",
+    source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md",
+    source_file: "working.md",
+    date: "2026-06-04",
+    title: "Created project root.",
+    status: "completed",
+    evidence: "- 2026-06-04: Created project root.",
+    confidence: 0.72,
+    accepted: true,
+    rejection_reason: null,
     ...overrides,
   };
 }
@@ -416,6 +457,17 @@ test("work log candidate labels describe AI extraction inputs", () => {
   assert.equal(workLogCandidatesFailureText("ready"), null);
 });
 
+test("work log candidate review labels expose candidate handling expectations", () => {
+  assert.equal(
+    workLogCandidateReviewLabel(extractionCandidate()),
+    "AI 검토 가능 · 로컬 날짜 bullet 탐색",
+  );
+  assert.equal(
+    workLogCandidateReviewLabel(extractionCandidate({ risk_flags: ["long_base64_like_token"] })),
+    "문서 위험 패턴 있음 · 줄 단위 안전 추출만 허용: 긴 토큰 형식 문자열",
+  );
+});
+
 test("work log extraction labels describe accepted and rejected AI proposals", () => {
   const failed: WorkLogExtractionState = "failed";
   assert.equal(workLogExtractionActionLabel("idle", false, lockState()), "AI 작업 추출 제안");
@@ -444,6 +496,41 @@ test("work log extraction labels describe accepted and rejected AI proposals", (
     "AI 작업 추출 제안을 불러오지 못했습니다. provider 설정, 진행 로그 경로, 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogExtractionFailureText("ready"), null);
+});
+
+test("work log extraction review labels expose saved, AI-review, and skipped outcomes", () => {
+  const localResult = extractionResult({ provider: "local-extraction-rules", used_ai: false });
+  const aiResult = extractionResult({ provider: "glm", used_ai: true });
+
+  assert.equal(
+    workLogExtractionReviewLabel(extractionProposal(), localResult),
+    "로컬 규칙 저장 가능",
+  );
+  assert.equal(
+    workLogExtractionReviewLabel(extractionProposal(), aiResult),
+    "AI 검증 저장 가능",
+  );
+  assert.equal(
+    workLogExtractionReviewLabel(
+      extractionProposal({ accepted: false, date: null, rejection_reason: "local_fallback_requires_ai_review" }),
+      localResult,
+    ),
+    "AI 검토 필요 · 로컬 확정 불가",
+  );
+  assert.equal(
+    workLogExtractionReviewLabel(
+      extractionProposal({ accepted: false, date: null, rejection_reason: "candidate_has_risk_flags" }),
+      localResult,
+    ),
+    "건너뜀 · 위험 패턴 포함",
+  );
+  assert.equal(
+    workLogExtractionReviewLabel(
+      extractionProposal({ accepted: false, date: null, rejection_reason: "evidence_not_in_source" }),
+      aiResult,
+    ),
+    "검증 실패 · 근거가 원문에 없음",
+  );
 });
 
 test("work log extraction persistence text is only shown after accepted proposals are saved", () => {

@@ -1,12 +1,117 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 04:48 KST
+Updated: 2026-06-09 04:55 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 deterministic local work-log extraction
+## Current Slice - 2026-06-09 work-log extraction review labels
+
+Current Goal:
+
+- Make unparsed project work-log candidate handling visible in the UI.
+- Show whether each extraction proposal is ready to save, needs AI review, or
+  was skipped/rejected, instead of requiring the operator to infer this from
+  raw `accepted` and `rejection_reason` fields.
+- Keep this slice read-only against the operating DB; verify labels through
+  candidate/proposal preview flows without writing duplicate saved rows.
+
+Context:
+
+- The previous slice populated the operating DB with one deterministic saved
+  row from `RepoTutorStudio/working.md`.
+- `work-log-candidates` currently sees `16` unparsed real project work-log
+  candidates under `/Users/wj/Ai/System/10_Projects`.
+- `work-log-extract` currently falls back to `local-extraction-rules` because
+  external GLM extraction fails at the provider request layer.
+- The candidate UI already rendered risk flags and source paths; proposal UI
+  already rendered `accepted` / `rejected` and `rejection_reason`, but neither
+  exposed the actionable handling state directly.
+
+Progress:
+
+- Added candidate review labels:
+  - safe candidate: `AI 검토 가능 · 로컬 날짜 bullet 탐색`
+  - risky full document: `문서 위험 패턴 있음 · 줄 단위 안전 추출만 허용: ...`
+- Added extraction proposal review labels:
+  - accepted local proposal: `로컬 규칙 저장 가능`
+  - accepted AI proposal: `AI 검증 저장 가능`
+  - local fallback rejection: `AI 검토 필요 · 로컬 확정 불가`
+  - risk rejection: `건너뜀 · 위험 패턴 포함`
+  - validation rejection: `검증 실패 · ...`
+- Rendered those labels in the candidate and proposal rows with stable
+  `data-work-log-candidate-review` and `data-work-log-proposal-review`
+  attributes for browser verification.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - added `workLogCandidateReviewLabel`;
+  - added `workLogExtractionReviewLabel`;
+  - reused existing `riskFlagLabel` for human-readable risk messages.
+- `src/App.tsx`:
+  - renders candidate/proposal review labels in the work-log management panel.
+- `tests/workSummaryStatus.test.ts`:
+  - added RED/GREEN coverage for candidate handling labels and proposal outcome
+    labels.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts` initially failed
+    because `workLogCandidateReviewLabel` was not exported.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts`: PASS.
+- Full UI tests:
+  - `npm run test:ui`: PASS, `408` passed.
+- Headless UI check against temporary bridge/Vite:
+  - bridge: `127.0.0.1:5174`
+  - Vite: `127.0.0.1:5177`
+  - clicked `AI 추출 후보 확인`: meta showed
+    `후보 16개 · parsed 제외 16개 · unreadable 0개 · empty 0개`.
+  - visible candidate labels included:
+    `AI 검토 가능 · 로컬 날짜 bullet 탐색` and
+    `문서 위험 패턴 있음 · 줄 단위 안전 추출만 허용: 긴 토큰 형식 문자열`.
+  - clicked `AI 작업 추출 제안`: meta showed
+    `로컬 local-extraction-rules · 후보 16개 · accepted 1개 · rejected 15개`.
+  - visible proposal labels included:
+    `로컬 규칙 저장 가능` and `AI 검토 필요 · 로컬 확정 불가`.
+  - No browser console errors and no global error banner.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `408` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `148` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- Cleanup:
+  - Stopped temporary bridge/Vite processes by exact test ports.
+  - Ports `5174` and `5177` had no remaining listeners.
+
+Issues:
+
+- GLM extraction still falls back to local rules because the external request
+  fails before usable AI proposals are returned.
+- Candidate labels intentionally do not claim final acceptance; final handling
+  truth is in extraction proposal labels after the preview run.
+
+Research:
+
+- No external research used. This was a local UI/verification slice based on
+  real candidate/proposal output.
+
+Next Steps:
+
+- Add a reviewed batch approval workflow so the operator can approve selected
+  deterministic/AI extraction proposals before saving more rows.
+- Add date/project filters or grouping to the candidate/proposal preview lists
+  if the 16-candidate set grows.
+- Keep working toward a project/day dashboard backed by parsed logs, saved
+  extraction rows, and session evidence.
+
+## Previous Slice - 2026-06-09 deterministic local work-log extraction
 
 Current Goal:
 

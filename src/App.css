@@ -318,6 +318,11 @@ h3 {
   font-weight: 700;
 }
 
+.work-summary-snapshot-toggle {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
 .work-summary-overflow {
   background: #f8faf7;
   border: 1px solid #dce5da;

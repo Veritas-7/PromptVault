@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Brain,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   ClipboardList,
   Database,
@@ -201,8 +203,9 @@ import {
   workSummarySnapshotsActionLabel,
   workSummarySnapshotsFailureText,
   workSummarySnapshotsMetaText,
+  workSummarySnapshotDetailToggleText,
+  workSummarySnapshotDisplaySummaries,
   workSummarySnapshotSummaryOverflowText,
-  workSummarySnapshotVisibleSummaries,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "./workSummaryStatus";
@@ -273,6 +276,9 @@ function App() {
     useState<ProjectWorkSummarySnapshotsResult | null>(null);
   const [workSummarySnapshotDateFilter, setWorkSummarySnapshotDateFilter] = useState("");
   const [workSummarySnapshotProjectFilter, setWorkSummarySnapshotProjectFilter] = useState("");
+  const [expandedWorkSummarySnapshotIds, setExpandedWorkSummarySnapshotIds] = useState<Set<number>>(
+    () => new Set(),
+  );
   const [result, setResult] = useState<ScanResult | null>(null);
   const [resultOrigin, setResultOrigin] = useState<PromptResultOrigin | null>(null);
   const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
@@ -690,6 +696,18 @@ function App() {
       setError(message);
       setWorkSummarySnapshotsState("failed");
     }
+  }
+
+  function toggleWorkSummarySnapshotDetails(snapshotId: number) {
+    setExpandedWorkSummarySnapshotIds((current) => {
+      const next = new Set(current);
+      if (next.has(snapshotId)) {
+        next.delete(snapshotId);
+      } else {
+        next.add(snapshotId);
+      }
+      return next;
+    });
   }
 
   async function refreshWorkSummary({
@@ -1430,11 +1448,13 @@ function App() {
           visibleWorkSummarySnapshots.length ? (
             <div className="work-summary-list" data-work-summary-snapshots="true">
               {visibleWorkSummarySnapshots.map((snapshot) => {
-                const visibleSummaries = workSummarySnapshotVisibleSummaries(snapshot);
+                const detailsExpanded = expandedWorkSummarySnapshotIds.has(snapshot.id);
+                const visibleSummaries = workSummarySnapshotDisplaySummaries(snapshot, detailsExpanded);
                 const summaryOverflowText = workSummarySnapshotSummaryOverflowText(
                   snapshot,
                   visibleSummaries.length,
                 );
+                const detailToggleText = workSummarySnapshotDetailToggleText(snapshot, detailsExpanded);
                 return (
                   <article className="work-summary-row" key={snapshot.id}>
                     <div>
@@ -1465,6 +1485,19 @@ function App() {
                         ))}
                         {summaryOverflowText ? <li className="snapshot-detail-overflow">{summaryOverflowText}</li> : null}
                       </ul>
+                    ) : null}
+                    {detailToggleText ? (
+                      <button
+                        aria-expanded={detailsExpanded}
+                        aria-label={`스냅샷 #${snapshot.id.toLocaleString()} ${detailToggleText}`}
+                        className="inline-action work-summary-snapshot-toggle"
+                        data-work-summary-snapshot-toggle={snapshot.id}
+                        onClick={() => toggleWorkSummarySnapshotDetails(snapshot.id)}
+                        type="button"
+                      >
+                        {detailsExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                        {detailToggleText}
+                      </button>
                     ) : null}
                   </article>
                 );

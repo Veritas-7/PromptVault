@@ -101,6 +101,15 @@ export function workSummarySnapshotVisibleSummaries(
   return snapshot.summaries.slice(0, Math.max(0, limit));
 }
 
+export function workSummarySnapshotDisplaySummaries(
+  snapshot: ProjectWorkSummarySnapshot,
+  expanded: boolean,
+  limit = WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT,
+): ProjectWorkSummary[] {
+  if (expanded) return snapshot.summaries;
+  return workSummarySnapshotVisibleSummaries(snapshot, limit);
+}
+
 export function workSummarySnapshotSummaryOverflowText(
   snapshot: ProjectWorkSummarySnapshot,
   visibleCount: number,
@@ -108,4 +117,14 @@ export function workSummarySnapshotSummaryOverflowText(
   const hiddenSummaryCount = Math.max(0, snapshot.summaries.length - visibleCount);
   if (!hiddenSummaryCount) return null;
   return `그 외 프로젝트/일자 요약 ${hiddenSummaryCount.toLocaleString()}개`;
+}
+
+export function workSummarySnapshotDetailToggleText(
+  snapshot: ProjectWorkSummarySnapshot,
+  expanded: boolean,
+  limit = WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT,
+): string | null {
+  const hiddenSummaryCount = Math.max(0, snapshot.summaries.length - Math.max(0, limit));
+  if (!hiddenSummaryCount) return null;
+  return expanded ? "프로젝트/일자 요약 접기" : `전체 프로젝트/일자 요약 ${snapshot.summaries.length.toLocaleString()}개 보기`;
 }

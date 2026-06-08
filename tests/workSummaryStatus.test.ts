@@ -10,6 +10,8 @@ import {
   workSummarySnapshotsActionLabel,
   workSummarySnapshotsFailureText,
   workSummarySnapshotsMetaText,
+  workSummarySnapshotDetailToggleText,
+  workSummarySnapshotDisplaySummaries,
   workSummarySnapshotSummaryOverflowText,
   workSummarySnapshotVisibleSummaries,
   type WorkSummarySnapshotsState,
@@ -231,4 +233,33 @@ test("work summary snapshot helpers expose bounded project/day drill-down", () =
   );
   assert.equal(workSummarySnapshotSummaryOverflowText(savedSnapshot, 4), null);
   assert.deepEqual(workSummarySnapshotVisibleSummaries(savedSnapshot, 0), []);
+});
+
+test("work summary snapshot helpers expose expandable project/day drill-down", () => {
+  const savedSnapshot = snapshot();
+
+  assert.deepEqual(
+    workSummarySnapshotDisplaySummaries(savedSnapshot, false).map((summary) => summary.project),
+    ["PromptVault", "CareVault", "PromptVault"],
+  );
+  assert.deepEqual(
+    workSummarySnapshotDisplaySummaries(savedSnapshot, true).map((summary) => summary.project),
+    ["PromptVault", "CareVault", "PromptVault", "SourceCollector"],
+  );
+  assert.equal(
+    workSummarySnapshotDetailToggleText(savedSnapshot, false),
+    "전체 프로젝트/일자 요약 4개 보기",
+  );
+  assert.equal(workSummarySnapshotDetailToggleText(savedSnapshot, true), "프로젝트/일자 요약 접기");
+  assert.equal(
+    workSummarySnapshotDetailToggleText(snapshot({
+      summaries: [
+        snapshotSummary({ project: "PromptVault" }),
+        snapshotSummary({ project: "CareVault" }),
+        snapshotSummary({ project: "QualityGate" }),
+      ],
+      summary_count: 3,
+    }), false),
+    null,
+  );
 });

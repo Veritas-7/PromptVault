@@ -1,12 +1,103 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 02:14 KST
+Updated: 2026-06-09 02:24 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-summary snapshot drill-down
+## Current Slice - 2026-06-09 work-summary snapshot expand/collapse
+
+Current Goal:
+
+- Let operators expand a saved work-summary snapshot to inspect every nested
+  project/day summary, then collapse back to the bounded preview.
+- Preserve the compact default view so large snapshots remain scan-friendly.
+
+Context:
+
+- The previous slice showed only the first three nested summaries inside each
+  saved snapshot. That made project/day evidence visible, but still required a
+  future view to inspect all summaries in a larger snapshot.
+- This slice keeps the default three-row preview and adds an inline
+  expand/collapse control when hidden summaries exist.
+
+Progress:
+
+- Added helper functions for expanded vs preview summary lists.
+- Added helper copy for the expand/collapse button.
+- Saved snapshot cards now track expanded state per snapshot ID.
+- The button reports `aria-expanded` and toggles between full details and the
+  compact preview.
+- Kept local expand/collapse state UI-only; no new backend contract was needed.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds
+  `workSummarySnapshotDisplaySummaries()` and
+  `workSummarySnapshotDetailToggleText()`.
+- `tests/workSummaryStatus.test.ts`: adds RED/GREEN coverage for preview,
+  expanded, collapsed, and no-toggle cases.
+- `src/App.tsx`: adds per-snapshot expanded state and an icon+text toggle
+  button in saved snapshot cards.
+- `src/App.css`: lets the saved snapshot toggle span the row and align with the
+  nested detail list.
+
+Tests:
+
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before implementation because
+  `workSummarySnapshotDetailToggleText` was not exported.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  passed with 8/8.
+- GREEN:
+  `npm run build` passed (`tsc && vite build`).
+- Browser QA without cmux:
+  built a synthetic temporary snapshot DB at
+  `/tmp/promptvault-expanded-home/Documents/PromptVault/promptvault.sqlite`
+  with one saved snapshot containing four valid project/day summaries and
+  citation-backed counts. Started
+  `HOME=/tmp/promptvault-expanded-home ./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174`
+  plus `npm run dev -- --host 127.0.0.1`, opened
+  `http://127.0.0.1:1420/` with one headless Chromium page, clicked
+  `[data-load-work-summary-snapshots="true"]`, clicked
+  `[data-work-summary-snapshot-toggle]`, then clicked it again.
+  Verification: preview had 3 real detail rows plus 1 overflow row, expanded
+  had 4 real detail rows and no overflow row, collapsed returned to 3 real
+  detail rows, and `aria-expanded` moved `false -> true -> false`. There were
+  no console errors and no page errors.
+- Full gate:
+  `npm run check` passed: UI tests 388/388, Vite build, Rust library tests
+  137/137, CLI tests 20/20, doc tests 0/0, and clippy clean. Rust dependency
+  recompilation occurred because an abandoned temp-HOME Cargo command touched
+  target state; it completed successfully.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this runtime by the latest
+  active objective note. A single headless Chromium page plus local browser
+  bridge was used for direct click/DOM verification.
+- The expand/collapse view is per-snapshot and display-only. A future
+  comparison view can diff two snapshots or group all saved history by project.
+
+Research:
+
+- No external research was needed. The slice used existing saved snapshot
+  payloads and helper-driven UI behavior.
+
+Next Steps:
+
+- Add saved-history comparison across two snapshots or a grouped all-history
+  project/day table.
+- Continue improving project/day/task management by adding AI-assisted
+  structure extraction for ambiguous progress-log sections while preserving
+  citation-backed evidence.
+- Run a cmux in-app browser pass only in a runtime where that browser is
+  explicitly available and safe to use as the single active browser.
+
+## Previous Slice - 2026-06-09 work-summary snapshot drill-down
 
 Current Goal:
 

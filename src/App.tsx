@@ -78,7 +78,12 @@ import {
   recommendationEmptyText,
   selectedPromptEmptyText,
 } from "./promptEmptyState";
-import { promptRowAriaLabel, promptRowPreviewText, selectedPromptMetaLabel } from "./promptRowA11y";
+import {
+  promptRowAriaLabel,
+  promptRowPreviewText,
+  selectedPromptDisplayText,
+  selectedPromptMetaLabel,
+} from "./promptRowA11y";
 import { qualityGapLabel, qualityGapSummary } from "./qualityGaps";
 import { qualityBandClass, qualityBandLabel } from "./qualityLabels";
 import { riskFlagLabel } from "./riskLabels";
@@ -1952,7 +1957,7 @@ function App() {
                   <AlertTriangle size={18} />
                   <span>
                     위험 패턴 감지: {selectedPrompt.risk_flags.map(riskFlagLabel).join(", ")}.
-                    원문에는 민감 문자열이 포함될 수 있습니다.
+                    표시된 프롬프트는 민감 문자열이 마스킹되었습니다.
                   </span>
                 </div>
               ) : null}
@@ -1963,7 +1968,7 @@ function App() {
                   ))}
                 </div>
               ) : null}
-              <pre className="prompt-text">{selectedPrompt.text}</pre>
+              <pre className="prompt-text">{selectedPromptDisplayText(selectedPrompt.text)}</pre>
             </>
           ) : (
             <div className="empty" data-empty-selected-prompt="true">

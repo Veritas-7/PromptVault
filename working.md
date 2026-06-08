@@ -1,12 +1,97 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 20:17 KST
+Updated: 2026-06-08 20:23 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Long CLI secret option redaction
+## Current Slice - 2026-06-08 Selected detail secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent the selected prompt detail panel from re-exposing sensitive prompt
+  text after the list row preview and aria label have already redacted it.
+
+Context:
+
+- Previous long CLI secret option redaction is pushed to `origin/main` with
+  source commit `249e6ba fix: redact cli secret options` and docs closeout
+  `cbd535f docs: close cli secret redaction slice`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A direct browser RED test showed the prompt row was already redacted, but the
+  selected prompt detail `<pre>` still rendered the raw risky prompt text and
+  leaked the raw CLI flag/value into page body text.
+
+Progress:
+
+- Reproduced the selected-detail leak with a stored prompt bridge payload where
+  the risky CLI-option prompt was the default selected prompt.
+- Factored the existing frontend redaction path so row preview and selected
+  detail rendering share the same sensitive-text masking.
+- Updated the selected prompt warning copy to match the new default masked
+  display behavior.
+- Added unit coverage proving selected prompt display redacts secrets while
+  preserving full safe context instead of using the 120-character row preview
+  truncation.
+- Re-ran the same browser flow and confirmed the selected detail and page body
+  no longer contain the raw flag or raw value.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: exposes `selectedPromptDisplayText()` backed by the
+  same sensitive redaction used by prompt row previews, without row truncation.
+- `src/App.tsx`: renders selected prompt text through
+  `selectedPromptDisplayText()` and updates the risk warning microcopy.
+- `tests/promptRowA11y.test.ts`: adds selected-detail display coverage for
+  redaction without truncating safe context.
+- `working.md`: records this slice and its RED/GREEN/browser/full-check
+  evidence.
+
+Tests:
+
+- RED browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5226" --port 5226 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_selected_detail_secret_red_qa.mjs'`
+  failed with `AssertionError [ERR_ASSERTION]: selected detail leaked raw flag`.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 41/41.
+- Build check: `npm run build` passed.
+- Browser QA after the fix:
+  same `with_server.py` command on port `5226` passed with exit code `0`; the
+  selected detail and page body no longer included the raw flag or raw value.
+- Full project check: `npm run check` passed, covering UI tests 347/347,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after masking selected prompt detail display.
+- The app still keeps original prompt text in state for improvement requests;
+  this slice changes only visible rendering.
+- Python Playwright is not installed, and PromptVault has no local Playwright
+  dependency. Browser QA used the installed shared workspace Playwright package
+  while still managing Vite with the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on a
+  reproducible local browser flow.
+
+Next Steps:
+
+- Commit and push the source changes for this selected-detail masking slice,
+  then update and push the docs closeout from a clean source-pushed tree.
+
+## Previous Slice - 2026-06-08 Long CLI secret option redaction
 
 Current Goal:
 

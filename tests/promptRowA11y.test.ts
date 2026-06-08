@@ -4,6 +4,7 @@ import type { ActionLockState } from "../src/actionLocks.ts";
 import {
   promptRowAriaLabel,
   promptRowPreviewText,
+  selectedPromptDisplayText,
   selectedPromptMetaLabel,
 } from "../src/promptRowA11y.ts";
 import type { PromptRecord } from "../src/types.ts";
@@ -64,6 +65,21 @@ test("prompt row labels avoid unbounded prompt text", () => {
 
   assert.ok(label.endsWith("..."));
   assert.ok(label.length < 230);
+});
+
+test("selected prompt display redacts secrets without truncating safe context", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["short", "secret", "value"].join("-");
+  const safeTail = "Keep this detailed verification context visible. ".repeat(5);
+  const text = `Run tool ${apiFlag} ${secretValue} --format json.\n${safeTail}`;
+
+  const displayText = selectedPromptDisplayText(text);
+
+  assert.match(displayText, /\[REDACTED_POSSIBLE_SECRET\]/);
+  assert.match(displayText, /--format json/);
+  assert.match(displayText, /Keep this detailed verification context visible/);
+  assert.ok(displayText.length > 120);
+  assert.doesNotMatch(displayText, new RegExp(`${apiFlag}|${secretValue}`));
 });
 
 test("prompt row previews redact secret-like tokens", () => {

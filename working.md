@@ -1,12 +1,126 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 04:39 KST
+Updated: 2026-06-09 04:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 saved extraction summary merge
+## Current Slice - 2026-06-09 deterministic local work-log extraction
+
+Current Goal:
+
+- Populate the operating PromptVault DB with reviewed, dated project work rows
+  even when external AI extraction is unavailable.
+- Keep external AI safety strict: risky full files are not sent to AI providers.
+- Accept only safe, deterministic local rows whose evidence line is already
+  redacted and contains an explicit dated work item.
+
+Context:
+
+- `work-log-candidates --json` sees `32` project progress logs:
+  `16` parsed and `16` unparsed extraction candidates.
+- `work-log-extract --limit 5 --ai --json` currently falls back to
+  `local-extraction-rules` because the GLM request fails at the provider
+  request layer.
+- Before this slice, local fallback intentionally returned `accepted_count=0`,
+  leaving the operating DB with `0` saved extraction rows.
+- A real candidate had deterministic work evidence:
+  `RepoTutorStudio/working.md` contained
+  `- 2026-06-04: Created project root and initialized a new git repository.`
+  while the full file had risk flags, so it remained blocked from external AI.
+
+Progress:
+
+- Added deterministic local extraction for safe dated bullet lines:
+  - accepts prefixes like `- 2026-06-04: ...`;
+  - rejects metadata-only dates such as `last_updated: 2026-04-24` and table
+    update rows;
+  - validates that the saved evidence/title/date have no risk flags;
+  - keeps non-matching risky candidates rejected as `candidate_has_risk_flags`;
+  - keeps non-matching safe candidates rejected as
+    `local_fallback_requires_ai_review`.
+- Saved one real accepted row into the operating DB:
+  - project: `RepoTutorStudio`
+  - date: `2026-06-04`
+  - title: `Created project root and initialized a new git repository.`
+  - provider: `local-extraction-rules`
+  - used_ai: `false`
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added local deterministic dated-bullet extraction helpers;
+  - updated local fallback proposal generation to use those helpers before
+    returning rejected placeholders;
+  - added RED/GREEN test coverage for accepting a safe dated bullet while
+    rejecting metadata-only project status dates.
+
+Tests:
+
+- RED:
+  - `cargo test local_work_log_extraction_accepts_safe_dated_bullets_only --lib`
+    failed with `accepted_count` `0` vs expected `1`.
+- GREEN:
+  - `cargo test local_work_log_extraction_accepts_safe_dated_bullets_only --lib`:
+    PASS.
+- Dry run on real candidates:
+  - `work-log-extract --limit 20 --json`: provider `local-extraction-rules`,
+    `accepted_count=1`, `rejected_count=15`.
+- Temporary SQLite save verification:
+  - `work-log-extract --limit 20 --database <tmp> --save --json`:
+    `saved_item_count=1`, `total_saved_item_count=1`.
+  - `work-log-items --database <tmp> --json`: returned the same
+    `RepoTutorStudio / 2026-06-04` row.
+- Operating DB verification:
+  - before save: `work-log-items --limit 5 --json` returned `total_items=0`.
+  - after save: `work-log-extract --limit 20 --save --json` returned
+    `saved_item_count=1`, `total_saved_item_count=1`.
+  - `work-log-items --limit 5 --json` returned `total_items=1`,
+    available date `2026-06-04`, available project `RepoTutorStudio`.
+  - `work-summary --limit 80 --session-limit 20 --summary-limit 5 --include-saved-extractions --json`
+    returned `merged_item_count=1`, `total_items=81`, `project_count=2`,
+    `date_count=2`, and a `RepoTutorStudio / 2026-06-04` summary.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `406` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `148` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- Headless UI check against temporary Vite/bridge:
+  - `저장 목록` showed `RepoTutorStudio` and `2026-06-04`.
+  - `저장 병합 요약` updated meta to
+    `2개 프로젝트 · 2일 · 81개 작업 · 세션 근거 80건 · 저장 병합 1개`.
+  - Summary narrative mentioned `RepoTutorStudio`.
+  - No browser errors, no work-summary error banner, no raw network error text.
+- Cleanup:
+  - Removed temporary SQLite verification DB.
+  - Stopped temporary bridge/Vite processes.
+  - Ports `5174` and `5177` had no remaining listeners.
+
+Issues:
+
+- External GLM work-log extraction currently falls back with request failure to
+  `https://api.z.ai/api/coding/paas/v4/chat/completions`.
+- Deterministic local extraction is intentionally conservative and currently
+  populated one row; broader extraction still needs reviewed AI/provider
+  reliability or more deterministic patterns.
+
+Research:
+
+- No external research used in this slice. The decision came from live CLI
+  evidence and existing fail-closed extraction validation.
+
+Next Steps:
+
+- Add operator-facing visibility for why each unparsed candidate was rejected
+  and whether it could be locally extracted, AI-reviewed, or skipped.
+- Consider a reviewed batch workflow for accepted/rejected candidates so users
+  can approve deterministic and AI proposals before writing more rows.
+
+## Previous Slice - 2026-06-09 saved extraction summary merge
 
 Current Goal:
 

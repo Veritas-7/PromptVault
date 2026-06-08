@@ -3827,16 +3827,7 @@ fn local_project_work_log_extraction_proposals(
     let proposals = candidates
         .candidates
         .iter()
-        .map(|candidate| {
-            rejected_project_work_log_extraction_proposal(
-                candidate,
-                if candidate.risk_flags.is_empty() {
-                    "local_fallback_requires_ai_review"
-                } else {
-                    "candidate_has_risk_flags"
-                },
-            )
-        })
+        .map(local_project_work_log_extraction_proposal)
         .collect::<Vec<_>>();
     finish_project_work_log_extraction_proposals(
         candidates.root_path,
@@ -3846,6 +3837,85 @@ fn local_project_work_log_extraction_proposals(
         proposals,
         warnings,
     )
+}
+
+fn local_project_work_log_extraction_proposal(
+    candidate: &ProjectWorkLogExtractionCandidate,
+) -> ProjectWorkLogExtractionProposal {
+    if let Some((date, title, evidence)) = local_project_work_log_dated_bullet(candidate) {
+        return ProjectWorkLogExtractionProposal {
+            candidate_id: candidate.candidate_id.clone(),
+            project: candidate.project.clone(),
+            source_path: candidate.source_path.clone(),
+            source_file: candidate.source_file.clone(),
+            date: Some(date),
+            title,
+            status: "proposed".to_string(),
+            evidence,
+            confidence: 0.72,
+            accepted: true,
+            rejection_reason: None,
+        };
+    }
+    rejected_project_work_log_extraction_proposal(
+        candidate,
+        if candidate.risk_flags.is_empty() {
+            "local_fallback_requires_ai_review"
+        } else {
+            "candidate_has_risk_flags"
+        },
+    )
+}
+
+fn local_project_work_log_dated_bullet(
+    candidate: &ProjectWorkLogExtractionCandidate,
+) -> Option<(String, String, String)> {
+    for raw_line in candidate.excerpt.lines() {
+        let line = raw_line.trim();
+        let Some(date_start) = find_iso_date_start(line) else {
+            continue;
+        };
+        let prefix = line[..date_start].trim();
+        if !local_project_work_log_date_prefix_is_item_marker(prefix) {
+            continue;
+        }
+        let date = line[date_start..date_start + 10].to_string();
+        let title = local_project_work_log_title_after_date(&line[date_start + 10..])?;
+        let evidence = truncate_chars(
+            line.trim_start_matches(|ch: char| ch == '-' || ch == '*' || ch.is_whitespace())
+                .trim(),
+            240,
+        );
+        if !detect_risks(&format!("{date}\n{title}\n{evidence}")).is_empty() {
+            continue;
+        }
+        return Some((date, title, evidence));
+    }
+    None
+}
+
+fn local_project_work_log_date_prefix_is_item_marker(prefix: &str) -> bool {
+    prefix.is_empty()
+        || prefix
+            .chars()
+            .all(|ch| matches!(ch, '-' | '*' | '>' | '#' | ' ' | '\t'))
+}
+
+fn local_project_work_log_title_after_date(rest: &str) -> Option<String> {
+    let rest = rest.trim_start();
+    let title = rest
+        .strip_prefix(':')
+        .or_else(|| rest.strip_prefix('-'))?
+        .trim()
+        .trim_matches('|')
+        .trim();
+    if title.chars().count() < 8 {
+        return None;
+    }
+    if !title.chars().any(|ch| ch.is_alphabetic()) {
+        return None;
+    }
+    Some(truncate_chars(title, 160))
 }
 
 fn rejected_project_work_log_extraction_proposal(
@@ -10217,6 +10287,69 @@ Progress:
         assert_eq!(
             result.proposals[0].rejection_reason.as_deref(),
             Some("date_not_in_candidate_excerpt")
+        );
+    }
+
+    #[test]
+    fn local_work_log_extraction_accepts_safe_dated_bullets_only() {
+        let candidates = ProjectWorkLogExtractionCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/tmp".to_string(),
+            files_seen: 2,
+            skipped_parsed_file_count: 0,
+            skipped_unreadable_file_count: 0,
+            skipped_empty_file_count: 0,
+            candidate_count: 2,
+            candidates: vec![
+                ProjectWorkLogExtractionCandidate {
+                    candidate_id: "work-log-Beta-a1b2c3d4e5".to_string(),
+                    project: "Beta".to_string(),
+                    source_path: "/tmp/Beta/working.md".to_string(),
+                    source_file: "working.md".to_string(),
+                    reason: "missing_dated_heading".to_string(),
+                    excerpt:
+                        "- 2026-06-04: Created project root and initialized a new git repository."
+                            .to_string(),
+                    line_count: 1,
+                    char_count: 74,
+                    risk_flags: vec!["long_base64_like_token".to_string()],
+                    modified_at: None,
+                },
+                ProjectWorkLogExtractionCandidate {
+                    candidate_id: "work-log-Gamma-b1b2c3d4e5".to_string(),
+                    project: "Gamma".to_string(),
+                    source_path: "/tmp/Gamma/PROJECT_STATUS.md".to_string(),
+                    source_file: "PROJECT_STATUS.md".to_string(),
+                    reason: "missing_dated_heading".to_string(),
+                    excerpt: "last_updated: 2026-04-24\n# Gamma — Project Status".to_string(),
+                    line_count: 2,
+                    char_count: 54,
+                    risk_flags: Vec::new(),
+                    modified_at: None,
+                },
+            ],
+            warnings: Vec::new(),
+        };
+
+        let result = local_project_work_log_extraction_proposals(candidates, Vec::new());
+
+        assert_eq!(result.provider, "local-extraction-rules");
+        assert!(!result.used_ai);
+        assert_eq!(result.accepted_count, 1);
+        assert_eq!(result.rejected_count, 1);
+        assert_eq!(result.proposals[0].project, "Beta");
+        assert!(result.proposals[0].accepted);
+        assert_eq!(result.proposals[0].date.as_deref(), Some("2026-06-04"));
+        assert_eq!(
+            result.proposals[0].title,
+            "Created project root and initialized a new git repository."
+        );
+        assert_eq!(result.proposals[0].status, "proposed");
+        assert_eq!(result.proposals[0].rejection_reason, None);
+        assert!(!result.proposals[1].accepted);
+        assert_eq!(
+            result.proposals[1].rejection_reason.as_deref(),
+            Some("local_fallback_requires_ai_review")
         );
     }
 

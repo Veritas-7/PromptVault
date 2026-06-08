@@ -1,12 +1,113 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 07:34 KST
+Updated: 2026-06-09 07:44 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 coverage Timestamp fallback parser
+## Current Slice - 2026-06-09 coverage pointer status parser
+
+Current Goal:
+
+- Remove pointer-only progress files from the real unparsed backlog without
+  hiding them from coverage.
+- Keep `workingd.md` support intact for real progress logs while recognizing
+  explicit pointer files that tell agents to use `working.md` instead.
+
+Context:
+
+- After the Timestamp fallback slice, the real coverage backlog was down to
+  three special-case files:
+  `CareVault/workingd.md`, `RepoTutorStudio/working.md`, and
+  `SnapTranslate/working.md`.
+- `CareVault/workingd.md` is not a missing parser case. It explicitly says the
+  active worklog is `working.md` and that agents should not append duplicate
+  progress there.
+- Extraction candidates already skipped pointer logs via
+  `project_progress_log_is_pointer`, but coverage still counted them as
+  unparsed.
+
+Progress:
+
+- Added coverage-level pointer handling:
+  - pointer files are still listed in coverage with `status="pointer"`;
+  - pointer files no longer increase `unparsed_file_count`.
+- Updated the UI row copy so pointer files are described as a pointer to another
+  work log rather than as a missing dated heading.
+- Updated the browser bridge response validator to accept `pointer` status and
+  keep `unparsed_file_count` scoped to true `unparsed`/`unreadable` gaps.
+- Actual coverage after the code change and this note:
+  `files_seen=774`, `parsed_file_count=771`, `unparsed_file_count=2`,
+  `work_item_count>=5921`, `warnings=[]`.
+- Remaining true unparsed projects are now only `RepoTutorStudio` and
+  `SnapTranslate`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - adds coverage test `project_progress_log_coverage_marks_pointer_logs_non_gap`;
+  - emits `status="pointer"` for pointer logs in
+    `build_project_progress_log_coverage`;
+  - counts only `unparsed` and `unreadable` statuses in
+    `unparsed_file_count`.
+- `src/App.tsx`:
+  - renders pointer coverage rows as `다른 작업 로그를 가리키는 포인터`.
+- `src/promptVaultApi.ts` and `tests/promptVaultApi.test.ts`:
+  - accept `pointer` status in bridge coverage payloads;
+  - reject impossible parsed/unparsed counters without requiring pointer files
+    to be counted as unparsed gaps.
+
+Tests:
+
+- RED:
+  - `cargo test project_progress_log_coverage_marks_pointer_logs_non_gap` failed
+    with `unparsed_file_count` 1 vs expected 0.
+- Targeted GREEN:
+  - `cargo test project_progress_log_coverage_marks_pointer_logs_non_gap`: PASS.
+  - `cargo test project_progress_log_coverage`: PASS, 2 tests.
+  - `cargo fmt --check`: PASS.
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts tests/workManagementOverview.test.ts`:
+    PASS; this repo script runs the full 426 UI tests.
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "pointer logs" tests/promptVaultApi.test.ts`:
+    PASS after RED validator failure.
+- Actual CLI verification after this note:
+  - `work-log-coverage --json`: `parsed=771`, `pointer=1`,
+    `unparsed=2`, `work_item_count>=5921`, `warnings=[]`.
+  - `work-report --json`: `total_items>=5921`, `files_seen=774`,
+    `session_evidence_count>=65894`, `warnings=[]`.
+- Headless browser-bridge QA:
+  - `node /tmp/promptvault_work_log_coverage_timestamp_qa.mjs`: PASS with
+    bridge on `127.0.0.1:5174` and Vite on `127.0.0.1:5177`.
+  - Observed coverage meta before this final note:
+    `774개 로그 · parsed 771개 · unparsed 2개 · 31개 프로젝트 · 작업 5,923개`.
+  - Visible coverage rows included exactly one pointer row.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `427` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `158` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- The remaining unparsed backlog is now two files:
+  - `RepoTutorStudio/working.md`: cumulative state log with dated inline
+    bullets;
+  - `SnapTranslate/working.md`: installed QA snapshot log with run IDs/build
+    hashes rather than ISO worklog dates.
+- Full project/day management still needs either deterministic rules for these
+  two shapes or reviewed AI-assisted normalization.
+
+Next Steps:
+
+- Commit the pointer status slice.
+- Next parser candidate: inline dated bullets for cumulative `working.md`
+  files, starting with RepoTutorStudio.
+
+## Previous Slice - 2026-06-09 coverage Timestamp fallback parser
 
 Current Goal:
 

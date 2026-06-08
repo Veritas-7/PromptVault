@@ -3245,15 +3245,20 @@ fn build_project_progress_log_coverage(
                 });
                 let latest_date = latest.map(|item| item.date.clone());
                 let latest_title = latest.map(|item| item.title.clone());
+                let status = if items.is_empty() {
+                    if project_progress_log_is_pointer(&text) {
+                        "pointer"
+                    } else {
+                        "unparsed"
+                    }
+                } else {
+                    "parsed"
+                };
                 files.push(ProjectWorkLogCoverageFile {
                     project,
                     source_path: candidate.path.display().to_string(),
                     source_file,
-                    status: if items.is_empty() {
-                        "unparsed".to_string()
-                    } else {
-                        "parsed".to_string()
-                    },
+                    status: status.to_string(),
                     work_item_count: items.len(),
                     latest_date,
                     latest_title,
@@ -3283,7 +3288,10 @@ fn build_project_progress_log_coverage(
     });
     let files_seen = files.len();
     let parsed_file_count = files.iter().filter(|file| file.status == "parsed").count();
-    let unparsed_file_count = files.iter().filter(|file| file.status != "parsed").count();
+    let unparsed_file_count = files
+        .iter()
+        .filter(|file| matches!(file.status.as_str(), "unparsed" | "unreadable"))
+        .count();
     let project_count = files
         .iter()
         .map(|file| file.project.as_str())
@@ -10703,6 +10711,38 @@ Progress:
         assert_eq!(coverage.files[1].work_item_count, 0);
 
         std::fs::remove_dir_all(root).expect("remove coverage fixture");
+    }
+
+    #[test]
+    fn project_progress_log_coverage_marks_pointer_logs_non_gap() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-project-log-pointer-coverage-{}",
+            std::process::id()
+        ));
+        let care_dir = root.join("CareVault");
+        std::fs::create_dir_all(&care_dir).expect("create care dir");
+        std::fs::write(
+            care_dir.join("workingd.md"),
+            "# CareVault Worklog Pointer\nThe active CareVault worklog is `working.md`.\nThis file exists only because some resume prompts refer to `workingd.md`.\nDo not append duplicate progress here. Read and update `working.md` instead.\n",
+        )
+        .expect("write pointer progress log");
+        let source = SourceSpec {
+            id: "project-progress-logs",
+            label: "Project progress logs",
+            root: root.clone(),
+            kind: SourceKind::ProjectProgressMarkdown,
+        };
+
+        let coverage = build_project_progress_log_coverage(&source).expect("build coverage");
+
+        assert_eq!(coverage.files_seen, 1);
+        assert_eq!(coverage.parsed_file_count, 0);
+        assert_eq!(coverage.unparsed_file_count, 0);
+        assert_eq!(coverage.files[0].status, "pointer");
+        assert_eq!(coverage.files[0].work_item_count, 0);
+        assert_eq!(coverage.files[0].source_file, "workingd.md");
+
+        std::fs::remove_dir_all(root).expect("remove pointer coverage fixture");
     }
 
     #[test]

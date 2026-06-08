@@ -1189,7 +1189,7 @@ function isProjectWorkLogCoverageFile(value: unknown): boolean {
     || !isNonBlankString(value.source_path)
     || !isNonBlankString(value.source_file)
     || !isNonBlankString(value.status)
-    || !["parsed", "unparsed", "unreadable"].includes(value.status)
+    || !["parsed", "pointer", "unparsed", "unreadable"].includes(value.status)
     || !isNonNegativeSafeInteger(value.work_item_count)
     || !(value.latest_date === null || isNonBlankString(value.latest_date))
     || !(value.latest_title === null || isNonBlankString(value.latest_title))
@@ -1213,7 +1213,9 @@ function projectWorkLogCoverageFilesWithinResult(value: unknown): boolean {
     return false;
   }
   const parsedFileCount = value.files.filter((file) => isRecord(file) && file.status === "parsed").length;
-  const unparsedFileCount = value.files.length - parsedFileCount;
+  const unparsedFileCount = value.files.filter((file) =>
+    isRecord(file) && ["unparsed", "unreadable"].includes(String(file.status))
+  ).length;
   let workItemCount = 0;
   const projects = new Set<string>();
   for (const file of value.files) {
@@ -1231,7 +1233,7 @@ function projectWorkLogCoverageFilesWithinResult(value: unknown): boolean {
   return value.files_seen === value.files.length
     && value.parsed_file_count === parsedFileCount
     && value.unparsed_file_count === unparsedFileCount
-    && value.parsed_file_count + value.unparsed_file_count === value.files_seen
+    && value.parsed_file_count + value.unparsed_file_count <= value.files_seen
     && value.project_count === projects.size
     && value.work_item_count === workItemCount;
 }

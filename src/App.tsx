@@ -2340,7 +2340,9 @@ function App() {
                       ? `${file.latest_date ?? "날짜 없음"} · ${file.latest_title ?? "Untitled work"}`
                       : file.status === "unreadable"
                         ? "파일을 읽지 못한 진행 로그"
-                        : "날짜 heading을 찾지 못한 진행 로그"}
+                        : file.status === "pointer"
+                          ? "다른 작업 로그를 가리키는 포인터"
+                          : "날짜 heading을 찾지 못한 진행 로그"}
                   </p>
                   <span>
                     {file.status} · 작업 {file.work_item_count.toLocaleString()}개 · {file.source_path}

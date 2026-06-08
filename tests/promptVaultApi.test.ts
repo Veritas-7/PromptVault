@@ -633,6 +633,38 @@ test("browser bridge work log coverage validates parsed and unparsed logs", asyn
   assert.equal(result.files[1].project, "CareVault");
 });
 
+test("browser bridge work log coverage accepts pointer logs as non-gap files", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkLogCoveragePayload({
+    files_seen: 3,
+    parsed_file_count: 1,
+    unparsed_file_count: 1,
+    files: [
+      ...projectWorkLogCoveragePayload().files,
+      {
+        project: "CareVault",
+        source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+        source_file: "workingd.md",
+        status: "pointer",
+        work_item_count: 0,
+        latest_date: null,
+        latest_title: null,
+        modified_at: null,
+      },
+    ],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkLogCoverage();
+
+  assert.equal(result.files_seen, 3);
+  assert.equal(result.parsed_file_count, 1);
+  assert.equal(result.unparsed_file_count, 1);
+  assert.equal(result.files[2].status, "pointer");
+});
+
 test("browser bridge work log coverage rejects impossible counters", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify(projectWorkLogCoveragePayload({

@@ -1,12 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 07:28 KST
+Updated: 2026-06-09 07:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 coverage Date/start-time fallback parser
+## Current Slice - 2026-06-09 coverage Timestamp fallback parser
+
+Current Goal:
+
+- Reduce the remaining real `work-log-coverage` unparsed backlog by adding the
+  next safe deterministic field parser for project-local worklogs.
+- Keep AI/SDK extraction behind the reviewed queue boundary; do not use AI for
+  logs that have a reliable local timestamp field.
+
+Context:
+
+- After the Date/start-time fallback slice, coverage was
+  `files_seen=773`, `parsed_file_count=618`, `unparsed_file_count=155`,
+  `work_item_count=5758`.
+- Sampling the 155 unparsed files showed `notebooklm-llm-wiki-flow` accounted
+  for 152 of them.
+- Representative `docs/plans/*-worklog.md` files used
+  `Timestamp: YYYY-MM-DD ...` under a safe markdown title rather than `Date:`.
+- The other three unparsed files are special cases:
+  - `CareVault/workingd.md` is an explicit pointer to `working.md`;
+  - `RepoTutorStudio/working.md` is a long cumulative state log with dated
+    inline bullets rather than a single worklog timestamp;
+  - `SnapTranslate/working.md` is an installed QA snapshot log using run IDs and
+    build hashes rather than ISO worklog dates.
+
+Progress:
+
+- Added TDD coverage for `Timestamp: 2026-06-06 ...` project worklogs.
+- Extended the safe local date-field detector to accept `Timestamp:` and emit
+  `Timestamp: YYYY-MM-DD` evidence.
+- Actual coverage improved from `parsed=618/unparsed=155` to
+  `parsed=771/unparsed=3`.
+- Actual report items increased from `5758` to `5916`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - extends `local_project_work_log_update_date_line` with
+    `timestamp:` / `timestamp ` detection;
+  - adds a `Timestamp` evidence label;
+  - extends `project_progress_work_items_extract_safe_date_field_fallbacks`.
+
+Tests:
+
+- RED:
+  - `cargo test project_progress_work_items_extract_safe_date_field_fallbacks`
+    failed with `timestamp_items.len()` 0 vs expected 1.
+- Targeted GREEN:
+  - `cargo test project_progress_work_items_extract_safe_date_field_fallbacks`:
+    PASS.
+  - `cargo test project_progress_work_items`: PASS, 2 tests.
+  - `cargo fmt --check`: PASS.
+- Actual CLI verification:
+  - `work-log-coverage --json` reports
+    `files_seen=774`, `parsed_file_count=771`,
+    `unparsed_file_count=3`, `project_count=31`,
+    `work_item_count=5916`, `warnings=[]`.
+  - Remaining unparsed by project:
+    `CareVault=1`, `RepoTutorStudio=1`, `SnapTranslate=1`.
+  - `work-report --json` reports `project_count=30`, `date_count=25`,
+    `total_items=5916`, `files_seen=774`,
+    `session_scan_prompt_count=200`, `session_evidence_count=65878`,
+    `session_evidence_unique_count=198`,
+    `session_evidence_index_count=200`, `warnings=[]`.
+- Headless browser-bridge QA:
+  - `node /tmp/promptvault_work_log_coverage_timestamp_qa.mjs`: PASS with
+    bridge on `127.0.0.1:5174` and Vite on `127.0.0.1:5177`.
+  - Observed coverage meta:
+    `774개 로그 · parsed 771개 · unparsed 3개 · 31개 프로젝트 · 작업 5,916개`.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `426` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `157` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- The unparsed backlog is now down to three special-case files, not a broad
+  notebooklm worklog parser gap.
+- Full project/day management should still not be marked complete until those
+  three special cases are either parsed, intentionally ignored with explicit
+  status, or routed through a reviewed AI-assisted normalization queue.
+
+Next Steps:
+
+- Decide how to represent the three special cases:
+  - pointer logs such as `CareVault/workingd.md` probably need an explicit
+    non-gap status instead of being counted as unparsed;
+  - cumulative logs such as `RepoTutorStudio/working.md` need inline dated
+    bullet parsing or reviewed extraction;
+  - QA snapshot logs such as `SnapTranslate/working.md` need a domain-specific
+    date extraction rule or reviewed AI normalization.
+- After that, add SDK-backed AI extraction only behind a reviewed
+  fail-closed queue.
+
+## Previous Slice - 2026-06-09 coverage Date/start-time fallback parser
 
 Current Goal:
 

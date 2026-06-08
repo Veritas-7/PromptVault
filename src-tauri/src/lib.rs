@@ -4064,6 +4064,8 @@ fn local_project_work_log_update_date_line(line: &str) -> Option<(String, &'stat
     let has_updated_field =
         field_lower.starts_with("updated:") || field_lower.starts_with("updated ");
     let has_date_field = field_lower.starts_with("date:") || field_lower.starts_with("date ");
+    let has_timestamp_field =
+        field_lower.starts_with("timestamp:") || field_lower.starts_with("timestamp ");
     let has_start_time_field = field_lower.starts_with("start time:")
         || field_lower.starts_with("start time ")
         || field_lower.starts_with("started:")
@@ -4074,6 +4076,7 @@ fn local_project_work_log_update_date_line(line: &str) -> Option<(String, &'stat
     if !has_last_updated
         && !has_updated_field
         && !has_date_field
+        && !has_timestamp_field
         && !has_start_time_field
         && !has_korean_updated
         && !has_korean_start_time
@@ -4092,6 +4095,8 @@ fn local_project_work_log_update_date_line(line: &str) -> Option<(String, &'stat
         "업데이트"
     } else if has_date_field {
         "Date"
+    } else if has_timestamp_field {
+        "Timestamp"
     } else if has_start_time_field {
         "Start time"
     } else if has_updated_field {
@@ -9877,6 +9882,10 @@ Progress:
         let start_time_path =
             PathBuf::from("/tmp/MacMini_RAG_Project/2_Source/STT_SOTA_PROGRESS.md");
         let start_time_text = "# SOTA 검증 진행 상황\n## Cycle 23 - 실시간 업데이트\n### 현재 상태\n- **Zeroth 457 테스트**: 진행 중\n- **시작 시간**: 2026-02-22 15:18 KST\n- **경과 시간**: 약 10분+";
+        let timestamp_path = PathBuf::from(
+            "/tmp/notebooklm-llm-wiki-flow/docs/plans/2026-06-06-report-recertification-status-summary-surface-worklog.md",
+        );
+        let timestamp_text = "# Report Recertification Status Summary Surface Worklog\n\nTimestamp: 2026-06-06 19:57 KST\n\nSlice:\n`report-recertification-status-summary-surface`\n\n## Goal\nExpose report recertification state.";
 
         let date_items = project_progress_work_items_from_text_for_project(
             &date_path,
@@ -9887,6 +9896,11 @@ Progress:
             &start_time_path,
             start_time_text,
             "MacMini_RAG_Project",
+        );
+        let timestamp_items = project_progress_work_items_from_text_for_project(
+            &timestamp_path,
+            timestamp_text,
+            "notebooklm-llm-wiki-flow",
         );
 
         assert_eq!(date_items.len(), 1);
@@ -9915,6 +9929,19 @@ Progress:
             "시작 시간: 2026-02-22\nSOTA 검증 진행 상황"
         );
         assert!(detect_risks(&start_time_items[0].evidence).is_empty());
+
+        assert_eq!(timestamp_items.len(), 1);
+        assert_eq!(timestamp_items[0].date, "2026-06-06");
+        assert_eq!(timestamp_items[0].project, "notebooklm-llm-wiki-flow");
+        assert_eq!(
+            timestamp_items[0].title,
+            "Report Recertification Status Summary Surface Worklog"
+        );
+        assert_eq!(
+            timestamp_items[0].evidence,
+            "Timestamp: 2026-06-06\nReport Recertification Status Summary Surface Worklog"
+        );
+        assert!(detect_risks(&timestamp_items[0].evidence).is_empty());
     }
 
     #[test]

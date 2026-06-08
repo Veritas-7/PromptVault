@@ -1,12 +1,86 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 14:35 KST
+Updated: 2026-06-08 14:38 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Bridge recovery and scan-limit QA
+## Current Slice - 2026-06-08 Stored filter empty reset QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Directly verify the stored-filter empty-result and reset recovery flow in
+  browser mode.
+
+Context:
+
+- Previous bridge recovery and scan-limit QA slice is pushed to `origin/main`
+  as `35a0a0c docs: record bridge recovery QA`.
+- Final parity after that push returned `HEAD...origin/main` as `0 0`, the
+  worktree was clean, and `gh repo view --json visibility --jq .visibility`
+  returned `PRIVATE`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus the CLI browser bridge and Playwright.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `35a0a0c docs: record bridge recovery QA`.
+- Re-read stored-filter helper code, existing stored-filter unit tests, and
+  the rendered stored-filter controls before QA.
+- Ran connected browser QA for an impossible stored text filter:
+  `zz-no-such-promptvault-filter-20260608`.
+- The draft filter enabled both apply and reset, with aria-labels
+  `저장소 필터 1개 적용` and `저장소 필터 1개 초기화`.
+- Applying the impossible filter called `/api/prompts` once, returned
+  `returned_prompt_count: 0`, showed `0개 로드됨`, showed the empty prompt and
+  selected-prompt messages for active stored filters, kept reset enabled, and
+  had no console or page errors.
+- Clicking reset called `/api/prompts` a second time, cleared the query input,
+  restored 1,000 loaded latest-preview prompts with 200 visible rows, removed
+  empty states, disabled reset, and set reset aria-label to
+  `초기화할 저장소 필터 없음`.
+- The first Playwright attempt captured the transient loading empty state
+  because `[data-empty-prompts]` is also used during stored-load progress.
+  The corrected script waited for `/api/prompts` and the final `0개 로드됨`
+  heading before asserting.
+
+Changes:
+
+- `working.md`: records this QA-only stored-filter empty reset slice.
+
+Tests:
+
+- Stored-filter browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5197" --port 5197 --server "npm run dev -- --host 127.0.0.1 --port 5198" --port 5198 --timeout 120 -- /bin/bash -lc ...`
+  confirmed impossible filter empty state, reset recovery, two successful
+  `/api/prompts` calls, restored prompt rows, disabled reset after unfiltered
+  load, and no console/page errors.
+
+Issues:
+
+- No code blockers found in the stored-filter empty reset flow.
+- Test harness note: wait for final stored-load content, not merely for
+  `[data-empty-prompts]`, because the same empty container appears during
+  loading.
+
+Research:
+
+- No external research. This is direct browser QA work.
+
+Next Steps:
+
+- Finish this QA-only closeout with docs-only verification, staged secret scan,
+  commit, push, and final parity checks.
+- Continue from a clean pushed tree and pick the next autonomous QA/improvement
+  slice.
+
+## Previous Slice - 2026-06-08 Bridge recovery and scan-limit QA
 
 Current Goal:
 

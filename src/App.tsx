@@ -169,6 +169,15 @@ import {
   type StoredPromptFilters,
 } from "./storedFilters";
 import {
+  activeWorkLogPreviewFilterCount,
+  emptyWorkLogPreviewFilters,
+  filterWorkLogExtractionCandidates,
+  filterWorkLogExtractionProposals,
+  workLogPreviewProjectSuggestions,
+  workLogProposalDateSuggestions,
+  type WorkLogPreviewFilters,
+} from "./workLogPreviewFilters";
+import {
   storedFacetSummaryText,
   storedFacetsFailureText,
   type StoredFacetsState,
@@ -331,6 +340,9 @@ function App() {
   const [workSummarySnapshotProjectFilter, setWorkSummarySnapshotProjectFilter] = useState("");
   const [workLogExtractionItemDateFilter, setWorkLogExtractionItemDateFilter] = useState("");
   const [workLogExtractionItemProjectFilter, setWorkLogExtractionItemProjectFilter] = useState("");
+  const [workLogPreviewFilters, setWorkLogPreviewFilters] = useState<WorkLogPreviewFilters>(() =>
+    emptyWorkLogPreviewFilters(),
+  );
   const [expandedWorkSummarySnapshotIds, setExpandedWorkSummarySnapshotIds] = useState<Set<number>>(
     () => new Set(),
   );
@@ -570,10 +582,27 @@ function App() {
     workSummarySnapshotDateFilter.trim() !== "" || workSummarySnapshotProjectFilter.trim() !== "";
   const hasWorkLogExtractionItemFilters =
     workLogExtractionItemDateFilter.trim() !== "" || workLogExtractionItemProjectFilter.trim() !== "";
+  const workLogPreviewFilterCount = activeWorkLogPreviewFilterCount(workLogPreviewFilters);
+  const hasWorkLogPreviewFilters = workLogPreviewFilterCount > 0;
   const workSummarySnapshotDateSuggestions = workSummarySnapshotsResult?.available_dates ?? [];
   const workSummarySnapshotProjectSuggestions = workSummarySnapshotsResult?.available_projects ?? [];
   const workLogExtractionItemDateSuggestions = workLogExtractionItemsResult?.available_dates ?? [];
   const workLogExtractionItemProjectSuggestions = workLogExtractionItemsResult?.available_projects ?? [];
+  const filteredWorkLogCandidates = filterWorkLogExtractionCandidates(
+    workLogCandidatesResult?.candidates ?? [],
+    workLogPreviewFilters,
+  );
+  const filteredWorkLogExtractionProposals = filterWorkLogExtractionProposals(
+    workLogExtractionResult?.proposals ?? [],
+    workLogPreviewFilters,
+  );
+  const workLogPreviewProjectFilterSuggestions = workLogPreviewProjectSuggestions(
+    workLogCandidatesResult?.candidates ?? [],
+    workLogExtractionResult?.proposals ?? [],
+  );
+  const workLogPreviewDateFilterSuggestions = workLogProposalDateSuggestions(
+    workLogExtractionResult?.proposals ?? [],
+  );
   const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
   const hiddenWorkSummaryCount = Math.max(
     0,
@@ -588,13 +617,13 @@ function App() {
     (workLogCoverageResult?.files.length ?? 0) - WORK_LOG_COVERAGE_DISPLAY_LIMIT,
   );
   const visibleWorkLogCandidates =
-    workLogCandidatesResult?.candidates.slice(0, WORK_LOG_CANDIDATE_DISPLAY_LIMIT) ?? [];
+    filteredWorkLogCandidates.slice(0, WORK_LOG_CANDIDATE_DISPLAY_LIMIT);
   const hiddenWorkLogCandidateCount = Math.max(
     0,
-    (workLogCandidatesResult?.candidates.length ?? 0) - WORK_LOG_CANDIDATE_DISPLAY_LIMIT,
+    filteredWorkLogCandidates.length - WORK_LOG_CANDIDATE_DISPLAY_LIMIT,
   );
   const visibleWorkLogExtractionProposals =
-    workLogExtractionResult?.proposals.slice(0, WORK_LOG_EXTRACTION_DISPLAY_LIMIT) ?? [];
+    filteredWorkLogExtractionProposals.slice(0, WORK_LOG_EXTRACTION_DISPLAY_LIMIT);
   const acceptedWorkLogExtractionCandidateIds = workLogExtractionResult
     ? acceptedWorkLogExtractionIds(workLogExtractionResult)
     : [];
@@ -603,7 +632,7 @@ function App() {
   const selectedApprovedWorkLogExtractionCount = selectedApprovedWorkLogExtractionCandidateIds.length;
   const hiddenWorkLogExtractionProposalCount = Math.max(
     0,
-    (workLogExtractionResult?.proposals.length ?? 0) - WORK_LOG_EXTRACTION_DISPLAY_LIMIT,
+    filteredWorkLogExtractionProposals.length - WORK_LOG_EXTRACTION_DISPLAY_LIMIT,
   );
   const visibleWorkLogExtractionItems =
     workLogExtractionItemsResult?.items.slice(0, WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT) ?? [];
@@ -1819,6 +1848,83 @@ function App() {
         </datalist>
         <form
           className="work-summary-filter-row"
+          data-work-log-preview-filters="true"
+          onSubmit={(event) => {
+            event.preventDefault();
+          }}
+        >
+          <label>
+            <span>제안 날짜</span>
+            <input
+              aria-label="AI 작업 추출 제안 날짜 필터"
+              data-work-log-preview-date-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-preview-date-options"
+              onChange={(event) =>
+                setWorkLogPreviewFilters((current) => ({
+                  ...current,
+                  date: event.target.value,
+                }))}
+              placeholder="2026-06-09"
+              type="text"
+              value={workLogPreviewFilters.date}
+            />
+          </label>
+          <label>
+            <span>프로젝트</span>
+            <input
+              aria-label="AI 작업 추출 후보와 제안 프로젝트 필터"
+              data-work-log-preview-project-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-preview-project-options"
+              onChange={(event) =>
+                setWorkLogPreviewFilters((current) => ({
+                  ...current,
+                  project: event.target.value,
+                }))}
+              placeholder="CareVault"
+              type="text"
+              value={workLogPreviewFilters.project}
+            />
+          </label>
+          <button
+            aria-label={
+              hasWorkLogPreviewFilters
+                ? `AI 작업 추출 미리보기 필터 ${workLogPreviewFilterCount.toLocaleString()}개 적용`
+                : "필터 없이 AI 작업 추출 미리보기 보기"
+            }
+            className="inline-action"
+            data-apply-work-log-preview-filters="true"
+            disabled={isTopLevelActionLocked}
+            type="submit"
+          >
+            <Search size={15} />
+            필터 적용
+          </button>
+          <button
+            aria-label="AI 작업 추출 미리보기 필터 초기화"
+            className="inline-action"
+            data-clear-work-log-preview-filters="true"
+            disabled={isTopLevelActionLocked || !hasWorkLogPreviewFilters}
+            onClick={() => setWorkLogPreviewFilters(emptyWorkLogPreviewFilters())}
+            type="button"
+          >
+            <XCircle size={15} />
+            초기화
+          </button>
+        </form>
+        <datalist id="work-log-preview-date-options">
+          {workLogPreviewDateFilterSuggestions.map((date) => (
+            <option key={date} value={date} />
+          ))}
+        </datalist>
+        <datalist id="work-log-preview-project-options">
+          {workLogPreviewProjectFilterSuggestions.map((project) => (
+            <option key={project} value={project} />
+          ))}
+        </datalist>
+        <form
+          className="work-summary-filter-row"
           data-work-log-items-filters="true"
           onSubmit={(event) => {
             event.preventDefault();
@@ -1921,6 +2027,18 @@ function App() {
           <div className="work-summary-index" data-work-log-extraction-meta="true">
             <Sparkles size={15} />
             <span>{workLogExtractionMeta}</span>
+          </div>
+        ) : null}
+        {workLogCandidatesResult || workLogExtractionResult ? (
+          <div className="work-summary-index" data-work-log-preview-filter-meta="true">
+            <Search size={15} />
+            <span>
+              미리보기 필터 {workLogPreviewFilterCount.toLocaleString()}개 · 후보{" "}
+              {filteredWorkLogCandidates.length.toLocaleString()} /{" "}
+              {(workLogCandidatesResult?.candidates.length ?? 0).toLocaleString()}개 · 제안{" "}
+              {filteredWorkLogExtractionProposals.length.toLocaleString()} /{" "}
+              {(workLogExtractionResult?.proposals.length ?? 0).toLocaleString()}개
+            </span>
           </div>
         ) : null}
         {workLogExtractionResult ? (
@@ -2041,7 +2159,9 @@ function App() {
             </div>
           ) : (
             <div className="empty compact" data-empty-work-log-candidates="true">
-              AI 추출 후보로 보낼 unparsed 진행 로그 없음
+              {hasWorkLogPreviewFilters && workLogCandidatesResult.candidates.length
+                ? "필터에 맞는 AI 추출 후보 없음"
+                : "AI 추출 후보로 보낼 unparsed 진행 로그 없음"}
             </div>
           )
         ) : null}
@@ -2097,7 +2217,9 @@ function App() {
             </div>
           ) : (
             <div className="empty compact" data-empty-work-log-extraction="true">
-              검증된 AI 작업 추출 제안 없음
+              {hasWorkLogPreviewFilters && workLogExtractionResult.proposals.length
+                ? "필터에 맞는 AI 작업 추출 제안 없음"
+                : "검증된 AI 작업 추출 제안 없음"}
             </div>
           )
         ) : null}

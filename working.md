@@ -1,12 +1,123 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 05:03 KST
+Updated: 2026-06-09 05:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 reviewed work-log extraction save
+## Current Slice - 2026-06-09 work-log preview project/date filters
+
+Current Goal:
+
+- Make large work-log candidate/proposal preview batches reviewable by adding
+  project/date filters before the visible slice limit is applied.
+- Keep filtering client-side so existing CLI, bridge, and Tauri extraction
+  contracts stay unchanged.
+- Verify the filter controls against the real current work-log candidate set
+  and local extraction fallback proposals.
+
+Context:
+
+- `work-log-candidates` currently returns `16` unparsed project progress-log
+  candidates.
+- `work-log-extract --ai` still falls back to `local-extraction-rules`,
+  producing `16` proposals: `1` accepted `RepoTutorStudio / 2026-06-04` row and
+  `15` rejected proposals.
+- Candidate previews do not carry dates, so the preview project filter applies
+  to candidates and proposals, while the date filter applies only to proposals.
+- The saved extraction item browser already has server-backed project/date
+  filters; this slice covers the unsaved candidate/proposal preview area.
+
+Progress:
+
+- Added reusable work-log preview filter helpers for:
+  - empty filter state;
+  - active filter count;
+  - candidate filtering by project;
+  - proposal filtering by project and date;
+  - project/date suggestion values.
+- Added an `AI 작업 추출` preview filter row in the management panel:
+  - `제안 날짜` input with proposal date suggestions;
+  - `프로젝트` input with combined candidate/proposal project suggestions;
+  - filter apply/reset controls;
+  - live meta row showing filtered candidate/proposal counts.
+- Preview lists now filter before applying the compact display limits, so a
+  hidden accepted proposal can be surfaced by filtering its project/date.
+- Empty states now distinguish true empty data from filter misses.
+
+Changes:
+
+- `src/workLogPreviewFilters.ts`:
+  - new helper module for candidate/proposal preview filtering.
+- `tests/workLogPreviewFilters.test.ts`:
+  - RED/GREEN coverage for filter counts, project/date filtering, and
+    suggestion normalization.
+- `src/App.tsx`:
+  - added preview filter state;
+  - wired filtered candidate/proposal arrays into the visible lists and overflow
+    counts;
+  - added filter controls, datalists, meta row, and filtered empty-state copy.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workLogPreviewFilters.test.ts` failed with
+    `ERR_MODULE_NOT_FOUND` before `src/workLogPreviewFilters.ts` existed.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workLogPreviewFilters.test.ts`: PASS, `414`
+    tests.
+  - `npm run build`: PASS.
+  - `npm run test:ui`: PASS, `414` tests.
+- Headless UI check against temporary bridge/Vite:
+  - started bridge on `127.0.0.1:5174` and Vite on `127.0.0.1:5177`;
+  - clicked `추출 후보`, meta showed
+    `후보 16개 · parsed 제외 16개 · unreadable 0개 · empty 0개`;
+  - clicked `AI 제안`, meta showed
+    `로컬 local-extraction-rules · 후보 16개 · accepted 1개 · rejected 15개`;
+  - initial filter meta showed
+    `미리보기 필터 0개 · 후보 16 / 16개 · 제안 16 / 16개`;
+  - project filter `RepoTutorStudio` reduced both lists to
+    `후보 1 / 16개 · 제안 1 / 16개`;
+  - adding date `2026-06-09` kept the candidate visible but reduced proposals
+    to `0 / 16개` and showed `필터에 맞는 AI 작업 추출 제안 없음`;
+  - changing date to `2026-06-04` isolated the accepted
+    `RepoTutorStudio / 2026-06-04` proposal;
+  - reset cleared both input values and restored `16 / 16` counts;
+  - no browser console errors, failed requests, or page errors were observed.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `414` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `149` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- External GLM extraction still fails before usable proposals are returned, so
+  real AI proposal validation remains blocked by provider reliability.
+- Candidate rows do not yet expose candidate-level inferred dates; date
+  filtering is intentionally proposal-only in this slice.
+
+Research:
+
+- Used the local `webapp-testing` skill workflow. Python Playwright was not
+  installed, so the headless check used repo-resolved Node Playwright while
+  still using the skill's `with_server.py` helper for server lifecycle.
+- No external web research used.
+
+Next Steps:
+
+- Add grouping/drill-down for saved extraction rows by project/date and link
+  them into summary snapshots.
+- Improve GLM/OpenAI provider health/error visibility so failed AI extraction
+  attempts are actionable before the fallback runs.
+- Consider enriching extraction candidates with safe inferred date hints, then
+  revisit whether candidate preview date filtering should be supported.
+
+## Previous Slice - 2026-06-09 reviewed work-log extraction save
 
 Current Goal:
 

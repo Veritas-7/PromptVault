@@ -321,6 +321,7 @@ pub struct ProjectWorkSummarySnapshot {
     pub session_evidence_unique_count: usize,
     pub summary_count: usize,
     pub summaries: Vec<ProjectWorkSummary>,
+    pub extraction_merge: Option<ProjectWorkLogExtractionMergeResult>,
     pub warnings: Vec<String>,
 }
 
@@ -5808,13 +5809,42 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             summary_count INTEGER NOT NULL,
             report_json TEXT NOT NULL,
             summaries_json TEXT NOT NULL,
+            extraction_merge_json TEXT,
             warnings_json TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_project_work_summary_snapshots_created_at
             ON project_work_summary_snapshots(created_at DESC);
         ",
     )?;
+    ensure_project_work_summary_snapshot_schema(conn)?;
     Ok(())
+}
+
+fn ensure_project_work_summary_snapshot_schema(
+    conn: &Connection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !project_work_summary_snapshots_has_column(conn, "extraction_merge_json")? {
+        conn.execute(
+            "ALTER TABLE project_work_summary_snapshots ADD COLUMN extraction_merge_json TEXT",
+            [],
+        )?;
+    }
+    Ok(())
+}
+
+fn project_work_summary_snapshots_has_column(
+    conn: &Connection,
+    column: &str,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare("PRAGMA table_info(project_work_summary_snapshots)")?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn persist_project_work_summary_snapshot(
@@ -5822,12 +5852,17 @@ fn persist_project_work_summary_snapshot(
     result: &ProjectWorkSummaryResult,
 ) -> Result<ProjectWorkSummaryPersistence, Box<dyn std::error::Error>> {
     let conn = open_promptvault_database(database_path)?;
+    let extraction_merge_json = result
+        .extraction_merge
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()?;
     conn.execute(
         "INSERT INTO project_work_summary_snapshots (
             created_at, provider, used_ai, narrative_markdown, total_items, project_count,
             date_count, files_seen, session_evidence_count, session_evidence_unique_count,
-            summary_count, report_json, summaries_json, warnings_json
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            summary_count, report_json, summaries_json, extraction_merge_json, warnings_json
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             Utc::now().to_rfc3339(),
             &result.provider,
@@ -5842,6 +5877,7 @@ fn persist_project_work_summary_snapshot(
             result.summaries.len() as i64,
             serde_json::to_string(&result.report)?,
             serde_json::to_string(&result.summaries)?,
+            extraction_merge_json,
             serde_json::to_string(&result.warnings)?,
         ],
     )?;
@@ -5874,7 +5910,8 @@ fn read_project_work_summary_snapshots(
     let mut stmt = conn.prepare(
         "SELECT id, created_at, provider, used_ai, narrative_markdown, total_items,
             project_count, date_count, files_seen, session_evidence_count,
-            session_evidence_unique_count, summary_count, summaries_json, warnings_json
+            session_evidence_unique_count, summary_count, summaries_json, extraction_merge_json,
+            warnings_json
          FROM project_work_summary_snapshots
          ORDER BY id DESC",
     )?;
@@ -5885,7 +5922,8 @@ fn read_project_work_summary_snapshots(
     let mut available_projects = BTreeSet::new();
     while let Some(row) = rows.next()? {
         let summaries_json: String = row.get(12)?;
-        let warnings_json: String = row.get(13)?;
+        let extraction_merge_json: Option<String> = row.get(13)?;
+        let warnings_json: String = row.get(14)?;
         let snapshot = ProjectWorkSummarySnapshot {
             id: row.get(0)?,
             created_at: row.get(1)?,
@@ -5900,6 +5938,10 @@ fn read_project_work_summary_snapshots(
             session_evidence_unique_count: row.get::<_, i64>(10)? as usize,
             summary_count: row.get::<_, i64>(11)? as usize,
             summaries: serde_json::from_str(&summaries_json)?,
+            extraction_merge: extraction_merge_json
+                .as_deref()
+                .map(serde_json::from_str)
+                .transpose()?,
             warnings: serde_json::from_str(&warnings_json)?,
         };
         if project_work_summary_snapshot_matches_filters(&snapshot, date_filter, project_filter) {
@@ -9403,7 +9445,18 @@ Progress:
                 warnings: Vec::new(),
             },
             warnings: Vec::new(),
-            extraction_merge: None,
+            extraction_merge: Some(ProjectWorkLogExtractionMergeResult {
+                provider: "glm".to_string(),
+                used_ai: true,
+                candidate_count: 3,
+                accepted_count: 1,
+                rejected_count: 2,
+                merged_item_count: 1,
+                warnings: vec![
+                    "AI 진행로그 제안 accepted 항목 1개를 프로젝트/일별 요약 preview에 병합했습니다."
+                        .to_string(),
+                ],
+            }),
             persistence: None,
         };
 
@@ -9415,19 +9468,43 @@ Progress:
         assert_eq!(persistence.database_path, db_path.display().to_string());
 
         let conn = Connection::open(&db_path).expect("open snapshot db");
-        let stored: (String, i64, i64, String) = conn
+        let stored: (String, i64, i64, String, String) = conn
             .query_row(
-                "SELECT provider, used_ai, total_items, report_json
+                "SELECT provider, used_ai, total_items, report_json, extraction_merge_json
                  FROM project_work_summary_snapshots
                  WHERE id = ?1",
                 [persistence.snapshot_id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
             )
             .expect("read snapshot");
         assert_eq!(stored.0, "local-citation-rules");
         assert_eq!(stored.1, 0);
         assert_eq!(stored.2, 1);
         assert!(stored.3.contains("\"total_items\":1"));
+        assert!(stored.4.contains("\"merged_item_count\":1"));
+        drop(conn);
+
+        let snapshots = run_list_project_work_summary_snapshots(ProjectWorkSummarySnapshotsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(1),
+            date: None,
+            project: None,
+        })
+        .expect("list persisted snapshot");
+        let extraction_merge = snapshots.snapshots[0]
+            .extraction_merge
+            .as_ref()
+            .expect("snapshot extraction merge");
+        assert_eq!(extraction_merge.provider, "glm");
+        assert_eq!(extraction_merge.merged_item_count, 1);
 
         std::fs::remove_file(db_path).expect("remove snapshot db");
     }

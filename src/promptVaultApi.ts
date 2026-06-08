@@ -1479,6 +1479,7 @@ function isProjectWorkSummarySnapshot(value: unknown): boolean {
     && value.summaries.length === value.summary_count
     && value.summaries.every(isProjectWorkSummary)
     && projectWorkSummarySnapshotSummariesWithinSnapshot(value)
+    && (value.extraction_merge === null || isProjectWorkLogExtractionMergeResult(value.extraction_merge))
     && isNonBlankStringArray(value.warnings);
 }
 

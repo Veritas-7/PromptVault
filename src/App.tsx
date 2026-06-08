@@ -220,6 +220,7 @@ import {
   workSummarySnapshotsMetaText,
   workSummarySnapshotDetailToggleText,
   workSummarySnapshotDisplaySummaries,
+  workSummarySnapshotExtractionMergeText,
   workSummarySnapshotSummaryOverflowText,
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
@@ -1411,6 +1412,17 @@ function App() {
               AI 병합 요약
             </button>
             <button
+              aria-label="accepted AI 진행로그 제안을 병합한 프로젝트 작업 요약을 SQLite 스냅샷으로 저장"
+              className="inline-action"
+              data-save-work-summary-with-extractions-snapshot="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => refreshWorkSummary({ includeExtractions: true, saveSnapshot: true })}
+              type="button"
+            >
+              <Database size={15} />
+              AI 병합 저장
+            </button>
+            <button
               aria-label={workSummarySnapshotsActionLabel(
                 workSummarySnapshotsState,
                 workSummarySnapshotsResult !== null,
@@ -1791,6 +1803,7 @@ function App() {
                   visibleSummaries.length,
                 );
                 const detailToggleText = workSummarySnapshotDetailToggleText(snapshot, detailsExpanded);
+                const extractionMergeText = workSummarySnapshotExtractionMergeText(snapshot);
                 return (
                   <article className="work-summary-row" key={snapshot.id}>
                     <div>
@@ -1804,6 +1817,7 @@ function App() {
                       {snapshot.project_count.toLocaleString()}개 · {snapshot.date_count.toLocaleString()}일 · 작업{" "}
                       {snapshot.total_items.toLocaleString()}개 · 세션 근거{" "}
                       {snapshot.session_evidence_count.toLocaleString()}건
+                      {extractionMergeText ? ` · ${extractionMergeText}` : ""}
                     </span>
                     {visibleSummaries.length ? (
                       <ul className="work-summary-snapshot-details">

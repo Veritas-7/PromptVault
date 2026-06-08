@@ -19,6 +19,7 @@ import {
   workSummarySnapshotsActionLabel,
   workSummarySnapshotsFailureText,
   workSummarySnapshotsMetaText,
+  workSummarySnapshotExtractionMergeText,
   workSummarySnapshotDetailToggleText,
   workSummarySnapshotDisplaySummaries,
   workSummarySnapshotSummaryOverflowText,
@@ -182,6 +183,7 @@ function snapshot(overrides: Partial<ProjectWorkSummarySnapshot> = {}): ProjectW
       snapshotSummary({ date: "2026-06-08", project: "PromptVault" }),
       snapshotSummary({ date: "2026-06-08", project: "SourceCollector" }),
     ],
+    extraction_merge: null,
     warnings: [],
     ...overrides,
   };
@@ -249,6 +251,24 @@ test("work summary persistence text is only shown after snapshot saves", () => {
       },
     })),
     "스냅샷 #12 저장 · 총 15개",
+  );
+});
+
+test("work summary snapshot extraction merge text is only shown for merge snapshots", () => {
+  assert.equal(workSummarySnapshotExtractionMergeText(snapshot()), null);
+  assert.equal(
+    workSummarySnapshotExtractionMergeText(snapshot({
+      extraction_merge: {
+        provider: "glm",
+        used_ai: true,
+        candidate_count: 3,
+        accepted_count: 1,
+        rejected_count: 2,
+        merged_item_count: 1,
+        warnings: [],
+      },
+    })),
+    "AI 병합 1개",
   );
 });
 

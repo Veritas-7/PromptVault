@@ -1,12 +1,120 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 03:45 KST
+Updated: 2026-06-09 03:59 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 AI extraction merge preview
+## Current Slice - 2026-06-09 AI extraction merge snapshot persistence
+
+Current Goal:
+
+- Make the accepted AI work-log extraction merge path explicitly persistable, not
+  only previewable.
+- Preserve the operator boundary: normal AI merge remains preview-only; `AI 병합
+  저장` is the explicit save action.
+- Prove the saved history can identify whether a snapshot included extraction
+  merge metadata.
+
+Context:
+
+- The previous slice added `AI 병합 요약`, which merges accepted extraction
+  proposals into the project/day work summary preview.
+- Snapshot saving already existed, but saved history did not store
+  `extraction_merge` metadata and the UI had no one-click "merge and save"
+  action.
+- The management layer already parses dated project progress logs and real Codex
+  session evidence; this slice makes the saved snapshot history keep the same
+  merge context visible after persistence.
+
+Progress:
+
+- Added nullable `extraction_merge_json` to the
+  `project_work_summary_snapshots` SQLite table and a schema migration for
+  existing databases.
+- Added `extraction_merge` to `ProjectWorkSummarySnapshot` so saved rows retain
+  provider, AI usage, candidate counts, accepted/rejected counts, merged item
+  count, and warnings.
+- Added the `AI 병합 저장` UI action:
+  `include_extractions=true`, `save_snapshot=true`, and `extraction_ai=true`.
+- Added saved-history display text so merge snapshots show `AI 병합 N개` in the
+  snapshot row.
+- Fixed the browser bridge snapshot validator to accept either `null` or a valid
+  extraction merge object.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: persists and reads `extraction_merge_json`, migrates
+  old snapshot tables, and tests round-trip snapshot metadata.
+- `src/types.ts` and `src/promptVaultApi.ts`: expose and validate
+  `ProjectWorkSummarySnapshot.extraction_merge`.
+- `src/workSummaryStatus.ts`: adds saved-snapshot merge status text.
+- `src/App.tsx`: adds `AI 병합 저장` and renders saved merge snapshot labels.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`: cover
+  snapshot merge metadata validation and display.
+
+Tests:
+
+- RED baseline:
+  `cargo test project_work_summary_snapshot_persists_sanitized_summary_metadata --lib`
+  failed before migration with `no such column: extraction_merge_json`.
+- GREEN:
+  `cargo test project_work_summary_snapshot --lib` passed 3/3.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 150/150.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  passed 12/12.
+- GREEN:
+  `npm run build` passed.
+- Live CLI verification using the operating database session index:
+  `work-summary --limit 5 --session-limit 1 --summary-limit 3
+  --include-extractions --extraction-limit 1 --json` returned
+  `total_items=5`, `index_used=true`, `session_evidence_count=0`,
+  `merge_provider=local-extraction-rules`, `candidate_count=1`,
+  `accepted_count=0`, and `merged_item_count=0`.
+- Live temp-DB save verification:
+  `work-summary --limit 5 --session-limit 1 --summary-limit 3
+  --include-extractions --extraction-limit 1 --save-snapshot --database <tmp>
+  --json` returned `session_evidence_count=5`, `index_updated=true`,
+  `snapshot_count=1`, and `extraction_merge.provider=local-extraction-rules`.
+- Live temp-DB snapshot read verification:
+  `work-summary-snapshots --limit 1 --database <tmp> --json` returned
+  `total_snapshots=1`, `returned_snapshot_count=1`, and saved
+  `extraction_merge.provider=local-extraction-rules`.
+- Browser QA without cmux:
+  started the PromptVault bridge on `127.0.0.1:5174` and Vite on
+  `127.0.0.1:1420`, clicked
+  `[data-save-work-summary-with-extractions-snapshot="true"]` in headless
+  Chromium, verified the request body had `include_extractions=true`,
+  `save_snapshot=true`, and `extraction_ai=true`, and verified UI text
+  `스냅샷 #2 저장 · 총 2개` plus saved-row `AI 병합` display.
+- Full gate:
+  `npm run check` passed: UI tests 400/400, Vite build, Rust library tests
+  144/144, CLI tests 20/20, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- Live AI extraction still accepted 0 proposals because the configured provider
+  path falls back locally. The save flow is verified with local merge metadata
+  and synthetic accepted-proposal tests.
+- Browser QA intentionally saved one real snapshot to
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite` because the tested action
+  is the explicit save flow.
+
+Next Steps:
+
+- Add provider health/timeout visibility to the UI so failed GLM/OpenAI attempts
+  are diagnosable before running AI extraction.
+- Add an operator-reviewed accept/persist flow for individual extraction
+  proposals, so accepted `workingd.md` items can be saved deliberately rather
+  than only previewed or merged into summaries.
+- Improve candidate classification so status-pointer files and low-value
+  planning notes are filtered before AI extraction.
+
+## Previous Slice - 2026-06-09 AI extraction merge preview
 
 Current Goal:
 

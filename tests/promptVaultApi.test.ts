@@ -303,6 +303,7 @@ function projectWorkSummarySnapshotsPayload(overrides = {}) {
       session_evidence_unique_count: 1,
       summary_count: 1,
       summaries: projectWorkSummaryPayload().summaries,
+      extraction_merge: null,
       warnings: [],
     }],
     warnings: [],
@@ -503,6 +504,32 @@ test("browser bridge work summary snapshots posts options and validates saved ro
   assert.deepEqual(result.available_projects, ["PromptVault"]);
   assert.equal(result.snapshots[0].id, 7);
   assert.equal(result.snapshots[0].summaries[0].citations[0].id, "2026-06-09-PromptVault-1");
+});
+
+test("browser bridge work summary snapshots validates extraction merge metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSummarySnapshotsPayload({
+    snapshots: [{
+      ...projectWorkSummarySnapshotsPayload().snapshots[0],
+      extraction_merge: {
+        provider: "glm",
+        used_ai: true,
+        candidate_count: 3,
+        accepted_count: 1,
+        rejected_count: 2,
+        merged_item_count: 1,
+        warnings: ["AI 진행로그 제안 accepted 항목 1개를 프로젝트/일별 요약 preview에 병합했습니다."],
+      },
+    }],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await listProjectWorkSummarySnapshots({ limit: 5 });
+
+  assert.equal(result.snapshots[0].extraction_merge?.provider, "glm");
+  assert.equal(result.snapshots[0].extraction_merge?.merged_item_count, 1);
 });
 
 test("browser bridge work log coverage validates parsed and unparsed logs", async (t) => {

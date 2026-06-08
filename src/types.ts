@@ -350,6 +350,7 @@ export interface ProjectWorkSummarySnapshot {
   session_evidence_unique_count: number;
   summary_count: number;
   summaries: ProjectWorkSummary[];
+  extraction_merge: ProjectWorkLogExtractionMergeResult | null;
   warnings: string[];
 }
 

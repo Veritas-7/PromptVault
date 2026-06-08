@@ -74,6 +74,13 @@ export function workSummaryPersistenceText(result: ProjectWorkSummaryResult): st
   ].join(" · ");
 }
 
+export function workSummarySnapshotExtractionMergeText(
+  snapshot: ProjectWorkSummarySnapshot,
+): string | null {
+  if (!snapshot.extraction_merge) return null;
+  return `AI 병합 ${snapshot.extraction_merge.merged_item_count.toLocaleString()}개`;
+}
+
 export function workSummarySnapshotsActionLabel(
   state: WorkSummarySnapshotsState,
   hasResult: boolean,

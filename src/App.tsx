@@ -143,6 +143,7 @@ import {
   storedFilterInputLabel,
   storedFilterResetCount,
   storedFilterResetLabel,
+  storedFilterSuggestionValues,
   storedPromptFiltersSnapshot,
   storedPromptLoadOptions,
   storedResultFilterCount,
@@ -420,16 +421,18 @@ function App() {
   const storedSourceSuggestions = useMemo(() => {
     const sourceLabels = storedFacetsResult?.sources.map((source) => source.text)
       ?? (result?.stats.source_summaries ?? []).map((source) => source.label);
-    return [...new Set(sourceLabels)]
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b));
+    return storedFilterSuggestionValues(sourceLabels, sourceLabelDisplayText);
   }, [result?.stats.source_summaries, storedFacetsResult?.sources]);
   const storedDateSuggestions = useMemo(() => {
-    return storedFacetsResult?.dates.map((date) => date.text)
+    const dates = storedFacetsResult?.dates.map((date) => date.text)
       ?? (result?.stats.prompts_by_date ?? []).map((date) => date.text);
+    return storedFilterSuggestionValues(dates);
   }, [result?.stats.prompts_by_date, storedFacetsResult?.dates]);
   const storedWorkspaceSuggestions = useMemo(() => {
-    return storedFacetsResult?.workspaces.map((workspace) => workspace.text) ?? [];
+    return storedFilterSuggestionValues(
+      storedFacetsResult?.workspaces.map((workspace) => workspace.text) ?? [],
+      pathDisplayText,
+    );
   }, [storedFacetsResult?.workspaces]);
   const storedFacetsFailureMessage = storedFacetsFailureText(storedFacetsState);
   const storedFacetSummary = storedFacetSummaryText(

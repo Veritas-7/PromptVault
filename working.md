@@ -1,12 +1,103 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 22:30 KST
+Updated: 2026-06-08 22:36 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Improvement context metadata redaction
+## Current Slice - 2026-06-08 Stored filter suggestion metadata redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent stored filter autocomplete suggestions from exposing secret-like
+  source/workspace facet strings as raw `<datalist>` option values.
+
+Context:
+
+- Previous improvement context metadata redaction is pushed to `origin/main`
+  with source commit `66337d9 fix: redact improvement context metadata` and
+  docs closeout `d75380e docs: record improvement context verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for the stored filter panel DOM.
+- Stored source/workspace suggestions are UI hints derived from backend facet
+  values. They should follow the same redacted display policy as visible
+  source/path labels instead of embedding raw secret-like values in option
+  attributes. Date suggestions remain trimmed/deduped normal values.
+
+Progress:
+
+- Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
+  persisted/current/first objective all point at PromptVault.
+- Re-read the clean pushed repo state, `working.md`, stored filter inputs,
+  datalist rendering in `src/App.tsx`, `src/storedFilters.ts`, and existing
+  stored filter tests.
+- Added RED tests in `tests/storedFilters.test.ts` for trimming/deduping/sorting
+  suggestion values and for redacting secret-like source/workspace suggestion
+  values using the existing source/path display redaction helpers. RED failed
+  as intended because the suggestion helper did not exist.
+- Added `storedFilterSuggestionValues()` to centralize trim, dedupe, display
+  transform, and sort behavior for stored filter suggestions.
+- Routed source suggestions through `sourceLabelDisplayText()`, workspace
+  suggestions through `pathDisplayText()`, and date suggestions through the
+  same trim/dedupe/sort helper.
+- Ran a browser smoke with a Tauri-like invoke shim returning stored facets
+  containing synthetic `--api-key` and `--cookie` fragments. The source and
+  workspace `<datalist>` option values were redacted, date options were
+  trimmed/deduped, and the page HTML omitted the raw synthetic fragments.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/storedFilters.ts`: adds `storedFilterSuggestionValues()` for safe,
+  consistent stored filter suggestion values.
+- `src/App.tsx`: uses the helper for source/date/workspace datalist options,
+  with redaction on source and workspace suggestions.
+- `tests/storedFilters.test.ts`: adds RED/GREEN coverage for suggestion
+  trimming/deduping/sorting and source/workspace redaction.
+- `working.md`: records this slice and updates the previous slice handoff
+  state.
+
+Tests:
+
+- RED helper test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/storedFilters.test.ts`
+  failed as intended because `storedFilterSuggestionValues` was not exported.
+- Targeted GREEN:
+  same command passed with `tests/storedFilters.test.ts` 12/12 after adding the
+  helper and wiring the UI.
+- Related regression checks:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts tests/promptVaultApi.test.ts tests/storedFacetStatus.test.ts`
+  passed with 186/186.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5244" --port 5244 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_stored_filter_suggestions_secret_qa.mjs'`
+  passed with exit code `0`; source/workspace option values were redacted,
+  date options were trimmed, raw synthetic fragments were absent from page
+  HTML, and there were no page errors, console errors, or failed responses.
+- Full project check: `npm run check` passed, covering UI tests 365/365,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after stored filter suggestion metadata redaction.
+- Source commit/push and final closeout are still pending staged/full-tree
+  secret scans.
+
+Research:
+
+- No external research. This is direct UI privacy hardening based on code
+  inspection plus a local browser DOM smoke.
+
+Next Steps:
+
+- Stage explicit source/test/log paths, run staged gitleaks, commit and push the
+  source slice to private `origin/main`, verify fetch parity and private
+  visibility, then close out `working.md` in a separate docs commit.
+
+## Previous Slice - 2026-06-08 Improvement context metadata redaction
 
 Current Goal:
 
@@ -107,9 +198,7 @@ Research:
 
 Next Steps:
 
-- Commit this closeout `working.md` update after staged gitleaks, run full-tree
-  gitleaks again, push to private `origin/main`, and verify final fetch parity
-  plus GitHub private visibility.
+- Continue autonomous QA/improvement from this clean pushed tree.
 
 ## Previous Slice - 2026-06-08 Quality band display secret masking
 

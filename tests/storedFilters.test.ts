@@ -8,11 +8,13 @@ import {
   storedFilterInputLabel,
   storedFilterResetCount,
   storedFilterResetLabel,
+  storedFilterSuggestionValues,
   storedPromptFiltersSnapshot,
   storedPromptLoadOptions,
   storedResultFilterCount,
   type StoredPromptFilters,
 } from "../src/storedFilters.ts";
+import { pathDisplayText, sourceLabelDisplayText } from "../src/promptRowA11y.ts";
 
 const emptyFilters: StoredPromptFilters = {
   date: "",
@@ -150,5 +152,35 @@ test("stored filter input labels explain field and locked state", () => {
   assert.equal(
     storedFilterInputLabel("workspace", lockState({ improvementRunning: true })),
     "프롬프트 추천 생성 중에는 저장소 작업공간 필터를 편집할 수 없습니다",
+  );
+});
+
+test("stored filter suggestions trim, dedupe, and sort display values", () => {
+  assert.deepEqual(
+    storedFilterSuggestionValues([" Codex ", "", "Claude", "Codex", "  "]),
+    ["Claude", "Codex"],
+  );
+});
+
+test("stored filter suggestions redact secret-like source and workspace values", () => {
+  const sourceFlag = ["--api", "key"].join("-");
+  const sourceSecret = ["stored", "source", "secret"].join("-");
+  const workspaceFlag = ["--cookie"].join("");
+  const workspaceSecret = ["stored", "workspace", "secret"].join("-");
+
+  const sourceSuggestions = storedFilterSuggestionValues(
+    [`Codex ${sourceFlag} ${sourceSecret}`],
+    sourceLabelDisplayText,
+  );
+  const workspaceSuggestions = storedFilterSuggestionValues(
+    [`/tmp/project ${workspaceFlag} session=${workspaceSecret}`],
+    pathDisplayText,
+  );
+
+  assert.deepEqual(sourceSuggestions, ["Codex [REDACTED_POSSIBLE_SECRET]"]);
+  assert.deepEqual(workspaceSuggestions, ["/tmp/project [REDACTED_POSSIBLE_SECRET]"]);
+  assert.doesNotMatch(
+    `${sourceSuggestions.join(" ")} ${workspaceSuggestions.join(" ")}`,
+    new RegExp(`${sourceFlag}|${sourceSecret}|${workspaceSecret}`),
   );
 });

@@ -32,6 +32,18 @@ function trimmedOptional(value: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+export function storedFilterSuggestionValues(
+  values: readonly string[],
+  displayText: (value: string) => string = (value) => value.trim(),
+): string[] {
+  return [...new Set(
+    values
+      .map(displayText)
+      .map((value) => value.trim())
+      .filter(Boolean),
+  )].sort((a, b) => a.localeCompare(b));
+}
+
 export function activeStoredPromptFilterCount(filters: StoredPromptFilters): number {
   return [
     filters.query,

@@ -1,12 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 00:07 KST
+Updated: 2026-06-09 00:18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 workingd.md progress log coverage
+## Current Slice - 2026-06-09 project work-report extraction
+
+Current Goal:
+
+- Add a first normalized project work report over real project-local progress
+  logs so PromptVault can answer project/day/work-item management questions from
+  local evidence, not only prompt-quality scan stats.
+- Keep the report read-only: it must not write markdown exports or mutate the
+  default PromptVault SQLite database.
+
+Context:
+
+- The previous slices made actual source verification side-effect-free with
+  `scan --no-persist` and read-only `repair` scans.
+- `project-progress-logs` now discovers 32 real progress markdown files under
+  `/Users/wj/Ai/System/10_Projects`, including `workingd.md` variants.
+- Existing scan stats can count prompts by date, but they do not expose
+  project/day/task records. This slice adds a dedicated project work report
+  that extracts dated markdown slice headings into structured work items.
+- cmux/in-app browser remains excluded in this runtime; verification is by CLI
+  unit tests, real CLI smoke runs, DB count checks, and full automated checks.
+
+Progress:
+
+- Added RED coverage for extracting `## Current Slice - YYYY-MM-DD ...` and
+  `## Previous Slice - YYYY-MM-DD ...` headings into project work items.
+- Added RED coverage for summarizing work items by date and project from temp
+  `working.md` and `workingd.md` fixtures.
+- Implemented `ProjectWorkItem`, `ProjectWorkReport`, and
+  `ProjectWorkReportOptions`.
+- Added `run_project_work_report()` and a project-progress markdown parser that
+  extracts dated headings, project name, source file, status, title, and first
+  useful evidence line.
+- Added CLI `work-report [--limit N>0] [--json]`.
+- Verified a real `work-report --limit 8 --json` over local progress logs
+  returns structured items without DB writes.
+- Verified an unrestricted real `work-report --json` currently extracts 3,481
+  work candidates across 14 projects and 16 dates from 32 progress-log files.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds project work report structs, read-only report
+  builder, dated heading parser, date/project counters, and tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: exposes `work-report` and documents it
+  in CLI help.
+- `working.md`: records this project work-report extraction slice.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_progress_work --lib`
+  failed before implementation because `project_progress_work_items_from_text()`
+  and `build_project_progress_work_report()` did not exist.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_progress_work --lib`
+  passed with 2/2.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules --bin promptvault-cli`
+  passed.
+- Actual limited report smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-report --limit 8 --json`
+  returned `total_items: 8`, `project_count: 2`, `date_count: 1`,
+  `files_seen: 32`, and first item from `CareVault/working.md`.
+- Actual full report smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-report --json`
+  returned `total_items: 3481`, `project_count: 14`, `date_count: 16`,
+  `files_seen: 32`, and no warnings.
+- Actual plan verification:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- plan --source project-progress-logs --json`
+  returned `total_files: 32`, `available_sources: 1`, and
+  `total_bytes: 16973173`.
+- Actual DB safety check:
+  `sqlite3 /Users/wj/Documents/PromptVault/promptvault.sqlite "select count(*) from prompts where source='Project progress logs';"`
+  returned `4` after report smoke runs, confirming `work-report` did not write
+  prompt rows.
+- Full verification:
+  `npm run check` passed with UI tests 374/374, Rust library tests 123/123,
+  CLI tests 18/18, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- This is a first deterministic work-item extraction layer, not the final
+  AI-assisted daily work manager.
+- Large logs with many dated headings can produce many candidate work items.
+  The current output is useful for evidence-backed inventory, but future
+  refinement should classify heading types and optionally merge/label duplicate
+  or low-signal timestamp sections.
+- The report currently covers project-local progress logs only. Raw Codex,
+  Claude, and Antigravity sessions are still represented by prompt scan stats,
+  not unified with the project work report.
+
+Next Steps:
+
+- Commit and push the work-report extraction slice if checks pass.
+- Add a follow-up AI/deterministic merge layer that joins raw session prompts
+  with project progress items by project path/date, then summarizes task status
+  with GLM/OpenAI only after source-backed grouping is available.
+
+## Previous Slice - 2026-06-09 workingd.md progress log coverage
 
 Current Goal:
 

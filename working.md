@@ -1,12 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 16:22 KST
+Updated: 2026-06-08 16:28 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Generic prefixed secret assignment redaction
+## Current Slice - 2026-06-08 Private-key assignment redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep frontend prompt row preview/accessibility redaction aligned with backend
+  scan redaction for private-key assignment forms such as
+  `ssh_private_key=...`, not only PEM-style private key blocks.
+
+Context:
+
+- Previous generic prefixed secret assignment redaction is pushed to
+  `origin/main` as `5f43a4a fix: redact prefixed secret assignments`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- Existing private-key redaction covered PEM block markers, but assignment
+  forms such as `ssh_private_key=...` were not covered by the key-value secret
+  regex.
+
+Progress:
+
+- Confirmed the working tree was clean at `main...origin/main` after the
+  previous push before this slice.
+- Added RED frontend coverage in `tests/promptRowA11y.test.ts` requiring prompt
+  row preview and row accessible labels to redact private-key assignments.
+- Added RED backend coverage in `src-tauri/src/lib.rs` requiring
+  `redact_sensitive_text` to redact private-key assignments.
+- Confirmed RED: both focused frontend and backend tests left the private-key
+  assignment visible.
+- Updated frontend and backend key-value secret regexes to include
+  `private key`, `private_key`, and `private-key` variants, while preserving
+  existing generic prefix handling for assignment names such as
+  `ssh_private_key`.
+- Confirmed focused GREEN for the new frontend and backend redaction cases.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a private-key assignment. It confirmed the prompt row
+  preview and row `aria-label` contained `[REDACTED_POSSIBLE_SECRET]`, the
+  synthetic assignment text was absent from checked UI surfaces, the localized
+  risk label was visible, and there were zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts private-key assignment names in prompt row
+  previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds regression coverage for private-key
+  assignment preview and accessible-name redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-key redaction with the
+  private-key assignment behavior and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on `prompt row previews redact private key assignments` because the
+  private-key assignment remained visible.
+- RED:
+  `cargo test redact_sensitive_text_redacts_private_key_pairs` failed because
+  backend redaction returned the original private-key assignment.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 16/16.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text` passed, 9/9.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5201" --port 5201 --timeout 120 -- /bin/bash -lc ...`
+  passed with one synthetic stored prompt row, preview and `aria-label`
+  redacted, synthetic assignment text absent from checked UI surfaces,
+  localized risk label visible, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 322/322,
+  production build, Rust lib tests 93/93, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- `gitleaks protect --staged` passed with no leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 701.57 MB with
+  no leaks.
+
+Issues:
+
+- No product blocker after aligning private-key assignment redaction.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for private-key assignment names.
+
+Next Steps:
+
+- Push this slice to `origin/main` and verify final local/remote parity.
+
+## Previous Slice - 2026-06-08 Generic prefixed secret assignment redaction
 
 Current Goal:
 
@@ -62,6 +159,8 @@ Progress:
   role name is `저장된 프롬프트 불러오기`, and the corrected QA passed.
 - Ran full `npm run check` successfully after implementation.
 - Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+- Pushed the closeout commit to `origin/main` and verified final local/remote
+  parity, clean status, latest commit, and private GitHub repository state.
 
 Changes:
 
@@ -106,6 +205,14 @@ Tests:
 - `gitleaks protect --staged` passed with no leaks.
 - `gitleaks dir . --no-banner --redact` passed, scanning about 701.56 MB with
   no leaks.
+- GitHub push: `git push origin main` updated `main` from `97dbaa7` to
+  `5f43a4a`.
+- Final remote verification after `git fetch origin main`:
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`,
+  `git status --short --branch` showed clean `main...origin/main`, latest
+  commit was `5f43a4a fix: redact prefixed secret assignments`, and
+  `gh repo view --json nameWithOwner,visibility,isPrivate` returned
+  `Veritas-7/PromptVault` as `PRIVATE`.
 
 Issues:
 
@@ -119,7 +226,8 @@ Research:
 
 Next Steps:
 
-- Push this slice to `origin/main` and verify final local/remote parity.
+- Continue from a clean pushed tree and pick the next autonomous
+  QA/improvement slice.
 
 ## Previous Slice - 2026-06-08 Prefixed API-key assignment redaction
 

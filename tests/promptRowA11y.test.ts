@@ -149,6 +149,18 @@ test("prompt row previews redact generic prefixed secret assignments", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact private key assignments", () => {
+  const text = "Store ssh_private_key=short-key-material only in local secrets.";
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "Store [REDACTED_POSSIBLE_SECRET] only in local secrets.");
+  assert.doesNotMatch(preview, /ssh_private_key|short-key-material/);
+  assert.doesNotMatch(label, /ssh_private_key|short-key-material/);
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact private key blocks case-insensitively", () => {
   const text = [
     "-----begin test private key-----",

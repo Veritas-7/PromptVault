@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ActionLockState } from "../src/actionLocks.ts";
 import {
+  workLogCoverageActionLabel,
+  workLogCoverageFailureText,
+  workLogCoverageMetaText,
   workSummaryActionLabel,
   workSummaryFailureText,
   workSummaryIndexStatusText,
@@ -14,10 +17,12 @@ import {
   workSummarySnapshotDisplaySummaries,
   workSummarySnapshotSummaryOverflowText,
   workSummarySnapshotVisibleSummaries,
+  type WorkLogCoverageState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "../src/workSummaryStatus.ts";
 import type {
+  ProjectWorkLogCoverageResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
@@ -78,6 +83,21 @@ function snapshotsResult(overrides: Partial<ProjectWorkSummarySnapshotsResult> =
     available_dates: ["2026-06-09"],
     available_projects: ["PromptVault"],
     snapshots: [],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function coverageResult(overrides: Partial<ProjectWorkLogCoverageResult> = {}): ProjectWorkLogCoverageResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    root_path: "/Users/wj/Ai/System/10_Projects",
+    files_seen: 32,
+    parsed_file_count: 28,
+    unparsed_file_count: 4,
+    project_count: 14,
+    work_item_count: 3532,
+    files: [],
     warnings: [],
     ...overrides,
   };
@@ -212,6 +232,32 @@ test("work summary snapshot meta and failure text describe saved history", () =>
     "저장된 프로젝트 작업 요약 스냅샷을 불러오지 못했습니다. 브리지 상태나 데이터베이스 경로를 확인하세요.",
   );
   assert.equal(workSummarySnapshotsFailureText("ready"), null);
+});
+
+test("work log coverage labels describe parsed and unparsed progress logs", () => {
+  const failed: WorkLogCoverageState = "failed";
+  assert.equal(workLogCoverageActionLabel("idle", false, lockState()), "작업 로그 범위 확인");
+  assert.equal(workLogCoverageActionLabel("ready", true, lockState()), "작업 로그 범위 새로고침");
+  assert.equal(
+    workLogCoverageActionLabel("loading", true, lockState({ workSummaryRunning: true })),
+    "작업 로그 범위 확인 중",
+  );
+  assert.equal(
+    workLogCoverageActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 작업 로그 범위를 새로고침할 수 없습니다",
+  );
+  assert.equal(workLogCoverageMetaText("idle", null), "아직 확인한 작업 로그 범위 없음");
+  assert.equal(workLogCoverageMetaText("loading", coverageResult()), "작업 로그 범위 확인 중");
+  assert.equal(
+    workLogCoverageMetaText("ready", coverageResult()),
+    "32개 로그 · parsed 28개 · unparsed 4개 · 14개 프로젝트 · 작업 3,532개",
+  );
+  assert.equal(workLogCoverageMetaText(failed, null), "작업 로그 범위를 사용할 수 없음");
+  assert.equal(
+    workLogCoverageFailureText(failed),
+    "프로젝트 작업 로그 범위를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workLogCoverageFailureText("ready"), null);
 });
 
 test("work summary snapshot helpers expose bounded project/day drill-down", () => {

@@ -1,12 +1,138 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 02:33 KST
+Updated: 2026-06-09 02:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 live work-report verification and bounded session scan
+## Current Slice - 2026-06-09 progress-log coverage view
+
+Current Goal:
+
+- Make project-local progress-log coverage explicit in the app and CLI.
+- Show which `working.md`/`workingd.md`/worklog-style files are parsed into
+  dated project work and which are only detected as unparsed or unreadable
+  candidates.
+- Keep the coverage view deterministic and citation-adjacent before adding
+  AI-assisted ambiguous-log extraction.
+
+Context:
+
+- The previous slice verified that project/day management works from
+  project-local progress logs plus bounded session evidence, but it did not
+  expose which progress logs were skipped or could not be parsed.
+- The operator explicitly asked that project-local `workingd.md` and other
+  progress logs be accounted for by project/day/task, with AI reserved for
+  ambiguous structure extraction rather than blind acceptance.
+- This slice adds the coverage surface needed before an AI extraction layer can
+  safely propose candidate work items for ambiguous logs.
+
+Progress:
+
+- Added a backend coverage report for project progress log candidates.
+- The report lists every matched progress-log file, its owning top-level
+  project, parse status, latest dated work item, work-item count, modified time,
+  and absolute source path.
+- Nested files such as `Project/docs/progress.md` are attributed to `Project`
+  instead of the nested folder.
+- Added a CLI command and browser-bridge route for the same coverage payload.
+- Added frontend validation, helper copy, and a UI panel that displays coverage
+  counts plus the first bounded set of log files.
+- UI now distinguishes parsed logs, logs without dated headings, and unreadable
+  logs.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds `ProjectWorkLogCoverage*` structs,
+  `run_project_work_log_coverage()`, the Tauri command, project-name helpers,
+  and the coverage builder.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds
+  `work-log-coverage [--json]`, help text, and `/api/work-log-coverage`.
+- `src/types.ts` and `src/promptVaultApi.ts`: add the coverage payload types,
+  bridge/Tauri loader, and fail-closed payload validation.
+- `src/workSummaryStatus.ts`: adds coverage action/meta/failure copy helpers.
+- `src/App.tsx` and `src/App.css`: add the coverage action, meta row, bounded
+  coverage list, and wrapping for long paths.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`: add
+  RED/GREEN coverage for the new API payload and helper copy.
+
+Tests:
+
+- RED:
+  `cargo test project_progress_log_coverage_reports_nested_and_unparsed_logs`
+  failed before implementation because
+  `build_project_progress_log_coverage` did not exist.
+- GREEN:
+  `cargo test project_progress_log_coverage_reports_nested_and_unparsed_logs`
+  passed.
+- GREEN:
+  `cargo test project_progress` passed 7/7.
+- GREEN:
+  `cargo test help_text_documents_cli_validation_rules` passed.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed before implementation because `loadProjectWorkLogCoverage` was not
+  exported.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 144/144.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before implementation because coverage helper exports were missing.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  passed 9/9.
+- GREEN:
+  `npm run build` passed.
+- Live CLI verification:
+  `./src-tauri/target/debug/promptvault-cli work-log-coverage --json` scanned
+  the real `/Users/wj/Ai/System/10_Projects` workspace and reported 32 matched
+  logs, 16 parsed files, 16 unparsed files, 26 projects, 3,602 work items, and
+  no warnings. The scan included `CareVault/workingd.md` as an unparsed
+  candidate.
+- Browser QA without cmux:
+  started the PromptVault browser bridge on `127.0.0.1:5174` and Vite on
+  `127.0.0.1:1420`, opened the app with headless Chromium, waited for
+  `[data-browser-bridge-status="connected"]`, clicked
+  `[data-load-work-log-coverage="true"]`, and verified
+  `[data-work-log-coverage-meta="true"]` plus
+  `[data-work-log-coverage="true"] .work-log-coverage-row`.
+  The rendered meta showed 32 logs, 16 parsed, 16 unparsed, 26 projects, and
+  3,600 work items at that moment; 8 bounded rows rendered and there were no
+  console or page errors. The live log count later moved to 3,602 because other
+  project logs were updated during the run.
+- Full gate:
+  `npm run check` passed: UI tests 391/391, Vite build, Rust library tests
+  139/139, CLI tests 20/20, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- Completion level: PromptVault now manages project/day/task evidence from
+  detected progress logs and saved summaries, but it is still not a complete
+  all-project operations ledger.
+- Ambiguous prose-only logs are visible as unparsed candidates. They still need
+  an AI-assisted extraction pass that emits citation-backed candidate work items
+  and rejects low-confidence structure.
+- Session evidence parsing is verified on bounded real samples; larger raw
+  refreshes still need a more incremental latest-first strategy.
+
+Research:
+
+- No external research was needed. The existing `work-summary --ai`
+  OpenAI/GLM provider path remains the intended integration point for future
+  ambiguous-log extraction.
+
+Next Steps:
+
+- Add AI-assisted extraction for ambiguous progress-log sections with
+  citation IDs, provider fallback, and fail-closed validation.
+- Add a project/day coverage dashboard that combines parsed log items, unparsed
+  candidates, saved work-summary snapshots, and attached session evidence.
+- Optimize raw session refresh so the latest bounded evidence can be updated
+  without rediscovering every raw session candidate.
+
+## Previous Slice - 2026-06-09 live work-report verification and bounded session scan
 
 Current Goal:
 

@@ -2,7 +2,8 @@ use promptvault_lib::{
     build_scan_plan, cancel_scan_run, default_database_path, improve_prompt_inner,
     redact_sensitive_text, run_import_batch, run_list_import_events, run_list_import_states,
     run_list_project_work_summary_snapshots, run_list_stored_prompt_facets,
-    run_load_stored_prompts, run_project_work_report, run_project_work_summary, run_scan,
+    run_load_stored_prompts, run_project_work_log_coverage, run_project_work_report,
+    run_project_work_summary, run_scan,
     source_specs, CancelScanOptions, ImportBatchOptions, ImportEventsOptions, ImportStatesOptions,
     ImproveRequest, ProjectWorkReportOptions, ProjectWorkSummaryOptions,
     ProjectWorkSummarySnapshotsOptions, PromptRecord, ScanOptions, ScanPlanOptions,
@@ -341,6 +342,43 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     println!("- {}", item.evidence);
                 }
                 println!("  {}", item.source_path);
+            }
+        }
+        "work-log-coverage" => {
+            let json = take_flag(&mut args, "--json");
+            reject_extra_args(&args, "work-log-coverage")?;
+            let result = run_project_work_log_coverage()?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+
+            println!("PromptVault project work log coverage");
+            println!("root: {}", result.root_path);
+            println!("files_seen: {}", result.files_seen);
+            println!("parsed_files: {}", result.parsed_file_count);
+            println!("unparsed_files: {}", result.unparsed_file_count);
+            println!("projects: {}", result.project_count);
+            println!("work_items: {}", result.work_item_count);
+            if !result.warnings.is_empty() {
+                println!("warnings:");
+                for warning in &result.warnings {
+                    println!("- {warning}");
+                }
+            }
+            for file in &result.files {
+                println!(
+                    "\n{} · {} · {} · {} items",
+                    file.project, file.source_file, file.status, file.work_item_count
+                );
+                if let Some(date) = &file.latest_date {
+                    println!(
+                        "- latest: {} · {}",
+                        date,
+                        file.latest_title.as_deref().unwrap_or("Untitled work")
+                    );
+                }
+                println!("  {}", file.source_path);
             }
         }
         "work-summary" => {
@@ -899,7 +937,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--ai] [--json]\n  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  work-summary builds project/date summaries with citation IDs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-log-coverage [--json]\n  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--ai] [--json]\n  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-log-coverage lists parsed and unparsed project progress logs by project.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  work-summary builds project/date summaries with citation IDs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1150,6 +1188,10 @@ fn handle_bridge_route(
                 .unwrap_or_default()
                 .into_project_work_summary_snapshots_options();
             let result = run_list_project_work_summary_snapshots(options)?;
+            write_json_response(stream, 200, &result)
+        }
+        ("POST", "/api/work-log-coverage") => {
+            let result = run_project_work_log_coverage()?;
             write_json_response(stream, 200, &result)
         }
         _ => write_response(stream, 404, "text/plain", "Not found"),
@@ -1454,6 +1496,7 @@ mod tests {
         assert!(help.contains(
             "work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
         ));
+        assert!(help.contains("work-log-coverage [--json]"));
         assert!(help.contains(
             "work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--ai] [--json]"
         ));
@@ -1461,6 +1504,7 @@ mod tests {
             "work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]"
         ));
         assert!(help.contains("work-report reads project progress logs"));
+        assert!(help.contains("work-log-coverage lists parsed and unparsed"));
         assert!(help.contains("work-report stores only sanitized session evidence"));
         assert!(help.contains("--refresh-session-index to rescan raw sessions"));
         assert!(help.contains("work-summary builds project/date summaries with citation IDs"));

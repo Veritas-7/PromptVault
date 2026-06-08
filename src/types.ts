@@ -210,6 +210,29 @@ export interface ProjectWorkReport {
   warnings: string[];
 }
 
+export interface ProjectWorkLogCoverageFile {
+  project: string;
+  source_path: string;
+  source_file: string;
+  status: string;
+  work_item_count: number;
+  latest_date: string | null;
+  latest_title: string | null;
+  modified_at: string | null;
+}
+
+export interface ProjectWorkLogCoverageResult {
+  generated_at: string;
+  root_path: string;
+  files_seen: number;
+  parsed_file_count: number;
+  unparsed_file_count: number;
+  project_count: number;
+  work_item_count: number;
+  files: ProjectWorkLogCoverageFile[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSummaryCitation {
   id: string;
   date: string;

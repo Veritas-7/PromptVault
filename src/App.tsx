@@ -109,6 +109,7 @@ import {
   importBatch,
   improvePrompt,
   isBrowserQaMode,
+  loadProjectWorkLogCoverage,
   loadProjectWorkSummary,
   listProjectWorkSummarySnapshots,
   listImportEvents,
@@ -186,6 +187,7 @@ import type {
   ImportEventsResult,
   ImportStatesResult,
   ImproveResult,
+  ProjectWorkLogCoverageResult,
   PromptRecord,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
@@ -195,6 +197,9 @@ import type {
   StoredPromptFacetsResult,
 } from "./types";
 import {
+  workLogCoverageActionLabel,
+  workLogCoverageFailureText,
+  workLogCoverageMetaText,
   workSummaryActionLabel,
   workSummaryFailureText,
   workSummaryIndexStatusText,
@@ -206,6 +211,7 @@ import {
   workSummarySnapshotDetailToggleText,
   workSummarySnapshotDisplaySummaries,
   workSummarySnapshotSummaryOverflowText,
+  type WorkLogCoverageState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "./workSummaryStatus";
@@ -218,6 +224,7 @@ const WORK_SUMMARY_LIMIT = 80;
 const WORK_SUMMARY_SESSION_LIMIT = 20;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
+const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
@@ -260,6 +267,7 @@ function App() {
   const [storedFacetsState, setStoredFacetsState] = useState<StoredFacetsState>("idle");
   const [workSummaryState, setWorkSummaryState] = useState<WorkSummaryState>("idle");
   const [workSummarySnapshotsState, setWorkSummarySnapshotsState] = useState<WorkSummarySnapshotsState>("idle");
+  const [workLogCoverageState, setWorkLogCoverageState] = useState<WorkLogCoverageState>("idle");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -272,6 +280,7 @@ function App() {
   const [importEventsResult, setImportEventsResult] = useState<ImportEventsResult | null>(null);
   const [storedFacetsResult, setStoredFacetsResult] = useState<StoredPromptFacetsResult | null>(null);
   const [workSummaryResult, setWorkSummaryResult] = useState<ProjectWorkSummaryResult | null>(null);
+  const [workLogCoverageResult, setWorkLogCoverageResult] = useState<ProjectWorkLogCoverageResult | null>(null);
   const [workSummarySnapshotsResult, setWorkSummarySnapshotsResult] =
     useState<ProjectWorkSummarySnapshotsResult | null>(null);
   const [workSummarySnapshotDateFilter, setWorkSummarySnapshotDateFilter] = useState("");
@@ -317,7 +326,8 @@ function App() {
   const isPlanRunning = planState === "planning";
   const isScanRunning = scanState === "scanning" || scanState === "canceling";
   const isStoredLoadRunning = storedLoadState === "loading";
-  const isWorkSummaryRunning = workSummaryState === "loading" || workSummarySnapshotsState === "loading";
+  const isWorkSummaryRunning =
+    workSummaryState === "loading" || workSummarySnapshotsState === "loading" || workLogCoverageState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
   const isBrowserBridgeDisconnected = browserQaMode && browserBridgeStatus === "disconnected";
   const actionLockState = {
@@ -486,6 +496,8 @@ function App() {
   const workSummaryMeta = workSummaryMetaText(workSummaryState, workSummaryResult);
   const workSummaryIndexStatus = workSummaryResult ? workSummaryIndexStatusText(workSummaryResult) : null;
   const workSummaryPersistenceStatus = workSummaryResult ? workSummaryPersistenceText(workSummaryResult) : null;
+  const workLogCoverageFailureMessage = workLogCoverageFailureText(workLogCoverageState);
+  const workLogCoverageMeta = workLogCoverageMetaText(workLogCoverageState, workLogCoverageResult);
   const workSummarySnapshotsFailureMessage = workSummarySnapshotsFailureText(workSummarySnapshotsState);
   const workSummarySnapshotsMeta = workSummarySnapshotsMetaText(
     workSummarySnapshotsState,
@@ -502,6 +514,12 @@ function App() {
   );
   const visibleWorkSummarySnapshots =
     workSummarySnapshotsResult?.snapshots.slice(0, WORK_SUMMARY_HISTORY_LIMIT) ?? [];
+  const visibleWorkLogCoverageFiles =
+    workLogCoverageResult?.files.slice(0, WORK_LOG_COVERAGE_DISPLAY_LIMIT) ?? [];
+  const hiddenWorkLogCoverageFileCount = Math.max(
+    0,
+    (workLogCoverageResult?.files.length ?? 0) - WORK_LOG_COVERAGE_DISPLAY_LIMIT,
+  );
   const storedFacetSummary = storedFacetSummaryText(
     storedFacetsState,
     storedFilterCount,
@@ -708,6 +726,24 @@ function App() {
       }
       return next;
     });
+  }
+
+  async function refreshWorkLogCoverage() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkLogCoverageState("loading");
+    try {
+      const next = await loadProjectWorkLogCoverage();
+      setWorkLogCoverageResult(next);
+      setWorkLogCoverageState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogCoverageState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
   }
 
   async function refreshWorkSummary({
@@ -1304,6 +1340,25 @@ function App() {
                   ? "기록 새로고침"
                   : "기록 보기"}
             </button>
+            <button
+              aria-label={workLogCoverageActionLabel(
+                workLogCoverageState,
+                workLogCoverageResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-log-coverage="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void refreshWorkLogCoverage()}
+              type="button"
+            >
+              <FileText size={15} />
+              {workLogCoverageState === "loading"
+                ? "확인 중"
+                : workLogCoverageResult
+                  ? "로그 새로고침"
+                  : "로그 범위"}
+            </button>
           </div>
         </div>
         {workSummaryFailureMessage ? (
@@ -1324,6 +1379,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workSummarySnapshotsFailureMessage}</span>
+          </div>
+        ) : null}
+        {workLogCoverageFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-log-coverage-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workLogCoverageFailureMessage}</span>
           </div>
         ) : null}
         <form
@@ -1414,6 +1479,12 @@ function App() {
             <span>{workSummarySnapshotsMeta}</span>
           </div>
         ) : null}
+        {workLogCoverageResult || workLogCoverageState !== "idle" ? (
+          <div className="work-summary-index" data-work-log-coverage-meta="true">
+            <FileText size={15} />
+            <span>{workLogCoverageMeta}</span>
+          </div>
+        ) : null}
         {workSummaryResult ? (
           <div className="work-summary-content">
             <pre data-work-summary-narrative="true">{workSummaryResult.narrative_markdown}</pre>
@@ -1444,6 +1515,39 @@ function App() {
             프로젝트 진행 로그와 세션 근거 요약 대기 중
           </div>
         )}
+        {workLogCoverageResult ? (
+          visibleWorkLogCoverageFiles.length ? (
+            <div className="work-summary-list" data-work-log-coverage="true">
+              {visibleWorkLogCoverageFiles.map((file) => (
+                <article className="work-summary-row work-log-coverage-row" key={file.source_path}>
+                  <div>
+                    <strong>{file.project}</strong>
+                    <span>{file.source_file}</span>
+                  </div>
+                  <p>
+                    {file.status === "parsed"
+                      ? `${file.latest_date ?? "날짜 없음"} · ${file.latest_title ?? "Untitled work"}`
+                      : file.status === "unreadable"
+                        ? "파일을 읽지 못한 진행 로그"
+                        : "날짜 heading을 찾지 못한 진행 로그"}
+                  </p>
+                  <span>
+                    {file.status} · 작업 {file.work_item_count.toLocaleString()}개 · {file.source_path}
+                  </span>
+                </article>
+              ))}
+              {hiddenWorkLogCoverageFileCount ? (
+                <div className="work-summary-overflow">
+                  그 외 작업 로그 {hiddenWorkLogCoverageFileCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-log-coverage="true">
+              감지된 프로젝트 작업 로그 없음
+            </div>
+          )
+        ) : null}
         {workSummarySnapshotsResult ? (
           visibleWorkSummarySnapshots.length ? (
             <div className="work-summary-list" data-work-summary-snapshots="true">

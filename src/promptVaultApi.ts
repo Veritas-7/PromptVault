@@ -11,6 +11,7 @@ import type {
   ImportEventsResult,
   ImportStatesResult,
   ImproveResult,
+  ProjectWorkLogCoverageResult,
   ProjectWorkReport,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
@@ -199,6 +200,13 @@ export async function loadProjectWorkSummary(
     });
   }
   return postBridge<ProjectWorkSummaryResult>("/api/work-summary", { options }, parseProjectWorkSummaryResult);
+}
+
+export async function loadProjectWorkLogCoverage(): Promise<ProjectWorkLogCoverageResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogCoverageResult>("project_work_log_coverage");
+  }
+  return postBridge<ProjectWorkLogCoverageResult>("/api/work-log-coverage", {}, parseProjectWorkLogCoverageResult);
 }
 
 export async function listProjectWorkSummarySnapshots(
@@ -1104,6 +1112,73 @@ function isProjectWorkReport(value: unknown): value is ProjectWorkReport {
   }
   return value.project_count <= value.total_items
     && value.date_count <= value.total_items;
+}
+
+function isProjectWorkLogCoverageFile(value: unknown): boolean {
+  if (!isRecord(value)
+    || !isNonBlankString(value.project)
+    || !isNonBlankString(value.source_path)
+    || !isNonBlankString(value.source_file)
+    || !isNonBlankString(value.status)
+    || !["parsed", "unparsed", "unreadable"].includes(value.status)
+    || !isNonNegativeSafeInteger(value.work_item_count)
+    || !(value.latest_date === null || isNonBlankString(value.latest_date))
+    || !(value.latest_title === null || isNonBlankString(value.latest_title))
+    || !isNullableTimestampString(value.modified_at)) {
+    return false;
+  }
+  if (value.status === "parsed") {
+    return value.work_item_count > 0 && value.latest_date !== null && value.latest_title !== null;
+  }
+  return value.work_item_count === 0 && value.latest_date === null && value.latest_title === null;
+}
+
+function projectWorkLogCoverageFilesWithinResult(value: unknown): boolean {
+  if (!isRecord(value)
+    || !Array.isArray(value.files)
+    || !isNonNegativeSafeInteger(value.files_seen)
+    || !isNonNegativeSafeInteger(value.parsed_file_count)
+    || !isNonNegativeSafeInteger(value.unparsed_file_count)
+    || !isNonNegativeSafeInteger(value.project_count)
+    || !isNonNegativeSafeInteger(value.work_item_count)) {
+    return false;
+  }
+  const parsedFileCount = value.files.filter((file) => isRecord(file) && file.status === "parsed").length;
+  const unparsedFileCount = value.files.length - parsedFileCount;
+  let workItemCount = 0;
+  const projects = new Set<string>();
+  for (const file of value.files) {
+    if (!isRecord(file)
+      || !isNonBlankString(file.project)
+      || !isNonNegativeSafeInteger(file.work_item_count)) {
+      return false;
+    }
+    projects.add(file.project);
+    workItemCount += file.work_item_count;
+    if (!Number.isSafeInteger(workItemCount) || workItemCount > value.work_item_count) {
+      return false;
+    }
+  }
+  return value.files_seen === value.files.length
+    && value.parsed_file_count === parsedFileCount
+    && value.unparsed_file_count === unparsedFileCount
+    && value.parsed_file_count + value.unparsed_file_count === value.files_seen
+    && value.project_count === projects.size
+    && value.work_item_count === workItemCount;
+}
+
+function parseProjectWorkLogCoverageResult(value: unknown): ProjectWorkLogCoverageResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.root_path)
+    || !Array.isArray(value.files)
+    || !value.files.every(isProjectWorkLogCoverageFile)
+    || !recordStringFieldValuesAreUnique(value.files, "source_path")
+    || !projectWorkLogCoverageFilesWithinResult(value)
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkLogCoverageResult;
 }
 
 function isProjectWorkSummaryCitation(value: unknown): boolean {

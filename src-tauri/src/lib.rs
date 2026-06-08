@@ -148,6 +148,31 @@ pub struct ProjectWorkReport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogCoverageFile {
+    pub project: String,
+    pub source_path: String,
+    pub source_file: String,
+    pub status: String,
+    pub work_item_count: usize,
+    pub latest_date: Option<String>,
+    pub latest_title: Option<String>,
+    pub modified_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogCoverageResult {
+    pub generated_at: String,
+    pub root_path: String,
+    pub files_seen: usize,
+    pub parsed_file_count: usize,
+    pub unparsed_file_count: usize,
+    pub project_count: usize,
+    pub work_item_count: usize,
+    pub files: Vec<ProjectWorkLogCoverageFile>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkSummaryCitation {
     pub id: String,
     pub date: String,
@@ -606,6 +631,11 @@ fn project_work_summary_snapshots(
         .map_err(|err| err.to_string())
 }
 
+#[tauri::command]
+fn project_work_log_coverage() -> Result<ProjectWorkLogCoverageResult, String> {
+    run_project_work_log_coverage().map_err(|err| err.to_string())
+}
+
 fn scan_cancel_flags() -> &'static Mutex<HashMap<String, ScanCancelFlag>> {
     SCAN_CANCEL_FLAGS.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -1030,6 +1060,15 @@ pub fn run_project_work_report(
         );
     }
     Ok(report)
+}
+
+pub fn run_project_work_log_coverage(
+) -> Result<ProjectWorkLogCoverageResult, Box<dyn std::error::Error>> {
+    let source = source_specs()
+        .into_iter()
+        .find(|source| source.id == "project-progress-logs")
+        .ok_or("project progress log source is unavailable")?;
+    build_project_progress_log_coverage(&source)
 }
 
 pub async fn run_project_work_summary(
@@ -2688,12 +2727,8 @@ fn parse_project_progress_markdown(
         return Ok(Vec::new());
     }
 
-    let project_dir = path.parent().map(Path::to_path_buf);
-    let project_name = project_dir
-        .as_deref()
-        .and_then(Path::file_name)
-        .and_then(|name| name.to_str())
-        .unwrap_or("unknown-project");
+    let project_dir = project_progress_workspace_dir(path, &source.root);
+    let project_name = project_progress_project_name(path, &source.root);
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
@@ -2716,10 +2751,29 @@ fn parse_project_progress_markdown(
         source,
         path,
         &metadata,
-        project_dir.map(|path| path.display().to_string()),
+        Some(project_dir.display().to_string()),
         text,
     );
     Ok(records)
+}
+
+fn project_progress_workspace_dir(path: &Path, root: &Path) -> PathBuf {
+    if let Ok(relative) = path.strip_prefix(root) {
+        if let Some(first_component) = relative.components().next() {
+            return root.join(first_component.as_os_str());
+        }
+    }
+    path.parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| root.to_path_buf())
+}
+
+fn project_progress_project_name(path: &Path, root: &Path) -> String {
+    project_progress_workspace_dir(path, root)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown-project")
+        .to_string()
 }
 
 fn project_progress_analysis_text(text: &str) -> String {
@@ -2761,10 +2815,14 @@ fn build_project_progress_work_report(
         };
         files_seen += 1;
         match fs::read_to_string(&candidate.path) {
-            Ok(text) => items.extend(project_progress_work_items_from_text(
-                &candidate.path,
-                &text,
-            )),
+            Ok(text) => {
+                let project = project_progress_project_name(&candidate.path, &source.root);
+                items.extend(project_progress_work_items_from_text_for_project(
+                    &candidate.path,
+                    &text,
+                    &project,
+                ));
+            }
             Err(err) => warnings.push(format!("{} 건너뜀: {err}", candidate.path.display())),
         }
     }
@@ -2805,6 +2863,102 @@ fn build_project_progress_work_report(
     })
 }
 
+fn build_project_progress_log_coverage(
+    source: &SourceSpec,
+) -> Result<ProjectWorkLogCoverageResult, Box<dyn std::error::Error>> {
+    let mut files = Vec::new();
+    let mut warnings = Vec::new();
+
+    for candidate in matching_source_file_candidates(&source.root, source.kind) {
+        let candidate = match candidate {
+            Ok(candidate) => candidate,
+            Err(err) => {
+                warnings.push(format!("순회 항목을 건너뜀: {err}"));
+                continue;
+            }
+        };
+        let project = project_progress_project_name(&candidate.path, &source.root);
+        let source_file = candidate
+            .path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("progress.md")
+            .to_string();
+        match fs::read_to_string(&candidate.path) {
+            Ok(text) => {
+                let items = project_progress_work_items_from_text_for_project(
+                    &candidate.path,
+                    &text,
+                    &project,
+                );
+                let latest = items
+                    .iter()
+                    .max_by(|left, right| left.date.cmp(&right.date).then_with(|| left.title.cmp(&right.title)));
+                let latest_date = latest.map(|item| item.date.clone());
+                let latest_title = latest.map(|item| item.title.clone());
+                files.push(ProjectWorkLogCoverageFile {
+                    project,
+                    source_path: candidate.path.display().to_string(),
+                    source_file,
+                    status: if items.is_empty() {
+                        "unparsed".to_string()
+                    } else {
+                        "parsed".to_string()
+                    },
+                    work_item_count: items.len(),
+                    latest_date,
+                    latest_title,
+                    modified_at: timestamp_millis_to_rfc3339(candidate.modified_ms),
+                });
+            }
+            Err(err) => {
+                warnings.push(format!("{} 건너뜀: {err}", candidate.path.display()));
+                files.push(ProjectWorkLogCoverageFile {
+                    project,
+                    source_path: candidate.path.display().to_string(),
+                    source_file,
+                    status: "unreadable".to_string(),
+                    work_item_count: 0,
+                    latest_date: None,
+                    latest_title: None,
+                    modified_at: timestamp_millis_to_rfc3339(candidate.modified_ms),
+                });
+            }
+        }
+    }
+
+    files.sort_by(|left, right| {
+        left.project
+            .cmp(&right.project)
+            .then_with(|| left.source_path.cmp(&right.source_path))
+    });
+    let files_seen = files.len();
+    let parsed_file_count = files.iter().filter(|file| file.status == "parsed").count();
+    let unparsed_file_count = files
+        .iter()
+        .filter(|file| file.status != "parsed")
+        .count();
+    let project_count = files
+        .iter()
+        .map(|file| file.project.as_str())
+        .collect::<BTreeSet<_>>()
+        .len();
+    let work_item_count = files.iter().map(|file| file.work_item_count).sum();
+
+    Ok(ProjectWorkLogCoverageResult {
+        generated_at: Utc::now().to_rfc3339(),
+        root_path: source.root.display().to_string(),
+        files_seen,
+        parsed_file_count,
+        unparsed_file_count,
+        project_count,
+        work_item_count,
+        files,
+        warnings,
+    })
+}
+
+#[cfg(test)]
 fn project_progress_work_items_from_text(path: &Path, text: &str) -> Vec<ProjectWorkItem> {
     let project = path
         .parent()
@@ -2812,6 +2966,14 @@ fn project_progress_work_items_from_text(path: &Path, text: &str) -> Vec<Project
         .and_then(|name| name.to_str())
         .unwrap_or("unknown-project")
         .to_string();
+    project_progress_work_items_from_text_for_project(path, text, &project)
+}
+
+fn project_progress_work_items_from_text_for_project(
+    path: &Path,
+    text: &str,
+    project: &str,
+) -> Vec<ProjectWorkItem> {
     let source_file = path
         .file_name()
         .and_then(|name| name.to_str())
@@ -2831,7 +2993,7 @@ fn project_progress_work_items_from_text(path: &Path, text: &str) -> Vec<Project
             }
             current = Some(ProjectWorkItem {
                 date,
-                project: project.clone(),
+                project: project.to_string(),
                 title,
                 status,
                 source_path: source_path.clone(),
@@ -6122,7 +6284,8 @@ pub fn run() {
             load_stored_prompts,
             improve_prompt,
             project_work_summary,
-            project_work_summary_snapshots
+            project_work_summary_snapshots,
+            project_work_log_coverage
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -8559,6 +8722,50 @@ Progress:
         assert_eq!(report.items[0].date, "2026-06-09");
 
         std::fs::remove_dir_all(root).expect("remove work report fixture");
+    }
+
+    #[test]
+    fn project_progress_log_coverage_reports_nested_and_unparsed_logs() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-project-log-coverage-{}",
+            std::process::id()
+        ));
+        let alpha_dir = root.join("Alpha/docs");
+        let beta_dir = root.join("Beta");
+        std::fs::create_dir_all(&alpha_dir).expect("create alpha docs dir");
+        std::fs::create_dir_all(&beta_dir).expect("create beta dir");
+        std::fs::write(
+            alpha_dir.join("progress.md"),
+            "## Current Slice - 2026-06-09 Nested alpha\n\n- Verified nested log.\n",
+        )
+        .expect("write alpha progress");
+        std::fs::write(beta_dir.join("worklog.md"), "# Worklog\n\nNo dated heading yet.\n")
+            .expect("write beta worklog");
+        let source = SourceSpec {
+            id: "project-progress-logs",
+            label: "Project progress logs",
+            root: root.clone(),
+            kind: SourceKind::ProjectProgressMarkdown,
+        };
+
+        let coverage = build_project_progress_log_coverage(&source).expect("build coverage");
+
+        assert_eq!(coverage.files_seen, 2);
+        assert_eq!(coverage.parsed_file_count, 1);
+        assert_eq!(coverage.unparsed_file_count, 1);
+        assert_eq!(coverage.project_count, 2);
+        assert_eq!(coverage.work_item_count, 1);
+        assert_eq!(coverage.files[0].project, "Alpha");
+        assert_eq!(coverage.files[0].source_file, "progress.md");
+        assert_eq!(coverage.files[0].status, "parsed");
+        assert_eq!(coverage.files[0].work_item_count, 1);
+        assert_eq!(coverage.files[0].latest_date.as_deref(), Some("2026-06-09"));
+        assert_eq!(coverage.files[0].latest_title.as_deref(), Some("Nested alpha"));
+        assert_eq!(coverage.files[1].project, "Beta");
+        assert_eq!(coverage.files[1].status, "unparsed");
+        assert_eq!(coverage.files[1].work_item_count, 0);
+
+        std::fs::remove_dir_all(root).expect("remove coverage fixture");
     }
 
     #[test]

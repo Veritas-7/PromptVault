@@ -1,5 +1,6 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import type {
+  ProjectWorkLogCoverageResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
@@ -8,6 +9,7 @@ import type {
 
 export type WorkSummaryState = "idle" | "loading" | "ready" | "failed";
 export type WorkSummarySnapshotsState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogCoverageState = "idle" | "loading" | "ready" | "failed";
 
 export const WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT = 3;
 
@@ -92,6 +94,39 @@ export function workSummarySnapshotsMetaText(
 export function workSummarySnapshotsFailureText(state: WorkSummarySnapshotsState): string | null {
   if (state !== "failed") return null;
   return "저장된 프로젝트 작업 요약 스냅샷을 불러오지 못했습니다. 브리지 상태나 데이터베이스 경로를 확인하세요.";
+}
+
+export function workLogCoverageActionLabel(
+  state: WorkLogCoverageState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "작업 로그 범위 확인 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 작업 로그 범위를 ${hasResult ? "새로고침" : "확인"}할 수 없습니다`;
+  }
+  return hasResult ? "작업 로그 범위 새로고침" : "작업 로그 범위 확인";
+}
+
+export function workLogCoverageMetaText(
+  state: WorkLogCoverageState,
+  result: ProjectWorkLogCoverageResult | null,
+): string {
+  if (state === "loading") return "작업 로그 범위 확인 중";
+  if (!result) return state === "failed" ? "작업 로그 범위를 사용할 수 없음" : "아직 확인한 작업 로그 범위 없음";
+  return [
+    `${result.files_seen.toLocaleString()}개 로그`,
+    `parsed ${result.parsed_file_count.toLocaleString()}개`,
+    `unparsed ${result.unparsed_file_count.toLocaleString()}개`,
+    `${result.project_count.toLocaleString()}개 프로젝트`,
+    `작업 ${result.work_item_count.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+export function workLogCoverageFailureText(state: WorkLogCoverageState): string | null {
+  if (state !== "failed") return null;
+  return "프로젝트 작업 로그 범위를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.";
 }
 
 export function workSummarySnapshotVisibleSummaries(

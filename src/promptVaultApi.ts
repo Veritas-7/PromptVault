@@ -650,12 +650,45 @@ function isReturnedPromptCount(value: unknown, prompts: unknown, stats: unknown)
     && prompts.length === value;
 }
 
-function isPromptTruncationState(value: unknown, returnedPromptCount: unknown, stats: unknown): boolean {
+type PromptTruncationValidator = (
+  value: unknown,
+  returnedPromptCount: unknown,
+  stats: unknown,
+  persistence: unknown,
+) => boolean;
+
+function isPromptTruncationState(
+  value: unknown,
+  returnedPromptCount: unknown,
+  stats: unknown,
+  _persistence: unknown,
+): boolean {
   return typeof value === "boolean"
     && isRecord(stats)
     && isNonNegativeSafeInteger(returnedPromptCount)
     && isNonNegativeSafeInteger(stats.total_prompts)
     && value === (returnedPromptCount < stats.total_prompts);
+}
+
+function isStoredPromptTruncationState(
+  value: unknown,
+  returnedPromptCount: unknown,
+  stats: unknown,
+  persistence: unknown,
+): boolean {
+  if (typeof value !== "boolean"
+    || !isRecord(stats)
+    || !isNonNegativeSafeInteger(returnedPromptCount)
+    || !isNonNegativeSafeInteger(stats.total_prompts)
+    || returnedPromptCount !== stats.total_prompts) {
+    return false;
+  }
+
+  if (!value) return true;
+
+  if (!isPersistStats(persistence)) return false;
+
+  return (persistence as { stored_prompt_count: number }).stored_prompt_count > returnedPromptCount;
 }
 
 function isUntruncatedPromptWordTotal(value: Record<string, unknown>): boolean {
@@ -1014,7 +1047,10 @@ function parseScanPlan(value: unknown): ScanPlan {
   return value as unknown as ScanPlan;
 }
 
-function parseScanResult(value: unknown): ScanResult {
+function parseScanResult(
+  value: unknown,
+  promptTruncationValidator: PromptTruncationValidator = isPromptTruncationState,
+): ScanResult {
   if (!isRecord(value)
     || !isTimestampString(value.generated_at)
     || !isScanOutputPathState(value.output_path, value.markdown_written)
@@ -1024,7 +1060,12 @@ function parseScanResult(value: unknown): ScanResult {
     || !value.prompts.every(isPromptRecord)
     || !promptRecordIdsAreUnique(value.prompts)
     || !isReturnedPromptCount(value.returned_prompt_count, value.prompts, value.stats)
-    || !isPromptTruncationState(value.prompts_truncated, value.returned_prompt_count, value.stats)
+    || !promptTruncationValidator(
+      value.prompts_truncated,
+      value.returned_prompt_count,
+      value.stats,
+      value.persistence,
+    )
     || !isUntruncatedPromptWordTotal(value)
     || !isUntruncatedPromptAverageQuality(value)
     || !isUntruncatedPromptWeakCount(value)
@@ -1041,12 +1082,19 @@ function parseScanResult(value: unknown): ScanResult {
 }
 
 function parseStoredPromptsResult(value: unknown): ScanResult {
-  const result = parseScanResult(value);
+  const result = parseScanResult(value, isStoredPromptTruncationState);
+  const completePreviewResult = { ...(value as Record<string, unknown>), prompts_truncated: false };
   if (result.output_path !== null
     || result.markdown !== ""
     || result.markdown_included !== false
     || result.markdown_written !== false
-    || result.persistence === null) {
+    || result.persistence === null
+    || !isUntruncatedPromptWordTotal(completePreviewResult)
+    || !isUntruncatedPromptAverageQuality(completePreviewResult)
+    || !isUntruncatedPromptWeakCount(completePreviewResult)
+    || !isUntruncatedSourceAverageQuality(completePreviewResult)
+    || !isUntruncatedSourcePromptCounts(completePreviewResult)
+    || !isUntruncatedSourceWeakCounts(completePreviewResult)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return result;

@@ -4440,6 +4440,35 @@ test("browser bridge stored prompt loads reject scan export response state", asy
   );
 });
 
+test("browser bridge stored prompt loads accept truncated stored previews", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(scanResultWithPrompt({
+    id: "stored-preview",
+    hash: "hash-stored-preview",
+  }, {
+    prompts_truncated: true,
+    persistence: {
+      database_path: "/tmp/promptvault.sqlite",
+      stored_prompt_count: 2,
+      inserted_prompt_count: 0,
+      updated_prompt_count: 0,
+      date_count: 1,
+    },
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadStoredPrompts({ limit: 1 });
+
+  assert.equal(result.returned_prompt_count, 1);
+  assert.equal(result.stats.total_prompts, 1);
+  assert.equal(result.prompts_truncated, true);
+  assert.equal(result.persistence?.stored_prompt_count, 2);
+});
+
 test("browser bridge stored prompt loads reject blank prompt metadata", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

@@ -1,12 +1,140 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 13:34 KST
+Updated: 2026-06-08 13:44 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Browser bridge URL override
+## Current Slice - 2026-06-08 Stored prompt truncation compatibility
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Fix browser bridge stored prompt loading when the stored database has more
+  matching prompts than the preview limit: the UI should accept the backend's
+  stored-load response shape instead of rejecting it as malformed.
+
+Context:
+
+- Previous browser bridge URL override slice is pushed to `origin/main`:
+  implementation `fdd7edc fix: support browser bridge URL overrides` and
+  closeout `ea24dd5 docs: close bridge URL override handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`,
+  and `gh repo view` reported the repository as `PRIVATE`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+- Connected bridge QA with Vite on 5177 and CLI bridge on 5176 found the next
+  core-flow failure: clicking "저장소 불러오기" sent `/api/prompts` to 5176 and
+  received HTTP 200, but the UI displayed
+  `PromptVault 브라우저 브리지 응답 형식이 올바르지 않습니다.`
+- The actual stored DB has about 90,750 prompts. `run_load_stored_prompts`
+  returns preview-scoped `stats` built from the returned prompt window, while
+  `prompts_truncated` is based on total stored matches. The frontend currently
+  reuses scan-result truncation validation, which expects
+  `prompts_truncated === (returned_prompt_count < stats.total_prompts)`.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `ea24dd5 docs: close bridge URL override handoff`.
+- Reproduced the issue with headless browser QA: bridge status stayed
+  connected, console/page errors were empty, `/api/prompts` returned HTTP 200,
+  and only the frontend parser rejected the payload.
+- Confirmed the likely parser mismatch in `src/promptVaultApi.ts`:
+  `parseStoredPromptsResult` calls `parseScanResult`, which applies scan
+  truncation semantics to stored-load payloads.
+- Confirmed RED first: a stored-load parser test with one returned preview
+  prompt, `stats.total_prompts: 1`, `prompts_truncated: true`, and
+  `persistence.stored_prompt_count: 2` failed with the malformed bridge
+  response error.
+- Split stored-load truncation validation from scan truncation validation.
+  Scan payloads still require
+  `prompts_truncated === (returned_prompt_count < stats.total_prompts)`;
+  stored-load payloads require preview stats to match returned prompts and allow
+  `prompts_truncated: true` only when persistence shows more stored prompts
+  than the returned preview.
+- Confirmed GREEN: the new stored-load parser test passed, and the existing
+  scan truncation rejection tests still passed.
+- Re-ran the connected browser stored-load QA. The UI stayed connected, clicking
+  `저장된 프롬프트 불러오기` reached a loaded state with `1,000개 로드됨`,
+  the malformed bridge response text disappeared, alert text was null, and
+  console/page errors were empty.
+- Ran the full project check successfully after stored prompt truncation
+  compatibility.
+- Pre-staging verification passed with only the expected three modified files:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Explicitly staged only `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged secret scan passed with
+  `gitleaks protect --staged --no-banner --redact` after scanning about
+  9.10 KB and finding no leaks.
+
+Changes:
+
+- `working.md`: records the current stored prompt truncation compatibility
+  slice.
+- `tests/promptVaultApi.test.ts`: adds truncated stored preview acceptance
+  coverage.
+- `src/promptVaultApi.ts`: validates stored-load truncation with stored preview
+  semantics instead of scan response semantics.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`.
+- Connected browser QA repro:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 90 -- bash -lc ...`
+  clicked `저장된 프롬프트 불러오기`; `/api/prompts` responded 200 from 5176,
+  console/page errors were empty, but the UI showed the malformed bridge
+  response error.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "truncated stored previews" tests/promptVaultApi.test.ts`
+  failed with `PromptVault 브라우저 브리지 응답 형식이 올바르지 않습니다.`
+- GREEN: the same targeted stored-load parser test passed after the parser
+  split.
+- Focused regression:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "truncated previews|stored prompt loads accept truncated stored previews" tests/promptVaultApi.test.ts`
+  passed the two scan truncation rejection tests plus the new stored-load
+  acceptance test.
+- Browser QA fix verification:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 90 -- bash -lc ...`
+  clicked `저장된 프롬프트 불러오기`; `/api/prompts` responded 200 from 5176,
+  the UI showed `1,000개 로드됨`, `bodyHasMalformedError` was false,
+  `alertText` was null, and `consoleMessages` / `pageErrors` were empty.
+- Full project check: `npm run check` passed, covering UI tests 303/303,
+  production build, Rust lib tests 85/85, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; `git status --short --branch` showed only `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `working.md` modified;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`.
+- Staged paths: `git diff --cached --name-only` listed only
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed
+  after scanning about 9.10 KB and finding no leaks.
+
+Issues:
+
+- Stored prompt loading fails against the real local database whenever the
+  returned preview is truncated relative to the total stored matches.
+
+Research:
+
+- No external research. This is direct code/test/QA work.
+
+Next Steps:
+
+- Add RED parser coverage for a stored-load response with
+  `prompts_truncated: true`, `returned_prompt_count === stats.total_prompts`,
+  and a larger `persistence.stored_prompt_count`.
+- Patch stored-load parser validation without weakening scan payload validation.
+- Re-run focused tests, browser QA, full project checks, explicit-path staging,
+  gitleaks, commit, and push.
+
+## Previous Slice - 2026-06-08 Browser bridge URL override
 
 Current Goal:
 

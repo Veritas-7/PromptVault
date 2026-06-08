@@ -2870,15 +2870,7 @@ fn project_work_session_prompts(
         return Ok(Vec::new());
     }
 
-    let scan = run_scan(ScanOptions {
-        limit: Some(limit),
-        preview_limit: None,
-        include_markdown: Some(false),
-        write_markdown: Some(false),
-        persist: Some(false),
-        source_ids: Some(source_ids),
-        ..Default::default()
-    })?;
+    let scan = run_scan(project_work_session_scan_options(limit, source_ids))?;
     warnings.extend(
         scan.warnings
             .into_iter()
@@ -2887,6 +2879,19 @@ fn project_work_session_prompts(
     let mut prompts = scan.prompts;
     prompts.extend(project_work_codex_metadata_prompts(limit, warnings)?);
     Ok(prompts)
+}
+
+fn project_work_session_scan_options(limit: usize, source_ids: Vec<String>) -> ScanOptions {
+    ScanOptions {
+        limit: Some(limit),
+        preview_limit: None,
+        include_markdown: Some(false),
+        write_markdown: Some(false),
+        source_ids: Some(source_ids),
+        source_limit: Some(limit),
+        persist: Some(false),
+        ..Default::default()
+    }
 }
 
 struct ProjectWorkSessionEvidence {
@@ -8003,6 +8008,19 @@ Progress:
         assert_eq!(sources[0].count, 2);
         assert_eq!(sources[1].text, "Claude Code projects");
         assert_eq!(sources[1].count, 1);
+    }
+
+    #[test]
+    fn project_work_session_scan_options_bound_source_collection() {
+        let options = project_work_session_scan_options(25, vec!["codex".to_string()]);
+
+        assert_eq!(options.limit, Some(25));
+        assert_eq!(options.source_limit, Some(25));
+        assert_eq!(options.preview_limit, None);
+        assert_eq!(options.include_markdown, Some(false));
+        assert_eq!(options.write_markdown, Some(false));
+        assert_eq!(options.persist, Some(false));
+        assert_eq!(options.source_ids, Some(vec!["codex".to_string()]));
     }
 
     #[test]

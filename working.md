@@ -1,12 +1,115 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 02:24 KST
+Updated: 2026-06-09 02:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-summary snapshot expand/collapse
+## Current Slice - 2026-06-09 live work-report verification and bounded session scan
+
+Current Goal:
+
+- Answer the operator's completion-level question with live evidence.
+- Keep project/day management grounded in project-local progress logs plus
+  actual session evidence.
+- Reduce the work-report raw session rescan cost by passing the session limit
+  through to source-level scan options.
+
+Context:
+
+- The app already has `project-progress-logs` as a source rooted at
+  `/Users/wj/Ai/System/10_Projects`.
+- The recognized progress log names are `working.md`, `workingd.md`,
+  `worklog.md`, `project_status.md`, `progress_log.md`, and `progress.md`.
+- `work-report` reads those progress logs, extracts dated work headings, groups
+  items by date/project, and attaches sanitized session evidence from Codex,
+  Codex CX, Claude, and Antigravity session sources.
+- `work-summary --ai` already has OpenAI/GLM provider support with local
+  fallback. It should remain a narrative/ambiguous-structure layer on top of
+  citation-backed deterministic evidence, not a replacement for raw evidence.
+
+Progress:
+
+- Verified the progress-log matching tests already cover `workingd.md` and
+  other progress-log names.
+- Added a RED/GREEN unit test that locks session evidence scans to set
+  `source_limit` as well as `limit`.
+- Updated the session evidence scan options so forced raw session rescans are
+  bounded per selected source.
+- Re-verified cached-index work-report output against the real workspace.
+- Re-verified a fresh raw session rescan against actual session files using a
+  temporary SQLite database.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds `project_work_session_scan_options()` and uses
+  it from `project_work_session_prompts()` so session evidence scans carry
+  `source_limit: Some(limit)`.
+- `src-tauri/src/lib.rs`: adds test coverage for bounded session evidence scan
+  options.
+- `working.md`: records the actual completion level and the remaining gap:
+  cached project/day management works, fresh raw rescans work on a small bounded
+  sample, but larger full refreshes still need better incremental scanning.
+
+Tests:
+
+- RED:
+  `cargo test project_work_session_scan_options_bound_source_collection`
+  failed before implementation because
+  `project_work_session_scan_options` did not exist.
+- GREEN:
+  `cargo test project_work_session_scan_options_bound_source_collection`
+  passed.
+- GREEN:
+  `cargo test project_progress`
+  passed 6/6, including progress-log file matching, dependency/build-dir
+  pruning, markdown preservation, heading extraction, and date/project report
+  grouping.
+- Live cached-index verification:
+  `./src-tauri/target/debug/promptvault-cli work-report --limit 100 --session-limit 200 --json`
+  read 32 project progress log files, returned 100 work items across 4 projects
+  and 1 date, used the cached session index (`session_evidence_index_used:
+  true`), and reported no warnings. Project counts: CareVault 57, QualityGate
+  20, PromptVault 15, ResearchFlowAI 8.
+- Live fresh raw-session verification:
+  `rm -f /tmp/promptvault-live-work-report-verify.sqlite` then
+  `/opt/homebrew/bin/timeout 45s ./src-tauri/target/debug/promptvault-cli work-report --limit 20 --session-limit 20 --database /tmp/promptvault-live-work-report-verify.sqlite --refresh-session-index --json`
+  completed before timeout, updated a new temp session index, scanned 40
+  session prompts, indexed 22 sanitized evidence records, attached 20 session
+  evidence hits, and warned that the configured 20-prompt scan limit stopped
+  the scan.
+- Full gate:
+  `npm run check` passed: UI tests 388/388, Vite build, Rust library tests
+  138/138, CLI tests 20/20, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- Completion level: the project/day/day-log management foundation is working,
+  but it is not yet a complete all-project operations ledger.
+- Cached-index mode is fast enough for normal management views; forced raw
+  session refresh is verified on bounded samples but still needs a more
+  incremental/latest-first refresh strategy for larger full rescans.
+- Current grouping depends on dated headings inside project logs. Ambiguous
+  prose-only logs should be handled by an AI structure-extraction layer that
+  emits citation-backed candidate items before they are accepted.
+
+Research:
+
+- No external research was needed. The existing OpenAI/GLM provider path in
+  `work-summary --ai` is the right place for AI-assisted narrative and future
+  ambiguous-log extraction.
+
+Next Steps:
+
+- Add an explicit progress-log coverage view that lists scanned log files,
+  matched projects, and unparsed progress logs.
+- Add AI-assisted extraction for ambiguous project log sections with citation
+  IDs and fail-closed validation.
+- Optimize raw session refresh to avoid expensive full candidate discovery when
+  only the latest bounded evidence is needed.
+
+## Previous Slice - 2026-06-09 work-summary snapshot expand/collapse
 
 Current Goal:
 

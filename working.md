@@ -1,25 +1,22 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 08:24 KST
+Updated: 2026-06-09 09:00 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 isolated browser bridge database
+## Current Slice - 2026-06-09 reusable browser QA and work-management status
 
 Current Goal:
 
-- Make full browser click QA safe for write-capable PromptVault flows by
-  allowing the local bridge to use an explicit temporary SQLite database.
-- Re-check the current work-management completeness claims against actual
-  project progress logs and session evidence.
+- Promote the one-off isolated browser QA into a checked-in command that
+  starts its own bridge, Vite app, and temporary SQLite database.
+- Re-check the work-management completion level against live project progress
+  logs and bounded real session evidence before claiming readiness.
 
 Context:
 
-- Browser bridge QA previously exercised scan/import/save flows against the
-  default permanent vault path, so exhaustive click tests could mutate real
-  operator data.
 - The current work-management layer now parses project-local progress logs
   (`working.md`, `workingd.md`, `WORKING_LOG.md`, `PROJECT_STATUS.md`,
   dated `docs/plans/*-worklog.md`, and related progress files) and groups work
@@ -28,73 +25,83 @@ Context:
   and work-summary narrative generation. They are deliberately fail-closed:
   risky candidates are blocked from external providers, accepted extraction
   proposals are validated before merge, and no blind AI merge is used.
+- Completion level: the project/day management backbone is in place and
+  verified for the current local corpus, but it is not yet a full autonomous PM
+  system. The current live session proof is bounded to `--session-limit 200`,
+  and there is no live unparsed candidate in this snapshot to exercise AI
+  normalization end to end.
 
 Progress:
 
-- Added `serve --database PATH` to the CLI browser bridge.
-- `/api/health` now reports the configured bridge default database path.
-- Bridge routes that read or write persistence now default to the configured
-  bridge database unless the request payload explicitly supplies
-  `database_path`.
-- Recommendation persistence and work-summary snapshot persistence now expose
-  their SQLite path in the UI status text, so browser QA can prove writes used
-  the isolated database.
-- Re-verified current management coverage with live commands:
-  - `work-log-coverage --json`: `files_seen=776`, `parsed_file_count=775`,
+- Added `npm run qa:browser-bridge`, a Playwright runner that self-starts the
+  bridge and Vite app, uses a temporary SQLite database, and clicks through
+  scan, local improvement persistence, planning/import, stored prompt loading,
+  work-summary snapshot persistence, work-log coverage, candidates,
+  extraction, and saved work-log items.
+- The reusable browser QA surfaced a real rapid-refresh SQLite contention
+  failure (`database is locked` on `/api/prompt-facets`). `open_promptvault_database`
+  now sets a 5s SQLite busy timeout, with regression coverage.
+- A later full QA rerun surfaced the same class of race on `/api/import-events`
+  and `/api/import-states`; the browser bridge now serializes DB-backed routes
+  while leaving health, plan, progress, cancel, coverage, and candidate routes
+  outside the lock.
+- Re-verified current management coverage with live commands after this slice:
+  - `work-log-coverage --json`: `files_seen=778`, `parsed_file_count=777`,
     `pointer=1`, `unparsed_file_count=0`, `project_count=31`,
-    `work_item_count=8433`, `warnings=[]`.
+    `work_item_count=8452`, `warnings=[]`.
   - `work-report --session-limit 200 --json`: `project_count=31`,
-    `date_count=25`, `total_items=8433`,
-    `session_scan_prompt_count=200`, `session_evidence_count=68480`,
+    `date_count=25`, `total_items=8452`, `files_seen=778`,
+    `session_scan_prompt_count=200`, `session_evidence_count=68563`,
     `session_evidence_unique_count=198`,
-    `session_evidence_index_count=200`, `warnings=[]`.
-  - `work-log-candidates --json`: `candidate_count=0`,
-    `skipped_pointer_file_count=1`, `warnings=[]`.
+    `session_evidence_index_count=200`, `session_evidence_index_used=true`,
+    `warnings=[]`.
+  - `work-log-candidates --json`: `candidate_count=0`.
   - `work-log-extract --json`: `candidate_count=0`, `accepted_count=0`,
-    `rejected_count=0`, provider `local-extraction-rules`, `used_ai=false`.
+    `rejected_count=0`.
 
 Changes:
 
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - starts/stops isolated bridge and Vite processes;
+  - verifies bridge health with HTTP, not a raw TCP probe;
+  - fails on browser console errors and HTTP 400+ responses;
+  - prints observed persistence and work-management counters.
+- `package.json` and `package-lock.json`:
+  - add `qa:browser-bridge`;
+  - declare Playwright locally instead of relying on a sibling project's
+    `node_modules`.
+- `src-tauri/src/lib.rs`:
+  - adds SQLite busy-timeout configuration and
+    `open_promptvault_database_sets_busy_timeout`.
 - `src-tauri/src/bin/promptvault-cli.rs`:
-  - adds `serve --database PATH`;
-  - threads the configured database through browser bridge request handling;
-  - injects the bridge default database for import, stored prompts/facets,
-    scan, improve, work-summary, work-summary snapshots, work-log extraction,
-    and work-log item routes when payloads omit `database_path`;
-  - adds `bridge_uses_configured_default_database_path`.
-- `src/App.tsx`:
-  - shows the improvement persistence database path in the recommendation
-    saved-state notice.
-- `src/workSummaryStatus.ts` and `tests/workSummaryStatus.test.ts`:
-  - show and test the work-summary snapshot persistence database path.
+  - serializes local browser bridge DB-backed routes to avoid rapid browser
+    refresh SQLite lock failures while keeping non-DB status/progress routes
+    concurrent.
 - `README.md` and `docs/CLI.md`:
-  - document isolated browser bridge QA with `serve --database`.
+  - document the checked-in isolated browser QA command.
 
 Tests:
 
 - RED:
-  - `cargo test --bin promptvault-cli bridge_uses_configured_default_database_path`
-    initially failed to compile because bridge handlers had no configurable
-    database parameter.
-  - First isolated browser QA failed because the recommendation saved-state UI
-    did not expose the database path.
-  - Second isolated browser QA showed work-summary snapshot status also needed
-    the database path for UI-level proof.
-  - First full `npm run check` after the UI text change failed one expected
-    string in `tests/workSummaryStatus.test.ts`.
+  - PromptVault had no declared Playwright dependency, so the one-off browser
+    QA resolved Playwright from a sibling project.
+  - First reusable QA readiness probe used bare TCP and produced an invalid
+    HTTP request log from the bridge.
+  - After HTTP readiness was fixed, rapid browser refreshes exposed
+    `database is locked` on `/api/prompt-facets`.
+  - A final full QA rerun then exposed the same DB lock class on
+    `/api/import-events` and `/api/import-states`.
 - GREEN:
   - `cargo fmt --check`: PASS.
-  - `cargo test --bin promptvault-cli bridge_uses_configured_default_database_path`: PASS.
-  - `cargo test --bin promptvault-cli help_text_documents_cli_validation_rules`: PASS.
-  - `npm run test:ui`: PASS, `427` tests.
-  - Isolated browser-bridge QA with temporary DB:
-    `PROMPTVAULT_QA_DATABASE=/tmp/promptvault-browser-qa-...sqlite`
-    plus `serve --database`: PASS.
-    Observed: `prompts=20`, `importProcessedFiles=5`, `importEvents=1`,
-    `snapshots=1`, management meta
-    `관리 45개 · 31개 프로젝트 · 19일 · 현재요약 1 · 스냅샷 1 · 추출제안 0 · 저장추출 0 · 진행로그 775`,
-    coverage meta
-    `776개 로그 · parsed 775개 · unparsed 0개 · 31개 프로젝트 · 작업 8,431개`.
+  - `cargo test open_promptvault_database_sets_busy_timeout`: PASS.
+  - `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli bridge_`:
+    PASS, `6` tests.
+  - `npm run qa:browser-bridge`: PASS after DB route serialization. Observed:
+    `prompts=20`, `importProcessedFiles=5`, `importEvents=1`, `snapshots=1`;
+    management meta included `31개 프로젝트`; coverage meta included
+    `778개 로그 · parsed 777개 · unparsed 0개`.
+  - `npm run check`: PASS. UI `427` tests, Rust lib `161` tests, CLI `23`
+    tests, build, doc-tests, and clippy all passed.
 
 Issues:
 
@@ -103,12 +110,14 @@ Issues:
   surface (`session-limit 200`), not an unrestricted raw-session full scan.
 - AI extraction is implemented and provider-backed, but with zero current
   unparsed candidates it has no live candidate to normalize in this snapshot.
+- Next meaningful step is a deliberate "fuller session coverage" slice:
+  configurable deeper session scan/backfill, saved daily/project snapshots,
+  and AI-assisted normalization only for newly discovered safe candidates.
 
 Next Steps:
 
-- Re-run final full `npm run check` after this working-log update.
-- Stage only the changed PromptVault paths, run `git diff --check` and staged
-  secret scan, then commit and push.
+- Run final diff/secret checks after this working-log update.
+- Stage only this slice's changed PromptVault paths, commit, and push.
 
 ## Previous Slice - 2026-06-09 compact QA run-id worklog parser
 

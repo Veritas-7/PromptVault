@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test:ui": "node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/*.test.ts",
+    "qa:browser-bridge": "node scripts/browser-bridge-isolated-qa.mjs",
     "check": "npm run test:ui && npm run build && cd src-tauri && cargo test && cargo clippy --all-targets --all-features -- -D warnings",
     "preview": "vite preview",
     "tauri": "tauri"
@@ -23,6 +24,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "playwright": "^1.58.2",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
   }

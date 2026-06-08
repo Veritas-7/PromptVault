@@ -1,0 +1,318 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { chromium } from "playwright";
+
+const PROJECT_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const HOST = "127.0.0.1";
+const BRIDGE_PORT = Number.parseInt(process.env.PROMPTVAULT_QA_BRIDGE_PORT ?? "5174", 10);
+const APP_PORT = Number.parseInt(process.env.PROMPTVAULT_QA_APP_PORT ?? "5177", 10);
+const DATABASE_PATH = process.env.PROMPTVAULT_QA_DATABASE
+  ?? join(mkdtempSync(join(tmpdir(), "promptvault-browser-qa-")), "qa.sqlite");
+const START_TIMEOUT_MS = Number.parseInt(process.env.PROMPTVAULT_QA_START_TIMEOUT_MS ?? "90000", 10);
+
+function step(label) {
+  console.log(`[qa] ${label}`);
+}
+
+function validatePort(value, name) {
+  if (!Number.isInteger(value) || value < 1 || value > 65535) {
+    throw new Error(`${name} must be a TCP port number, got ${value}`);
+  }
+}
+
+validatePort(BRIDGE_PORT, "PROMPTVAULT_QA_BRIDGE_PORT");
+validatePort(APP_PORT, "PROMPTVAULT_QA_APP_PORT");
+
+function spawnServer(label, command, args, options = {}) {
+  const child = spawn(command, args, {
+    cwd: PROJECT_ROOT,
+    env: process.env,
+    stdio: ["ignore", "pipe", "pipe"],
+    ...options,
+  });
+  child.stdout.on("data", (chunk) => process.stdout.write(`[${label}] ${chunk}`));
+  child.stderr.on("data", (chunk) => process.stderr.write(`[${label}] ${chunk}`));
+  child.on("exit", (code, signal) => {
+    if (code !== null && code !== 0) {
+      process.stderr.write(`[${label}] exited with code ${code}\n`);
+    } else if (signal) {
+      process.stderr.write(`[${label}] exited by signal ${signal}\n`);
+    }
+  });
+  return child;
+}
+
+function waitForHttp(url, timeoutMs) {
+  const started = Date.now();
+  return new Promise((resolve, reject) => {
+    async function attempt() {
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          await response.arrayBuffer();
+          resolve();
+          return;
+        }
+      } catch {
+        // Server is not ready yet.
+      }
+      if (Date.now() - started > timeoutMs) {
+        reject(new Error(`Timed out waiting for ${url}`));
+        return;
+      }
+      setTimeout(attempt, 250);
+    }
+
+    attempt();
+  });
+}
+
+function waitForBridgeHealth(timeoutMs) {
+  const url = `http://${HOST}:${BRIDGE_PORT}/api/health`;
+  const started = Date.now();
+  return new Promise((resolve, reject) => {
+    async function attempt() {
+      try {
+        const response = await fetch(url);
+        const body = await response.json();
+        if (response.ok && body?.ok === true && body?.database_path === DATABASE_PATH) {
+          resolve();
+          return;
+        }
+      } catch {
+        // Server is not ready yet.
+      }
+      if (Date.now() - started > timeoutMs) {
+        reject(new Error(`Timed out waiting for ${url}`));
+        return;
+      }
+      setTimeout(attempt, 250);
+    }
+
+    attempt();
+  });
+}
+
+async function bridgeJson(page, path, body = {}) {
+  return page.evaluate(
+    async ({ path, body, bridgePort }) => {
+      const response = await fetch(`http://127.0.0.1:${bridgePort}${path}`, {
+        method: path === "/api/health" ? "GET" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: path === "/api/health" ? undefined : JSON.stringify(body),
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(`${path} HTTP ${response.status}: ${text}`);
+      }
+      return JSON.parse(text);
+    },
+    { path, body, bridgePort: BRIDGE_PORT },
+  );
+}
+
+async function clickAndWait(page, selector, predicate, timeout = 120000) {
+  await page.locator(selector).click();
+  await page.waitForFunction(predicate, undefined, { timeout });
+}
+
+async function runBrowserQa() {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  const consoleErrors = [];
+  const httpErrors = [];
+
+  page.on("console", (message) => {
+    if (["error", "warning"].includes(message.type())) {
+      if (message.text().includes("Failed to load resource")) return;
+      consoleErrors.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on("pageerror", (error) => consoleErrors.push(`pageerror: ${error.message}`));
+  page.on("response", async (response) => {
+    if (response.status() < 400) return;
+    let body = "";
+    try {
+      body = (await response.text()).slice(0, 300);
+    } catch {
+      body = "<body unavailable>";
+    }
+    httpErrors.push(`HTTP ${response.status()}: ${response.url()} ${body}`);
+  });
+
+  try {
+    step("open app");
+    await page.goto(`http://${HOST}:${APP_PORT}`, { waitUntil: "networkidle" });
+
+    step("health");
+    const health = await bridgeJson(page, "/api/health");
+    if (health.database_path !== DATABASE_PATH) {
+      throw new Error(`Expected bridge database ${DATABASE_PATH}, got ${health.database_path}`);
+    }
+    await page.locator('[data-browser-bridge-status="connected"]').waitFor({ timeout: 60000 });
+
+    step("scan");
+    await page.locator('[data-scan-limit="true"]').fill("20");
+    await clickAndWait(page, '[data-run-scan="true"]', () => {
+      const rows = document.querySelectorAll('[data-prompt-row="true"]').length;
+      const buttonText = document.querySelector('[data-run-scan="true"]')?.textContent ?? "";
+      return rows > 0 && !buttonText.includes("스캔 중") && !buttonText.includes("중지 중");
+    });
+    const scanPersistence = await bridgeJson(page, "/api/prompt-facets", { options: {} });
+    if (scanPersistence.database_path !== DATABASE_PATH || scanPersistence.total_prompts < 1) {
+      throw new Error(`Scan did not persist prompts to isolated DB: ${JSON.stringify(scanPersistence)}`);
+    }
+
+    step("improve");
+    await page.locator('[data-prompt-row="true"]').first().click();
+    const localToggle = page.locator(".local-recommendation-toggle input");
+    if (!(await localToggle.isChecked())) {
+      await localToggle.check();
+    }
+    await clickAndWait(page, '[data-run-improve="true"]', () => {
+      return Boolean(document.querySelector('[data-improvement-persistence="true"]'))
+        || Boolean(document.querySelector('[data-improvement-run-error="true"]'));
+    });
+    const improveError = await page.locator('[data-improvement-run-error="true"]').textContent().catch(() => "");
+    if (improveError.trim()) {
+      throw new Error(`Improve flow failed: ${improveError.trim()}`);
+    }
+    const improvementPersistence =
+      (await page.locator('[data-improvement-persistence="true"]').textContent())?.trim() ?? "";
+    if (!improvementPersistence.includes(DATABASE_PATH)) {
+      throw new Error(`Improvement persistence did not use isolated DB: ${improvementPersistence}`);
+    }
+
+    step("plan and import");
+    await page.locator('[data-run-plan="true"]').click();
+    await page.locator("button[data-import-source-id]:not([disabled])").first().waitFor({ timeout: 90000 });
+    await page.locator("button[data-import-source-id]:not([disabled])").first().click();
+    await page.waitForFunction((databasePath) => {
+      const text = document.querySelector(".import-panel")?.textContent ?? "";
+      return text.includes(databasePath) && !text.includes("가져오는 중");
+    }, DATABASE_PATH, { timeout: 120000 });
+    const importStates = await bridgeJson(page, "/api/import-states", { options: {} });
+    const importEvents = await bridgeJson(page, "/api/import-events", { options: {} });
+    if (importStates.database_path !== DATABASE_PATH || importStates.processed_files < 1) {
+      throw new Error(`Import states did not use isolated DB: ${JSON.stringify(importStates)}`);
+    }
+    if (importEvents.database_path !== DATABASE_PATH || importEvents.total_events < 1) {
+      throw new Error(`Import events did not use isolated DB: ${JSON.stringify(importEvents)}`);
+    }
+
+    step("stored facets and prompts");
+    await page.locator('[data-refresh-import-states="true"]').click();
+    await page.locator('[data-refresh-import-events="true"]').click();
+    await page.locator('[data-refresh-stored-facets="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-stored-facet-summary="true"]')?.textContent ?? "";
+      return text.includes("저장됨") || text.includes("저장소 필터 후보");
+    });
+    await page.locator('[data-load-stored-prompts="true"]').click();
+    await page.waitForFunction(() => {
+      return document.querySelectorAll('[data-prompt-row="true"]').length > 0
+        || Boolean(document.querySelector('[data-empty-prompts="true"]'));
+    }, undefined, { timeout: 90000 });
+
+    step("work summary and snapshot");
+    await page.locator('[data-load-work-summary="true"]').click();
+    await page.locator('[data-work-summary-narrative="true"]').waitFor({ timeout: 120000 });
+    await page.locator('[data-save-work-summary-snapshot="true"]').click();
+    await page.waitForFunction((databasePath) => {
+      const text = document.querySelector('[data-work-summary-persistence="true"]')?.textContent ?? "";
+      return text.includes(databasePath);
+    }, DATABASE_PATH, { timeout: 120000 });
+    await page.locator('[data-load-work-summary-snapshots="true"]').click();
+    await page.waitForFunction(() => {
+      return Boolean(document.querySelector('[data-work-summary-snapshots="true"] article'))
+        || Boolean(document.querySelector('[data-empty-work-summary-snapshots="true"]'));
+    }, undefined, { timeout: 90000 });
+    const snapshots = await bridgeJson(page, "/api/work-summary-snapshots", { options: {} });
+    if (snapshots.database_path !== DATABASE_PATH || snapshots.total_snapshots < 1) {
+      throw new Error(`Snapshot flow did not use isolated DB: ${JSON.stringify(snapshots)}`);
+    }
+
+    step("work log management");
+    await page.locator('[data-refresh-work-management-overview="true"]').click();
+    await page.locator('[data-work-management-overview-meta="true"]').waitFor({ timeout: 120000 });
+    await page.locator('[data-load-work-log-coverage="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-coverage-meta="true"]')?.textContent ?? "";
+      return text.includes("unparsed 0개");
+    }, undefined, { timeout: 120000 });
+    await page.locator('[data-load-work-log-candidates="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-candidates-meta="true"]')?.textContent ?? "";
+      return text.includes("후보 0개") || text.includes("후보 없음");
+    }, undefined, { timeout: 90000 });
+    await page.locator('[data-load-work-log-extraction-local="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-extraction-meta="true"]')?.textContent ?? "";
+      return text.includes("후보 0개") || text.includes("제안 0개");
+    }, undefined, { timeout: 90000 });
+    await page.locator('[data-load-work-log-items="true"]').click();
+    await page.waitForFunction(() => {
+      return Boolean(document.querySelector('[data-work-log-items-meta="true"]'));
+    }, undefined, { timeout: 90000 });
+
+    if (consoleErrors.length > 0) {
+      throw new Error(`Browser console errors:\n${consoleErrors.join("\n")}`);
+    }
+    if (httpErrors.length > 0) {
+      throw new Error(`Browser HTTP errors:\n${httpErrors.join("\n")}`);
+    }
+
+    const result = {
+      databasePath: DATABASE_PATH,
+      prompts: scanPersistence.total_prompts,
+      importProcessedFiles: importStates.processed_files,
+      importEvents: importEvents.total_events,
+      snapshots: snapshots.total_snapshots,
+      workManagementMeta:
+        (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "",
+      coverageMeta:
+        (await page.locator('[data-work-log-coverage-meta="true"]').textContent())?.trim() ?? "",
+    };
+    console.log(JSON.stringify(result, null, 2));
+  } finally {
+    await browser.close();
+  }
+}
+
+function stopServer(child) {
+  if (!child || child.killed) return;
+  child.kill("SIGTERM");
+  setTimeout(() => {
+    if (!child.killed) child.kill("SIGKILL");
+  }, 3000).unref();
+}
+
+const bridge = spawnServer("bridge", "cargo", [
+  "run",
+  "--quiet",
+  "--bin",
+  "promptvault-cli",
+  "--",
+  "serve",
+  "--addr",
+  `${HOST}:${BRIDGE_PORT}`,
+  "--database",
+  DATABASE_PATH,
+], { cwd: join(PROJECT_ROOT, "src-tauri") });
+const app = spawnServer("vite", "npm", ["run", "dev", "--", "--host", HOST, "--port", String(APP_PORT)]);
+
+try {
+  step(`wait for bridge http://${HOST}:${BRIDGE_PORT}/api/health`);
+  await waitForBridgeHealth(START_TIMEOUT_MS);
+  step(`wait for app http://${HOST}:${APP_PORT}`);
+  await waitForHttp(`http://${HOST}:${APP_PORT}`, START_TIMEOUT_MS);
+  await runBrowserQa();
+} finally {
+  stopServer(app);
+  stopServer(bridge);
+  if (!process.env.PROMPTVAULT_QA_DATABASE) {
+    rmSync(DATABASE_PATH, { force: true });
+  }
+}

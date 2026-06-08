@@ -14,6 +14,7 @@ use promptvault_lib::{
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 const MAX_JSON_PROMPT_PREVIEW: usize = 25;
 const MAX_REPAIR_COUNT: usize = 10;
@@ -1325,14 +1326,16 @@ struct HttpRequest {
 
 fn serve_bridge(addr: &str, database_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind(addr)?;
+    let database_lock = Arc::new(Mutex::new(()));
     println!("PromptVault browser bridge listening on http://{addr}");
     println!("database: {}", database_path.display());
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 let database_path = database_path.clone();
+                let database_lock = Arc::clone(&database_lock);
                 std::thread::spawn(move || {
-                    if let Err(err) = handle_bridge_client(stream, database_path) {
+                    if let Err(err) = handle_bridge_client(stream, database_path, database_lock) {
                         eprintln!("promptvault bridge request error: {err}");
                     }
                 });
@@ -1346,13 +1349,14 @@ fn serve_bridge(addr: &str, database_path: PathBuf) -> Result<(), Box<dyn std::e
 fn handle_bridge_client(
     mut stream: TcpStream,
     database_path: PathBuf,
+    database_lock: Arc<Mutex<()>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = read_http_request(&stream)?;
     if request.method == "OPTIONS" {
         return write_response(&mut stream, 204, "text/plain", "");
     }
 
-    match handle_bridge_route(&mut stream, &request, &database_path) {
+    match handle_bridge_route(&mut stream, &request, &database_path, &database_lock) {
         Ok(()) => Ok(()),
         Err(err) => write_response(&mut stream, 400, "text/plain", &err.to_string()),
     }
@@ -1362,12 +1366,22 @@ fn handle_bridge_route(
     stream: &mut TcpStream,
     request: &HttpRequest,
     database_path: &Path,
+    database_lock: &Arc<Mutex<()>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let path = request
         .path
         .split_once('?')
         .map(|(path, _)| path)
         .unwrap_or(request.path.as_str());
+    let _database_guard = if bridge_route_uses_database(request.method.as_str(), path) {
+        Some(
+            database_lock
+                .lock()
+                .map_err(|_| "bridge database lock poisoned")?,
+        )
+    } else {
+        None
+    };
     match (request.method.as_str(), path) {
         ("GET", "/api/health") => {
             let body = serde_json::json!({
@@ -1514,6 +1528,23 @@ fn handle_bridge_route(
         }
         _ => write_response(stream, 404, "text/plain", "Not found"),
     }
+}
+
+fn bridge_route_uses_database(method: &str, path: &str) -> bool {
+    matches!(
+        (method, path),
+        ("POST", "/api/import-batch")
+            | ("POST", "/api/import-states")
+            | ("POST", "/api/import-events")
+            | ("POST", "/api/prompt-facets")
+            | ("POST", "/api/prompts")
+            | ("POST", "/api/scan")
+            | ("POST", "/api/improve")
+            | ("POST", "/api/work-summary")
+            | ("POST", "/api/work-summary-snapshots")
+            | ("POST", "/api/work-log-extract")
+            | ("POST", "/api/work-log-items")
+    )
 }
 
 fn read_http_request(stream: &TcpStream) -> Result<HttpRequest, Box<dyn std::error::Error>> {
@@ -1813,6 +1844,42 @@ mod tests {
         let _ = std::fs::remove_file(database_path);
     }
 
+    #[test]
+    fn bridge_serializes_database_backed_routes_only() {
+        for path in [
+            "/api/import-batch",
+            "/api/import-states",
+            "/api/import-events",
+            "/api/prompt-facets",
+            "/api/prompts",
+            "/api/scan",
+            "/api/improve",
+            "/api/work-summary",
+            "/api/work-summary-snapshots",
+            "/api/work-log-extract",
+            "/api/work-log-items",
+        ] {
+            assert!(
+                bridge_route_uses_database("POST", path),
+                "{path} should use the bridge database lock"
+            );
+        }
+
+        for (method, path) in [
+            ("GET", "/api/health"),
+            ("POST", "/api/plan"),
+            ("POST", "/api/scan/cancel"),
+            ("POST", "/api/scan/progress"),
+            ("POST", "/api/work-log-coverage"),
+            ("POST", "/api/work-log-candidates"),
+        ] {
+            assert!(
+                !bridge_route_uses_database(method, path),
+                "{method} {path} should stay outside the bridge database lock"
+            );
+        }
+    }
+
     fn bridge_response_for(path: &str, body: &str) -> String {
         bridge_response_for_with_database(path, body, default_database_path())
     }
@@ -1835,7 +1902,8 @@ mod tests {
         let addr = listener.local_addr().expect("listener addr");
         let handle = std::thread::spawn(move || {
             let (stream, _) = listener.accept().expect("accept bridge client");
-            handle_bridge_client(stream, database_path).expect("handle bridge request");
+            handle_bridge_client(stream, database_path, Arc::new(Mutex::new(())))
+                .expect("handle bridge request");
         });
 
         let mut client = std::net::TcpStream::connect(addr).expect("connect bridge client");

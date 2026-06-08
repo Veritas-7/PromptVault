@@ -64,6 +64,7 @@ CLI-Anything's useful lesson for PromptVault is not to wrap everything in a GUI-
 
 ```bash
 npm run check
+npm run qa:browser-bridge
 cargo check
 npm run build
 cargo run --bin promptvault-cli -- sources

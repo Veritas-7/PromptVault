@@ -10,6 +10,7 @@ use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 use walkdir::WalkDir;
 
 const APP_DIR_NAME: &str = "PromptVault";
@@ -19,6 +20,7 @@ const DEFAULT_OPENAI_RESPONSES_ENDPOINT: &str = "https://api.openai.com/v1/respo
 const DEFAULT_OPENAI_MODEL: &str = "gpt-5.2";
 const DEFAULT_GLM_CHAT_ENDPOINT: &str = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
 const DEFAULT_GLM_MODEL: &str = "glm-4.6";
+const PROMPTVAULT_SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 const LARGE_SOURCE_FILE_COUNT: usize = 10_000;
 const LARGE_SOURCE_BYTES: u64 = 5 * 1024 * 1024 * 1024;
 const LARGE_FILE_BYTES: u64 = 50 * 1024 * 1024;
@@ -6536,6 +6538,7 @@ fn open_promptvault_database(
         fs::create_dir_all(parent)?;
     }
     let conn = Connection::open(database_path)?;
+    conn.busy_timeout(Duration::from_millis(PROMPTVAULT_SQLITE_BUSY_TIMEOUT_MS))?;
     ensure_promptvault_schema(&conn)?;
     Ok(conn)
 }
@@ -8272,6 +8275,23 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn open_promptvault_database_sets_busy_timeout() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-busy-timeout-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+
+        let conn = open_promptvault_database(&db_path).expect("open promptvault db");
+        let timeout_ms: i64 = conn
+            .query_row("PRAGMA busy_timeout", [], |row| row.get(0))
+            .expect("read busy timeout");
+
+        assert!(timeout_ms >= PROMPTVAULT_SQLITE_BUSY_TIMEOUT_MS as i64);
+        std::fs::remove_file(db_path).expect("remove promptvault db");
+    }
 
     fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
         haystack

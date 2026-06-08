@@ -72,7 +72,17 @@ curl -sS http://127.0.0.1:5174/api/health
 ```
 
 For full browser click QA that exercises save/import flows without touching the
-permanent vault, point the bridge at a temporary SQLite file:
+permanent vault, use the checked-in isolated QA runner:
+
+```bash
+npm run qa:browser-bridge
+```
+
+The runner starts Vite and the local bridge, points the bridge at a temporary
+SQLite file, clicks through scan, local improvement, plan/import, stored prompt
+loading, work summary snapshot saving, and work-log management, then prints the
+observed counters. To run the same bridge manually, point it at a temporary
+SQLite file:
 
 ```bash
 cd src-tauri
@@ -142,8 +152,7 @@ cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 ```
 
 The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, and `/api/import-events` endpoints so cmux or another in-app browser can exercise the same scan, scan cancellation, active scan progress with discovery counts, stored-prompt loading, stored facet summaries, planning, improvement, resumable import, saved cursor, and import activity code paths without Tauri IPC. The browser Stop control returns partial scan results for review but does not write canceled partial scans into the permanent SQLite vault; completed browser scans still persist normally.
-Use `serve --database /tmp/promptvault-browser-qa.sqlite` when validating
-write-capable browser flows against an isolated database.
+Use `npm run qa:browser-bridge` or `serve --database /tmp/promptvault-browser-qa.sqlite` when validating write-capable browser flows against an isolated database.
 
 ## AI Recommendation Path
 

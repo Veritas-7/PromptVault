@@ -273,6 +273,8 @@ export interface ProjectWorkSummarySnapshotsResult {
   database_path: string;
   total_snapshots: number;
   returned_snapshot_count: number;
+  available_dates: string[];
+  available_projects: string[];
   snapshots: ProjectWorkSummarySnapshot[];
   warnings: string[];
 }

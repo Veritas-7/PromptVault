@@ -485,6 +485,8 @@ function App() {
   );
   const hasWorkSummarySnapshotFilters =
     workSummarySnapshotDateFilter.trim() !== "" || workSummarySnapshotProjectFilter.trim() !== "";
+  const workSummarySnapshotDateSuggestions = workSummarySnapshotsResult?.available_dates ?? [];
+  const workSummarySnapshotProjectSuggestions = workSummarySnapshotsResult?.available_projects ?? [];
   const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
   const hiddenWorkSummaryCount = Math.max(
     0,
@@ -1318,6 +1320,7 @@ function App() {
               aria-label="저장된 작업 요약 스냅샷 날짜 필터"
               data-work-summary-snapshots-date-filter="true"
               disabled={isTopLevelActionLocked}
+              list="work-summary-snapshot-date-options"
               onChange={(event) => setWorkSummarySnapshotDateFilter(event.target.value)}
               placeholder="2026-06-09"
               type="text"
@@ -1330,6 +1333,7 @@ function App() {
               aria-label="저장된 작업 요약 스냅샷 프로젝트 필터"
               data-work-summary-snapshots-project-filter="true"
               disabled={isTopLevelActionLocked}
+              list="work-summary-snapshot-project-options"
               onChange={(event) => setWorkSummarySnapshotProjectFilter(event.target.value)}
               placeholder="PromptVault"
               type="text"
@@ -1362,6 +1366,16 @@ function App() {
             초기화
           </button>
         </form>
+        <datalist id="work-summary-snapshot-date-options">
+          {workSummarySnapshotDateSuggestions.map((date) => (
+            <option key={date} value={date} />
+          ))}
+        </datalist>
+        <datalist id="work-summary-snapshot-project-options">
+          {workSummarySnapshotProjectSuggestions.map((project) => (
+            <option key={project} value={project} />
+          ))}
+        </datalist>
         {workSummaryIndexStatus ? (
           <div className="work-summary-index" data-work-summary-index="true">
             <ShieldCheck size={15} />

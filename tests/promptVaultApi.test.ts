@@ -283,6 +283,8 @@ function projectWorkSummarySnapshotsPayload(overrides = {}) {
     database_path: "/tmp/promptvault.sqlite",
     total_snapshots: 1,
     returned_snapshot_count: 1,
+    available_dates: ["2026-06-09"],
+    available_projects: ["PromptVault"],
     snapshots: [{
       id: 7,
       created_at: "2026-06-09T00:00:00Z",
@@ -360,6 +362,8 @@ test("browser bridge work summary snapshots posts options and validates saved ro
     },
   });
   assert.equal(result.returned_snapshot_count, 1);
+  assert.deepEqual(result.available_dates, ["2026-06-09"]);
+  assert.deepEqual(result.available_projects, ["PromptVault"]);
   assert.equal(result.snapshots[0].id, 7);
   assert.equal(result.snapshots[0].summaries[0].citations[0].id, "2026-06-09-PromptVault-1");
 });
@@ -379,6 +383,29 @@ test("browser bridge work summary snapshots reject impossible counters", async (
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /returned_snapshot_count|promptvault.sqlite|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work summary snapshots reject missing filter suggestions", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    const payload = projectWorkSummarySnapshotsPayload();
+    delete payload.available_dates;
+    delete payload.available_projects;
+    return new Response(JSON.stringify(payload), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listProjectWorkSummarySnapshots({ limit: 5 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /available_dates|available_projects|undefined/);
       return true;
     },
   );

@@ -232,6 +232,8 @@ pub struct ProjectWorkSummarySnapshotsResult {
     pub database_path: String,
     pub total_snapshots: usize,
     pub returned_snapshot_count: usize,
+    pub available_dates: Vec<String>,
+    pub available_projects: Vec<String>,
     pub snapshots: Vec<ProjectWorkSummarySnapshot>,
     pub warnings: Vec<String>,
 }
@@ -1101,7 +1103,7 @@ pub fn run_list_project_work_summary_snapshots(
         .unwrap_or(DEFAULT_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT)
         .min(MAX_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT);
     let conn = open_promptvault_database(&database_path)?;
-    let (total_snapshots, snapshots) = read_project_work_summary_snapshots(
+    let snapshot_rows = read_project_work_summary_snapshots(
         &conn,
         limit,
         date_filter.as_deref(),
@@ -1110,9 +1112,11 @@ pub fn run_list_project_work_summary_snapshots(
     Ok(ProjectWorkSummarySnapshotsResult {
         generated_at,
         database_path: database_path.display().to_string(),
-        total_snapshots,
-        returned_snapshot_count: snapshots.len(),
-        snapshots,
+        total_snapshots: snapshot_rows.total_snapshots,
+        returned_snapshot_count: snapshot_rows.snapshots.len(),
+        available_dates: snapshot_rows.available_dates,
+        available_projects: snapshot_rows.available_projects,
+        snapshots: snapshot_rows.snapshots,
         warnings: Vec::new(),
     })
 }
@@ -4787,12 +4791,19 @@ fn persist_project_work_summary_snapshot(
     })
 }
 
+struct ProjectWorkSummarySnapshotRows {
+    total_snapshots: usize,
+    snapshots: Vec<ProjectWorkSummarySnapshot>,
+    available_dates: Vec<String>,
+    available_projects: Vec<String>,
+}
+
 fn read_project_work_summary_snapshots(
     conn: &Connection,
     limit: usize,
     date_filter: Option<&str>,
     project_filter: Option<&str>,
-) -> Result<(usize, Vec<ProjectWorkSummarySnapshot>), Box<dyn std::error::Error>> {
+) -> Result<ProjectWorkSummarySnapshotRows, Box<dyn std::error::Error>> {
     let mut stmt = conn.prepare(
         "SELECT id, created_at, provider, used_ai, narrative_markdown, total_items,
             project_count, date_count, files_seen, session_evidence_count,
@@ -4803,6 +4814,8 @@ fn read_project_work_summary_snapshots(
     let mut rows = stmt.query([])?;
     let mut total_snapshots = 0usize;
     let mut snapshots = Vec::new();
+    let mut available_dates = BTreeSet::new();
+    let mut available_projects = BTreeSet::new();
     while let Some(row) = rows.next()? {
         let summaries_json: String = row.get(12)?;
         let warnings_json: String = row.get(13)?;
@@ -4824,12 +4837,21 @@ fn read_project_work_summary_snapshots(
         };
         if project_work_summary_snapshot_matches_filters(&snapshot, date_filter, project_filter) {
             total_snapshots += 1;
+            for summary in &snapshot.summaries {
+                available_dates.insert(summary.date.clone());
+                available_projects.insert(summary.project.clone());
+            }
             if snapshots.len() < limit {
                 snapshots.push(snapshot);
             }
         }
     }
-    Ok((total_snapshots, snapshots))
+    Ok(ProjectWorkSummarySnapshotRows {
+        total_snapshots,
+        snapshots,
+        available_dates: available_dates.into_iter().collect(),
+        available_projects: available_projects.into_iter().collect(),
+    })
 }
 
 fn project_work_summary_snapshot_matches_filters(
@@ -8466,6 +8488,8 @@ Progress:
 
         assert_eq!(result.total_snapshots, 1);
         assert_eq!(result.returned_snapshot_count, 1);
+        assert_eq!(result.available_dates, vec!["2026-06-09"]);
+        assert_eq!(result.available_projects, vec!["PromptVault"]);
         assert_eq!(result.snapshots[0].summaries[0].date, "2026-06-09");
         assert_eq!(result.snapshots[0].summaries[0].project, "PromptVault");
         assert!(result.snapshots[0]

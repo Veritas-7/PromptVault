@@ -1255,6 +1255,8 @@ function parseProjectWorkSummarySnapshotsResult(value: unknown): ProjectWorkSumm
     || !isNonBlankString(value.database_path)
     || !isNonNegativeSafeInteger(value.total_snapshots)
     || !isNonNegativeSafeIntegerAtMost(value.returned_snapshot_count, value.total_snapshots)
+    || !isUniqueNonBlankStringArray(value.available_dates)
+    || !isUniqueNonBlankStringArray(value.available_projects)
     || !Array.isArray(value.snapshots)
     || value.snapshots.length !== value.returned_snapshot_count
     || !value.snapshots.every(isProjectWorkSummarySnapshot)

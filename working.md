@@ -1,12 +1,104 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 02:03 KST
+Updated: 2026-06-09 02:09 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-summary snapshot filters
+## Current Slice - 2026-06-09 work-summary snapshot suggestions
+
+Current Goal:
+
+- Surface available date/project filter suggestions for saved
+  work-summary snapshots so operators do not need to guess exact saved values.
+- Keep the suggestions evidence-backed: compute them from parsed
+  `summaries_json` rows that match the saved snapshot query, not from raw
+  session bodies or substring searches.
+
+Context:
+
+- The previous slice added exact date/project filtering for saved snapshot
+  history. Manual filters work, but the UI still made users type values without
+  seeing what dates/projects exist in saved rows.
+- This slice adds a small discovery layer over the saved snapshot results while
+  preserving the existing limit-bounded row listing.
+
+Progress:
+
+- Added `available_dates` and `available_projects` to saved work-summary
+  snapshot results.
+- Rust now computes suggestion facets from structured nested summaries across
+  all matched snapshot rows before applying the returned-row limit.
+- TypeScript bridge validation now rejects saved snapshot payloads that omit
+  these suggestion arrays.
+- The main app saved-history date/project filter inputs now use datalist
+  suggestions returned by the backend.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: returns a structured snapshot-row result with
+  `total_snapshots`, returned snapshots, and sorted unique date/project
+  suggestion arrays.
+- `src/types.ts`, `src/promptVaultApi.ts`: extends and validates the saved
+  snapshot result contract.
+- `tests/promptVaultApi.test.ts`: covers valid suggestion arrays and malformed
+  bridge responses that omit them.
+- `src/App.tsx`: wires saved-history date/project filter inputs to backend
+  datalist suggestions.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_summary_snapshots_filter_saved_rows_by_summary_date_and_project --lib`
+  failed before implementation because saved snapshot results had no
+  `available_dates` or `available_projects`.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed before implementation because malformed saved snapshot bridge payloads
+  without suggestion arrays were accepted.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_summary_snapshots_filter_saved_rows_by_summary_date_and_project --lib`
+  passed with 1/1.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed with 142/142.
+- GREEN:
+  `npm run build` passed (`tsc && vite build`).
+- Actual suggestion smoke:
+  created `/tmp/promptvault-work-summary-facets-smoke.sqlite` via
+  `work-summary --save-snapshot`, then listed it with
+  `work-summary-snapshots --limit 5 --json`. The response returned
+  `available_dates: ["2026-06-09"]`, `available_projects: ["CareVault"]`,
+  and first summary `date: 2026-06-09`, `project: CareVault`.
+- Full gate:
+  `npm run check` passed: UI tests 386/386, Vite build, Rust library tests
+  137/137, CLI tests 20/20, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- cmux/in-app browser click testing remains excluded in this runtime by the
+  active goal's latest environment note. This slice was verified through CLI,
+  bridge tests, TypeScript tests, Vite build, Rust tests, and clippy.
+- Suggestions are exact saved values only. Fuzzy project search and cross-row
+  comparison are still future enhancements.
+
+Research:
+
+- No external research was needed. The implementation followed the existing
+  local structured JSON parser path and avoided new dependencies.
+
+Next Steps:
+
+- Add saved-history comparison or drill-down views if operators need to compare
+  day/project progress across multiple saved snapshots.
+- Continue improving project/day/task management by adding AI-assisted
+  structure extraction for ambiguous progress-log sections while preserving
+  citation-backed evidence.
+- Run a browser automation pass against the work-summary panel when a
+  permitted local browser target is available.
+
+## Previous Slice - 2026-06-09 work-summary snapshot filters
 
 Current Goal:
 

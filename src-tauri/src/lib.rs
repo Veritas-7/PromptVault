@@ -1,4 +1,4 @@
-use chrono::{FixedOffset, Local, TimeZone, Utc};
+use chrono::{FixedOffset, Local, NaiveDate, TimeZone, Utc};
 use regex::{Captures, Regex};
 use rusqlite::{params, Connection, OpenFlags, ToSql};
 use serde::{Deserialize, Serialize};
@@ -4560,6 +4560,14 @@ fn project_progress_work_items_from_text_for_project(
             &source_file,
         ));
     }
+    if items.is_empty() {
+        items.extend(project_progress_work_items_from_compact_qa_run_ids(
+            text,
+            project,
+            &source_path,
+            &source_file,
+        ));
+    }
 
     items
 }
@@ -4648,6 +4656,137 @@ fn project_progress_work_items_from_safe_dated_lines(
         });
     }
     items
+}
+
+fn project_progress_work_items_from_compact_qa_run_ids(
+    text: &str,
+    project: &str,
+    source_path: &str,
+    source_file: &str,
+) -> Vec<ProjectWorkItem> {
+    let mut items = Vec::new();
+    let mut seen = BTreeSet::new();
+    for raw_line in text.lines() {
+        let Some(content) = local_project_work_log_item_line_content(raw_line) else {
+            continue;
+        };
+        let Some((date, run_id)) = local_project_work_log_compact_run_date(content) else {
+            continue;
+        };
+        let Some(title) = local_project_work_log_title_before_compact_run(content, &run_id) else {
+            continue;
+        };
+        let evidence = local_project_work_log_compact_run_evidence(&run_id, &title);
+        if !detect_risks(&format!("{date}\n{title}\n{evidence}")).is_empty() {
+            continue;
+        }
+        if !seen.insert((date.clone(), title.clone(), evidence.clone())) {
+            continue;
+        }
+        items.push(ProjectWorkItem {
+            date,
+            project: project.to_string(),
+            title,
+            status: "logged".to_string(),
+            source_path: source_path.to_string(),
+            source_file: source_file.to_string(),
+            evidence,
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_keys: Vec::new(),
+        });
+    }
+    items
+}
+
+fn local_project_work_log_item_line_content(raw_line: &str) -> Option<&str> {
+    let line = raw_line.trim();
+    let content = line
+        .strip_prefix("- ")
+        .or_else(|| line.strip_prefix("* "))
+        .or_else(|| line.strip_prefix("> - "))
+        .or_else(|| line.strip_prefix("> * "))?
+        .trim();
+    if content.chars().count() < 12 {
+        return None;
+    }
+    Some(content)
+}
+
+fn local_project_work_log_compact_run_date(content: &str) -> Option<(String, String)> {
+    let mut rest = content;
+    while let Some(start) = rest.find('`') {
+        let after_start = &rest[start + 1..];
+        let Some(end) = after_start.find('`') else {
+            break;
+        };
+        let token = after_start[..end].trim();
+        if let Some(date) = local_project_work_log_compact_run_token_date(token) {
+            return Some((date, token.to_string()));
+        }
+        rest = &after_start[end + 1..];
+    }
+    None
+}
+
+fn local_project_work_log_compact_run_token_date(token: &str) -> Option<String> {
+    let bytes = token.as_bytes();
+    if bytes.len() < 9 || bytes[8] != b'-' || !bytes[..8].iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    let year = token[0..4].parse::<i32>().ok()?;
+    let month = token[4..6].parse::<u32>().ok()?;
+    let day = token[6..8].parse::<u32>().ok()?;
+    NaiveDate::from_ymd_opt(year, month, day)?;
+    Some(format!("{year:04}-{month:02}-{day:02}"))
+}
+
+fn local_project_work_log_title_before_compact_run(content: &str, run_id: &str) -> Option<String> {
+    let run_start = content.find(run_id)?;
+    let before_run = content[..run_start]
+        .trim_end_matches('`')
+        .trim()
+        .trim_end_matches(|ch: char| matches!(ch, ':' | ';' | ',' | ' ') || ch.is_whitespace())
+        .trim();
+    let lower = before_run.to_ascii_lowercase();
+    let title = if let Some(index) = lower.find(": pass") {
+        &before_run[..index]
+    } else if let Some(index) = lower.find(" pass for run") {
+        &before_run[..index]
+    } else if let Some(index) = before_run.find(':') {
+        &before_run[..index]
+    } else {
+        before_run
+    }
+    .trim()
+    .trim_matches('|')
+    .trim();
+    if title.chars().count() < 6 {
+        return None;
+    }
+    if !title.chars().any(|ch| ch.is_alphabetic()) {
+        return None;
+    }
+    Some(truncate_chars(title, 160))
+}
+
+fn local_project_work_log_compact_run_evidence(run_id: &str, title: &str) -> String {
+    let mut hint = String::new();
+    for part in run_id.split('-') {
+        let next = if hint.is_empty() {
+            part.to_string()
+        } else {
+            format!("{hint}-{part}")
+        };
+        if next.chars().count() > 40 {
+            break;
+        }
+        hint = next;
+    }
+    if hint.is_empty() {
+        hint = truncate_chars(run_id, 40);
+    }
+    format!("Run: {hint}\n{title}")
 }
 
 fn project_work_session_prompts(
@@ -10032,6 +10171,26 @@ Progress:
             items[1].title,
             "Added pnpm workspace, shared schemas, and initial tests."
         );
+        assert!(detect_risks(&items[0].evidence).is_empty());
+        assert!(detect_risks(&items[1].evidence).is_empty());
+    }
+
+    #[test]
+    fn project_progress_work_items_extract_compact_qa_run_ids() {
+        let path = PathBuf::from("/tmp/SnapTranslate/working.md");
+        let text = "# Current Installed QA Snapshot - fe8a0398\n\n- Installed SHA: `fe8a0398822e804ae6d716dfc841f97c03206f191ce4eaebde6e69774e9d286c`\n- Runtime matrix: `20260605-runtime-matrix-fe8a0398-status-recapture-drop-target` PASS.\n- Installed personal build capability QA: PASS for run `20260606-personal-build-capability-fe8a0398-final`; runtime report keeps OCR/translation active while StoreKit/free-count and CloudKit live sync remain decision-gated.\n";
+
+        let items = project_progress_work_items_from_text_for_project(&path, text, "SnapTranslate");
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].date, "2026-06-05");
+        assert_eq!(items[0].project, "SnapTranslate");
+        assert_eq!(items[0].status, "logged");
+        assert_eq!(items[0].title, "Runtime matrix");
+        assert!(items[0].evidence.contains("20260605-runtime-matrix"));
+        assert!(!items[0].evidence.contains("fe8a0398822e804ae6d716"));
+        assert_eq!(items[1].date, "2026-06-06");
+        assert_eq!(items[1].title, "Installed personal build capability QA");
         assert!(detect_risks(&items[0].evidence).is_empty());
         assert!(detect_risks(&items[1].evidence).is_empty());
     }

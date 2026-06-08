@@ -1,12 +1,103 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 07:47 KST
+Updated: 2026-06-09 07:58 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 inline dated bullet parser
+## Current Slice - 2026-06-09 compact QA run-id worklog parser
+
+Current Goal:
+
+- Close the final real `work-log-coverage` gap by parsing
+  `SnapTranslate/working.md`.
+- Treat installed QA snapshot run IDs such as
+  `20260605-runtime-matrix-...` as dated work items without sending risky full
+  snapshot bodies or long hashes to AI providers.
+
+Context:
+
+- After the inline dated bullet slice, coverage had one true unparsed file:
+  `SnapTranslate/working.md`.
+- The existing OpenAI/GLM work-log extraction path already exists, but this
+  candidate carried `long_base64_like_token` risk flags from full SHA/run-id
+  material and was correctly blocked from external AI.
+- The SnapTranslate log has deterministic compact run dates in backticked QA
+  run IDs, so a local parser is safer than asking a model to normalize it.
+
+Progress:
+
+- Added a final fallback that runs only after heading, date-field, and ISO
+  dated bullet parsing produce no items.
+- The fallback scans markdown item lines for backticked compact run IDs that
+  begin with `YYYYMMDD-`, validates the date with `chrono::NaiveDate`, and
+  emits one `logged` item per safe run line.
+- Evidence keeps only a short safe run prefix, for example
+  `Run: 20260605-runtime-matrix`, plus the title. Full long run IDs and SHA
+  strings are not copied into managed evidence.
+- Final coverage after this note:
+  `files_seen=774`, `parsed_file_count=773`, `pointer=1`,
+  `unparsed_file_count=0`, `work_item_count=8415`, `warnings=[]`.
+- `SnapTranslate/working.md` is now parsed with `work_item_count=137` and
+  latest parsed date `2026-06-07`.
+- `work-log-candidates --json` now reports `candidate_count=0`; no unparsed
+  progress logs remain for AI review.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - adds `project_progress_work_items_from_compact_qa_run_ids`;
+  - adds compact run-id date/title/evidence helpers;
+  - adds `project_progress_work_items_extract_compact_qa_run_ids`.
+
+Tests:
+
+- RED:
+  - `cargo test project_progress_work_items_extract_compact_qa_run_ids`
+    failed with `items.len()` 0 vs expected 2.
+- Targeted GREEN:
+  - `cargo test project_progress_work_items_extract_compact_qa_run_ids`: PASS.
+  - `cargo test project_progress_work_items`: PASS, 4 tests.
+  - `cargo fmt --check`: PASS.
+- Actual CLI verification:
+  - `work-log-coverage --json`: `parsed=773`, `pointer=1`,
+    `unparsed=0`, `work_item_count=8415`, `warnings=[]`.
+  - `work-report --json`: `project_count=31`, `date_count=25`,
+    `total_items=8415`, `session_scan_prompt_count=200`,
+    `session_evidence_count=68397`, `warnings=[]`.
+  - `work-log-candidates --json`: `candidate_count=0`.
+- Headless browser-bridge QA:
+  - `node /tmp/promptvault_work_log_coverage_timestamp_qa.mjs`: PASS with
+    bridge on `127.0.0.1:5174` and Vite on `127.0.0.1:5177`.
+  - Observed coverage meta:
+    `774개 로그 · parsed 773개 · unparsed 0개 · 31개 프로젝트 · 작업 8,415개`.
+  - Visible coverage rows had `unparsedRowCount=0` and `pointerRowCount=1`.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `427` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `160` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- The deterministic project-local progress-log coverage backlog is now closed:
+  `unparsed_file_count=0`.
+- AI extraction is present and guarded, but with no remaining unparsed
+  candidate it is no longer needed for current coverage.
+- Future arbitrary log formats should still go through the existing reviewed
+  AI extraction flow, not blind automatic merges.
+
+Next Steps:
+
+- Commit the compact QA run-id parser slice.
+- Re-run final coverage after this working log update and stage only
+  `src-tauri/src/lib.rs` plus `working.md`.
+
+## Previous Slice - 2026-06-09 inline dated bullet parser
 
 Current Goal:
 

@@ -1,12 +1,131 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 22:48 KST
+Updated: 2026-06-08 22:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Prompt timestamp display consistency
+## Current Slice - 2026-06-08 Import event timestamp display guard
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make import activity event timestamps use the same guarded display policy as
+  prompt timestamps.
+- Avoid showing `Invalid Date`, raw ISO strings, or raw secret-like fallback
+  values if malformed native import event timestamps reach the UI.
+
+Context:
+
+- Previous prompt timestamp display consistency is pushed to `origin/main` with
+  source commit `b176c34 fix: normalize prompt timestamp display` and docs
+  closeout `eede196 docs: record timestamp display verification`; final fetch
+  parity was `0 0`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for the import activity DOM.
+- Prompt timestamps now route through `promptTimestampDisplayText()`, but import
+  activity rows still called `new Date(event.generated_at).toLocaleString()`
+  directly in `src/App.tsx`. That path could render `Invalid Date` and did not
+  share the malformed fallback redaction guard.
+
+Progress:
+
+- Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
+  persisted/current/first objective all point at PromptVault.
+- Re-read the clean pushed repo state, `working.md`, existing prompt timestamp
+  helper path, import event formatter tests, and import activity rendering in
+  `src/App.tsx`.
+- Added RED tests in `tests/importEvents.test.ts` requiring a new
+  `importEventTimestampText()` export. RED failed as intended because the export
+  did not exist.
+- Added shared `dateTimeDisplayText()` in `src/dateDisplay.ts` for parseable
+  local date/time formatting, missing timestamp fallback, and invalid fallback
+  redaction through `redactSensitiveDisplayText()`.
+- Routed `promptTimestampDisplayText()` through the shared date display helper
+  to preserve the previous prompt timestamp behavior.
+- Added `importEventTimestampText()` in `src/importEvents.ts` and routed import
+  activity rows in `src/App.tsx` through it instead of direct `new Date(...)`.
+- Ran a browser smoke with a Tauri-like invoke shim returning one parseable
+  import event timestamp and one invalid secret-like timestamp. The import
+  activity DOM showed localized time for the parseable value, redacted the
+  invalid fallback, and omitted both raw secret fragments and raw ISO text.
+- Deleted the temporary browser QA script after verification.
+- Full project verification passed.
+- Source staged secret scan and full-tree secret scan both found no leaks.
+- Source commit `8c204a7 fix: guard import event timestamp display` was pushed
+  to private `origin/main`; final fetch parity was `0 0`.
+- Repository visibility was rechecked with `gh repo view
+  Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`:
+  `visibility=PRIVATE`, `isPrivate=true`.
+
+Changes:
+
+- `src/dateDisplay.ts`: adds shared guarded timestamp display formatting.
+- `src/promptRowA11y.ts`: reuses the shared helper for prompt timestamp display.
+- `src/importEvents.ts`: adds `importEventTimestampText()` for import activity
+  rows.
+- `src/App.tsx`: uses `importEventTimestampText(event)` in the import activity
+  list.
+- `tests/importEvents.test.ts`: adds RED/GREEN coverage for local formatting and
+  invalid secret-like fallback redaction.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED helper test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/importEvents.test.ts`
+  failed as intended with `SyntaxError: The requested module
+  '../src/importEvents.ts' does not provide an export named
+  'importEventTimestampText'`.
+- Targeted GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/importEvents.test.ts tests/promptRowA11y.test.ts`
+  passed with 54/54.
+- Related regression checks:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/importEvents.test.ts tests/promptRowA11y.test.ts tests/promptVaultApi.test.ts`
+  passed with 190/190.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5246" --port 5246 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_import_event_timestamp_qa.mjs'`
+  passed with exit code `0`; parseable import event timestamps used localized
+  display, invalid secret-like timestamps rendered `[REDACTED_POSSIBLE_SECRET]`,
+  raw ISO/secret fragments were absent, and there were no page errors, console
+  errors, failed responses, or failed requests.
+- `git diff --check` passed.
+- Full project check: `npm run check` passed, covering UI tests 369/369,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Source staged secret scan: `gitleaks protect --staged` scanned about 1.99 KB
+  and found no leaks before `8c204a7`.
+- Source full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.20 MB and found no leaks before the source push.
+- Source push verification: `git push origin main` advanced `main` from
+  `eede196` to `8c204a7`; after fetch, parity was `0 0` and
+  `git status --short --branch` reported `## main...origin/main` with only
+  `working.md` modified.
+
+Issues:
+
+- No product/source blocker after import event timestamp display guard.
+- Other direct `new Date(...).toLocaleString()` generated timestamp displays
+  remain for future autonomous slices: scan plans, import result metadata, and
+  scan result metadata.
+- No source push blocker after staged and full-tree gitleaks verification.
+- Docs closeout commit is pending.
+
+Research:
+
+- No external research. This is direct display-safety hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Stage only `working.md`, run staged gitleaks, commit
+  `docs: record import event timestamp verification`, run full-tree gitleaks,
+  push to private `origin/main`, and verify final fetch parity plus GitHub
+  private visibility.
+
+## Previous Slice - 2026-06-08 Prompt timestamp display consistency
 
 Current Goal:
 
@@ -24,7 +143,7 @@ Context:
   `origin/main` with source commit `a832858 fix: redact stored filter
   suggestions` and docs closeout `4870482 docs: record stored filter suggestion
   verification`; final fetch parity was `0 0`.
-- cmux/in-app browser remains excluded for this runtime. Verification uses
+- cmux/in-app browser remained excluded for this runtime. Verification used
   local Vite plus a Tauri-like Playwright shim for the quick scan -> selected
   prompt detail DOM.
 - The API boundary already rejects invalid prompt timestamps, but display
@@ -36,7 +155,7 @@ Context:
 Progress:
 
 - Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
-  persisted/current/first objective all point at PromptVault.
+  persisted/current/first objective all pointed at PromptVault.
 - Re-read the clean pushed repo state, `working.md`, prompt metadata display
   helpers, prompt API timestamp validation, and selected prompt rendering in
   `src/App.tsx`.
@@ -55,6 +174,8 @@ Progress:
 - Deleted the temporary browser QA script after verification.
 - Source commit `b176c34 fix: normalize prompt timestamp display` was pushed
   to private `origin/main`; final fetch parity was `0 0`.
+- Docs closeout commit `eede196 docs: record timestamp display verification`
+  was pushed to private `origin/main`; final fetch parity was `0 0`.
 - Repository visibility was rechecked with `gh repo view
   Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`:
   `visibility=PRIVATE`, `isPrivate=true`.
@@ -98,23 +219,21 @@ Tests:
   `4870482` to `b176c34`; after fetch, parity was `0 0` and
   `git status --short --branch` reported `## main...origin/main` with only
   `working.md` modified.
+- Docs staged secret scan and full-tree secret scan found no leaks before
+  `eede196`; after docs push and fetch, parity was `0 0`.
 
 Issues:
 
-- No product blocker after prompt timestamp display consistency.
-- No source push blocker after staged and full-tree gitleaks verification.
-- Docs closeout commit is still pending for this slice.
+- No remaining blocker after source and docs closeout.
 
 Research:
 
-- No external research. This is direct UI/UX consistency hardening based on code
-  inspection plus a local browser user flow.
+- No external research. This was direct UI/UX consistency hardening based on
+  code inspection plus a local browser user flow.
 
 Next Steps:
 
-- Commit this closeout `working.md` update after staged gitleaks, run full-tree
-  gitleaks again, push to private `origin/main`, and verify final fetch parity
-  plus GitHub private visibility.
+- Continue autonomous QA/improvement from this clean pushed tree.
 
 ## Previous Slice - 2026-06-08 Stored filter suggestion metadata redaction
 

@@ -16,7 +16,7 @@ function redactSensitivePromptPreview(text: string): string {
       "[REDACTED_PRIVATE_KEY]",
     )
     .replace(
-      /\b[A-Za-z][A-Za-z0-9+.-]*:\/\/(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[A-Za-z0-9]+[_-])*(?:(?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|(?:[A-Za-z]+\s+)?\S+)?/gim,
+      /\bBearer\s+[A-Za-z0-9][A-Za-z0-9]*[._~+/=-][A-Za-z0-9._~+/=-]*[A-Za-z0-9_=/+-]|\b[A-Za-z][A-Za-z0-9+.-]*:\/\/(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[A-Za-z0-9]+[_-])*(?:(?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|(?:[A-Za-z]+\s+)?\S+)?/gim,
       "[REDACTED_POSSIBLE_SECRET]",
     )
     .replace(

@@ -186,6 +186,18 @@ test("prompt row previews redact authorization bearer headers", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact standalone bearer tokens", () => {
+  const text = "Use Bearer short-token-value for the request.";
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "Use [REDACTED_POSSIBLE_SECRET] for the request.");
+  assert.doesNotMatch(preview, /Bearer|short-token-value/);
+  assert.doesNotMatch(label, /Bearer|short-token-value/);
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact authorization scheme headers", () => {
   const text = "Send Authorization: Basic short-basic-value before request.";
 

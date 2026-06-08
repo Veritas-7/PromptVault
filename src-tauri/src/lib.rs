@@ -3949,7 +3949,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "possible_api_key",
                 Regex::new(
-                    r#"(?im)\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
+                    r#"(?im)\bbearer\s+[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
                 )
                     .expect("api key regex"),
             ),
@@ -6388,6 +6388,15 @@ mod tests {
     fn redact_sensitive_text_redacts_authorization_bearer_headers() {
         let text = "Authorization: Bearer short-token-value";
         assert_eq!(redact_sensitive_text(text), "[REDACTED_POSSIBLE_API_KEY]");
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_standalone_bearer_tokens() {
+        let text = "Use Bearer short-token-value for the request.";
+        assert_eq!(
+            redact_sensitive_text(text),
+            "Use [REDACTED_POSSIBLE_API_KEY] for the request."
+        );
     }
 
     #[test]

@@ -250,6 +250,7 @@ import {
   workSummarySnapshotSummaryOverflowText,
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
+  type WorkLogExtractionRunMode,
   type WorkLogExtractionState,
   type WorkLogExtractionItemsState,
   type WorkManagementRefreshState,
@@ -321,6 +322,8 @@ function App() {
   const [workLogCoverageState, setWorkLogCoverageState] = useState<WorkLogCoverageState>("idle");
   const [workLogCandidatesState, setWorkLogCandidatesState] = useState<WorkLogCandidatesState>("idle");
   const [workLogExtractionState, setWorkLogExtractionState] = useState<WorkLogExtractionState>("idle");
+  const [workLogExtractionRunMode, setWorkLogExtractionRunMode] =
+    useState<WorkLogExtractionRunMode>("ai");
   const [workLogExtractionItemsState, setWorkLogExtractionItemsState] =
     useState<WorkLogExtractionItemsState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
@@ -577,9 +580,13 @@ function App() {
   const workLogCandidatesFailureMessage = workLogCandidatesFailureText(workLogCandidatesState);
   const workLogCandidatesMeta = workLogCandidatesMetaText(workLogCandidatesState, workLogCandidatesResult);
   const workLogExtractionFailureMessage = workLogExtractionFailureText(workLogExtractionState);
-  const workLogExtractionMeta = workLogExtractionMetaText(workLogExtractionState, workLogExtractionResult);
+  const workLogExtractionMeta = workLogExtractionMetaText(
+    workLogExtractionState,
+    workLogExtractionResult,
+    workLogExtractionRunMode,
+  );
   const workLogExtractionProviderNotice =
-    workLogExtractionProviderNoticeText(workLogExtractionResult);
+    workLogExtractionProviderNoticeText(workLogExtractionResult, workLogExtractionRunMode);
   const workLogExtractionPersistenceStatus = workLogExtractionResult
     ? workLogExtractionPersistenceText(workLogExtractionResult)
     : null;
@@ -972,13 +979,16 @@ function App() {
   async function refreshWorkLogExtraction({
     save = false,
     approvedCandidateIds,
-  }: { save?: boolean; approvedCandidateIds?: string[] } = {}) {
+    ai,
+  }: { save?: boolean; approvedCandidateIds?: string[]; ai?: boolean } = {}) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    const useAi = ai ?? (save ? (workLogExtractionResult?.used_ai ?? true) : true);
     setError(null);
+    setWorkLogExtractionRunMode(useAi ? "ai" : "local");
     setWorkLogExtractionState("loading");
     try {
       const next = await loadProjectWorkLogExtractionProposals({
-        ai: true,
+        ai: useAi,
         save,
         approved_candidate_ids: save ? approvedCandidateIds : undefined,
       });
@@ -1056,6 +1066,7 @@ function App() {
     setWorkSummarySnapshotsState("loading");
     setWorkLogCoverageState("loading");
     setWorkLogCandidatesState("loading");
+    setWorkLogExtractionRunMode("ai");
     setWorkLogExtractionState("loading");
     setWorkLogExtractionItemsState("loading");
     try {
@@ -1782,19 +1793,40 @@ function App() {
                 workLogExtractionState,
                 workLogExtractionResult !== null,
                 actionLockState,
+                "ai",
               )}
               className="inline-action"
               data-load-work-log-extraction="true"
               disabled={isTopLevelActionLocked}
-              onClick={() => void refreshWorkLogExtraction()}
+              onClick={() => void refreshWorkLogExtraction({ ai: true })}
               type="button"
             >
               <Sparkles size={15} />
-              {workLogExtractionState === "loading"
+              {workLogExtractionState === "loading" && workLogExtractionRunMode === "ai"
                 ? "생성 중"
                 : workLogExtractionResult
                   ? "제안 새로고침"
                   : "AI 제안"}
+            </button>
+            <button
+              aria-label={workLogExtractionActionLabel(
+                workLogExtractionState,
+                workLogExtractionResult !== null,
+                actionLockState,
+                "local",
+              )}
+              className="inline-action"
+              data-load-work-log-extraction-local="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void refreshWorkLogExtraction({ ai: false })}
+              type="button"
+            >
+              <FileText size={15} />
+              {workLogExtractionState === "loading" && workLogExtractionRunMode === "local"
+                ? "로컬 생성 중"
+                : workLogExtractionResult
+                  ? "로컬 새로고침"
+                  : "로컬 제안"}
             </button>
             <button
               aria-label={

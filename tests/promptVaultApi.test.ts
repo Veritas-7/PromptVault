@@ -723,6 +723,30 @@ test("browser bridge work log extraction posts AI option and validates proposals
   assert.equal(result.proposals[0].rejection_reason, null);
 });
 
+test("browser bridge work log extraction posts local-only option", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogExtractionProposalsPayload({
+      provider: "local-extraction-rules",
+      used_ai: false,
+    })), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkLogExtractionProposals({ ai: false });
+
+  assert.match(requestPath, /\/api\/work-log-extract$/);
+  assert.deepEqual(JSON.parse(requestBody), { options: { ai: false } });
+  assert.equal(result.provider, "local-extraction-rules");
+  assert.equal(result.used_ai, false);
+});
+
 test("browser bridge work log extraction posts save option and validates persistence", async (t) => {
   const originalFetch = globalThis.fetch;
   let requestPath = "";

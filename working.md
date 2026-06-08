@@ -1,12 +1,116 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 05:49 KST
+Updated: 2026-06-09 05:58 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 saved extraction proposal dedupe in management overview
+## Current Slice - 2026-06-09 local-only work-log extraction control
+
+Current Goal:
+
+- Let the operator intentionally run work-log extraction through local rules
+  only, without calling OpenAI/GLM, when provider health is unreliable or an
+  external AI round trip is not desired.
+- Keep AI extraction and local extraction visibly distinct in button labels,
+  loading copy, meta text, request options, and provider notices.
+- Preserve the existing save/review flow while making local-only extraction a
+  first-class UI path.
+
+Context:
+
+- Backend and browser bridge already support `ai: false` for
+  `project_work_log_extract` / `/api/work-log-extract`.
+- The UI previously exposed only one extraction button, which always sent
+  `ai: true`; live QA repeatedly showed GLM request failure and fallback to
+  `local-extraction-rules`.
+- `ai: false` is not a provider failure fallback. It intentionally disables AI,
+  so the notice should say local extraction was used instead of implying a GLM
+  failure.
+
+Progress:
+
+- Added work-log extraction run mode state: `ai` or `local`.
+- Added a `로컬 제안` button next to the existing `AI 제안` button.
+- Wired the AI button to send `ai: true` and the local button to send
+  `ai: false`.
+- Updated action labels, loading meta, and provider warning notice text so
+  local-only runs say `로컬 작업 추출 제안` and `로컬 추출 사용`.
+- Added browser bridge API coverage proving `ai: false` is posted to
+  `/api/work-log-extract`.
+- Verified the actual browser bridge UI flow against real local progress logs.
+
+Changes:
+
+- `src/App.tsx`:
+  - tracks `workLogExtractionRunMode`;
+  - passes mode to work-log extraction meta/provider notice helpers;
+  - adds `data-load-work-log-extraction-local="true"` local-only button;
+  - preserves save behavior by reusing the last result's provider mode unless
+    a caller explicitly overrides `ai`.
+- `src/workSummaryStatus.ts`:
+  - adds `WorkLogExtractionRunMode`;
+  - lets extraction action/meta/provider notice helpers distinguish AI,
+    fallback, and intentional local-only runs.
+- `tests/workSummaryStatus.test.ts`:
+  - adds local-mode label/meta/provider notice expectations.
+- `tests/promptVaultApi.test.ts`:
+  - adds browser bridge coverage for posting `{ options: { ai: false } }`.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts` initially failed
+    because helper copy did not accept local mode yet.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts`: PASS, `421`
+    tests before API coverage; later suite count is `422`.
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts tests/promptVaultApi.test.ts`:
+    PASS, `422` tests.
+  - `npm run build`: PASS.
+- Headless UI QA against real local sources:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 220 -- /bin/bash -lc 'node /tmp/promptvault_work_log_local_extraction_qa.mjs'`: PASS.
+  - Observed:
+    - initial local button: `로컬 제안`;
+    - final local button: `로컬 새로고침`;
+    - request body: `{"options":{"ai":false,"save":false}}`;
+    - extraction meta:
+      `로컬 local-extraction-rules · 후보 16개 · accepted 1개 · rejected 15개`;
+    - provider notice:
+      `로컬 추출 사용 · 경고 1개`;
+    - no GLM request failure appeared in the local-only notice;
+    - no console errors, page errors, or failed requests were reported.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `422` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `149` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- Local-only extraction intentionally avoids provider failures, but it still
+  accepted only `1` of `16` current unparsed progress-log candidates.
+- The remaining `15` rejected candidates need AI/provider extraction or richer
+  local parsing before the project/day ledger is close to complete.
+- GLM/OpenAI provider health and retry diagnostics remain a separate follow-up.
+
+Research:
+
+- Used local TDD, incremental implementation, and webapp-testing workflows.
+- No external web research was used.
+
+Next Steps:
+
+- Add provider health diagnostics/retry controls for GLM/OpenAI extraction.
+- Improve AI-assisted parsing for the remaining unparsed project progress logs.
+- Promote saved accepted extraction rows into clearer durable daily management
+  snapshot flows.
+
+## Previous Slice - 2026-06-09 saved extraction proposal dedupe in management overview
 
 Current Goal:
 

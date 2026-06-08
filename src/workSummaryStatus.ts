@@ -20,6 +20,7 @@ export type WorkLogCandidatesState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionItemsState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogExtractionRunMode = "ai" | "local";
 
 export const WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT = 3;
 
@@ -216,21 +217,25 @@ export function workLogExtractionActionLabel(
   state: WorkLogExtractionState,
   hasResult: boolean,
   lockState: ActionLockState,
+  mode: WorkLogExtractionRunMode = "ai",
 ): string {
-  if (state === "loading") return "AI 작업 추출 제안 생성 중";
+  const label = mode === "local" ? "로컬 작업 추출 제안" : "AI 작업 추출 제안";
+  if (state === "loading") return `${label} 생성 중`;
   const lockReason = activeActionLockReason(lockState);
   if (lockReason) {
-    return `${lockReason}에는 AI 작업 추출 제안을 ${hasResult ? "새로고침" : "생성"}할 수 없습니다`;
+    return `${lockReason}에는 ${label}을 ${hasResult ? "새로고침" : "생성"}할 수 없습니다`;
   }
-  return hasResult ? "AI 작업 추출 제안 새로고침" : "AI 작업 추출 제안";
+  return hasResult ? `${label} 새로고침` : label;
 }
 
 export function workLogExtractionMetaText(
   state: WorkLogExtractionState,
   result: ProjectWorkLogExtractionProposalsResult | null,
+  mode: WorkLogExtractionRunMode = "ai",
 ): string {
-  if (state === "loading") return "AI 작업 추출 제안 생성 중";
-  if (!result) return state === "failed" ? "AI 작업 추출 제안을 사용할 수 없음" : "아직 생성한 AI 작업 추출 제안 없음";
+  const label = mode === "local" ? "로컬 작업 추출 제안" : "AI 작업 추출 제안";
+  if (state === "loading") return `${label} 생성 중`;
+  if (!result) return state === "failed" ? "AI 작업 추출 제안을 사용할 수 없음" : `아직 생성한 ${label} 없음`;
   return [
     result.used_ai ? `AI ${result.provider}` : `로컬 ${result.provider}`,
     `후보 ${result.candidate_count.toLocaleString()}개`,
@@ -241,11 +246,14 @@ export function workLogExtractionMetaText(
 
 export function workLogExtractionProviderNoticeText(
   result: ProjectWorkLogExtractionProposalsResult | null,
+  mode: WorkLogExtractionRunMode = "ai",
 ): string | null {
   if (!result?.warnings.length) return null;
   const providerText = result.used_ai
     ? `AI ${result.provider} 사용`
-    : result.provider === "local-extraction-rules"
+    : mode === "local"
+      ? "로컬 추출 사용"
+      : result.provider === "local-extraction-rules"
       ? "로컬 fallback 사용"
       : `로컬 ${result.provider} 사용`;
   return `${providerText} · 경고 ${result.warnings.length.toLocaleString()}개`;

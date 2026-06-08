@@ -496,15 +496,39 @@ test("work log extraction labels describe accepted and rejected AI proposals", (
   assert.equal(workLogExtractionActionLabel("idle", false, lockState()), "AI 작업 추출 제안");
   assert.equal(workLogExtractionActionLabel("ready", true, lockState()), "AI 작업 추출 제안 새로고침");
   assert.equal(
+    workLogExtractionActionLabel("idle", false, lockState(), "local"),
+    "로컬 작업 추출 제안",
+  );
+  assert.equal(
+    workLogExtractionActionLabel("ready", true, lockState(), "local"),
+    "로컬 작업 추출 제안 새로고침",
+  );
+  assert.equal(
     workLogExtractionActionLabel("loading", true, lockState({ workSummaryRunning: true })),
     "AI 작업 추출 제안 생성 중",
+  );
+  assert.equal(
+    workLogExtractionActionLabel("loading", true, lockState({ workSummaryRunning: true }), "local"),
+    "로컬 작업 추출 제안 생성 중",
   );
   assert.equal(
     workLogExtractionActionLabel("ready", true, lockState({ scanRunning: true })),
     "스캔 실행 중에는 AI 작업 추출 제안을 새로고침할 수 없습니다",
   );
+  assert.equal(
+    workLogExtractionActionLabel("ready", true, lockState({ scanRunning: true }), "local"),
+    "스캔 실행 중에는 로컬 작업 추출 제안을 새로고침할 수 없습니다",
+  );
   assert.equal(workLogExtractionMetaText("idle", null), "아직 생성한 AI 작업 추출 제안 없음");
   assert.equal(workLogExtractionMetaText("loading", extractionResult()), "AI 작업 추출 제안 생성 중");
+  assert.equal(
+    workLogExtractionMetaText("idle", null, "local"),
+    "아직 생성한 로컬 작업 추출 제안 없음",
+  );
+  assert.equal(
+    workLogExtractionMetaText("loading", extractionResult(), "local"),
+    "로컬 작업 추출 제안 생성 중",
+  );
   assert.equal(
     workLogExtractionMetaText("ready", extractionResult()),
     "AI glm · 후보 13개 · accepted 3개 · rejected 10개",
@@ -534,6 +558,17 @@ test("work log extraction provider notice exposes fallback warnings", () => {
       ],
     })),
     "로컬 fallback 사용 · 경고 2개",
+  );
+  assert.equal(
+    workLogExtractionProviderNoticeText(
+      extractionResult({
+        provider: "local-extraction-rules",
+        used_ai: false,
+        warnings: ["AI 추출이 비활성화되어 로컬 검토 후보만 반환했습니다."],
+      }),
+      "local",
+    ),
+    "로컬 추출 사용 · 경고 1개",
   );
   assert.equal(
     workLogExtractionProviderNoticeText(extractionResult({

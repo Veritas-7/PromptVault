@@ -1,12 +1,112 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 18:08 KST
+Updated: 2026-06-08 18:18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Provider-prefixed token redaction
+## Current Slice - 2026-06-08 Standalone Basic token redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for standalone `Basic ...` token values copied without an
+  `Authorization:` header.
+
+Context:
+
+- Previous provider-prefixed token redaction is pushed to `origin/main` with
+  source commit `4a4160b fix: redact provider-prefixed tokens` and docs
+  closeout `92bfab4 docs: record provider-prefixed token verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed `Basic short-basic-value` remained visible when
+  it appeared as a standalone copied Basic value instead of an
+  `Authorization: Basic ...` header.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact standalone Basic token values.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same standalone Basic token shape.
+- Confirmed RED: frontend prompt row preview returned the original Basic
+  value, and backend redaction returned the original Basic value.
+- Extended frontend and backend standalone auth-scheme matchers from
+  Bearer-only to Bearer-or-Basic while keeping the token-like punctuation
+  requirement.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a raw standalone Basic token in a prompt row while
+  selecting a safe prompt row. It confirmed two stored prompt rows, possible
+  secret redaction marker visible, no Basic value in row text, aria labels, or
+  page body, localized risk label visible, selected safe detail text visible,
+  and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts standalone Basic token values in prompt row
+  previews and accessible names through the existing auth-scheme branch.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for
+  standalone Basic token redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-secret redaction with the
+  frontend matcher and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on standalone Basic token redaction because the original Basic value
+  remained visible.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_standalone_basic_tokens` failed
+  from `src-tauri` because backend redaction returned the original Basic
+  value.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 27/27.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_standalone_basic_tokens` passed,
+  1/1 focused lib test, plus zero-test main and CLI targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5212" --port 5212 --timeout 120 -- /bin/bash -lc ...`
+  passed with `rowCount=2`, `redactionCount=1`, `rowLeaked=false`,
+  `ariaLeaked=false`, `bodyLeaked=false`, `riskVisible=true`,
+  `selectedSafe=true`, `consoleErrors=0`, and `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 333/333,
+  production build, Rust lib tests 104/104, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` passed before staging.
+
+Issues:
+
+- No product blocker after aligning standalone Basic token redaction.
+- Python Playwright is not installed in this environment, so browser QA used
+  the repo's available Node Playwright package while still managing Vite with
+  the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for copied Basic authorization values.
+
+Next Steps:
+
+- Stage the explicit source/worklog paths, run staged gitleaks, commit and
+  push the source slice, then record the source-push evidence in this worklog
+  and make the docs closeout commit.
+
+## Previous Slice - 2026-06-08 Provider-prefixed token redaction
 
 Current Goal:
 

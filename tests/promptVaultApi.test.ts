@@ -2136,6 +2136,28 @@ test("browser bridge scan results reject blank optional prompt metadata", async 
   );
 });
 
+test("browser bridge scan results reject invalid prompt timestamps", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(scanResultWithPrompt({
+    timestamp: "not-a-date",
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /not-a-date|Invalid Date|시간 없음|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject missing nullable prompt metadata", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify(scanResultWithPrompt({

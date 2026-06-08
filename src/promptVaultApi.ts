@@ -304,7 +304,7 @@ function isPromptRecord(value: unknown): boolean {
     && isNonBlankString(value.source)
     && isNonBlankString(value.session_id)
     && isNonBlankString(value.path)
-    && isNullableNonBlankString(value.timestamp)
+    && isNullableTimestampString(value.timestamp)
     && isNullableNonBlankString(value.cwd)
     && isNonBlankString(value.text)
     && isPromptWordCount(value.text, value.word_count)

@@ -1,12 +1,104 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 13:14 KST
+Updated: 2026-06-08 13:18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Scan truncation flag validation
+## Current Slice - 2026-06-08 Prompt timestamp validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make browser bridge prompt records reject invalid timestamp strings instead
+  of allowing unparseable dates into the UI prompt detail state.
+
+Context:
+
+- Previous truncation flag validation slice is pushed to `origin/main`:
+  implementation `49db718 fix: validate scan truncation flag` and closeout
+  `250d35f docs: close truncation flag handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`,
+  and `gh repo view` reported the repository as `PRIVATE`.
+- Other bridge timestamp fields already require `Date.parse`-valid strings.
+  Prompt records currently only require `timestamp` to be null or nonblank,
+  which can let malformed prompt dates reach selected prompt details.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `250d35f docs: close truncation flag handoff`.
+- Re-read prompt record parsing and timestamp-related parser tests. Confirmed
+  blank and missing prompt timestamps are rejected, but unparseable nonblank
+  timestamp strings are not covered yet.
+- Confirmed RED first: targeted parser test failed with `Missing expected
+  rejection` because `timestamp: "not-a-date"` was accepted.
+- Tightened prompt record parsing so `timestamp` must be null or a parseable
+  timestamp string, matching the other bridge timestamp fields.
+- Confirmed GREEN: the new targeted parser test passed.
+- Focused timestamp regression passed, covering generated scan timestamps,
+  prompt timestamps, scan plan source timestamps, and import batch timestamps.
+- Ran the full project check successfully after prompt timestamp validation.
+- Pre-staging verification passed with only the expected three modified files:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Explicitly staged only `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 4.21 KB and finding no leaks.
+
+Changes:
+
+- `working.md`: records the current prompt timestamp validation slice.
+- `tests/promptVaultApi.test.ts`: adds invalid prompt timestamp rejection
+  coverage.
+- `src/promptVaultApi.ts`: validates prompt record timestamps with the shared
+  nullable timestamp parser.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `gh repo view` reported `PRIVATE`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "invalid prompt timestamps" tests/promptVaultApi.test.ts`
+  failed with `Missing expected rejection.`
+- GREEN: the same targeted parser test passed after tightening prompt timestamp
+  validation.
+- Focused regression: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "timestamp" tests/promptVaultApi.test.ts`
+  passed 5 timestamp-related parser tests.
+- Full project check: `npm run check` passed, covering UI tests 299/299,
+  production build, Rust lib tests 85/85, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; repo root was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `working.md` modified;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`.
+- Staged paths: `git diff --cached --name-only` listed only
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed
+  after scanning about 4.21 KB and finding no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Add a RED parser test for invalid prompt timestamps, make prompt record
+  validation require null or parseable timestamp strings, then run targeted and
+  full verification.
+
+## Previous Slice - 2026-06-08 Scan truncation flag validation
 
 Current Goal:
 

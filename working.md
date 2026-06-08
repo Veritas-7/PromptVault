@@ -1,12 +1,104 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 21:05 KST
+Updated: 2026-06-08 21:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Global error notice secret masking
+## Current Slice - 2026-06-08 Prompt metadata display secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent prompt metadata display strings from bypassing sensitive text
+  redaction in prompt row aria labels, row source text, and selected prompt
+  metadata chips.
+
+Context:
+
+- Previous global error notice secret masking is pushed to `origin/main` with
+  source commit `cad98d6 fix: mask global error secrets` and docs closeout
+  `90bc1c3 docs: record global error masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment or Tauri-like browser shims for
+  controlled user flows.
+- Prompt text, warnings, and errors were already routed through display
+  redaction, but `source` and `cwd` metadata still appeared raw in visible row
+  metadata, selected metadata chips, and related aria labels.
+- This slice keeps raw prompt records available for filtering and request
+  context; only display and accessibility copy is masked.
+
+Progress:
+
+- Searched prompt metadata display surfaces and found raw `prompt.source`,
+  `selectedPrompt.source`, and `selectedPrompt.cwd` rendering in
+  `src/App.tsx`, plus row/selected metadata aria strings in
+  `src/promptRowA11y.ts`.
+- Added RED unit coverage for metadata display masking. The first RED attempt
+  failed for a test-code import error against a helper that did not exist yet,
+  then the corrected RED failed as intended through existing public aria-label
+  APIs because raw metadata was exposed.
+- Added `promptMetadataDisplayText()` to compact and redact metadata display
+  text via the existing `redactSensitiveDisplayText()` display redactor.
+- Wired prompt row aria labels, selected metadata aria labels, visible row
+  source text, and selected source/workspace chips through the metadata display
+  helper.
+- Ran a browser smoke with a Tauri-like successful scan payload whose `source`
+  and `cwd` contained synthetic secret-like metadata. After clicking quick scan,
+  row text, row aria label, selected metadata text, selected metadata aria
+  label, and full page body were masked and contained no raw metadata secret
+  fragments.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/promptRowA11y.ts`: adds `promptMetadataDisplayText()` and masks
+  source/workspace metadata in row and selected prompt aria labels.
+- `src/App.tsx`: masks visible row source text and selected source/workspace
+  metadata chips.
+- `tests/promptRowA11y.test.ts`: adds RED/GREEN coverage for source and
+  workspace metadata display masking.
+- `working.md`: records this slice and its RED/GREEN/browser/full-check
+  evidence.
+
+Tests:
+
+- RED unit test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  first failed for a missing test import, then failed as intended because row
+  and selected metadata labels exposed raw secret-like metadata.
+- Targeted GREEN:
+  same command passed with 44/44 tests after masking metadata display paths.
+- Browser click smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5232" --port 5232 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_metadata_secret_qa.mjs'`
+  passed with exit code `0`; row text, row aria label, selected metadata text,
+  selected metadata aria label, and full body no longer included the raw
+  metadata secret fragments, with no page errors, console errors, or failed
+  responses.
+- Full project check: `npm run check` passed, covering UI tests 352/352,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after metadata display masking.
+- This slice changes display and accessibility text only. It does not mutate
+  raw prompt metadata used for filtering, improvement request context, or
+  persisted prompt records.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Commit and push the source slice, then record docs closeout from the clean
+  pushed tree.
+
+## Previous Slice - 2026-06-08 Global error notice secret masking
 
 Current Goal:
 

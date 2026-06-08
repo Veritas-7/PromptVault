@@ -48,6 +48,10 @@ export function selectedPromptDisplayText(text: string): string {
   return redactSensitiveDisplayText(text);
 }
 
+export function promptMetadataDisplayText(text: string): string {
+  return compactPromptText(redactSensitiveDisplayText(text));
+}
+
 export function promptRowAriaLabel(
   prompt: PromptRecord,
   index: number,
@@ -55,18 +59,22 @@ export function promptRowAriaLabel(
   lockState?: ActionLockState,
 ): string {
   const position = `프롬프트 ${index + 1} / ${total}`;
+  const source = promptMetadataDisplayText(prompt.source);
   const timestamp = prompt.timestamp?.trim() || "시간 없음";
   const riskLabel = prompt.risk_flags.length
     ? `, 위험 패턴: ${prompt.risk_flags.map(riskFlagLabel).join(", ")}`
     : "";
-  const label = `${position}: ${prompt.source}, ${timestamp}, ${prompt.word_count.toLocaleString()}개 단어, 품질 ${prompt.quality.score} ${qualityBandLabel(prompt.quality.band)}${riskLabel}, ${promptRowPreviewText(prompt.text)}`;
+  const label = `${position}: ${source}, ${timestamp}, ${prompt.word_count.toLocaleString()}개 단어, 품질 ${prompt.quality.score} ${qualityBandLabel(prompt.quality.band)}${riskLabel}, ${promptRowPreviewText(prompt.text)}`;
   const reason = lockState ? activeActionLockReason(lockState) : null;
   if (reason) return `${label}. ${reason}에는 다른 프롬프트를 선택할 수 없습니다`;
   return label;
 }
 
 export function selectedPromptMetaLabel(prompt: PromptRecord): string {
+  const source = promptMetadataDisplayText(prompt.source);
   const timestamp = prompt.timestamp?.trim() || "시간 없음";
-  const workspace = prompt.cwd?.trim() || "작업공간 없음";
-  return `선택한 프롬프트 메타데이터: ${prompt.source}, ${timestamp}, ${workspace}, 품질 ${prompt.quality.score} ${qualityBandLabel(prompt.quality.band)}`;
+  const workspace = prompt.cwd?.trim()
+    ? promptMetadataDisplayText(prompt.cwd)
+    : "작업공간 없음";
+  return `선택한 프롬프트 메타데이터: ${source}, ${timestamp}, ${workspace}, 품질 ${prompt.quality.score} ${qualityBandLabel(prompt.quality.band)}`;
 }

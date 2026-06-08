@@ -81,6 +81,7 @@ import {
 } from "./promptEmptyState";
 import {
   promptRowAriaLabel,
+  promptMetadataDisplayText,
   promptRowPreviewText,
   redactSensitiveDisplayText,
   selectedPromptDisplayText,
@@ -1864,38 +1865,41 @@ function App() {
             </div>
           </div>
           <div className="prompt-list">
-            {filteredPrompts.map((prompt, index) => (
-              <button
-                aria-label={promptRowAriaLabel(prompt, index, filteredPrompts.length, actionLockState)}
-                aria-pressed={prompt.id === selectedPrompt?.id}
-                className={`prompt-row ${prompt.id === selectedPrompt?.id ? "active" : ""}`}
-                data-prompt-index={index + 1}
-                data-prompt-row="true"
-                disabled={isTopLevelActionLocked}
-                key={prompt.id}
-                onClick={() => {
-                  if (shouldClearImprovementOnPromptSelect(prompt.id, selectedPrompt?.id ?? null)) {
-                    clearImprovementPromptContext();
-                  }
-                  setSelectedId(prompt.id);
-                }}
-                type="button"
-              >
-                <span className="prompt-meta">
-                  {prompt.source} · {prompt.word_count.toLocaleString()}개 단어
-                </span>
-                <span className={`quality-pill ${qualityBandClass(prompt.quality.band)}`}>
-                  {prompt.quality.score} · {qualityBandLabel(prompt.quality.band)}
-                </span>
-                <strong>{promptRowPreviewText(prompt.text)}</strong>
-                {prompt.risk_flags.length ? (
-                  <span className="risk">
-                    <AlertTriangle size={13} />
-                    {prompt.risk_flags.map(riskFlagLabel).join(", ")}
+            {filteredPrompts.map((prompt, index) => {
+              const displaySource = promptMetadataDisplayText(prompt.source);
+              return (
+                <button
+                  aria-label={promptRowAriaLabel(prompt, index, filteredPrompts.length, actionLockState)}
+                  aria-pressed={prompt.id === selectedPrompt?.id}
+                  className={`prompt-row ${prompt.id === selectedPrompt?.id ? "active" : ""}`}
+                  data-prompt-index={index + 1}
+                  data-prompt-row="true"
+                  disabled={isTopLevelActionLocked}
+                  key={prompt.id}
+                  onClick={() => {
+                    if (shouldClearImprovementOnPromptSelect(prompt.id, selectedPrompt?.id ?? null)) {
+                      clearImprovementPromptContext();
+                    }
+                    setSelectedId(prompt.id);
+                  }}
+                  type="button"
+                >
+                  <span className="prompt-meta">
+                    {displaySource} · {prompt.word_count.toLocaleString()}개 단어
                   </span>
-                ) : null}
-              </button>
-            ))}
+                  <span className={`quality-pill ${qualityBandClass(prompt.quality.band)}`}>
+                    {prompt.quality.score} · {qualityBandLabel(prompt.quality.band)}
+                  </span>
+                  <strong>{promptRowPreviewText(prompt.text)}</strong>
+                  {prompt.risk_flags.length ? (
+                    <span className="risk">
+                      <AlertTriangle size={13} />
+                      {prompt.risk_flags.map(riskFlagLabel).join(", ")}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
             {filteredPrompts.length === 0 && promptListEmptyMessage ? (
               <div className="empty compact" data-empty-prompts="true">
                 {promptListEmptyMessage}
@@ -1942,9 +1946,13 @@ function App() {
                 className="selected-meta"
                 role="group"
               >
-                <span>{selectedPrompt.source}</span>
+                <span>{promptMetadataDisplayText(selectedPrompt.source)}</span>
                 <span>{selectedPrompt.timestamp ?? "시간 없음"}</span>
-                <span>{selectedPrompt.cwd ?? "작업공간 없음"}</span>
+                <span>
+                  {selectedPrompt.cwd
+                    ? promptMetadataDisplayText(selectedPrompt.cwd)
+                    : "작업공간 없음"}
+                </span>
                 <span>
                   {selectedPrompt.quality.score} · {qualityBandLabel(selectedPrompt.quality.band)}
                 </span>

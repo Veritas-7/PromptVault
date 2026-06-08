@@ -731,6 +731,17 @@ test("prompt row labels handle missing timestamps and empty prompts", () => {
   );
 });
 
+test("prompt metadata display redacts secret-like source text", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["metadata", "source", "secret"].join("-");
+  const source = `Codex ${apiFlag} ${secretValue}`;
+
+  const label = promptRowAriaLabel(promptRecord({ source }), 0, 1);
+
+  assert.doesNotMatch(label, new RegExp(`${apiFlag}|${secretValue}`));
+  assert.match(label, /Codex \[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row labels explain active-work selection locks", () => {
   assert.equal(
     promptRowAriaLabel(promptRecord(), 0, 1, lockState({ improvementRunning: true })),
@@ -743,6 +754,17 @@ test("selected prompt metadata label separates visual chips", () => {
     selectedPromptMetaLabel(promptRecord()),
     "선택한 프롬프트 메타데이터: Codex, 2026-06-06T12:00:00Z, /Users/wj, 품질 36 약함",
   );
+});
+
+test("selected prompt metadata label redacts secret-like workspaces", () => {
+  const tokenName = ["access", "token"].join("_");
+  const secretValue = ["metadata", "workspace", "secret"].join("-");
+  const label = selectedPromptMetaLabel(
+    promptRecord({ cwd: `/tmp/project?${tokenName}=${secretValue}` }),
+  );
+
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+  assert.doesNotMatch(label, new RegExp(`${tokenName}|${secretValue}`));
 });
 
 test("selected prompt metadata label handles missing values", () => {

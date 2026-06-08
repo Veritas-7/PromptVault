@@ -1,12 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 21:43 KST
+Updated: 2026-06-08 21:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Quality suggestion display secret masking
+## Current Slice - 2026-06-08 Quality gap display secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent unknown backend quality gap strings from rendering raw secret-like
+  text in quality gap labels, frequency summaries, and recommendation delta
+  summaries.
+
+Context:
+
+- Previous quality suggestion masking is pushed to `origin/main` with source
+  commit `ab7af4e fix: mask quality suggestion secrets` and docs closeout
+  `7604a10 docs: record quality suggestion masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for the scan and recommendation
+  user flow.
+- Existing display redaction covered prompt text, prompt metadata, paths,
+  source labels, warnings, import/scan progress, and quality suggestions.
+  `qualityGapLabel()` still preserved unknown backend gap strings verbatim.
+- This slice changes display copy only. Raw backend quality metadata,
+  quality-delta validation, and filtering behavior remain unchanged.
+
+Progress:
+
+- Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
+  persisted/current/first objective all point at PromptVault.
+- Re-read workspace policies, `working.md`, `src/qualityGaps.ts`,
+  `tests/qualityGaps.test.ts`, and the recommendation delta rendering in
+  `src/App.tsx`.
+- Added a RED test in `tests/qualityGaps.test.ts` requiring secret-like unknown
+  quality gaps to be redacted. RED failed as intended because
+  `qualityGapLabel()` returned the raw synthetic unknown gap.
+- Routed unknown `qualityGapLabel()` fallbacks through the existing display
+  redactor and whitespace compaction while preserving known Korean gap labels
+  and the empty fallback.
+- Ran a browser smoke with a Tauri-like invoke shim. Quick scan loaded a prompt,
+  recommendation generation returned a `remaining_gaps` quality delta with a
+  synthetic secret-like unknown gap, and the recommendation panel rendered the
+  redacted summary without raw synthetic fragments.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/qualityGaps.ts`: redacts and compacts unknown quality gap labels before
+  display.
+- `tests/qualityGaps.test.ts`: adds RED/GREEN coverage for secret-like unknown
+  quality gaps.
+- `working.md`: records this slice and its RED/GREEN/browser/full-check
+  evidence.
+
+Tests:
+
+- RED helper test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/qualityGaps.test.ts`
+  failed as intended because `qualityGapLabel()` exposed raw synthetic
+  secret-like unknown gap fragments.
+- Targeted GREEN:
+  same command passed with `tests/qualityGaps.test.ts` 5/5 after masking unknown
+  quality gap labels.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5237" --port 5237 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_quality_gap_secret_qa.mjs'`
+  passed with exit code `0`; quick scan and recommendation generation invoked
+  `scan_prompts` and `improve_prompt`, the recommendation panel showed
+  `남음: custom [REDACTED_POSSIBLE_SECRET]`, raw synthetic fragments were absent
+  from the body, and there were no page errors, console errors, or failed
+  responses.
+- Full project check: `npm run check` passed, covering UI tests 358/358,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after quality gap display masking.
+- Source commit/push is pending staged and full-tree gitleaks verification.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Run `git diff --check`, stage explicit paths only, run staged gitleaks, commit
+  the source change, run full-tree gitleaks, push to private `origin/main`, and
+  verify fetch parity plus GitHub private visibility.
+
+## Previous Slice - 2026-06-08 Quality suggestion display secret masking
 
 Current Goal:
 

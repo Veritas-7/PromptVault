@@ -26,6 +26,17 @@ test("quality gap labels preserve trimmed unknown values", () => {
   assert.equal(qualityGapLabel("   "), "알 수 없음");
 });
 
+test("quality gap labels redact secret-like unknown values", () => {
+  const flagName = ["api", "key"].join("-");
+  const syntheticValue = ["quality", "gap", "token", "value"].join("-");
+
+  const label = qualityGapLabel(`custom --${flagName} ${syntheticValue}`);
+
+  assert.equal(label, "custom [REDACTED_POSSIBLE_SECRET]");
+  assert.doesNotMatch(label, new RegExp(flagName));
+  assert.doesNotMatch(label, new RegExp(syntheticValue));
+});
+
 test("quality gap summaries cap visible gaps", () => {
   assert.equal(
     qualityGapSummary([

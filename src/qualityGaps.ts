@@ -1,3 +1,5 @@
+import { redactSensitiveDisplayText } from "./promptRowA11y.ts";
+
 const QUALITY_GAP_DISPLAY_LIMIT = 4;
 
 const QUALITY_GAP_LABELS: Record<string, string> = {
@@ -16,10 +18,17 @@ function normalizedQualityGap(gap: string): string {
   return gap.trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
+function compactQualityGapLabel(label: string): string {
+  return label.replace(/\s+/g, " ").trim();
+}
+
 export function qualityGapLabel(gap: string): string {
   const trimmed = gap.trim();
   if (!trimmed) return "알 수 없음";
-  return QUALITY_GAP_LABELS[normalizedQualityGap(gap)] ?? trimmed;
+  return (
+    QUALITY_GAP_LABELS[normalizedQualityGap(gap)] ??
+    compactQualityGapLabel(redactSensitiveDisplayText(trimmed))
+  );
 }
 
 export function qualityGapSummary(gaps: string[]): string {

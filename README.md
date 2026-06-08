@@ -71,6 +71,14 @@ cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 curl -sS http://127.0.0.1:5174/api/health
 ```
 
+For full browser click QA that exercises save/import flows without touching the
+permanent vault, point the bridge at a temporary SQLite file:
+
+```bash
+cd src-tauri
+cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174 --database /tmp/promptvault-browser-qa.sqlite
+```
+
 The default permanent vault is:
 
 ```text
@@ -134,6 +142,8 @@ cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 ```
 
 The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, and `/api/import-events` endpoints so cmux or another in-app browser can exercise the same scan, scan cancellation, active scan progress with discovery counts, stored-prompt loading, stored facet summaries, planning, improvement, resumable import, saved cursor, and import activity code paths without Tauri IPC. The browser Stop control returns partial scan results for review but does not write canceled partial scans into the permanent SQLite vault; completed browser scans still persist normally.
+Use `serve --database /tmp/promptvault-browser-qa.sqlite` when validating
+write-capable browser flows against an isolated database.
 
 ## AI Recommendation Path
 

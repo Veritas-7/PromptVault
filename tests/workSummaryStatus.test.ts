@@ -368,7 +368,7 @@ test("work summary persistence text is only shown after snapshot saves", () => {
         snapshot_count: 15,
       },
     })),
-    "스냅샷 #12 저장 · 총 15개",
+    "/tmp/promptvault.sqlite · 스냅샷 #12 저장 · 총 15개",
   );
 });
 

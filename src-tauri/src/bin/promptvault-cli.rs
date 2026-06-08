@@ -13,6 +13,7 @@ use promptvault_lib::{
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
 
 const MAX_JSON_PROMPT_PREVIEW: usize = 25;
 const MAX_REPAIR_COUNT: usize = 10;
@@ -832,14 +833,23 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         "serve" => {
             let mut addr = "127.0.0.1:5174".to_string();
+            let mut database_path = None;
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
                     "--addr" => addr = parse_required_arg(iter.next(), "--addr")?,
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?)
+                    }
                     other => return Err(format!("unknown serve argument: {other}").into()),
                 }
             }
-            serve_bridge(&addr)?;
+            serve_bridge(
+                &addr,
+                database_path
+                    .map(PathBuf::from)
+                    .unwrap_or_else(default_database_path),
+            )?;
         }
         command if is_help_command(command) => print_help(),
         other => {
@@ -1147,7 +1157,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-log-coverage [--json]\n  work-log-candidates [--limit N>0] [--json]\n  work-log-extract [--limit N>0] [--database PATH] [--save] [--ai] [--json]\n  work-log-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]\n  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-log-coverage lists parsed and unparsed project progress logs by project.\n  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n  work-log-extract validates AI extraction proposals before they can become dated work items; --save persists accepted dated proposals to SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-log-items lists saved accepted AI extraction rows by project and date without reading raw progress logs.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  work-summary builds project/date summaries with citation IDs; --include-extractions merges accepted AI work-log proposals into the summary preview; --include-saved-extractions merges stored accepted AI extraction rows without rereading raw progress logs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-log-coverage [--json]\n  work-log-candidates [--limit N>0] [--json]\n  work-log-extract [--limit N>0] [--database PATH] [--save] [--ai] [--json]\n  work-log-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]\n  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174] [--database PATH]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-log-coverage lists parsed and unparsed project progress logs by project.\n  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n  work-log-extract validates AI extraction proposals before they can become dated work items; --save persists accepted dated proposals to SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-log-items lists saved accepted AI extraction rows by project and date without reading raw progress logs.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  work-summary builds project/date summaries with citation IDs; --include-extractions merges accepted AI work-log proposals into the summary preview; --include-saved-extractions merges stored accepted AI extraction rows without rereading raw progress logs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity.\n  serve --database PATH isolates browser-bridge persistence for full click QA without touching the permanent vault."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1264,12 +1274,15 @@ struct ProjectWorkSummarySnapshotsBridgePayload {
 }
 
 impl ProjectWorkSummaryBridgeOptions {
-    fn into_project_work_summary_options(self) -> ProjectWorkSummaryOptions {
+    fn into_project_work_summary_options(self, database_path: &Path) -> ProjectWorkSummaryOptions {
         ProjectWorkSummaryOptions {
             report: ProjectWorkReportOptions {
                 limit: self.limit,
                 session_limit: self.session_limit,
-                database_path: self.database_path,
+                database_path: Some(
+                    self.database_path
+                        .unwrap_or_else(|| bridge_database_path(database_path)),
+                ),
                 refresh_session_index: self.refresh_session_index,
             },
             summary_limit: self.summary_limit,
@@ -1284,14 +1297,24 @@ impl ProjectWorkSummaryBridgeOptions {
 }
 
 impl ProjectWorkSummarySnapshotsBridgeOptions {
-    fn into_project_work_summary_snapshots_options(self) -> ProjectWorkSummarySnapshotsOptions {
+    fn into_project_work_summary_snapshots_options(
+        self,
+        database_path: &Path,
+    ) -> ProjectWorkSummarySnapshotsOptions {
         ProjectWorkSummarySnapshotsOptions {
-            database_path: self.database_path,
+            database_path: Some(
+                self.database_path
+                    .unwrap_or_else(|| bridge_database_path(database_path)),
+            ),
             limit: self.limit,
             date: self.date,
             project: self.project,
         }
     }
+}
+
+fn bridge_database_path(database_path: &Path) -> String {
+    database_path.display().to_string()
 }
 
 struct HttpRequest {
@@ -1300,15 +1323,16 @@ struct HttpRequest {
     body: String,
 }
 
-fn serve_bridge(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn serve_bridge(addr: &str, database_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind(addr)?;
     println!("PromptVault browser bridge listening on http://{addr}");
-    println!("database: {}", default_database_path().display());
+    println!("database: {}", database_path.display());
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
+                let database_path = database_path.clone();
                 std::thread::spawn(move || {
-                    if let Err(err) = handle_bridge_client(stream) {
+                    if let Err(err) = handle_bridge_client(stream, database_path) {
                         eprintln!("promptvault bridge request error: {err}");
                     }
                 });
@@ -1319,13 +1343,16 @@ fn serve_bridge(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn handle_bridge_client(mut stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+fn handle_bridge_client(
+    mut stream: TcpStream,
+    database_path: PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
     let request = read_http_request(&stream)?;
     if request.method == "OPTIONS" {
         return write_response(&mut stream, 204, "text/plain", "");
     }
 
-    match handle_bridge_route(&mut stream, &request) {
+    match handle_bridge_route(&mut stream, &request, &database_path) {
         Ok(()) => Ok(()),
         Err(err) => write_response(&mut stream, 400, "text/plain", &err.to_string()),
     }
@@ -1334,6 +1361,7 @@ fn handle_bridge_client(mut stream: TcpStream) -> Result<(), Box<dyn std::error:
 fn handle_bridge_route(
     stream: &mut TcpStream,
     request: &HttpRequest,
+    database_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let path = request
         .path
@@ -1344,7 +1372,7 @@ fn handle_bridge_route(
         ("GET", "/api/health") => {
             let body = serde_json::json!({
                 "ok": true,
-                "database_path": default_database_path().display().to_string()
+                "database_path": bridge_database_path(database_path)
             });
             write_json_response(stream, 200, &body)
         }
@@ -1355,32 +1383,56 @@ fn handle_bridge_route(
         }
         ("POST", "/api/import-batch") => {
             let payload = serde_json::from_str::<ImportBatchBridgePayload>(&request.body)?;
-            let result = run_import_batch(payload.options)?;
+            let mut options = payload.options;
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_import_batch(options)?;
             write_json_response(stream, 200, &result)
         }
         ("POST", "/api/import-states") => {
             let payload = serde_json::from_str::<ImportStatesBridgePayload>(&request.body)?;
-            let result = run_list_import_states(payload.options.unwrap_or_default())?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_list_import_states(options)?;
             write_json_response(stream, 200, &result)
         }
         ("POST", "/api/import-events") => {
             let payload = serde_json::from_str::<ImportEventsBridgePayload>(&request.body)?;
-            let result = run_list_import_events(payload.options.unwrap_or_default())?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_list_import_events(options)?;
             write_json_response(stream, 200, &result)
         }
         ("POST", "/api/prompt-facets") => {
             let payload = serde_json::from_str::<StoredPromptFacetsBridgePayload>(&request.body)?;
-            let result = run_list_stored_prompt_facets(payload.options.unwrap_or_default())?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_list_stored_prompt_facets(options)?;
             write_json_response(stream, 200, &result)
         }
         ("POST", "/api/prompts") => {
             let payload = serde_json::from_str::<StoredPromptsBridgePayload>(&request.body)?;
-            let result = run_load_stored_prompts(payload.options.unwrap_or_default())?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_load_stored_prompts(options)?;
             write_json_response(stream, 200, &result)
         }
         ("POST", "/api/scan") => {
             let payload = serde_json::from_str::<ScanBridgePayload>(&request.body)?;
-            let result = run_scan(payload.options.unwrap_or_default())?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_scan(options)?;
             write_json_response(stream, 200, &result)
         }
         ("POST", "/api/scan/cancel") => {
@@ -1395,10 +1447,14 @@ fn handle_bridge_route(
         }
         ("POST", "/api/improve") => {
             let payload = serde_json::from_str::<ImproveBridgePayload>(&request.body)?;
+            let mut request = payload.request;
+            request
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
-            let result = runtime.block_on(improve_prompt_inner(payload.request))?;
+            let result = runtime.block_on(improve_prompt_inner(request))?;
             write_json_response(stream, 200, &result)
         }
         ("POST", "/api/work-summary") => {
@@ -1409,7 +1465,7 @@ fn handle_bridge_route(
             let options = payload
                 .options
                 .unwrap_or_default()
-                .into_project_work_summary_options();
+                .into_project_work_summary_options(database_path);
             let result = runtime.block_on(run_project_work_summary(options))?;
             write_json_response(stream, 200, &result)
         }
@@ -1419,7 +1475,7 @@ fn handle_bridge_route(
             let options = payload
                 .options
                 .unwrap_or_default()
-                .into_project_work_summary_snapshots_options();
+                .into_project_work_summary_snapshots_options(database_path);
             let result = run_list_project_work_summary_snapshots(options)?;
             write_json_response(stream, 200, &result)
         }
@@ -1437,18 +1493,23 @@ fn handle_bridge_route(
         ("POST", "/api/work-log-extract") => {
             let payload =
                 serde_json::from_str::<ProjectWorkLogExtractionBridgePayload>(&request.body)?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
-            let result = runtime.block_on(run_project_work_log_extraction_proposals(
-                payload.options.unwrap_or_default(),
-            ))?;
+            let result = runtime.block_on(run_project_work_log_extraction_proposals(options))?;
             write_json_response(stream, 200, &result)
         }
         ("POST", "/api/work-log-items") => {
             let payload = serde_json::from_str::<ProjectWorkLogItemsBridgePayload>(&request.body)?;
-            let result =
-                run_list_project_work_log_extraction_items(payload.options.unwrap_or_default())?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_list_project_work_log_extraction_items(options)?;
             write_json_response(stream, 200, &result)
         }
         _ => write_response(stream, 404, "text/plain", "Not found"),
@@ -1728,18 +1789,59 @@ mod tests {
         );
     }
 
+    #[test]
+    fn bridge_uses_configured_default_database_path() {
+        let database_path = std::env::temp_dir().join(format!(
+            "promptvault-bridge-db-{}.sqlite",
+            std::process::id()
+        ));
+        let database_text = database_path.display().to_string();
+
+        let health_response =
+            bridge_response_for_with_method("GET", "/api/health", "", database_path.clone());
+        assert!(health_response.starts_with("HTTP/1.1 200 OK"));
+        assert!(health_response.contains(&database_text));
+
+        let import_states_response = bridge_response_for_with_database(
+            "/api/import-states",
+            r#"{"options":{}}"#,
+            database_path.clone(),
+        );
+        assert!(import_states_response.starts_with("HTTP/1.1 200 OK"));
+        assert!(import_states_response.contains(&database_text));
+
+        let _ = std::fs::remove_file(database_path);
+    }
+
     fn bridge_response_for(path: &str, body: &str) -> String {
+        bridge_response_for_with_database(path, body, default_database_path())
+    }
+
+    fn bridge_response_for_with_database(
+        path: &str,
+        body: &str,
+        database_path: std::path::PathBuf,
+    ) -> String {
+        bridge_response_for_with_method("POST", path, body, database_path)
+    }
+
+    fn bridge_response_for_with_method(
+        method: &str,
+        path: &str,
+        body: &str,
+        database_path: std::path::PathBuf,
+    ) -> String {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind listener");
         let addr = listener.local_addr().expect("listener addr");
         let handle = std::thread::spawn(move || {
             let (stream, _) = listener.accept().expect("accept bridge client");
-            handle_bridge_client(stream).expect("handle bridge request");
+            handle_bridge_client(stream, database_path).expect("handle bridge request");
         });
 
         let mut client = std::net::TcpStream::connect(addr).expect("connect bridge client");
         write!(
             client,
-            "POST {path} HTTP/1.1\r\n\
+            "{method} {path} HTTP/1.1\r\n\
              Host: 127.0.0.1\r\n\
              Content-Type: application/json\r\n\
              Content-Length: {}\r\n\
@@ -1809,8 +1911,9 @@ mod tests {
         assert!(help.contains("--preview-sort or --weakest-first"));
         assert!(help.contains("repair --count is capped at 10"));
         assert!(help.contains("repair scans are side-effect-free"));
-        assert!(help.contains("serve [--addr 127.0.0.1:5174]"));
+        assert!(help.contains("serve [--addr 127.0.0.1:5174] [--database PATH]"));
         assert!(help.contains("browser-bridge endpoints"));
+        assert!(help.contains("serve --database PATH isolates browser-bridge persistence"));
     }
 
     #[test]

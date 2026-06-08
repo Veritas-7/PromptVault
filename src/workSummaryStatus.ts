@@ -1,4 +1,5 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
+import { pathDisplayText } from "./promptRowA11y.ts";
 import { riskFlagLabel } from "./riskLabels.ts";
 import type {
   ProjectWorkLogCoverageResult,
@@ -91,6 +92,7 @@ export function workSummaryIndexStatusText(result: ProjectWorkSummaryResult): st
 export function workSummaryPersistenceText(result: ProjectWorkSummaryResult): string | null {
   if (!result.persistence) return null;
   return [
+    pathDisplayText(result.persistence.database_path),
     `스냅샷 #${result.persistence.snapshot_id.toLocaleString()} 저장`,
     `총 ${result.persistence.snapshot_count.toLocaleString()}개`,
   ].join(" · ");

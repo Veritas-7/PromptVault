@@ -3541,7 +3541,8 @@ function App() {
                 <div className="notice success panel-notice" data-improvement-persistence="true">
                   <Database size={16} />
                   <span>
-                    추천 이력 #{activeImprovement.persistence.improvement_event_id.toLocaleString()} 저장됨 ·
+                    {pathDisplayText(activeImprovement.persistence.database_path)} · 추천 이력 #
+                    {activeImprovement.persistence.improvement_event_id.toLocaleString()} 저장됨 ·
                     이 프롬프트 {activeImprovement.persistence.prompt_improvement_count.toLocaleString()}회
                   </span>
                 </div>

@@ -1,6 +1,7 @@
 const QUALITY_BAND_LABELS: Record<string, string> = {
   excellent: "우수",
   good: "좋음",
+  medium: "보통",
   strong: "강함",
   weak: "약함",
   workable: "보통",
@@ -9,6 +10,7 @@ const QUALITY_BAND_LABELS: Record<string, string> = {
 const QUALITY_BAND_CLASSES: Record<string, string> = {
   excellent: "excellent",
   good: "good",
+  medium: "workable",
   strong: "strong",
   weak: "weak",
   workable: "workable",

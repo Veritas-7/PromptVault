@@ -5,6 +5,7 @@ import { qualityBandClass, qualityBandLabel } from "../src/qualityLabels.ts";
 test("quality band labels use Korean UI copy for known bands", () => {
   assert.equal(qualityBandLabel("weak"), "약함");
   assert.equal(qualityBandLabel("workable"), "보통");
+  assert.equal(qualityBandLabel("medium"), "보통");
   assert.equal(qualityBandLabel("strong"), "강함");
 });
 
@@ -18,6 +19,7 @@ test("quality band labels handle legacy and fallback values", () => {
 test("quality band classes normalize known and legacy values", () => {
   assert.equal(qualityBandClass("weak"), "weak");
   assert.equal(qualityBandClass("workable"), "workable");
+  assert.equal(qualityBandClass("medium"), "workable");
   assert.equal(qualityBandClass("strong"), "strong");
   assert.equal(qualityBandClass("GOOD"), "good");
   assert.equal(qualityBandClass("excellent"), "excellent");

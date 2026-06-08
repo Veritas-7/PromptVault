@@ -1,12 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 15:26 KST
+Updated: 2026-06-08 15:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Case-insensitive private-key preview redaction
+## Current Slice - 2026-06-08 Medium quality band label normalization
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep stored prompt rows and row accessible names localized when browser bridge
+  payloads use the common `medium` quality band.
+
+Context:
+
+- Previous private-key preview redaction fix is pushed to `origin/main` as
+  `d625736 fix: redact private key previews case-insensitively`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- API tests already use `medium` as a valid bridge quality band in scan and
+  improvement fixtures, but UI quality band labels/classes only normalized
+  `workable` to the Korean "보통" display. A real browser bridge payload with
+  `medium` could therefore show raw English copy and fall into the `unknown`
+  visual class.
+
+Progress:
+
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree was clean at `main...origin/main` and parity was
+  `0 0` before this slice.
+- Re-read workspace, test-driven-development, and webapp-testing instructions
+  before implementation/verification.
+- Added RED coverage to `tests/qualityLabels.test.ts` requiring `medium` to
+  display as "보통" and reuse the existing `workable` quality pill class.
+- Confirmed RED: the focused quality-label test failed because `medium`
+  displayed as raw `medium` and used class `unknown`.
+- Added `medium` to `QUALITY_BAND_LABELS` and normalized its class to
+  `workable`.
+- Confirmed focused GREEN with quality-label and prompt-row accessibility tests.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing `quality.band: "medium"`. It confirmed one row rendered,
+  the quality pill and row `aria-label` used Korean "보통", the quality pill
+  used the `workable` class, raw `medium` was absent from the pill text, and
+  there were zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+
+Changes:
+
+- `src/qualityLabels.ts`: maps `medium` quality bands to the Korean "보통"
+  label and existing `workable` CSS class.
+- `tests/qualityLabels.test.ts`: adds regression coverage for the `medium`
+  label/class normalization.
+- `working.md`: records this slice.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/qualityLabels.test.ts`
+  failed because `qualityBandLabel("medium")` returned `medium` and
+  `qualityBandClass("medium")` returned `unknown`.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/qualityLabels.test.ts tests/promptRowA11y.test.ts`
+  passed, 13/13.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5216" --port 5216 --timeout 120 -- /bin/bash -lc ...`
+  passed with one synthetic stored prompt row, Korean "보통" in the quality
+  pill and row `aria-label`, `workable` class applied, no raw `medium` in the
+  pill text, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 312/312,
+  production build, Rust lib tests 86/86, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- `gitleaks protect --staged` passed with no leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 701.52 MB with
+  no leaks.
+
+Issues:
+
+- No product blocker after the `medium` quality band normalization.
+
+Research:
+
+- No external research. This is direct UI localization/styling parity work for
+  already accepted bridge payload values.
+
+Next Steps:
+
+- Push this closeout commit to `origin/main`, run final parity/status checks,
+  then continue from a clean pushed tree and pick the next autonomous
+  QA/improvement slice.
+
+## Previous Slice - 2026-06-08 Case-insensitive private-key preview redaction
 
 Current Goal:
 

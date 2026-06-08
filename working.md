@@ -1,12 +1,119 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 15:57 KST
+Updated: 2026-06-08 16:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Spaced API-key assignment redaction
+## Current Slice - 2026-06-08 Prefixed token assignment redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep frontend prompt row preview/accessibility redaction aligned with backend
+  scan redaction for common prefixed token assignments such as
+  `access_token=...`.
+
+Context:
+
+- Previous spaced API-key assignment redaction is pushed to `origin/main` as
+  `61c2595 fix: redact spaced api key assignments`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- The frontend preview regex did not redact `access_token=...`. The backend
+  regex matched only the `token=...` suffix and left the prefix visible, so
+  backend redaction could produce partial secret-key text.
+
+Progress:
+
+- Confirmed the working tree was clean at `main...origin/main` with parity
+  `0 0` before this slice.
+- Added RED frontend coverage in `tests/promptRowA11y.test.ts` requiring prompt
+  row preview and row accessible labels to redact a prefixed token assignment.
+- Added RED backend coverage in `src-tauri/src/lib.rs` requiring
+  `redact_sensitive_text` to redact the same prefixed token assignment fully.
+- Confirmed RED: the focused frontend test left the full assignment visible;
+  the backend test only redacted the `token=...` suffix and left the prefix.
+- Updated frontend and backend key-value secret regexes to consume common token
+  prefixes (`access`, `refresh`, `auth`, `id`) before the generic `token`
+  branch.
+- Confirmed focused GREEN for the new frontend and backend redaction cases.
+- Confirmed related regression tests for prompt row accessibility, risk labels,
+  and backend redaction remain green.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a prefixed token assignment. It confirmed the prompt row
+  preview and row `aria-label` contained `[REDACTED_POSSIBLE_SECRET]`, the
+  synthetic assignment text was absent from checked UI surfaces, the localized
+  risk label was visible, and there were zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts common prefixed token assignments in prompt
+  row previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds regression coverage for prefixed token
+  assignment preview and accessible-name redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-key redaction with the
+  prefixed token behavior and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on `prompt row previews redact prefixed token assignments` because
+  the assignment remained visible.
+- RED:
+  `cargo test redact_sensitive_text_redacts_prefixed_token_pairs` failed
+  because backend redaction returned a partial prefix plus redaction marker.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 13/13.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_prefixed_token_pairs` passed, 1/1.
+- Related frontend regression checks:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts tests/riskLabels.test.ts`
+  passed, 15/15.
+- Related backend redaction checks:
+  `cargo test redact_sensitive_text_redacts` passed, 5/5.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5198" --port 5198 --timeout 120 -- /bin/bash -lc ...`
+  passed with one synthetic stored prompt row, preview and `aria-label`
+  redacted, synthetic assignment text absent from checked UI surfaces,
+  localized risk label visible, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 319/319,
+  production build, Rust lib tests 89/89, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- `gitleaks protect --staged` passed with no leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 701.55 MB with
+  no leaks.
+
+Issues:
+
+- No product blocker after aligning prefixed token assignment redaction.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for common token assignment key names.
+
+Next Steps:
+
+- Push this closeout commit to `origin/main`, run final parity/status checks,
+  then continue from a clean pushed tree and pick the next autonomous
+  QA/improvement slice.
+
+## Previous Slice - 2026-06-08 Spaced API-key assignment redaction
 
 Current Goal:
 

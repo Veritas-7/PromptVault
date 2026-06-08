@@ -1,12 +1,127 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 16:11 KST
+Updated: 2026-06-08 16:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Prefixed API-key assignment redaction
+## Current Slice - 2026-06-08 Generic prefixed secret assignment redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep frontend prompt row preview/accessibility redaction aligned with backend
+  scan redaction for generic prefixed secret, password, and token assignments
+  such as `client_secret=...`, `db_password=...`, and `github_token=...`.
+
+Context:
+
+- Previous provider-prefixed API-key assignment redaction is pushed to
+  `origin/main` as `97dbaa7 fix: redact prefixed api key assignments`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- The frontend preview regex did not redact generic prefixed secret/password/
+  token assignments. The backend regex matched only the suffix key and left
+  prefixes such as `client_`, `db_`, and `github_` visible.
+
+Progress:
+
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree was clean at `main...origin/main` with parity
+  `0 0` before this slice.
+- Added RED frontend coverage in `tests/promptRowA11y.test.ts` requiring prompt
+  row preview and row accessible labels to redact generic prefixed secret,
+  password, and token assignments.
+- Added RED backend coverage in `src-tauri/src/lib.rs` requiring
+  `redact_sensitive_text` to redact the same generic prefixed assignments
+  fully.
+- Confirmed RED: the focused frontend test left all generic prefixed
+  assignments visible; the backend test redacted only suffix keys and left
+  generic prefixes visible.
+- Updated frontend and backend key-value secret regexes so one underscore- or
+  hyphen-separated generic prefix is consumed before `api key`, prefixed token,
+  `secret`, `token`, or `password` key names.
+- Preserved the previous overmatch guard: generic prefixes still require `_` or
+  `-`, so leading prose such as `Use api_key=...` remains intact.
+- Confirmed focused GREEN for the new frontend and backend redaction cases.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing generic prefixed secret/password/token assignments. It
+  confirmed the prompt row preview and row `aria-label` contained three
+  `[REDACTED_POSSIBLE_SECRET]` markers, the synthetic assignment text was
+  absent from checked UI surfaces, the localized risk label was visible, and
+  there were zero console/page/API failures.
+- The first browser QA attempt used the visible button copy rather than the
+  accessible button name; a short button-discovery pass confirmed the correct
+  role name is `저장된 프롬프트 불러오기`, and the corrected QA passed.
+- Ran full `npm run check` successfully after implementation.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts generic prefixed secret/password/token
+  assignments in prompt row previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds regression coverage for generic
+  prefixed secret/password/token preview and accessible-name redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-key redaction with the
+  generic prefixed key behavior and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on `prompt row previews redact generic prefixed secret assignments`
+  because the generic prefixed assignments remained visible.
+- RED:
+  `cargo test redact_sensitive_text_redacts_generic_prefixed_secret_pairs`
+  failed because backend redaction returned redaction markers with generic
+  prefixes still visible.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 15/15.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text` passed, 8/8.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5200" --port 5200 --timeout 120 -- /bin/bash -lc ...`
+  passed with one synthetic stored prompt row, preview and `aria-label`
+  redacted, synthetic assignment text absent from checked UI surfaces,
+  localized risk label visible, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 321/321,
+  production build, Rust lib tests 92/92, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- `gitleaks protect --staged` passed with no leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 701.56 MB with
+  no leaks.
+
+Issues:
+
+- No product blocker after aligning generic prefixed secret assignment
+  redaction.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for common generic prefixed secret assignment names.
+
+Next Steps:
+
+- Push this slice to `origin/main` and verify final local/remote parity.
+
+## Previous Slice - 2026-06-08 Prefixed API-key assignment redaction
 
 Current Goal:
 
@@ -58,6 +173,8 @@ Progress:
   zero console/page/API failures.
 - Ran full `npm run check` successfully after implementation.
 - Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+- Pushed the closeout commit to `origin/main` and verified final local/remote
+  parity, clean status, latest commit, and private GitHub repository state.
 
 Changes:
 
@@ -99,6 +216,14 @@ Tests:
 - `gitleaks protect --staged` passed with no leaks.
 - `gitleaks dir . --no-banner --redact` passed, scanning about 701.55 MB with
   no leaks.
+- GitHub push: `git push origin main` updated `main` from `090ad7b` to
+  `97dbaa7`.
+- Final remote verification after `git fetch origin main`:
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`,
+  `git status --short --branch` showed clean `main...origin/main`, latest
+  commit was `97dbaa7 fix: redact prefixed api key assignments`, and
+  `gh repo view --json nameWithOwner,visibility,isPrivate` returned
+  `Veritas-7/PromptVault` as `PRIVATE`.
 
 Issues:
 
@@ -111,7 +236,8 @@ Research:
 
 Next Steps:
 
-- Push this slice to `origin/main` and verify final local/remote parity.
+- Continue from a clean pushed tree and pick the next autonomous
+  QA/improvement slice.
 
 ## Previous Slice - 2026-06-08 Prefixed token assignment redaction
 

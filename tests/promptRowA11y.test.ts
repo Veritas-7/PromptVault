@@ -127,6 +127,28 @@ test("prompt row previews redact prefixed api key assignments", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact generic prefixed secret assignments", () => {
+  const text =
+    "Store client_secret=short-secret-value, db_password=local-password, and github_token=short-token.";
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(
+    preview,
+    "Store [REDACTED_POSSIBLE_SECRET] [REDACTED_POSSIBLE_SECRET] and [REDACTED_POSSIBLE_SECRET]",
+  );
+  assert.doesNotMatch(
+    preview,
+    /client_secret|db_password|github_token|short-secret-value|local-password|short-token/,
+  );
+  assert.doesNotMatch(
+    label,
+    /client_secret|db_password|github_token|short-secret-value|local-password|short-token/,
+  );
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact private key blocks case-insensitively", () => {
   const text = [
     "-----begin test private key-----",

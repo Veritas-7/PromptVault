@@ -3949,7 +3949,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "possible_api_key",
                 Regex::new(
-                    r#"(?i)((?:[a-z0-9]+[_-])?api[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|secret|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|\S+)?"#,
+                    r#"(?i)\b(?:[a-z0-9]+[_-])?(api[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|secret|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|\S+)?"#,
                 )
                     .expect("api key regex"),
             ),
@@ -6362,6 +6362,16 @@ mod tests {
         assert_eq!(
             redact_sensitive_text(text),
             "Use [REDACTED_POSSIBLE_API_KEY] only in local secrets."
+        );
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_generic_prefixed_secret_pairs() {
+        let text =
+            "client_secret=short-secret-value db_password=local-password github_token=short-token";
+        assert_eq!(
+            redact_sensitive_text(text),
+            "[REDACTED_POSSIBLE_API_KEY] [REDACTED_POSSIBLE_API_KEY] [REDACTED_POSSIBLE_API_KEY]"
         );
     }
 

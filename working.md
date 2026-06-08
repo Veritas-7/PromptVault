@@ -1,12 +1,117 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 19:28 KST
+Updated: 2026-06-08 19:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Glued short curl header flag redaction shape
+## Current Slice - 2026-06-08 Quoted curl key-like header redaction shape
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for quoted curl key-like sensitive headers such as `X-Api-Key`,
+  `Proxy-Authorization`, and `X-Auth-Token`, preserving shell shape while
+  hiding sensitive header contents.
+
+Context:
+
+- Previous glued short curl header flag shape fix is pushed to `origin/main`
+  with source commit `148c055 fix: preserve glued curl header redaction shape`
+  and docs closeout `a693e43 docs: record glued curl header verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed quoted curl headers such as
+  `-H "X-Api-Key: short-api-value"`, `--header="Proxy-Authorization: ..."`,
+  and `-H "X-Auth-Token: ..."` hid the sensitive value but consumed the closing
+  quote, rendering malformed shell text.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to preserve quoted curl key-like sensitive header shape.
+- Added RED backend coverage requiring `redact_sensitive_text` to preserve the
+  same quoted curl key-like header shape.
+- Confirmed RED: frontend and backend redaction both returned malformed strings
+  with the closing quote removed for `X-Api-Key`.
+- Broadened the quoted curl sensitive-header pre-pass to cover key-like header
+  names containing authorization, cookie, api/access key, credential, secret,
+  signature, token, or password markers.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a raw quoted curl `X-Api-Key` header. It confirmed two
+  stored prompt rows, the
+  `-H "[REDACTED_POSSIBLE_SECRET]" https://example.net` shape visible in row
+  text and aria labels, no key-like header leak in row text, aria labels, or
+  body text, and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: broadens quoted curl sensitive-header shape
+  preservation to key-like header names beyond authorization/cookie.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for
+  `X-Api-Key`, `Proxy-Authorization`, and `X-Auth-Token` quoted curl headers.
+- `src-tauri/src/lib.rs`: aligns backend quoted curl sensitive-header redaction
+  with the same key-like header matcher and Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- Probe:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --input-type=module -e ...`
+  showed quoted key-like curl headers redacted but missing the closing quote.
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed 35/36 because the quoted `X-Api-Key` curl header preview missed the
+  closing quote.
+- RED backend:
+  `cargo test redact_sensitive_text_preserves_quoted_curl_key_like_header_shape`
+  from `src-tauri` failed because backend redaction missed the closing quote.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 36/36.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_preserves_quoted_curl_key_like_header_shape`
+  from `src-tauri` passed, 1/1 focused lib test, plus zero-test main and CLI
+  targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5221" --port 5221 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_keylike_header_qa.mjs'`
+  passed with `rowCount=2`, expected preview
+  `Run curl -H "[REDACTED_POSSIBLE_SECRET]" https://example.net`,
+  `consoleErrors=[]`, and `apiErrors=[]`.
+- Full project check: `npm run check` passed, covering UI tests 342/342,
+  production build, Rust lib tests 113/113, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after preserving quoted curl key-like sensitive header
+  shape.
+- Python Playwright is not installed, and PromptVault has no local Playwright
+  dependency. Browser QA used the installed shared workspace Playwright package
+  while still managing Vite with the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity and
+  UI/accessibility preview correctness work for quoted curl header snippets.
+
+Next Steps:
+
+- Run whitespace and staged gitleaks checks, commit this source slice, run a
+  full-tree gitleaks scan, push to the private GitHub remote, verify parity,
+  then record the push evidence in this worklog.
+
+## Previous Slice - 2026-06-08 Glued short curl header flag redaction shape
 
 Current Goal:
 

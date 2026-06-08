@@ -3957,7 +3957,7 @@ fn quoted_curl_sensitive_header_regex() -> &'static Regex {
     static QUOTED_CURL_SENSITIVE_HEADER_REGEX: OnceLock<Regex> = OnceLock::new();
     QUOTED_CURL_SENSITIVE_HEADER_REGEX.get_or_init(|| {
         Regex::new(
-            r#"(?im)((?:--header(?:\s+|=)|-H\s*))"(?:authorization|cookie|set-cookie)\s*:\s*[^"\r\n]*"|((?:--header(?:\s+|=)|-H\s*))'(?:authorization|cookie|set-cookie)\s*:\s*[^'\r\n]*'"#,
+            r#"(?im)((?:--header(?:\s+|=)|-H\s*))"(?:[a-z0-9_-]*(?:authorization|cookie|api[-_]?key|access[-_]?key|credential|secret|signature|token|password)[a-z0-9_-]*)\s*:\s*[^"\r\n]*"|((?:--header(?:\s+|=)|-H\s*))'(?:[a-z0-9_-]*(?:authorization|cookie|api[-_]?key|access[-_]?key|credential|secret|signature|token|password)[a-z0-9_-]*)\s*:\s*[^'\r\n]*'"#,
         )
         .expect("quoted curl sensitive header regex")
     })
@@ -6591,6 +6591,40 @@ mod tests {
         assert_eq!(
             redact_sensitive_text(&cookie_text),
             "Run curl -H'[REDACTED_POSSIBLE_API_KEY]' https://example.org"
+        );
+    }
+
+    #[test]
+    fn redact_sensitive_text_preserves_quoted_curl_key_like_header_shape() {
+        let api_key_header = ["X", "Api", "Key"].join("-");
+        let api_key_value = ["short", "api", "value"].join("-");
+        let proxy_authorization_header = ["Proxy", "Authorization"].join("-");
+        let basic_scheme = ["Bas", "ic"].join("");
+        let basic_value = ["short", "basic", "value"].join("-");
+        let auth_token_header = ["X", "Auth", "Token"].join("-");
+        let token_value = ["short", "token", "value"].join("-");
+        let header_flag = ["-", "H"].join("");
+        let long_header_flag = ["--", "header"].join("");
+
+        let api_key_text =
+            format!("Run curl {header_flag} \"{api_key_header}: {api_key_value}\" https://example.net");
+        let proxy_authorization_text = format!(
+            "Run curl {long_header_flag}=\"{proxy_authorization_header}: {basic_scheme} {basic_value}\" https://example.org"
+        );
+        let auth_token_text =
+            format!("Run curl {header_flag}'{auth_token_header}: {token_value}' https://example.com");
+
+        assert_eq!(
+            redact_sensitive_text(&api_key_text),
+            "Run curl -H \"[REDACTED_POSSIBLE_API_KEY]\" https://example.net"
+        );
+        assert_eq!(
+            redact_sensitive_text(&proxy_authorization_text),
+            "Run curl --header=\"[REDACTED_POSSIBLE_API_KEY]\" https://example.org"
+        );
+        assert_eq!(
+            redact_sensitive_text(&auth_token_text),
+            "Run curl -H'[REDACTED_POSSIBLE_API_KEY]' https://example.com"
         );
     }
 

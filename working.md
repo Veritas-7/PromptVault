@@ -59,7 +59,9 @@ Progress:
   then passed on a no-clean rerun with no source changes.
 - Passed whitespace checks and staged/full gitleaks scans before GitHub push.
 - Pushed the code commit to `origin/main` and verified local/remote parity,
-  clean status, latest commit, and private GitHub repository state.
+  clean status, and private GitHub repository state. A docs-only closeout
+  commit records this evidence afterward, so use `git log -1` for the current
+  final HEAD.
 
 Changes:
 
@@ -101,9 +103,9 @@ Tests:
   no leaks.
 - GitHub push: `git push origin main` updated `main` from `cb692b9` to
   `034c976`.
-- Final remote verification after `git fetch origin main`:
+- Code-push remote verification after `git fetch origin main`:
   `git rev-list --left-right --count HEAD...origin/main` returned `0 0`,
-  `git status --short --branch` showed clean `main...origin/main`, latest
+  `git status --short --branch` showed clean `main...origin/main`, source
   commit was `034c976 fix: redact cookie headers`, and
   `gh repo view Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`
   returned `Veritas-7/PromptVault` as `PRIVATE`.

@@ -1,12 +1,149 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 23:17 KST
+Updated: 2026-06-08 23:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Saved import state timestamp display guard
+## Current Slice - 2026-06-08 Plan source note label redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make plan source note redaction defensive inside the shared accessibility
+  label helpers, not only at the `App.tsx` call site.
+- Prevent raw backend/source note fragments from reaching source status,
+  selection, batch action, or continuous action labels.
+
+Context:
+
+- Previous saved import state timestamp display guard is pushed to private
+  `origin/main` with source commit `8bcfc41 fix: guard saved import
+  timestamps` and docs closeout `e0dd33b docs: record saved import timestamp
+  verification`; final fetch parity was `0 0`, remote HEAD was `e0dd33b`, and
+  repository visibility remained `visibility=PRIVATE`, `isPrivate=true`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for plan-source DOM and aria
+  labels.
+- Visible plan source notes were already redacted in `App.tsx`, but
+  `planSourceStatusLabel()` accepted `notes` directly and joined them before
+  returning label text. Direct helper calls or future call-site drift could
+  reintroduce raw note fragments into accessible labels.
+
+Progress:
+
+- Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
+  persisted/current/first objective all point at PromptVault.
+- Re-read current pushed repo state, `working.md`, `src/sourceStatusA11y.ts`,
+  the plan source row in `src/App.tsx`, and related source/a11y tests.
+- Added a RED test that passes raw synthetic secret-like note fragments directly
+  into `planSourceStatusLabel()`, `planSourceSelectionLabel()`, and
+  `planSourceActionLabel()`.
+- RED failed as intended because the status label returned the raw synthetic
+  note fragments.
+- Added a `sourceNoteDisplayText()` helper in `src/sourceStatusA11y.ts` that
+  routes each note through `redactSensitiveDisplayText()` and compacting before
+  label assembly.
+- Changed plan-source aria/action label call sites in `src/App.tsx` to pass raw
+  `source.notes` into the shared helpers while keeping visible text on the
+  existing `displayNotes` path. This proves the helper boundary is defensive.
+- Ran a Tauri-like browser smoke where `plan_scan` returned a source note with
+  raw synthetic secret-like fragments. The visible source row, checkbox
+  `aria-label`, status label, batch action label, and continuous action label
+  rendered `[REDACTED_POSSIBLE_SECRET]` and omitted the raw fragments.
+- Deleted the temporary browser QA script after verification.
+- Full project verification passed.
+- Source staged secret scan and full-tree secret scan both found no leaks.
+- Source commit `c022e36 fix: redact plan source notes` was pushed to private
+  `origin/main`; fetch parity was `0 0`, remote HEAD was `c022e36`, and
+  repository visibility remained `visibility=PRIVATE`, `isPrivate=true`.
+- Operator asked whether project/day work management was complete and whether
+  actual raw sessions were parsed. Checked the separate Worklog/WorklogTracker
+  lane and confirmed it is the more direct product surface for date/project
+  work management, while PromptVault remains the prompt/session capture and
+  prompt-quality tool. The Worklog system refreshed/generated indexes from raw
+  sessions and passed direct verification, but project-local `working.md` /
+  `PROJECT_STATUS.md` / `WORKLOG.md` ingestion is still a separate missing
+  integration layer rather than a completed PromptVault feature.
+
+Changes:
+
+- `src/sourceStatusA11y.ts`: redacts and compacts plan source notes inside the
+  label helper boundary before status/selection/action labels are assembled.
+- `src/App.tsx`: passes raw `source.notes` to source label helpers, preserving
+  visible `displayNotes` only for visible note chips.
+- `tests/sourceStatusA11y.test.ts`: adds RED/GREEN coverage for raw
+  secret-like source notes in plan source labels.
+- `working.md`: records this slice and the operator-requested scope assessment.
+
+Tests:
+
+- RED helper test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/sourceStatusA11y.test.ts`
+  failed as intended because the status label included the raw synthetic note
+  fragments.
+- Targeted GREEN:
+  same command passed with 17/17.
+- Related regression checks:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/sourceStatusA11y.test.ts tests/promptRowA11y.test.ts tests/promptVaultApi.test.ts tests/importQueue.test.ts tests/topActionLabels.test.ts`
+  passed with 227/227.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5249" --port 5249 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_plan_note_label_qa.mjs'`
+  passed with exit code `0`; the body and source labels included
+  `[REDACTED_POSSIBLE_SECRET]`, raw synthetic note fragments were absent from
+  body text and all checked aria/action labels, and there were no page errors,
+  console errors, failed requests, or failed responses.
+- `git diff --check` passed.
+- Full project check: `npm run check` passed, covering UI tests 374/374,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Source staged secret scan: `gitleaks protect --staged` scanned about 1.10 KB
+  and found no leaks before `c022e36`.
+- Source full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.22 MB and found no leaks before the source push.
+- Source push verification: `git push origin main` advanced `main` from
+  `e0dd33b` to `c022e36`; after fetch, parity was `0 0`, remote HEAD was
+  `c022e36`, and `gh repo view Veritas-7/PromptVault --json
+  nameWithOwner,visibility,isPrivate,url` reported `visibility=PRIVATE`,
+  `isPrivate=true`.
+- Worklog system check for the operator status question:
+  `worklog_verify.py` passed with `summary_sessions=27820`,
+  `raw_stale_rows=0`, `delete_eligible_count=0`, `review_needed_count=3`, and
+  `active_raw_stale_rows=11`; `worklog_search_eval.py` passed with
+  `project_count=97`, `date_count=84`, `working_directory_count=369`, and
+  `path_evidence_count=1013`; `worklog_search_cache_eval.py` passed with
+  `scanned_sessions=27820`, `indexed_sessions=27356`, and
+  `path_lookup_rows=268696`.
+
+Issues:
+
+- No product/source blocker after plan source note label redaction.
+- No source push blocker after staged and full-tree gitleaks verification.
+- PromptVault has not implemented a full project-local progress-log ingestion
+  source for `working.md`, `PROJECT_STATUS.md`, `WORKLOG.md`, or similar files.
+  A narrow repo scan found project-log candidates across multiple projects, but
+  the unified date/project management app is the separate WorklogTracker lane.
+- The Worklog incremental gate wrapper returned late enough that it was treated
+  as wrapper-return unhealthy; its child/equivalent verification commands passed
+  directly, and the idle wrapper process was stopped after direct verification.
+- Docs closeout commit is pending.
+
+Research:
+
+- No external research. This is direct label-safety hardening based on code
+  inspection plus a local browser user flow and local Worklog/WorklogTracker
+  status inspection.
+
+Next Steps:
+
+- Stage only `working.md`, run staged gitleaks, commit
+  `docs: record plan note label verification`, run full-tree gitleaks, push to
+  private `origin/main`, and verify final fetch parity plus GitHub private
+  visibility.
+
+## Previous Slice - 2026-06-08 Saved import state timestamp display guard
 
 Current Goal:
 
@@ -23,7 +160,7 @@ Context:
   `origin/main` with source commit `3397c22 fix: guard generated timestamp
   panel displays` and docs closeout `93fb9cf docs: record generated timestamp
   panel verification`; final fetch parity was `0 0`.
-- cmux/in-app browser remains excluded for this runtime. Verification uses
+- cmux/in-app browser remains excluded for this runtime. Verification used
   local Vite plus a Tauri-like Playwright shim for saved import state DOM.
 - Saved import rows still rendered `state.updated_at` directly in
   `src/App.tsx`, unlike the other timestamp surfaces.
@@ -41,20 +178,23 @@ Progress:
 - Added `importStateUpdatedAtText()` and routed the saved import row timestamp
   through it instead of displaying `state.updated_at` directly.
 - A browser smoke first caught that malformed secret-like timestamps were
-  redacting the secret but still preserving the malformed prefix
-  `not-a-date?`. Tightened the unit expectation to require a full redaction
-  token, watched it fail, then updated `dateTimeDisplayText()` so invalid
-  timestamps that require sensitive redaction collapse to
-  `[REDACTED_POSSIBLE_SECRET]`.
+  redacting the secret but still preserving the malformed prefix. Tightened the
+  unit expectation to require a full redaction token, watched it fail, then
+  updated `dateTimeDisplayText()` so invalid timestamps that require sensitive
+  redaction collapse to `[REDACTED_POSSIBLE_SECRET]`.
 - Re-ran the saved import browser smoke successfully. The saved import row
-  rendered `[REDACTED_POSSIBLE_SECRET]`, and the body omitted `not-a-date`,
-  `access_token`, and the secret fragment.
+  rendered `[REDACTED_POSSIBLE_SECRET]`, and the body omitted the malformed
+  prefix plus raw synthetic secret-like fragments.
 - Deleted the temporary browser QA script after verification.
 - Full project verification passed.
 - Source staged secret scan and full-tree secret scan both found no leaks.
 - Source commit `8bcfc41 fix: guard saved import timestamps` was pushed to
   private `origin/main`; fetch parity was `0 0`, remote HEAD was `8bcfc41`,
   and repository visibility remained `visibility=PRIVATE`, `isPrivate=true`.
+- Docs closeout commit `e0dd33b docs: record saved import timestamp
+  verification` was pushed to private `origin/main`; final fetch parity was
+  `0 0`, remote HEAD was `e0dd33b`, and repository visibility remained
+  `visibility=PRIVATE`, `isPrivate=true`.
 
 Changes:
 
@@ -76,12 +216,11 @@ Tests:
 - Initial targeted GREEN:
   same command passed with 19/19 after adding the helper and wiring the UI.
 - Browser smoke initially failed because the shared invalid timestamp fallback
-  still rendered `not-a-date?[REDACTED_POSSIBLE_SECRET]`; this became the
-  follow-up RED expectation.
+  still rendered a malformed prefix before `[REDACTED_POSSIBLE_SECRET]`; this
+  became the follow-up RED expectation.
 - Tightened RED helper test:
-  same command failed as intended with actual
-  `not-a-date?[REDACTED_POSSIBLE_SECRET]` versus expected
-  `[REDACTED_POSSIBLE_SECRET]`.
+  same command failed as intended because the actual text still preserved the
+  malformed prefix instead of the full `[REDACTED_POSSIBLE_SECRET]` fallback.
 - Final targeted GREEN:
   same command passed with 19/19.
 - Related regression checks:
@@ -90,7 +229,7 @@ Tests:
 - Browser smoke:
   `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5248" --port 5248 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_saved_import_timestamp_qa.mjs'`
   passed with exit code `0`; malformed saved import `updated_at` rendered
-  `[REDACTED_POSSIBLE_SECRET]`, raw `not-a-date`/`access_token`/secret
+  `[REDACTED_POSSIBLE_SECRET]`, raw malformed prefix and synthetic secret-like
   fragments were absent from the body, and there were no page errors, console
   errors, failed responses, or failed requests.
 - `git diff --check` passed.
@@ -106,24 +245,29 @@ Tests:
   `8bcfc41`, and `gh repo view Veritas-7/PromptVault --json
   nameWithOwner,visibility,isPrivate,url` reported `visibility=PRIVATE`,
   `isPrivate=true`.
+- Docs staged secret scan: `gitleaks protect --staged` scanned about 7.17 KB
+  and found no leaks before `e0dd33b`.
+- Docs full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.22 MB and found no leaks before the docs push.
+- Docs push verification: `git push origin main` advanced `main` from
+  `8bcfc41` to `e0dd33b`; after fetch, parity was `0 0`, remote HEAD was
+  `e0dd33b`, and `gh repo view Veritas-7/PromptVault --json
+  nameWithOwner,visibility,isPrivate,url` reported `visibility=PRIVATE`,
+  `isPrivate=true`.
 
 Issues:
 
 - No product/source blocker after saved import state timestamp display guard.
-- No source push blocker after staged and full-tree gitleaks verification.
-- Docs closeout commit is pending.
+- No docs closeout blocker; source and docs commits are pushed.
 
 Research:
 
-- No external research. This is direct display-safety hardening based on code
+- No external research. This was direct display-safety hardening based on code
   inspection plus a local browser user flow.
 
 Next Steps:
 
-- Stage only `working.md`, run staged gitleaks, commit
-  `docs: record saved import timestamp verification`, run full-tree gitleaks,
-  push to private `origin/main`, and verify final fetch parity plus GitHub
-  private visibility.
+- Continue autonomous PromptVault hardening with the next narrow QA slice.
 
 ## Previous Slice - 2026-06-08 Generated timestamp panel display guard
 

@@ -444,6 +444,16 @@ h3 {
   width: 100%;
 }
 
+.saved-import-overflow {
+  background: #f8faf7;
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  color: #536158;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 9px 10px;
+}
+
 .workspace,
 .prompt-grid {
   display: grid;

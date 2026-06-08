@@ -168,6 +168,7 @@ type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
 const IMPORT_BATCH_FILES = 5;
+const IMPORT_STATES_DISPLAY_LIMIT = 8;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
 const SCAN_PROGRESS_POLL_MS = 300;
 const QUALITY_GAP_DISPLAY_LIMIT = 4;
@@ -419,6 +420,11 @@ function App() {
     improvement,
     improvementPromptId,
     selectedPrompt?.id ?? null,
+  );
+  const visibleImportStates = importStatesResult?.states.slice(0, IMPORT_STATES_DISPLAY_LIMIT) ?? [];
+  const hiddenImportStateCount = Math.max(
+    0,
+    (importStatesResult?.states.length ?? 0) - IMPORT_STATES_DISPLAY_LIMIT,
   );
   const improvementFailureMessage = improvementFailureText(
     improvementFailurePromptId,
@@ -1306,7 +1312,7 @@ function App() {
               </div>
               {importStatesResult.states.length ? (
                 <div className="saved-import-list">
-                  {importStatesResult.states.slice(0, 8).map((state) => (
+                  {visibleImportStates.map((state) => (
                     <div className="saved-import-row" key={state.source_id}>
                       <div>
                         <strong>{state.source_label}</strong>
@@ -1324,6 +1330,15 @@ function App() {
                       </span>
                     </div>
                   ))}
+                  {hiddenImportStateCount > 0 ? (
+                    <div
+                      className="saved-import-overflow"
+                      data-import-states-overflow="true"
+                      {...STATUS_NOTICE_PROPS}
+                    >
+                      저장된 가져오기 진행 외 {hiddenImportStateCount.toLocaleString()}개 소스가 더 있습니다.
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="empty compact">저장된 가져오기 커서가 아직 없습니다.</div>

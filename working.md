@@ -1,12 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 12:16 KST
+Updated: 2026-06-08 12:25 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Improvement delta gap overflow visibility
+## Current Slice - 2026-06-08 Import state list overflow visibility
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make the saved import-progress panel disclose when more saved source cursors
+  exist than the compact list renders.
+
+Context:
+
+- Previous quality-gap overflow slice is pushed to `origin/main`:
+  implementation `f9f99dc fix: show quality gap overflow counts` and closeout
+  `127c5df docs: close quality gap overflow handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`.
+- The saved import-progress panel renders only
+  `importStatesResult.states.slice(0, 8)`, but currently gives no indication
+  that additional saved cursors are hidden.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `127c5df docs: close quality gap overflow handoff`.
+- Re-read saved import-progress rendering and `ImportStatesResult` shape.
+  Confirmed the list is capped at eight rows with no overflow indicator.
+- Preparing a RED Playwright QA that expects a visible overflow summary when
+  nine saved import states are returned.
+- Confirmed RED first: dev-mode Playwright QA rendered eight saved import rows
+  but timed out waiting for `[data-import-states-overflow="true"]`.
+- Added a compact `saved-import-overflow` row that reports hidden saved source
+  cursor count after the capped list.
+- Confirmed GREEN: the same dev-mode Playwright QA rendered the overflow row
+  for the ninth saved source with no browser console/page errors.
+- Removed `/tmp/promptvault_import_states_overflow_qa.mjs` after QA and
+  confirmed port 5339 had no listener.
+- Ran the full project check successfully after import-state overflow QA.
+- Pre-staging verification passed with only the expected three modified files:
+  `src/App.tsx`, `src/App.css`, and `working.md`.
+- Explicitly staged only `src/App.tsx`, `src/App.css`, and `working.md`.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 5 KB and finding no leaks.
+- Restaged `working.md` after recording the staged scan and reran the staged
+  secret scan; about 5.41 KB was scanned and no leaks were found.
+
+Changes:
+
+- `working.md`: records the current saved import-state overflow visibility
+  slice.
+- `src/App.tsx`: limits visible saved import-state rows through a named
+  constant and renders a `data-import-states-overflow` summary when rows are
+  hidden.
+- `src/App.css`: styles the compact saved import overflow summary.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5339" --port 5339 --timeout 30 node /tmp/promptvault_import_states_overflow_qa.mjs http://127.0.0.1:5339`
+  failed because `[data-import-states-overflow="true"]` was not visible after
+  nine saved import states were returned.
+- GREEN: the same dev-mode Playwright QA passed after the overflow row was
+  rendered.
+- Cleanup: `/tmp/promptvault_import_states_overflow_qa.mjs` removed and
+  `lsof -nP -iTCP:5339 -sTCP:LISTEN` returned no listener.
+- Full project check: `npm run check` passed, covering UI tests 297/297,
+  production build, Rust lib tests 84/84, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/App.tsx src/App.css working.md`
+  passed; repo root was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only `src/App.css`, `src/App.tsx`,
+  and `working.md` modified;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`; the temp QA file was absent; port 5339 was free.
+- Staged paths: `git diff --cached --name-only` listed only `src/App.css`,
+  `src/App.tsx`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed with
+  no leaks found.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Perform explicit-path staging, staged secret scan, commit, full-tree secret
+  scan, push, and final parity verification.
+
+## Previous Slice - 2026-06-08 Improvement delta gap overflow visibility
 
 Current Goal:
 

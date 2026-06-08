@@ -321,6 +321,36 @@ h3 {
   white-space: pre-wrap;
 }
 
+.work-log-item-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.work-log-item-group-heading {
+  align-items: center;
+  border-bottom: 1px solid #dce5da;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 0 0 4px;
+}
+
+.work-log-item-group-heading strong {
+  color: #1c2a21;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-log-item-group-heading span {
+  color: #68766b;
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
 .work-summary-snapshot-details {
   display: grid;
   gap: 6px;

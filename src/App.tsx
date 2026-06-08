@@ -177,6 +177,7 @@ import {
   workLogProposalDateSuggestions,
   type WorkLogPreviewFilters,
 } from "./workLogPreviewFilters";
+import { groupWorkLogExtractionItemsByProjectDate } from "./workLogExtractionItemGroups";
 import {
   storedFacetSummaryText,
   storedFacetsFailureText,
@@ -636,6 +637,8 @@ function App() {
   );
   const visibleWorkLogExtractionItems =
     workLogExtractionItemsResult?.items.slice(0, WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT) ?? [];
+  const visibleWorkLogExtractionItemGroups =
+    groupWorkLogExtractionItemsByProjectDate(visibleWorkLogExtractionItems);
   const hiddenWorkLogExtractionItemCount = Math.max(
     0,
     (workLogExtractionItemsResult?.items.length ?? 0) - WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT,
@@ -2226,29 +2229,41 @@ function App() {
         {workLogExtractionItemsResult ? (
           visibleWorkLogExtractionItems.length ? (
             <div className="work-summary-list" data-work-log-items="true">
-              {visibleWorkLogExtractionItems.map((item) => (
-                <article
-                  className="work-summary-row work-log-proposal-row"
-                  key={item.id}
+              {visibleWorkLogExtractionItemGroups.map((group) => (
+                <section
+                  className="work-log-item-group"
+                  data-work-log-item-group={group.group_id}
+                  key={group.group_id}
                 >
-                  <div>
-                    <strong>{item.project}</strong>
-                    <span>{item.date}</span>
+                  <div className="work-log-item-group-heading">
+                    <strong>{group.project}</strong>
+                    <span>{group.date} · 저장 {group.item_count.toLocaleString()}개</span>
                   </div>
-                  <p>{item.title}</p>
-                  <p className="work-log-proposal-evidence">{item.evidence}</p>
-                  <span>
-                    #{item.id.toLocaleString()} · {item.provider}
-                    {item.used_ai ? " · AI" : " · local"} · {item.status} · confidence{" "}
-                    {item.confidence.toFixed(2)}
-                  </span>
-                  <span>
-                    {item.source_file} · saved {item.saved_at} · {item.source_path}
-                  </span>
-                  {item.warnings.length ? (
-                    <span>warnings {item.warnings.join("; ")}</span>
-                  ) : null}
-                </article>
+                  {group.items.map((item) => (
+                    <article
+                      className="work-summary-row work-log-proposal-row"
+                      key={item.id}
+                    >
+                      <div>
+                        <strong>{item.project}</strong>
+                        <span>{item.date}</span>
+                      </div>
+                      <p>{item.title}</p>
+                      <p className="work-log-proposal-evidence">{item.evidence}</p>
+                      <span>
+                        #{item.id.toLocaleString()} · {item.provider}
+                        {item.used_ai ? " · AI" : " · local"} · {item.status} · confidence{" "}
+                        {item.confidence.toFixed(2)}
+                      </span>
+                      <span>
+                        {item.source_file} · saved {item.saved_at} · {item.source_path}
+                      </span>
+                      {item.warnings.length ? (
+                        <span>warnings {item.warnings.join("; ")}</span>
+                      ) : null}
+                    </article>
+                  ))}
+                </section>
               ))}
               {hiddenWorkLogExtractionItemCount ? (
                 <div className="work-summary-overflow">

@@ -1,12 +1,117 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 05:12 KST
+Updated: 2026-06-09 05:19 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-log preview project/date filters
+## Current Slice - 2026-06-09 saved extraction project/date grouping
+
+Current Goal:
+
+- Show persisted work-log extraction rows as project/day groups instead of a
+  flat list.
+- Keep this as a display-layer grouping slice only; do not change extraction,
+  persistence, bridge, or CLI contracts.
+- Make the completion boundary explicit: PromptVault now has verified real
+  session parsing and project progress-log extraction paths, but it is not yet
+  a full automatic daily/project management system across every session and
+  every in-repo progress log.
+
+Context:
+
+- The current operating DB has one saved extraction item:
+  `RepoTutorStudio / 2026-06-04`.
+- Saved extraction rows already support server-backed project/date filters.
+  This slice makes the visible saved rows match the desired project/day
+  management shape.
+- Existing tests prove Codex/Gemini/Claude/Antigravity session parsing,
+  project progress markdown matching, `working.md`-style progress-log parsing,
+  session evidence attachment, and project/date summary grouping at the Rust
+  data layer. The remaining product gap is broader ingestion coverage,
+  operator-facing management flows, and AI-assisted normalization over project
+  logs beyond the currently parsed candidates.
+
+Progress:
+
+- Added a reusable grouping helper for saved work-log extraction items.
+- The saved extraction list now renders grouped sections by `project` and
+  `date`.
+- Group headings show the project, date, and saved-row count.
+- Existing per-row details remain unchanged inside each group.
+
+Changes:
+
+- `src/workLogExtractionItemGroups.ts`:
+  - new helper module for grouping saved extraction items by project/date.
+- `tests/workLogExtractionItemGroups.test.ts`:
+  - RED/GREEN coverage for grouping order, stable group IDs, counts, and
+    project/date display values.
+- `src/App.tsx`:
+  - wires visible saved extraction rows through grouped rendering.
+- `src/App.css`:
+  - adds compact group heading styles for the saved extraction list.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workLogExtractionItemGroups.test.ts` failed with
+    `ERR_MODULE_NOT_FOUND` before `src/workLogExtractionItemGroups.ts` existed.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workLogExtractionItemGroups.test.ts`: PASS,
+    `416` tests.
+  - `npm run build`: PASS.
+- Headless UI check against temporary bridge/Vite:
+  - started bridge on `127.0.0.1:5174` and Vite on `127.0.0.1:5177`;
+  - loaded the management surface;
+  - clicked `AI 작업 추출`;
+  - verified saved extraction meta:
+    `저장 1개 · 표시 1개 · 1일 · 1개 프로젝트`;
+  - verified a saved group for `RepoTutorStudio / 2026-06-04`;
+  - verified the row still shows the saved extraction details inside the group.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `416` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `149` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- Not all real Codex sessions have been exhaustively scanned in this UI check;
+  the verified real target for this slice is the current saved extraction row
+  and the existing full test suite's session/progress-log parsing coverage.
+- Project-local work logs such as `working.md` are already detected by the
+  project progress markdown path, but broad AI-assisted daily/project
+  consolidation across all project logs is still a next slice, not complete.
+- External GLM extraction still falls back before usable AI proposals are
+  returned, so AI provider hardening remains required before claiming SDK-backed
+  full automation.
+
+Research:
+
+- Used the local `webapp-testing` skill workflow with the `with_server.py`
+  lifecycle helper.
+- Python Playwright was unavailable, so the browser proof used repo-resolved
+  Node Playwright.
+- No external web research used.
+
+Next Steps:
+
+- Add a consolidated daily/project work dashboard that combines:
+  - parsed real Codex/Gemini/Claude/Antigravity sessions;
+  - project-local `working.md` and other recognized progress logs;
+  - saved reviewed extraction rows;
+  - generated summary snapshots with source citations.
+- Add an AI-assisted normalization pass using the existing GLM/OpenAI provider
+  abstraction, with fail-closed validation so invented dates/projects are
+  rejected.
+- Improve provider health reporting before enabling SDK-backed bulk automation.
+
+## Previous Slice - 2026-06-09 work-log preview project/date filters
 
 Current Goal:
 

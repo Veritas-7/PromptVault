@@ -22,6 +22,9 @@ const DEFAULT_GLM_MODEL: &str = "glm-4.6";
 const LARGE_SOURCE_FILE_COUNT: usize = 10_000;
 const LARGE_SOURCE_BYTES: u64 = 5 * 1024 * 1024 * 1024;
 const LARGE_FILE_BYTES: u64 = 50 * 1024 * 1024;
+const PROJECT_PROGRESS_MAX_DEPTH: usize = 4;
+const PROJECT_PROGRESS_HEAD_CHARS: usize = 24_000;
+const PROJECT_PROGRESS_TAIL_CHARS: usize = 8_000;
 const DEFAULT_IMPORT_EVENT_LIMIT: usize = 20;
 const MAX_IMPORT_EVENT_LIMIT: usize = 100;
 const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
@@ -372,6 +375,7 @@ enum SourceKind {
     AntigravityHistoryJsonl,
     AntigravityConversationSqlite,
     GeminiTmpChatJson,
+    ProjectProgressMarkdown,
 }
 
 #[tauri::command]
@@ -1736,6 +1740,12 @@ fn source_specs_for_home(home: &Path) -> Vec<SourceSpec> {
             root: home.join(".gemini/tmp"),
             kind: SourceKind::GeminiTmpChatJson,
         },
+        SourceSpec {
+            id: "project-progress-logs",
+            label: "Project progress logs",
+            root: home.join("Ai/System/10_Projects"),
+            kind: SourceKind::ProjectProgressMarkdown,
+        },
     ]
 }
 
@@ -1848,6 +1858,7 @@ fn parse_source_file(
             parse_antigravity_conversation_sqlite(source, file)
         }
         SourceKind::GeminiTmpChatJson => parse_gemini_tmp_chat(source, file),
+        SourceKind::ProjectProgressMarkdown => parse_project_progress_markdown(source, file),
     }
 }
 
@@ -1892,7 +1903,16 @@ fn matching_source_file_candidates_with_cancel(
 
     let mut paths = Vec::new();
     let mut errors = Vec::new();
-    for entry in WalkDir::new(root).follow_links(false) {
+    let walker = WalkDir::new(root).follow_links(false);
+    let walker = match kind {
+        SourceKind::ProjectProgressMarkdown => walker.max_depth(PROJECT_PROGRESS_MAX_DEPTH),
+        _ => walker,
+    };
+
+    for entry in walker
+        .into_iter()
+        .filter_entry(|entry| source_should_descend(entry.path(), kind))
+    {
         if scan_cancel_requested(cancel_flag) {
             break;
         }
@@ -1957,7 +1977,54 @@ fn source_file_matches(path: &Path, kind: SourceKind) -> bool {
                     .and_then(|name| name.to_str())
                     .is_some_and(|name| name == "chats")
         }
+        SourceKind::ProjectProgressMarkdown => {
+            path.extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(is_project_progress_log_name)
+        }
     }
+}
+
+fn source_should_descend(path: &Path, kind: SourceKind) -> bool {
+    match kind {
+        SourceKind::ProjectProgressMarkdown if path.is_dir() => path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_none_or(|name| !is_ignored_project_progress_dir(name)),
+        _ => true,
+    }
+}
+
+fn is_ignored_project_progress_dir(name: &str) -> bool {
+    matches!(
+        name,
+        ".cache"
+            | ".git"
+            | ".next"
+            | ".nuxt"
+            | ".svelte-kit"
+            | ".tauri"
+            | ".turbo"
+            | ".venv"
+            | "build"
+            | "coverage"
+            | "dist"
+            | "node_modules"
+            | "out"
+            | "target"
+            | "venv"
+    )
+}
+
+fn is_project_progress_log_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "working.md" | "worklog.md" | "project_status.md" | "progress_log.md" | "progress.md"
+    )
 }
 
 fn file_candidate(path: &Path) -> SourceFileCandidate {
@@ -2282,6 +2349,73 @@ fn parse_gemini_tmp_chat(
         }
     }
     Ok(records)
+}
+
+fn parse_project_progress_markdown(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut text = String::new();
+    File::open(path)?.read_to_string(&mut text)?;
+    let text = project_progress_analysis_text(&text);
+    let text = normalize_prompt_text(&text);
+    if text.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let project_dir = path.parent().map(Path::to_path_buf);
+    let project_name = project_dir
+        .as_deref()
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown-project");
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("progress.md");
+    let session_id = format!("{project_name}:{file_name}");
+    let timestamp = path
+        .metadata()
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+        .and_then(|duration| timestamp_millis_to_rfc3339(duration.as_millis()));
+    let metadata = serde_json::json!({
+        "session_id": session_id,
+        "timestamp": timestamp,
+    });
+
+    let mut records = Vec::new();
+    push_record(
+        &mut records,
+        source,
+        path,
+        &metadata,
+        project_dir.map(|path| path.display().to_string()),
+        text,
+    );
+    Ok(records)
+}
+
+fn project_progress_analysis_text(text: &str) -> String {
+    let max_chars = PROJECT_PROGRESS_HEAD_CHARS + PROJECT_PROGRESS_TAIL_CHARS;
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+
+    let head = text
+        .chars()
+        .take(PROJECT_PROGRESS_HEAD_CHARS)
+        .collect::<String>();
+    let tail = text
+        .chars()
+        .rev()
+        .take(PROJECT_PROGRESS_TAIL_CHARS)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<String>();
+    format!("{head}\n\n[... project progress log truncated for prompt analysis ...]\n\n{tail}")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -5988,6 +6122,13 @@ mod tests {
             .expect("gemini tmp source exists");
         assert_eq!(gemini.root, home.join(".gemini/tmp"));
         assert!(!gemini.root.to_string_lossy().contains("/wj/"));
+
+        let project_logs = specs
+            .iter()
+            .find(|source| source.id == "project-progress-logs")
+            .expect("project progress logs source exists");
+        assert_eq!(project_logs.root, home.join("Ai/System/10_Projects"));
+        assert!(!project_logs.root.to_string_lossy().contains("/wj/"));
     }
 
     #[test]
@@ -6021,6 +6162,136 @@ mod tests {
         ));
 
         std::fs::remove_dir_all(root).expect("remove gemini tmp fixture");
+    }
+
+    #[test]
+    fn project_progress_log_matching_finds_only_known_progress_markdown_files() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-project-progress-match-{}",
+            std::process::id()
+        ));
+        let project_dir = root.join("ExampleProject");
+        std::fs::create_dir_all(&project_dir).expect("create project fixture dir");
+        let working = project_dir.join("working.md");
+        let status = project_dir.join("PROJECT_STATUS.md");
+        let notes = project_dir.join("notes.md");
+        let json = project_dir.join("working.json");
+        std::fs::write(&working, "# Working\n").expect("write working");
+        std::fs::write(&status, "# Status\n").expect("write status");
+        std::fs::write(&notes, "# Notes\n").expect("write notes");
+        std::fs::write(&json, "{}").expect("write json");
+
+        assert!(source_file_matches(
+            &working,
+            SourceKind::ProjectProgressMarkdown
+        ));
+        assert!(source_file_matches(
+            &status,
+            SourceKind::ProjectProgressMarkdown
+        ));
+        assert!(!source_file_matches(
+            &notes,
+            SourceKind::ProjectProgressMarkdown
+        ));
+        assert!(!source_file_matches(
+            &json,
+            SourceKind::ProjectProgressMarkdown
+        ));
+
+        std::fs::remove_dir_all(root).expect("remove project progress fixture");
+    }
+
+    #[test]
+    fn project_progress_scan_skips_dependency_and_build_dirs() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-project-progress-prune-{}",
+            std::process::id()
+        ));
+        let project_dir = root.join("ExampleProject");
+        let node_dir = project_dir.join("node_modules/pkg");
+        let target_dir = project_dir.join("target/debug");
+        let deep_dir = project_dir.join("archive/old/runs/extra");
+        std::fs::create_dir_all(&node_dir).expect("create node fixture dir");
+        std::fs::create_dir_all(&target_dir).expect("create target fixture dir");
+        std::fs::create_dir_all(&deep_dir).expect("create deep fixture dir");
+        let project_working = project_dir.join("working.md");
+        let dependency_working = node_dir.join("working.md");
+        let build_working = target_dir.join("working.md");
+        let deep_working = deep_dir.join("working.md");
+        std::fs::write(&project_working, "# Project Working\n").expect("write project working");
+        std::fs::write(&dependency_working, "# Dependency Working\n")
+            .expect("write dependency working");
+        std::fs::write(&build_working, "# Build Working\n").expect("write build working");
+        std::fs::write(&deep_working, "# Deep Working\n").expect("write deep working");
+
+        let paths = matching_source_file_candidates(&root, SourceKind::ProjectProgressMarkdown)
+            .into_iter()
+            .map(|candidate| candidate.expect("candidate").path)
+            .collect::<Vec<_>>();
+
+        assert!(paths.contains(&project_working));
+        assert!(!paths.contains(&dependency_working));
+        assert!(!paths.contains(&build_working));
+        assert!(!paths.contains(&deep_working));
+
+        std::fs::remove_dir_all(root).expect("remove project progress fixture");
+    }
+
+    #[test]
+    fn parse_project_progress_markdown_preserves_content_and_project_workspace() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-project-progress-parse-{}",
+            std::process::id()
+        ));
+        let project_dir = root.join("ExampleProject");
+        std::fs::create_dir_all(&project_dir).expect("create project fixture dir");
+        let working = project_dir.join("working.md");
+        std::fs::write(
+            &working,
+            "# Working Log\n\nCurrent Goal:\n- Track project work by date.\n",
+        )
+        .expect("write working");
+        let source = SourceSpec {
+            id: "project-progress-logs",
+            label: "Project progress logs",
+            root: root.clone(),
+            kind: SourceKind::ProjectProgressMarkdown,
+        };
+
+        let records =
+            parse_project_progress_markdown(&source, &working).expect("parse progress log");
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].source, "Project progress logs");
+        assert_eq!(records[0].session_id, "ExampleProject:working.md");
+        assert_eq!(
+            records[0].cwd.as_deref(),
+            Some(project_dir.to_str().unwrap())
+        );
+        assert!(records[0].text.contains("Track project work by date."));
+
+        std::fs::remove_dir_all(root).expect("remove project progress fixture");
+    }
+
+    #[test]
+    fn project_progress_analysis_text_truncates_large_logs_with_head_and_tail() {
+        let large_log = format!(
+            "{}\n{}\n{}",
+            "head-marker ".repeat(PROJECT_PROGRESS_HEAD_CHARS / 12 + 10),
+            "middle-marker ".repeat(1_000),
+            "tail-marker ".repeat(PROJECT_PROGRESS_TAIL_CHARS / 12 + 10)
+        );
+
+        let snapshot = project_progress_analysis_text(&large_log);
+
+        assert!(snapshot.contains("head-marker"));
+        assert!(snapshot.contains("tail-marker"));
+        assert!(snapshot.contains("[... project progress log truncated for prompt analysis ...]"));
+        assert!(!snapshot.contains("middle-marker"));
+        assert!(
+            snapshot.chars().count()
+                <= PROJECT_PROGRESS_HEAD_CHARS + PROJECT_PROGRESS_TAIL_CHARS + 80
+        );
     }
 
     #[test]
@@ -6465,7 +6736,8 @@ mod tests {
             format!(r#"Use {{"{api_key}":"short-secret-value","format":"json"}} locally."#);
         let access_token_text =
             format!("Use {{'{access_token}': 'short-token-value', 'limit': '10'}} locally.");
-        let cookie_text = format!(r#"Use {{"{cookie_key}":"{cookie_value}","mode":"safe"}} locally."#);
+        let cookie_text =
+            format!(r#"Use {{"{cookie_key}":"{cookie_value}","mode":"safe"}} locally."#);
 
         let redacted_api_key = redact_sensitive_text(&api_key_text);
         let redacted_access_token = redact_sensitive_text(&access_token_text);
@@ -6626,8 +6898,9 @@ mod tests {
         let auth_scheme = ["Bear", "er"].join("");
         let token = ["short", "bearer", "value"].join("-");
         let header_flag = ["-", "H"].join("");
-        let text =
-            format!("Run curl {header_flag} \"Authorization: {auth_scheme} {token}\" https://example.com");
+        let text = format!(
+            "Run curl {header_flag} \"Authorization: {auth_scheme} {token}\" https://example.com"
+        );
 
         assert_eq!(
             redact_sensitive_text(&text),
@@ -6643,8 +6916,9 @@ mod tests {
         let long_header_flag = ["--", "header"].join("");
         let auth_text =
             format!("Run curl {long_header_flag}=\"Authorization: {auth_scheme} {token}\" https://example.com");
-        let cookie_text =
-            format!("Run curl {long_header_flag}='Cookie: session_id={cookie_value}' https://example.org");
+        let cookie_text = format!(
+            "Run curl {long_header_flag}='Cookie: session_id={cookie_value}' https://example.org"
+        );
 
         assert_eq!(
             redact_sensitive_text(&auth_text),
@@ -6663,10 +6937,12 @@ mod tests {
         let cookie_value = ["short", "session", "value"].join("-");
         let header_flag = ["-", "H"].join("");
         let long_header_flag = ["--", "header"].join("");
-        let auth_text =
-            format!("Run curl {header_flag} \"AUTHORIZATION: {auth_scheme} {token}\" https://example.com");
-        let cookie_text =
-            format!("Run curl {long_header_flag}=\"COOKIE: session_id={cookie_value}\" https://example.org");
+        let auth_text = format!(
+            "Run curl {header_flag} \"AUTHORIZATION: {auth_scheme} {token}\" https://example.com"
+        );
+        let cookie_text = format!(
+            "Run curl {long_header_flag}=\"COOKIE: session_id={cookie_value}\" https://example.org"
+        );
         let set_cookie_text =
             format!("Run curl {long_header_flag}='Set-Cookie: session_id={cookie_value}' https://example.net");
 
@@ -6690,10 +6966,12 @@ mod tests {
         let token = ["short", "bearer", "value"].join("-");
         let cookie_value = ["short", "session", "value"].join("-");
         let header_flag = ["-", "H"].join("");
-        let auth_text =
-            format!("Run curl {header_flag}\"Authorization: {auth_scheme} {token}\" https://example.com");
-        let cookie_text =
-            format!("Run curl {header_flag}'Cookie: session_id={cookie_value}' https://example.org");
+        let auth_text = format!(
+            "Run curl {header_flag}\"Authorization: {auth_scheme} {token}\" https://example.com"
+        );
+        let cookie_text = format!(
+            "Run curl {header_flag}'Cookie: session_id={cookie_value}' https://example.org"
+        );
 
         assert_eq!(
             redact_sensitive_text(&auth_text),
@@ -6717,13 +6995,15 @@ mod tests {
         let header_flag = ["-", "H"].join("");
         let long_header_flag = ["--", "header"].join("");
 
-        let api_key_text =
-            format!("Run curl {header_flag} \"{api_key_header}: {api_key_value}\" https://example.net");
+        let api_key_text = format!(
+            "Run curl {header_flag} \"{api_key_header}: {api_key_value}\" https://example.net"
+        );
         let proxy_authorization_text = format!(
             "Run curl {long_header_flag}=\"{proxy_authorization_header}: {basic_scheme} {basic_value}\" https://example.org"
         );
-        let auth_token_text =
-            format!("Run curl {header_flag}'{auth_token_header}: {token_value}' https://example.com");
+        let auth_token_text = format!(
+            "Run curl {header_flag}'{auth_token_header}: {token_value}' https://example.com"
+        );
 
         assert_eq!(
             redact_sensitive_text(&api_key_text),
@@ -6858,8 +7138,7 @@ mod tests {
     #[test]
     fn frequency_stats_redact_sensitive_prompt_text() {
         let synthetic_token = format!("sk-{}", "A".repeat(60));
-        let prompt_text =
-            format!("Fix parser handling for {synthetic_token} and run cargo test.");
+        let prompt_text = format!("Fix parser handling for {synthetic_token} and run cargo test.");
         let mut first = record("risky-frequency-a");
         first.text = prompt_text.clone();
         first.word_count = count_words(&first.text);

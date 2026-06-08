@@ -1,12 +1,85 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 23:47 KST
+Updated: 2026-06-08 23:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Project progress log source
+## Current Slice - 2026-06-08 CLI no-persist scan flag
+
+Current Goal:
+
+- Add a side-effect-free CLI scan mode so verification runs can inspect real
+  sources without inserting/updating rows in the default PromptVault SQLite DB.
+- Keep the browser bridge and Tauri app defaults unchanged; this slice only
+  exposes the existing backend `ScanOptions.persist=false` behavior through
+  the CLI.
+
+Context:
+
+- The previous project-progress-log source verification used CLI `scan`, whose
+  default behavior persists results to
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- Backend `run_scan()` already supports `persist: Some(false)`, and the browser
+  bridge can pass that option in JSON. The missing layer was the human-facing
+  CLI flag.
+- cmux/in-app browser remains excluded in this runtime; verification is by CLI
+  unit tests and real CLI scans against local project progress logs.
+
+Progress:
+
+- Added scan argument parsing coverage before implementation.
+- Extracted scan CLI argument handling into `parse_scan_args()`.
+- Added `--no-persist`, mapped to `ScanOptions.persist = Some(false)`.
+- Updated CLI help text so `scan ... --no-persist` is visible and its DB
+  behavior is documented.
+- Verified a real scan of `project-progress-logs` with `--no-persist` returns
+  `persistence: null` and still computes scan stats.
+- Verified the existing local DB row count for `Project progress logs` stayed
+  at `4` after a `--no-persist` scan.
+
+Changes:
+
+- `src-tauri/src/bin/promptvault-cli.rs`: adds `parse_scan_args()`, wires
+  `--no-persist`, and documents the flag in help text.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds CLI parser/help tests for
+  side-effect-free scans.
+- `working.md`: records this CLI no-persist slice.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml parse_scan_args_supports_no_persist_for_side_effect_free_scans --bin promptvault-cli`
+  failed before implementation because `parse_scan_args()` did not exist.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
+  passed with 17/17.
+- Actual DB baseline:
+  `sqlite3 /Users/wj/Documents/PromptVault/promptvault.sqlite "select count(*) from prompts where source='Project progress logs';"`
+  returned `4`.
+- Actual no-persist CLI smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- scan --source project-progress-logs --limit 1 --preview-limit 0 --no-export --no-persist --json`
+  returned `persistence: null`, `total_files: 1`, and `total_prompts: 1`.
+- Post-smoke DB count remained `4`.
+
+Issues:
+
+- `repair` still calls `run_scan()` with default persistence behavior. This may
+  be worth a later explicit `persist=false` review, but it was not changed in
+  this slice to avoid altering repair semantics without a focused test.
+- Full daily/project/task structuring still belongs in WorklogTracker or a
+  dedicated worklog parser; this slice only prevents PromptVault CLI
+  verification scans from touching the DB.
+
+Next Steps:
+
+- Run full project verification and secret scans before committing this slice.
+- Consider a focused follow-up for `repair` scan persistence semantics.
+- Continue toward WorklogTracker-side date/project/task structuring using raw
+  sessions plus project-local progress logs.
+
+## Previous Slice - 2026-06-08 Project progress log source
 
 Current Goal:
 

@@ -482,7 +482,10 @@ test("prompt row previews redact credential and signature query params", () => {
   const preview = promptRowPreviewText(text);
   const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
 
-  assert.equal(preview, "Fetch https://example.test/file?[REDACTED_POSSIBLE_SECRET] before request.");
+  assert.equal(
+    preview,
+    "Fetch https://example.test/file?[REDACTED_POSSIBLE_SECRET]&[REDACTED_POSSIBLE_SECRET] before request.",
+  );
   assert.doesNotMatch(preview, /X-Amz|Credential|Signature|short-credential-value|short-signature-value/);
   assert.doesNotMatch(label, /X-Amz|Credential|Signature|short-credential-value|short-signature-value/);
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
@@ -495,10 +498,31 @@ test("prompt row previews redact cloud access key query params", () => {
   const preview = promptRowPreviewText(text);
   const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
 
-  assert.equal(preview, "Fetch https://example.test/file?[REDACTED_POSSIBLE_SECRET] before request.");
+  assert.equal(
+    preview,
+    "Fetch https://example.test/file?[REDACTED_POSSIBLE_SECRET]&[REDACTED_POSSIBLE_SECRET] before request.",
+  );
   assert.doesNotMatch(preview, /AWSAccessKeyId|AKIAIOSFODNN7EXAMPLE|Signature|short-signature/);
   assert.doesNotMatch(label, /AWSAccessKeyId|AKIAIOSFODNN7EXAMPLE|Signature|short-signature/);
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
+test("prompt row previews preserve safe query params around sensitive query params", () => {
+  const sensitiveKey = ["auth", "token"].join("_");
+  const sensitiveValue = ["short", "token", "value"].join("-");
+  const text = `Fetch https://example.test/file?format=json&${sensitiveKey}=${sensitiveValue}&limit=10 before request.`;
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(
+    preview,
+    "Fetch https://example.test/file?format=json&[REDACTED_POSSIBLE_SECRET]&limit=10 before request.",
+  );
+  assert.doesNotMatch(preview, new RegExp(`${sensitiveKey}|${sensitiveValue}`));
+  assert.doesNotMatch(label, new RegExp(`${sensitiveKey}|${sensitiveValue}`));
+  assert.match(label, /format=json/);
+  assert.match(label, /limit=10/);
 });
 
 test("prompt row previews redact cloud access key assignments", () => {

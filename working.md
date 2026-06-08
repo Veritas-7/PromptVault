@@ -1,12 +1,123 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 19:43 KST
+Updated: 2026-06-08 19:52 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Quoted standalone auth scheme token redaction
+## Current Slice - 2026-06-08 Sensitive query param redaction precision
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  from hiding non-sensitive URL query params when only one neighboring query
+  pair is sensitive.
+
+Context:
+
+- Previous quoted standalone auth scheme token fix is pushed to `origin/main`
+  with source commit `9fda911 fix: redact quoted auth scheme tokens` and docs
+  closeout `09f4f89 docs: record quoted auth token verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed
+  `?token=short-token-value&format=json` rendered as
+  `?[REDACTED_POSSIBLE_SECRET]`, swallowing the safe `format=json` query
+  parameter. With a safe leading param, the same over-redaction swallowed the
+  safe trailing param after the sensitive pair.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to preserve safe query params around a sensitive query pair.
+- Tightened existing frontend query-param expectations so multiple sensitive
+  query pairs keep their `&` separator while still hiding each sensitive pair.
+- Added RED backend coverage for the same mixed safe/sensitive query-param
+  shape, and tightened existing backend expectations for multiple sensitive
+  query pairs.
+- Confirmed RED: frontend prompt-row tests failed 3 cases because redaction
+  consumed through `&`; backend focused query-param tests failed because
+  redaction swallowed the rest of the query string.
+- Updated frontend and backend unquoted sensitive assignment matchers to stop
+  at `&`, while quoted values still keep their existing quote-aware behavior.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` query-param coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a risky query string. It confirmed two stored prompt rows,
+  the
+  `Fetch https://example.test/file?format=json&[REDACTED_POSSIBLE_SECRET]&limit=10 before request.`
+  preview visible in row text and aria labels, no raw sensitive query key/value
+  leak in row text, aria labels, or body text, safe `format=json` and
+  `limit=10` still visible, and zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: stops unquoted sensitive assignment values at query
+  `&` separators so safe neighboring query params remain visible.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for safe
+  query params around a sensitive pair and tightens multi-sensitive query-param
+  expectations.
+- `src-tauri/src/lib.rs`: aligns backend redaction and Rust regression coverage
+  with the same query-param boundary behavior.
+- `working.md`: records this slice.
+
+Tests:
+
+- Probe:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --input-type=module -e ...`
+  showed sensitive query params redacted but safe trailing params swallowed.
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed 35/38; the three query-param precision cases showed the old
+  `&`-swallowing behavior.
+- RED backend:
+  `cargo test query_params` from `src-tauri` failed 0/2 focused matching tests;
+  the backend also swallowed the rest of the query string.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 38/38.
+- Focused backend GREEN:
+  `cargo test params` from `src-tauri` passed, 3/3 focused lib tests, plus
+  zero-test main and CLI targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5223" --port 5223 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_query_param_precision_qa.mjs'`
+  passed with `rowCount=2`, expected preview
+  `Fetch https://example.test/file?format=json&[REDACTED_POSSIBLE_SECRET]&limit=10 before request.`,
+  `consoleErrors=[]`, `pageErrors=[]`, and `apiErrors=[]`. An initial QA
+  fixture attempt was rejected by the app parser because the mock `word_count`
+  did not use PromptVault's word regex; the fixture was corrected before the
+  passing browser QA run.
+- Full project check: `npm run check` passed, covering UI tests 344/344,
+  production build, Rust lib tests 115/115, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after preserving safe query params around sensitive query
+  params.
+- Python Playwright is not installed, and PromptVault has no local Playwright
+  dependency. Browser QA used the installed shared workspace Playwright package
+  while still managing Vite with the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction precision and
+  UI/accessibility preview correctness work for URL query strings.
+
+Next Steps:
+
+- Run whitespace checks, staged/full gitleaks, then commit and push this source
+  slice to the private `origin/main`.
+
+## Previous Slice - 2026-06-08 Quoted standalone auth scheme token redaction
 
 Current Goal:
 

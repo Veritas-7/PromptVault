@@ -3970,7 +3970,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "possible_api_key",
                 Regex::new(
-                    r#"(?im)\bgh[oprsu]_[a-z0-9_]{20,}\b|\b(?:bearer|basic)\s+(?:"(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})"|'(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})'|(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})\b)|(?:--user|-u)\s+[^:\s]+:[^\s]+|(?:--cookie|-b)\s+[^=\s]+=[^\s]+|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
+                    r#"(?im)\bgh[oprsu]_[a-z0-9_]{20,}\b|\b(?:bearer|basic)\s+(?:"(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})"|'(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})'|(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})\b)|(?:--user|-u)\s+[^:\s]+:[^\s]+|(?:--cookie|-b)\s+[^=\s]+=[^\s]+|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?[^\s&]+)?"#,
                 )
                     .expect("api key regex"),
             ),
@@ -6650,13 +6650,37 @@ mod tests {
     #[test]
     fn redact_sensitive_text_redacts_credential_and_signature_params() {
         let text = "X-Amz-Credential=short-credential-value&X-Amz-Signature=short-signature-value";
-        assert_eq!(redact_sensitive_text(text), "[REDACTED_POSSIBLE_API_KEY]");
+        assert_eq!(
+            redact_sensitive_text(text),
+            "[REDACTED_POSSIBLE_API_KEY]&[REDACTED_POSSIBLE_API_KEY]"
+        );
     }
 
     #[test]
     fn redact_sensitive_text_redacts_cloud_access_key_query_params() {
         let text = "AWSAccessKeyId=AKIAIOSFODNN7EXAMPLE&Signature=short-signature";
-        assert_eq!(redact_sensitive_text(text), "[REDACTED_POSSIBLE_API_KEY]");
+        assert_eq!(
+            redact_sensitive_text(text),
+            "[REDACTED_POSSIBLE_API_KEY]&[REDACTED_POSSIBLE_API_KEY]"
+        );
+    }
+
+    #[test]
+    fn redact_sensitive_text_preserves_safe_query_params_around_sensitive_query_params() {
+        let sensitive_key = ["auth", "token"].join("_");
+        let sensitive_value = ["short", "token", "value"].join("-");
+        let text = format!(
+            "Fetch https://example.test/file?format=json&{sensitive_key}={sensitive_value}&limit=10 before request."
+        );
+
+        let redacted = redact_sensitive_text(&text);
+
+        assert_eq!(
+            redacted,
+            "Fetch https://example.test/file?format=json&[REDACTED_POSSIBLE_API_KEY]&limit=10 before request."
+        );
+        assert!(!redacted.contains(&sensitive_key));
+        assert!(!redacted.contains(&sensitive_value));
     }
 
     #[test]

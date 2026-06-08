@@ -1,10 +1,122 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 09:30 KST
+Updated: 2026-06-08 09:39 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Prompt metadata presence validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge prompt records that omit backend-required nullable
+  metadata fields (`timestamp` and `cwd`).
+
+Context:
+
+- Recent slices hardened browser-bridge response-state and import event ordering
+  invariants.
+- Backend `PromptRecord` serializes `timestamp` and `cwd` as present fields
+  whose values may be `null`.
+- The frontend browser-bridge prompt parser currently allows those properties to
+  be omitted entirely, which is looser than the backend contract and can let a
+  malformed bridge payload reach UI metadata fallback paths.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `3f745fc docs: close import event order handoff` with `HEAD...origin/main`
+  returning `0 0`.
+- Re-read `PromptRecord` type/parser and backend Rust `PromptRecord`, confirming
+  the parser permits missing `timestamp`/`cwd` even though backend serialization
+  emits explicit nullable fields.
+- Added a RED API test for scan prompt records whose `timestamp` and `cwd`
+  properties are omitted instead of explicitly set to a non-blank string or
+  `null`.
+- Confirmed RED first: focused API suite failed 119/120 only on the new
+  missing nullable prompt metadata rejection case.
+- Tightened the shared prompt record parser so `timestamp` and `cwd` must be
+  present and either `null` or a non-blank string.
+- Updated the frontend `PromptRecord` type to match the backend serialized
+  nullable-field contract.
+- Confirmed GREEN: focused API suite passed 120/120 after the parser/type
+  change.
+- Verified the local preview quick-scan flow with Node Playwright: a malformed
+  `/api/scan` prompt record without `timestamp`/`cwd` shows the sanitized bridge
+  format error and does not leak the raw prompt text or metadata fallback copy.
+- Removed the temporary preview QA script and confirmed port 5322 was free.
+
+Changes:
+
+- `working.md`: records the current prompt metadata presence validation slice.
+- `src/promptVaultApi.ts`: requires explicit nullable `timestamp` and `cwd`
+  fields on browser-bridge prompt records.
+- `src/types.ts`: makes `PromptRecord.timestamp` and `PromptRecord.cwd`
+  required nullable fields instead of optional fields.
+- `tests/promptVaultApi.test.ts`: adds a missing nullable prompt metadata
+  rejection case for scan bridge responses.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 119/120 only on the new missing nullable prompt metadata rejection
+  case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 120/120 after requiring explicit nullable prompt metadata fields.
+- Broader UI suite: `npm run test:ui` passed 284/284.
+- Production build: `npm run build` passed; Vite emitted
+  `dist/assets/index-s77uuByr.js` and `dist/assets/index-D81jZHaU.css`.
+- Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  printed usage successfully.
+- Preview QA: first run overmatched the static `선택 항목` heading in the QA
+  assertion, not an app failure. After narrowing that assertion, `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5322" --port 5322 --timeout 30 node /tmp/promptvault_prompt_metadata_presence_qa.mjs http://127.0.0.1:5322`
+  passed. The script confirmed connected browser bridge status, clicked quick
+  scan, saw the sanitized malformed-response error, and verified the page omitted
+  raw `Improve this prompt`, `시간 없음`, `작업공간 없음`, `1개 로드`,
+  `toLocaleString`, `RangeError`, `TypeError`, and `undefined`.
+- Preview cleanup: `test ! -e /tmp/promptvault_prompt_metadata_presence_qa.mjs`
+  returned `temp_absent`; `! lsof -nP -iTCP:5322 -sTCP:LISTEN` returned
+  `port_5322_free`.
+- Full project check: `npm run check` passed. It reran `npm run test:ui`
+  284/284, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
+  and `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts src/types.ts tests/promptVaultApi.test.ts working.md`
+  produced no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only the four expected modified files; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` lists only
+  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned private GitHub visibility; temp script remained absent and port 5322
+  remained free.
+- Staged explicit paths only:
+  `src/promptVaultApi.ts`, `src/types.ts`, `tests/promptVaultApi.test.ts`, and
+  `working.md`.
+- Staged security scan: `gitleaks protect --staged --no-banner --redact`
+  scanned about 6.49 KB and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Add a RED API test for prompt records missing `timestamp`/`cwd`, then tighten
+  the shared prompt parser and TypeScript type to require explicit nullable
+  fields, then run broader UI/build, local preview QA, full project check,
+  security scans, commit, and push.
 
 ## Previous Slice - 2026-06-08 Import event ordering validation
 

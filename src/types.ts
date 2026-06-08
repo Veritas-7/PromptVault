@@ -20,8 +20,8 @@ export interface PromptRecord {
   source: string;
   session_id: string;
   path: string;
-  timestamp?: string | null;
-  cwd?: string | null;
+  timestamp: string | null;
+  cwd: string | null;
   text: string;
   word_count: number;
   char_count: number;

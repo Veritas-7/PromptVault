@@ -1855,6 +1855,29 @@ test("browser bridge scan results reject blank optional prompt metadata", async 
   );
 });
 
+test("browser bridge scan results reject missing nullable prompt metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(scanResultWithPrompt({
+    timestamp: undefined,
+    cwd: undefined,
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /시간 없음|작업공간 없음|선택 항목|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject blank risk flags", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify(scanResultWithPrompt({

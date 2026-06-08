@@ -29,7 +29,12 @@ import {
   checkBrowserBridgeHealth,
 } from "./browserBridge";
 import { displayErrorText } from "./errorDisplay";
-import { importEventBatchSummary, importEventStatusLabel, importEventWarningSummary } from "./importEvents";
+import {
+  importEventBatchSummary,
+  importEventStatusLabel,
+  importEventTimestampText,
+  importEventWarningSummary,
+} from "./importEvents";
 import {
   activeImprovementForSelection,
   buildImprovePromptRequest,
@@ -1406,7 +1411,7 @@ function App() {
                     <div className="import-activity-row" key={event.id}>
                       <div>
                         <strong>{sourceLabelDisplayText(event.source_label)}</strong>
-                        <span>{new Date(event.generated_at).toLocaleString()}</span>
+                        <span>{importEventTimestampText(event)}</span>
                       </div>
                       <span>{importEventBatchSummary(event)}</span>
                       <span>

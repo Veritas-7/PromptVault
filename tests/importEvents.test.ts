@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   importEventBatchSummary,
   importEventStatusLabel,
+  importEventTimestampText,
   importEventWarningSummary,
 } from "../src/importEvents.ts";
 import type { ImportEvent } from "../src/types.ts";
@@ -44,6 +45,24 @@ test("import event batch summary formats files and prompts", () => {
     importEventBatchSummary(event({ batch_file_count: 0, batch_prompt_count: 0 })),
     "0개 파일 · 0개 프롬프트",
   );
+});
+
+test("import event timestamp display uses local date formatting for parseable values", () => {
+  const generatedAt = "2026-06-06T00:00:00Z";
+
+  assert.equal(importEventTimestampText(event({ generated_at: generatedAt })), new Date(generatedAt).toLocaleString());
+  assert.notEqual(importEventTimestampText(event({ generated_at: generatedAt })), generatedAt);
+});
+
+test("import event timestamp display redacts invalid raw fallback values", () => {
+  const tokenName = ["access", "token"].join("_");
+  const secretValue = ["import", "event", "timestamp", "secret"].join("-");
+  const generatedAt = `not-a-date?${tokenName}=${secretValue}`;
+
+  const displayText = importEventTimestampText(event({ generated_at: generatedAt }));
+
+  assert.match(displayText, /\[REDACTED_POSSIBLE_SECRET\]/);
+  assert.doesNotMatch(displayText, new RegExp(`${tokenName}|${secretValue}`));
 });
 
 test("import event warning summary formats zero, singular, and plural counts", () => {

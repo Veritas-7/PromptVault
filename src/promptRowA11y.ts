@@ -1,4 +1,5 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
+import { dateTimeDisplayText } from "./dateDisplay.ts";
 import { redactSensitiveDisplayText } from "./displayRedaction.ts";
 import { qualityBandLabel } from "./qualityLabels.ts";
 import { riskFlagLabel } from "./riskLabels.ts";
@@ -44,15 +45,7 @@ export function pathDisplayText(text: string): string {
 }
 
 export function promptTimestampDisplayText(timestamp: string | null | undefined): string {
-  const trimmedTimestamp = timestamp?.trim();
-  if (!trimmedTimestamp) return "시간 없음";
-
-  const parsedTimestamp = new Date(trimmedTimestamp);
-  if (!Number.isFinite(parsedTimestamp.getTime())) {
-    return promptMetadataDisplayText(trimmedTimestamp);
-  }
-
-  return parsedTimestamp.toLocaleString();
+  return dateTimeDisplayText(timestamp);
 }
 
 export function promptRowAriaLabel(

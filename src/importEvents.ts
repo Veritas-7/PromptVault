@@ -1,3 +1,4 @@
+import { dateTimeDisplayText } from "./dateDisplay.ts";
 import type { ImportEvent } from "./types";
 
 export function importEventStatusLabel(event: ImportEvent): string {
@@ -12,6 +13,10 @@ function countLabel(count: number, singular: string): string {
 
 export function importEventBatchSummary(event: ImportEvent): string {
   return `${countLabel(event.batch_file_count, "파일")} · ${countLabel(event.batch_prompt_count, "프롬프트")}`;
+}
+
+export function importEventTimestampText(event: ImportEvent): string {
+  return dateTimeDisplayText(event.generated_at);
 }
 
 export function importEventWarningSummary(event: ImportEvent): string {

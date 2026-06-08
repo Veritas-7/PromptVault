@@ -1,12 +1,95 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 20:48 KST
+Updated: 2026-06-08 20:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Plan warning and source note secret masking
+## Current Slice - 2026-06-08 Scan and import success warning secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent successful scan and import warning strings from re-exposing sensitive
+  values in visible warning notices.
+
+Context:
+
+- Previous plan warning/source note secret masking is pushed to `origin/main`
+  with source commit `31bbf1b fix: mask plan note secrets` and docs closeout
+  `94c5de5 docs: record plan note masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- After masking plan warnings, two success-response warning surfaces still
+  rendered backend/bridge warning strings directly: `result.warnings` from
+  `/api/scan` and `importResult.warnings` from `/api/import-batch`.
+
+Progress:
+
+- Built a browser RED/GREEN harness for the successful scan and import flows
+  using local Vite on port `5230` and route-fulfilled browser bridge responses.
+- The first RED run failed for the wrong reason because `/api/prompt-facets`
+  used an incomplete fixture; corrected it to the full stored facet result
+  shape expected by the parser.
+- Confirmed the corrected RED failed because the scan success warning rendered
+  raw `--api-key scan-warning-secret`.
+- Masked `result.warnings` through `redactSensitiveDisplayText()` before
+  joining the global scan warning notice.
+- Re-ran the same browser harness and confirmed the next failure was the import
+  success warning rendering raw `--api-key import-warning-secret`.
+- Masked each `importResult.warnings` item through
+  `redactSensitiveDisplayText()` before rendering import warning paragraphs.
+- Re-ran the same browser flow and confirmed scan warning text, import warning
+  text, and page body no longer included the raw warning flag or values.
+- Ran production build successfully after implementation.
+
+Changes:
+
+- `src/App.tsx`: masks visible successful scan warnings and successful import
+  warnings before rendering.
+- `working.md`: records this slice and its RED/GREEN/browser/build evidence.
+
+Tests:
+
+- RED browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5230" --port 5230 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_success_warning_secret_red_qa.mjs'`
+  first failed for an incomplete fixture, then failed as expected because scan
+  warning text rendered raw `--api-key scan-warning-secret`.
+- Second RED after fixing scan warning display:
+  same command failed as expected because import warning text rendered raw
+  `--api-key import-warning-secret`.
+- Browser QA after the fix:
+  same command passed with exit code `0`; scan warning text, import warning
+  text, and page body no longer included the raw warning flag or values, with no
+  page errors, console errors, or failed responses.
+- Build check: `npm run build` passed.
+- Full project check: `npm run check` passed, covering UI tests 348/348,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after masking successful scan/import warnings.
+- This slice changes only visible warning rendering. It does not mutate original
+  bridge payloads, import execution inputs, or persisted records.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on a
+  reproducible local browser flow.
+
+Next Steps:
+
+- Commit and push the scan/import success warning masking slice, then update
+  docs closeout from a clean source-pushed tree.
+
+## Previous Slice - 2026-06-08 Plan warning and source note secret masking
 
 Current Goal:
 

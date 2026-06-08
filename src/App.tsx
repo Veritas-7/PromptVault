@@ -1340,7 +1340,7 @@ function App() {
       {result?.warnings.length ? (
         <section className="notice warning" {...STATUS_NOTICE_PROPS}>
           <AlertTriangle size={18} />
-          <span>{result.warnings.join(" ")}</span>
+          <span>{result.warnings.map(redactSensitiveDisplayText).join(" ")}</span>
         </section>
       ) : null}
 
@@ -1736,7 +1736,7 @@ function App() {
           {importResult?.warnings.length ? (
             <div className="warning-list">
               {importResult.warnings.map((warning, index) => (
-                <p key={textListItemKey(warning, index)}>{warning}</p>
+                <p key={textListItemKey(warning, index)}>{redactSensitiveDisplayText(warning)}</p>
               ))}
             </div>
           ) : null}

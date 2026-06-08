@@ -100,7 +100,11 @@ export function buildWorkManagementOverview(
     row.sourceSet.add("saved_extraction");
   }
 
+  const savedExtractionCandidateIds = new Set(
+    (input.extractionItems?.items ?? []).map((item) => item.candidate_id),
+  );
   for (const proposal of input.extractionProposals?.proposals ?? []) {
+    if (savedExtractionCandidateIds.has(proposal.candidate_id)) continue;
     if (!proposal.accepted || !proposal.date) continue;
     const row = upsertRow(rowsByKey, proposal.date, proposal.project);
     row.extraction_proposal_count += 1;

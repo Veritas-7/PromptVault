@@ -1,12 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 05:43 KST
+Updated: 2026-06-09 05:49 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-log extraction provider fallback visibility
+## Current Slice - 2026-06-09 saved extraction proposal dedupe in management overview
+
+Current Goal:
+
+- Keep project/day work management counts semantically accurate after an
+  accepted extraction proposal has already been saved as canonical managed
+  extraction data.
+- Prevent a saved accepted `candidate_id` from being counted again as a pending
+  `추출제안` in the consolidated overview.
+- Preserve unsaved accepted proposals as `추출제안` so operators can still see
+  work that needs review/save.
+
+Context:
+
+- The management overview merges current summaries, saved snapshots, saved
+  extraction items, pending extraction proposals, and parsed progress logs.
+- The save flow already refreshes saved extraction rows after `선택 저장`.
+- Without deduping by `candidate_id`, the same accepted progress-log extraction
+  could appear as both `추출제안` and `저장추출`, overstating what still needs
+  review.
+
+Progress:
+
+- Added a RED test for duplicate saved/pending extraction candidates.
+- Updated overview merge logic to build a saved extraction `candidate_id` set.
+- Pending extraction proposals whose `candidate_id` is already saved are now
+  excluded from `추출제안` counts and sources.
+- Verified against live local data that the overview now reports the existing
+  saved candidate as `저장추출 1` and no longer reports it as `추출제안 1`.
+
+Changes:
+
+- `src/workManagementOverview.ts`:
+  - skips accepted extraction proposals already present in saved extraction
+    items by `candidate_id`.
+- `tests/workManagementOverview.test.ts`:
+  - adds coverage proving saved extraction proposals are not double-counted.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workManagementOverview.test.ts` failed because
+    `PromptVault` showed both `extraction_proposal` and `saved_extraction` for
+    the same `candidate_id`.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workManagementOverview.test.ts`: PASS, `421`
+    tests.
+  - `npm run build`: PASS.
+- Headless UI QA against real local sources:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 220 -- /bin/bash -lc 'node /tmp/promptvault_work_management_refresh_qa.mjs'`: PASS.
+  - Observed:
+    - overview meta:
+      `관리 17개 · 15개 프로젝트 · 10일 · 현재요약 2 · 스냅샷 4 · 추출제안 0 · 저장추출 1 · 진행로그 16`;
+    - summary meta:
+      `2개 프로젝트 · 2일 · 81개 작업 · 세션 근거 80건 · 저장 병합 1개`;
+    - coverage meta:
+      `32개 로그 · parsed 16개 · unparsed 16개 · 26개 프로젝트 · 작업 3,713개`;
+    - candidates meta:
+      `후보 16개 · parsed 제외 16개 · unreadable 0개 · empty 0개`;
+    - extraction meta:
+      `로컬 local-extraction-rules · 후보 16개 · accepted 1개 · rejected 15개`;
+    - provider warning:
+      `로컬 fallback 사용 · 경고 2개`;
+    - saved extraction meta:
+      `저장 1개 · 표시 1개 · 1일 · 1개 프로젝트`.
+  - No console errors, page errors, or failed requests were reported.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `421` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `149` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- This improves overview accounting accuracy, but does not yet solve the
+  remaining `16` unparsed progress logs or the GLM provider failure.
+- The live extraction still uses local fallback and reports `15` rejected
+  proposals.
+- Persisted daily project management snapshots still need a clearer operator
+  flow after extraction saves.
+
+Research:
+
+- Used local `test-driven-development`, `incremental-implementation`, and
+  `webapp-testing` workflows.
+- No external web research was used.
+
+Next Steps:
+
+- Add provider health diagnostics/retry controls for GLM/OpenAI extraction.
+- Improve AI-assisted parsing for unparsed project-local progress logs.
+- Add a clearer review/save/snapshot flow so saved extraction changes can be
+  promoted into durable daily management snapshots.
+
+## Previous Slice - 2026-06-09 work-log extraction provider fallback visibility
 
 Current Goal:
 

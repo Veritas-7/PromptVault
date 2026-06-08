@@ -276,6 +276,40 @@ test("work management overview merges source evidence by project and date", () =
   assert.equal(careVault.latest_title, "CareVault snapshot");
 });
 
+test("work management overview does not double count saved extraction proposals", () => {
+  const proposals = extractionProposalsResult();
+  const overview = buildWorkManagementOverview({
+    extractionItems: extractionItemsResult(),
+    extractionProposals: {
+      ...proposals,
+      proposals: [
+        ...proposals.proposals,
+        {
+          candidate_id: "work-log-PromptVault-a1",
+          project: "PromptVault",
+          source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+          source_file: "working.md",
+          date: "2026-06-09",
+          title: "Already saved management overview",
+          status: "completed",
+          evidence: "2026-06-09: Already saved management overview",
+          confidence: 0.88,
+          accepted: true,
+          rejection_reason: null,
+        },
+      ],
+    },
+  });
+
+  const promptVault = overview.rows.find((row) => row.key === "2026-06-09::PromptVault");
+  assert.ok(promptVault);
+  assert.deepEqual(promptVault.sources, ["saved_extraction"]);
+  assert.equal(promptVault.saved_extraction_count, 1);
+  assert.equal(promptVault.extraction_proposal_count, 0);
+  assert.equal(overview.saved_extraction_count, 2);
+  assert.equal(overview.extraction_proposal_count, 1);
+});
+
 test("work management overview status text exposes management coverage", () => {
   const overview = buildWorkManagementOverview({
     coverage: coverageResult(),

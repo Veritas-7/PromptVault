@@ -655,7 +655,7 @@ function isPromptTruncationState(value: unknown, returnedPromptCount: unknown, s
     && isRecord(stats)
     && isNonNegativeSafeInteger(returnedPromptCount)
     && isNonNegativeSafeInteger(stats.total_prompts)
-    && (value || returnedPromptCount === stats.total_prompts);
+    && value === (returnedPromptCount < stats.total_prompts);
 }
 
 function isUntruncatedPromptWordTotal(value: Record<string, unknown>): boolean {

@@ -1,12 +1,101 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 13:07 KST
+Updated: 2026-06-08 13:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Stored latest preview order consistency
+## Current Slice - 2026-06-08 Scan truncation flag validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make browser bridge scan payload validation reject `prompts_truncated` values
+  that do not exactly match `returned_prompt_count < stats.total_prompts`.
+
+Context:
+
+- Previous stored latest order slice is pushed to `origin/main`:
+  implementation `8044b73 fix: align stored latest prompt order` and closeout
+  `c4562f5 docs: close stored latest order handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`.
+- `isPromptTruncationState` currently accepts any boolean `true`, even when
+  all prompts were returned. That can make a malformed bridge payload display a
+  preview/truncation state when the result is actually complete.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `c4562f5 docs: close stored latest order handoff`.
+- Re-read scan result parser tests and `isPromptTruncationState`. Confirmed
+  existing coverage rejects unmarked truncation but not overstated truncation.
+- Preparing a RED API parser test that returns one prompt, total one prompt,
+  and `prompts_truncated: true`; the parser should reject that payload.
+- Confirmed RED first: targeted parser test failed with "Missing expected
+  rejection" because the malformed complete result was accepted.
+- Tightened `isPromptTruncationState` so `prompts_truncated` must equal
+  `returned_prompt_count < stats.total_prompts`.
+- Confirmed GREEN: the new targeted parser test and the existing unmarked
+  truncation test both passed.
+- Ran the full project check successfully after truncation flag validation.
+- Pre-staging verification passed with only the expected three modified files:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Explicitly staged only `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 5.01 KB and finding no leaks.
+
+Changes:
+
+- `working.md`: records the current truncation flag validation slice.
+- `tests/promptVaultApi.test.ts`: adds overstated truncation rejection
+  coverage and lets the scan-result helper accept result-level overrides.
+- `src/promptVaultApi.ts`: validates the truncation boolean exactly against
+  returned and total prompt counts.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "overstated truncated previews" tests/promptVaultApi.test.ts`
+  failed with `Missing expected rejection.`
+- GREEN: the same targeted test passed after the parser change.
+- Focused regression: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "truncated previews" tests/promptVaultApi.test.ts`
+  passed both truncation-state parser tests.
+- Full project check: `npm run check` passed, covering UI tests 298/298,
+  production build, Rust lib tests 85/85, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; repo root was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `working.md` modified;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`.
+- Staged paths: `git diff --cached --name-only` listed only
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed
+  after scanning about 5.01 KB and finding no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Restage `working.md`, rerun staged secret scan, then commit the implementation,
+  run full-tree secret scan, push, and verify final parity.
+
+## Previous Slice - 2026-06-08 Stored latest preview order consistency
 
 Current Goal:
 

@@ -72,7 +72,7 @@ function promptRecord(overrides = {}) {
   };
 }
 
-function scanResultWithPrompt(promptOverrides = {}) {
+function scanResultWithPrompt(promptOverrides = {}, resultOverrides = {}) {
   return emptyScanResult({
     stats: emptyScanStats({
       total_prompts: 1,
@@ -95,6 +95,7 @@ function scanResultWithPrompt(promptOverrides = {}) {
     }),
     prompts: [promptRecord(promptOverrides)],
     returned_prompt_count: 1,
+    ...resultOverrides,
   });
 }
 
@@ -4006,6 +4007,31 @@ test("browser bridge scan results reject unmarked truncated previews", async (t)
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /1개 로드됨|1 \/ 2|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge scan results reject overstated truncated previews", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(scanResultWithPrompt({
+    id: "prompt-complete",
+    hash: "hash-complete",
+  }, {
+    prompts_truncated: true,
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /1개 로드됨|미리보기|toLocaleString|RangeError|undefined/);
       return true;
     },
   );

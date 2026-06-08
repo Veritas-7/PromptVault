@@ -1,12 +1,132 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 05:25 KST
+Updated: 2026-06-09 05:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 consolidated work management overview
+## Current Slice - 2026-06-09 one-click work management refresh
+
+Current Goal:
+
+- Add a single “전체 관리” / “전체 새로고침” action that loads the
+  project/day management sources needed by the consolidated overview.
+- Keep this as a UI orchestration slice over existing verified APIs:
+  `work-summary`, `work-summary-snapshots`, `work-log-coverage`, and
+  `work-log-items`.
+- Do not claim full automatic all-session/all-project AI normalization yet; the
+  button loads the currently implemented management surfaces in one user flow.
+
+Context:
+
+- The previous slice made the consolidated management overview visible, but it
+  depended on manually clicking separate source buttons.
+- The desired operator flow is one click that refreshes current summaries,
+  saved snapshots, progress-log coverage, and saved extraction rows.
+- The overview is allowed to render incrementally while requests finish; the
+  button remains in `관리 로딩` until all four source loads complete.
+
+Progress:
+
+- Added a `WorkManagementRefreshState` and action-label helper for the
+  one-click management refresh.
+- Added the top-level refresh button to the project work panel.
+- Wired the button to sequentially load:
+  - project work summary with saved extractions included;
+  - saved work-summary snapshots;
+  - project-local progress-log coverage;
+  - saved reviewed extraction rows.
+- Fixed a real clickability regression in the panel heading by allowing action
+  buttons to wrap and giving the heading vertical padding.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - adds `WorkManagementRefreshState`;
+  - adds `workManagementRefreshActionLabel()` for idle, loading, ready, and
+    locked states.
+- `tests/workSummaryStatus.test.ts`:
+  - adds RED/GREEN coverage for the management refresh action label.
+- `src/App.tsx`:
+  - adds refresh state;
+  - includes the refresh workflow in top-level action locking;
+  - adds `refreshWorkManagementOverview()`;
+  - renders the `전체 관리` / `관리 로딩` / `전체 새로고침` button.
+- `src/App.css`:
+  - lets `.panel-heading-actions` wrap;
+  - increases `.panel-heading` vertical padding so wrapped action rows remain
+    clickable.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts` failed before
+    implementation because `workManagementRefreshActionLabel` was not exported.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts`: PASS, `419` tests.
+  - `npm run build`: PASS.
+- Headless UI QA, first run:
+  - started bridge on `127.0.0.1:5174` and Vite on `127.0.0.1:5177`;
+  - click failed because the new button's Playwright click point was
+    intercepted by `main.shell`;
+  - fixed the actual UI hit-area issue by allowing panel heading actions to
+    wrap.
+- Headless UI QA, second run:
+  - click succeeded, but the QA script read final button text before all four
+    source requests completed;
+  - corrected the QA script to wait until the button text reaches
+    `전체 새로고침`.
+- Final headless UI QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 180 -- /bin/bash -lc 'node /tmp/promptvault_work_management_refresh_qa.mjs'`: PASS.
+  - Observed:
+    - initial button: `전체 관리`;
+    - final button: `전체 새로고침`;
+    - overview meta:
+      `관리 17개 · 15개 프로젝트 · 10일 · 현재요약 2 · 스냅샷 4 · 저장추출 1 · 진행로그 16`;
+    - summary meta:
+      `2개 프로젝트 · 2일 · 81개 작업 · 세션 근거 80건 · 저장 병합 1개`;
+    - snapshot meta: `저장 2개 · 표시 2개`;
+    - coverage meta:
+      `32개 로그 · parsed 16개 · unparsed 16개 · 26개 프로젝트 · 작업 3,700개`;
+    - saved extraction meta:
+      `저장 1개 · 표시 1개 · 1일 · 1개 프로젝트`.
+  - No console errors, page errors, or failed requests were reported.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `419` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `149` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- This completes the one-click loading workflow, not a full background
+  all-session/all-project AI normalization engine.
+- `work-log-coverage` still reports `16` unparsed progress-log files that need
+  AI-assisted extraction/review before they become managed dated work rows.
+- The current overview is loaded on demand; persisted overview snapshots remain
+  a next slice.
+
+Research:
+
+- Used local `incremental-implementation`, `test-driven-development`, and
+  `webapp-testing` skill workflows.
+- No external web research was used; this slice was driven by direct code,
+  tests, and headless browser QA.
+
+Next Steps:
+
+- Add persisted overview/snapshot support so the consolidated management state
+  can be saved and reloaded without rebuilding every panel.
+- Move the remaining unparsed project progress logs through an AI-assisted
+  extraction/review/save path.
+- Harden provider health reporting before bulk SDK-backed normalization over
+  unparsed logs.
+
+## Previous Slice - 2026-06-09 consolidated work management overview
 
 Current Goal:
 

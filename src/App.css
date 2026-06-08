@@ -908,7 +908,7 @@ h3 {
   gap: 12px;
   justify-content: space-between;
   min-height: 50px;
-  padding: 0 14px;
+  padding: 8px 14px;
 }
 
 .panel-heading > span {
@@ -923,6 +923,7 @@ h3 {
   align-items: center;
   display: flex;
   flex: 1;
+  flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
   min-width: 0;

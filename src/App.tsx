@@ -231,6 +231,7 @@ import {
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
   workLogExtractionReviewLabel,
+  workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
   workLogCoverageMetaText,
@@ -250,6 +251,7 @@ import {
   type WorkLogCoverageState,
   type WorkLogExtractionState,
   type WorkLogExtractionItemsState,
+  type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "./workSummaryStatus";
@@ -320,6 +322,8 @@ function App() {
   const [workLogExtractionState, setWorkLogExtractionState] = useState<WorkLogExtractionState>("idle");
   const [workLogExtractionItemsState, setWorkLogExtractionItemsState] =
     useState<WorkLogExtractionItemsState>("idle");
+  const [workManagementRefreshState, setWorkManagementRefreshState] =
+    useState<WorkManagementRefreshState>("idle");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -397,7 +401,8 @@ function App() {
     || workLogCoverageState === "loading"
     || workLogCandidatesState === "loading"
     || workLogExtractionState === "loading"
-    || workLogExtractionItemsState === "loading";
+    || workLogExtractionItemsState === "loading"
+    || workManagementRefreshState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
   const isBrowserBridgeDisconnected = browserQaMode && browserBridgeStatus === "disconnected";
   const actionLockState = {
@@ -1037,6 +1042,51 @@ function App() {
     }
   }
 
+  async function refreshWorkManagementOverview() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkManagementRefreshState("loading");
+    setWorkSummaryState("loading");
+    setWorkSummarySnapshotsState("loading");
+    setWorkLogCoverageState("loading");
+    setWorkLogExtractionItemsState("loading");
+    try {
+      const nextSummary = await loadProjectWorkSummary({
+        limit: WORK_SUMMARY_LIMIT,
+        session_limit: WORK_SUMMARY_SESSION_LIMIT,
+        summary_limit: WORK_SUMMARY_DISPLAY_LIMIT,
+        include_saved_extractions: true,
+      });
+      setWorkSummaryResult(nextSummary);
+      setWorkSummaryState("ready");
+
+      const nextSnapshots = await listProjectWorkSummarySnapshots(workSummarySnapshotOptions());
+      setWorkSummarySnapshotsResult(nextSnapshots);
+      setWorkSummarySnapshotsState("ready");
+
+      const nextCoverage = await loadProjectWorkLogCoverage();
+      setWorkLogCoverageResult(nextCoverage);
+      setWorkLogCoverageState("ready");
+
+      const nextItems = await listProjectWorkLogExtractionItems(workLogExtractionItemOptions());
+      setWorkLogExtractionItemsResult(nextItems);
+      setWorkLogExtractionItemsState("ready");
+
+      setWorkManagementRefreshState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkManagementRefreshState("failed");
+      setWorkSummaryState((current) => (current === "loading" ? "failed" : current));
+      setWorkSummarySnapshotsState((current) => (current === "loading" ? "failed" : current));
+      setWorkLogCoverageState((current) => (current === "loading" ? "failed" : current));
+      setWorkLogExtractionItemsState((current) => (current === "loading" ? "failed" : current));
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
   async function runPlan() {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
@@ -1541,6 +1591,25 @@ function App() {
             <span data-work-summary-meta="true">{workSummaryMeta}</span>
           </div>
           <div className="panel-heading-actions">
+            <button
+              aria-label={workManagementRefreshActionLabel(
+                workManagementRefreshState,
+                workManagementOverviewLoaded,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-refresh-work-management-overview="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void refreshWorkManagementOverview()}
+              type="button"
+            >
+              <RefreshCw size={15} />
+              {workManagementRefreshState === "loading"
+                ? "관리 로딩"
+                : workManagementOverviewLoaded
+                  ? "전체 새로고침"
+                  : "전체 관리"}
+            </button>
             <button
               aria-label={workSummaryActionLabel(
                 workSummaryState,

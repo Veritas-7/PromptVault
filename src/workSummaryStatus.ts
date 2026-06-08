@@ -19,6 +19,7 @@ export type WorkLogCoverageState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCandidatesState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionItemsState = "idle" | "loading" | "ready" | "failed";
+export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
 
 export const WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT = 3;
 
@@ -33,6 +34,19 @@ export function workSummaryActionLabel(
     return `${lockReason}에는 작업 요약을 ${hasResult ? "새로고침" : "생성"}할 수 없습니다`;
   }
   return hasResult ? "작업 요약 새로고침" : "작업 요약 생성";
+}
+
+export function workManagementRefreshActionLabel(
+  state: WorkManagementRefreshState,
+  hasOverview: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "전체 작업 관리 새로고침 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 전체 작업 관리를 ${hasOverview ? "새로고침" : "불러오기"}할 수 없습니다`;
+  }
+  return hasOverview ? "전체 작업 관리 새로고침" : "전체 작업 관리 불러오기";
 }
 
 export function workSummaryFailureText(state: WorkSummaryState): string | null {

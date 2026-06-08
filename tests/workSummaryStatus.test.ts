@@ -14,6 +14,7 @@ import {
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
   workLogExtractionReviewLabel,
+  workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
   workLogCoverageMetaText,
@@ -34,6 +35,7 @@ import {
   type WorkLogCoverageState,
   type WorkLogExtractionState,
   type WorkLogExtractionItemsState,
+  type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "../src/workSummaryStatus.ts";
@@ -263,6 +265,26 @@ test("work summary action label explains ready, loading, and locked states", () 
   assert.equal(
     workSummaryActionLabel("ready", true, lockState({ scanRunning: true })),
     "스캔 실행 중에는 작업 요약을 새로고침할 수 없습니다",
+  );
+});
+
+test("work management refresh action label explains overview loading and locks", () => {
+  const loading: WorkManagementRefreshState = "loading";
+  assert.equal(
+    workManagementRefreshActionLabel("idle", false, lockState()),
+    "전체 작업 관리 불러오기",
+  );
+  assert.equal(
+    workManagementRefreshActionLabel("ready", true, lockState()),
+    "전체 작업 관리 새로고침",
+  );
+  assert.equal(
+    workManagementRefreshActionLabel(loading, true, lockState({ workSummaryRunning: true })),
+    "전체 작업 관리 새로고침 중",
+  );
+  assert.equal(
+    workManagementRefreshActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 전체 작업 관리를 새로고침할 수 없습니다",
   );
 });
 

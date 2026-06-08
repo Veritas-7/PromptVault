@@ -1,5 +1,6 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import type { ImprovePromptRequest } from "./promptVaultApi.ts";
+import { pathDisplayText, sourceLabelDisplayText } from "./promptRowA11y.ts";
 import type { PromptRecord } from "./types.ts";
 
 export function activeImprovementForSelection<T>(
@@ -55,7 +56,9 @@ export function buildImprovePromptRequest(
 ): ImprovePromptRequest {
   const request: ImprovePromptRequest = {
     prompt: prompt.text,
-    context: `${prompt.source} · ${prompt.cwd ?? "작업공간 없음"}`,
+    context: `${sourceLabelDisplayText(prompt.source)} · ${
+      prompt.cwd?.trim() ? pathDisplayText(prompt.cwd) : "작업공간 없음"
+    }`,
     prompt_id: prompt.id,
     source: prompt.source,
     persist: true,

@@ -124,6 +124,30 @@ test("local improvement request includes force local only when enabled", () => {
   });
 });
 
+test("improvement request redacts secret-like source context metadata", () => {
+  const sourceFlag = ["--api", "key"].join("-");
+  const sourceSecret = ["improve", "source", "secret"].join("-");
+  const cwdFlag = ["--cookie"].join("");
+  const cwdSecret = ["improve", "cwd", "secret"].join("-");
+
+  const request = buildImprovePromptRequest(
+    promptRecord({
+      source: `Codex ${sourceFlag} ${sourceSecret}`,
+      cwd: `/tmp/project ${cwdFlag} session=${cwdSecret}`,
+    }),
+    "/tmp/promptvault.sqlite",
+    false,
+  );
+
+  assert.equal(
+    request.context,
+    "Codex [REDACTED_POSSIBLE_SECRET] · /tmp/project [REDACTED_POSSIBLE_SECRET]",
+  );
+  assert.doesNotMatch(request.context ?? "", new RegExp(`${sourceFlag}|${sourceSecret}|${cwdSecret}`));
+  assert.equal(request.prompt, "Improve this prompt");
+  assert.equal(request.source, `Codex ${sourceFlag} ${sourceSecret}`);
+});
+
 test("selection change clears recommendation state and matching improve error", () => {
   assert.deepEqual(improvementSelectionChanged("improve failed", "improve failed"), {
     error: null,

@@ -1,12 +1,106 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 22:22 KST
+Updated: 2026-06-08 22:28 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Quality band display secret masking
+## Current Slice - 2026-06-08 Improvement context metadata redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent secret-like source/workspace metadata from propagating raw in
+  recommendation request `context` while keeping the selected prompt text and
+  raw `source` persistence field unchanged.
+
+Context:
+
+- Previous quality band masking is pushed to `origin/main` with source commit
+  `ed0547d fix: mask quality band secrets` and docs closeout
+  `bb5b466 docs: record quality band masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for the selected prompt
+  recommendation user flow.
+- The selected prompt body must remain the raw recommendation input, and the
+  request `source` field remains raw for existing persistence semantics. The
+  recommendation `context` string is metadata (`source` + workspace) and can
+  use the same display redaction helpers already used for visible prompt rows.
+
+Progress:
+
+- Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
+  persisted/current/first objective all point at PromptVault.
+- Re-read the clean pushed repo state, `working.md`, improvement request
+  builder, prompt row redaction helpers, browser bridge request path, and the
+  Tauri/Rust improvement provider boundary.
+- Added a RED test in `tests/improvementSelection.test.ts` requiring
+  secret-like source/workspace metadata to be redacted in
+  `buildImprovePromptRequest().context` while preserving the raw prompt and
+  raw `source` field. RED failed as intended because the context preserved raw
+  synthetic `--api-key` and `--cookie` fragments.
+- Routed recommendation request context source/workspace metadata through
+  `sourceLabelDisplayText()` and `pathDisplayText()`. This changes only the
+  context metadata sent with the request.
+- Ran a browser smoke with a Tauri-like invoke shim for the quick scan ->
+  prompt select -> recommendation flow. The outgoing `improve_prompt` request
+  kept the raw prompt and raw `source` field, but `context` contained
+  `Codex [REDACTED_POSSIBLE_SECRET] · /tmp/project
+  [REDACTED_POSSIBLE_SECRET]`; the page body also omitted the raw synthetic
+  metadata fragments.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/improvementSelection.ts`: sanitizes recommendation request context
+  metadata using existing source/path display redaction helpers.
+- `tests/improvementSelection.test.ts`: adds RED/GREEN coverage for secret-like
+  source/workspace metadata in recommendation request context.
+- `working.md`: records this slice and updates the previous slice handoff
+  state.
+
+Tests:
+
+- RED helper test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/improvementSelection.test.ts`
+  failed as intended because `context` exposed raw synthetic source/workspace
+  fragments.
+- Targeted GREEN:
+  same command passed with `tests/improvementSelection.test.ts` 13/13 after
+  context redaction.
+- Redaction/API regression checks:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts tests/errorDisplay.test.ts`
+  passed with 49/49; `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed with 136/136.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5243" --port 5243 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_improve_context_secret_qa.mjs'`
+  passed with exit code `0`; there were no page errors, console errors, or
+  failed responses, and the outgoing `improve_prompt` request carried redacted
+  context metadata.
+- Full project check: `npm run check` passed, covering UI tests 363/363,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after recommendation context metadata redaction.
+- Source commit/push and final closeout are still pending staged/full-tree
+  secret scans.
+
+Research:
+
+- No external research. This is direct privacy hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Stage explicit source/test/log paths, run staged gitleaks, commit and push the
+  source slice to private `origin/main`, verify fetch parity and private
+  visibility, then close out `working.md` in a separate docs commit.
+
+## Previous Slice - 2026-06-08 Quality band display secret masking
 
 Current Goal:
 
@@ -111,9 +205,7 @@ Research:
 
 Next Steps:
 
-- Commit this closeout `working.md` update after staged gitleaks, run full-tree
-  gitleaks again, push to private `origin/main`, and verify final fetch parity
-  plus GitHub private visibility.
+- Continue autonomous QA/improvement from this clean pushed tree.
 
 ## Previous Slice - 2026-06-08 Risk flag display secret masking
 

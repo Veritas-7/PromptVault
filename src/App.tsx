@@ -201,6 +201,8 @@ import {
   workSummarySnapshotsActionLabel,
   workSummarySnapshotsFailureText,
   workSummarySnapshotsMetaText,
+  workSummarySnapshotSummaryOverflowText,
+  workSummarySnapshotVisibleSummaries,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "./workSummaryStatus";
@@ -1427,22 +1429,46 @@ function App() {
         {workSummarySnapshotsResult ? (
           visibleWorkSummarySnapshots.length ? (
             <div className="work-summary-list" data-work-summary-snapshots="true">
-              {visibleWorkSummarySnapshots.map((snapshot) => (
-                <article className="work-summary-row" key={snapshot.id}>
-                  <div>
-                    <strong>스냅샷 #{snapshot.id.toLocaleString()}</strong>
-                    <span>{snapshot.created_at}</span>
-                  </div>
-                  <p>{snapshot.narrative_markdown.split("\n")[0]}</p>
-                  <span>
-                    {snapshot.provider}
-                    {snapshot.used_ai ? " · AI" : " · local"} · 프로젝트{" "}
-                    {snapshot.project_count.toLocaleString()}개 · {snapshot.date_count.toLocaleString()}일 · 작업{" "}
-                    {snapshot.total_items.toLocaleString()}개 · 세션 근거{" "}
-                    {snapshot.session_evidence_count.toLocaleString()}건
-                  </span>
-                </article>
-              ))}
+              {visibleWorkSummarySnapshots.map((snapshot) => {
+                const visibleSummaries = workSummarySnapshotVisibleSummaries(snapshot);
+                const summaryOverflowText = workSummarySnapshotSummaryOverflowText(
+                  snapshot,
+                  visibleSummaries.length,
+                );
+                return (
+                  <article className="work-summary-row" key={snapshot.id}>
+                    <div>
+                      <strong>스냅샷 #{snapshot.id.toLocaleString()}</strong>
+                      <span>{snapshot.created_at}</span>
+                    </div>
+                    <p>{snapshot.narrative_markdown.split("\n")[0]}</p>
+                    <span>
+                      {snapshot.provider}
+                      {snapshot.used_ai ? " · AI" : " · local"} · 프로젝트{" "}
+                      {snapshot.project_count.toLocaleString()}개 · {snapshot.date_count.toLocaleString()}일 · 작업{" "}
+                      {snapshot.total_items.toLocaleString()}개 · 세션 근거{" "}
+                      {snapshot.session_evidence_count.toLocaleString()}건
+                    </span>
+                    {visibleSummaries.length ? (
+                      <ul className="work-summary-snapshot-details">
+                        {visibleSummaries.map((summary) => (
+                          <li key={`${snapshot.id}-${summary.date}-${summary.project}`}>
+                            <strong>
+                              {summary.project} · {summary.date}
+                            </strong>
+                            <span>
+                              작업 {summary.work_item_count.toLocaleString()}개 · 세션 근거{" "}
+                              {summary.session_evidence_count.toLocaleString()}건
+                            </span>
+                            <p>{summary.headline}</p>
+                          </li>
+                        ))}
+                        {summaryOverflowText ? <li className="snapshot-detail-overflow">{summaryOverflowText}</li> : null}
+                      </ul>
+                    ) : null}
+                  </article>
+                );
+              })}
             </div>
           ) : (
             <div className="empty compact" data-empty-work-summary-snapshots="true">

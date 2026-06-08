@@ -10,10 +10,17 @@ import {
   workSummarySnapshotsActionLabel,
   workSummarySnapshotsFailureText,
   workSummarySnapshotsMetaText,
+  workSummarySnapshotSummaryOverflowText,
+  workSummarySnapshotVisibleSummaries,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "../src/workSummaryStatus.ts";
-import type { ProjectWorkSummaryResult, ProjectWorkSummarySnapshotsResult } from "../src/types.ts";
+import type {
+  ProjectWorkSummary,
+  ProjectWorkSummaryResult,
+  ProjectWorkSummarySnapshot,
+  ProjectWorkSummarySnapshotsResult,
+} from "../src/types.ts";
 
 function lockState(overrides: Partial<ActionLockState> = {}): ActionLockState {
   return {
@@ -66,7 +73,48 @@ function snapshotsResult(overrides: Partial<ProjectWorkSummarySnapshotsResult> =
     database_path: "/tmp/promptvault.sqlite",
     total_snapshots: 12,
     returned_snapshot_count: 5,
+    available_dates: ["2026-06-09"],
+    available_projects: ["PromptVault"],
     snapshots: [],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function snapshotSummary(overrides: Partial<ProjectWorkSummary> = {}): ProjectWorkSummary {
+  return {
+    date: "2026-06-09",
+    project: "PromptVault",
+    headline: "PromptVault: 작업 요약",
+    work_item_count: 3,
+    session_evidence_count: 2,
+    unique_session_evidence_count: 1,
+    citations: [],
+    next_actions: [],
+    ...overrides,
+  };
+}
+
+function snapshot(overrides: Partial<ProjectWorkSummarySnapshot> = {}): ProjectWorkSummarySnapshot {
+  return {
+    id: 7,
+    created_at: "2026-06-09T00:00:00Z",
+    provider: "local-citation-rules",
+    used_ai: false,
+    narrative_markdown: "- 2026-06-09 PromptVault: 요약",
+    total_items: 8,
+    project_count: 2,
+    date_count: 2,
+    files_seen: 4,
+    session_evidence_count: 3,
+    session_evidence_unique_count: 2,
+    summary_count: 4,
+    summaries: [
+      snapshotSummary({ date: "2026-06-09", project: "PromptVault" }),
+      snapshotSummary({ date: "2026-06-09", project: "CareVault" }),
+      snapshotSummary({ date: "2026-06-08", project: "PromptVault" }),
+      snapshotSummary({ date: "2026-06-08", project: "SourceCollector" }),
+    ],
     warnings: [],
     ...overrides,
   };
@@ -162,4 +210,25 @@ test("work summary snapshot meta and failure text describe saved history", () =>
     "저장된 프로젝트 작업 요약 스냅샷을 불러오지 못했습니다. 브리지 상태나 데이터베이스 경로를 확인하세요.",
   );
   assert.equal(workSummarySnapshotsFailureText("ready"), null);
+});
+
+test("work summary snapshot helpers expose bounded project/day drill-down", () => {
+  const savedSnapshot = snapshot();
+
+  const visible = workSummarySnapshotVisibleSummaries(savedSnapshot, 3);
+
+  assert.deepEqual(
+    visible.map((summary) => `${summary.date}:${summary.project}`),
+    [
+      "2026-06-09:PromptVault",
+      "2026-06-09:CareVault",
+      "2026-06-08:PromptVault",
+    ],
+  );
+  assert.equal(
+    workSummarySnapshotSummaryOverflowText(savedSnapshot, visible.length),
+    "그 외 프로젝트/일자 요약 1개",
+  );
+  assert.equal(workSummarySnapshotSummaryOverflowText(savedSnapshot, 4), null);
+  assert.deepEqual(workSummarySnapshotVisibleSummaries(savedSnapshot, 0), []);
 });

@@ -1,8 +1,15 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
-import type { ProjectWorkSummaryResult, ProjectWorkSummarySnapshotsResult } from "./types.ts";
+import type {
+  ProjectWorkSummary,
+  ProjectWorkSummaryResult,
+  ProjectWorkSummarySnapshot,
+  ProjectWorkSummarySnapshotsResult,
+} from "./types.ts";
 
 export type WorkSummaryState = "idle" | "loading" | "ready" | "failed";
 export type WorkSummarySnapshotsState = "idle" | "loading" | "ready" | "failed";
+
+export const WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT = 3;
 
 export function workSummaryActionLabel(
   state: WorkSummaryState,
@@ -85,4 +92,20 @@ export function workSummarySnapshotsMetaText(
 export function workSummarySnapshotsFailureText(state: WorkSummarySnapshotsState): string | null {
   if (state !== "failed") return null;
   return "저장된 프로젝트 작업 요약 스냅샷을 불러오지 못했습니다. 브리지 상태나 데이터베이스 경로를 확인하세요.";
+}
+
+export function workSummarySnapshotVisibleSummaries(
+  snapshot: ProjectWorkSummarySnapshot,
+  limit = WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT,
+): ProjectWorkSummary[] {
+  return snapshot.summaries.slice(0, Math.max(0, limit));
+}
+
+export function workSummarySnapshotSummaryOverflowText(
+  snapshot: ProjectWorkSummarySnapshot,
+  visibleCount: number,
+): string | null {
+  const hiddenSummaryCount = Math.max(0, snapshot.summaries.length - visibleCount);
+  if (!hiddenSummaryCount) return null;
+  return `그 외 프로젝트/일자 요약 ${hiddenSummaryCount.toLocaleString()}개`;
 }

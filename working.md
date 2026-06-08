@@ -1,12 +1,102 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 02:09 KST
+Updated: 2026-06-09 02:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-summary snapshot suggestions
+## Current Slice - 2026-06-09 work-summary snapshot drill-down
+
+Current Goal:
+
+- Make saved work-summary history visibly useful for project/day management by
+  showing the nested project/date summaries inside each saved snapshot row.
+- Keep the UI bounded so large snapshots do not make the panel unwieldy.
+
+Context:
+
+- The previous slice returned date/project suggestions for saved snapshot
+  filters, but the history card still only showed snapshot-level aggregate
+  counts.
+- The backend already returns nested `summaries` with date, project, headline,
+  work item count, session evidence count, citations, and next actions. This
+  slice exposes the first few nested summaries directly in the saved-history
+  panel rather than adding a new API.
+
+Progress:
+
+- Added a small helper layer for saved snapshot drill-down limits and overflow
+  text.
+- Saved snapshot rows now display up to three nested project/date summaries.
+- Each visible nested summary shows project, date, work item count, session
+  evidence count, and headline.
+- The row shows an overflow message when more project/date summaries are hidden.
+- Added CSS so drill-down details span the full snapshot row and wrap long
+  project/headline text without overflowing.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds `WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT`,
+  `workSummarySnapshotVisibleSummaries()`, and
+  `workSummarySnapshotSummaryOverflowText()`.
+- `tests/workSummaryStatus.test.ts`: adds RED/GREEN coverage for bounded
+  project/day drill-down and overflow copy.
+- `src/App.tsx`: renders saved snapshot nested summaries under each snapshot
+  row.
+- `src/App.css`: styles bounded snapshot detail rows with stable spacing and
+  wrapping.
+
+Tests:
+
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before implementation because
+  `workSummarySnapshotSummaryOverflowText` was not exported.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  passed with 7/7.
+- GREEN:
+  `npm run build` passed (`tsc && vite build`).
+- Browser QA without cmux:
+  started `cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174`
+  and `npm run dev -- --host 127.0.0.1`, opened
+  `http://127.0.0.1:1420/` with one headless Chromium page, waited for
+  `[data-browser-bridge-status="connected"]`, clicked
+  `[data-save-work-summary-snapshot="true"]`, and waited for
+  `[data-work-summary-snapshots="true"] .work-summary-snapshot-details li`.
+  The UI rendered 3 nested project/day detail rows including CareVault,
+  PromptVault, and QualityGate for `2026-06-09`; there were no console errors
+  and no page errors. This created a real saved snapshot in
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- Full gate:
+  `npm run check` passed: UI tests 387/387, Vite build, Rust library tests
+  137/137, CLI tests 20/20, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this runtime by the latest
+  active objective note. A single headless Chromium page plus local browser
+  bridge was used for direct click/DOM verification.
+- The drill-down is display-only and bounded at three summaries per snapshot.
+  A future comparison view can expose all summaries or diff two snapshots.
+
+Research:
+
+- No external research was needed. Existing backend data already contained the
+  required project/day evidence.
+
+Next Steps:
+
+- Add saved-history comparison or a full drill-down modal/table for all
+  summaries inside a snapshot.
+- Continue improving project/day/task management by adding AI-assisted
+  structure extraction for ambiguous progress-log sections while preserving
+  citation-backed evidence.
+- Run a cmux in-app browser pass only in a runtime where that browser is
+  explicitly available and safe to use as the single active browser.
+
+## Previous Slice - 2026-06-09 work-summary snapshot suggestions
 
 Current Goal:
 

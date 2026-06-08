@@ -1,12 +1,116 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 15:04 KST
+Updated: 2026-06-08 15:13 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Selected prompt risk notice
+## Current Slice - 2026-06-08 Risk flag label alignment
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Ensure backend risk flag identifiers never leak as raw internal IDs in
+  user-facing prompt row or selected-detail warning copy.
+
+Context:
+
+- Previous selected prompt risk warning implementation is pushed to
+  `origin/main` as `914ea05 fix: show selected prompt risk warning`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus the CLI browser bridge and Playwright.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- Backend risk detection emits `possible_api_key`, `private_key`, and
+  `long_base64_like_token`, while the inline UI label helper still covered
+  older names such as `private_key_marker` and
+  `short_secret_like_assignment`.
+
+Progress:
+
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree was otherwise clean at `main...origin/main` and
+  parity was `0 0`; only the new RED test was untracked after the prior
+  handoff point.
+- Re-read test-driven-development and webapp-testing instructions before
+  implementation/verification.
+- Added RED coverage in `tests/riskLabels.test.ts`. The first focused run
+  failed with `ERR_MODULE_NOT_FOUND` because `src/riskLabels.ts` did not exist.
+- Added shared `riskFlagLabel` mapping in `src/riskLabels.ts`, preserving old
+  alias support while adding the current backend identifiers.
+- Switched `src/App.tsx` prompt row and selected-detail warning rendering to
+  import the shared helper instead of keeping an inline helper.
+- Confirmed focused GREEN and related prompt-row test coverage.
+- Browser QA first failed before the behavior check because the fresh bridge URL
+  was not seeded into browser storage, leaving the stored-load button disabled.
+  The rerun seeded `promptvault.browserBridgeUrl` before navigation.
+- Browser QA rerun loaded 200 stored rows, found 12 risky rows, selected a
+  risky row, confirmed the selected risk warning remained visible, confirmed
+  expected localized labels appeared, confirmed raw backend risk IDs did not
+  appear in the row risk label or selected warning, and saw zero
+  console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+
+Changes:
+
+- `src/riskLabels.ts`: exports the canonical user-facing risk flag label
+  helper for current backend IDs and older aliases.
+- `src/App.tsx`: imports the shared helper for prompt row and selected-detail
+  warning risk labels.
+- `tests/riskLabels.test.ts`: locks backend risk identifiers to Korean UI
+  labels and preserves fallback behavior for unknown IDs.
+- `working.md`: records this slice.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed
+  `main...origin/main` with only `tests/riskLabels.test.ts` untracked;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/riskLabels.test.ts`
+  failed with `ERR_MODULE_NOT_FOUND` for missing `src/riskLabels.ts`.
+- GREEN:
+  the same focused test passed after implementation, 2/2.
+- Related UI helper coverage:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/riskLabels.test.ts tests/promptRowA11y.test.ts`
+  passed, 10/10.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5211" --port 5211 --server "npm run dev -- --host 127.0.0.1 --port 5212" --port 5212 --timeout 120 -- /bin/bash -lc ...`
+  passed with 200 rows loaded, 12 risky rows, selected warning visible,
+  expected localized labels present, no raw backend risk IDs in row/warning
+  text, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 310/310,
+  production build, Rust lib tests 86/86, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- `gitleaks protect --staged` passed with no leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 701.51 MB with
+  no leaks.
+
+Issues:
+
+- No product blocker after the risk label alignment fix.
+- Browser harness note: seed `promptvault.browserBridgeUrl` in localStorage
+  before navigation when using non-default bridge ports.
+
+Research:
+
+- No external research. This is direct code/test/browser QA work.
+
+Next Steps:
+
+- Push this closeout commit to `origin/main`, run final parity/status checks,
+  then continue from a clean pushed tree and pick the next autonomous
+  QA/improvement slice.
+
+## Previous Slice - 2026-06-08 Selected prompt risk notice
 
 Current Goal:
 

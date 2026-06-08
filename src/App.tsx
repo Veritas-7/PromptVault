@@ -80,6 +80,7 @@ import {
 } from "./promptEmptyState";
 import { promptRowAriaLabel, promptRowPreviewText, selectedPromptMetaLabel } from "./promptRowA11y";
 import { qualityBandClass, qualityBandLabel } from "./qualityLabels";
+import { riskFlagLabel } from "./riskLabels";
 import {
   cancelScan,
   importBatch,
@@ -234,19 +235,6 @@ function qualityGapSummary(gaps: string[]): string {
     .join(", ");
   const hiddenCount = gaps.length - QUALITY_GAP_DISPLAY_LIMIT;
   return hiddenCount > 0 ? `${visible} 외 ${hiddenCount.toLocaleString()}개` : visible;
-}
-
-function riskFlagLabel(flag: string): string {
-  switch (flag) {
-    case "long_base64_like_token":
-      return "긴 토큰 형식 문자열";
-    case "private_key_marker":
-      return "비공개 키 표식";
-    case "short_secret_like_assignment":
-      return "비밀값 형태 할당";
-    default:
-      return flag || "알 수 없음";
-  }
 }
 
 function App() {

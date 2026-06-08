@@ -1,12 +1,82 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 00:46 KST
+Updated: 2026-06-09 00:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 Codex session metadata evidence
+## Current Slice - 2026-06-09 unique session evidence counts
+
+Current Goal:
+
+- Make `work-report` distinguish per-item session support counts from unique
+  session evidence counts.
+- Prevent one Codex metadata session that supports multiple same-day work items
+  from being misread as multiple unique sessions.
+
+Context:
+
+- The previous slice successfully attached Codex session metadata evidence to
+  PromptVault work items.
+- `session_evidence_count` is intentionally an item-support count: one session
+  evidence record can support several work items on the same project/date.
+- Operators need a separate unique session/thread count to interpret report
+  totals correctly.
+
+Progress:
+
+- Added report-level `session_evidence_unique_count`.
+- Added report-level `session_evidence_unique_sources`.
+- Added hidden per-item evidence keys so unique evidence can be counted without
+  exposing raw session content in JSON output.
+- Kept existing per-item `session_evidence_count` semantics unchanged.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: tracks hidden session evidence keys per work item and
+  computes unique report totals.
+- `src-tauri/src/bin/promptvault-cli.rs`: prints `unique_session_evidence` and
+  unique session source counts in plain CLI output.
+- `working.md`: records this evidence-count interpretation slice.
+
+Tests:
+
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_report_distinguishes_unique_session_evidence_from_item_support --lib`
+  failed before implementation because `ProjectWorkReport` had no unique
+  evidence fields.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_report_distinguishes_unique_session_evidence_from_item_support --lib`
+  passed.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work --lib`
+  passed with 6/6.
+- Actual unique-count smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-report --limit 80 --session-limit 20 --json`
+  returned `session_scan_prompt_count: 40`,
+  `session_evidence_count: 33`,
+  `session_evidence_unique_count: 3`, and
+  `session_evidence_unique_sources: Codex session metadata 3`.
+- Actual DB safety check:
+  `sqlite3 /Users/wj/Documents/PromptVault/promptvault.sqlite "select count(*) from prompts where source='Project progress logs';"`
+  returned `4` after the smoke.
+
+Issues:
+
+- The unique count is now clearer, but the raw scan still takes about 49-52
+  seconds for this bounded smoke. A persistent evidence index is still needed.
+- AI summarization is still pending until deterministic evidence indexing is
+  stable.
+
+Next Steps:
+
+- Add a persistent, sanitized session-evidence index to avoid repeated raw
+  scans.
+- Add AI-assisted daily/project summaries with source citations after indexed
+  evidence is available.
+
+## Previous Slice - 2026-06-09 Codex session metadata evidence
 
 Current Goal:
 

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 21:56 KST
+Updated: 2026-06-08 21:58 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -49,6 +49,12 @@ Progress:
   and the recommendation panel heading rendered the redacted provider without
   raw synthetic fragments.
 - Deleted the temporary browser QA script after verification.
+- Source commit `eec401e fix: mask provider label secrets` was pushed to
+  `origin/main`; `git fetch origin main && git rev-list --left-right --count
+  HEAD...origin/main` returned `0 0`.
+- Repository visibility was rechecked with `gh repo view
+  Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`:
+  `visibility=PRIVATE`, `isPrivate=true`.
 
 Changes:
 
@@ -77,11 +83,18 @@ Tests:
 - Full project check: `npm run check` passed, covering UI tests 359/359,
   production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
   `cargo clippy --all-targets --all-features -- -D warnings`.
+- Source staged secret scan: `gitleaks protect --staged` scanned about 5.68 KB
+  and found no leaks before commit.
+- Source full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.15 MB and found no leaks before the GitHub push.
+- Source push verification: `git push origin main` advanced `main` from
+  `26e457f` to `eec401e`; after fetch, parity was `0 0` and
+  `git status --short --branch` reported `## main...origin/main`.
 
 Issues:
 
 - No product blocker after provider display masking.
-- Source commit/push is pending staged and full-tree gitleaks verification.
+- No product blocker after source push verification.
 
 Research:
 
@@ -90,9 +103,9 @@ Research:
 
 Next Steps:
 
-- Run `git diff --check`, stage explicit paths only, run staged gitleaks, commit
-  the source change, run full-tree gitleaks, push to private `origin/main`, and
-  verify fetch parity plus GitHub private visibility.
+- Commit this closeout `working.md` update after staged gitleaks, run full-tree
+  gitleaks again, push to private `origin/main`, and verify final fetch parity
+  plus GitHub private visibility.
 
 ## Previous Slice - 2026-06-08 Quality gap display secret masking
 

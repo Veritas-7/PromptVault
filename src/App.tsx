@@ -58,6 +58,7 @@ import {
   importQueueFinalState,
   importQueueSelectionSummaryLabel,
   importQueueSelectAllLabel,
+  plannedQueueSourceIds,
   selectedQueueSourceIds,
   toggleSourceSelection,
 } from "./importQueue";
@@ -624,7 +625,7 @@ function App() {
     try {
       const next = await planScan();
       setPlan(next);
-      setSelectedImportSourceIds((current) => selectedQueueSourceIds(current, next.sources));
+      setSelectedImportSourceIds((current) => plannedQueueSourceIds(current, next.sources));
       setPlanState("ready");
     } catch (err) {
       const message = errorText(err);

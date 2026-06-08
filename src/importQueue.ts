@@ -27,6 +27,15 @@ export function selectedQueueSourceIds(
   return selectedSourceIds.filter((sourceId) => availableSourceIds.has(sourceId));
 }
 
+export function plannedQueueSourceIds(
+  selectedSourceIds: string[],
+  sources: SourcePlan[],
+): string[] {
+  const availableSourceIds = availableQueueSourceIds(sources);
+  const selectedAvailableSourceIds = selectedQueueSourceIds(selectedSourceIds, sources);
+  return selectedAvailableSourceIds.length ? selectedAvailableSourceIds : availableSourceIds;
+}
+
 export function availableQueueSourceIds(sources: SourcePlan[]): string[] {
   return sources.filter((source) => source.file_count > 0).map((source) => source.id);
 }

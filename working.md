@@ -1,12 +1,148 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 14:10 KST
+Updated: 2026-06-08 14:19 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Canceled quick scan response compatibility
+## Current Slice - 2026-06-08 Import plan default selection
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Improve the import-plan user flow so a freshly generated plan starts with
+  available sources selected by default, while preserving an existing available
+  selection on subsequent plan refreshes.
+
+Context:
+
+- Previous canceled quick scan response compatibility slice is pushed to
+  `origin/main`: implementation
+  `1aa110f fix: accept canceled quick scan results` and closeout
+  `ef787f7 docs: close canceled scan handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`,
+  and `gh repo view --json visibility --jq .visibility` returned `PRIVATE`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus the CLI browser bridge and Playwright.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- Connected browser QA found that a successful import plan showed 12 plan rows
+  with 11 selectable sources, but `0 / 11개 선택됨`; `선택 실행` and
+  `선택 해제` were disabled until the user clicked `전체 선택`.
+- The safer UX improvement is to default-select all currently available import
+  sources only when there is no previous available selection. If the user has
+  already selected a subset and refreshes the plan, that subset should be
+  preserved.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `ef787f7 docs: close canceled scan handoff`.
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree is clean at `main...origin/main` and parity is
+  `0 0`.
+- Ran connected browser QA across bridge health, initial stored facets, import
+  states/events, plan generation, store filters, empty stored result, reset,
+  prompt filter empty state, and local recommendation. All API calls returned
+  HTTP 200, with no console or page errors. The flow created local
+  recommendation event `#6` in the real PromptVault DB.
+- Confirmed reset-after-empty stored filter behavior is normal after waiting
+  for React render: `1,000개 로드됨 · 최신순 미리보기`, 200 visible prompt
+  rows, no empty state, and the first row selected.
+- Ran connected browser QA for one small Codex import batch. It processed
+  5 files, produced 11 prompts, updated the stored count to 90,752, and
+  refreshed import states/events/facets without errors. This created one real
+  import event in the PromptVault DB.
+- Confirmed RED first:
+  `tests/importQueue.test.ts` imported `plannedQueueSourceIds` and failed
+  because the helper was not exported.
+- Added `plannedQueueSourceIds`: it returns all available source ids when the
+  existing available selection is empty, otherwise it preserves the existing
+  available selection.
+- Updated `runPlan` to use `plannedQueueSourceIds` after a successful plan.
+- Confirmed GREEN with the focused plan default/preserve tests.
+- Ran `tests/importQueue.test.ts`; 15/15 passed.
+- Re-ran connected browser plan QA. The plan had 12 rows, 11 available sources,
+  11 selected sources, summary `11 / 11개 선택됨`, `전체 선택` disabled,
+  `선택 해제` enabled, `선택 실행` enabled with aria-label
+  `선택한 소스 11개 가져오기`, and no global/plan/console/page errors.
+- Ran full `npm run check` successfully after the import plan default
+  selection change.
+
+Changes:
+
+- `working.md`: records the import plan default selection slice.
+- `tests/importQueue.test.ts`: adds RED/GREEN coverage for defaulting an empty
+  plan selection to available sources and preserving an existing subset.
+- `src/importQueue.ts`: adds `plannedQueueSourceIds`.
+- `src/App.tsx`: uses `plannedQueueSourceIds` after plan generation.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- Baseline connected browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5183" --port 5183 --server "npm run dev -- --host 127.0.0.1 --port 5182" --port 5182 --timeout 120 -- /bin/bash -lc ...`
+  confirmed bridge health, stored facets, import states/events, plan,
+  missing stored filter, reset, prompt filter empty state, and local
+  recommendation without console/page errors.
+- Reset focused browser QA:
+  same Vite/bridge harness confirmed missing stored filter showed `0개 로드됨`
+  and reset rendered `1,000개 로드됨 · 최신순 미리보기` with 200 prompt rows.
+- One-batch import browser QA:
+  same harness ran Codex `data-import-source-id="codex"` batch import. It
+  returned `/api/import-batch` HTTP 200, showed no errors, and refreshed
+  import states/events/facets.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "plan defaults|plan preserves" tests/importQueue.test.ts`
+  failed because `plannedQueueSourceIds` was not exported.
+- GREEN:
+  the same focused test passed after implementation.
+- Import queue regression:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/importQueue.test.ts`
+  passed 15/15.
+- Browser plan default selection verification:
+  same Vite/bridge harness confirmed `availableCount: 11`,
+  `selectedCount: 11`, `selectionSummary: "11 / 11개 선택됨"`,
+  `selectAllDisabled: true`, `clearDisabled: false`,
+  `importSelectedDisabled: false`, and no console/page errors.
+- Full project check: `npm run check` passed, covering UI tests 307/307,
+  production build, Rust lib tests 85/85, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/App.tsx src/importQueue.ts tests/importQueue.test.ts working.md`
+  passed; `git status --short --branch` showed only `src/App.tsx`,
+  `src/importQueue.ts`, `tests/importQueue.test.ts`, and `working.md`
+  modified.
+- Staged paths: `git diff --cached --name-only` listed only `src/App.tsx`,
+  `src/importQueue.ts`, `tests/importQueue.test.ts`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed
+  after scanning about 7.66 KB and finding no leaks.
+
+Issues:
+
+- No blockers. Commit, full-tree secret scan, push, and final parity checks are
+  pending.
+- QA side effects in the real local PromptVault database: local recommendation
+  event `#6` and one Codex import event were created during direct browser
+  verification.
+
+Research:
+
+- No external research. This is direct code/test/QA work.
+
+Next Steps:
+
+- Commit the implementation, run full-tree secret scan, push, and record final
+  parity.
+
+## Previous Slice - 2026-06-08 Canceled quick scan response compatibility
 
 Current Goal:
 

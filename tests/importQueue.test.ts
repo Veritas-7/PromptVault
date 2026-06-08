@@ -7,6 +7,7 @@ import {
   importQueueFinalState,
   importQueueSelectionSummaryLabel,
   importQueueSelectAllLabel,
+  plannedQueueSourceIds,
   selectedQueueSourceIds,
   toggleSourceSelection,
 } from "../src/importQueue.ts";
@@ -55,6 +56,20 @@ test("available queue source ids keep plan order and omit empty sources", () => 
   assert.deepEqual(
     availableQueueSourceIds([source("a", 10), source("b", 0), source("c", 2)]),
     ["a", "c"],
+  );
+});
+
+test("plan defaults to all available queue sources when no previous selection exists", () => {
+  assert.deepEqual(
+    plannedQueueSourceIds([], [source("a", 10), source("b", 0), source("c", 2)]),
+    ["a", "c"],
+  );
+});
+
+test("plan preserves available previous queue selection", () => {
+  assert.deepEqual(
+    plannedQueueSourceIds(["c", "b"], [source("a", 10), source("b", 0), source("c", 2)]),
+    ["c"],
   );
 });
 

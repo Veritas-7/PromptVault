@@ -119,6 +119,8 @@ pub struct ProjectWorkItem {
     pub evidence: String,
     pub session_evidence_count: usize,
     pub session_sources: Vec<FrequencyItem>,
+    #[serde(skip)]
+    pub session_evidence_keys: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,6 +136,8 @@ pub struct ProjectWorkReport {
     pub session_scan_sources: Vec<FrequencyItem>,
     pub session_evidence_count: usize,
     pub session_sources: Vec<FrequencyItem>,
+    pub session_evidence_unique_count: usize,
+    pub session_evidence_unique_sources: Vec<FrequencyItem>,
     pub items: Vec<ProjectWorkItem>,
     pub warnings: Vec<String>,
 }
@@ -2550,6 +2554,8 @@ fn build_project_progress_work_report(
         session_scan_sources: Vec::new(),
         session_evidence_count: 0,
         session_sources: Vec::new(),
+        session_evidence_unique_count: 0,
+        session_evidence_unique_sources: Vec::new(),
         items,
         warnings,
     })
@@ -2589,6 +2595,7 @@ fn project_progress_work_items_from_text(path: &Path, text: &str) -> Vec<Project
                 evidence: String::new(),
                 session_evidence_count: 0,
                 session_sources: Vec::new(),
+                session_evidence_keys: Vec::new(),
             });
             continue;
         }
@@ -2785,6 +2792,7 @@ fn normalize_project_path_match(text: &str) -> Option<String> {
 fn attach_session_evidence(items: &mut [ProjectWorkItem], prompts: &[PromptRecord]) {
     for item in items {
         let mut source_counts = HashMap::new();
+        let mut evidence_keys = BTreeSet::new();
         for prompt in prompts {
             if prompt_date(prompt.timestamp.as_deref()) != item.date {
                 continue;
@@ -2793,9 +2801,11 @@ fn attach_session_evidence(items: &mut [ProjectWorkItem], prompts: &[PromptRecor
                 continue;
             }
             *source_counts.entry(prompt.source.clone()).or_default() += 1;
+            evidence_keys.insert(format!("{}\t{}", prompt.source, prompt.id));
         }
         item.session_sources = rank_counts(source_counts, usize::MAX);
         item.session_evidence_count = item.session_sources.iter().map(|entry| entry.count).sum();
+        item.session_evidence_keys = evidence_keys.into_iter().collect();
     }
 }
 
@@ -2809,15 +2819,27 @@ fn prompt_source_counts(prompts: &[PromptRecord]) -> Vec<FrequencyItem> {
 
 fn refresh_project_work_session_summary(report: &mut ProjectWorkReport) {
     let mut source_counts = HashMap::new();
+    let mut unique_keys = HashSet::new();
+    let mut unique_source_counts = HashMap::new();
     let mut evidence_count = 0usize;
     for item in &report.items {
         evidence_count += item.session_evidence_count;
         for source in &item.session_sources {
             *source_counts.entry(source.text.clone()).or_default() += source.count;
         }
+        for key in &item.session_evidence_keys {
+            if !unique_keys.insert(key.clone()) {
+                continue;
+            }
+            if let Some((source, _)) = key.split_once('\t') {
+                *unique_source_counts.entry(source.to_string()).or_default() += 1;
+            }
+        }
     }
     report.session_evidence_count = evidence_count;
     report.session_sources = rank_counts(source_counts, usize::MAX);
+    report.session_evidence_unique_count = unique_keys.len();
+    report.session_evidence_unique_sources = rank_counts(unique_source_counts, usize::MAX);
 }
 
 fn workspace_matches_project(cwd: &str, project: &str) -> bool {
@@ -7015,6 +7037,52 @@ Progress:
         assert_eq!(sources[0].count, 2);
         assert_eq!(sources[1].text, "Claude Code projects");
         assert_eq!(sources[1].count, 1);
+    }
+
+    #[test]
+    fn project_work_report_distinguishes_unique_session_evidence_from_item_support() {
+        let path = PathBuf::from("/tmp/ExampleProject/working.md");
+        let text = r#"## Current Slice - 2026-06-09 First item
+
+- First.
+
+## Previous Slice - 2026-06-09 Second item
+
+- Second.
+"#;
+        let mut items = project_progress_work_items_from_text(&path, text);
+        let mut prompt = dated_record("same-session", "2026-06-09T12:00:00Z");
+        prompt.source = "Codex session metadata".to_string();
+        prompt.text = "Codex session project targets: /tmp/ExampleProject".to_string();
+
+        attach_session_evidence(&mut items, &[prompt]);
+        let mut report = ProjectWorkReport {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            total_items: items.len(),
+            project_count: 1,
+            date_count: 1,
+            files_seen: 1,
+            items_by_date: Vec::new(),
+            items_by_project: Vec::new(),
+            session_scan_prompt_count: 1,
+            session_scan_sources: Vec::new(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_unique_count: 0,
+            session_evidence_unique_sources: Vec::new(),
+            items,
+            warnings: Vec::new(),
+        };
+
+        refresh_project_work_session_summary(&mut report);
+
+        assert_eq!(report.session_evidence_count, 2);
+        assert_eq!(report.session_evidence_unique_count, 1);
+        assert_eq!(
+            report.session_evidence_unique_sources[0].text,
+            "Codex session metadata"
+        );
+        assert_eq!(report.session_evidence_unique_sources[0].count, 1);
     }
 
     #[test]

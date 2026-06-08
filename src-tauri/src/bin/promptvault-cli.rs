@@ -284,6 +284,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 report.session_scan_prompt_count
             );
             println!("session_evidence: {}", report.session_evidence_count);
+            println!(
+                "unique_session_evidence: {}",
+                report.session_evidence_unique_count
+            );
             if !report.warnings.is_empty() {
                 println!("warnings:");
                 for warning in &report.warnings {
@@ -304,6 +308,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("session sources:");
             for item in &report.session_sources {
+                println!("- {}: {}", item.text, item.count);
+            }
+            println!("unique session sources:");
+            for item in &report.session_evidence_unique_sources {
                 println!("- {}: {}", item.text, item.count);
             }
             for item in &report.items {

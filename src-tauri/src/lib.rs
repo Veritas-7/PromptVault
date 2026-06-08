@@ -3490,7 +3490,8 @@ fn read_stored_prompts(
         )?
         .collect::<Result<Vec<_>, _>>()?;
 
-    rows.into_iter()
+    let mut prompts = rows
+        .into_iter()
         .map(|row| {
             Ok(PromptRecord {
                 id: row.id,
@@ -3507,7 +3508,13 @@ fn read_stored_prompts(
                 quality: serde_json::from_str(&row.quality_json)?,
             })
         })
-        .collect()
+        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
+
+    if preview_sort == PreviewSort::Latest {
+        prompts.reverse();
+    }
+
+    Ok(prompts)
 }
 
 fn count_stored_prompt_matches(
@@ -6760,6 +6767,50 @@ mod tests {
         );
 
         std::fs::remove_dir_all(root).expect("remove load stored root");
+    }
+
+    #[test]
+    fn load_stored_prompts_latest_preview_matches_scan_order() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-load-latest-order-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create load latest order root");
+        let db_path = root.join("promptvault.sqlite");
+        let prompts = vec![
+            dated_record("stored-old", "2026-06-05T00:00:00Z"),
+            dated_record("stored-middle", "2026-06-06T00:00:00Z"),
+            dated_record("stored-new", "2026-06-07T00:00:00Z"),
+        ];
+        let stats = build_stats(&prompts, Vec::new());
+        persist_scan_result(&db_path, "2026-06-07T00:01:00Z", &prompts, &stats, &[])
+            .expect("persist prompt vault");
+
+        let result = run_load_stored_prompts(StoredPromptsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(2),
+            query: None,
+            source: None,
+            date: None,
+            workspace: None,
+            preview_sort: Some("latest".to_string()),
+        })
+        .expect("load latest stored prompts");
+
+        assert_eq!(result.returned_prompt_count, 2);
+        assert_eq!(
+            result
+                .prompts
+                .iter()
+                .map(|prompt| prompt.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["stored-middle", "stored-new"]
+        );
+
+        std::fs::remove_dir_all(root).expect("remove load latest order root");
     }
 
     #[test]

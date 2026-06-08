@@ -1,12 +1,101 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 13:00 KST
+Updated: 2026-06-08 13:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Status - 2026-06-08 Clean pushed after overflow visibility batch
+## Current Slice - 2026-06-08 Stored latest preview order consistency
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make stored prompt loading return `latest` previews in the same order as scan
+  previews, so the frontend latest-mode display and default selection remain
+  consistent across scan and saved-database flows.
+
+Context:
+
+- Previous overflow visibility batch is pushed to `origin/main`; latest handoff
+  commit is `fdff22b docs: refresh overflow batch handoff`.
+- Final parity after that handoff returned `HEAD...origin/main` as `0 0`.
+- Scan latest preview chooses the latest N prompt records from an ascending
+  timestamp list and returns them older-to-newer; the frontend reverses that for
+  newest-first display.
+- Stored prompt loading currently queries latest rows with SQL `DESC` and
+  returns them directly, which can make the same frontend logic display the
+  oldest part of the loaded preview and select a stale default prompt.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `fdff22b docs: refresh overflow batch handoff`.
+- Re-read `response_prompts`, `read_stored_prompts`, and the frontend latest
+  list rendering. Confirmed scan and stored latest previews have inconsistent
+  return ordering.
+- Preparing a RED Rust test that expects stored latest loading with limit 2 to
+  return the latest two records older-to-newer, matching scan preview order.
+- Confirmed RED first: targeted Rust test returned `stored-new, stored-middle`
+  but expected `stored-middle, stored-new`.
+- Fixed stored latest loading to reverse the limited DESC SQL result before
+  returning it, matching scan preview order while preserving the latest-N query.
+- Confirmed GREEN: the targeted Rust test passed after the order normalization.
+- Ran the full project check successfully after stored latest order fix.
+- Pre-staging verification passed with only the expected two modified files:
+  `src-tauri/src/lib.rs` and `working.md`.
+- Explicitly staged only `src-tauri/src/lib.rs` and `working.md`.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 5.69 KB and finding no leaks.
+
+Changes:
+
+- `working.md`: records the current stored latest preview order slice.
+- `src-tauri/src/lib.rs`: adds stored latest preview order coverage and
+  normalizes latest stored prompt return order to older-to-newer.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `cargo test load_stored_prompts_latest_preview_matches_scan_order`
+  failed because the returned ids were `stored-new, stored-middle` instead of
+  `stored-middle, stored-new`.
+- GREEN: the same targeted Rust test passed after latest stored rows were
+  reversed before return.
+- Full project check: `npm run check` passed, covering UI tests 297/297,
+  production build, Rust lib tests 85/85, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src-tauri/src/lib.rs working.md` passed;
+  repo root was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only `src-tauri/src/lib.rs` and
+  `working.md` modified;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`.
+- Staged paths: `git diff --cached --name-only` listed only
+  `src-tauri/src/lib.rs` and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed
+  after scanning about 5.69 KB and finding no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Restage `working.md`, rerun staged secret scan, then commit the implementation,
+  run full-tree secret scan, push, and verify final parity.
+
+## Previous Status - 2026-06-08 Clean pushed after overflow visibility batch
 
 Current Goal:
 

@@ -2023,7 +2023,12 @@ fn is_ignored_project_progress_dir(name: &str) -> bool {
 fn is_project_progress_log_name(name: &str) -> bool {
     matches!(
         name.to_ascii_lowercase().as_str(),
-        "working.md" | "worklog.md" | "project_status.md" | "progress_log.md" | "progress.md"
+        "working.md"
+            | "workingd.md"
+            | "worklog.md"
+            | "project_status.md"
+            | "progress_log.md"
+            | "progress.md"
     )
 }
 
@@ -6173,16 +6178,22 @@ mod tests {
         let project_dir = root.join("ExampleProject");
         std::fs::create_dir_all(&project_dir).expect("create project fixture dir");
         let working = project_dir.join("working.md");
+        let workingd = project_dir.join("workingd.md");
         let status = project_dir.join("PROJECT_STATUS.md");
         let notes = project_dir.join("notes.md");
         let json = project_dir.join("working.json");
         std::fs::write(&working, "# Working\n").expect("write working");
+        std::fs::write(&workingd, "# Working D\n").expect("write workingd");
         std::fs::write(&status, "# Status\n").expect("write status");
         std::fs::write(&notes, "# Notes\n").expect("write notes");
         std::fs::write(&json, "{}").expect("write json");
 
         assert!(source_file_matches(
             &working,
+            SourceKind::ProjectProgressMarkdown
+        ));
+        assert!(source_file_matches(
+            &workingd,
             SourceKind::ProjectProgressMarkdown
         ));
         assert!(source_file_matches(

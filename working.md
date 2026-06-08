@@ -1,12 +1,106 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 00:18 KST
+Updated: 2026-06-09 00:39 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 project work-report extraction
+## Current Slice - 2026-06-09 work-report session evidence join
+
+Current Goal:
+
+- Join project-local progress-log work items with bounded raw session evidence
+  so PromptVault can distinguish "not checked" from "checked but no session
+  evidence matched".
+- Keep the report read-only and make actual session scan counts visible in JSON
+  and CLI output.
+
+Context:
+
+- The project work report already extracts dated work items from real
+  project-local `working.md`, `workingd.md`, `worklog.md`, `progress.md`,
+  `progress_log.md`, and `PROJECT_STATUS.md` files under
+  `/Users/wj/Ai/System/10_Projects`.
+- The operator asked whether project/day work management is actually complete,
+  whether real sessions were parsed, and whether project-local progress logs are
+  included.
+- Raw Codex session timestamps are UTC while project progress logs are written
+  in KST, so session-date matching must normalize timestamps to KST.
+
+Progress:
+
+- Added session-evidence fields to project work items and report summaries.
+- Added `work-report --session-limit N>0` so raw session evidence scans are
+  bounded and read-only.
+- Limited the first raw session evidence scan to fast local session sources:
+  Codex, Codex CX, Claude project/history, and Antigravity CLI history.
+- Added KST date normalization for RFC3339 session timestamps.
+- Added explicit report fields for `session_scan_prompt_count` and
+  `session_scan_sources`, separate from matched `session_evidence_count`.
+- Added a warning when raw session prompts were scanned but none matched the
+  selected project/date work items.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds session evidence counters, KST prompt-date
+  normalization, source-count summaries, project/date/text matching, and tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds `--session-limit`, prints scanned
+  session prompt/source counts, and keeps JSON output structured.
+- `working.md`: records this session-evidence join slice.
+
+Tests:
+
+- RED/GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_items_attach_session_evidence --lib`
+  now verifies matching by project/date and by prompt text path.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work --lib`
+  passed with 4/4.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml project_progress_work --lib`
+  passed with 2/2.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml prompt_date_uses_kst_for_utc_session_timestamps --lib`
+  passed.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules --bin promptvault-cli`
+  passed.
+- Actual raw-session smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-report --limit 80 --session-limit 20 --json`
+  returned `session_scan_prompt_count: 20`,
+  `session_scan_sources: [{"text":"Codex","count":20}]`, and
+  `session_evidence_count: 0`.
+- Actual DB safety check:
+  `sqlite3 /Users/wj/Documents/PromptVault/promptvault.sqlite "select count(*) from prompts where source='Project progress logs';"`
+  returned `4` before and after the report smoke.
+
+Issues:
+
+- This is not yet a fully AI-assisted daily work manager. It is a deterministic
+  source-backed extraction and evidence-scan layer.
+- The first real raw-session verification found that progress-log items were
+  scanned against actual Codex prompts, but selected project/date items did not
+  match because recent raw user prompt text and cwd often do not include the
+  target project name.
+- Larger session scans are currently slow because evidence scans read raw
+  session files directly instead of using a dedicated incremental evidence
+  index.
+- Codex thread goal/session metadata is not yet modeled as a first-class
+  project evidence source; this is needed for ambiguous prompts where the repo
+  is known by thread identity rather than user prompt text.
+- GLM/OpenAI/Codex SDK summarization is still a follow-up. It should run only
+  after source-backed grouping and traceability are stable.
+
+Next Steps:
+
+- Add a session-evidence index that stores sanitized project/date/thread hints
+  incrementally instead of rescanning raw session files for each report.
+- Add Codex thread identity/goal metadata as a project-link source.
+- Add AI-assisted summarization with source citations after deterministic
+  project/date/session grouping is reliable.
+
+## Previous Slice - 2026-06-09 project work-report extraction
 
 Current Goal:
 

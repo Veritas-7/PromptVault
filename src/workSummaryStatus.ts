@@ -272,6 +272,19 @@ export function workLogExtractionPersistenceText(
   ].join(" · ");
 }
 
+export function workLogExtractionApprovalText(
+  result: ProjectWorkLogExtractionProposalsResult | null,
+  selectedApprovedCount: number,
+): string | null {
+  if (!result) return null;
+  const pendingText = `저장 대기 ${selectedApprovedCount.toLocaleString()}개 / accepted ${result.accepted_count.toLocaleString()}개`;
+  if (!result.persistence) return pendingText;
+  return [
+    `저장 완료 ${result.persistence.saved_item_count.toLocaleString()}개`,
+    pendingText,
+  ].join(" · ");
+}
+
 export function workLogExtractionFailureText(state: WorkLogExtractionState): string | null {
   if (state !== "failed") return null;
   return "AI 작업 추출 제안을 불러오지 못했습니다. provider 설정, 진행 로그 경로, 브리지 상태를 확인하세요.";

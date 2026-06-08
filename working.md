@@ -1,12 +1,121 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 06:37 KST
+Updated: 2026-06-09 06:53 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 generic Updated anchor extraction
+## Current Slice - 2026-06-09 extraction save-state clarity and nested worklog discovery
+
+Current Goal:
+
+- Make the work-log extraction UI clearly distinguish accepted-but-unsaved
+  proposals from SQLite-persisted managed rows.
+- Expand project-local progress-log discovery to include nested working/progress
+  worklog files without treating `/10_Projects` root-level files as projects.
+
+Context:
+
+- Operator review confirmed the app is not yet a complete project/day work
+  management ledger: live accepted proposals and saved SQLite rows were easy to
+  confuse, and only 1 extraction row was saved while more proposals were
+  accepted.
+- Existing project progress discovery was recursive but file-name matching was
+  too narrow. It included `working.md`, `workingd.md`, `worklog.md`,
+  `PROJECT_STATUS.md`, `progress_log.md`, and `progress.md`, but missed
+  project-local nested files such as `docs/WORKING_LOG.md`,
+  `docs/plans/*-worklog.md`, and `docs/*-progress.md`.
+
+Progress:
+
+- Added a UI helper that labels extraction approval state as `저장 대기 ...`
+  before persistence and `저장 완료 ... · 저장 대기 ...` after persistence.
+- Replaced the hard-coded approval meta text in the app with the shared helper.
+- Expanded project progress markdown matching to include:
+  `WORKING_LOG.md`, `work_log.md`, `working-log.md`, `work-log.md`,
+  `progress-log.md`, `*-worklog.md`, `*_worklog.md`,
+  `*-working-log.md`, `*_working_log.md`, `*-progress.md`, and
+  `*_progress.md`.
+- Added a root-boundary filter so worklog files directly under
+  `/Users/wj/Ai/System/10_Projects` are not treated as standalone projects.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - adds `workLogExtractionApprovalText`.
+- `src/App.tsx`:
+  - uses `workLogExtractionApprovalText` for extraction approval meta.
+- `src-tauri/src/lib.rs`:
+  - broadens safe project-progress log file-name matching;
+  - adds `is_project_progress_path_inside_project`;
+  - adds regression tests for nested worklog filenames and root-level worklog
+    exclusion.
+- `tests/workSummaryStatus.test.ts`:
+  - covers pending-vs-persisted extraction approval text.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts` failed because
+    `workLogExtractionApprovalText` was not exported.
+  - `cargo test project_progress_log_matching_finds_only_known_progress_markdown_files`
+    failed because `WORKING_LOG.md` was not matched.
+  - `cargo test project_progress_scan_requires_a_project_directory` failed
+    because root-level `REPO_SPLIT_WORKLOG.md` was included as a project log.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts`: PASS, 424 tests.
+  - `cargo test project_progress_`: PASS, 12 tests.
+- Actual CLI verification:
+  - `cargo run --quiet --bin promptvault-cli -- work-log-coverage --json`:
+    `files_seen=769`, `parsed_file_count=186`,
+    `unparsed_file_count=583`, `project_count=31`,
+    `work_item_count=5303`, and root-level
+    `/10_Projects/REPO_SPLIT_WORKLOG.md` excluded.
+  - `cargo run --quiet --bin promptvault-cli -- work-log-extract --json`:
+    `candidate_count=20`, `accepted_count=16`, `rejected_count=4`,
+    provider `local-extraction-rules`.
+- Headless browser-bridge QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 220 -- /bin/bash -lc 'node /tmp/promptvault_work_log_save_state_qa.mjs'`:
+    PASS.
+  - Observed approval meta:
+    `저장 대기 16개 / accepted 16개`.
+  - Observed extraction meta:
+    `로컬 local-extraction-rules · 후보 20개 · accepted 16개 · rejected 4개`.
+  - Persistence badge stayed hidden before saving proposals.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `424` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `155` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- Four newly discovered extraction candidates remain rejected:
+  - `MacMini_RAG_Project/2_Source/STT_SOTA_PROGRESS.md`:
+    `local_fallback_requires_ai_review`.
+  - Three `notebooklm-llm-wiki-flow/docs/plans/*-worklog.md` candidates:
+    `candidate_has_risk_flags`.
+- Saved SQLite extraction rows are still separate from accepted live proposals;
+  no default DB write was performed in browser QA.
+- Full gate passed for this slice.
+
+Research:
+
+- Used existing local code and Worklog memory guidance. No external web
+  research was used.
+
+Next Steps:
+
+- Stage only the changed PromptVault paths, run staged secret scan, commit, and
+  push.
+- Later: add an explicit reviewed save flow or AI-review path for the 4 rejected
+  nested candidates.
+
+## Previous Slice - 2026-06-09 generic Updated anchor extraction
 
 Current Goal:
 

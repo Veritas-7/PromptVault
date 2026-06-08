@@ -12,6 +12,7 @@ import {
   workLogExtractionItemsFailureText,
   workLogExtractionItemsMetaText,
   workLogExtractionMetaText,
+  workLogExtractionApprovalText,
   workLogExtractionPersistenceText,
   workLogExtractionProviderNoticeText,
   workLogExtractionReviewLabel,
@@ -638,6 +639,31 @@ test("work log extraction persistence text is only shown after accepted proposal
       },
     })),
     "accepted 제안 1개 저장 · 총 3개",
+  );
+});
+
+test("work log extraction approval text separates pending and persisted rows", () => {
+  assert.equal(workLogExtractionApprovalText(null, 0), null);
+  assert.equal(
+    workLogExtractionApprovalText(extractionResult(), 3),
+    "저장 대기 3개 / accepted 3개",
+  );
+  assert.equal(
+    workLogExtractionApprovalText(extractionResult({ accepted_count: 0 }), 0),
+    "저장 대기 0개 / accepted 0개",
+  );
+  assert.equal(
+    workLogExtractionApprovalText(
+      extractionResult({
+        persistence: {
+          database_path: "/tmp/promptvault.sqlite",
+          saved_item_count: 2,
+          total_saved_item_count: 5,
+        },
+      }),
+      1,
+    ),
+    "저장 완료 2개 · 저장 대기 1개 / accepted 3개",
   );
 });
 

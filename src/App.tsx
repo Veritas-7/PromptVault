@@ -224,6 +224,7 @@ import {
   workLogCandidatesMetaText,
   workLogCandidateReviewLabel,
   workLogExtractionActionLabel,
+  workLogExtractionApprovalText,
   workLogExtractionFailureText,
   workLogExtractionItemsActionLabel,
   workLogExtractionItemsFailureText,
@@ -652,6 +653,10 @@ function App() {
   const selectedApprovedWorkLogExtractionCandidateIds = acceptedWorkLogExtractionCandidateIds
     .filter((candidateId) => approvedWorkLogExtractionCandidateIds.has(candidateId));
   const selectedApprovedWorkLogExtractionCount = selectedApprovedWorkLogExtractionCandidateIds.length;
+  const workLogExtractionApprovalStatus = workLogExtractionApprovalText(
+    workLogExtractionResult,
+    selectedApprovedWorkLogExtractionCount,
+  );
   const hiddenWorkLogExtractionProposalCount = Math.max(
     0,
     filteredWorkLogExtractionProposals.length - WORK_LOG_EXTRACTION_DISPLAY_LIMIT,
@@ -2217,10 +2222,7 @@ function App() {
         {workLogExtractionResult ? (
           <div className="work-summary-index" data-work-log-extraction-approval-meta="true">
             <CheckCircle2 size={15} />
-            <span>
-              저장 승인 {selectedApprovedWorkLogExtractionCount.toLocaleString()}개 / accepted{" "}
-              {acceptedWorkLogExtractionCandidateIds.length.toLocaleString()}개
-            </span>
+            <span>{workLogExtractionApprovalStatus}</span>
           </div>
         ) : null}
         {workLogExtractionPersistenceStatus ? (

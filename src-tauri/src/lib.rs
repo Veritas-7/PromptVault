@@ -2614,7 +2614,10 @@ fn matching_source_file_candidates_with_cancel(
             }
         };
         let path = entry.path();
-        if source_file_matches(path, kind) {
+        if source_file_matches(path, kind)
+            && (!matches!(kind, SourceKind::ProjectProgressMarkdown)
+                || is_project_progress_path_inside_project(path, root))
+        {
             paths.push(file_candidate(path));
             if paths.len() <= 10 || paths.len() % 50 == 0 {
                 let discovered = paths.len();
@@ -2679,6 +2682,12 @@ fn source_file_matches(path: &Path, kind: SourceKind) -> bool {
     }
 }
 
+fn is_project_progress_path_inside_project(path: &Path, root: &Path) -> bool {
+    path.strip_prefix(root)
+        .ok()
+        .is_some_and(|relative| relative.components().count() >= 2)
+}
+
 fn source_should_descend(path: &Path, kind: SourceKind) -> bool {
     match kind {
         SourceKind::ProjectProgressMarkdown if path.is_dir() => path
@@ -2711,15 +2720,29 @@ fn is_ignored_project_progress_dir(name: &str) -> bool {
 }
 
 fn is_project_progress_log_name(name: &str) -> bool {
-    matches!(
-        name.to_ascii_lowercase().as_str(),
+    let name = name.to_ascii_lowercase();
+    if matches!(
+        name.as_str(),
         "working.md"
             | "workingd.md"
+            | "working_log.md"
+            | "working-log.md"
             | "worklog.md"
+            | "work_log.md"
+            | "work-log.md"
             | "project_status.md"
             | "progress_log.md"
+            | "progress-log.md"
             | "progress.md"
-    )
+    ) {
+        return true;
+    }
+    name.ends_with("-worklog.md")
+        || name.ends_with("_worklog.md")
+        || name.ends_with("-working-log.md")
+        || name.ends_with("_working_log.md")
+        || name.ends_with("-progress.md")
+        || name.ends_with("_progress.md")
 }
 
 fn file_candidate(path: &Path) -> SourceFileCandidate {
@@ -9567,11 +9590,21 @@ mod tests {
         std::fs::create_dir_all(&project_dir).expect("create project fixture dir");
         let working = project_dir.join("working.md");
         let workingd = project_dir.join("workingd.md");
+        let working_log = project_dir.join("WORKING_LOG.md");
+        let work_log = project_dir.join("work_log.md");
+        let plan_worklog = project_dir.join("docs/plans/2026-06-09-local-slice-worklog.md");
+        let refactor_progress = project_dir.join("docs/refactor-progress.md");
         let status = project_dir.join("PROJECT_STATUS.md");
         let notes = project_dir.join("notes.md");
         let json = project_dir.join("working.json");
+        std::fs::create_dir_all(project_dir.join("docs/plans")).expect("create plan log dirs");
         std::fs::write(&working, "# Working\n").expect("write working");
         std::fs::write(&workingd, "# Working D\n").expect("write workingd");
+        std::fs::write(&working_log, "# Working Log\n").expect("write working log");
+        std::fs::write(&work_log, "# Work Log\n").expect("write work log");
+        std::fs::write(&plan_worklog, "# Plan Worklog\n").expect("write plan worklog");
+        std::fs::write(&refactor_progress, "# Refactor Progress\n")
+            .expect("write refactor progress");
         std::fs::write(&status, "# Status\n").expect("write status");
         std::fs::write(&notes, "# Notes\n").expect("write notes");
         std::fs::write(&json, "{}").expect("write json");
@@ -9582,6 +9615,22 @@ mod tests {
         ));
         assert!(source_file_matches(
             &workingd,
+            SourceKind::ProjectProgressMarkdown
+        ));
+        assert!(source_file_matches(
+            &working_log,
+            SourceKind::ProjectProgressMarkdown
+        ));
+        assert!(source_file_matches(
+            &work_log,
+            SourceKind::ProjectProgressMarkdown
+        ));
+        assert!(source_file_matches(
+            &plan_worklog,
+            SourceKind::ProjectProgressMarkdown
+        ));
+        assert!(source_file_matches(
+            &refactor_progress,
             SourceKind::ProjectProgressMarkdown
         ));
         assert!(source_file_matches(
@@ -9632,6 +9681,29 @@ mod tests {
         assert!(!paths.contains(&dependency_working));
         assert!(!paths.contains(&build_working));
         assert!(!paths.contains(&deep_working));
+
+        std::fs::remove_dir_all(root).expect("remove project progress fixture");
+    }
+
+    #[test]
+    fn project_progress_scan_requires_a_project_directory() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-project-progress-project-dir-{}",
+            std::process::id()
+        ));
+        let project_dir = root.join("ExampleProject/docs/plans");
+        std::fs::create_dir_all(&project_dir).expect("create project fixture dir");
+        let root_worklog = root.join("REPO_SPLIT_WORKLOG.md");
+        let project_worklog = project_dir.join("2026-06-09-local-slice-worklog.md");
+        std::fs::write(&root_worklog, "# Root Worklog\n").expect("write root worklog");
+        std::fs::write(&project_worklog, "# Project Worklog\n").expect("write project worklog");
+
+        let matches = matching_source_file_candidates(&root, SourceKind::ProjectProgressMarkdown)
+            .into_iter()
+            .map(|candidate| candidate.expect("candidate").path)
+            .collect::<Vec<_>>();
+
+        assert_eq!(matches, vec![project_worklog]);
 
         std::fs::remove_dir_all(root).expect("remove project progress fixture");
     }

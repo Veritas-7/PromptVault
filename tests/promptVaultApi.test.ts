@@ -353,6 +353,7 @@ function projectWorkLogCandidatesPayload(overrides = {}) {
     skipped_parsed_file_count: 1,
     skipped_unreadable_file_count: 0,
     skipped_empty_file_count: 0,
+    skipped_pointer_file_count: 0,
     candidate_count: 1,
     candidates: [{
       candidate_id: "work-log-CareVault-a1b2c3d4e5",

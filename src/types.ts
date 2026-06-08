@@ -253,6 +253,7 @@ export interface ProjectWorkLogExtractionCandidatesResult {
   skipped_parsed_file_count: number;
   skipped_unreadable_file_count: number;
   skipped_empty_file_count: number;
+  skipped_pointer_file_count: number;
   candidate_count: number;
   candidates: ProjectWorkLogExtractionCandidate[];
   warnings: string[];

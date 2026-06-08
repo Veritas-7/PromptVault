@@ -1271,12 +1271,14 @@ function projectWorkLogExtractionCandidatesWithinResult(value: unknown): boolean
     || !isNonNegativeSafeInteger(value.skipped_parsed_file_count)
     || !isNonNegativeSafeInteger(value.skipped_unreadable_file_count)
     || !isNonNegativeSafeInteger(value.skipped_empty_file_count)
+    || !isNonNegativeSafeInteger(value.skipped_pointer_file_count)
     || !isNonNegativeSafeInteger(value.candidate_count)) {
     return false;
   }
   const accountedFileCount = value.skipped_parsed_file_count
     + value.skipped_unreadable_file_count
     + value.skipped_empty_file_count
+    + value.skipped_pointer_file_count
     + value.candidates.length;
   return Number.isSafeInteger(accountedFileCount)
     && value.candidate_count === value.candidates.length

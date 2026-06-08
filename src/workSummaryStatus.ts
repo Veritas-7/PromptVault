@@ -197,6 +197,7 @@ export function workLogCandidatesMetaText(
     `parsed 제외 ${result.skipped_parsed_file_count.toLocaleString()}개`,
     `unreadable ${result.skipped_unreadable_file_count.toLocaleString()}개`,
     `empty ${result.skipped_empty_file_count.toLocaleString()}개`,
+    `pointer ${result.skipped_pointer_file_count.toLocaleString()}개`,
   ].join(" · ");
 }
 

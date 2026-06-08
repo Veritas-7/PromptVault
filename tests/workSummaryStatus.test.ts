@@ -138,6 +138,7 @@ function candidatesResult(
     skipped_parsed_file_count: 16,
     skipped_unreadable_file_count: 1,
     skipped_empty_file_count: 2,
+    skipped_pointer_file_count: 1,
     candidate_count: 13,
     candidates: [],
     warnings: [],
@@ -481,7 +482,7 @@ test("work log candidate labels describe AI extraction inputs", () => {
   assert.equal(workLogCandidatesMetaText("loading", candidatesResult()), "AI 추출 후보 확인 중");
   assert.equal(
     workLogCandidatesMetaText("ready", candidatesResult()),
-    "후보 13개 · parsed 제외 16개 · unreadable 1개 · empty 2개",
+    "후보 13개 · parsed 제외 16개 · unreadable 1개 · empty 2개 · pointer 1개",
   );
   assert.equal(workLogCandidatesMetaText(failed, null), "AI 추출 후보를 사용할 수 없음");
   assert.equal(

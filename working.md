@@ -1,12 +1,119 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 06:15 KST
+Updated: 2026-06-09 06:21 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-summary session coverage visibility
+## Current Slice - 2026-06-09 progress-log pointer candidate skip
+
+Current Goal:
+
+- Stop treating pointer-only progress logs as AI extraction candidates.
+- Keep `workingd.md` visible in coverage accounting, but do not report it as a
+  rejected or AI-review-needed work item when it only points to `working.md`.
+- Show pointer skip counts separately from empty files in the work-log
+  candidate UI.
+
+Context:
+
+- Actual `work-log-candidates` showed CareVault `workingd.md` as an unparsed
+  candidate.
+- The file content was not a task log. It said the active CareVault worklog is
+  `working.md`, the file exists only because resume prompts refer to
+  `workingd.md`, and duplicate progress should not be appended there.
+- Counting that pointer as `local_fallback_requires_ai_review` made the ledger
+  look less complete than it was.
+
+Progress:
+
+- Added backend pointer detection for narrow worklog-pointer wording:
+  active worklog points to `working.md` and duplicate progress append is
+  explicitly discouraged.
+- Added `skipped_pointer_file_count` to extraction-candidate results.
+- Updated frontend types, browser-bridge validation, and candidate meta text to
+  include pointer skip counts.
+- Fixed two Rust test fixtures whose `files_seen` values did not match their
+  candidate counts.
+- Verified real data:
+  - `work-log-candidates`: `files_seen=32`, `candidate_count=15`,
+    `skipped_pointer_file_count=1`;
+  - `work-log-extract`: `candidate_count=15`, `accepted_count=13`,
+    `rejected_count=2`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - adds `skipped_pointer_file_count`;
+  - skips pointer-only progress logs before creating AI extraction candidates;
+  - adds regression coverage for CareVault-style `workingd.md` pointers.
+- `src/types.ts`:
+  - adds `skipped_pointer_file_count` to
+    `ProjectWorkLogExtractionCandidatesResult`.
+- `src/promptVaultApi.ts`:
+  - validates the new pointer skip counter and includes it in candidate-result
+    accounting.
+- `src/workSummaryStatus.ts`:
+  - includes `pointer N개` in extraction candidate metadata.
+- `tests/workSummaryStatus.test.ts` and `tests/promptVaultApi.test.ts`:
+  - update fixtures and expectations for pointer skip counts.
+
+Tests:
+
+- RED:
+  - `cargo test project_progress_log_extraction_candidates_skip_pointer_logs`:
+    failed because CareVault-style pointer logs were still returned as one
+    extraction candidate.
+- Targeted GREEN:
+  - `cargo test project_progress_log_extraction_candidates_skip_pointer_logs`:
+    PASS.
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts tests/promptVaultApi.test.ts`:
+    PASS, `422` tests.
+- Actual CLI verification:
+  - `cargo run --quiet --bin promptvault-cli -- work-log-candidates --json`:
+    `files_seen=32`, `skipped_parsed_file_count=16`,
+    `skipped_unreadable_file_count=0`, `skipped_empty_file_count=0`,
+    `skipped_pointer_file_count=1`, `candidate_count=15`.
+  - `cargo run --quiet --bin promptvault-cli -- work-log-extract --json`:
+    `candidate_count=15`, `accepted_count=13`, `rejected_count=2`.
+  - Remaining rejected candidates are only SnapTranslate
+    `PROJECT_STATUS.md` and `working.md`, both `candidate_has_risk_flags`.
+- Headless browser-bridge QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 220 -- /bin/bash -lc 'node /tmp/promptvault_work_log_pointer_candidate_qa.mjs'`:
+    PASS.
+  - Observed candidate meta:
+    `후보 15개 · parsed 제외 16개 · unreadable 0개 · empty 0개 · pointer 1개`.
+  - CareVault was absent from the extraction candidate list.
+  - Browser QA captured no console errors, page errors, or failed requests.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `422` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `151` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- This removes one false-positive candidate. It does not solve the two
+  remaining SnapTranslate risk-flagged candidates.
+- The pointer detector is intentionally narrow; future pointer formats may need
+  additional fixtures before broadening.
+
+Research:
+
+- Used TDD, incremental implementation, and webapp-testing workflows.
+- No external web research was used.
+
+Next Steps:
+
+- Commit and push this pointer skip slice.
+- Continue with AI/provider extraction diagnostics for the remaining
+  risk-flagged logs.
+
+## Previous Slice - 2026-06-09 work-summary session coverage visibility
 
 Current Goal:
 

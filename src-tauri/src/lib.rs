@@ -213,6 +213,7 @@ pub struct ProjectWorkLogExtractionCandidatesResult {
     pub skipped_parsed_file_count: usize,
     pub skipped_unreadable_file_count: usize,
     pub skipped_empty_file_count: usize,
+    pub skipped_pointer_file_count: usize,
     pub candidate_count: usize,
     pub candidates: Vec<ProjectWorkLogExtractionCandidate>,
     pub warnings: Vec<String>,
@@ -3290,6 +3291,7 @@ fn build_project_progress_log_extraction_candidates(
     let mut skipped_parsed_file_count = 0usize;
     let mut skipped_unreadable_file_count = 0usize;
     let mut skipped_empty_file_count = 0usize;
+    let mut skipped_pointer_file_count = 0usize;
 
     for candidate in matching_source_file_candidates(&source.root, source.kind) {
         let candidate = match candidate {
@@ -3319,6 +3321,10 @@ fn build_project_progress_log_extraction_candidates(
             project_progress_work_items_from_text_for_project(&candidate.path, &text, &project);
         if !items.is_empty() {
             skipped_parsed_file_count += 1;
+            continue;
+        }
+        if project_progress_log_is_pointer(&text) {
+            skipped_pointer_file_count += 1;
             continue;
         }
         let excerpt = project_progress_log_candidate_excerpt(&text);
@@ -3360,10 +3366,21 @@ fn build_project_progress_log_extraction_candidates(
         skipped_parsed_file_count,
         skipped_unreadable_file_count,
         skipped_empty_file_count,
+        skipped_pointer_file_count,
         candidate_count,
         candidates,
         warnings,
     })
+}
+
+fn project_progress_log_is_pointer(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    let points_to_working_md = lower.contains("active") && lower.contains("worklog")
+        && lower.contains("working.md");
+    let duplicate_guard = lower.contains("do not append duplicate progress")
+        || lower.contains("read and update `working.md` instead")
+        || lower.contains("read and update working.md instead");
+    points_to_working_md && duplicate_guard
 }
 
 fn project_progress_log_candidate_excerpt(text: &str) -> String {
@@ -10486,6 +10503,39 @@ Progress:
     }
 
     #[test]
+    fn project_progress_log_extraction_candidates_skip_pointer_logs() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-project-log-pointer-candidates-{}",
+            std::process::id()
+        ));
+        let care_dir = root.join("CareVault");
+        std::fs::create_dir_all(&care_dir).expect("create care dir");
+        std::fs::write(
+            care_dir.join("workingd.md"),
+            "# CareVault Worklog Pointer\nThe active CareVault worklog is `working.md`.\nThis file exists only because some resume prompts refer to `workingd.md`.\nDo not append duplicate progress here. Read and update `working.md` instead.\n",
+        )
+        .expect("write pointer progress log");
+        let source = SourceSpec {
+            id: "project-progress-logs",
+            label: "Project progress logs",
+            root: root.clone(),
+            kind: SourceKind::ProjectProgressMarkdown,
+        };
+
+        let result = build_project_progress_log_extraction_candidates(&source, Some(10))
+            .expect("build extraction candidates");
+
+        assert_eq!(result.files_seen, 1);
+        assert_eq!(result.skipped_parsed_file_count, 0);
+        assert_eq!(result.skipped_unreadable_file_count, 0);
+        assert_eq!(result.skipped_empty_file_count, 0);
+        assert_eq!(result.skipped_pointer_file_count, 1);
+        assert_eq!(result.candidate_count, 0);
+
+        std::fs::remove_dir_all(root).expect("remove pointer candidates fixture");
+    }
+
+    #[test]
     fn project_work_log_extraction_proposals_reject_invented_dates() {
         let candidate = ProjectWorkLogExtractionCandidate {
             candidate_id: "work-log-Beta-a1b2c3d4e5".to_string(),
@@ -10527,10 +10577,11 @@ Progress:
         let candidates = ProjectWorkLogExtractionCandidatesResult {
             generated_at: "2026-06-09T00:00:00Z".to_string(),
             root_path: "/tmp".to_string(),
-            files_seen: 2,
+            files_seen: 3,
             skipped_parsed_file_count: 0,
             skipped_unreadable_file_count: 0,
             skipped_empty_file_count: 0,
+            skipped_pointer_file_count: 0,
             candidate_count: 3,
             candidates: vec![
                 ProjectWorkLogExtractionCandidate {
@@ -10599,11 +10650,12 @@ Progress:
         let candidates = ProjectWorkLogExtractionCandidatesResult {
             generated_at: "2026-06-09T00:00:00Z".to_string(),
             root_path: "/tmp".to_string(),
-            files_seen: 2,
+            files_seen: 3,
             skipped_parsed_file_count: 0,
             skipped_unreadable_file_count: 0,
             skipped_empty_file_count: 0,
-            candidate_count: 2,
+            skipped_pointer_file_count: 0,
+            candidate_count: 3,
             candidates: vec![
                 ProjectWorkLogExtractionCandidate {
                     candidate_id: "work-log-Gamma-a1b2c3d4e5".to_string(),
@@ -11217,6 +11269,7 @@ Progress:
             skipped_parsed_file_count: 0,
             skipped_unreadable_file_count: 0,
             skipped_empty_file_count: 0,
+            skipped_pointer_file_count: 0,
             candidate_count: 1,
             candidates: vec![candidate],
             warnings: Vec::new(),

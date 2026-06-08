@@ -138,6 +138,9 @@ pub struct ProjectWorkReport {
     pub session_sources: Vec<FrequencyItem>,
     pub session_evidence_unique_count: usize,
     pub session_evidence_unique_sources: Vec<FrequencyItem>,
+    pub session_evidence_index_used: bool,
+    pub session_evidence_index_updated: bool,
+    pub session_evidence_index_count: usize,
     pub items: Vec<ProjectWorkItem>,
     pub warnings: Vec<String>,
 }
@@ -146,6 +149,8 @@ pub struct ProjectWorkReport {
 pub struct ProjectWorkReportOptions {
     pub limit: Option<usize>,
     pub session_limit: Option<usize>,
+    pub database_path: Option<String>,
+    pub refresh_session_index: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -870,6 +875,9 @@ pub fn run_project_work_report(
     if matches!(options.session_limit, Some(0)) {
         return Err("work-report session_limit requires a positive integer".into());
     }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("work-report database path requires a non-empty value".into());
+    }
     let source = source_specs()
         .into_iter()
         .find(|source| source.id == "project-progress-logs")
@@ -878,7 +886,22 @@ pub fn run_project_work_report(
     let session_limit = options
         .session_limit
         .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_LIMIT);
-    let sessions = project_work_session_prompts(session_limit, &mut report.warnings)?;
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let refresh_index = options.refresh_session_index.unwrap_or(false);
+    let evidence = project_work_session_evidence(
+        &database_path,
+        session_limit,
+        refresh_index,
+        &mut report.warnings,
+    )?;
+    let sessions = evidence.prompts;
+    report.session_evidence_index_used = evidence.index_used;
+    report.session_evidence_index_updated = evidence.index_updated;
+    report.session_evidence_index_count = evidence.index_count;
     report.session_scan_prompt_count = sessions.len();
     report.session_scan_sources = prompt_source_counts(&sessions);
     attach_session_evidence(&mut report.items, &sessions);
@@ -2556,6 +2579,9 @@ fn build_project_progress_work_report(
         session_sources: Vec::new(),
         session_evidence_unique_count: 0,
         session_evidence_unique_sources: Vec::new(),
+        session_evidence_index_used: false,
+        session_evidence_index_updated: false,
+        session_evidence_index_count: 0,
         items,
         warnings,
     })
@@ -2645,6 +2671,42 @@ fn project_work_session_prompts(
     Ok(prompts)
 }
 
+struct ProjectWorkSessionEvidence {
+    prompts: Vec<PromptRecord>,
+    index_used: bool,
+    index_updated: bool,
+    index_count: usize,
+}
+
+fn project_work_session_evidence(
+    database_path: &Path,
+    limit: usize,
+    refresh_index: bool,
+    warnings: &mut Vec<String>,
+) -> Result<ProjectWorkSessionEvidence, Box<dyn std::error::Error>> {
+    if !refresh_index {
+        let indexed = project_work_session_prompts_from_index(database_path, limit)?;
+        if !indexed.is_empty() {
+            let index_count = indexed.len();
+            return Ok(ProjectWorkSessionEvidence {
+                prompts: indexed,
+                index_used: true,
+                index_updated: false,
+                index_count,
+            });
+        }
+    }
+
+    let prompts = project_work_session_prompts(limit, warnings)?;
+    let index_count = persist_project_work_session_index(database_path, &prompts)?;
+    Ok(ProjectWorkSessionEvidence {
+        prompts,
+        index_used: false,
+        index_updated: true,
+        index_count,
+    })
+}
+
 fn project_work_codex_metadata_prompts(
     limit: usize,
     warnings: &mut Vec<String>,
@@ -2677,6 +2739,147 @@ fn project_work_codex_metadata_prompts(
         }
     }
     Ok(prompts)
+}
+
+fn project_work_session_prompts_from_index(
+    database_path: &Path,
+    limit: usize,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let conn = open_promptvault_database(database_path)?;
+    let mut stmt = conn.prepare(
+        "SELECT id, hash, source, session_id, source_path, timestamp, cwd, text,
+            word_count, char_count, risk_flags_json, quality_json
+         FROM project_work_session_evidence
+         ORDER BY prompt_date DESC, COALESCE(timestamp, indexed_at, '') DESC, id DESC
+         LIMIT ?1",
+    )?;
+    let rows = stmt
+        .query_map([limit as i64], |row| {
+            Ok(StoredPromptRow {
+                id: row.get(0)?,
+                hash: row.get(1)?,
+                source: row.get(2)?,
+                session_id: row.get(3)?,
+                path: row.get(4)?,
+                timestamp: row.get(5)?,
+                cwd: row.get(6)?,
+                text: row.get(7)?,
+                word_count: row.get::<_, i64>(8)? as usize,
+                char_count: row.get::<_, i64>(9)? as usize,
+                risk_flags_json: row.get(10)?,
+                quality_json: row.get(11)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(PromptRecord {
+                id: row.id,
+                source: row.source,
+                session_id: row.session_id,
+                path: row.path,
+                timestamp: row.timestamp,
+                cwd: row.cwd,
+                text: row.text,
+                word_count: row.word_count,
+                char_count: row.char_count,
+                hash: row.hash,
+                risk_flags: serde_json::from_str(&row.risk_flags_json)?,
+                quality: serde_json::from_str(&row.quality_json)?,
+            })
+        })
+        .collect()
+}
+
+fn persist_project_work_session_index(
+    database_path: &Path,
+    prompts: &[PromptRecord],
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let mut conn = open_promptvault_database(database_path)?;
+    let indexed_at = Utc::now().to_rfc3339();
+    let records = prompts
+        .iter()
+        .filter_map(sanitized_project_work_session_prompt)
+        .collect::<Vec<_>>();
+    let tx = conn.transaction()?;
+    tx.execute("DELETE FROM project_work_session_evidence", [])?;
+    for prompt in &records {
+        tx.execute(
+            "INSERT INTO project_work_session_evidence (
+                id, hash, source, session_id, source_path, timestamp, prompt_date, cwd,
+                text, word_count, char_count, risk_flags_json, quality_json,
+                quality_score, quality_band, indexed_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            rusqlite::params![
+                &prompt.id,
+                &prompt.hash,
+                &prompt.source,
+                &prompt.session_id,
+                &prompt.path,
+                prompt.timestamp.as_deref(),
+                prompt_date(prompt.timestamp.as_deref()),
+                prompt.cwd.as_deref(),
+                &prompt.text,
+                prompt.word_count as i64,
+                prompt.char_count as i64,
+                serde_json::to_string(&prompt.risk_flags)?,
+                serde_json::to_string(&prompt.quality)?,
+                prompt.quality.score as i64,
+                &prompt.quality.band,
+                &indexed_at,
+            ],
+        )?;
+    }
+    tx.commit()?;
+    Ok(records.len())
+}
+
+fn sanitized_project_work_session_prompt(prompt: &PromptRecord) -> Option<PromptRecord> {
+    let mut project_paths = BTreeSet::new();
+    if let Some(cwd) = &prompt.cwd {
+        project_paths.extend(project_paths_from_text(cwd));
+    }
+    project_paths.extend(project_paths_from_text(&prompt.path));
+    project_paths.extend(project_paths_from_text(&prompt.text));
+    let has_project_cwd = prompt
+        .cwd
+        .as_deref()
+        .is_some_and(|cwd| cwd.contains("/Ai/System/10_Projects/"));
+    if project_paths.is_empty() && !has_project_cwd {
+        return None;
+    }
+
+    let text = if project_paths.is_empty() {
+        format!("{} indexed session evidence", prompt.source)
+    } else {
+        format!(
+            "{} indexed session project targets: {}",
+            prompt.source,
+            project_paths.into_iter().collect::<Vec<_>>().join(", ")
+        )
+    };
+    let hash = hash_text(&format!(
+        "project-work-session-index:{}:{}:{}",
+        prompt.source, prompt.id, text
+    ));
+    let risk_flags = detect_risks(&text);
+    let quality = assess_prompt_quality(&text, &risk_flags);
+
+    Some(PromptRecord {
+        id: hash.chars().take(16).collect(),
+        source: prompt.source.clone(),
+        session_id: prompt.session_id.clone(),
+        path: prompt.path.clone(),
+        timestamp: prompt.timestamp.clone(),
+        cwd: prompt.cwd.clone(),
+        word_count: count_words(&text),
+        char_count: text.chars().count(),
+        text,
+        hash,
+        risk_flags,
+        quality,
+    })
 }
 
 fn parse_codex_project_metadata_prompt(
@@ -3899,6 +4102,28 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             ON prompt_improvements(prompt_id, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_prompt_improvements_created_at
             ON prompt_improvements(created_at DESC);
+        CREATE TABLE IF NOT EXISTS project_work_session_evidence (
+            id TEXT PRIMARY KEY,
+            hash TEXT NOT NULL,
+            source TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            timestamp TEXT,
+            prompt_date TEXT NOT NULL,
+            cwd TEXT,
+            text TEXT NOT NULL,
+            word_count INTEGER NOT NULL,
+            char_count INTEGER NOT NULL,
+            risk_flags_json TEXT NOT NULL,
+            quality_json TEXT NOT NULL,
+            quality_score INTEGER NOT NULL,
+            quality_band TEXT NOT NULL,
+            indexed_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_date
+            ON project_work_session_evidence(prompt_date);
+        CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_source
+            ON project_work_session_evidence(source);
         ",
     )?;
     Ok(())
@@ -7070,6 +7295,9 @@ Progress:
             session_sources: Vec::new(),
             session_evidence_unique_count: 0,
             session_evidence_unique_sources: Vec::new(),
+            session_evidence_index_used: false,
+            session_evidence_index_updated: false,
+            session_evidence_index_count: 0,
             items,
             warnings: Vec::new(),
         };
@@ -7083,6 +7311,75 @@ Progress:
             "Codex session metadata"
         );
         assert_eq!(report.session_evidence_unique_sources[0].count, 1);
+    }
+
+    #[test]
+    fn project_work_session_index_round_trips_sanitized_project_evidence() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-session-index-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut raw = dated_record("raw-session-index", "2026-06-08T15:30:00Z");
+        raw.source = "Codex".to_string();
+        raw.session_id = "thread-123".to_string();
+        raw.cwd = Some("/Users/wj".to_string());
+        raw.text = "SECRET RAW USER TEXT /Users/wj/Ai/System/10_Projects/ExampleProject"
+            .to_string();
+        raw.word_count = count_words(&raw.text);
+        raw.char_count = raw.text.chars().count();
+        raw.hash = hash_text(&raw.text);
+
+        let written =
+            persist_project_work_session_index(&db_path, &[raw]).expect("persist session index");
+        let indexed =
+            project_work_session_prompts_from_index(&db_path, 10).expect("read session index");
+
+        assert_eq!(written, 1);
+        assert_eq!(indexed.len(), 1);
+        assert!(indexed[0]
+            .text
+            .contains("/Users/wj/Ai/System/10_Projects/ExampleProject"));
+        assert!(!indexed[0].text.contains("SECRET RAW USER TEXT"));
+
+        let path = PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md");
+        let mut items = project_progress_work_items_from_text(
+            &path,
+            "## Current Slice - 2026-06-09 Indexed evidence\n\n- Use cached evidence.\n",
+        );
+        attach_session_evidence(&mut items, &indexed);
+
+        assert_eq!(items[0].session_evidence_count, 1);
+        assert_eq!(items[0].session_sources[0].text, "Codex");
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn project_work_session_evidence_prefers_existing_index() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-session-index-prefer-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut prompt = dated_record("indexed-session-prefer", "2026-06-08T15:30:00Z");
+        prompt.source = "Codex session metadata".to_string();
+        prompt.text =
+            "Codex session project targets: /Users/wj/Ai/System/10_Projects/ExampleProject"
+                .to_string();
+        persist_project_work_session_index(&db_path, &[prompt]).expect("persist session index");
+
+        let mut warnings = Vec::new();
+        let evidence =
+            project_work_session_evidence(&db_path, 10, false, &mut warnings).expect("evidence");
+
+        assert!(evidence.index_used);
+        assert!(!evidence.index_updated);
+        assert_eq!(evidence.index_count, 1);
+        assert_eq!(evidence.prompts.len(), 1);
+        assert!(warnings.is_empty());
+
+        let _ = std::fs::remove_file(db_path);
     }
 
     #[test]

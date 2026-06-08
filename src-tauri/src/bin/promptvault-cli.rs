@@ -249,8 +249,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         "work-report" => {
             let json = take_flag(&mut args, "--json");
+            let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
             let mut limit = None;
             let mut session_limit = None;
+            let mut database_path = None;
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
@@ -261,6 +263,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         session_limit =
                             Some(parse_positive_usize_arg(iter.next(), "--session-limit")?);
                     }
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?);
+                    }
                     other => return Err(format!("unknown work-report argument: {other}").into()),
                 }
             }
@@ -268,6 +273,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let report = run_project_work_report(ProjectWorkReportOptions {
                 limit,
                 session_limit,
+                database_path,
+                refresh_session_index: Some(refresh_session_index),
             })?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&report)?);
@@ -287,6 +294,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!(
                 "unique_session_evidence: {}",
                 report.session_evidence_unique_count
+            );
+            println!("session_index_used: {}", report.session_evidence_index_used);
+            println!(
+                "session_index_updated: {}",
+                report.session_evidence_index_updated
+            );
+            println!(
+                "session_index_records: {}",
+                report.session_evidence_index_count
             );
             if !report.warnings.is_empty() {
                 println!("warnings:");
@@ -736,7 +752,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project without database writes.\n  work-report session evidence is read-only and bounded by --session-limit.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1178,9 +1194,12 @@ mod tests {
         assert!(help.contains("plan inventories matching source files"));
         assert!(help.contains("import-batch --source ID [--files N>0]"));
         assert!(help.contains("import-batch persists one resumable source slice"));
-        assert!(help.contains("work-report [--limit N>0] [--session-limit N>0] [--json]"));
+        assert!(help.contains(
+            "work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
+        ));
         assert!(help.contains("work-report reads project progress logs"));
-        assert!(help.contains("work-report session evidence is read-only"));
+        assert!(help.contains("work-report stores only sanitized session evidence"));
+        assert!(help.contains("--refresh-session-index to rescan raw sessions"));
         assert!(help.contains("--limit N>0"));
         assert!(help.contains("--source-limit N>0"));
         assert!(help.contains("--source-limit caps prompts read from each selected source"));

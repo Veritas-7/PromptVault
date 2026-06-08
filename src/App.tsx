@@ -1987,6 +1987,19 @@ function App() {
                   {selectedPrompt.quality.score} · {qualityBandLabel(selectedPrompt.quality.band)}
                 </span>
               </div>
+              {selectedPrompt.risk_flags.length ? (
+                <div
+                  className="notice warning panel-notice"
+                  data-selected-risk-warning="true"
+                  {...STATUS_NOTICE_PROPS}
+                >
+                  <AlertTriangle size={18} />
+                  <span>
+                    위험 패턴 감지: {selectedPrompt.risk_flags.map(riskFlagLabel).join(", ")}.
+                    원문에는 민감 문자열이 포함될 수 있습니다.
+                  </span>
+                </div>
+              ) : null}
               {selectedPrompt.quality.suggestions.length ? (
                 <div className="quality-box">
                   {selectedPrompt.quality.suggestions.map((suggestion, index) => (

@@ -1,12 +1,96 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 14:59 KST
+Updated: 2026-06-08 15:04 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Frequency stats redaction
+## Current Slice - 2026-06-08 Selected prompt risk notice
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make risky selected prompt details explicit without removing the full prompt
+  inspection surface.
+
+Context:
+
+- Previous frequency stats redaction implementation is pushed to `origin/main`
+  as `726e13a fix: redact frequency stats`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus the CLI browser bridge and Playwright.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- Prompt rows already show risk labels and redacted previews, but selecting a
+  risky prompt still showed the full prompt body without a detail-panel warning.
+  The full prompt body remains intentionally visible so users can inspect their
+  stored prompt records.
+
+Progress:
+
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree was clean at `main...origin/main` and parity was
+  `0 0`.
+- Re-read webapp-testing instructions and inspected selected prompt detail
+  rendering, risk label helpers, and notice accessibility props.
+- Confirmed RED with browser QA: stored source filter `Codex`, weakest preview,
+  first risky row selected, row risk label visible, prompt detail visible, but
+  no selected-detail risk warning.
+- Added a `data-selected-risk-warning` warning notice in the selected detail
+  panel when `selectedPrompt.risk_flags` is non-empty. The notice lists
+  sanitized risk labels and warns that the full prompt may contain sensitive
+  strings.
+- Confirmed GREEN by rerunning the same browser QA: the risky row stayed
+  selected, the row risk label remained visible, the selected detail risk
+  warning appeared, the full prompt text remained visible, and no
+  console/page/API failures occurred.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/App.tsx`: shows a selected prompt risk warning before the full prompt
+  body when the selected prompt has risk flags.
+- `working.md`: records this slice.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- Browser RED:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5209" --port 5209 --server "npm run dev -- --host 127.0.0.1 --port 5210" --port 5210 --timeout 120 -- /bin/bash -lc ...`
+  failed only because selected detail did not show `data-selected-risk-warning`.
+- Browser GREEN:
+  the same browser flow passed after implementation with `hasRiskWarning:
+  true`, prompt detail still visible, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 308/308,
+  production build, Rust lib tests 86/86, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after the selected-detail risk notice fix.
+- Full selected prompt text remains visible by design; this slice adds context
+  before display rather than hiding source content.
+
+Research:
+
+- No external research. This is direct browser QA and UI implementation work.
+
+Next Steps:
+
+- Finish this implementation closeout with diff checks, staged/full secret
+  scans, commit, push, and final parity checks.
+- Continue from a clean pushed tree and pick the next autonomous QA/improvement
+  slice.
+
+## Previous Slice - 2026-06-08 Frequency stats redaction
 
 Current Goal:
 

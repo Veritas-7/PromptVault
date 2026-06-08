@@ -1,12 +1,124 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 01:12 KST
+Updated: 2026-06-09 01:29 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 AI-assisted work summaries with citations
+## Current Slice - 2026-06-09 in-app project work summary panel
+
+Current Goal:
+
+- Surface `work-summary` through the local browser bridge, Tauri command layer,
+  TypeScript API wrapper, and the main app UI.
+- Keep the summary panel operational: cached summary by default, explicit
+  session-index refresh when the operator wants raw Codex sessions reparsed.
+
+Context:
+
+- The prior slice made CLI work summaries and AI-capable narrative generation
+  available, but the workflow was not visible in the app.
+- This session is not using cmux/in-app browser, so verification used CLI,
+  HTTP bridge smoke, Vite dev-server load checks, and full automated tests.
+- The new UI must keep raw session content out of the browser and display only
+  summary/citation/status counts from sanitized evidence.
+
+Progress:
+
+- Added `ProjectWorkSummaryResult` and related TypeScript types.
+- Added `loadProjectWorkSummary()` with strict browser-bridge response
+  validation.
+- Added `/api/work-summary` to the local browser bridge using flat UI options
+  and converting them to internal `ProjectWorkSummaryOptions`.
+- Added a native Tauri `project_work_summary` command.
+- Added a `프로젝트 작업 요약` panel with summary generation, cached refresh,
+  explicit `세션 재스캔`, index status, narrative Markdown, and summary rows.
+- Added work-summary action locking so scans/imports/improvements cannot
+  overlap with a long summary generation.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: exposes the async `project_work_summary` Tauri
+  command.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds `/api/work-summary` bridge route,
+  flat bridge options, and route validation coverage.
+- `src/types.ts`: adds project work report/summary/citation result types.
+- `src/promptVaultApi.ts`: adds `loadProjectWorkSummary()` and response
+  validators for report, summary, citation, and session evidence invariants.
+- `src/actionLocks.ts`: includes `workSummaryRunning` in top-level locks.
+- `src/workSummaryStatus.ts`: adds panel action labels, failure text, meta text,
+  and index status text.
+- `src/App.tsx`: renders and wires the project work summary panel.
+- `src/App.css`: adds compact responsive styles for the new panel.
+- `tests/promptVaultApi.test.ts`, `tests/actionLocks.test.ts`,
+  `tests/workSummaryStatus.test.ts`, `src-tauri/src/bin/promptvault-cli.rs`:
+  add RED/GREEN coverage for the new bridge/API/UI helper behavior.
+- `working.md`: records this bridge/UI slice.
+
+Tests:
+
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed before implementation because `loadProjectWorkSummary` was not
+  exported.
+- RED:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli bridge_routes_work_summary_validation_errors`
+  failed before implementation because `/api/work-summary` was not routed.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/actionLocks.test.ts`
+  failed before implementation because `workSummaryRunning` did not lock
+  top-level actions.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before implementation because `src/workSummaryStatus.ts` did not
+  exist.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed with 138/138.
+- GREEN:
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli bridge_routes_work_summary_validation_errors`
+  passed with 1/1.
+- GREEN:
+  `npm run test:ui` passed with 379/379.
+- GREEN:
+  `npm run build` passed; Vite built `dist/index.html` and the JS/CSS assets.
+- Actual bridge smoke:
+  started `promptvault-cli serve --addr 127.0.0.1:5188`, then posted to
+  `/api/work-summary` with `limit:20`, `session_limit:20`, `summary_limit:3`.
+  The response returned `provider: local-citation-rules`, `summary_count: 1`,
+  `total_items: 20`, `project_count: 1`, `date_count: 1`,
+  `session_evidence_count: 20`, `session_evidence_unique_count: 1`,
+  `session_evidence_index_used: true`, and first summary `CareVault` with
+  `citation_count: 20`.
+- Dev-server load smoke:
+  started Vite on `http://127.0.0.1:5190/`; `curl` confirmed the app HTML and
+  `/src/App.tsx` contained `프로젝트 작업 요약`,
+  `data-load-work-summary`, and `data-refresh-work-summary-session-index`.
+- Full gate:
+  `npm run check` passed: UI tests 379/379, Vite build, Rust lib tests 134/134,
+  CLI tests 19/19, doc tests 0, and `cargo clippy --all-targets --all-features
+  -- -D warnings`.
+
+Issues:
+
+- No cmux or real in-app browser click test was run in this environment; cmux is
+  explicitly out of scope here. The UI path was verified by unit tests, build,
+  HTTP bridge smoke, and Vite dev-server load checks.
+- The panel currently shows top summaries only and does not persist summary
+  snapshots. Historical summary storage remains a later slice.
+- The UI uses local deterministic summaries by default; real external
+  OpenAI/GLM calls are still covered by mock-provider tests, not paid live API
+  calls.
+
+Next Steps:
+
+- Add optional persisted summary snapshots if users need historical daily
+  reports independent of current progress-log state.
+- Add a browser automation QA pass when a permitted local browser target is
+  available, clicking `작업 요약 생성` and `세션 재스캔`.
+
+## Previous Slice - 2026-06-09 AI-assisted work summaries with citations
 
 Current Goal:
 

@@ -1,12 +1,124 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 18:53 KST
+Updated: 2026-06-08 19:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Quoted curl authorization header redaction shape
+## Current Slice - 2026-06-08 Equals-style quoted curl header redaction shape
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for quoted curl sensitive headers copied as equals-style
+  `curl --header="Authorization: ..."` or `curl --header='Cookie: ...'`
+  snippets, without leaking token/cookie values or producing malformed shell
+  text.
+
+Context:
+
+- Previous quoted curl authorization header shape fix is pushed to
+  `origin/main` with source commit
+  `b8576c0 fix: preserve quoted curl authorization redaction shape` and docs
+  closeout
+  `b415609 docs: record quoted curl authorization verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed equals-style quoted curl headers hid the secret
+  but consumed the closing quote, rendering
+  `Run curl --header="[REDACTED_POSSIBLE_SECRET] https://example.com` instead
+  of a valid quoted `--header` argument followed by the URL. The same issue
+  appeared for single-quoted equals-style headers.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to preserve equals-style quoted `--header="..."` and `--header='...'` shell
+  shape while redacting authorization/cookie header payloads.
+- Added RED backend coverage requiring `redact_sensitive_text` to preserve the
+  same equals-style quoted curl header shape for authorization and cookie
+  headers.
+- Confirmed RED: frontend and backend redaction both returned malformed
+  strings with the closing quote removed.
+- Extended the existing quoted curl sensitive-header regexes in frontend and
+  backend redaction paths to accept either whitespace after `--header` or an
+  equals sign after `--header`.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a raw equals-style quoted curl authorization header. It
+  confirmed two stored prompt rows, the quoted
+  `--header="[REDACTED_POSSIBLE_SECRET]" https://example.com` shape visible in
+  row text and aria labels, no authorization token leak in row text, aria
+  labels, or body text, and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: extends the quoted curl header pre-pass to preserve
+  `--header="..."` and `--header='...'` shell shape while replacing sensitive
+  header payloads with the possible-secret marker.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for
+  equals-style quoted curl authorization and cookie header shape preservation.
+- `src-tauri/src/lib.rs`: aligns backend redaction through the same
+  whitespace-or-equals `--header` matching and Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- Probe:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --input-type=module -e ...`
+  showed equals-style quoted authorization and cookie snippets redacted but
+  missing the closing quote.
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed 31/32 because the equals-style quoted curl header preview missed the
+  closing quote.
+- RED backend:
+  `cargo test redact_sensitive_text_preserves_equals_style_quoted_curl_header_shape`
+  from `src-tauri` failed because backend redaction missed the closing quote.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 32/32.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_preserves_equals_style_quoted_curl_header_shape`
+  from `src-tauri` passed, 1/1 focused lib test, plus zero-test main and CLI
+  targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5217" --port 5217 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_equals_header_qa.mjs'`
+  passed with `rowCount=2`, `equalsShapeVisible=true`, `rowLeaked=false`,
+  `ariaLeaked=false`, `bodyLeaked=false`, `consoleErrors=0`, and
+  `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 338/338,
+  production build, Rust lib tests 109/109, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after preserving equals-style quoted curl header shape.
+- Python Playwright is not installed, and PromptVault has no local Playwright
+  dependency. Browser QA used the installed shared workspace Playwright package
+  while still managing Vite with the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity and
+  UI/accessibility preview correctness work for copied curl header snippets.
+
+Next Steps:
+
+- Run whitespace and staged secret checks, commit the source slice, push to the
+  private GitHub repository, verify local/remote parity, then record the final
+  source-push evidence in this log.
+
+## Previous Slice - 2026-06-08 Quoted curl authorization header redaction shape
 
 Current Goal:
 

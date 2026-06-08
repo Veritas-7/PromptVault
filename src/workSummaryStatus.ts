@@ -41,12 +41,16 @@ export function workSummaryMetaText(
 ): string {
   if (state === "loading") return "작업 요약 생성 중";
   if (!result) return state === "failed" ? "작업 요약을 사용할 수 없음" : "아직 생성된 작업 요약 없음";
-  return [
+  const parts = [
     `${result.report.project_count.toLocaleString()}개 프로젝트`,
     `${result.report.date_count.toLocaleString()}일`,
     `${result.report.total_items.toLocaleString()}개 작업`,
     `세션 근거 ${result.report.session_evidence_count.toLocaleString()}건`,
-  ].join(" · ");
+  ];
+  if (result.extraction_merge) {
+    parts.push(`AI 병합 ${result.extraction_merge.merged_item_count.toLocaleString()}개`);
+  }
+  return parts.join(" · ");
 }
 
 export function workSummaryIndexStatusText(result: ProjectWorkSummaryResult): string {

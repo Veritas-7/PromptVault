@@ -824,7 +824,8 @@ function App() {
   async function refreshWorkSummary({
     refreshSessionIndex = false,
     saveSnapshot = false,
-  }: { refreshSessionIndex?: boolean; saveSnapshot?: boolean } = {}) {
+    includeExtractions = false,
+  }: { refreshSessionIndex?: boolean; saveSnapshot?: boolean; includeExtractions?: boolean } = {}) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkSummaryState("loading");
@@ -835,6 +836,8 @@ function App() {
         summary_limit: WORK_SUMMARY_DISPLAY_LIMIT,
         refresh_session_index: refreshSessionIndex,
         save_snapshot: saveSnapshot,
+        include_extractions: includeExtractions,
+        extraction_ai: includeExtractions,
       });
       setWorkSummaryResult(next);
       setWorkSummaryState("ready");
@@ -1395,6 +1398,17 @@ function App() {
             >
               <Database size={15} />
               스냅샷 저장
+            </button>
+            <button
+              aria-label="accepted AI 진행로그 제안을 프로젝트별 일별 작업 요약 preview에 병합"
+              className="inline-action"
+              data-load-work-summary-with-extractions="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => refreshWorkSummary({ includeExtractions: true })}
+              type="button"
+            >
+              <Sparkles size={15} />
+              AI 병합 요약
             </button>
             <button
               aria-label={workSummarySnapshotsActionLabel(

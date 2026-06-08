@@ -58,6 +58,7 @@ function summaryResult(overrides: Partial<ProjectWorkSummaryResult> = {}): Proje
     used_ai: false,
     narrative_markdown: "- 2026-06-09 PromptVault: 요약",
     summaries: [],
+    extraction_merge: null,
     persistence: null,
     report: {
       generated_at: "2026-06-09T00:00:00Z",
@@ -204,6 +205,20 @@ test("work summary status text uses report counts and index state", () => {
   assert.equal(
     workSummaryMetaText("ready", result),
     "14개 프로젝트 · 16일 · 3,532개 작업 · 세션 근거 541건",
+  );
+  assert.equal(
+    workSummaryMetaText("ready", summaryResult({
+      extraction_merge: {
+        provider: "glm",
+        used_ai: true,
+        candidate_count: 3,
+        accepted_count: 1,
+        rejected_count: 2,
+        merged_item_count: 1,
+        warnings: [],
+      },
+    })),
+    "14개 프로젝트 · 16일 · 3,532개 작업 · 세션 근거 541건 · AI 병합 1개",
   );
   assert.equal(workSummaryMetaText("loading", result), "작업 요약 생성 중");
   assert.equal(workSummaryMetaText("failed", null), "작업 요약을 사용할 수 없음");

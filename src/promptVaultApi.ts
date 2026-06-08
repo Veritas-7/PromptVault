@@ -87,6 +87,9 @@ export interface ProjectWorkSummaryOptions {
   summary_limit?: number;
   refresh_session_index?: boolean;
   save_snapshot?: boolean;
+  include_extractions?: boolean;
+  extraction_limit?: number;
+  extraction_ai?: boolean;
   ai?: boolean;
 }
 
@@ -1107,6 +1110,9 @@ function nativeProjectWorkSummaryOptions(options: ProjectWorkSummaryOptions) {
     summary_limit: options.summary_limit,
     force_local: options.ai === true ? false : undefined,
     save_snapshot: options.save_snapshot,
+    include_extractions: options.include_extractions,
+    extraction_limit: options.extraction_limit,
+    extraction_ai: options.extraction_ai,
   };
 }
 
@@ -1319,6 +1325,19 @@ function parseProjectWorkLogExtractionProposalsResult(
   return value as unknown as ProjectWorkLogExtractionProposalsResult;
 }
 
+function isProjectWorkLogExtractionMergeResult(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.provider)
+    && typeof value.used_ai === "boolean"
+    && isNonNegativeSafeInteger(value.candidate_count)
+    && isNonNegativeSafeInteger(value.accepted_count)
+    && isNonNegativeSafeInteger(value.rejected_count)
+    && isNonNegativeSafeInteger(value.merged_item_count)
+    && value.accepted_count + value.rejected_count <= value.candidate_count
+    && value.merged_item_count <= value.accepted_count
+    && isNonBlankStringArray(value.warnings);
+}
+
 function isProjectWorkSummaryCitation(value: unknown): boolean {
   return isRecord(value)
     && isNonBlankString(value.id)
@@ -1403,6 +1422,7 @@ function parseProjectWorkSummaryResult(value: unknown): ProjectWorkSummaryResult
     || !value.summaries.every(isProjectWorkSummary)
     || !isProjectWorkReport(value.report)
     || !projectWorkSummariesWithinReport(value.summaries, value.report)
+    || !(value.extraction_merge === null || isProjectWorkLogExtractionMergeResult(value.extraction_merge))
     || !(value.persistence === null || isProjectWorkSummaryPersistence(value.persistence))
     || !isNonBlankStringArray(value.warnings)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);

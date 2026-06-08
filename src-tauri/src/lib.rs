@@ -242,6 +242,17 @@ pub struct ProjectWorkLogExtractionProposalsResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogExtractionMergeResult {
+    pub provider: String,
+    pub used_ai: bool,
+    pub candidate_count: usize,
+    pub accepted_count: usize,
+    pub rejected_count: usize,
+    pub merged_item_count: usize,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkSummaryCitation {
     pub id: String,
     pub date: String,
@@ -290,6 +301,7 @@ pub struct ProjectWorkSummaryResult {
     pub narrative_markdown: String,
     pub summaries: Vec<ProjectWorkSummary>,
     pub report: ProjectWorkReport,
+    pub extraction_merge: Option<ProjectWorkLogExtractionMergeResult>,
     pub persistence: Option<ProjectWorkSummaryPersistence>,
     pub warnings: Vec<String>,
 }
@@ -346,6 +358,9 @@ pub struct ProjectWorkSummaryOptions {
     pub summary_limit: Option<usize>,
     pub force_local: Option<bool>,
     pub save_snapshot: Option<bool>,
+    pub include_extractions: Option<bool>,
+    pub extraction_limit: Option<usize>,
+    pub extraction_ai: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1207,6 +1222,9 @@ pub async fn run_project_work_summary(
     if matches!(options.summary_limit, Some(0)) {
         return Err("work-summary summary_limit requires a positive integer".into());
     }
+    if matches!(options.extraction_limit, Some(0)) {
+        return Err("work-summary extraction_limit requires a positive integer".into());
+    }
     let database_path = options
         .report
         .database_path
@@ -1214,7 +1232,21 @@ pub async fn run_project_work_summary(
         .map(PathBuf::from)
         .unwrap_or_else(default_database_path);
     let save_snapshot = options.save_snapshot.unwrap_or(false);
-    let report = run_project_work_report(options.report)?;
+    let mut report = run_project_work_report(options.report)?;
+    let extraction_merge = if options.include_extractions.unwrap_or(false) {
+        let proposals =
+            run_project_work_log_extraction_proposals(ProjectWorkLogExtractionProposalsOptions {
+                limit: options.extraction_limit,
+                ai: options.extraction_ai,
+            })
+            .await?;
+        Some(merge_project_work_log_extraction_proposals_into_report(
+            &mut report,
+            &proposals,
+        ))
+    } else {
+        None
+    };
     let summaries = build_project_work_summaries(&report, options.summary_limit.unwrap_or(20));
     let narrative = project_work_summary_narrative_with_env(
         &summaries,
@@ -1232,6 +1264,7 @@ pub async fn run_project_work_summary(
         narrative_markdown: narrative.markdown,
         summaries,
         report,
+        extraction_merge,
         persistence: None,
         warnings,
     };
@@ -2957,14 +2990,7 @@ fn build_project_progress_work_report(
         }
     }
 
-    items.sort_by(|left, right| {
-        right
-            .date
-            .cmp(&left.date)
-            .then_with(|| left.project.cmp(&right.project))
-            .then_with(|| left.title.cmp(&right.title))
-            .then_with(|| left.source_path.cmp(&right.source_path))
-    });
+    sort_project_work_items(&mut items);
     if let Some(limit) = limit {
         items.truncate(limit);
     }
@@ -3336,7 +3362,7 @@ async fn request_openai_project_work_log_extraction(
         }
     });
 
-    let client = reqwest::Client::new();
+    let client = project_work_log_extraction_http_client("OpenAI")?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -3397,7 +3423,7 @@ async fn request_glm_project_work_log_extraction(
         "response_format": { "type": "json_object" }
     });
 
-    let client = reqwest::Client::new();
+    let client = project_work_log_extraction_http_client("GLM")?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -3747,6 +3773,89 @@ fn refresh_project_work_log_extraction_counts(
         .iter()
         .filter(|proposal| !proposal.accepted)
         .count();
+}
+
+fn project_work_items_from_accepted_extraction_proposals(
+    result: &ProjectWorkLogExtractionProposalsResult,
+) -> Vec<ProjectWorkItem> {
+    let mut items = result
+        .proposals
+        .iter()
+        .filter(|proposal| proposal.accepted)
+        .filter_map(|proposal| {
+            let date = proposal.date.as_deref()?.trim();
+            if date.is_empty() {
+                return None;
+            }
+            Some(ProjectWorkItem {
+                date: date.to_string(),
+                project: proposal.project.clone(),
+                title: proposal.title.clone(),
+                status: "extracted".to_string(),
+                source_path: proposal.source_path.clone(),
+                source_file: proposal.source_file.clone(),
+                evidence: proposal.evidence.clone(),
+                session_evidence_count: 0,
+                session_sources: Vec::new(),
+                session_evidence_keys: Vec::new(),
+            })
+        })
+        .collect::<Vec<_>>();
+    sort_project_work_items(&mut items);
+    items
+}
+
+fn merge_project_work_log_extraction_proposals_into_report(
+    report: &mut ProjectWorkReport,
+    proposals: &ProjectWorkLogExtractionProposalsResult,
+) -> ProjectWorkLogExtractionMergeResult {
+    let mut warnings = proposals.warnings.clone();
+    let extracted_items = project_work_items_from_accepted_extraction_proposals(proposals);
+    let merged_item_count = extracted_items.len();
+    if merged_item_count == 0 {
+        warnings.push(
+            "AI 진행로그 제안 중 accepted 항목이 없어 프로젝트/일별 요약에 병합한 항목이 없습니다."
+                .to_string(),
+        );
+    } else {
+        warnings.push(format!(
+            "AI 진행로그 제안 accepted 항목 {merged_item_count}개를 프로젝트/일별 요약 preview에 병합했습니다."
+        ));
+        report.items.extend(extracted_items);
+        refresh_project_work_item_summary(report);
+        refresh_project_work_session_summary(report);
+    }
+    report.warnings.extend(warnings.clone());
+
+    ProjectWorkLogExtractionMergeResult {
+        provider: proposals.provider.clone(),
+        used_ai: proposals.used_ai,
+        candidate_count: proposals.candidate_count,
+        accepted_count: proposals.accepted_count,
+        rejected_count: proposals.rejected_count,
+        merged_item_count,
+        warnings,
+    }
+}
+
+fn sort_project_work_items(items: &mut [ProjectWorkItem]) {
+    items.sort_by(|left, right| {
+        right
+            .date
+            .cmp(&left.date)
+            .then_with(|| left.project.cmp(&right.project))
+            .then_with(|| left.title.cmp(&right.title))
+            .then_with(|| left.source_path.cmp(&right.source_path))
+    });
+}
+
+fn refresh_project_work_item_summary(report: &mut ProjectWorkReport) {
+    sort_project_work_items(&mut report.items);
+    report.total_items = report.items.len();
+    report.items_by_date = work_item_counts_by_date(&report.items);
+    report.items_by_project = work_item_counts_by_project(&report.items);
+    report.date_count = report.items_by_date.len();
+    report.project_count = report.items_by_project.len();
 }
 
 #[cfg(test)]
@@ -9294,6 +9403,7 @@ Progress:
                 warnings: Vec::new(),
             },
             warnings: Vec::new(),
+            extraction_merge: None,
             persistence: None,
         };
 
@@ -9654,6 +9764,154 @@ Progress:
             result.proposals[0].rejection_reason.as_deref(),
             Some("date_not_in_candidate_excerpt")
         );
+    }
+
+    #[test]
+    fn accepted_work_log_extraction_proposals_become_project_work_items() {
+        let proposals = ProjectWorkLogExtractionProposalsResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
+            provider: "glm".to_string(),
+            used_ai: true,
+            candidate_count: 3,
+            accepted_count: 1,
+            rejected_count: 2,
+            proposals: vec![
+                ProjectWorkLogExtractionProposal {
+                    candidate_id: "work-log-Beta-a1b2c3d4e5".to_string(),
+                    project: "Beta".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/Beta/workingd.md".to_string(),
+                    source_file: "workingd.md".to_string(),
+                    date: Some("2026-06-04".to_string()),
+                    title: "Created project root".to_string(),
+                    status: "proposed".to_string(),
+                    evidence:
+                        "2026-06-04: Created project root and initialized a new git repository."
+                            .to_string(),
+                    confidence: 0.92,
+                    accepted: true,
+                    rejection_reason: None,
+                },
+                ProjectWorkLogExtractionProposal {
+                    candidate_id: "work-log-Gamma-b1b2c3d4e5".to_string(),
+                    project: "Gamma".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/Gamma/workingd.md".to_string(),
+                    source_file: "workingd.md".to_string(),
+                    date: Some("2026-06-03".to_string()),
+                    title: "Needs review".to_string(),
+                    status: "rejected".to_string(),
+                    evidence: "Undated notes".to_string(),
+                    confidence: 0.0,
+                    accepted: false,
+                    rejection_reason: Some("low_confidence".to_string()),
+                },
+                ProjectWorkLogExtractionProposal {
+                    candidate_id: "work-log-Delta-c1b2c3d4e5".to_string(),
+                    project: "Delta".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/Delta/workingd.md".to_string(),
+                    source_file: "workingd.md".to_string(),
+                    date: None,
+                    title: "Missing date".to_string(),
+                    status: "proposed".to_string(),
+                    evidence: "No dated evidence".to_string(),
+                    confidence: 0.9,
+                    accepted: true,
+                    rejection_reason: None,
+                },
+            ],
+            warnings: Vec::new(),
+        };
+
+        let items = project_work_items_from_accepted_extraction_proposals(&proposals);
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].date, "2026-06-04");
+        assert_eq!(items[0].project, "Beta");
+        assert_eq!(items[0].title, "Created project root");
+        assert_eq!(items[0].status, "extracted");
+        assert_eq!(items[0].source_file, "workingd.md");
+        assert!(items[0]
+            .evidence
+            .contains("Created project root and initialized"));
+        assert_eq!(items[0].session_evidence_count, 0);
+    }
+
+    #[test]
+    fn project_work_log_extraction_merge_refreshes_report_counts() {
+        let mut report = ProjectWorkReport {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            total_items: 1,
+            project_count: 1,
+            date_count: 1,
+            files_seen: 1,
+            items_by_date: vec![FrequencyItem {
+                text: "2026-06-09".to_string(),
+                count: 1,
+            }],
+            items_by_project: vec![FrequencyItem {
+                text: "PromptVault".to_string(),
+                count: 1,
+            }],
+            session_scan_prompt_count: 0,
+            session_scan_sources: Vec::new(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_unique_count: 0,
+            session_evidence_unique_sources: Vec::new(),
+            session_evidence_index_used: false,
+            session_evidence_index_updated: false,
+            session_evidence_index_count: 0,
+            items: vec![ProjectWorkItem {
+                date: "2026-06-09".to_string(),
+                project: "PromptVault".to_string(),
+                title: "Existing parsed log".to_string(),
+                status: "done".to_string(),
+                source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md".to_string(),
+                source_file: "working.md".to_string(),
+                evidence: "- Existing parsed log".to_string(),
+                session_evidence_count: 0,
+                session_sources: Vec::new(),
+                session_evidence_keys: Vec::new(),
+            }],
+            warnings: Vec::new(),
+        };
+        let proposals = ProjectWorkLogExtractionProposalsResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
+            provider: "glm".to_string(),
+            used_ai: true,
+            candidate_count: 1,
+            accepted_count: 1,
+            rejected_count: 0,
+            proposals: vec![ProjectWorkLogExtractionProposal {
+                candidate_id: "work-log-CareVault-a1b2c3d4e5".to_string(),
+                project: "CareVault".to_string(),
+                source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md".to_string(),
+                source_file: "workingd.md".to_string(),
+                date: Some("2026-06-04".to_string()),
+                title: "Backfilled older work notes".to_string(),
+                status: "proposed".to_string(),
+                evidence: "2026-06-04: Backfilled older work notes".to_string(),
+                confidence: 0.91,
+                accepted: true,
+                rejection_reason: None,
+            }],
+            warnings: Vec::new(),
+        };
+
+        let merge =
+            merge_project_work_log_extraction_proposals_into_report(&mut report, &proposals);
+
+        assert_eq!(merge.provider, "glm");
+        assert_eq!(merge.merged_item_count, 1);
+        assert_eq!(report.total_items, 2);
+        assert_eq!(report.project_count, 2);
+        assert_eq!(report.date_count, 2);
+        assert_eq!(report.items_by_project[0].text, "CareVault");
+        assert!(report
+            .items
+            .iter()
+            .any(|item| item.project == "CareVault" && item.status == "extracted"));
     }
 
     #[tokio::test]

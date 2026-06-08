@@ -284,6 +284,16 @@ export interface ProjectWorkLogExtractionProposalsResult {
   warnings: string[];
 }
 
+export interface ProjectWorkLogExtractionMergeResult {
+  provider: string;
+  used_ai: boolean;
+  candidate_count: number;
+  accepted_count: number;
+  rejected_count: number;
+  merged_item_count: number;
+  warnings: string[];
+}
+
 export interface ProjectWorkSummaryCitation {
   id: string;
   date: string;
@@ -321,6 +331,7 @@ export interface ProjectWorkSummaryResult {
   narrative_markdown: string;
   summaries: ProjectWorkSummary[];
   report: ProjectWorkReport;
+  extraction_merge: ProjectWorkLogExtractionMergeResult | null;
   persistence: ProjectWorkSummaryPersistence | null;
   warnings: string[];
 }

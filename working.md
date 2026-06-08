@@ -1,12 +1,146 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 03:28 KST
+Updated: 2026-06-09 03:45 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 AI work-log extraction proposals
+## Current Slice - 2026-06-09 AI extraction merge preview
+
+Current Goal:
+
+- Merge only accepted AI work-log extraction proposals into the project/day
+  work summary preview.
+- Keep the merge path non-mutating by default: do not rewrite source progress
+  logs and do not save a snapshot unless the operator explicitly uses the
+  existing snapshot save path.
+- Prove the management layer with live project progress logs and actual Codex
+  session metadata, not just fixtures.
+
+Context:
+
+- The app already parses dated `working.md`/progress logs into
+  `ProjectWorkItem`s and separately prepares unparsed files such as
+  `workingd.md` as redacted AI extraction candidates.
+- Before this slice, AI extraction proposals were visible as accepted/rejected
+  preview rows, but accepted proposals were not available in the project/day
+  summary result.
+- Live coverage on `/Users/wj/Ai/System/10_Projects` now finds 32 progress-log
+  files across 26 projects: 16 parsed files, 16 unparsed files, and 3,636 parsed
+  dated work items.
+- A live session-index refresh with
+  `work-report --limit 80 --session-limit 50 --refresh-session-index --json`
+  scanned 99 sanitized Codex session metadata prompts, updated an index with 51
+  stored evidence rows, and attached session evidence to 80 selected CareVault
+  work items.
+
+Progress:
+
+- Added `ProjectWorkLogExtractionMergeResult` metadata to summary responses so
+  the operator can see provider, AI usage, candidate count, accepted/rejected
+  count, and merged work item count.
+- Added a deterministic conversion from accepted extraction proposals to
+  `ProjectWorkItem`s with status `extracted`; rejected proposals and accepted
+  proposals missing dates are not merged.
+- Added report refresh after merge so `total_items`, `items_by_date`,
+  `items_by_project`, `project_count`, and `date_count` remain internally
+  consistent.
+- Added `work-summary --include-extractions --extraction-limit N>0
+  --extraction-ai` and the matching browser bridge/API options.
+- Added an `AI 병합 요약` UI action that runs the summary preview with AI
+  extraction merge enabled and displays `AI 병합 N개` in the summary meta.
+- Fixed a real provider-path defect: OpenAI/GLM work-log extraction requests now
+  use the bounded timeout HTTP client instead of unbounded `reqwest::Client::new()`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds extraction merge metadata, accepted-proposal to
+  work-item conversion, merge/report-refresh helpers, `ProjectWorkSummaryOptions`
+  extraction flags, summary merge execution, and bounded provider clients.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds CLI flags, bridge payload fields,
+  plain output for extraction merge metadata, and help text.
+- `src/types.ts` and `src/promptVaultApi.ts`: add merge result types, summary
+  options, native option mapping, and fail-closed bridge validation.
+- `src/workSummaryStatus.ts`: includes merge count in summary meta.
+- `src/App.tsx`: adds the `AI 병합 요약` action with
+  `data-load-work-summary-with-extractions`.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`: cover
+  merge options, merge response validation, and UI meta text.
+
+Tests:
+
+- GREEN:
+  `cargo test work_log_extraction --lib` passed 4/4, including accepted proposal
+  conversion, merge count refresh, invented-date rejection, and GLM mock provider
+  request validation.
+- GREEN:
+  `cargo test work_summary --lib --bin promptvault-cli` passed 6/6.
+- GREEN:
+  `cargo test help --bin promptvault-cli` passed 2/2.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 149/149.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  passed 11/11.
+- GREEN:
+  `npm run build` passed.
+- Live CLI verification:
+  `work-summary --limit 5 --summary-limit 3 --include-extractions --extraction-limit 2 --json`
+  returned `extraction_merge.provider=local-extraction-rules`, `used_ai=false`,
+  `candidate_count=2`, `accepted_count=0`, `rejected_count=2`, and
+  `merged_item_count=0`.
+- Live AI/fallback verification:
+  `work-summary --limit 5 --summary-limit 3 --include-extractions --extraction-limit 1 --extraction-ai --json`
+  attempted the configured GLM endpoint, returned bounded local fallback,
+  and reported `candidate_count=1`, `accepted_count=0`, `rejected_count=1`,
+  `merged_item_count=0`.
+- Live progress-log coverage verification:
+  `work-log-coverage --json` returned 32 files, 16 parsed, 16 unparsed, 26
+  projects, and 3,636 parsed dated work items.
+- Live session verification:
+  `work-report --limit 80 --session-limit 50 --refresh-session-index --json`
+  scanned 99 sanitized Codex session metadata prompts, updated the session index,
+  and attached 80 session evidence matches to selected work items.
+- Browser QA without cmux:
+  started the PromptVault bridge on `127.0.0.1:5174` and Vite on
+  `127.0.0.1:1420`, clicked
+  `[data-load-work-summary-with-extractions="true"]` in headless Chromium, and
+  verified meta
+  `1개 프로젝트 · 1일 · 80개 작업 · 세션 근거 80건 · AI 병합 0개`;
+  there were no page errors.
+- Full gate:
+  `npm run check` passed: UI tests 398/398, Vite build, Rust library tests
+  144/144, CLI tests 20/20, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- The current configured GLM endpoint fails, so live AI extraction falls back to
+  local rejected proposals. The app now reports this in merge metadata and
+  warnings instead of hanging or silently claiming success.
+- Because live AI extraction accepted 0 proposals, the merge path is verified by
+  tests with synthetic accepted proposals and by live CLI/UI fallback behavior;
+  no live unparsed `workingd.md` item was promoted in this run.
+- Snapshot save remains explicit. A merge preview is not automatically persisted
+  to SQLite history unless the operator runs the snapshot save flow.
+
+Research:
+
+- No external research was needed. This was an implementation and verification
+  slice using the existing OpenAI/GLM provider infrastructure.
+
+Next Steps:
+
+- Add provider health/timeout visibility to the UI so failed GLM/OpenAI attempts
+  are easier to diagnose before running AI extraction.
+- Add an operator-reviewed accept/persist flow for individual extraction
+  proposals, so accepted `workingd.md` items can be saved deliberately rather
+  than only previewed in a summary.
+- Improve candidate classification so status-pointer files and low-value
+  `PROJECT_STATUS.md` rows can be rejected before provider calls.
+
+## Previous Slice - 2026-06-09 AI work-log extraction proposals
 
 Current Goal:
 

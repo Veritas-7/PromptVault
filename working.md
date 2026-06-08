@@ -1,12 +1,119 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 20:03 KST
+Updated: 2026-06-08 20:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 JSON-style sensitive property redaction
+## Current Slice - 2026-06-08 Long CLI secret option redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  from leaking long CLI secret option shapes such as `--api-key value`,
+  `--access-token=value`, `--password "value"`, and `--secret 'value'`.
+
+Context:
+
+- Previous JSON-style sensitive property redaction is pushed to `origin/main`
+  with source commit `ce71620 fix: redact json-style secret properties` and
+  docs closeout `5474291 docs: record json secret redaction verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed `--api-key short-secret-value`,
+  `--password "short password"`, and `--secret short-secret-value` leaked
+  unchanged in prompt row previews. `--access-token=short-token-value` was
+  partially redacted into a malformed flag-shaped preview, while the existing
+  cookie option case was already covered.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact long CLI secret options with space-separated, equals-style,
+  double-quoted, and single-quoted values.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same long CLI secret option forms.
+- Confirmed RED after correcting a fixture typo: frontend prompt-row tests
+  failed 39/40 because `--api-key short-secret-value` leaked unchanged, and
+  backend focused redaction failed on the same leak.
+- Added a long-option sensitive-value pre-pass before the broader
+  assignment/header matchers in frontend redaction.
+- Added the same long-option matcher to the backend `possible_api_key` regex.
+  The first backend attempt used a lookahead unsupported by Rust `regex`, then
+  was corrected to a compatible no-lookahead value matcher.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` CLI-option coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a risky CLI option. It confirmed two stored prompt rows,
+  the `Run tool [REDACTED_POSSIBLE_SECRET] --format json.` preview visible in
+  row text and aria labels, no raw flag/value leak in row text, aria labels, or
+  body text while a safe prompt was selected, safe `--format json` still
+  visible, and zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: adds a long CLI sensitive-option redaction pre-pass.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for
+  long-option API key, access token, password, and secret forms.
+- `src-tauri/src/lib.rs`: aligns backend redaction and Rust regression
+  coverage with the same long-option CLI secret behavior.
+- `working.md`: records this slice and corrects the previous JSON docs closeout
+  state now that `5474291` is already pushed.
+
+Tests:
+
+- Probe:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --input-type=module -e ...`
+  showed long CLI secret options leaking or partially redacting in row previews.
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed 39/40 because `--api-key short-secret-value` was not redacted.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_long_cli_secret_options` from
+  `src-tauri` failed because backend redaction leaked the same CLI option.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 40/40.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_long_cli_secret_options` from
+  `src-tauri` passed, 1/1 focused lib test, plus zero-test main and CLI
+  targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5225" --port 5225 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_cli_secret_option_qa.mjs'`
+  passed with `rowCount=2`, expected preview
+  `Run tool [REDACTED_POSSIBLE_SECRET] --format json.`,
+  `rawFlagVisible=false`, `rawValueVisible=false`, `consoleMessages=[]`,
+  `pageErrors=[]`, and `apiErrors=[]`.
+- Full project check: `npm run check` passed, covering UI tests 346/346,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after redacting long CLI secret options.
+- Python Playwright is not installed, and PromptVault has no local Playwright
+  dependency. Browser QA used the installed shared workspace Playwright package
+  while still managing Vite with the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity and
+  UI/accessibility preview correctness work for CLI-shaped prompt snippets.
+
+Next Steps:
+
+- Commit and push the source changes for this CLI-option redaction slice, then
+  update and push the docs closeout from a clean source-pushed tree.
+
+## Previous Slice - 2026-06-08 JSON-style sensitive property redaction
 
 Current Goal:
 

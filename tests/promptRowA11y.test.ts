@@ -162,6 +162,45 @@ test("prompt row previews redact generic prefixed secret assignments", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact long CLI secret options", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const accessTokenFlag = ["--access", "token"].join("-");
+  const passwordFlag = ["--pass", "word"].join("");
+  const secretFlag = ["--", "secret"].join("");
+  const cases = [
+    {
+      text: `Run tool ${apiFlag} short-secret-value --format json.`,
+      expected: "Run tool [REDACTED_POSSIBLE_SECRET] --format json.",
+      leakPattern: new RegExp(`${apiFlag}|short-secret-value`),
+    },
+    {
+      text: `Run tool ${accessTokenFlag}=short-token-value --limit 10.`,
+      expected: "Run tool [REDACTED_POSSIBLE_SECRET] --limit 10.",
+      leakPattern: new RegExp(`${accessTokenFlag}|short-token-value`),
+    },
+    {
+      text: `Run tool ${passwordFlag} "short password" --mode safe.`,
+      expected: "Run tool [REDACTED_POSSIBLE_SECRET] --mode safe.",
+      leakPattern: new RegExp(`${passwordFlag}|short password`),
+    },
+    {
+      text: `Run tool ${secretFlag} 'short secret' --verbose.`,
+      expected: "Run tool [REDACTED_POSSIBLE_SECRET] --verbose.",
+      leakPattern: new RegExp(`${secretFlag}|short secret`),
+    },
+  ];
+
+  for (const { text, expected, leakPattern } of cases) {
+    const preview = promptRowPreviewText(text);
+    const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+    assert.equal(preview, expected);
+    assert.doesNotMatch(preview, leakPattern);
+    assert.doesNotMatch(label, leakPattern);
+    assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+  }
+});
+
 test("prompt row previews redact JSON-style sensitive properties", () => {
   const apiKey = ["api", "key"].join("_");
   const accessToken = ["access", "token"].join("_");

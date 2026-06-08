@@ -3983,7 +3983,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "possible_api_key",
                 Regex::new(
-                    r#"(?im)\bgh[oprsu]_[a-z0-9_]{20,}\b|\b(?:bearer|basic)\s+(?:"(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})"|'(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})'|(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})\b)|(?:--user|-u)\s+[^:\s]+:[^\s]+|(?:--cookie|-b)\s+[^=\s]+=[^\s]+|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?[^\s&]+)?"#,
+                    r#"(?im)--[a-z0-9_-]*(?:authorization|cookie|api[-_]?key|access[-_]?key|credential|secret|signature|token|password)[a-z0-9_-]*(?:=|\s+)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^-\s][^\s]*|-[^-\s][^\s]*)|\bgh[oprsu]_[a-z0-9_]{20,}\b|\b(?:bearer|basic)\s+(?:"(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})"|'(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})'|(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})\b)|(?:--user|-u)\s+[^:\s]+:[^\s]+|(?:--cookie|-b)\s+[^=\s]+=[^\s]+|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?[^\s&]+)?"#,
                 )
                     .expect("api key regex"),
             ),
@@ -6410,6 +6410,49 @@ mod tests {
             redact_sensitive_text(text),
             "[REDACTED_POSSIBLE_API_KEY] [REDACTED_POSSIBLE_API_KEY] [REDACTED_POSSIBLE_API_KEY]"
         );
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_long_cli_secret_options() {
+        let api_flag = ["--api", "key"].join("-");
+        let access_token_flag = ["--access", "token"].join("-");
+        let password_flag = ["--pass", "word"].join("");
+        let secret_flag = ["--", "secret"].join("");
+        let api_key_text = format!("Run tool {api_flag} short-secret-value --format json.");
+        let access_token_text =
+            format!("Run tool {access_token_flag}=short-token-value --limit 10.");
+        let password_text = format!("Run tool {password_flag} \"short password\" --mode safe.");
+        let secret_text = format!("Run tool {secret_flag} 'short secret' --verbose.");
+
+        let redacted_api_key = redact_sensitive_text(&api_key_text);
+        let redacted_access_token = redact_sensitive_text(&access_token_text);
+        let redacted_password = redact_sensitive_text(&password_text);
+        let redacted_secret = redact_sensitive_text(&secret_text);
+
+        assert_eq!(
+            redacted_api_key,
+            "Run tool [REDACTED_POSSIBLE_API_KEY] --format json."
+        );
+        assert_eq!(
+            redacted_access_token,
+            "Run tool [REDACTED_POSSIBLE_API_KEY] --limit 10."
+        );
+        assert_eq!(
+            redacted_password,
+            "Run tool [REDACTED_POSSIBLE_API_KEY] --mode safe."
+        );
+        assert_eq!(
+            redacted_secret,
+            "Run tool [REDACTED_POSSIBLE_API_KEY] --verbose."
+        );
+        assert!(!redacted_api_key.contains(&api_flag));
+        assert!(!redacted_api_key.contains("short-secret-value"));
+        assert!(!redacted_access_token.contains(&access_token_flag));
+        assert!(!redacted_access_token.contains("short-token-value"));
+        assert!(!redacted_password.contains(&password_flag));
+        assert!(!redacted_password.contains("short password"));
+        assert!(!redacted_secret.contains(&secret_flag));
+        assert!(!redacted_secret.contains("short secret"));
     }
 
     #[test]

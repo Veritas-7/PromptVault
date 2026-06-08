@@ -1,12 +1,118 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 11:43 KST
+Updated: 2026-06-08 11:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Prompt quality helper uniqueness validation
+## Current Slice - 2026-06-08 Repeated helper text key stability
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make repeated helper text lists render with stable unique React keys even when
+  backend or AI provider output contains duplicate strings.
+
+Context:
+
+- Previous prompt quality helper uniqueness slice is pushed to `origin/main`:
+  implementation `3ad783c fix: reject duplicate prompt quality helpers` and
+  closeout `d978776 docs: close prompt quality helper handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`.
+- Browser-bridge prompt quality suggestions are now validated as unique, but
+  Tauri native invoke and external AI improvement results can still deliver
+  repeated `rationale` or `warnings` strings.
+- Current UI renders several repeated helper text lists with `key={text}`:
+  import warnings, selected prompt suggestions, improvement rationale, and
+  improvement warnings.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `d978776 docs: close prompt quality helper handoff`.
+- Identified the next narrow UI maintenance issue: duplicate helper text can
+  create duplicate React key warnings even when the duplicate text is otherwise
+  safe to show.
+- Adding a RED helper test for duplicate text list keys, then applying the
+  helper to repeated helper text rendering sites.
+- Confirmed RED first: focused helper test failed because
+  `src/textListKey.ts` did not exist.
+- Added `textListItemKey(text, index)` and applied it to import warnings,
+  selected prompt suggestions, improvement rationale, and improvement warnings.
+- Confirmed GREEN: focused helper test passed.
+- Ran broader UI tests successfully: `npm run test:ui` passed 297/297.
+- Ran `npm run build` successfully after adding the helper import.
+- Verified the dev-mode improve flow with Node Playwright: an AI improve
+  response containing duplicate rationale and duplicate warnings rendered both
+  duplicate rows without browser console/page errors.
+- Removed `/tmp/promptvault_text_list_key_qa.mjs` after dev-mode QA and
+  confirmed port 5335 had no listener.
+- Ran the full project check successfully after dev-mode QA.
+- Pre-staging verification passed with only the expected four changed files:
+  `src/App.tsx`, `src/textListKey.ts`, `tests/textListKey.test.ts`, and
+  `working.md`.
+- Explicitly staged only those four paths.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 5.27 KB and finding no leaks.
+- Restaged `working.md` after recording the staged scan and reran the staged
+  secret scan; about 6.33 KB was scanned and no leaks were found.
+
+Changes:
+
+- `working.md`: records the current UI key stability slice.
+- `src/textListKey.ts`: adds a small key helper for text lists that may contain
+  repeated strings.
+- `tests/textListKey.test.ts`: covers duplicate text keys by position.
+- `src/App.tsx`: uses the helper for repeated helper text `<p>` rows.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/textListKey.test.ts`
+  failed with `ERR_MODULE_NOT_FOUND` for `src/textListKey.ts`.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/textListKey.test.ts`
+  passed 1/1.
+- Broader UI: `npm run test:ui` passed 297/297.
+- Build: `npm run build` passed.
+- Dev-mode QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5335" --port 5335 --timeout 30 node /tmp/promptvault_text_list_key_qa.mjs http://127.0.0.1:5335`
+  passed after fixing the stubbed `quality_delta` shape to include required
+  prompt-quality `suggestions`.
+- Cleanup: `/tmp/promptvault_text_list_key_qa.mjs` removed and
+  `lsof -nP -iTCP:5335 -sTCP:LISTEN` returned no listener.
+- Full project check: `npm run check` passed, covering UI tests 297/297,
+  production build, Rust lib tests 84/84, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/App.tsx src/textListKey.ts tests/textListKey.test.ts working.md`
+  passed; repo root was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only the four expected changed files;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`; the temp QA file was absent; port 5335 was free.
+- Staged paths: `git diff --cached --name-only` listed only `src/App.tsx`,
+  `src/textListKey.ts`, `tests/textListKey.test.ts`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed with
+  no leaks found.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit, full-tree secret scan, push, and final parity verification.
+
+## Previous Slice - 2026-06-08 Prompt quality helper uniqueness validation
 
 Current Goal:
 

@@ -150,6 +150,7 @@ import {
   scanStopActionLabel,
   storedLoadActionLabel,
 } from "./topActionLabels";
+import { textListItemKey } from "./textListKey";
 import type {
   ImportBatchResult,
   ImportEventsResult,
@@ -1737,8 +1738,8 @@ function App() {
           ) : null}
           {importResult?.warnings.length ? (
             <div className="warning-list">
-              {importResult.warnings.map((warning) => (
-                <p key={warning}>{warning}</p>
+              {importResult.warnings.map((warning, index) => (
+                <p key={textListItemKey(warning, index)}>{warning}</p>
               ))}
             </div>
           ) : null}
@@ -1939,8 +1940,8 @@ function App() {
               </div>
               {selectedPrompt.quality.suggestions.length ? (
                 <div className="quality-box">
-                  {selectedPrompt.quality.suggestions.map((suggestion) => (
-                    <p key={suggestion}>{suggestion}</p>
+                  {selectedPrompt.quality.suggestions.map((suggestion, index) => (
+                    <p key={textListItemKey(suggestion, index)}>{suggestion}</p>
                   ))}
                 </div>
               ) : null}
@@ -2009,14 +2010,14 @@ function App() {
                 </div>
               ) : null}
               <div className="advice">
-                {activeImprovement.rationale.map((item) => (
-                  <p key={item}>{item}</p>
+                {activeImprovement.rationale.map((item, index) => (
+                  <p key={textListItemKey(item, index)}>{item}</p>
                 ))}
               </div>
               {activeImprovement.warnings.length ? (
                 <div className="warning-list">
-                  {activeImprovement.warnings.map((warning) => (
-                    <p key={warning}>{warning}</p>
+                  {activeImprovement.warnings.map((warning, index) => (
+                    <p key={textListItemKey(warning, index)}>{warning}</p>
                   ))}
                 </div>
               ) : null}

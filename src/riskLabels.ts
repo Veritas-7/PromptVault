@@ -1,3 +1,9 @@
+import { redactSensitiveDisplayText } from "./displayRedaction.ts";
+
+function compactRiskFlagLabel(label: string): string {
+  return label.replace(/\s+/g, " ").trim();
+}
+
 export function riskFlagLabel(flag: string): string {
   switch (flag) {
     case "long_base64_like_token":
@@ -9,6 +15,6 @@ export function riskFlagLabel(flag: string): string {
     case "short_secret_like_assignment":
       return "비밀값 형태 할당";
     default:
-      return flag || "알 수 없음";
+      return compactRiskFlagLabel(redactSensitiveDisplayText(flag.trim())) || "알 수 없음";
   }
 }

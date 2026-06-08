@@ -12,3 +12,12 @@ test("risk flag labels preserve unknown backend identifiers", () => {
   assert.equal(riskFlagLabel("new_backend_flag"), "new_backend_flag");
   assert.equal(riskFlagLabel(""), "알 수 없음");
 });
+
+test("risk flag labels redact secret-like unknown backend identifiers", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["risk", "flag", "secret"].join("-");
+  const label = riskFlagLabel(`new_backend_flag ${apiFlag} ${secretValue}`);
+
+  assert.equal(label, "new_backend_flag [REDACTED_POSSIBLE_SECRET]");
+  assert.doesNotMatch(label, new RegExp(`${apiFlag}|${secretValue}`));
+});

@@ -1,12 +1,112 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 22:06 KST
+Updated: 2026-06-08 22:13 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Source status display secret masking
+## Current Slice - 2026-06-08 Risk flag display secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent unknown backend risk flag identifiers from rendering raw secret-like
+  text in prompt row visible badges and prompt row `aria-label` copy.
+
+Context:
+
+- Previous source status masking is pushed to `origin/main` with source commit
+  `c1bee97 fix: mask source status secrets` and docs closeout
+  `67cdb16 docs: record source status masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for the quick scan/prompt row
+  user flow.
+- Existing prompt text, metadata, paths, sources, warnings, quality gaps,
+  provider labels, and source status labels were already redacted. The next
+  uncovered display fallback was `riskFlagLabel()` preserving unknown backend
+  risk identifiers verbatim.
+- This slice changes display copy only. Known risk flag localization and
+  backend risk detection remain unchanged.
+
+Progress:
+
+- Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
+  persisted/current/first objective all point at PromptVault.
+- Re-read workspace policies, `working.md`, `src/riskLabels.ts`,
+  `tests/riskLabels.test.ts`, `src/promptRowA11y.ts`, and prompt row rendering
+  in `src/App.tsx` from a clean `origin/main` tree.
+- Added a RED test in `tests/riskLabels.test.ts` requiring secret-like unknown
+  backend risk flags to be redacted while preserving safe unknown identifiers.
+  RED failed as intended because `riskFlagLabel()` rendered the raw synthetic
+  risk flag.
+- Extracted the shared display redaction helper into `src/displayRedaction.ts`
+  so `riskLabels.ts` can use it without creating a `promptRowA11y` import cycle.
+  `promptRowA11y.ts` still re-exports `redactSensitiveDisplayText()` for
+  existing call sites.
+- Routed unknown `riskFlagLabel()` fallbacks through the shared redactor and
+  whitespace compaction. Known risk identifiers still map to Korean labels.
+- Ran a browser smoke with a Tauri-like invoke shim. Quick scan loaded a prompt
+  whose unknown `risk_flags` entry contained a synthetic secret-like value; the
+  prompt row risk badge and row `aria-label` rendered the redacted label, and
+  the body omitted raw synthetic fragments.
+- Deleted the temporary browser QA script after verification.
+
+Changes:
+
+- `src/displayRedaction.ts`: new shared display redaction helper module.
+- `src/promptRowA11y.ts`: imports and re-exports the shared redaction helper
+  instead of owning it directly.
+- `src/riskLabels.ts`: redacts and compacts unknown risk flag labels before
+  display.
+- `tests/riskLabels.test.ts`: adds RED/GREEN coverage for secret-like unknown
+  backend risk flags.
+- `working.md`: records this slice and updates the previous slice handoff state.
+
+Tests:
+
+- RED helper test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/riskLabels.test.ts`
+  failed as intended because unknown risk flag labels exposed raw synthetic
+  secret-like fragments.
+- Targeted GREEN:
+  same command passed with `tests/riskLabels.test.ts` 3/3 after masking unknown
+  risk fallbacks.
+- Redaction regression checks:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed with 47/47; `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/qualityGaps.test.ts tests/sourceStatusA11y.test.ts tests/errorDisplay.test.ts`
+  passed with 23/23.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5241" --port 5241 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_risk_flag_secret_qa.mjs'`
+  passed with exit code `0` after correcting the temporary script's Playwright
+  module resolution to the project `package.json`; quick scan invoked
+  `scan_prompts`, the first prompt row risk badge showed `new_backend_flag
+  [REDACTED_POSSIBLE_SECRET]`, the row `aria-label` included the same redacted
+  risk label, raw synthetic fragments were absent from the body and
+  `aria-label`, and there were no page errors, console errors, or failed
+  responses.
+- Full project check: `npm run check` passed, covering UI tests 361/361,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after risk flag display masking.
+- Source commit/push is pending staged and full-tree gitleaks verification.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Run `git diff --check`, stage explicit paths only, run staged gitleaks, commit
+  the source change, run full-tree gitleaks, push to private `origin/main`, and
+  verify fetch parity plus GitHub private visibility.
+
+## Previous Slice - 2026-06-08 Source status display secret masking
 
 Current Goal:
 
@@ -54,6 +154,10 @@ Progress:
 - Repository visibility was rechecked with `gh repo view
   Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`:
   `visibility=PRIVATE`, `isPrivate=true`.
+- Docs closeout commit
+  `67cdb16 docs: record source status masking verification` was pushed to
+  `origin/main`; final fetch parity was `0 0` and `git status --short --branch`
+  reported `## main...origin/main`.
 
 Changes:
 
@@ -89,6 +193,13 @@ Tests:
 - Source push verification: `git push origin main` advanced `main` from
   `1875e71` to `c1bee97`; after fetch, parity was `0 0` and
   `git status --short --branch` reported `## main...origin/main`.
+- Docs staged secret scan: `gitleaks protect --staged` scanned about 1.05 KB
+  and found no leaks before the docs closeout commit.
+- Docs full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.16 MB and found no leaks before the docs closeout push.
+- Docs push verification: `git push origin main` advanced `main` from
+  `c1bee97` to `67cdb16`; after fetch, parity was `0 0` and
+  `git status --short --branch` reported `## main...origin/main`.
 
 Issues:
 
@@ -102,9 +213,7 @@ Research:
 
 Next Steps:
 
-- Commit this closeout `working.md` update after staged gitleaks, run full-tree
-  gitleaks again, push to private `origin/main`, and verify final fetch parity
-  plus GitHub private visibility.
+- Continue autonomous QA/improvement from this clean pushed tree.
 
 ## Previous Slice - 2026-06-08 Provider display secret masking
 

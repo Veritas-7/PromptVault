@@ -48,6 +48,7 @@ import {
   importProgressDisplay,
   importProgressLabel,
   importRunTimestampText,
+  importStateUpdatedAtText,
   importStateProgressPercent,
   importProgressValueText,
   importRunFailureText,
@@ -1294,7 +1295,7 @@ function App() {
                     <div className="saved-import-row" key={state.source_id}>
                       <div>
                         <strong>{sourceLabelDisplayText(state.source_label)}</strong>
-                        <span>{state.updated_at}</span>
+                        <span>{importStateUpdatedAtText(state.updated_at)}</span>
                       </div>
                       <progress
                         aria-label={importProgressLabel(state.source_label)}

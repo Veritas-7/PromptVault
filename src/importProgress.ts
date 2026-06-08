@@ -49,6 +49,10 @@ export function importRunTimestampText(generatedAt: string | null | undefined, r
   return "시작 중";
 }
 
+export function importStateUpdatedAtText(updatedAt: string | null | undefined): string {
+  return dateTimeDisplayText(updatedAt);
+}
+
 export function importProgressDisplay(
   result: ImportBatchResult | null,
   savedState: ImportState | null,

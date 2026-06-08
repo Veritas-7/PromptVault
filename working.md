@@ -1,12 +1,137 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 11:10 KST
+Updated: 2026-06-08 11:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Missing source plan metadata validation
+## Current Slice - 2026-06-08 Missing source summary metadata validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan results that claim a missing source has scanned
+  files, found prompts, quality statistics, or weak prompt counts.
+
+Context:
+
+- The previous slice hardened scan plan missing-source metadata. This slice
+  applies the same backend contract to scan result source summaries.
+- Backend `run_scan()` initializes each `SourceSummary` as `status: "missing"`
+  with zero counts and zero quality metrics. If the source root does not exist,
+  it records the missing-path note and pushes the summary before any file
+  collection can happen.
+- Therefore a valid scan result source summary with `status: "missing"` cannot
+  have nonzero `files_seen`, `prompts_found`, `average_quality`, or
+  `weak_prompt_count`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `66d71fb docs: finalize missing source plan metadata handoff` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read scan result source summary parser/tests and backend `run_scan()`
+  missing-source generation. The backend cannot produce a missing source
+  summary with scanned-file or prompt-quality metadata, but the browser-bridge
+  parser currently validates only generic numeric ranges and aggregate totals.
+- Adding a RED API test for a missing source summary whose aggregate totals
+  match the impossible row, so the failure targets row-level status
+  consistency rather than aggregate mismatch.
+- Confirmed RED first: focused API suite failed 129/130 only on the new missing
+  source summary metadata rejection case with `Missing expected rejection`.
+- Tightened the scan result parser so `status: "missing"` source summaries must
+  keep scanned-file, prompt, and quality metadata at zero, matching backend
+  `run_scan()` behavior.
+- Confirmed GREEN: focused API suite passed 130/130 after the parser change.
+- Ran the broader UI test suite and production build successfully after the
+  parser change.
+- Verified the local preview quick-scan flow with Node Playwright: a malformed
+  missing source summary with `files_seen: 1` was rejected and not rendered, the
+  retry rendered the valid missing `Codex` source with zero quality/weak
+  metadata, and there were no console or page errors.
+- Removed the temporary preview QA script.
+- Confirmed preview cleanup: temp script was absent and port 5332 was free.
+- Ran the full project check successfully after preview QA.
+- Pre-staging verification passed with only the expected three modified files:
+  parser, API test, and working log.
+- Staged the three explicit paths and confirmed the staged secret scan found no
+  leaks.
+- Restaged `working.md` after recording the staged scan result and reran the
+  staged secret scan; no leaks were found.
+- Ran the final staged secret scan before the implementation commit; no leaks
+  were found.
+
+Changes:
+
+- `working.md`: records the current missing source summary metadata validation
+  slice.
+- `tests/promptVaultApi.test.ts`: adds a malformed missing source summary
+  rejection case.
+- `src/promptVaultApi.ts`: rejects missing scan result source summaries with
+  nonzero scanned-file, prompt, or quality metadata.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 129/130 only on the new missing source summary row with file metadata
+  rejection case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 130/130 after rejecting impossible missing source summary metadata.
+- Broader UI suite: `npm run test:ui` passed 294/294.
+- Production build: `npm run build` passed; Vite emitted
+  `dist/assets/index-CkZ0Ay8O.js` and `dist/assets/index-D81jZHaU.css`.
+- Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  printed usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5332" --port 5332 --timeout 30 node /tmp/promptvault_missing_source_summary_metadata_qa.mjs http://127.0.0.1:5332`
+  passed. The script clicked quick scan, served a malformed missing source
+  summary with `files_seen: 1` first, verified the scan error state without
+  rendering a source row or file count, retried with a valid missing `Codex`
+  source, verified the zero-metadata source row rendered, and observed no
+  console or page errors.
+- Preview cleanup: `test ! -e /tmp/promptvault_missing_source_summary_metadata_qa.mjs`
+  exited 0; `lsof -nP -iTCP:5332 -sTCP:LISTEN` produced no listener.
+- Full project check: `npm run check` passed. It reran `npm run test:ui`
+  294/294, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
+  and `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  produced no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only the three expected modified files; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` lists only
+  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned private GitHub visibility; temp script remained absent and port 5332
+  remained free.
+- Staged explicit paths only:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security scan: `gitleaks protect --staged --no-banner --redact`
+  scanned about 7.31 KB and found no leaks.
+- Restaged `working.md` after recording the staged scan result and reran
+  `gitleaks protect --staged --no-banner --redact`; it scanned about 7.66 KB
+  and found no leaks.
+- Final staged security scan before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit the implementation.
+
+## Previous Slice - 2026-06-08 Missing source plan metadata validation
 
 Current Goal:
 

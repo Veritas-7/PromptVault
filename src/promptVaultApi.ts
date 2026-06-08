@@ -319,7 +319,18 @@ function isSourceSummary(value: unknown): boolean {
     && isQualityAverage(value.average_quality)
     && isNonNegativeSafeIntegerAtMost(value.weak_prompt_count, value.prompts_found)
     && isNonBlankString(value.status)
-    && isNonBlankStringArray(value.notes);
+    && isNonBlankStringArray(value.notes)
+    && isMissingSourceSummaryMetadataConsistent(value);
+}
+
+function isMissingSourceSummaryMetadataConsistent(value: Record<string, unknown>): boolean {
+  return value.status !== "missing"
+    || (
+      value.files_seen === 0
+      && value.prompts_found === 0
+      && value.average_quality === 0
+      && value.weak_prompt_count === 0
+    );
 }
 
 function recordStringFieldValuesAreUnique(values: unknown, fieldName: string): boolean {

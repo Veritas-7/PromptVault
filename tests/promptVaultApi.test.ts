@@ -2000,6 +2000,41 @@ test("browser bridge scan results reject blank source summary metadata", async (
   );
 });
 
+test("browser bridge scan results reject missing source summaries with file metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanResult({
+    stats: emptyScanStats({
+      total_files: 1,
+      source_summaries: [{
+        id: "codex",
+        label: "Codex",
+        root_path: "/tmp/codex",
+        files_seen: 1,
+        prompts_found: 0,
+        average_quality: 0,
+        weak_prompt_count: 0,
+        status: "missing",
+        notes: ["이 머신에 경로가 없습니다."],
+      }],
+    }),
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Codex|파일\s*1|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject blank prompt metadata", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

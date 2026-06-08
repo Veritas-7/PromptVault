@@ -1,12 +1,127 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 05:58 KST
+Updated: 2026-06-09 06:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 local-only work-log extraction control
+## Current Slice - 2026-06-09 last-updated progress-log local extraction
+
+Current Goal:
+
+- Improve local project progress-log extraction so explicit update summaries
+  from project-local files can become managed project/day work candidates.
+- Cover `last_updated`, `Last updated`, and `마지막 업데이트` lines in
+  `PROJECT_STATUS.md`, `working.md`, and related progress logs.
+- Keep extracted evidence sanitized and fail closed when context contains
+  obvious secret/risk markers.
+
+Context:
+
+- The previous local-only extraction control worked end to end but accepted
+  only `1` of `16` current unparsed progress-log candidates.
+- Many rejected candidates were not arbitrary prose. They had explicit update
+  dates in project-local work/status logs, including `working.md`,
+  `workingd.md`, and `PROJECT_STATUS.md`.
+- The user asked whether project/day work management actually covers real
+  sessions and project-local progress logs. This slice narrows that gap for
+  deterministic local extraction; richer AI extraction and provider health
+  remain separate work.
+
+Progress:
+
+- Added local parsing for explicit last-updated summary lines.
+- For `PROJECT_STATUS.md`, local extraction now emits a coarse
+  `Project status snapshot updated` candidate when the dated status header is
+  safe.
+- For `working.md`-style files, local extraction now prefers a safe
+  `Current Goal` paragraph, joining wrapped first-paragraph lines instead of
+  taking only the first line.
+- Added context safety checks so evidence skips lines with markers such as
+  `Installed SHA`, `authorization`, `cookie`, `password`, `secret`, `token`,
+  `api key`, or `key:`.
+- Verified actual local extraction over the current real candidate set:
+  `16` candidates, `13` accepted, `3` rejected.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - adds `local_project_work_log_update_summary`;
+  - detects update-date lines with `last_updated`, `Last updated`, and
+    `마지막 업데이트`;
+  - derives safe titles/evidence from status headings or current-goal context;
+  - keeps risky candidates rejected or falls back to date-only evidence when
+    safe.
+- `src-tauri/src/lib.rs` tests:
+  - extends local extraction coverage for dated bullets plus update summaries;
+  - adds coverage for safe `PROJECT_STATUS.md` summaries, wrapped current-goal
+    evidence, and risk-line exclusion.
+
+Tests:
+
+- RED:
+  - `cargo test local_work_log_extraction_accepts_last_updated_summaries_with_safe_evidence`
+    initially failed because local extraction accepted `0` update-summary
+    candidates.
+  - The wrapped `Current Goal` case then failed because only the first line was
+    extracted.
+  - The sensitive-context case then failed because `Installed SHA` appeared in
+    evidence.
+- Targeted GREEN:
+  - `cargo test local_work_log_extraction_accepts_last_updated_summaries_with_safe_evidence`:
+    PASS.
+  - `cargo test local_work_log_extraction`: PASS, `2` tests.
+  - `cargo test work_log_extraction`: PASS, `10` tests.
+- Actual local extraction verification:
+  - `cargo run --quiet --bin promptvault-cli -- work-log-extract --json`:
+    `candidate_count=16`, `accepted_count=13`, `rejected_count=3`.
+  - Remaining rejected candidates:
+    - CareVault `workingd.md`: `local_fallback_requires_ai_review`;
+    - SnapTranslate `PROJECT_STATUS.md`: `candidate_has_risk_flags`;
+    - SnapTranslate `working.md`: `candidate_has_risk_flags`.
+- Headless browser-bridge QA against real local sources:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 220 -- /bin/bash -lc 'node /tmp/promptvault_work_log_local_extraction_qa.mjs'`:
+    PASS.
+  - Observed local request body:
+    `{"options":{"ai":false,"save":false}}`.
+  - Observed extraction meta:
+    `로컬 local-extraction-rules · 후보 16개 · accepted 13개 · rejected 3개`.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `422` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `150` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- This is materially better local coverage, but it is still not a complete
+  project/day ledger.
+- The real session parsers and project progress-log parsers are both exercised,
+  but risk-flagged or ambiguous progress logs still need AI/provider extraction
+  or more careful local rules.
+- GLM/OpenAI provider health remains the next blocker for richer extraction
+  across harder logs.
+- Current status snapshot rows are coarse daily/project evidence, not full
+  narrative summaries of every task.
+
+Research:
+
+- Used local TDD, incremental implementation, and webapp-testing workflows.
+- No external web research was used.
+
+Next Steps:
+
+- Add provider health diagnostics/retry controls for GLM/OpenAI extraction.
+- Add AI-assisted parsing for the remaining risk-flagged or ambiguous progress
+  logs, with sanitized evidence requirements.
+- Promote accepted extraction rows into a clearer durable project/day
+  management snapshot flow.
+
+## Previous Slice - 2026-06-09 local-only work-log extraction control
 
 Current Goal:
 

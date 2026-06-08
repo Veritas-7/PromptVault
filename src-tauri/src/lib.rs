@@ -3879,6 +3879,21 @@ fn local_project_work_log_extraction_proposal(
             rejection_reason: None,
         };
     }
+    if let Some((date, title, evidence)) = local_project_work_log_update_summary(candidate) {
+        return ProjectWorkLogExtractionProposal {
+            candidate_id: candidate.candidate_id.clone(),
+            project: candidate.project.clone(),
+            source_path: candidate.source_path.clone(),
+            source_file: candidate.source_file.clone(),
+            date: Some(date),
+            title,
+            status: "proposed".to_string(),
+            evidence,
+            confidence: 0.62,
+            accepted: true,
+            rejection_reason: None,
+        };
+    }
     rejected_project_work_log_extraction_proposal(
         candidate,
         if candidate.risk_flags.is_empty() {
@@ -3938,6 +3953,195 @@ fn local_project_work_log_title_after_date(rest: &str) -> Option<String> {
         return None;
     }
     Some(truncate_chars(title, 160))
+}
+
+fn local_project_work_log_update_summary(
+    candidate: &ProjectWorkLogExtractionCandidate,
+) -> Option<(String, String, String)> {
+    let lines = candidate.excerpt.lines().collect::<Vec<_>>();
+    for (index, line) in lines.iter().enumerate() {
+        let Some((date, label)) = local_project_work_log_update_date_line(line) else {
+            continue;
+        };
+        let title = local_project_work_log_update_title(candidate, &lines, index);
+        let mut evidence = format!("{label}: {date}");
+        if let Some(context) = local_project_work_log_update_context(candidate, &lines, index) {
+            evidence.push('\n');
+            evidence.push_str(&context);
+        }
+        if !detect_risks(&format!("{date}\n{title}\n{evidence}")).is_empty() {
+            let fallback_title = local_project_work_log_generic_update_title(candidate);
+            let fallback_evidence = format!("{label}: {date}");
+            if !detect_risks(&format!("{date}\n{fallback_title}\n{fallback_evidence}"))
+                .is_empty()
+            {
+                continue;
+            }
+            return Some((date, fallback_title, fallback_evidence));
+        }
+        return Some((date, title, evidence));
+    }
+    None
+}
+
+fn local_project_work_log_update_date_line(line: &str) -> Option<(String, &'static str)> {
+    let lower = line.to_ascii_lowercase();
+    let has_last_updated = lower.contains("last_updated") || lower.contains("last updated");
+    let has_korean_updated = line.contains("마지막 업데이트");
+    if !has_last_updated && !has_korean_updated {
+        return None;
+    }
+    let date_start = find_iso_date_start(line)?;
+    let date = line[date_start..date_start + 10].to_string();
+    let label = if lower.contains("last_updated") {
+        "last_updated"
+    } else if has_korean_updated {
+        "마지막 업데이트"
+    } else {
+        "Last updated"
+    };
+    Some((date, label))
+}
+
+fn local_project_work_log_update_title(
+    candidate: &ProjectWorkLogExtractionCandidate,
+    lines: &[&str],
+    date_line_index: usize,
+) -> String {
+    if candidate
+        .source_file
+        .eq_ignore_ascii_case("PROJECT_STATUS.md")
+    {
+        return "Project status snapshot updated".to_string();
+    }
+    local_project_work_log_current_goal_line(lines, date_line_index)
+        .or_else(|| local_project_work_log_first_safe_heading(lines))
+        .unwrap_or_else(|| local_project_work_log_generic_update_title(candidate))
+}
+
+fn local_project_work_log_generic_update_title(
+    candidate: &ProjectWorkLogExtractionCandidate,
+) -> String {
+    if candidate
+        .source_file
+        .eq_ignore_ascii_case("PROJECT_STATUS.md")
+    {
+        "Project status snapshot updated".to_string()
+    } else {
+        "Progress log updated".to_string()
+    }
+}
+
+fn local_project_work_log_update_context(
+    candidate: &ProjectWorkLogExtractionCandidate,
+    lines: &[&str],
+    date_line_index: usize,
+) -> Option<String> {
+    if candidate
+        .source_file
+        .eq_ignore_ascii_case("PROJECT_STATUS.md")
+    {
+        return local_project_work_log_first_safe_heading(lines);
+    }
+    local_project_work_log_current_goal_line(lines, date_line_index)
+        .or_else(|| local_project_work_log_first_safe_heading(lines))
+}
+
+fn local_project_work_log_current_goal_line(
+    lines: &[&str],
+    date_line_index: usize,
+) -> Option<String> {
+    let mut in_current_goal = false;
+    let mut parts = Vec::new();
+    for line in lines.iter().skip(date_line_index + 1) {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            if in_current_goal {
+                break;
+            }
+            let heading = trimmed.trim_start_matches('#').trim().to_ascii_lowercase();
+            in_current_goal = heading.contains("current goal");
+            continue;
+        }
+        if !in_current_goal {
+            continue;
+        }
+        if trimmed.is_empty() {
+            if parts.is_empty() {
+                continue;
+            }
+            break;
+        }
+        let Some(cleaned) = local_project_work_log_safe_context_line(trimmed) else {
+            if parts.is_empty() {
+                continue;
+            }
+            break;
+        };
+        parts.push(cleaned);
+        if parts.join(" ").chars().count() >= 160 {
+            break;
+        }
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    let joined = parts.join(" ");
+    local_project_work_log_safe_context_line(&joined)
+}
+
+fn local_project_work_log_first_safe_heading(lines: &[&str]) -> Option<String> {
+    lines
+        .iter()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if !trimmed.starts_with('#') {
+                return None;
+            }
+            local_project_work_log_safe_context_line(trimmed)
+        })
+        .next()
+}
+
+fn local_project_work_log_safe_context_line(line: &str) -> Option<String> {
+    let cleaned = line
+        .trim()
+        .trim_matches('|')
+        .trim()
+        .trim_start_matches(['#', '-', '*', '>', ' ', '\t'])
+        .trim()
+        .trim_matches('*')
+        .trim();
+    if cleaned.chars().count() < 8 {
+        return None;
+    }
+    if !cleaned.chars().any(|ch| ch.is_alphabetic()) {
+        return None;
+    }
+    if local_project_work_log_context_line_looks_sensitive(cleaned) {
+        return None;
+    }
+    if !detect_risks(cleaned).is_empty() {
+        return None;
+    }
+    Some(truncate_chars(cleaned, 160))
+}
+
+fn local_project_work_log_context_line_looks_sensitive(line: &str) -> bool {
+    let lower = line.to_ascii_lowercase();
+    [
+        "authorization",
+        "cookie",
+        "installed sha",
+        "password",
+        "secret",
+        "token",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
+        || lower.contains("api key")
+        || lower.contains("key:")
+        || lower.contains("sha:")
 }
 
 fn rejected_project_work_log_extraction_proposal(
@@ -9154,7 +9358,7 @@ mod tests {
             id: "test-source".to_string(),
             label: "Test Source".to_string(),
             root_path: "/tmp/test-source".to_string(),
-            files_seen: 2,
+            files_seen: 3,
             prompts_found: prompts.len(),
             average_quality: 0.0,
             weak_prompt_count: 0,
@@ -10319,7 +10523,7 @@ Progress:
     }
 
     #[test]
-    fn local_work_log_extraction_accepts_safe_dated_bullets_only() {
+    fn local_work_log_extraction_accepts_safe_dated_bullets_and_update_summaries() {
         let candidates = ProjectWorkLogExtractionCandidatesResult {
             generated_at: "2026-06-09T00:00:00Z".to_string(),
             root_path: "/tmp".to_string(),
@@ -10327,7 +10531,7 @@ Progress:
             skipped_parsed_file_count: 0,
             skipped_unreadable_file_count: 0,
             skipped_empty_file_count: 0,
-            candidate_count: 2,
+            candidate_count: 3,
             candidates: vec![
                 ProjectWorkLogExtractionCandidate {
                     candidate_id: "work-log-Beta-a1b2c3d4e5".to_string(),
@@ -10363,8 +10567,8 @@ Progress:
 
         assert_eq!(result.provider, "local-extraction-rules");
         assert!(!result.used_ai);
-        assert_eq!(result.accepted_count, 1);
-        assert_eq!(result.rejected_count, 1);
+        assert_eq!(result.accepted_count, 2);
+        assert_eq!(result.rejected_count, 0);
         assert_eq!(result.proposals[0].project, "Beta");
         assert!(result.proposals[0].accepted);
         assert_eq!(result.proposals[0].date.as_deref(), Some("2026-06-04"));
@@ -10374,10 +10578,118 @@ Progress:
         );
         assert_eq!(result.proposals[0].status, "proposed");
         assert_eq!(result.proposals[0].rejection_reason, None);
-        assert!(!result.proposals[1].accepted);
+        assert!(result.proposals[1].accepted);
+        assert_eq!(result.proposals[1].date.as_deref(), Some("2026-04-24"));
+        assert_eq!(
+            result.proposals[1].title,
+            "Project status snapshot updated"
+        );
+        assert_eq!(
+            result.proposals[1].evidence,
+            "last_updated: 2026-04-24\nGamma — Project Status"
+        );
         assert_eq!(
             result.proposals[1].rejection_reason.as_deref(),
-            Some("local_fallback_requires_ai_review")
+            None
+        );
+    }
+
+    #[test]
+    fn local_work_log_extraction_accepts_last_updated_summaries_with_safe_evidence() {
+        let candidates = ProjectWorkLogExtractionCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/tmp".to_string(),
+            files_seen: 2,
+            skipped_parsed_file_count: 0,
+            skipped_unreadable_file_count: 0,
+            skipped_empty_file_count: 0,
+            candidate_count: 2,
+            candidates: vec![
+                ProjectWorkLogExtractionCandidate {
+                    candidate_id: "work-log-Gamma-a1b2c3d4e5".to_string(),
+                    project: "Gamma".to_string(),
+                    source_path: "/tmp/Gamma/PROJECT_STATUS.md".to_string(),
+                    source_file: "PROJECT_STATUS.md".to_string(),
+                    reason: "missing_dated_heading".to_string(),
+                    excerpt: "---\nproject: Gamma\nstatus: active\nlast_updated: 2026-04-24\n---\n# Gamma — Project Status\n## 현재 상태\n- **Phase**: 활성 개발"
+                        .to_string(),
+                    line_count: 8,
+                    char_count: 130,
+                    risk_flags: Vec::new(),
+                    modified_at: None,
+                },
+                ProjectWorkLogExtractionCandidate {
+                    candidate_id: "work-log-SkillManager-b1b2c3d4e5".to_string(),
+                    project: "SuperpowersSkillManager".to_string(),
+                    source_path: "/tmp/SuperpowersSkillManager/working.md".to_string(),
+                    source_file: "working.md".to_string(),
+                    reason: "missing_dated_heading".to_string(),
+                    excerpt: "# Superpowers Skill Manager Working Notes\nLast updated: 2026-06-05 19:36 KST\n## Current Goal\nConvert `SuperpowersSkillManager` itself into a TypeScript/Tauri skill manager.\nInstalled SHA: abcdefghijklmnopqrstuvwxyz0123456789"
+                        .to_string(),
+                    line_count: 5,
+                    char_count: 215,
+                    risk_flags: vec!["long_base64_like_token".to_string()],
+                    modified_at: None,
+                },
+                ProjectWorkLogExtractionCandidate {
+                    candidate_id: "work-log-WorklogTracker-c1b2c3d4e5".to_string(),
+                    project: "WorklogTracker".to_string(),
+                    source_path: "/tmp/WorklogTracker/working.md".to_string(),
+                    source_file: "working.md".to_string(),
+                    reason: "missing_dated_heading".to_string(),
+                    excerpt: "# Worklog Tracker Working State\nLast updated: 2026-06-09 KST\n## Current Goal\nOperator correction: manage what\nwork was done by date and by project.\n\n## Next Steps\n- Continue extraction."
+                        .to_string(),
+                    line_count: 8,
+                    char_count: 185,
+                    risk_flags: Vec::new(),
+                    modified_at: None,
+                },
+            ],
+            warnings: Vec::new(),
+        };
+
+        let result = local_project_work_log_extraction_proposals(candidates, Vec::new());
+
+        assert_eq!(result.provider, "local-extraction-rules");
+        assert!(!result.used_ai);
+        assert_eq!(result.accepted_count, 3);
+        assert_eq!(result.rejected_count, 0);
+
+        let status = &result.proposals[0];
+        assert!(status.accepted);
+        assert_eq!(status.date.as_deref(), Some("2026-04-24"));
+        assert_eq!(status.title, "Project status snapshot updated");
+        assert_eq!(
+            status.evidence,
+            "last_updated: 2026-04-24\nGamma — Project Status"
+        );
+        assert!(detect_risks(&status.evidence).is_empty());
+
+        let working = &result.proposals[1];
+        assert!(working.accepted);
+        assert_eq!(working.date.as_deref(), Some("2026-06-05"));
+        assert_eq!(
+            working.title,
+            "Convert `SuperpowersSkillManager` itself into a TypeScript/Tauri skill manager."
+        );
+        assert_eq!(
+            working.evidence,
+            "Last updated: 2026-06-05\nConvert `SuperpowersSkillManager` itself into a TypeScript/Tauri skill manager."
+        );
+        assert!(detect_risks(&working.title).is_empty());
+        assert!(detect_risks(&working.evidence).is_empty());
+        assert!(!working.evidence.contains("abcdefghijklmnopqrstuvwxyz0123456789"));
+
+        let wrapped = &result.proposals[2];
+        assert!(wrapped.accepted);
+        assert_eq!(wrapped.date.as_deref(), Some("2026-06-09"));
+        assert_eq!(
+            wrapped.title,
+            "Operator correction: manage what work was done by date and by project."
+        );
+        assert_eq!(
+            wrapped.evidence,
+            "Last updated: 2026-06-09\nOperator correction: manage what work was done by date and by project."
         );
     }
 

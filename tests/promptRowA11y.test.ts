@@ -7,6 +7,7 @@ import {
   promptQualitySuggestionText,
   promptRowAriaLabel,
   promptRowPreviewText,
+  promptTimestampDisplayText,
   redactSensitiveDisplayText,
   selectedPromptDisplayText,
   selectedPromptMetaLabel,
@@ -58,9 +59,11 @@ test("prompt row labels distinguish duplicate prompt text by list position", () 
 });
 
 test("prompt row labels compact whitespace and include quality metadata", () => {
+  const timestamp = promptTimestampDisplayText("2026-06-06T12:00:00Z");
+
   assert.equal(
     promptRowAriaLabel(promptRecord({ text: "  Improve\n\nthis\tprompt  ", word_count: 3 }), 0, 1),
-    "프롬프트 1 / 1: Codex, 2026-06-06T12:00:00Z, 3개 단어, 품질 36 약함, Improve this prompt",
+    `프롬프트 1 / 1: Codex, ${timestamp}, 3개 단어, 품질 36 약함, Improve this prompt`,
   );
 });
 
@@ -777,17 +780,39 @@ test("path display redacts secret-like query parameters", () => {
 });
 
 test("prompt row labels explain active-work selection locks", () => {
+  const timestamp = promptTimestampDisplayText("2026-06-06T12:00:00Z");
+
   assert.equal(
     promptRowAriaLabel(promptRecord(), 0, 1, lockState({ improvementRunning: true })),
-    "프롬프트 1 / 1: Codex, 2026-06-06T12:00:00Z, 3개 단어, 품질 36 약함, Return exactly OK. 프롬프트 추천 생성 중에는 다른 프롬프트를 선택할 수 없습니다",
+    `프롬프트 1 / 1: Codex, ${timestamp}, 3개 단어, 품질 36 약함, Return exactly OK. 프롬프트 추천 생성 중에는 다른 프롬프트를 선택할 수 없습니다`,
   );
 });
 
 test("selected prompt metadata label separates visual chips", () => {
+  const timestamp = promptTimestampDisplayText("2026-06-06T12:00:00Z");
+
   assert.equal(
     selectedPromptMetaLabel(promptRecord()),
-    "선택한 프롬프트 메타데이터: Codex, 2026-06-06T12:00:00Z, /Users/wj, 품질 36 약함",
+    `선택한 프롬프트 메타데이터: Codex, ${timestamp}, /Users/wj, 품질 36 약함`,
   );
+});
+
+test("prompt timestamp display uses local date formatting for parseable values", () => {
+  const timestamp = "2026-06-06T12:00:00Z";
+
+  assert.equal(promptTimestampDisplayText(`  ${timestamp}  `), new Date(timestamp).toLocaleString());
+  assert.notEqual(promptTimestampDisplayText(timestamp), timestamp);
+});
+
+test("prompt timestamp display hides missing and invalid raw values safely", () => {
+  const tokenName = ["access", "token"].join("_");
+  const secretValue = ["timestamp", "display", "secret"].join("-");
+  const invalidTimestamp = `not-a-date?${tokenName}=${secretValue}`;
+
+  assert.equal(promptTimestampDisplayText(null), "시간 없음");
+  assert.equal(promptTimestampDisplayText("   "), "시간 없음");
+  assert.match(promptTimestampDisplayText(invalidTimestamp), /\[REDACTED_POSSIBLE_SECRET\]/);
+  assert.doesNotMatch(promptTimestampDisplayText(invalidTimestamp), new RegExp(`${tokenName}|${secretValue}`));
 });
 
 test("selected prompt metadata label redacts secret-like workspaces", () => {

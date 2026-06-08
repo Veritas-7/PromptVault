@@ -86,6 +86,7 @@ import {
   promptRowAriaLabel,
   promptMetadataDisplayText,
   promptRowPreviewText,
+  promptTimestampDisplayText,
   redactSensitiveDisplayText,
   selectedPromptDisplayText,
   selectedPromptMetaLabel,
@@ -1955,7 +1956,7 @@ function App() {
                 role="group"
               >
                 <span>{promptMetadataDisplayText(selectedPrompt.source)}</span>
-                <span>{selectedPrompt.timestamp ?? "시간 없음"}</span>
+                <span>{promptTimestampDisplayText(selectedPrompt.timestamp)}</span>
                 <span>
                   {selectedPrompt.cwd
                     ? promptMetadataDisplayText(selectedPrompt.cwd)

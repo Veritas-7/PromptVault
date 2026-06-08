@@ -43,6 +43,18 @@ export function pathDisplayText(text: string): string {
   return compactPromptText(redactSensitiveDisplayText(text));
 }
 
+export function promptTimestampDisplayText(timestamp: string | null | undefined): string {
+  const trimmedTimestamp = timestamp?.trim();
+  if (!trimmedTimestamp) return "시간 없음";
+
+  const parsedTimestamp = new Date(trimmedTimestamp);
+  if (!Number.isFinite(parsedTimestamp.getTime())) {
+    return promptMetadataDisplayText(trimmedTimestamp);
+  }
+
+  return parsedTimestamp.toLocaleString();
+}
+
 export function promptRowAriaLabel(
   prompt: PromptRecord,
   index: number,
@@ -51,7 +63,7 @@ export function promptRowAriaLabel(
 ): string {
   const position = `프롬프트 ${index + 1} / ${total}`;
   const source = promptMetadataDisplayText(prompt.source);
-  const timestamp = prompt.timestamp?.trim() || "시간 없음";
+  const timestamp = promptTimestampDisplayText(prompt.timestamp);
   const riskLabel = prompt.risk_flags.length
     ? `, 위험 패턴: ${prompt.risk_flags.map(riskFlagLabel).join(", ")}`
     : "";
@@ -63,7 +75,7 @@ export function promptRowAriaLabel(
 
 export function selectedPromptMetaLabel(prompt: PromptRecord): string {
   const source = promptMetadataDisplayText(prompt.source);
-  const timestamp = prompt.timestamp?.trim() || "시간 없음";
+  const timestamp = promptTimestampDisplayText(prompt.timestamp);
   const workspace = prompt.cwd?.trim()
     ? promptMetadataDisplayText(prompt.cwd)
     : "작업공간 없음";

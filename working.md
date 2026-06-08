@@ -1,12 +1,147 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 02:48 KST
+Updated: 2026-06-09 03:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 progress-log coverage view
+## Current Slice - 2026-06-09 AI extraction candidate inputs
+
+Current Goal:
+
+- Prepare unparsed project progress logs for future AI-assisted structure
+  extraction without sending raw ambiguous files blindly.
+- Expose redacted, bounded, citation-ready candidate inputs through backend,
+  CLI, browser bridge, and UI.
+- Keep this slice deterministic; OpenAI/GLM extraction should build on these
+  candidates in the next slice with fail-closed validation.
+
+Context:
+
+- `work-log-coverage` now shows parsed, unparsed, and unreadable progress-log
+  files, but it does not expose the actual evidence chunks that an AI extractor
+  should review.
+- The existing OpenAI/GLM provider path is available in `work-summary --ai`,
+  but unparsed log extraction needs a safer input layer first: redacted excerpt,
+  candidate ID, reason, project/path metadata, and risk flags.
+- cmux/in-app browser remains excluded in this runtime by the active objective
+  note. Browser QA uses the local bridge plus headless Chromium.
+
+Progress:
+
+- Added deterministic AI extraction candidate generation for readable unparsed
+  progress logs.
+- Parsed logs are skipped, unreadable logs are counted separately, empty logs
+  are skipped separately, and unparsed readable logs become candidates with
+  stable `work-log-<project>-<hash>` IDs.
+- Candidate excerpts are normalized, redacted, truncated to 2,000 characters,
+  and paired with raw line/char counts plus risk flags.
+- Added CLI and browser-bridge access for the same candidate payload.
+- Added UI controls and a bounded candidate list under the project work summary
+  panel.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds `ProjectWorkLogExtractionCandidate*` payloads,
+  `run_project_work_log_extraction_candidates()`, Tauri command, builder, and
+  redacted excerpt helper.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds
+  `work-log-candidates [--limit N>0] [--json]`, help text, and
+  `/api/work-log-candidates`.
+- `src/types.ts` and `src/promptVaultApi.ts`: add candidate types, loader, and
+  fail-closed bridge payload validation.
+- `src/workSummaryStatus.ts`: adds candidate action/meta/failure copy helpers.
+- `src/App.tsx` and `src/App.css`: add the candidate button, loading/error/meta
+  states, bounded candidate rows, risk labels, and scrollable pre-wrapped
+  excerpts.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`: add
+  RED/GREEN coverage for candidate bridge validation and UI copy.
+
+Tests:
+
+- RED:
+  `cargo test project_progress_log_extraction_candidates_include_only_unparsed_readable_logs`
+  failed before implementation because
+  `build_project_progress_log_extraction_candidates` did not exist.
+- GREEN:
+  `cargo test project_progress_log_extraction_candidates_include_only_unparsed_readable_logs`
+  passed.
+- RED:
+  `cargo test help_text_documents_cli_validation_rules` failed before CLI help
+  implementation because `work-log-candidates [--limit N>0] [--json]` was not
+  documented.
+- GREEN:
+  `cargo test help_text_documents_cli_validation_rules` passed.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed before API implementation because `loadProjectWorkLogCandidates` was
+  not exported.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 146/146.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before helper implementation because
+  `workLogCandidatesActionLabel` was not exported.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  passed 10/10.
+- GREEN:
+  Combined targeted UI/API tests passed 156/156.
+- GREEN:
+  `npm run build` passed.
+- GREEN:
+  `cargo test project_progress` passed 8/8.
+- Live CLI verification:
+  `./src-tauri/target/debug/promptvault-cli work-log-candidates --json` scanned
+  the real `/Users/wj/Ai/System/10_Projects` progress-log source and reported
+  32 files seen, 16 parsed files skipped, 0 unreadable files, 0 empty files,
+  and 16 AI extraction candidates. Sample candidates included
+  `CareVault/workingd.md`, `ClipboardCollector/PROJECT_STATUS.md`, and
+  `RepoTutorStudio/working.md`; `RepoTutorStudio` carried
+  `long_base64_like_token` risk flags.
+- Browser QA without cmux:
+  started the PromptVault bridge on `127.0.0.1:5174` and Vite on
+  `127.0.0.1:1420`, opened the app with headless Chromium, waited for
+  `[data-browser-bridge-status="connected"]`, clicked
+  `[data-load-work-log-candidates="true"]`, and verified
+  `[data-work-log-candidates-meta="true"]` plus
+  `[data-work-log-candidates="true"] .work-log-candidate-row`.
+  The rendered meta showed 16 candidates, 16 parsed skips, 0 unreadable, 0
+  empty; 5 bounded candidate rows rendered, the first row showed
+  `missing_dated_heading`, and there were no console or page errors.
+- Full gate:
+  `npm run check` passed: UI tests 394/394, Vite build, Rust library tests
+  140/140, CLI tests 20/20, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- This slice prepares AI extraction inputs but does not yet call OpenAI/GLM to
+  produce dated work-item candidates.
+- Some detected candidates are status-pointer files or project status files
+  rather than true chronological worklogs. The next extraction step should
+  classify and reject low-value candidates before proposing work items.
+- Large prose logs can still be expensive to risk-scan because the full file is
+  read before excerpting. Current live scan completed, but later optimization
+  should consider bounded risk scanning or latest-first file ordering.
+
+Research:
+
+- No external research was needed. This was a safety/data-contract slice using
+  the existing provider and redaction infrastructure.
+
+Next Steps:
+
+- Add OpenAI/GLM extraction over these candidates with strict JSON schema:
+  proposed date, title, status, evidence excerpt, confidence, and source
+  candidate ID.
+- Add validation that rejects candidates with low confidence, invented dates,
+  missing source IDs, or unredacted risk text.
+- Add a UI preview for accepted/rejected AI extraction proposals before they
+  are merged into project/day summaries.
+
+## Previous Slice - 2026-06-09 progress-log coverage view
 
 Current Goal:
 

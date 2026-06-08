@@ -1,6 +1,7 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import type {
   ProjectWorkLogCoverageResult,
+  ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
@@ -10,6 +11,7 @@ import type {
 export type WorkSummaryState = "idle" | "loading" | "ready" | "failed";
 export type WorkSummarySnapshotsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCoverageState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogCandidatesState = "idle" | "loading" | "ready" | "failed";
 
 export const WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT = 3;
 
@@ -127,6 +129,38 @@ export function workLogCoverageMetaText(
 export function workLogCoverageFailureText(state: WorkLogCoverageState): string | null {
   if (state !== "failed") return null;
   return "프로젝트 작업 로그 범위를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.";
+}
+
+export function workLogCandidatesActionLabel(
+  state: WorkLogCandidatesState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "AI 추출 후보 확인 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 AI 추출 후보를 ${hasResult ? "새로고침" : "확인"}할 수 없습니다`;
+  }
+  return hasResult ? "AI 추출 후보 새로고침" : "AI 추출 후보 확인";
+}
+
+export function workLogCandidatesMetaText(
+  state: WorkLogCandidatesState,
+  result: ProjectWorkLogExtractionCandidatesResult | null,
+): string {
+  if (state === "loading") return "AI 추출 후보 확인 중";
+  if (!result) return state === "failed" ? "AI 추출 후보를 사용할 수 없음" : "아직 확인한 AI 추출 후보 없음";
+  return [
+    `후보 ${result.candidate_count.toLocaleString()}개`,
+    `parsed 제외 ${result.skipped_parsed_file_count.toLocaleString()}개`,
+    `unreadable ${result.skipped_unreadable_file_count.toLocaleString()}개`,
+    `empty ${result.skipped_empty_file_count.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+export function workLogCandidatesFailureText(state: WorkLogCandidatesState): string | null {
+  if (state !== "failed") return null;
+  return "AI 추출 후보를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.";
 }
 
 export function workSummarySnapshotVisibleSummaries(

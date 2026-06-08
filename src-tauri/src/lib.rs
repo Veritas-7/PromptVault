@@ -38,6 +38,8 @@ const DEFAULT_IMPORT_EVENT_LIMIT: usize = 20;
 const MAX_IMPORT_EVENT_LIMIT: usize = 100;
 const DEFAULT_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT: usize = 10;
 const MAX_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT: usize = 100;
+const DEFAULT_PROJECT_WORK_LOG_CANDIDATE_LIMIT: usize = 20;
+const MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT: usize = 100;
 const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
 const MAX_STORED_PROMPT_LIMIT: usize = 1_000;
 const DEFAULT_STORED_FACET_LIMIT: usize = 50;
@@ -169,6 +171,38 @@ pub struct ProjectWorkLogCoverageResult {
     pub project_count: usize,
     pub work_item_count: usize,
     pub files: Vec<ProjectWorkLogCoverageFile>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkLogExtractionCandidatesOptions {
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogExtractionCandidate {
+    pub candidate_id: String,
+    pub project: String,
+    pub source_path: String,
+    pub source_file: String,
+    pub reason: String,
+    pub excerpt: String,
+    pub line_count: usize,
+    pub char_count: usize,
+    pub risk_flags: Vec<String>,
+    pub modified_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogExtractionCandidatesResult {
+    pub generated_at: String,
+    pub root_path: String,
+    pub files_seen: usize,
+    pub skipped_parsed_file_count: usize,
+    pub skipped_unreadable_file_count: usize,
+    pub skipped_empty_file_count: usize,
+    pub candidate_count: usize,
+    pub candidates: Vec<ProjectWorkLogExtractionCandidate>,
     pub warnings: Vec<String>,
 }
 
@@ -636,6 +670,14 @@ fn project_work_log_coverage() -> Result<ProjectWorkLogCoverageResult, String> {
     run_project_work_log_coverage().map_err(|err| err.to_string())
 }
 
+#[tauri::command]
+fn project_work_log_candidates(
+    options: Option<ProjectWorkLogExtractionCandidatesOptions>,
+) -> Result<ProjectWorkLogExtractionCandidatesResult, String> {
+    run_project_work_log_extraction_candidates(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
+}
+
 fn scan_cancel_flags() -> &'static Mutex<HashMap<String, ScanCancelFlag>> {
     SCAN_CANCEL_FLAGS.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -1069,6 +1111,27 @@ pub fn run_project_work_log_coverage(
         .find(|source| source.id == "project-progress-logs")
         .ok_or("project progress log source is unavailable")?;
     build_project_progress_log_coverage(&source)
+}
+
+pub fn run_project_work_log_extraction_candidates(
+    options: ProjectWorkLogExtractionCandidatesOptions,
+) -> Result<ProjectWorkLogExtractionCandidatesResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-log-candidates limit requires a positive integer".into());
+    }
+    let source = source_specs()
+        .into_iter()
+        .find(|source| source.id == "project-progress-logs")
+        .ok_or("project progress log source is unavailable")?;
+    build_project_progress_log_extraction_candidates(
+        &source,
+        Some(
+            options
+                .limit
+                .unwrap_or(DEFAULT_PROJECT_WORK_LOG_CANDIDATE_LIMIT)
+                .min(MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT),
+        ),
+    )
 }
 
 pub async fn run_project_work_summary(
@@ -2956,6 +3019,102 @@ fn build_project_progress_log_coverage(
         files,
         warnings,
     })
+}
+
+fn build_project_progress_log_extraction_candidates(
+    source: &SourceSpec,
+    limit: Option<usize>,
+) -> Result<ProjectWorkLogExtractionCandidatesResult, Box<dyn std::error::Error>> {
+    let mut candidates = Vec::new();
+    let mut warnings = Vec::new();
+    let mut files_seen = 0usize;
+    let mut skipped_parsed_file_count = 0usize;
+    let mut skipped_unreadable_file_count = 0usize;
+    let mut skipped_empty_file_count = 0usize;
+
+    for candidate in matching_source_file_candidates(&source.root, source.kind) {
+        let candidate = match candidate {
+            Ok(candidate) => candidate,
+            Err(err) => {
+                warnings.push(format!("순회 항목을 건너뜀: {err}"));
+                continue;
+            }
+        };
+        files_seen += 1;
+        let project = project_progress_project_name(&candidate.path, &source.root);
+        let source_file = candidate
+            .path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("progress.md")
+            .to_string();
+        let text = match fs::read_to_string(&candidate.path) {
+            Ok(text) => text,
+            Err(err) => {
+                skipped_unreadable_file_count += 1;
+                warnings.push(format!("{} 건너뜀: {err}", candidate.path.display()));
+                continue;
+            }
+        };
+        let items = project_progress_work_items_from_text_for_project(
+            &candidate.path,
+            &text,
+            &project,
+        );
+        if !items.is_empty() {
+            skipped_parsed_file_count += 1;
+            continue;
+        }
+        let excerpt = project_progress_log_candidate_excerpt(&text);
+        if excerpt.trim().is_empty() {
+            skipped_empty_file_count += 1;
+            continue;
+        }
+        let source_path = candidate.path.display().to_string();
+        let hash = hash_text(&format!("{source_path}:{excerpt}"));
+        let hash_segment = hash.chars().take(10).collect::<String>();
+        candidates.push(ProjectWorkLogExtractionCandidate {
+            candidate_id: format!("work-log-{}-{hash_segment}", summary_id_segment(&project)),
+            project,
+            source_path,
+            source_file,
+            reason: "missing_dated_heading".to_string(),
+            excerpt,
+            line_count: text.lines().count(),
+            char_count: text.chars().count(),
+            risk_flags: detect_risks(&text),
+            modified_at: timestamp_millis_to_rfc3339(candidate.modified_ms),
+        });
+    }
+
+    candidates.sort_by(|left, right| {
+        left.project
+            .cmp(&right.project)
+            .then_with(|| left.source_path.cmp(&right.source_path))
+    });
+    if let Some(limit) = limit {
+        candidates.truncate(limit);
+    }
+    let candidate_count = candidates.len();
+
+    Ok(ProjectWorkLogExtractionCandidatesResult {
+        generated_at: Utc::now().to_rfc3339(),
+        root_path: source.root.display().to_string(),
+        files_seen,
+        skipped_parsed_file_count,
+        skipped_unreadable_file_count,
+        skipped_empty_file_count,
+        candidate_count,
+        candidates,
+        warnings,
+    })
+}
+
+fn project_progress_log_candidate_excerpt(text: &str) -> String {
+    let text = project_progress_analysis_text(text);
+    let text = normalize_prompt_text(&text);
+    let text = redact_sensitive_text(&text);
+    truncate_chars(text.trim(), 2_000)
 }
 
 #[cfg(test)]
@@ -6285,7 +6444,8 @@ pub fn run() {
             improve_prompt,
             project_work_summary,
             project_work_summary_snapshots,
-            project_work_log_coverage
+            project_work_log_coverage,
+            project_work_log_candidates
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -8766,6 +8926,56 @@ Progress:
         assert_eq!(coverage.files[1].work_item_count, 0);
 
         std::fs::remove_dir_all(root).expect("remove coverage fixture");
+    }
+
+    #[test]
+    fn project_progress_log_extraction_candidates_include_only_unparsed_readable_logs() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-project-log-candidates-{}",
+            std::process::id()
+        ));
+        let alpha_dir = root.join("Alpha");
+        let beta_dir = root.join("Beta");
+        std::fs::create_dir_all(&alpha_dir).expect("create alpha dir");
+        std::fs::create_dir_all(&beta_dir).expect("create beta dir");
+        std::fs::write(
+            alpha_dir.join("working.md"),
+            "# Current Slice - 2026-06-09 Parsed alpha\n\n- Already structured.\n",
+        )
+        .expect("write parsed progress log");
+        std::fs::write(
+            beta_dir.join("workingd.md"),
+            "Ideas\n\n- Backfill older work notes\n- Keep api_key=short-secret-value local only\n",
+        )
+        .expect("write unparsed progress log");
+        let source = SourceSpec {
+            id: "project-progress-logs",
+            label: "Project progress logs",
+            root: root.clone(),
+            kind: SourceKind::ProjectProgressMarkdown,
+        };
+
+        let result = build_project_progress_log_extraction_candidates(&source, Some(10))
+            .expect("build extraction candidates");
+
+        assert_eq!(result.files_seen, 2);
+        assert_eq!(result.skipped_parsed_file_count, 1);
+        assert_eq!(result.skipped_unreadable_file_count, 0);
+        assert_eq!(result.candidate_count, 1);
+        assert_eq!(result.candidates[0].project, "Beta");
+        assert_eq!(result.candidates[0].source_file, "workingd.md");
+        assert_eq!(result.candidates[0].reason, "missing_dated_heading");
+        assert!(result.candidates[0]
+            .candidate_id
+            .starts_with("work-log-Beta-"));
+        assert!(result.candidates[0].excerpt.contains("Backfill older work notes"));
+        assert!(!result.candidates[0].excerpt.contains("short-secret-value"));
+        assert!(result.candidates[0]
+            .risk_flags
+            .iter()
+            .any(|flag| flag == "possible_api_key"));
+
+        std::fs::remove_dir_all(root).expect("remove candidates fixture");
     }
 
     #[test]

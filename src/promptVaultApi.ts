@@ -12,6 +12,7 @@ import type {
   ImportStatesResult,
   ImproveResult,
   ProjectWorkLogCoverageResult,
+  ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkReport,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
@@ -93,6 +94,10 @@ export interface ProjectWorkSummarySnapshotsOptions {
   limit?: number;
   date?: string;
   project?: string;
+}
+
+export interface ProjectWorkLogCandidatesOptions {
+  limit?: number;
 }
 
 export interface ImprovePromptRequest {
@@ -207,6 +212,19 @@ export async function loadProjectWorkLogCoverage(): Promise<ProjectWorkLogCovera
     return invoke<ProjectWorkLogCoverageResult>("project_work_log_coverage");
   }
   return postBridge<ProjectWorkLogCoverageResult>("/api/work-log-coverage", {}, parseProjectWorkLogCoverageResult);
+}
+
+export async function loadProjectWorkLogCandidates(
+  options: ProjectWorkLogCandidatesOptions = {},
+): Promise<ProjectWorkLogExtractionCandidatesResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogExtractionCandidatesResult>("project_work_log_candidates", { options });
+  }
+  return postBridge<ProjectWorkLogExtractionCandidatesResult>(
+    "/api/work-log-candidates",
+    { options },
+    parseProjectWorkLogExtractionCandidatesResult,
+  );
 }
 
 export async function listProjectWorkSummarySnapshots(
@@ -1179,6 +1197,56 @@ function parseProjectWorkLogCoverageResult(value: unknown): ProjectWorkLogCovera
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkLogCoverageResult;
+}
+
+function isProjectWorkLogExtractionCandidate(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.candidate_id)
+    && isNonBlankString(value.project)
+    && isNonBlankString(value.source_path)
+    && isNonBlankString(value.source_file)
+    && value.reason === "missing_dated_heading"
+    && isNonBlankString(value.excerpt)
+    && isPositiveSafeInteger(value.line_count)
+    && isPositiveSafeInteger(value.char_count)
+    && isNonBlankStringArray(value.risk_flags)
+    && isNullableTimestampString(value.modified_at);
+}
+
+function projectWorkLogExtractionCandidatesWithinResult(value: unknown): boolean {
+  if (!isRecord(value)
+    || !Array.isArray(value.candidates)
+    || !isNonNegativeSafeInteger(value.files_seen)
+    || !isNonNegativeSafeInteger(value.skipped_parsed_file_count)
+    || !isNonNegativeSafeInteger(value.skipped_unreadable_file_count)
+    || !isNonNegativeSafeInteger(value.skipped_empty_file_count)
+    || !isNonNegativeSafeInteger(value.candidate_count)) {
+    return false;
+  }
+  const accountedFileCount = value.skipped_parsed_file_count
+    + value.skipped_unreadable_file_count
+    + value.skipped_empty_file_count
+    + value.candidates.length;
+  return Number.isSafeInteger(accountedFileCount)
+    && value.candidate_count === value.candidates.length
+    && accountedFileCount <= value.files_seen;
+}
+
+function parseProjectWorkLogExtractionCandidatesResult(
+  value: unknown,
+): ProjectWorkLogExtractionCandidatesResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.root_path)
+    || !Array.isArray(value.candidates)
+    || !value.candidates.every(isProjectWorkLogExtractionCandidate)
+    || !recordStringFieldValuesAreUnique(value.candidates, "candidate_id")
+    || !recordStringFieldValuesAreUnique(value.candidates, "source_path")
+    || !projectWorkLogExtractionCandidatesWithinResult(value)
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkLogExtractionCandidatesResult;
 }
 
 function isProjectWorkSummaryCitation(value: unknown): boolean {

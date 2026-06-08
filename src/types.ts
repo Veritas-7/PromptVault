@@ -233,6 +233,31 @@ export interface ProjectWorkLogCoverageResult {
   warnings: string[];
 }
 
+export interface ProjectWorkLogExtractionCandidate {
+  candidate_id: string;
+  project: string;
+  source_path: string;
+  source_file: string;
+  reason: string;
+  excerpt: string;
+  line_count: number;
+  char_count: number;
+  risk_flags: string[];
+  modified_at: string | null;
+}
+
+export interface ProjectWorkLogExtractionCandidatesResult {
+  generated_at: string;
+  root_path: string;
+  files_seen: number;
+  skipped_parsed_file_count: number;
+  skipped_unreadable_file_count: number;
+  skipped_empty_file_count: number;
+  candidate_count: number;
+  candidates: ProjectWorkLogExtractionCandidate[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSummaryCitation {
   id: string;
   date: string;

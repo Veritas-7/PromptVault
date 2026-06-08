@@ -4,6 +4,7 @@ import {
   cancelScan,
   importBatch,
   improvePrompt,
+  loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
   loadStoredPrompts,
   loadProjectWorkSummary,
@@ -340,6 +341,32 @@ function projectWorkLogCoveragePayload(overrides = {}) {
   };
 }
 
+function projectWorkLogCandidatesPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    root_path: "/Users/wj/Ai/System/10_Projects",
+    files_seen: 2,
+    skipped_parsed_file_count: 1,
+    skipped_unreadable_file_count: 0,
+    skipped_empty_file_count: 0,
+    candidate_count: 1,
+    candidates: [{
+      candidate_id: "work-log-CareVault-a1b2c3d4e5",
+      project: "CareVault",
+      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      source_file: "workingd.md",
+      reason: "missing_dated_heading",
+      excerpt: "Ideas\n- Backfill older work notes",
+      line_count: 2,
+      char_count: 35,
+      risk_flags: ["possible_api_key"],
+      modified_at: null,
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
 test("browser bridge work summary posts options and validates citation payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   let requestPath = "";
@@ -441,6 +468,51 @@ test("browser bridge work log coverage rejects impossible counters", async (t) =
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /parsed_file_count|working\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work log candidates posts limit and validates redacted candidates", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogCandidatesPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkLogCandidates({ limit: 5 });
+
+  assert.match(requestPath, /\/api\/work-log-candidates$/);
+  assert.deepEqual(JSON.parse(requestBody), { options: { limit: 5 } });
+  assert.equal(result.files_seen, 2);
+  assert.equal(result.skipped_parsed_file_count, 1);
+  assert.equal(result.candidate_count, 1);
+  assert.equal(result.candidates[0].project, "CareVault");
+  assert.equal(result.candidates[0].reason, "missing_dated_heading");
+  assert.deepEqual(result.candidates[0].risk_flags, ["possible_api_key"]);
+});
+
+test("browser bridge work log candidates rejects impossible counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkLogCandidatesPayload({
+    candidate_count: 2,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkLogCandidates({ limit: 5 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /candidate_count|workingd\.md|undefined/);
       return true;
     },
   );

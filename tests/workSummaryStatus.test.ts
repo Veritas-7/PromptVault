@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ActionLockState } from "../src/actionLocks.ts";
 import {
+  workLogCandidatesActionLabel,
+  workLogCandidatesFailureText,
+  workLogCandidatesMetaText,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
   workLogCoverageMetaText,
@@ -17,12 +20,14 @@ import {
   workSummarySnapshotDisplaySummaries,
   workSummarySnapshotSummaryOverflowText,
   workSummarySnapshotVisibleSummaries,
+  type WorkLogCandidatesState,
   type WorkLogCoverageState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "../src/workSummaryStatus.ts";
 import type {
   ProjectWorkLogCoverageResult,
+  ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
@@ -98,6 +103,23 @@ function coverageResult(overrides: Partial<ProjectWorkLogCoverageResult> = {}): 
     project_count: 14,
     work_item_count: 3532,
     files: [],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function candidatesResult(
+  overrides: Partial<ProjectWorkLogExtractionCandidatesResult> = {},
+): ProjectWorkLogExtractionCandidatesResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    root_path: "/Users/wj/Ai/System/10_Projects",
+    files_seen: 32,
+    skipped_parsed_file_count: 16,
+    skipped_unreadable_file_count: 1,
+    skipped_empty_file_count: 2,
+    candidate_count: 13,
+    candidates: [],
     warnings: [],
     ...overrides,
   };
@@ -258,6 +280,32 @@ test("work log coverage labels describe parsed and unparsed progress logs", () =
     "프로젝트 작업 로그 범위를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogCoverageFailureText("ready"), null);
+});
+
+test("work log candidate labels describe AI extraction inputs", () => {
+  const failed: WorkLogCandidatesState = "failed";
+  assert.equal(workLogCandidatesActionLabel("idle", false, lockState()), "AI 추출 후보 확인");
+  assert.equal(workLogCandidatesActionLabel("ready", true, lockState()), "AI 추출 후보 새로고침");
+  assert.equal(
+    workLogCandidatesActionLabel("loading", true, lockState({ workSummaryRunning: true })),
+    "AI 추출 후보 확인 중",
+  );
+  assert.equal(
+    workLogCandidatesActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 AI 추출 후보를 새로고침할 수 없습니다",
+  );
+  assert.equal(workLogCandidatesMetaText("idle", null), "아직 확인한 AI 추출 후보 없음");
+  assert.equal(workLogCandidatesMetaText("loading", candidatesResult()), "AI 추출 후보 확인 중");
+  assert.equal(
+    workLogCandidatesMetaText("ready", candidatesResult()),
+    "후보 13개 · parsed 제외 16개 · unreadable 1개 · empty 2개",
+  );
+  assert.equal(workLogCandidatesMetaText(failed, null), "AI 추출 후보를 사용할 수 없음");
+  assert.equal(
+    workLogCandidatesFailureText(failed),
+    "AI 추출 후보를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workLogCandidatesFailureText("ready"), null);
 });
 
 test("work summary snapshot helpers expose bounded project/day drill-down", () => {

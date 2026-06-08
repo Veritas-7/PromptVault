@@ -78,7 +78,7 @@ import {
   recommendationEmptyText,
   selectedPromptEmptyText,
 } from "./promptEmptyState";
-import { promptRowAriaLabel, selectedPromptMetaLabel } from "./promptRowA11y";
+import { promptRowAriaLabel, promptRowPreviewText, selectedPromptMetaLabel } from "./promptRowA11y";
 import { qualityBandClass, qualityBandLabel } from "./qualityLabels";
 import {
   cancelScan,
@@ -1925,7 +1925,7 @@ function App() {
                 <span className={`quality-pill ${qualityBandClass(prompt.quality.band)}`}>
                   {prompt.quality.score} · {qualityBandLabel(prompt.quality.band)}
                 </span>
-                <strong>{oneLine(prompt.text)}</strong>
+                <strong>{promptRowPreviewText(prompt.text)}</strong>
                 {prompt.risk_flags.length ? (
                   <span className="risk">
                     <AlertTriangle size={13} />
@@ -2137,10 +2137,6 @@ function FrequencyColumn({
       )}
     </div>
   );
-}
-
-function oneLine(value: string) {
-  return value.replace(/\s+/g, " ").trim().slice(0, 180);
 }
 
 export default App;

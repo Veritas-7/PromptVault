@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ActionLockState } from "../src/actionLocks.ts";
-import { promptRowAriaLabel, selectedPromptMetaLabel } from "../src/promptRowA11y.ts";
+import {
+  promptRowAriaLabel,
+  promptRowPreviewText,
+  selectedPromptMetaLabel,
+} from "../src/promptRowA11y.ts";
 import type { PromptRecord } from "../src/types.ts";
 
 function promptRecord(overrides: Partial<PromptRecord> = {}): PromptRecord {
@@ -60,6 +64,19 @@ test("prompt row labels avoid unbounded prompt text", () => {
 
   assert.ok(label.endsWith("..."));
   assert.ok(label.length < 230);
+});
+
+test("prompt row previews redact secret-like tokens", () => {
+  const syntheticToken = `tokenlike-${"A".repeat(56)}`;
+  const text = `Store token ${syntheticToken} in secrets.env`;
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.doesNotMatch(preview, new RegExp(syntheticToken));
+  assert.doesNotMatch(label, new RegExp(syntheticToken));
+  assert.match(preview, /\[REDACTED_LONG_TOKEN\]/);
+  assert.match(label, /\[REDACTED_LONG_TOKEN\]/);
 });
 
 test("prompt row labels handle missing timestamps and empty prompts", () => {

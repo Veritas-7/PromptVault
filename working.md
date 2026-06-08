@@ -1,12 +1,126 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 14:38 KST
+Updated: 2026-06-08 14:45 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Stored filter empty reset QA
+## Current Slice - 2026-06-08 Redacted row previews
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify stored filtered preview-mode reload and prevent secret-like prompt
+  strings from appearing in prompt-list row previews or accessibility labels.
+
+Context:
+
+- Previous stored filter empty reset QA slice is pushed to `origin/main` as
+  `c42f820 docs: record stored filter QA`.
+- Final parity after that push returned `HEAD...origin/main` as `0 0`, the
+  worktree was clean, and `gh repo view --json visibility --jq .visibility`
+  returned `PRIVATE`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus the CLI browser bridge and Playwright.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- Existing CLI behavior and docs already redact stdout prompt previews for
+  token/key/private-key risk patterns. Browser row previews and aria-labels
+  were the missing UI surface.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `c42f820 docs: record stored filter QA`.
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree was clean at `main...origin/main` and parity was
+  `0 0`.
+- Re-read webapp-testing and TDD skill instructions, preview-mode helpers, and
+  prompt-row accessibility helpers before editing.
+- Ran connected browser QA for stored source filter `Codex`, then switched
+  from latest preview to weakest preview. The source filter was preserved in
+  both `/api/prompts` requests, the weakest reload completed without a pending
+  preview notice, the segmented control reflected weakest mode, and no
+  console/page errors occurred.
+- The QA also surfaced a security/UX issue: a weak prompt row preview and
+  aria-label could include a long token-like string from stored prompt text.
+  The raw value was not recorded in this log.
+- Confirmed RED first:
+  `tests/promptRowA11y.test.ts` failed because row preview text exposed the
+  synthetic long token.
+- Added shared `promptRowPreviewText` logic that redacts private-key blocks,
+  key/secret/token/password assignments, and long token-like strings before
+  clipping prompt-list snippets.
+- Updated both prompt-row aria-labels and visible row preview text to use the
+  same redacted preview helper. Full selected prompt detail remains unchanged
+  so the vault can still inspect original prompt bodies when needed.
+- Confirmed GREEN with the focused redaction test, then
+  `tests/promptRowA11y.test.ts`, then related preview/stored filter tests.
+- Re-ran connected browser QA with sanitized output. The latest source-filter
+  load still returned rows; the weakest reload still preserved the source
+  filter and returned rows; the weakest row preview exposed no long token
+  pattern and did show a redaction placeholder; no console/page errors
+  occurred.
+- Ran full `npm run check` successfully after the implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: adds redacted row preview text and uses it for
+  prompt row aria-label snippets.
+- `src/App.tsx`: uses the same redacted row preview helper for visible prompt
+  list snippets.
+- `tests/promptRowA11y.test.ts`: adds a regression for secret-like token
+  redaction in row previews and labels.
+- `working.md`: records this slice.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test --test-name-pattern "prompt row previews redact" tests/promptRowA11y.test.ts`
+  failed on raw synthetic long-token exposure.
+- GREEN:
+  the same focused test passed after implementation.
+- Prompt row regression:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed 8/8.
+- Related UI helpers:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/previewMode.test.ts tests/storedFilters.test.ts`
+  passed 15/15.
+- Browser preview-mode/redaction QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5203" --port 5203 --server "npm run dev -- --host 127.0.0.1 --port 5204" --port 5204 --timeout 120 -- /bin/bash -lc ...`
+  confirmed source filter preservation, latest-to-weakest reload, no pending
+  preview notice, redacted weakest row previews, and no console/page errors.
+- Full project check: `npm run check` passed, covering UI tests 308/308,
+  production build, Rust lib tests 85/85, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No blockers after the row-preview redaction fix.
+- Browser QA scripts must avoid printing raw prompt row labels, because stored
+  prompt text can contain secret-like strings by design.
+
+Research:
+
+- No external research. This is direct code/test/browser QA work.
+
+Next Steps:
+
+- Finish this implementation closeout with diff checks, staged/full secret
+  scans, commit, push, and final parity checks.
+- Continue from a clean pushed tree and pick the next autonomous QA/improvement
+  slice.
+
+## Previous Slice - 2026-06-08 Stored filter empty reset QA
 
 Current Goal:
 

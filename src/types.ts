@@ -281,7 +281,14 @@ export interface ProjectWorkLogExtractionProposalsResult {
   accepted_count: number;
   rejected_count: number;
   proposals: ProjectWorkLogExtractionProposal[];
+  persistence: ProjectWorkLogExtractionPersistence | null;
   warnings: string[];
+}
+
+export interface ProjectWorkLogExtractionPersistence {
+  database_path: string;
+  saved_item_count: number;
+  total_saved_item_count: number;
 }
 
 export interface ProjectWorkLogExtractionMergeResult {

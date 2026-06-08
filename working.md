@@ -1,12 +1,126 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 03:59 KST
+Updated: 2026-06-09 04:09 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 AI extraction merge snapshot persistence
+## Current Slice - 2026-06-09 AI extraction proposal persistence
+
+Current Goal:
+
+- Move unparsed project progress logs such as `workingd.md` from preview-only AI
+  extraction toward managed project/day data.
+- Persist only accepted extraction proposals that contain explicit dates into
+  SQLite management data.
+- Preserve source integrity: do not mutate original project progress logs during
+  extraction persistence.
+
+Context:
+
+- PromptVault already parses dated `working.md`/progress logs into project/day
+  summary items and can attach real Codex session evidence through the session
+  index.
+- The previous slices added AI extraction preview, accepted-proposal summary
+  merge, and merge snapshot persistence.
+- The missing management step was direct persistence for accepted/date-bearing
+  extraction proposals from unparsed logs. Without that, `workingd.md`-style
+  content could be inspected or merged into one saved summary snapshot, but not
+  stored as its own reviewed work-log extraction data.
+
+Progress:
+
+- Added `project_work_log_extraction_items` to the SQLite schema for accepted
+  extraction proposals.
+- Added `--save` and `--database PATH` to `work-log-extract`.
+- Added backend persistence that saves only `accepted=true` proposals with a
+  non-empty `date`, using `INSERT OR IGNORE` for repeated runs.
+- Added bridge/API/type validation for extraction persistence metadata.
+- Added an `accepted 저장` UI action that runs extraction with
+  `{ ai: true, save: true }`.
+- Added a UI status row showing how many accepted proposals were saved and the
+  total stored extraction item count.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds persistence options/result metadata, creates the
+  extraction item table and project/date index, and saves accepted dated
+  proposals to SQLite.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds `work-log-extract --save` and
+  `--database PATH`, plus plain-output save counts.
+- `src/types.ts` and `src/promptVaultApi.ts`: expose and validate
+  `ProjectWorkLogExtractionPersistence`.
+- `src/workSummaryStatus.ts`: adds persistence status text.
+- `src/App.tsx`: adds `accepted 저장` and renders persistence status.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`: cover
+  bridge save options, persistence validation, and status text.
+
+Tests:
+
+- RED baseline:
+  `cargo test project_work_log_extraction_persistence_saves_only_accepted_dated_proposals --lib`
+  failed before implementation because the persistence field/function did not
+  exist.
+- RED baseline:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before `workLogExtractionPersistenceText` existed.
+- GREEN:
+  `cargo test project_work_log_extraction_persistence_saves_only_accepted_dated_proposals --lib`
+  passed 1/1.
+- GREEN:
+  `cargo test work_log_extraction --lib --bin promptvault-cli` passed 5/5.
+- GREEN:
+  `cargo test help --bin promptvault-cli` passed 2/2.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  passed 13/13.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 151/151.
+- GREEN:
+  `npm run build` passed.
+- Live CLI verification with a temp SQLite database:
+  `work-log-extract --limit 1 --save --database <tmp> --json` returned
+  provider `local-extraction-rules`, `candidate_count=1`, `accepted_count=0`,
+  `saved_item_count=0`, and `total_saved_item_count=0`.
+- Browser QA without cmux:
+  started the PromptVault bridge on `127.0.0.1:5174` and Vite on
+  `127.0.0.1:1420`, clicked `[data-save-work-log-extraction="true"]`, verified
+  the request body `{ ai: true, save: true }`, verified persistence UI text
+  `accepted 제안 0개 저장 · 총 0개`, verified live candidate output included
+  `CareVault workingd.md`, and observed no browser errors.
+- Full gate:
+  `npm run check` passed: UI tests 402/402, Vite build, Rust library tests
+  145/145, CLI tests 20/20, doc tests 0/0, and clippy clean.
+
+Issues:
+
+- The live provider path still falls back to local extraction rules, so the real
+  live save run stored 0 accepted proposals. Accepted-row persistence is covered
+  by the synthetic Rust test.
+- Saved extraction items are now stored, but there is no listing/drill-down UI
+  for the saved extraction table yet.
+- Project/day summaries still merge live extraction results on demand; they do
+  not yet load saved extraction items by default.
+
+Next Steps:
+
+- Add a saved extraction item browser/filter by project, date, source file, and
+  confidence.
+- Feed saved accepted extraction items into project/day work summary without
+  re-running AI.
+- Add provider health/timeout visibility so GLM/OpenAI extraction failures are
+  visible before the local fallback path runs.
+- Add an operator review queue for individual extraction proposals before
+  persistence, so `workingd.md` items can be accepted/rejected deliberately.
+
+Research:
+
+- No external research. This slice used live repo state, real PromptVault CLI/UI
+  runs, and local synthetic persistence coverage.
+
+## Previous Slice - 2026-06-09 AI extraction merge snapshot persistence
 
 Current Goal:
 

@@ -107,6 +107,8 @@ export interface ProjectWorkLogCandidatesOptions {
 export interface ProjectWorkLogExtractionOptions {
   limit?: number;
   ai?: boolean;
+  database_path?: string;
+  save?: boolean;
 }
 
 export interface ImprovePromptRequest {
@@ -1307,6 +1309,14 @@ function projectWorkLogExtractionProposalsWithinResult(value: unknown): boolean 
     && acceptedCount + rejectedCount === value.proposals.length;
 }
 
+function isProjectWorkLogExtractionPersistence(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.database_path)
+    && isNonNegativeSafeInteger(value.saved_item_count)
+    && isNonNegativeSafeInteger(value.total_saved_item_count)
+    && value.saved_item_count <= value.total_saved_item_count;
+}
+
 function parseProjectWorkLogExtractionProposalsResult(
   value: unknown,
 ): ProjectWorkLogExtractionProposalsResult {
@@ -1319,6 +1329,7 @@ function parseProjectWorkLogExtractionProposalsResult(
     || !value.proposals.every(isProjectWorkLogExtractionProposal)
     || !recordStringFieldValuesAreUnique(value.proposals, "candidate_id")
     || !projectWorkLogExtractionProposalsWithinResult(value)
+    || !(value.persistence === null || isProjectWorkLogExtractionPersistence(value.persistence))
     || !isNonBlankStringArray(value.warnings)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }

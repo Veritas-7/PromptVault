@@ -184,6 +184,8 @@ pub struct ProjectWorkLogExtractionCandidatesOptions {
 pub struct ProjectWorkLogExtractionProposalsOptions {
     pub limit: Option<usize>,
     pub ai: Option<bool>,
+    pub database_path: Option<String>,
+    pub save: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -238,7 +240,15 @@ pub struct ProjectWorkLogExtractionProposalsResult {
     pub accepted_count: usize,
     pub rejected_count: usize,
     pub proposals: Vec<ProjectWorkLogExtractionProposal>,
+    pub persistence: Option<ProjectWorkLogExtractionPersistence>,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogExtractionPersistence {
+    pub database_path: String,
+    pub saved_item_count: usize,
+    pub total_saved_item_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1200,6 +1210,15 @@ pub async fn run_project_work_log_extraction_proposals(
     if matches!(options.limit, Some(0)) {
         return Err("work-log-extract limit requires a positive integer".into());
     }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let save = options.save.unwrap_or(false);
     let candidates =
         run_project_work_log_extraction_candidates(ProjectWorkLogExtractionCandidatesOptions {
             limit: Some(
@@ -1209,12 +1228,19 @@ pub async fn run_project_work_log_extraction_proposals(
                     .min(MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT),
             ),
         })?;
-    project_work_log_extraction_proposals_with_env(
+    let mut result = project_work_log_extraction_proposals_with_env(
         candidates,
         !options.ai.unwrap_or(false),
         load_improve_env(),
     )
-    .await
+    .await?;
+    if save {
+        result.persistence = Some(persist_project_work_log_extraction_proposals(
+            &database_path,
+            &result,
+        )?);
+    }
+    Ok(result)
 }
 
 pub async fn run_project_work_summary(
@@ -1239,6 +1265,8 @@ pub async fn run_project_work_summary(
             run_project_work_log_extraction_proposals(ProjectWorkLogExtractionProposalsOptions {
                 limit: options.extraction_limit,
                 ai: options.extraction_ai,
+                database_path: None,
+                save: None,
             })
             .await?;
         Some(merge_project_work_log_extraction_proposals_into_report(
@@ -3755,6 +3783,7 @@ fn finish_project_work_log_extraction_proposals(
         accepted_count: 0,
         rejected_count: 0,
         proposals,
+        persistence: None,
         warnings,
     };
     refresh_project_work_log_extraction_counts(&mut result);
@@ -5794,6 +5823,26 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             ON project_work_session_evidence(prompt_date);
         CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_source
             ON project_work_session_evidence(source);
+        CREATE TABLE IF NOT EXISTS project_work_log_extraction_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            saved_at TEXT NOT NULL,
+            run_generated_at TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            used_ai INTEGER NOT NULL,
+            candidate_id TEXT NOT NULL,
+            project TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            source_file TEXT NOT NULL,
+            proposal_date TEXT NOT NULL,
+            title TEXT NOT NULL,
+            status TEXT NOT NULL,
+            evidence TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            warnings_json TEXT NOT NULL,
+            UNIQUE(candidate_id, proposal_date, title, evidence)
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_work_log_extraction_items_project_date
+            ON project_work_log_extraction_items(project, proposal_date);
         CREATE TABLE IF NOT EXISTS project_work_summary_snapshots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             created_at TEXT NOT NULL,
@@ -5845,6 +5894,61 @@ fn project_work_summary_snapshots_has_column(
         }
     }
     Ok(false)
+}
+
+fn persist_project_work_log_extraction_proposals(
+    database_path: &Path,
+    result: &ProjectWorkLogExtractionProposalsResult,
+) -> Result<ProjectWorkLogExtractionPersistence, Box<dyn std::error::Error>> {
+    let mut conn = open_promptvault_database(database_path)?;
+    let saved_at = Utc::now().to_rfc3339();
+    let warnings_json = serde_json::to_string(&result.warnings)?;
+    let tx = conn.transaction()?;
+    let mut saved_item_count = 0usize;
+    for proposal in &result.proposals {
+        if !proposal.accepted {
+            continue;
+        }
+        let Some(date) = proposal.date.as_deref().map(str::trim).filter(|date| !date.is_empty())
+        else {
+            continue;
+        };
+        let changed = tx.execute(
+            "INSERT OR IGNORE INTO project_work_log_extraction_items (
+                saved_at, run_generated_at, provider, used_ai, candidate_id, project,
+                source_path, source_file, proposal_date, title, status, evidence,
+                confidence, warnings_json
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            params![
+                &saved_at,
+                &result.generated_at,
+                &result.provider,
+                result.used_ai as i64,
+                &proposal.candidate_id,
+                &proposal.project,
+                &proposal.source_path,
+                &proposal.source_file,
+                date,
+                &proposal.title,
+                &proposal.status,
+                &proposal.evidence,
+                proposal.confidence,
+                &warnings_json,
+            ],
+        )?;
+        saved_item_count += changed;
+    }
+    tx.commit()?;
+    let total_saved_item_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM project_work_log_extraction_items",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(ProjectWorkLogExtractionPersistence {
+        database_path: database_path.display().to_string(),
+        saved_item_count,
+        total_saved_item_count: total_saved_item_count as usize,
+    })
 }
 
 fn persist_project_work_summary_snapshot(
@@ -9896,6 +10000,7 @@ Progress:
                     rejection_reason: None,
                 },
             ],
+            persistence: None,
             warnings: Vec::new(),
         };
 
@@ -9973,6 +10078,7 @@ Progress:
                 accepted: true,
                 rejection_reason: None,
             }],
+            persistence: None,
             warnings: Vec::new(),
         };
 
@@ -9989,6 +10095,91 @@ Progress:
             .items
             .iter()
             .any(|item| item.project == "CareVault" && item.status == "extracted"));
+    }
+
+    #[test]
+    fn project_work_log_extraction_persistence_saves_only_accepted_dated_proposals() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-project-work-log-extraction-persistence-{}.sqlite",
+            std::process::id()
+        ));
+        let result = ProjectWorkLogExtractionProposalsResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
+            provider: "glm".to_string(),
+            used_ai: true,
+            candidate_count: 3,
+            accepted_count: 2,
+            rejected_count: 1,
+            proposals: vec![
+                ProjectWorkLogExtractionProposal {
+                    candidate_id: "work-log-CareVault-a1b2c3d4e5".to_string(),
+                    project: "CareVault".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md"
+                        .to_string(),
+                    source_file: "workingd.md".to_string(),
+                    date: Some("2026-06-04".to_string()),
+                    title: "Backfilled older work notes".to_string(),
+                    status: "proposed".to_string(),
+                    evidence: "2026-06-04: Backfilled older work notes".to_string(),
+                    confidence: 0.91,
+                    accepted: true,
+                    rejection_reason: None,
+                },
+                ProjectWorkLogExtractionProposal {
+                    candidate_id: "work-log-Delta-c1b2c3d4e5".to_string(),
+                    project: "Delta".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/Delta/workingd.md".to_string(),
+                    source_file: "workingd.md".to_string(),
+                    date: None,
+                    title: "Missing date".to_string(),
+                    status: "proposed".to_string(),
+                    evidence: "No dated evidence".to_string(),
+                    confidence: 0.9,
+                    accepted: true,
+                    rejection_reason: None,
+                },
+                ProjectWorkLogExtractionProposal {
+                    candidate_id: "work-log-Gamma-b1b2c3d4e5".to_string(),
+                    project: "Gamma".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/Gamma/workingd.md".to_string(),
+                    source_file: "workingd.md".to_string(),
+                    date: Some("2026-06-03".to_string()),
+                    title: "Rejected note".to_string(),
+                    status: "rejected".to_string(),
+                    evidence: "Rejected evidence".to_string(),
+                    confidence: 0.0,
+                    accepted: false,
+                    rejection_reason: Some("low_confidence".to_string()),
+                },
+            ],
+            persistence: None,
+            warnings: vec!["provider warning".to_string()],
+        };
+
+        let persistence =
+            persist_project_work_log_extraction_proposals(&db_path, &result).expect("persist proposals");
+
+        assert_eq!(persistence.database_path, db_path.display().to_string());
+        assert_eq!(persistence.saved_item_count, 1);
+        assert_eq!(persistence.total_saved_item_count, 1);
+
+        let conn = Connection::open(&db_path).expect("open extraction db");
+        let stored: (String, String, String, String, String) = conn
+            .query_row(
+                "SELECT provider, project, proposal_date, source_file, warnings_json
+                 FROM project_work_log_extraction_items",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+            )
+            .expect("read saved extraction");
+        assert_eq!(stored.0, "glm");
+        assert_eq!(stored.1, "CareVault");
+        assert_eq!(stored.2, "2026-06-04");
+        assert_eq!(stored.3, "workingd.md");
+        assert!(stored.4.contains("provider warning"));
+
+        std::fs::remove_file(db_path).expect("remove extraction db");
     }
 
     #[tokio::test]

@@ -8,6 +8,7 @@ import {
   workLogExtractionActionLabel,
   workLogExtractionFailureText,
   workLogExtractionMetaText,
+  workLogExtractionPersistenceText,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
   workLogCoverageMetaText,
@@ -144,6 +145,7 @@ function extractionResult(
     accepted_count: 3,
     rejected_count: 10,
     proposals: [],
+    persistence: null,
     warnings: [],
     ...overrides,
   };
@@ -393,6 +395,20 @@ test("work log extraction labels describe accepted and rejected AI proposals", (
     "AI 작업 추출 제안을 불러오지 못했습니다. provider 설정, 진행 로그 경로, 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogExtractionFailureText("ready"), null);
+});
+
+test("work log extraction persistence text is only shown after accepted proposals are saved", () => {
+  assert.equal(workLogExtractionPersistenceText(extractionResult()), null);
+  assert.equal(
+    workLogExtractionPersistenceText(extractionResult({
+      persistence: {
+        database_path: "/tmp/promptvault.sqlite",
+        saved_item_count: 1,
+        total_saved_item_count: 3,
+      },
+    })),
+    "accepted 제안 1개 저장 · 총 3개",
+  );
 });
 
 test("work summary snapshot helpers expose bounded project/day drill-down", () => {

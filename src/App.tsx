@@ -207,6 +207,7 @@ import {
   workLogExtractionActionLabel,
   workLogExtractionFailureText,
   workLogExtractionMetaText,
+  workLogExtractionPersistenceText,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
   workLogCoverageMetaText,
@@ -526,6 +527,9 @@ function App() {
   const workLogCandidatesMeta = workLogCandidatesMetaText(workLogCandidatesState, workLogCandidatesResult);
   const workLogExtractionFailureMessage = workLogExtractionFailureText(workLogExtractionState);
   const workLogExtractionMeta = workLogExtractionMetaText(workLogExtractionState, workLogExtractionResult);
+  const workLogExtractionPersistenceStatus = workLogExtractionResult
+    ? workLogExtractionPersistenceText(workLogExtractionResult)
+    : null;
   const workSummarySnapshotsFailureMessage = workSummarySnapshotsFailureText(workSummarySnapshotsState);
   const workSummarySnapshotsMeta = workSummarySnapshotsMetaText(
     workSummarySnapshotsState,
@@ -804,12 +808,12 @@ function App() {
     }
   }
 
-  async function refreshWorkLogExtraction() {
+  async function refreshWorkLogExtraction({ save = false }: { save?: boolean } = {}) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkLogExtractionState("loading");
     try {
-      const next = await loadProjectWorkLogExtractionProposals({ ai: true });
+      const next = await loadProjectWorkLogExtractionProposals({ ai: true, save });
       setWorkLogExtractionResult(next);
       setWorkLogExtractionState("ready");
     } catch (err) {
@@ -1498,6 +1502,17 @@ function App() {
                   ? "제안 새로고침"
                   : "AI 제안"}
             </button>
+            <button
+              aria-label="accepted AI 작업 추출 제안을 SQLite 관리 데이터로 저장"
+              className="inline-action"
+              data-save-work-log-extraction="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void refreshWorkLogExtraction({ save: true })}
+              type="button"
+            >
+              <Database size={15} />
+              accepted 저장
+            </button>
           </div>
         </div>
         {workSummaryFailureMessage ? (
@@ -1654,6 +1669,12 @@ function App() {
           <div className="work-summary-index" data-work-log-extraction-meta="true">
             <Sparkles size={15} />
             <span>{workLogExtractionMeta}</span>
+          </div>
+        ) : null}
+        {workLogExtractionPersistenceStatus ? (
+          <div className="work-summary-index" data-work-log-extraction-persistence="true">
+            <Database size={15} />
+            <span>{workLogExtractionPersistenceStatus}</span>
           </div>
         ) : null}
         {workSummaryResult ? (

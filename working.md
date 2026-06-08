@@ -1,12 +1,90 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 20:42 KST
+Updated: 2026-06-08 20:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Frequency statistic secret masking
+## Current Slice - 2026-06-08 Plan warning and source note secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent import plan warnings and source notes from re-exposing sensitive
+  strings in visible plan text or related action/selection aria labels.
+
+Context:
+
+- Previous frequency statistic secret masking is pushed to `origin/main` with
+  source commit `a1908c8 fix: mask frequency stat secrets` and docs closeout
+  `6564b3d docs: record frequency stat masking verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- `/api/plan` success payloads can include warning and source note strings from
+  bridge-side file/source checks. Those strings are useful for operators, but
+  should be masked before display and before reuse in accessible names.
+
+Progress:
+
+- Reproduced a plan panel leak by routing `/api/plan` to a valid synthetic
+  plan result where `warnings` and a source `notes` row contained a raw CLI
+  secret option.
+- The RED browser QA failed as expected because the plan source note rendered
+  raw `--api-key plan-secret-value`.
+- Updated plan warning rendering so warning strings pass through
+  `redactSensitiveDisplayText()` before joining.
+- Updated plan source rendering so notes are masked once, then reused for the
+  visible source meta and source selection/status/import action aria-labels.
+- Re-ran the same browser flow and confirmed the plan panel, page body,
+  selection aria-label, and import action aria-label no longer include the raw
+  flag or raw value.
+- Ran production build successfully after implementation.
+
+Changes:
+
+- `src/App.tsx`: masks visible import plan warnings and source notes, and passes
+  masked notes into plan source selection/status/action label builders.
+- `working.md`: records this slice and its RED/GREEN/browser/build evidence.
+
+Tests:
+
+- RED browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5229" --port 5229 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_plan_warning_secret_red_qa.mjs'`
+  failed because the plan source note rendered raw
+  `--api-key plan-secret-value`.
+- Browser QA after the fix:
+  same `with_server.py` command on port `5229` passed with exit code `0`; the
+  plan panel, page body, source checkbox aria-label, and import action
+  aria-label no longer included the raw flag or raw value, with no page errors,
+  console errors, or failed responses.
+- Build check: `npm run build` passed.
+- Full project check: `npm run check` passed, covering UI tests 348/348,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after masking plan warning/source note display.
+- This slice changes only visible/import-plan accessibility rendering. It does
+  not mutate original plan payloads or import execution inputs.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on a
+  reproducible local browser flow.
+
+Next Steps:
+
+- Commit and push the source changes for this plan warning/source note masking
+  slice, then update and push the docs closeout from a clean source-pushed tree.
+
+## Previous Slice - 2026-06-08 Frequency statistic secret masking
 
 Current Goal:
 

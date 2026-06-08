@@ -1347,7 +1347,7 @@ function App() {
       {plan?.warnings.length ? (
         <section className="notice warning" {...STATUS_NOTICE_PROPS}>
           <AlertTriangle size={18} />
-          <span>{plan.warnings.join(" ")}</span>
+          <span>{plan.warnings.map(redactSensitiveDisplayText).join(" ")}</span>
         </section>
       ) : null}
 
@@ -1539,94 +1539,97 @@ function App() {
                 </div>
               </div>
               <div className="plan-sources">
-                {plan.sources.map((source) => (
-                  <div className="plan-source-row" key={source.id}>
-                    <div className="plan-source-main">
-                      <label className="source-select">
-                        <input
-                          aria-label={planSourceSelectionLabel(
+                {plan.sources.map((source) => {
+                  const displayNotes = source.notes.map(redactSensitiveDisplayText);
+                  return (
+                    <div className="plan-source-row" key={source.id}>
+                      <div className="plan-source-main">
+                        <label className="source-select">
+                          <input
+                            aria-label={planSourceSelectionLabel(
+                              source.label,
+                              source.status,
+                              source.file_count,
+                              formatBytes(source.byte_count),
+                              displayNotes,
+                              actionLockState,
+                            )}
+                            checked={selectedImportSourceIds.includes(source.id)}
+                            data-select-source-id={source.id}
+                            disabled={isImportActionLocked || source.file_count === 0}
+                            onChange={(event) => {
+                              const checked = event.currentTarget.checked;
+                              setSelectedImportSourceIds((current) =>
+                                toggleSourceSelection(current, source.id, checked),
+                              );
+                            }}
+                            type="checkbox"
+                          />
+                          <strong>{source.label}</strong>
+                        </label>
+                        <span>{source.root_path}</span>
+                        {displayNotes.length ? <span className="source-meta">{displayNotes.join(" ")}</span> : null}
+                      </div>
+                      <div
+                        aria-label={planSourceStatusLabel(
+                          source.label,
+                          source.status,
+                          source.file_count,
+                          formatBytes(source.byte_count),
+                          displayNotes,
+                        )}
+                        className={`status ${sourceStatusClass(source.status)}`}
+                      >
+                        {isSourceStatusOk(source.status) ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                        {source.file_count.toLocaleString()} · {formatBytes(source.byte_count)}
+                      </div>
+                      <div className="plan-source-actions">
+                        <button
+                          aria-label={planSourceActionLabel(
+                            "batch",
                             source.label,
                             source.status,
                             source.file_count,
                             formatBytes(source.byte_count),
-                            source.notes,
+                            displayNotes,
                             actionLockState,
                           )}
-                          checked={selectedImportSourceIds.includes(source.id)}
-                          data-select-source-id={source.id}
+                          className="inline-action"
+                          data-import-source-id={source.id}
                           disabled={isImportActionLocked || source.file_count === 0}
-                          onChange={(event) => {
-                            const checked = event.currentTarget.checked;
-                            setSelectedImportSourceIds((current) =>
-                              toggleSourceSelection(current, source.id, checked),
-                            );
-                          }}
-                          type="checkbox"
-                        />
-                        <strong>{source.label}</strong>
-                      </label>
-                      <span>{source.root_path}</span>
-                      {source.notes.length ? <span className="source-meta">{source.notes.join(" ")}</span> : null}
+                          onClick={() => runImportBatch(source.id, "single")}
+                          type="button"
+                        >
+                          <RefreshCw size={15} />
+                          {isImportRunning && activeImportSourceId === source.id && importMode === "single"
+                            ? "가져오는 중"
+                            : "배치 가져오기"}
+                        </button>
+                        <button
+                          aria-label={planSourceActionLabel(
+                            "continuous",
+                            source.label,
+                            source.status,
+                            source.file_count,
+                            formatBytes(source.byte_count),
+                            displayNotes,
+                            actionLockState,
+                          )}
+                          className="inline-action"
+                          data-import-continuous-source-id={source.id}
+                          disabled={isImportActionLocked || source.file_count === 0}
+                          onClick={() => runImportBatch(source.id, "continuous")}
+                          type="button"
+                        >
+                          <Play size={15} />
+                          {isImportRunning && activeImportSourceId === source.id && importMode === "continuous"
+                            ? "실행 중"
+                            : "끝까지 실행"}
+                        </button>
+                      </div>
                     </div>
-                    <div
-                      aria-label={planSourceStatusLabel(
-                        source.label,
-                        source.status,
-                        source.file_count,
-                        formatBytes(source.byte_count),
-                        source.notes,
-                      )}
-                      className={`status ${sourceStatusClass(source.status)}`}
-                    >
-                      {isSourceStatusOk(source.status) ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-                      {source.file_count.toLocaleString()} · {formatBytes(source.byte_count)}
-                    </div>
-                    <div className="plan-source-actions">
-                      <button
-                        aria-label={planSourceActionLabel(
-                          "batch",
-                          source.label,
-                          source.status,
-                          source.file_count,
-                          formatBytes(source.byte_count),
-                          source.notes,
-                          actionLockState,
-                        )}
-                        className="inline-action"
-                        data-import-source-id={source.id}
-                        disabled={isImportActionLocked || source.file_count === 0}
-                        onClick={() => runImportBatch(source.id, "single")}
-                        type="button"
-                      >
-                        <RefreshCw size={15} />
-                        {isImportRunning && activeImportSourceId === source.id && importMode === "single"
-                          ? "가져오는 중"
-                          : "배치 가져오기"}
-                      </button>
-                      <button
-                        aria-label={planSourceActionLabel(
-                          "continuous",
-                          source.label,
-                          source.status,
-                          source.file_count,
-                          formatBytes(source.byte_count),
-                          source.notes,
-                          actionLockState,
-                        )}
-                        className="inline-action"
-                        data-import-continuous-source-id={source.id}
-                        disabled={isImportActionLocked || source.file_count === 0}
-                        onClick={() => runImportBatch(source.id, "continuous")}
-                        type="button"
-                      >
-                        <Play size={15} />
-                        {isImportRunning && activeImportSourceId === source.id && importMode === "continuous"
-                          ? "실행 중"
-                          : "끝까지 실행"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           ) : (

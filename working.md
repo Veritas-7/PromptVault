@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 07:26 KST
+Updated: 2026-06-09 07:28 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -38,6 +38,8 @@ Progress:
 - Kept extracted status as `logged`, preserving `current`/`previous` status for
   explicit `Current Slice` / `Previous Slice` headings.
 - Ran `cargo fmt` after `cargo fmt --check` caught same-file formatting drift.
+- Committed and pushed the parser slice as
+  `7ff7634 feat: parse date-field project worklogs`.
 
 Changes:
 
@@ -95,10 +97,11 @@ Issues:
 
 Next Steps:
 
-- Stage only `src-tauri/src/lib.rs` and `working.md`, run staged secret scan,
-  commit, and push.
-- Then sample the remaining 155 unparsed files and decide whether the next
-  slice is another deterministic parser rule or a reviewed AI queue surface.
+- Sample the remaining 155 unparsed files and decide whether the next slice is
+  another deterministic parser rule or a reviewed AI-assisted normalization
+  queue surface.
+- Add SDK-backed AI extraction only behind a reviewed queue/fail-closed boundary,
+  so risky project logs are not silently normalized into the report.
 
 ## Previous Slice - 2026-06-09 local Date/start-time worklog extraction
 

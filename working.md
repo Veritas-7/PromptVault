@@ -1,12 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 12:00 KST
+Updated: 2026-06-08 12:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Improvement checklist visibility
+## Current Slice - 2026-06-08 Improvement delta mixed gap visibility
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Show both resolved and remaining quality gaps when an improvement fixes some
+  gaps but leaves others.
+
+Context:
+
+- Previous checklist visibility slice is pushed to `origin/main`:
+  implementation `51b58b6 feat: show improvement checklist guidance` and
+  closeout `be3b5a6 docs: close improvement checklist handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`.
+- `quality_delta` can validly contain both `resolved_gaps` and
+  `remaining_gaps`, but the recommendation panel currently displays remaining
+  gaps only when no gaps were resolved.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `be3b5a6 docs: close improvement checklist handoff`.
+- Re-read recommendation delta rendering and parser tests. Confirmed mixed
+  resolved/remaining gap states are valid but the UI hides `remaining_gaps`
+  whenever `resolved_gaps.length > 0`.
+- Preparing a RED Playwright QA that expects both `해결됨: 맥락` and
+  `남음: 검증` after a recommendation.
+- Confirmed RED first: dev-mode Playwright QA showed the delta text contained
+  `해결됨: 맥락` but not `남음: 검증`.
+- Updated quality delta rendering so resolved and remaining gap rows are
+  rendered independently.
+- Confirmed GREEN: the same dev-mode Playwright QA rendered both `해결됨: 맥락`
+  and `남음: 검증` with no browser console/page errors.
+- Removed `/tmp/promptvault_mixed_quality_delta_qa.mjs` after QA and confirmed
+  port 5337 had no listener.
+- Ran the full project check successfully after mixed quality-gap QA.
+- Pre-staging verification passed with only the expected two modified files:
+  `src/App.tsx` and `working.md`.
+- Explicitly staged only `src/App.tsx` and `working.md`.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 4.08 KB and finding no leaks.
+- Restaged `working.md` after recording the staged scan and reran the staged
+  secret scan; about 4.46 KB was scanned and no leaks were found.
+
+Changes:
+
+- `working.md`: records the current mixed quality-gap visibility slice.
+- `src/App.tsx`: renders remaining quality gaps even when some gaps were
+  resolved.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5337" --port 5337 --timeout 30 node /tmp/promptvault_mixed_quality_delta_qa.mjs http://127.0.0.1:5337`
+  failed because `.quality-delta` text omitted `남음: 검증`.
+- GREEN: the same dev-mode Playwright QA passed after independent resolved and
+  remaining gap rows were rendered.
+- Cleanup: `/tmp/promptvault_mixed_quality_delta_qa.mjs` removed and
+  `lsof -nP -iTCP:5337 -sTCP:LISTEN` returned no listener.
+- Full project check: `npm run check` passed, covering UI tests 297/297,
+  production build, Rust lib tests 84/84, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/App.tsx working.md` passed; repo root
+  was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only `src/App.tsx` and `working.md`
+  modified; `git rev-list --left-right --count HEAD...origin/main` returned
+  `0 0`; origin was `https://github.com/Veritas-7/PromptVault.git`;
+  `gh repo view` reported `PRIVATE`; the temp QA file was absent; port 5337
+  was free.
+- Staged paths: `git diff --cached --name-only` listed only `src/App.tsx` and
+  `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed with
+  no leaks found.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Perform explicit-path staging, staged secret scan, commit, full-tree secret
+  scan, push, and final parity verification.
+
+## Previous Slice - 2026-06-08 Improvement checklist visibility
 
 Current Goal:
 

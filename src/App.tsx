@@ -1989,14 +1989,17 @@ function App() {
                       .map(qualityGapLabel)
                       .join(", ")}
                   </p>
-                ) : (
+                ) : null}
+                {activeImprovement.quality_delta.remaining_gaps.length ? (
                   <p>
                     남음:{" "}
                     {activeImprovement.quality_delta.remaining_gaps
                       .slice(0, 4)
                       .map(qualityGapLabel)
-                      .join(", ") || "없음"}
+                      .join(", ")}
                   </p>
+                ) : activeImprovement.quality_delta.resolved_gaps.length ? null : (
+                  <p>남음: 없음</p>
                 )}
               </div>
               <pre className="prompt-text revised">{activeImprovement.revised_prompt}</pre>

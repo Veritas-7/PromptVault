@@ -1,12 +1,116 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 05:33 KST
+Updated: 2026-06-09 05:37 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 one-click work management refresh
+## Current Slice - 2026-06-09 unparsed log extraction proposals in management overview
+
+Current Goal:
+
+- Make unparsed project progress logs such as `workingd.md` more directly
+  visible in the project/day management surface before they are saved.
+- Extend the one-click management refresh so it loads AI/local extraction
+  candidates and proposals, not just already saved extraction rows.
+- Show accepted, dated extraction proposals as `추출제안` evidence in the
+  consolidated overview while keeping rejected or undated proposals out of the
+  project/day managed rows.
+
+Context:
+
+- The one-click refresh previously loaded current summary, saved snapshots,
+  progress-log coverage, and saved extraction rows.
+- That still left detected unparsed logs visible only in coverage/candidate
+  panels, not in the consolidated project/day overview unless the proposal had
+  already been saved.
+- The extraction provider path may use GLM/OpenAI when available and falls back
+  to `local-extraction-rules`; accepted proposals still require explicit save
+  before becoming persisted extraction items.
+
+Progress:
+
+- Added `extraction_proposal` as a management overview source.
+- The overview now counts accepted dated proposals separately from saved
+  extraction rows.
+- Rejected proposals and proposals without a source-verified date are excluded
+  from overview rows.
+- The `전체 관리` / `전체 새로고침` workflow now also loads:
+  - unparsed work-log candidates;
+  - AI/local extraction proposals;
+  - selected approved proposal ids for the visible review/save workflow.
+
+Changes:
+
+- `src/workManagementOverview.ts`:
+  - accepts `ProjectWorkLogExtractionProposalsResult`;
+  - adds `extraction_proposal_count`;
+  - adds `추출제안` to source/meta text.
+- `tests/workManagementOverview.test.ts`:
+  - adds proposal fixture coverage;
+  - verifies only accepted dated proposals are merged into project/day rows.
+- `src/App.tsx`:
+  - includes `workLogExtractionResult` in overview loading and memo inputs;
+  - updates one-click refresh to load candidates and extraction proposals;
+  - shows per-row `추출제안` counts alongside saved extraction counts.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workManagementOverview.test.ts` failed because
+    `extraction_proposal_count` was missing and meta text did not include
+    `추출제안`.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workManagementOverview.test.ts`: PASS, `419`
+    tests.
+  - `npm run build`: PASS.
+- Headless UI QA:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 220 -- /bin/bash -lc 'node /tmp/promptvault_work_management_refresh_qa.mjs'`: PASS.
+  - Observed:
+    - overview meta:
+      `관리 17개 · 15개 프로젝트 · 10일 · 현재요약 2 · 스냅샷 4 · 추출제안 1 · 저장추출 1 · 진행로그 16`;
+    - coverage meta:
+      `32개 로그 · parsed 16개 · unparsed 16개 · 26개 프로젝트 · 작업 3,705개`;
+    - candidates meta:
+      `후보 16개 · parsed 제외 16개 · unreadable 0개 · empty 0개`;
+    - extraction meta:
+      `로컬 local-extraction-rules · 후보 16개 · accepted 1개 · rejected 15개`;
+    - saved extraction meta:
+      `저장 1개 · 표시 1개 · 1일 · 1개 프로젝트`.
+  - No console errors, page errors, or failed requests were reported.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `419` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `149` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- `추출제안` rows are not persisted until the operator approves and saves them.
+- Current live provider result still used `local-extraction-rules`, so SDK-backed
+  normalization is not yet proven as the active successful path in this slice.
+- There are still `15` rejected unparsed-log proposals from the current live
+  run that need better AI/provider handling or manual review.
+
+Research:
+
+- Used local `incremental-implementation`, `test-driven-development`, and
+  `webapp-testing` skill workflows.
+- No external web research was used.
+
+Next Steps:
+
+- Add a bulk review/save flow for accepted extraction proposals from the
+  one-click management refresh.
+- Improve provider health reporting so GLM/OpenAI failures are visible and
+  distinguishable from local fallback.
+- Add persisted overview/snapshot support after proposal save flow is stable.
+
+## Previous Slice - 2026-06-09 one-click work management refresh
 
 Current Goal:
 

@@ -657,15 +657,18 @@ function App() {
   const workManagementOverviewLoaded =
     workSummaryResult !== null
     || workSummarySnapshotsResult !== null
+    || workLogExtractionResult !== null
     || workLogExtractionItemsResult !== null
     || workLogCoverageResult !== null;
   const workManagementOverview = useMemo(() => buildWorkManagementOverview({
     coverage: workLogCoverageResult,
     extractionItems: workLogExtractionItemsResult,
+    extractionProposals: workLogExtractionResult,
     snapshots: workSummarySnapshotsResult,
     summary: workSummaryResult,
   }), [
     workLogCoverageResult,
+    workLogExtractionResult,
     workLogExtractionItemsResult,
     workSummaryResult,
     workSummarySnapshotsResult,
@@ -1049,6 +1052,8 @@ function App() {
     setWorkSummaryState("loading");
     setWorkSummarySnapshotsState("loading");
     setWorkLogCoverageState("loading");
+    setWorkLogCandidatesState("loading");
+    setWorkLogExtractionState("loading");
     setWorkLogExtractionItemsState("loading");
     try {
       const nextSummary = await loadProjectWorkSummary({
@@ -1068,6 +1073,18 @@ function App() {
       setWorkLogCoverageResult(nextCoverage);
       setWorkLogCoverageState("ready");
 
+      const nextCandidates = await loadProjectWorkLogCandidates();
+      setWorkLogCandidatesResult(nextCandidates);
+      setWorkLogCandidatesState("ready");
+
+      const nextExtraction = await loadProjectWorkLogExtractionProposals({
+        ai: true,
+      });
+      const nextAcceptedIds = new Set(acceptedWorkLogExtractionIds(nextExtraction));
+      setWorkLogExtractionResult(nextExtraction);
+      setApprovedWorkLogExtractionCandidateIds(nextAcceptedIds);
+      setWorkLogExtractionState("ready");
+
       const nextItems = await listProjectWorkLogExtractionItems(workLogExtractionItemOptions());
       setWorkLogExtractionItemsResult(nextItems);
       setWorkLogExtractionItemsState("ready");
@@ -1081,6 +1098,8 @@ function App() {
       setWorkSummaryState((current) => (current === "loading" ? "failed" : current));
       setWorkSummarySnapshotsState((current) => (current === "loading" ? "failed" : current));
       setWorkLogCoverageState((current) => (current === "loading" ? "failed" : current));
+      setWorkLogCandidatesState((current) => (current === "loading" ? "failed" : current));
+      setWorkLogExtractionState((current) => (current === "loading" ? "failed" : current));
       setWorkLogExtractionItemsState((current) => (current === "loading" ? "failed" : current));
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
@@ -2180,7 +2199,8 @@ function App() {
                   <p>{row.latest_title ?? "제목 없는 작업 관리 row"}</p>
                   <span>
                     {workManagementOverviewSourceText(row)} · 작업 {row.work_item_count.toLocaleString()}개 ·
-                    세션 근거 {row.session_evidence_count.toLocaleString()}건 · 저장추출{" "}
+                    세션 근거 {row.session_evidence_count.toLocaleString()}건 · 추출제안{" "}
+                    {row.extraction_proposal_count.toLocaleString()}개 · 저장추출{" "}
                     {row.saved_extraction_count.toLocaleString()}개
                   </span>
                 </article>

@@ -8,6 +8,7 @@ import {
 import type {
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionItemsResult,
+  ProjectWorkLogExtractionProposalsResult,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
   ProjectWorkSummarySnapshotsResult,
@@ -158,6 +159,48 @@ function extractionItemsResult(): ProjectWorkLogExtractionItemsResult {
   };
 }
 
+function extractionProposalsResult(): ProjectWorkLogExtractionProposalsResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    root_path: "/Users/wj/Ai/System/10_Projects",
+    provider: "local-extraction-rules",
+    used_ai: false,
+    candidate_count: 2,
+    accepted_count: 1,
+    rejected_count: 1,
+    proposals: [
+      {
+        candidate_id: "work-log-CareVault-unsaved-a1",
+        project: "CareVault",
+        source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+        source_file: "workingd.md",
+        date: "2026-06-08",
+        title: "Unparsed progress log proposal",
+        status: "completed",
+        evidence: "2026-06-08: Unparsed progress log proposal",
+        confidence: 0.76,
+        accepted: true,
+        rejection_reason: null,
+      },
+      {
+        candidate_id: "work-log-Unknown-rejected-a1",
+        project: "UnknownProject",
+        source_path: "/Users/wj/Ai/System/10_Projects/UnknownProject/working.md",
+        source_file: "working.md",
+        date: null,
+        title: "Undated rejected proposal",
+        status: "blocked",
+        evidence: "No source date",
+        confidence: 0.1,
+        accepted: false,
+        rejection_reason: "missing_date",
+      },
+    ],
+    persistence: null,
+    warnings: [],
+  };
+}
+
 function coverageResult(): ProjectWorkLogCoverageResult {
   return {
     generated_at: "2026-06-09T00:00:00Z",
@@ -197,6 +240,7 @@ test("work management overview merges source evidence by project and date", () =
   const overview = buildWorkManagementOverview({
     coverage: coverageResult(),
     extractionItems: extractionItemsResult(),
+    extractionProposals: extractionProposalsResult(),
     snapshots: snapshotsResult(),
     summary: summaryResult(),
   });
@@ -220,23 +264,30 @@ test("work management overview merges source evidence by project and date", () =
   assert.equal(promptVault.current_summary_count, 1);
   assert.equal(promptVault.snapshot_count, 1);
   assert.equal(promptVault.saved_extraction_count, 1);
+  assert.equal(promptVault.extraction_proposal_count, 0);
   assert.equal(promptVault.progress_log_count, 1);
   assert.equal(promptVault.work_item_count, 4);
   assert.equal(promptVault.session_evidence_count, 2);
   assert.equal(promptVault.latest_title, "PromptVault management slice");
+
+  const careVault = overview.rows[1];
+  assert.deepEqual(careVault.sources, ["snapshot", "extraction_proposal"]);
+  assert.equal(careVault.extraction_proposal_count, 1);
+  assert.equal(careVault.latest_title, "CareVault snapshot");
 });
 
 test("work management overview status text exposes management coverage", () => {
   const overview = buildWorkManagementOverview({
     coverage: coverageResult(),
     extractionItems: extractionItemsResult(),
+    extractionProposals: extractionProposalsResult(),
     snapshots: snapshotsResult(),
     summary: summaryResult(),
   });
 
   assert.equal(
     workManagementOverviewMetaText(overview),
-    "관리 3개 · 3개 프로젝트 · 3일 · 현재요약 1 · 스냅샷 2 · 저장추출 2 · 진행로그 1",
+    "관리 3개 · 3개 프로젝트 · 3일 · 현재요약 1 · 스냅샷 2 · 추출제안 1 · 저장추출 2 · 진행로그 1",
   );
   assert.equal(
     workManagementOverviewSourceText(overview.rows[0]),

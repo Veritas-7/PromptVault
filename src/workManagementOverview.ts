@@ -1,6 +1,7 @@
 import type {
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionItemsResult,
+  ProjectWorkLogExtractionProposalsResult,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
 } from "./types.ts";
@@ -8,12 +9,14 @@ import type {
 export type WorkManagementOverviewSource =
   | "current_summary"
   | "snapshot"
+  | "extraction_proposal"
   | "saved_extraction"
   | "progress_log";
 
 export interface WorkManagementOverviewInput {
   summary?: ProjectWorkSummaryResult | null;
   snapshots?: ProjectWorkSummarySnapshotsResult | null;
+  extractionProposals?: ProjectWorkLogExtractionProposalsResult | null;
   extractionItems?: ProjectWorkLogExtractionItemsResult | null;
   coverage?: ProjectWorkLogCoverageResult | null;
 }
@@ -25,6 +28,7 @@ export interface WorkManagementOverviewRow {
   sources: WorkManagementOverviewSource[];
   current_summary_count: number;
   snapshot_count: number;
+  extraction_proposal_count: number;
   saved_extraction_count: number;
   progress_log_count: number;
   work_item_count: number;
@@ -38,6 +42,7 @@ export interface WorkManagementOverview {
   date_count: number;
   current_summary_count: number;
   snapshot_summary_count: number;
+  extraction_proposal_count: number;
   saved_extraction_count: number;
   progress_log_count: number;
   rows: WorkManagementOverviewRow[];
@@ -46,12 +51,14 @@ export interface WorkManagementOverview {
 const SOURCE_ORDER: WorkManagementOverviewSource[] = [
   "current_summary",
   "snapshot",
+  "extraction_proposal",
   "saved_extraction",
   "progress_log",
 ];
 
 const SOURCE_LABELS: Record<WorkManagementOverviewSource, string> = {
   current_summary: "현재요약",
+  extraction_proposal: "추출제안",
   progress_log: "진행로그",
   saved_extraction: "저장추출",
   snapshot: "스냅샷",
@@ -93,6 +100,15 @@ export function buildWorkManagementOverview(
     row.sourceSet.add("saved_extraction");
   }
 
+  for (const proposal of input.extractionProposals?.proposals ?? []) {
+    if (!proposal.accepted || !proposal.date) continue;
+    const row = upsertRow(rowsByKey, proposal.date, proposal.project);
+    row.extraction_proposal_count += 1;
+    row.work_item_count = Math.max(row.work_item_count, 1);
+    row.latest_title ??= proposal.title;
+    row.sourceSet.add("extraction_proposal");
+  }
+
   for (const file of input.coverage?.files ?? []) {
     if (file.status !== "parsed" || !file.latest_date) continue;
     const row = upsertRow(rowsByKey, file.latest_date, file.project);
@@ -118,6 +134,7 @@ export function buildWorkManagementOverview(
     date_count: new Set(rows.map((row) => row.date)).size,
     current_summary_count: sumRows(rows, "current_summary_count"),
     snapshot_summary_count: sumRows(rows, "snapshot_count"),
+    extraction_proposal_count: sumRows(rows, "extraction_proposal_count"),
     saved_extraction_count: sumRows(rows, "saved_extraction_count"),
     progress_log_count: sumRows(rows, "progress_log_count"),
     rows,
@@ -131,6 +148,7 @@ export function workManagementOverviewMetaText(overview: WorkManagementOverview)
     `${overview.date_count.toLocaleString()}일`,
     `현재요약 ${overview.current_summary_count.toLocaleString()}`,
     `스냅샷 ${overview.snapshot_summary_count.toLocaleString()}`,
+    `추출제안 ${overview.extraction_proposal_count.toLocaleString()}`,
     `저장추출 ${overview.saved_extraction_count.toLocaleString()}`,
     `진행로그 ${overview.progress_log_count.toLocaleString()}`,
   ].join(" · ");
@@ -157,6 +175,7 @@ function upsertRow(
     sourceSet: new Set(),
     current_summary_count: 0,
     snapshot_count: 0,
+    extraction_proposal_count: 0,
     saved_extraction_count: 0,
     progress_log_count: 0,
     work_item_count: 0,
@@ -169,7 +188,12 @@ function upsertRow(
 
 function sumRows(
   rows: WorkManagementOverviewRow[],
-  field: "current_summary_count" | "snapshot_count" | "saved_extraction_count" | "progress_log_count",
+  field:
+    | "current_summary_count"
+    | "snapshot_count"
+    | "extraction_proposal_count"
+    | "saved_extraction_count"
+    | "progress_log_count",
 ): number {
   return rows.reduce((total, row) => total + row[field], 0);
 }

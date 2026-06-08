@@ -1,12 +1,125 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 15:50 KST
+Updated: 2026-06-08 15:57 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Quoted secret assignment redaction
+## Current Slice - 2026-06-08 Spaced API-key assignment redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep frontend prompt row preview/accessibility redaction aligned with backend
+  scan redaction for the common spaced `api key=...` assignment shape.
+
+Context:
+
+- Previous quoted secret assignment redaction is pushed to `origin/main` as
+  `4a33817 fix: redact quoted secret assignments`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- The frontend preview regex and backend risk/redaction regex handled
+  `apikey`, `api_key`, and `api-key`, but not the common spaced form
+  `api key=...`.
+
+Progress:
+
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree was clean at `main...origin/main` with parity
+  `0 0` before this slice.
+- Added RED frontend coverage in `tests/promptRowA11y.test.ts` requiring prompt
+  row preview and row accessible labels to redact a spaced `api key=...`
+  assignment.
+- Added RED backend coverage in `src-tauri/src/lib.rs` requiring
+  `redact_sensitive_text` to redact the same spaced API-key assignment shape.
+- Confirmed RED: the focused frontend and Rust tests both left the spaced
+  assignment visible.
+- Updated frontend and backend key-value secret regexes to accept `api key` in
+  addition to `apikey`, `api_key`, and `api-key`.
+- Confirmed focused GREEN for the new frontend and backend redaction cases.
+- Confirmed related regression tests for prompt row accessibility, risk labels,
+  and backend redaction remain green.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a spaced API-key assignment. It confirmed the prompt row
+  preview and row `aria-label` contained `[REDACTED_POSSIBLE_SECRET]`, the
+  synthetic value was absent from checked UI surfaces, the localized risk label
+  was visible, and there were zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts spaced `api key=...` assignments in prompt
+  row previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds regression coverage for spaced API-key
+  assignment preview and accessible-name redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-key redaction with the
+  spaced key-name behavior and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on `prompt row previews redact space-separated api key assignments`
+  because the spaced assignment remained visible.
+- RED:
+  `cargo test redact_sensitive_text_redacts_space_separated_api_key_pairs`
+  failed because `redact_sensitive_text` returned the original spaced
+  assignment.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 12/12.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_space_separated_api_key_pairs`
+  passed, 1/1.
+- Related frontend regression checks:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts tests/riskLabels.test.ts`
+  passed, 14/14.
+- Related backend redaction checks:
+  `cargo test redact_sensitive_text_redacts` passed, 4/4.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5197" --port 5197 --timeout 120 -- /bin/bash -lc ...`
+  passed with one synthetic stored prompt row, preview and `aria-label`
+  redacted, synthetic raw value absent from checked UI surfaces, localized risk
+  label visible, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 318/318,
+  production build, Rust lib tests 88/88, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- `gitleaks protect --staged` passed with no leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 701.54 MB with
+  no leaks.
+
+Issues:
+
+- No product blocker after aligning spaced API-key assignment redaction.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for common secret-like key assignment spelling.
+
+Next Steps:
+
+- Push this closeout commit to `origin/main`, run final parity/status checks,
+  then continue from a clean pushed tree and pick the next autonomous
+  QA/improvement slice.
+
+## Previous Slice - 2026-06-08 Quoted secret assignment redaction
 
 Current Goal:
 

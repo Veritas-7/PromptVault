@@ -1,12 +1,93 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 14:45 KST
+Updated: 2026-06-08 14:52 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Redacted row previews
+## Current Slice - 2026-06-08 Local recommendation redaction QA
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verify that local recommendation generation does not echo secret-like
+  token text from a risky stored prompt into the recommendation response or UI.
+
+Context:
+
+- Previous row-preview redaction implementation is pushed to `origin/main` as
+  `0c6e126 fix: redact prompt row previews`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus the CLI browser bridge and Playwright.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- This QA intentionally avoids printing raw stored prompt row labels or prompt
+  bodies because stored prompt text can contain secret-like strings by design.
+
+Progress:
+
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree was clean at `main...origin/main` and parity was
+  `0 0`.
+- Re-read webapp-testing and TDD skill instructions, then inspected the
+  recommendation panel and local improvement redaction tests.
+- Ran connected browser QA for stored source filter `Codex`, switched from
+  latest preview to weakest preview, selected the first risky row, enabled
+  `로컬 추천`, and generated a recommendation.
+- Confirmed `/api/prompts` preserved source `Codex` for both latest and weakest
+  preview loads.
+- Confirmed the weakest row preview and aria-label did not expose a long-token
+  pattern and did show a redaction placeholder.
+- Confirmed `/api/improve` used `force_local: true`, `persist: true`, and a
+  database path. The request still carried the raw selected prompt, which is
+  expected for backend recommendation generation.
+- Confirmed the local recommendation response provider was `local-rules`, the
+  recommendation was persisted, and neither the response nor the visible
+  recommendation panel exposed a long-token pattern.
+- The browser QA created real local recommendation history entries for the
+  selected prompt. This is an expected DB side effect of verifying persistence.
+
+Changes:
+
+- `working.md`: records this QA-only local recommendation redaction slice.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- Browser local recommendation redaction QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5205" --port 5205 --server "npm run dev -- --host 127.0.0.1 --port 5206" --port 5206 --timeout 120 -- /bin/bash -lc ...`
+  passed with latest/weakest stored `Codex` requests, redacted risky row
+  preview/aria-labels, `force_local` recommendation persistence, no long-token
+  pattern in the recommendation response or panel, and no console/page/API
+  failures.
+
+Issues:
+
+- No product blocker found in this flow.
+- Harness note: provider value is `local-rules`, not plain `local`; redaction
+  placeholders may appear in backend response fields but the visible panel can
+  also satisfy the security condition by omitting the risky token entirely.
+
+Research:
+
+- No external research. This is direct browser QA work.
+
+Next Steps:
+
+- Finish this QA-only closeout with docs-only verification, staged secret scan,
+  commit, push, and final parity checks.
+- Continue from a clean pushed tree and pick the next autonomous QA/improvement
+  slice.
+
+## Previous Slice - 2026-06-08 Redacted row previews
 
 Current Goal:
 

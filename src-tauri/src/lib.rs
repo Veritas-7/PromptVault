@@ -3970,7 +3970,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "possible_api_key",
                 Regex::new(
-                    r#"(?im)\bgh[oprsu]_[a-z0-9_]{20,}\b|\b(?:bearer|basic)\s+(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})\b|(?:--user|-u)\s+[^:\s]+:[^\s]+|(?:--cookie|-b)\s+[^=\s]+=[^\s]+|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
+                    r#"(?im)\bgh[oprsu]_[a-z0-9_]{20,}\b|\b(?:bearer|basic)\s+(?:"(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})"|'(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})'|(?:[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|[a-z0-9]{16,})\b)|(?:--user|-u)\s+[^:\s]+:[^\s]+|(?:--cookie|-b)\s+[^=\s]+=[^\s]+|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
                 )
                     .expect("api key regex"),
             ),
@@ -6425,6 +6425,25 @@ mod tests {
         let text = "Use Basic short-basic-value for the request.";
         assert_eq!(
             redact_sensitive_text(text),
+            "Use [REDACTED_POSSIBLE_API_KEY] for the request."
+        );
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_quoted_standalone_auth_scheme_tokens() {
+        let bearer_scheme = ["Bear", "er"].join("");
+        let bearer_token = ["short", "bearer", "value"].join("-");
+        let basic_scheme = ["Bas", "ic"].join("");
+        let basic_token = ["short", "basic", "value"].join("-");
+        let bearer_text = format!("Use {bearer_scheme} \"{bearer_token}\" for the request.");
+        let basic_text = format!("Use {basic_scheme} '{basic_token}' for the request.");
+
+        assert_eq!(
+            redact_sensitive_text(&bearer_text),
+            "Use [REDACTED_POSSIBLE_API_KEY] for the request."
+        );
+        assert_eq!(
+            redact_sensitive_text(&basic_text),
             "Use [REDACTED_POSSIBLE_API_KEY] for the request."
         );
     }

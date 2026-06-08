@@ -1,12 +1,114 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 19:35 KST
+Updated: 2026-06-08 19:41 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Quoted curl key-like header redaction shape
+## Current Slice - 2026-06-08 Quoted standalone auth scheme token redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for standalone `Bearer`/`Basic` auth scheme tokens when the token
+  value is wrapped in single or double quotes.
+
+Context:
+
+- Previous quoted curl key-like header shape fix is pushed to `origin/main`
+  with source commit
+  `8a0f0f4 fix: preserve quoted curl key header redaction shape` and docs
+  closeout `ff8f4b6 docs: record quoted curl key header verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed standalone `Bearer "short-bearer-value"` and
+  `Basic "short-basic-value"` snippets rendered unchanged in prompt row
+  previews, even though the same unquoted token forms were already redacted.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact quoted standalone `Bearer`/`Basic` auth scheme tokens.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same quoted standalone auth scheme token forms.
+- Confirmed RED: frontend and backend redaction leaked the quoted bearer token
+  unchanged.
+- Extended the standalone `Bearer`/`Basic` matcher to accept the existing
+  secret-like token patterns when wrapped in single or double quotes.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a raw `Bearer "..."` prompt. It confirmed two stored
+  prompt rows, the `Use [REDACTED_POSSIBLE_SECRET] for the request.` preview
+  visible in row text and aria labels, no bearer token leak in row text, aria
+  labels, or body text, and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: extends standalone auth scheme token redaction to
+  quoted token values.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for quoted
+  standalone `Bearer` and `Basic` token snippets.
+- `src-tauri/src/lib.rs`: aligns backend redaction with the same quoted
+  standalone auth scheme token matcher and Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- Probe:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --input-type=module -e ...`
+  showed standalone quoted `Bearer` and `Basic` tokens rendered unchanged.
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed 36/37 because `Bearer "short-bearer-value"` was not redacted.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_quoted_standalone_auth_scheme_tokens`
+  from `src-tauri` failed because backend redaction leaked the quoted bearer
+  token.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 37/37.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_quoted_standalone_auth_scheme_tokens`
+  from `src-tauri` passed, 1/1 focused lib test, plus zero-test main and CLI
+  targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5222" --port 5222 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_quoted_auth_scheme_qa.mjs'`
+  passed with `rowCount=2`, expected preview
+  `Use [REDACTED_POSSIBLE_SECRET] for the request.`, `consoleErrors=[]`, and
+  `apiErrors=[]`.
+- Full project check: `npm run check` passed, covering UI tests 343/343,
+  production build, Rust lib tests 114/114, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after redacting quoted standalone auth scheme tokens.
+- Python Playwright is not installed, and PromptVault has no local Playwright
+  dependency. Browser QA used the installed shared workspace Playwright package
+  while still managing Vite with the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity and
+  UI/accessibility preview correctness work for standalone auth scheme token
+  snippets.
+
+Next Steps:
+
+- Run whitespace and staged gitleaks checks, commit this source slice, run a
+  full-tree gitleaks scan, push to the private GitHub remote, verify parity,
+  then record the push evidence in this worklog.
+
+## Previous Slice - 2026-06-08 Quoted curl key-like header redaction shape
 
 Current Goal:
 

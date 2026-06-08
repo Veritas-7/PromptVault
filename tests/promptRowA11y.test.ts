@@ -210,6 +210,34 @@ test("prompt row previews redact standalone basic tokens", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact quoted standalone auth scheme tokens", () => {
+  const bearerScheme = ["Bear", "er"].join("");
+  const bearerToken = ["short", "bearer", "value"].join("-");
+  const basicScheme = ["Bas", "ic"].join("");
+  const basicToken = ["short", "basic", "value"].join("-");
+  const cases = [
+    {
+      text: `Use ${bearerScheme} "${bearerToken}" for the request.`,
+      expected: "Use [REDACTED_POSSIBLE_SECRET] for the request.",
+      leakPattern: new RegExp(`${bearerScheme}|${bearerToken}`),
+    },
+    {
+      text: `Use ${basicScheme} '${basicToken}' for the request.`,
+      expected: "Use [REDACTED_POSSIBLE_SECRET] for the request.",
+      leakPattern: new RegExp(`${basicScheme}|${basicToken}`),
+    },
+  ];
+
+  for (const { text, expected, leakPattern } of cases) {
+    const preview = promptRowPreviewText(text);
+    const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+    assert.equal(preview, expected);
+    assert.doesNotMatch(preview, leakPattern);
+    assert.doesNotMatch(label, leakPattern);
+  }
+});
+
 test("prompt row previews redact standalone alphanumeric auth scheme tokens", () => {
   const bearerToken = ["short", "bearer", "value", "1"].join("");
   const basicToken = ["short", "basic", "value", "1"].join("");

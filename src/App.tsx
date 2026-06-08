@@ -230,6 +230,7 @@ import {
   workLogExtractionItemsMetaText,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
+  workLogExtractionProviderNoticeText,
   workLogExtractionReviewLabel,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
@@ -577,6 +578,8 @@ function App() {
   const workLogCandidatesMeta = workLogCandidatesMetaText(workLogCandidatesState, workLogCandidatesResult);
   const workLogExtractionFailureMessage = workLogExtractionFailureText(workLogExtractionState);
   const workLogExtractionMeta = workLogExtractionMetaText(workLogExtractionState, workLogExtractionResult);
+  const workLogExtractionProviderNotice =
+    workLogExtractionProviderNoticeText(workLogExtractionResult);
   const workLogExtractionPersistenceStatus = workLogExtractionResult
     ? workLogExtractionPersistenceText(workLogExtractionResult)
     : null;
@@ -1884,6 +1887,25 @@ function App() {
             <AlertTriangle size={18} />
             <span>{workLogExtractionFailureMessage}</span>
           </div>
+        ) : null}
+        {workLogExtractionProviderNotice && workLogExtractionResult?.warnings.length ? (
+          <section
+            className="notice warning panel-notice provider-warning-notice"
+            data-work-log-extraction-provider-warning="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <div>
+              <span>{workLogExtractionProviderNotice}</span>
+              <div className="warning-list">
+                {workLogExtractionResult.warnings.map((warning, index) => (
+                  <p key={textListItemKey(warning, index)}>
+                    {redactSensitiveDisplayText(warning)}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </section>
         ) : null}
         {workLogExtractionItemsFailureMessage ? (
           <div

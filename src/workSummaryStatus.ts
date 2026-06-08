@@ -239,6 +239,18 @@ export function workLogExtractionMetaText(
   ].join(" · ");
 }
 
+export function workLogExtractionProviderNoticeText(
+  result: ProjectWorkLogExtractionProposalsResult | null,
+): string | null {
+  if (!result?.warnings.length) return null;
+  const providerText = result.used_ai
+    ? `AI ${result.provider} 사용`
+    : result.provider === "local-extraction-rules"
+      ? "로컬 fallback 사용"
+      : `로컬 ${result.provider} 사용`;
+  return `${providerText} · 경고 ${result.warnings.length.toLocaleString()}개`;
+}
+
 export function workLogExtractionPersistenceText(
   result: ProjectWorkLogExtractionProposalsResult,
 ): string | null {

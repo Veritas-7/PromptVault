@@ -504,6 +504,18 @@ h3 {
   margin: 0;
 }
 
+.provider-warning-notice {
+  align-items: flex-start;
+}
+
+.provider-warning-notice .warning-list {
+  padding: 8px 0 0;
+}
+
+.provider-warning-notice .warning-list p {
+  margin: 0;
+}
+
 .metrics {
   display: grid;
   gap: 12px;

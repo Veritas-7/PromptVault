@@ -13,6 +13,7 @@ import {
   workLogExtractionItemsMetaText,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
+  workLogExtractionProviderNoticeText,
   workLogExtractionReviewLabel,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
@@ -518,6 +519,30 @@ test("work log extraction labels describe accepted and rejected AI proposals", (
     "AI 작업 추출 제안을 불러오지 못했습니다. provider 설정, 진행 로그 경로, 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogExtractionFailureText("ready"), null);
+});
+
+test("work log extraction provider notice exposes fallback warnings", () => {
+  assert.equal(workLogExtractionProviderNoticeText(null), null);
+  assert.equal(workLogExtractionProviderNoticeText(extractionResult()), null);
+  assert.equal(
+    workLogExtractionProviderNoticeText(extractionResult({
+      provider: "local-extraction-rules",
+      used_ai: false,
+      warnings: [
+        "OpenAI work-log extraction 요청 실패: timeout; 다음 provider 또는 로컬 fallback을 사용합니다.",
+        "GLM work-log extraction 요청 실패: timeout; 로컬 fallback을 사용했습니다.",
+      ],
+    })),
+    "로컬 fallback 사용 · 경고 2개",
+  );
+  assert.equal(
+    workLogExtractionProviderNoticeText(extractionResult({
+      provider: "glm",
+      used_ai: true,
+      warnings: ["OpenAI work-log extraction 요청 실패: timeout; 다음 provider를 사용합니다."],
+    })),
+    "AI glm 사용 · 경고 1개",
+  );
 });
 
 test("work log extraction review labels expose saved, AI-review, and skipped outcomes", () => {

@@ -1,12 +1,125 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 05:37 KST
+Updated: 2026-06-09 05:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 unparsed log extraction proposals in management overview
+## Current Slice - 2026-06-09 work-log extraction provider fallback visibility
+
+Current Goal:
+
+- Make the current completion boundary explicit in the project work management
+  panel: real sessions and progress logs are being scanned, but the AI/provider
+  extraction path may still fall back to local rules.
+- Surface provider/fallback warnings in the same UI flow that shows
+  project/day management counts, so operators can tell whether GLM/OpenAI was
+  actually used or whether local extraction handled the run.
+- Keep this as a visibility and verification slice, not a claim that the
+  all-project/all-day work-management system is fully autonomous yet.
+
+Context:
+
+- The management panel already scans real Codex/session evidence and project
+  progress logs, then groups work by project and date.
+- The previous slice made unparsed `working.md`/`workingd.md`-style progress
+  logs visible as extraction candidates/proposals in the one-click refresh.
+- Live QA still showed `local-extraction-rules` as the active result, so the
+  UI needed to explain why the AI provider path was not the successful path.
+
+Progress:
+
+- Added a provider warning helper for work-log extraction results.
+- Added a warning notice in the project work panel when extraction returns
+  provider/fallback warnings.
+- The notice redacts sensitive text before rendering warning details.
+- Updated the real headless one-click QA to assert fallback warning visibility
+  whenever live extraction resolves to the local provider.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - adds `workLogExtractionProviderNoticeText()`;
+  - returns no notice when there are no provider warnings;
+  - labels fallback runs as `로컬 fallback 사용 · 경고 N개`.
+- `tests/workSummaryStatus.test.ts`:
+  - adds RED/GREEN coverage for missing-warning, local fallback, and AI
+    provider-with-warning cases.
+- `src/App.tsx`:
+  - renders provider/fallback warnings next to the work-log extraction state;
+  - uses existing notice semantics, warning list rendering, and redaction.
+- `src/App.css`:
+  - aligns the nested provider warning notice and warning list without
+    distorting the existing notice layout.
+- `/tmp/promptvault_work_management_refresh_qa.mjs`:
+  - reads `data-work-log-extraction-provider-warning`;
+  - fails the QA run if live local extraction lacks a provider warning notice.
+
+Tests:
+
+- RED:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts` failed because
+    `workLogExtractionProviderNoticeText` was not exported yet.
+- Targeted GREEN:
+  - `npm run test:ui -- tests/workSummaryStatus.test.ts`: PASS, `420` tests.
+  - `npm run build`: PASS.
+- Headless UI QA against real local sources:
+  - `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "./src-tauri/target/debug/promptvault-cli serve --addr 127.0.0.1:5174" --port 5174 --server "npm run dev -- --host 127.0.0.1 --port 5177" --port 5177 --timeout 220 -- /bin/bash -lc 'node /tmp/promptvault_work_management_refresh_qa.mjs'`: PASS.
+  - Observed:
+    - overview meta:
+      `관리 17개 · 15개 프로젝트 · 10일 · 현재요약 2 · 스냅샷 4 · 추출제안 1 · 저장추출 1 · 진행로그 16`;
+    - summary meta:
+      `2개 프로젝트 · 2일 · 81개 작업 · 세션 근거 80건 · 저장 병합 1개`;
+    - coverage meta:
+      `32개 로그 · parsed 16개 · unparsed 16개 · 26개 프로젝트 · 작업 3,708개`;
+    - candidates meta:
+      `후보 16개 · parsed 제외 16개 · unreadable 0개 · empty 0개`;
+    - extraction meta:
+      `로컬 local-extraction-rules · 후보 16개 · accepted 1개 · rejected 15개`;
+    - provider warning:
+      `로컬 fallback 사용 · 경고 2개`, including risk-pattern local handling
+      and GLM request failure details;
+    - saved extraction meta:
+      `저장 1개 · 표시 1개 · 1일 · 1개 프로젝트`.
+  - No console errors, page errors, or failed requests were reported.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `420` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `149` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+
+Issues:
+
+- The system is MVP+/foundation level, not fully complete as an autonomous
+  all-session/all-project daily work ledger.
+- Real session evidence is parsed and counted, and project progress logs are
+  scanned; however `16` live progress logs remain unparsed and require AI or
+  manual extraction/review.
+- The current live extraction path still fell back to local rules after GLM
+  request failure, so SDK-backed successful extraction is not yet proven in
+  the live UI flow.
+- Accepted proposals are not canonical managed rows until the operator saves
+  them.
+
+Research:
+
+- Used local `test-driven-development` and `webapp-testing` workflows.
+- No external web research was used.
+
+Next Steps:
+
+- Add stronger SDK/provider health diagnostics and retry controls for GLM/OpenAI
+  extraction.
+- Expand AI-assisted parsing for project-local `working.md`, `workingd.md`, and
+  related progress logs so unparsed logs become date/project-scoped proposals.
+- Add bulk review/save for accepted extraction proposals and persisted daily
+  project management snapshots.
+
+## Previous Slice - 2026-06-09 unparsed log extraction proposals in management overview
 
 Current Goal:
 

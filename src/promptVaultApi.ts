@@ -89,6 +89,7 @@ export interface ProjectWorkSummaryOptions {
   refresh_session_index?: boolean;
   save_snapshot?: boolean;
   include_extractions?: boolean;
+  include_saved_extractions?: boolean;
   extraction_limit?: number;
   extraction_ai?: boolean;
   ai?: boolean;
@@ -1134,6 +1135,7 @@ function nativeProjectWorkSummaryOptions(options: ProjectWorkSummaryOptions) {
     force_local: options.ai === true ? false : undefined,
     save_snapshot: options.save_snapshot,
     include_extractions: options.include_extractions,
+    include_saved_extractions: options.include_saved_extractions,
     extraction_limit: options.extraction_limit,
     extraction_ai: options.extraction_ai,
   };

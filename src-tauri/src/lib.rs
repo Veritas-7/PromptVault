@@ -411,6 +411,7 @@ pub struct ProjectWorkSummaryOptions {
     pub force_local: Option<bool>,
     pub save_snapshot: Option<bool>,
     pub include_extractions: Option<bool>,
+    pub include_saved_extractions: Option<bool>,
     pub extraction_limit: Option<usize>,
     pub extraction_ai: Option<bool>,
 }
@@ -1347,6 +1348,14 @@ pub async fn run_project_work_summary(
     if matches!(options.extraction_limit, Some(0)) {
         return Err("work-summary extraction_limit requires a positive integer".into());
     }
+    if options.include_extractions.unwrap_or(false)
+        && options.include_saved_extractions.unwrap_or(false)
+    {
+        return Err(
+            "work-summary cannot combine live AI extraction and saved extraction merges in one run"
+                .into(),
+        );
+    }
     let database_path = options
         .report
         .database_path
@@ -1367,6 +1376,18 @@ pub async fn run_project_work_summary(
         Some(merge_project_work_log_extraction_proposals_into_report(
             &mut report,
             &proposals,
+        ))
+    } else if options.include_saved_extractions.unwrap_or(false) {
+        let saved_items =
+            run_list_project_work_log_extraction_items(ProjectWorkLogExtractionItemsOptions {
+                database_path: Some(database_path.display().to_string()),
+                limit: Some(MAX_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT),
+                date: None,
+                project: None,
+            })?;
+        Some(merge_saved_project_work_log_extraction_items_into_report(
+            &mut report,
+            &saved_items,
         ))
     } else {
         None
@@ -3963,6 +3984,78 @@ fn merge_project_work_log_extraction_proposals_into_report(
     }
 }
 
+fn project_work_items_from_saved_extraction_items(
+    result: &ProjectWorkLogExtractionItemsResult,
+) -> Vec<ProjectWorkItem> {
+    let mut items = result
+        .items
+        .iter()
+        .filter_map(|item| {
+            let date = item.date.trim();
+            if date.is_empty() {
+                return None;
+            }
+            Some(ProjectWorkItem {
+                date: date.to_string(),
+                project: item.project.clone(),
+                title: item.title.clone(),
+                status: "extracted".to_string(),
+                source_path: item.source_path.clone(),
+                source_file: item.source_file.clone(),
+                evidence: item.evidence.clone(),
+                session_evidence_count: 0,
+                session_sources: Vec::new(),
+                session_evidence_keys: Vec::new(),
+            })
+        })
+        .collect::<Vec<_>>();
+    sort_project_work_items(&mut items);
+    items
+}
+
+fn merge_saved_project_work_log_extraction_items_into_report(
+    report: &mut ProjectWorkReport,
+    saved_items: &ProjectWorkLogExtractionItemsResult,
+) -> ProjectWorkLogExtractionMergeResult {
+    let mut warnings = saved_items.warnings.clone();
+    for item in &saved_items.items {
+        warnings.extend(item.warnings.clone());
+    }
+    if saved_items.returned_item_count < saved_items.total_items {
+        warnings.push(format!(
+            "저장된 AI 진행로그 항목 {}개 중 {}개만 summary preview에 병합 대상으로 읽었습니다.",
+            saved_items.total_items, saved_items.returned_item_count
+        ));
+    }
+
+    let extracted_items = project_work_items_from_saved_extraction_items(saved_items);
+    let merged_item_count = extracted_items.len();
+    if merged_item_count == 0 {
+        warnings.push(
+            "저장된 AI 진행로그 항목이 없어 프로젝트/일별 요약에 병합한 항목이 없습니다."
+                .to_string(),
+        );
+    } else {
+        warnings.push(format!(
+            "저장된 AI 진행로그 accepted 항목 {merged_item_count}개를 프로젝트/일별 요약 preview에 병합했습니다."
+        ));
+        report.items.extend(extracted_items);
+        refresh_project_work_item_summary(report);
+        refresh_project_work_session_summary(report);
+    }
+    report.warnings.extend(warnings.clone());
+
+    ProjectWorkLogExtractionMergeResult {
+        provider: "saved-extraction-items".to_string(),
+        used_ai: false,
+        candidate_count: saved_items.total_items,
+        accepted_count: saved_items.total_items,
+        rejected_count: 0,
+        merged_item_count,
+        warnings,
+    }
+}
+
 fn sort_project_work_items(items: &mut [ProjectWorkItem]) {
     items.sort_by(|left, right| {
         right
@@ -6004,7 +6097,11 @@ fn persist_project_work_log_extraction_proposals(
         if !proposal.accepted {
             continue;
         }
-        let Some(date) = proposal.date.as_deref().map(str::trim).filter(|date| !date.is_empty())
+        let Some(date) = proposal
+            .date
+            .as_deref()
+            .map(str::trim)
+            .filter(|date| !date.is_empty())
         else {
             continue;
         };
@@ -9771,13 +9868,14 @@ Progress:
         assert!(stored.4.contains("\"merged_item_count\":1"));
         drop(conn);
 
-        let snapshots = run_list_project_work_summary_snapshots(ProjectWorkSummarySnapshotsOptions {
-            database_path: Some(db_path.display().to_string()),
-            limit: Some(1),
-            date: None,
-            project: None,
-        })
-        .expect("list persisted snapshot");
+        let snapshots =
+            run_list_project_work_summary_snapshots(ProjectWorkSummarySnapshotsOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(1),
+                date: None,
+                project: None,
+            })
+            .expect("list persisted snapshot");
         let extraction_merge = snapshots.snapshots[0]
             .extraction_merge
             .as_ref()
@@ -10273,6 +10371,90 @@ Progress:
     }
 
     #[test]
+    fn saved_project_work_log_extraction_items_merge_refreshes_report_counts_without_ai() {
+        let mut report = ProjectWorkReport {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            total_items: 1,
+            project_count: 1,
+            date_count: 1,
+            files_seen: 1,
+            items_by_date: vec![FrequencyItem {
+                text: "2026-06-09".to_string(),
+                count: 1,
+            }],
+            items_by_project: vec![FrequencyItem {
+                text: "PromptVault".to_string(),
+                count: 1,
+            }],
+            session_scan_prompt_count: 0,
+            session_scan_sources: Vec::new(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_unique_count: 0,
+            session_evidence_unique_sources: Vec::new(),
+            session_evidence_index_used: false,
+            session_evidence_index_updated: false,
+            session_evidence_index_count: 0,
+            items: vec![ProjectWorkItem {
+                date: "2026-06-09".to_string(),
+                project: "PromptVault".to_string(),
+                title: "Existing parsed log".to_string(),
+                status: "done".to_string(),
+                source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md".to_string(),
+                source_file: "working.md".to_string(),
+                evidence: "- Existing parsed log".to_string(),
+                session_evidence_count: 0,
+                session_sources: Vec::new(),
+                session_evidence_keys: Vec::new(),
+            }],
+            warnings: Vec::new(),
+        };
+        let saved_items = ProjectWorkLogExtractionItemsResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            database_path: "/tmp/promptvault.sqlite".to_string(),
+            total_items: 1,
+            returned_item_count: 1,
+            available_dates: vec!["2026-06-04".to_string()],
+            available_projects: vec!["CareVault".to_string()],
+            items: vec![ProjectWorkLogExtractionItem {
+                id: 9,
+                saved_at: "2026-06-09T00:01:00Z".to_string(),
+                run_generated_at: "2026-06-09T00:00:00Z".to_string(),
+                provider: "glm".to_string(),
+                used_ai: true,
+                candidate_id: "work-log-CareVault-a1b2c3d4e5".to_string(),
+                project: "CareVault".to_string(),
+                source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md".to_string(),
+                source_file: "workingd.md".to_string(),
+                date: "2026-06-04".to_string(),
+                title: "Backfilled older work notes".to_string(),
+                status: "proposed".to_string(),
+                evidence: "2026-06-04: Backfilled older work notes".to_string(),
+                confidence: 0.91,
+                warnings: Vec::new(),
+            }],
+            warnings: Vec::new(),
+        };
+
+        let merge =
+            merge_saved_project_work_log_extraction_items_into_report(&mut report, &saved_items);
+
+        assert_eq!(merge.provider, "saved-extraction-items");
+        assert!(!merge.used_ai);
+        assert_eq!(merge.candidate_count, 1);
+        assert_eq!(merge.accepted_count, 1);
+        assert_eq!(merge.rejected_count, 0);
+        assert_eq!(merge.merged_item_count, 1);
+        assert_eq!(report.total_items, 2);
+        assert_eq!(report.project_count, 2);
+        assert_eq!(report.date_count, 2);
+        assert!(report
+            .items
+            .iter()
+            .any(|item| item.project == "CareVault" && item.status == "extracted"));
+    }
+
+    #[test]
     fn project_work_log_extraction_persistence_saves_only_accepted_dated_proposals() {
         let db_path = std::env::temp_dir().join(format!(
             "promptvault-project-work-log-extraction-persistence-{}.sqlite",
@@ -10332,8 +10514,8 @@ Progress:
             warnings: vec!["provider warning".to_string()],
         };
 
-        let persistence =
-            persist_project_work_log_extraction_proposals(&db_path, &result).expect("persist proposals");
+        let persistence = persist_project_work_log_extraction_proposals(&db_path, &result)
+            .expect("persist proposals");
 
         assert_eq!(persistence.database_path, db_path.display().to_string());
         assert_eq!(persistence.saved_item_count, 1);
@@ -10345,7 +10527,15 @@ Progress:
                 "SELECT provider, project, proposal_date, source_file, warnings_json
                  FROM project_work_log_extraction_items",
                 [],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
             )
             .expect("read saved extraction");
         assert_eq!(stored.0, "glm");
@@ -10410,15 +10600,14 @@ Progress:
         }
         drop(conn);
 
-        let result = run_list_project_work_log_extraction_items(
-            ProjectWorkLogExtractionItemsOptions {
+        let result =
+            run_list_project_work_log_extraction_items(ProjectWorkLogExtractionItemsOptions {
                 database_path: Some(db_path.display().to_string()),
                 limit: Some(5),
                 date: Some("2026-06-04".to_string()),
                 project: Some("CareVault".to_string()),
-            },
-        )
-        .expect("list extraction items");
+            })
+            .expect("list extraction items");
 
         assert_eq!(result.database_path, db_path.display().to_string());
         assert_eq!(result.total_items, 1);

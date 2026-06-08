@@ -504,6 +504,50 @@ test("browser bridge work summary posts extraction merge options and validates m
   assert.equal(result.extraction_merge?.merged_item_count, 1);
 });
 
+test("browser bridge work summary posts saved extraction merge option and validates merge metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSummaryPayload({
+      extraction_merge: {
+        provider: "saved-extraction-items",
+        used_ai: false,
+        candidate_count: 2,
+        accepted_count: 2,
+        rejected_count: 0,
+        merged_item_count: 2,
+        warnings: ["저장된 AI 진행로그 accepted 항목 2개를 프로젝트/일별 요약 preview에 병합했습니다."],
+      },
+    })), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkSummary({
+    limit: 80,
+    session_limit: 20,
+    summary_limit: 5,
+    include_saved_extractions: true,
+  });
+
+  assert.match(requestPath, /\/api\/work-summary$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      limit: 80,
+      session_limit: 20,
+      summary_limit: 5,
+      include_saved_extractions: true,
+    },
+  });
+  assert.equal(result.extraction_merge?.provider, "saved-extraction-items");
+  assert.equal(result.extraction_merge?.used_ai, false);
+  assert.equal(result.extraction_merge?.merged_item_count, 2);
+});
+
 test("browser bridge work summary snapshots posts options and validates saved rows", async (t) => {
   const originalFetch = globalThis.fetch;
   let requestPath = "";

@@ -50,7 +50,7 @@ export function workSummaryMetaText(
     `세션 근거 ${result.report.session_evidence_count.toLocaleString()}건`,
   ];
   if (result.extraction_merge) {
-    parts.push(`AI 병합 ${result.extraction_merge.merged_item_count.toLocaleString()}개`);
+    parts.push(workSummaryExtractionMergeText(result.extraction_merge));
   }
   return parts.join(" · ");
 }
@@ -80,7 +80,14 @@ export function workSummarySnapshotExtractionMergeText(
   snapshot: ProjectWorkSummarySnapshot,
 ): string | null {
   if (!snapshot.extraction_merge) return null;
-  return `AI 병합 ${snapshot.extraction_merge.merged_item_count.toLocaleString()}개`;
+  return workSummaryExtractionMergeText(snapshot.extraction_merge);
+}
+
+function workSummaryExtractionMergeText(
+  merge: NonNullable<ProjectWorkSummaryResult["extraction_merge"]>,
+): string {
+  const label = merge.provider === "saved-extraction-items" ? "저장 병합" : "AI 병합";
+  return `${label} ${merge.merged_item_count.toLocaleString()}개`;
 }
 
 export function workSummarySnapshotsActionLabel(

@@ -245,6 +245,20 @@ test("work summary status text uses report counts and index state", () => {
     })),
     "14개 프로젝트 · 16일 · 3,532개 작업 · 세션 근거 541건 · AI 병합 1개",
   );
+  assert.equal(
+    workSummaryMetaText("ready", summaryResult({
+      extraction_merge: {
+        provider: "saved-extraction-items",
+        used_ai: false,
+        candidate_count: 2,
+        accepted_count: 2,
+        rejected_count: 0,
+        merged_item_count: 2,
+        warnings: [],
+      },
+    })),
+    "14개 프로젝트 · 16일 · 3,532개 작업 · 세션 근거 541건 · 저장 병합 2개",
+  );
   assert.equal(workSummaryMetaText("loading", result), "작업 요약 생성 중");
   assert.equal(workSummaryMetaText("failed", null), "작업 요약을 사용할 수 없음");
   assert.equal(
@@ -292,6 +306,20 @@ test("work summary snapshot extraction merge text is only shown for merge snapsh
       },
     })),
     "AI 병합 1개",
+  );
+  assert.equal(
+    workSummarySnapshotExtractionMergeText(snapshot({
+      extraction_merge: {
+        provider: "saved-extraction-items",
+        used_ai: false,
+        candidate_count: 2,
+        accepted_count: 2,
+        rejected_count: 0,
+        merged_item_count: 2,
+        warnings: [],
+      },
+    })),
+    "저장 병합 2개",
   );
 });
 

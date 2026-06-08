@@ -899,7 +899,13 @@ function App() {
     refreshSessionIndex = false,
     saveSnapshot = false,
     includeExtractions = false,
-  }: { refreshSessionIndex?: boolean; saveSnapshot?: boolean; includeExtractions?: boolean } = {}) {
+    includeSavedExtractions = false,
+  }: {
+    refreshSessionIndex?: boolean;
+    saveSnapshot?: boolean;
+    includeExtractions?: boolean;
+    includeSavedExtractions?: boolean;
+  } = {}) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkSummaryState("loading");
@@ -911,6 +917,7 @@ function App() {
         refresh_session_index: refreshSessionIndex,
         save_snapshot: saveSnapshot,
         include_extractions: includeExtractions,
+        include_saved_extractions: includeSavedExtractions,
         extraction_ai: includeExtractions,
       });
       setWorkSummaryResult(next);
@@ -1494,6 +1501,31 @@ function App() {
             >
               <Database size={15} />
               AI 병합 저장
+            </button>
+            <button
+              aria-label="저장된 accepted AI 추출 작업을 프로젝트별 일별 작업 요약 preview에 병합"
+              className="inline-action"
+              data-load-work-summary-with-saved-extractions="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => refreshWorkSummary({ includeSavedExtractions: true })}
+              type="button"
+            >
+              <FileText size={15} />
+              저장 병합 요약
+            </button>
+            <button
+              aria-label="저장된 accepted AI 추출 작업을 병합한 프로젝트 작업 요약을 SQLite 스냅샷으로 저장"
+              className="inline-action"
+              data-save-work-summary-with-saved-extractions-snapshot="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => refreshWorkSummary({
+                includeSavedExtractions: true,
+                saveSnapshot: true,
+              })}
+              type="button"
+            >
+              <Database size={15} />
+              저장 병합 저장
             </button>
             <button
               aria-label={workSummarySnapshotsActionLabel(

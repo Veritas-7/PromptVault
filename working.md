@@ -1,12 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 04:22 KST
+Updated: 2026-06-09 04:39 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 saved extraction item browser
+## Current Slice - 2026-06-09 saved extraction summary merge
+
+Current Goal:
+
+- Make stored accepted AI work-log extraction rows usable in the main
+  project/date `work-summary` without re-running AI extraction.
+- Keep live AI extraction merge and saved-row merge distinct so summary metadata
+  can explain whether a run used fresh AI proposals or managed stored rows.
+- Add UI actions for saved-row summary preview and saved-row summary snapshot
+  persistence.
+
+Context:
+
+- The previous slice exposed saved extraction rows through CLI, bridge, Tauri,
+  and UI list/filter controls.
+- The operating PromptVault DB currently has 0 saved extraction rows, so positive
+  non-empty saved-row behavior was verified with a temporary SQLite DB.
+- Real project progress-log coverage already scans `/Users/wj/Ai/System/10_Projects`
+  and sees both parsed logs and unparsed candidate logs such as
+  `CareVault/workingd.md`.
+
+Progress:
+
+- Added `include_saved_extractions` to `ProjectWorkSummaryOptions`, the CLI
+  `work-summary --include-saved-extractions` flag, bridge payload mapping,
+  Tauri/native API mapping, and TypeScript API options.
+- Added saved-row merge conversion from `ProjectWorkLogExtractionItem` to
+  `ProjectWorkItem` with `status="extracted"` and provider metadata
+  `saved-extraction-items`.
+- Made live AI extraction merge and saved extraction merge mutually exclusive in
+  one summary run to avoid ambiguous single `extraction_merge` metadata.
+- Added React controls:
+  - `저장 병합 요약`
+  - `저장 병합 저장`
+- Updated summary and snapshot UI text so live AI merge shows `AI 병합` and
+  stored-row merge shows `저장 병합`.
+
+Verification:
+
+- RED tests first:
+  - `tests/workSummaryStatus.test.ts` failed while saved provider still rendered
+    as `AI 병합`.
+  - Rust lib test failed because
+    `merge_saved_project_work_log_extraction_items_into_report` did not exist.
+- Targeted tests after implementation:
+  - `node --experimental-transform-types --test tests/workSummaryStatus.test.ts tests/promptVaultApi.test.ts`:
+    PASS, `168` tests.
+  - `cargo test saved_project_work_log_extraction_items_merge_refreshes_report_counts_without_ai --lib`:
+    PASS.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `406` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `147` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- Real data checks:
+  - `work-log-items --limit 5 --json`: operating DB has `0` saved rows.
+  - `work-log-coverage --json`: saw `32` progress logs, `16` parsed, `16`
+    unparsed, `3665` parsed work items.
+  - `work-log-candidates --limit 5 --json`: produced candidates from real
+    project logs; first candidate was `CareVault/workingd.md`.
+  - `work-summary --refresh-session-index --json`: rescanned real session
+    evidence, `session_scan_prompt_count=40`,
+    `session_evidence_index_updated=true`, `session_evidence_index_count=21`.
+  - Temporary SQLite positive merge: one stored accepted row merged into
+    `TempProject` / `2026-06-04`, raising `total_items` to `81`,
+    `project_count` to `2`, and `date_count` to `2` with
+    `merged_item_count=1`.
+  - Headless Playwright UI check against temporary Vite/bridge:
+    - New buttons rendered: `저장 병합 요약`, `저장 병합 저장`.
+    - Clicking `저장 병합 요약` updated meta to
+      `1개 프로젝트 · 1일 · 80개 작업 · 세션 근거 80건 · 저장 병합 0개`.
+    - No work-summary error banner, no browser errors, and no raw network error
+      text.
+- Cleanup:
+  - Removed temporary SQLite verification DB.
+  - Stopped temporary bridge/Vite processes.
+  - Ports `5174` and `5177` had no remaining listeners.
+
+Next:
+
+- Populate the operating DB with real accepted dated rows by running/supervising
+  `work-log-extract --save --ai` or an equivalent reviewed extraction pass.
+- Add a higher-level managed daily dashboard once the saved-row population path
+  has non-empty operating data.
+
+## Previous Slice - 2026-06-09 saved extraction item browser
 
 Current Goal:
 

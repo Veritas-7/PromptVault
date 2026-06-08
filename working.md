@@ -1,10 +1,124 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 09:58 KST
+Updated: 2026-06-08 10:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-08 Scan progress source position validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan progress snapshots whose source identity and
+  source position disagree.
+
+Context:
+
+- Recent slices hardened browser-bridge scan progress identity fields so
+  `source_id` and `source_label` must be populated together.
+- Backend scan progress starts as active with no current source
+  (`source_id: null`, `source_label: null`, `source_index: 0`) and switches to
+  a concrete source by setting both identity fields plus `source_index = 1..n`.
+- The frontend parser currently allows a named source with `source_index: 0`,
+  which can make malformed bridge data look like a named source still in
+  "source waiting" position state.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `cf32468 docs: close scan progress identity handoff` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read `ScanProgress` type/parser, scan progress tests, and backend scan
+  progress lifecycle. Confirmed backend source identity and position are
+  advanced together after each source starts.
+- Added a RED API test for active scan progress snapshots whose source identity
+  is populated but `source_index` is still `0`.
+- Confirmed RED first: focused API suite failed 122/123 only on the new
+  source-position rejection case with `Missing expected rejection`.
+- Tightened the scan progress parser so a populated source identity requires a
+  non-zero `source_index`, and the pre-source state requires no source identity.
+- Confirmed GREEN: focused API suite passed 123/123 after the parser change.
+- Ran the broader UI test suite and production build successfully after the
+  parser change.
+- Verified the local preview quick-scan flow with Node Playwright: a malformed
+  named-source progress snapshot with `source_index: 0` is not rendered, the
+  next valid progress snapshot renders normal `Codex` source position copy, and
+  the scan completes without console or page errors.
+- Removed the temporary preview QA script and confirmed port 5325 was free.
+- Ran the full project check successfully after preview QA.
+- Pre-staging verification passed with only the expected three modified files:
+  parser, API test, and working log.
+- Staged the three explicit paths and confirmed the staged secret scan found no
+  leaks.
+
+Changes:
+
+- `working.md`: records the current scan progress source position validation
+  slice.
+- `src/promptVaultApi.ts`: rejects scan progress snapshots where source
+  identity and source position disagree.
+- `tests/promptVaultApi.test.ts`: adds a malformed source position rejection
+  case for scan progress bridge responses.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 122/123 only on the new source identity without source position
+  rejection case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 123/123 after requiring source identity and source position to agree.
+- Broader UI suite: `npm run test:ui` passed 287/287.
+- Production build: `npm run build` passed; Vite emitted
+  `dist/assets/index-Cpa-tIjF.js` and `dist/assets/index-D81jZHaU.css`.
+- Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  printed usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5325" --port 5325 --timeout 30 node /tmp/promptvault_scan_progress_position_qa.mjs http://127.0.0.1:5325`
+  passed after adjusting the temporary script to echo the app-generated
+  `run_id` in progress responses. The script confirmed connected browser
+  bridge status, clicked quick scan, served a named source with
+  `source_index: 0` first, verified that malformed `Codex` progress was not
+  rendered, then served valid `Codex` progress and verified `소스 1 / 2`,
+  `1 / 1개 파일`, and `제한 10` rendering before scan completion.
+- Preview cleanup: `test ! -e /tmp/promptvault_scan_progress_position_qa.mjs`
+  returned `temp_absent`; `! lsof -nP -iTCP:5325 -sTCP:LISTEN` returned
+  `port_5325_free`.
+- Full project check: `npm run check` passed. It reran `npm run test:ui`
+  287/287, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
+  and `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  produced no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only the three expected modified files; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` lists only
+  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned private GitHub visibility; temp script remained absent and port 5325
+  remained free.
+- Staged explicit paths only:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security scan: `gitleaks protect --staged --no-banner --redact`
+  scanned about 6.89 KB and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Stage explicit paths, run staged and full-tree secret scans, then commit and
+  push this slice if all checks stay green.
 
 ## Previous Slice - 2026-06-08 Scan progress source identity validation
 

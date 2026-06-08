@@ -1,12 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 16:28 KST
+Updated: 2026-06-08 16:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Private-key assignment redaction
+## Current Slice - 2026-06-08 Authorization bearer header redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep frontend prompt row preview/accessibility redaction aligned with backend
+  scan redaction for `Authorization: Bearer ...` header snippets, including
+  short synthetic bearer values that are not long enough for long-token
+  redaction.
+
+Context:
+
+- Previous private-key assignment redaction is pushed to `origin/main` as
+  `1553e5a fix: redact private key assignments`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- Existing key-value redaction covered token-like assignments, but did not
+  cover HTTP authorization header snippets. The existing value matcher also
+  consumed only a single non-space value token, so `Bearer <token>` needs to be
+  handled as one redaction unit.
+
+Progress:
+
+- Added RED frontend coverage in `tests/promptRowA11y.test.ts` requiring prompt
+  row preview and row accessible labels to redact authorization bearer headers.
+- Added RED backend coverage in `src-tauri/src/lib.rs` requiring
+  `redact_sensitive_text` to redact authorization bearer headers.
+- Confirmed RED: both focused frontend and backend tests left the authorization
+  bearer header visible.
+- Updated frontend and backend key-value secret regexes to include
+  `authorization` as a sensitive key and to consume an optional `Bearer` prefix
+  plus the following token as the value.
+- Confirmed focused GREEN for the new frontend and backend redaction cases.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing an authorization bearer header. It confirmed the prompt
+  row preview and row `aria-label` contained `[REDACTED_POSSIBLE_SECRET]`, the
+  synthetic header text was absent from checked UI surfaces, the localized risk
+  label was visible, and there were zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts authorization bearer headers in prompt row
+  previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds regression coverage for authorization
+  bearer preview and accessible-name redaction.
+- `src-tauri/src/lib.rs`: aligns backend possible-key redaction with the
+  authorization bearer behavior and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on `prompt row previews redact authorization bearer headers` because
+  the authorization bearer header remained visible.
+- RED:
+  `cargo test redact_sensitive_text_redacts_authorization_bearer_headers`
+  failed because backend redaction returned the original authorization bearer
+  header.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 17/17.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text` passed, 10/10.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5202" --port 5202 --timeout 120 -- /bin/bash -lc ...`
+  passed with one synthetic stored prompt row, preview and `aria-label`
+  redacted, synthetic header text absent from checked UI surfaces, localized
+  risk label visible, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 323/323,
+  production build, Rust lib tests 94/94, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- `gitleaks protect --staged` passed with no leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 701.57 MB with
+  no leaks.
+
+Issues:
+
+- No product blocker after aligning authorization bearer header redaction.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for common authorization header snippets.
+
+Next Steps:
+
+- Push this slice to `origin/main` and verify final local/remote parity.
+
+## Previous Slice - 2026-06-08 Private-key assignment redaction
 
 Current Goal:
 
@@ -52,6 +149,8 @@ Progress:
   risk label was visible, and there were zero console/page/API failures.
 - Ran full `npm run check` successfully after implementation.
 - Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+- Pushed the closeout commit to `origin/main` and verified final local/remote
+  parity, clean status, latest commit, and private GitHub repository state.
 
 Changes:
 
@@ -89,6 +188,14 @@ Tests:
 - `gitleaks protect --staged` passed with no leaks.
 - `gitleaks dir . --no-banner --redact` passed, scanning about 701.57 MB with
   no leaks.
+- GitHub push: `git push origin main` updated `main` from `5f43a4a` to
+  `1553e5a`.
+- Final remote verification after `git fetch origin main`:
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`,
+  `git status --short --branch` showed clean `main...origin/main`, latest
+  commit was `1553e5a fix: redact private key assignments`, and
+  `gh repo view --json nameWithOwner,visibility,isPrivate` returned
+  `Veritas-7/PromptVault` as `PRIVATE`.
 
 Issues:
 
@@ -101,7 +208,8 @@ Research:
 
 Next Steps:
 
-- Push this slice to `origin/main` and verify final local/remote parity.
+- Continue from a clean pushed tree and pick the next autonomous
+  QA/improvement slice.
 
 ## Previous Slice - 2026-06-08 Generic prefixed secret assignment redaction
 

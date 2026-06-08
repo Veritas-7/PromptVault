@@ -161,6 +161,18 @@ test("prompt row previews redact private key assignments", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact authorization bearer headers", () => {
+  const text = "Send Authorization: Bearer short-token-value before request.";
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "Send [REDACTED_POSSIBLE_SECRET] before request.");
+  assert.doesNotMatch(preview, /Authorization|Bearer|short-token-value/);
+  assert.doesNotMatch(label, /Authorization|Bearer|short-token-value/);
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact private key blocks case-insensitively", () => {
   const text = [
     "-----begin test private key-----",

@@ -2974,7 +2974,8 @@ fn top_words(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
     let stop = stop_words();
     let mut counts: HashMap<String, usize> = HashMap::new();
     for prompt in prompts {
-        for mat in word_regex().find_iter(&prompt.text.to_lowercase()) {
+        let text = frequency_safe_prompt_text(&prompt.text);
+        for mat in word_regex().find_iter(&text) {
             let token = mat.as_str().trim_matches(|c: char| c == '_' || c == '-');
             if token.chars().count() < 2 || stop.contains(token) {
                 continue;
@@ -2988,8 +2989,8 @@ fn top_words(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
 fn top_phrases(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
     let mut counts: HashMap<String, usize> = HashMap::new();
     for prompt in prompts {
-        for sentence in prompt
-            .text
+        let text = frequency_safe_prompt_text(&prompt.text);
+        for sentence in text
             .split(['.', '?', '!', '\n', ';', '。', '？', '！'])
             .map(str::trim)
             .filter(|sentence| sentence.chars().count() >= 12)
@@ -2998,8 +2999,7 @@ fn top_phrases(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
                 .split_whitespace()
                 .take(14)
                 .collect::<Vec<_>>()
-                .join(" ")
-                .to_lowercase();
+                .join(" ");
             if phrase.chars().count() >= 12 {
                 *counts.entry(phrase).or_default() += 1;
             }
@@ -3011,7 +3011,7 @@ fn top_phrases(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
 fn repeated_prompts(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
     let mut counts: HashMap<String, usize> = HashMap::new();
     for prompt in prompts {
-        let normalized = prompt.text.to_lowercase();
+        let normalized = frequency_safe_prompt_text(&prompt.text);
         let short = normalized
             .chars()
             .take(180)
@@ -3023,6 +3023,10 @@ fn repeated_prompts(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem
         .into_iter()
         .filter(|item| item.count > 1)
         .collect()
+}
+
+fn frequency_safe_prompt_text(text: &str) -> String {
+    redact_sensitive_text(&text.to_lowercase())
 }
 
 fn top_quality_gaps(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
@@ -3950,7 +3954,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "private_key",
                 Regex::new(
-                    r"(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
+                    r"(?is)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
                 )
                 .expect("private key regex"),
             ),
@@ -6335,6 +6339,44 @@ mod tests {
         );
 
         assert_eq!(redact_sensitive_text(&text), "[REDACTED_PRIVATE_KEY]");
+    }
+
+    #[test]
+    fn frequency_stats_redact_sensitive_prompt_text() {
+        let synthetic_token = format!("sk-{}", "A".repeat(60));
+        let prompt_text =
+            format!("Fix parser handling for {synthetic_token} and run cargo test.");
+        let mut first = record("risky-frequency-a");
+        first.text = prompt_text.clone();
+        first.word_count = count_words(&first.text);
+        first.char_count = first.text.chars().count();
+        first.risk_flags = detect_risks(&first.text);
+        first.quality = assess_prompt_quality(&first.text, &first.risk_flags);
+        let mut second = record("risky-frequency-b");
+        second.text = prompt_text;
+        second.word_count = count_words(&second.text);
+        second.char_count = second.text.chars().count();
+        second.risk_flags = detect_risks(&second.text);
+        second.quality = assess_prompt_quality(&second.text, &second.risk_flags);
+
+        let stats = build_stats(&[first, second], Vec::new());
+        let frequency_text = stats
+            .top_words
+            .iter()
+            .chain(stats.top_phrases.iter())
+            .chain(stats.repeated_prompts.iter())
+            .map(|item| item.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let markdown = render_markdown("2026-06-08T00:00:00Z", &stats, &[], &[]);
+        let synthetic_token_lowercase = synthetic_token.to_lowercase();
+
+        assert!(!frequency_text.contains(&synthetic_token));
+        assert!(!frequency_text.contains(&synthetic_token_lowercase));
+        assert!(!markdown.contains(&synthetic_token));
+        assert!(!markdown.contains(&synthetic_token_lowercase));
+        assert!(frequency_text.contains("REDACTED"));
+        assert!(markdown.contains("REDACTED"));
     }
 
     #[test]

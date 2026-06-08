@@ -1,12 +1,104 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 14:52 KST
+Updated: 2026-06-08 14:59 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Local recommendation redaction QA
+## Current Slice - 2026-06-08 Frequency stats redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent secret-like prompt text from leaking through analytics frequency
+  stats or Markdown export sections.
+
+Context:
+
+- Previous local recommendation redaction QA is pushed to `origin/main` as
+  `9208d6a docs: record local recommendation QA`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus the CLI browser bridge and Playwright.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- Prompt row previews were already redacted, but backend frequency analytics
+  still built `top_words`, `top_phrases`, and `repeated_prompts` directly from
+  prompt bodies. Those stats feed both the UI frequency grid and Markdown
+  exports.
+
+Progress:
+
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree was clean at `main...origin/main` and parity was
+  `0 0`.
+- Re-read webapp-testing and TDD skill instructions before this slice.
+- Inspected `build_stats`, `top_words`, `top_phrases`, `repeated_prompts`, and
+  `render_markdown`.
+- Added RED Rust coverage proving a synthetic long token could appear in
+  frequency stats or Markdown export content.
+- Implemented `frequency_safe_prompt_text` so frequency analytics are generated
+  from redacted lowercase prompt text. Also made private-key redaction
+  case-insensitive so lowercased stats input still redacts key blocks.
+- Confirmed GREEN with the focused Rust test.
+- Ran connected browser QA for stored source filter `Codex`, loading latest
+  and weakest previews. Both `/api/prompts` stats responses and the rendered
+  `.frequency-grid` had no long-token pattern and did show redaction content.
+  Console/page/API failure counts were zero.
+- The first browser QA script over-scoped to full grid `textContent`; adjacent
+  labels and counts could concatenate into an artificial long alphanumeric
+  string. The corrected assertion checks frequency item label spans only.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: redacts secret-like prompt text before frequency
+  analytics and Markdown frequency sections are built; private-key risk regex
+  now handles lowercase variants.
+- `working.md`: records this slice.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- RED:
+  `cargo test frequency_stats_redact_sensitive_prompt_text` failed because
+  frequency stats contained the lowercased synthetic long token.
+- GREEN:
+  the same focused test passed after implementation.
+- Browser frequency redaction QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "cd src-tauri && cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5207" --port 5207 --server "npm run dev -- --host 127.0.0.1 --port 5208" --port 5208 --timeout 120 -- /bin/bash -lc ...`
+  passed with latest/weakest stored `Codex` stats responses, no long-token
+  pattern in frequency stats or visible frequency item labels, redaction
+  content present, and no console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 308/308,
+  production build, Rust lib tests 86/86, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after the frequency redaction fix.
+- Browser harness note: inspect frequency item label spans, not whole-grid
+  concatenated `textContent`, when checking long alphanumeric patterns.
+
+Research:
+
+- No external research. This is direct code/test/browser QA work.
+
+Next Steps:
+
+- Finish this implementation closeout with diff checks, staged/full secret
+  scans, commit, push, and final parity checks.
+- Continue from a clean pushed tree and pick the next autonomous QA/improvement
+  slice.
+
+## Previous Slice - 2026-06-08 Local recommendation redaction QA
 
 Current Goal:
 

@@ -1028,6 +1028,7 @@ function parseScanProgressResult(value: unknown): ScanProgress {
     || !isScanProgressSourceIdentityConsistent(value)
     || !isScanProgressSourcePositionConsistent(value)
     || !isSourceLessScanProgressCounterConsistent(value)
+    || value.source_files_seen > value.files_seen
     || value.source_files_seen > value.source_files_discovered
     || (value.source_file_count !== null && !isNonNegativeSafeIntegerAtMost(value.source_files_seen, value.source_file_count))
     || (value.source_index !== 0 && !isNonNegativeSafeIntegerAtMost(value.source_index, value.source_count))

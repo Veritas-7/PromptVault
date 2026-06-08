@@ -1344,6 +1344,41 @@ test("browser bridge scan progress rejects source-less counters", async (t) => {
   );
 });
 
+test("browser bridge scan progress rejects source counters beyond aggregate files", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    run_id: "scan-run-1",
+    active: true,
+    canceled: false,
+    source_id: "codex",
+    source_label: "Codex",
+    source_index: 1,
+    source_count: 2,
+    files_seen: 1,
+    source_files_seen: 2,
+    source_files_discovered: 2,
+    source_file_count: 2,
+    prompts_found: 0,
+    limit: 10,
+    updated_at: "2026-06-07T00:00:00Z",
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanProgress("scan-run-1"),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Codex|2 \/ 2|10|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan progress rejects impossible numeric payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

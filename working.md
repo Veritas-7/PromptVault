@@ -1,12 +1,131 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 23:06 KST
+Updated: 2026-06-08 23:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Generated timestamp panel display guard
+## Current Slice - 2026-06-08 Saved import state timestamp display guard
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make saved import progress row `updated_at` values use the same guarded
+  timestamp display policy as prompt/import event/generated panel timestamps.
+- Avoid showing raw malformed timestamp prefixes, `Invalid Date`, raw ISO
+  strings, or secret-like timestamp fallback values in the saved import panel.
+
+Context:
+
+- Previous generated timestamp panel display guard is pushed to private
+  `origin/main` with source commit `3397c22 fix: guard generated timestamp
+  panel displays` and docs closeout `93fb9cf docs: record generated timestamp
+  panel verification`; final fetch parity was `0 0`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus a Tauri-like Playwright shim for saved import state DOM.
+- Saved import rows still rendered `state.updated_at` directly in
+  `src/App.tsx`, unlike the other timestamp surfaces.
+
+Progress:
+
+- Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
+  persisted/current/first objective all point at PromptVault.
+- Re-read the clean pushed repo state, stale `working.md` top section,
+  `src/importProgress.ts`, `tests/importProgress.test.ts`, the saved import
+  list rendering in `src/App.tsx`, and the shared `dateTimeDisplayText()`
+  helper.
+- Added a RED test requiring a new `importStateUpdatedAtText()` export. RED
+  failed as intended because the export did not exist.
+- Added `importStateUpdatedAtText()` and routed the saved import row timestamp
+  through it instead of displaying `state.updated_at` directly.
+- A browser smoke first caught that malformed secret-like timestamps were
+  redacting the secret but still preserving the malformed prefix
+  `not-a-date?`. Tightened the unit expectation to require a full redaction
+  token, watched it fail, then updated `dateTimeDisplayText()` so invalid
+  timestamps that require sensitive redaction collapse to
+  `[REDACTED_POSSIBLE_SECRET]`.
+- Re-ran the saved import browser smoke successfully. The saved import row
+  rendered `[REDACTED_POSSIBLE_SECRET]`, and the body omitted `not-a-date`,
+  `access_token`, and the secret fragment.
+- Deleted the temporary browser QA script after verification.
+- Full project verification passed.
+- Source staged secret scan and full-tree secret scan both found no leaks.
+- Source commit `8bcfc41 fix: guard saved import timestamps` was pushed to
+  private `origin/main`; fetch parity was `0 0`, remote HEAD was `8bcfc41`,
+  and repository visibility remained `visibility=PRIVATE`, `isPrivate=true`.
+
+Changes:
+
+- `src/importProgress.ts`: adds `importStateUpdatedAtText()`.
+- `src/App.tsx`: uses `importStateUpdatedAtText(state.updated_at)` in saved
+  import rows.
+- `src/dateDisplay.ts`: collapses invalid timestamp strings that required
+  sensitive redaction to `[REDACTED_POSSIBLE_SECRET]`.
+- `tests/importProgress.test.ts`: adds RED/GREEN coverage for saved import row
+  timestamp formatting, missing fallback text, and full malformed secret-like
+  fallback redaction.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED helper test:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/importProgress.test.ts`
+  failed as intended because `importStateUpdatedAtText` was not exported.
+- Initial targeted GREEN:
+  same command passed with 19/19 after adding the helper and wiring the UI.
+- Browser smoke initially failed because the shared invalid timestamp fallback
+  still rendered `not-a-date?[REDACTED_POSSIBLE_SECRET]`; this became the
+  follow-up RED expectation.
+- Tightened RED helper test:
+  same command failed as intended with actual
+  `not-a-date?[REDACTED_POSSIBLE_SECRET]` versus expected
+  `[REDACTED_POSSIBLE_SECRET]`.
+- Final targeted GREEN:
+  same command passed with 19/19.
+- Related regression checks:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/importProgress.test.ts tests/importEvents.test.ts tests/promptRowA11y.test.ts tests/planStatus.test.ts tests/scanStatus.test.ts tests/promptVaultApi.test.ts`
+  passed with 224/224.
+- Browser smoke:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5248" --port 5248 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_saved_import_timestamp_qa.mjs'`
+  passed with exit code `0`; malformed saved import `updated_at` rendered
+  `[REDACTED_POSSIBLE_SECRET]`, raw `not-a-date`/`access_token`/secret
+  fragments were absent from the body, and there were no page errors, console
+  errors, failed responses, or failed requests.
+- `git diff --check` passed.
+- Full project check: `npm run check` passed, covering UI tests 373/373,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Source staged secret scan: `gitleaks protect --staged` scanned about 1.40 KB
+  and found no leaks before `8bcfc41`.
+- Source full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.22 MB and found no leaks before the source push.
+- Source push verification: `git push origin main` advanced `main` from
+  `93fb9cf` to `8bcfc41`; after fetch, parity was `0 0`, remote HEAD was
+  `8bcfc41`, and `gh repo view Veritas-7/PromptVault --json
+  nameWithOwner,visibility,isPrivate,url` reported `visibility=PRIVATE`,
+  `isPrivate=true`.
+
+Issues:
+
+- No product/source blocker after saved import state timestamp display guard.
+- No source push blocker after staged and full-tree gitleaks verification.
+- Docs closeout commit is pending.
+
+Research:
+
+- No external research. This is direct display-safety hardening based on code
+  inspection plus a local browser user flow.
+
+Next Steps:
+
+- Stage only `working.md`, run staged gitleaks, commit
+  `docs: record saved import timestamp verification`, run full-tree gitleaks,
+  push to private `origin/main`, and verify final fetch parity plus GitHub
+  private visibility.
+
+## Previous Slice - 2026-06-08 Generated timestamp panel display guard
 
 Current Goal:
 
@@ -26,17 +145,17 @@ Context:
   source commit `8c204a7 fix: guard import event timestamp display` and docs
   closeout `04534a2 docs: record import event timestamp verification`; final
   fetch parity was `0 0`.
-- cmux/in-app browser remains excluded for this runtime. Verification uses
+- cmux/in-app browser remained excluded for this runtime. Verification used
   local Vite plus a Tauri-like Playwright shim for plan, import-run, and
   scan-result panel DOM.
-- Prompt row timestamps and import activity timestamps already route through
+- Prompt row timestamps and import activity timestamps already routed through
   guarded helpers. `src/App.tsx` still had direct generated timestamp calls for
   scan plans, import batch results, and scan results.
 
 Progress:
 
 - Rechecked goal identity with `get_goal` and `codex_handoff.py inspect`; the
-  persisted/current/first objective all point at PromptVault.
+  persisted/current/first objective all pointed at PromptVault.
 - Re-read the clean pushed repo state, `working.md`, App panel heading
   rendering, `planStatus`, `importProgress`, `scanStatus`, and the existing
   shared `dateTimeDisplayText()` helper.
@@ -60,9 +179,10 @@ Progress:
 - Full project verification passed.
 - Source staged secret scan and full-tree secret scan both found no leaks.
 - Source commit `3397c22 fix: guard generated timestamp panel displays` was
-  pushed to private `origin/main`; final fetch parity was `0 0`.
-- Repository visibility was rechecked with `gh repo view
-  Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`:
+  pushed to private `origin/main`; fetch parity was `0 0`.
+- Docs closeout commit `93fb9cf docs: record generated timestamp panel
+  verification` was pushed to private `origin/main`; final fetch parity was
+  `0 0`, remote HEAD was `93fb9cf`, and repository visibility remained
   `visibility=PRIVATE`, `isPrivate=true`.
 
 Changes:
@@ -102,28 +222,24 @@ Tests:
   and found no leaks before `3397c22`.
 - Source full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
   about 504.21 MB and found no leaks before the source push.
-- Source push verification: `git push origin main` advanced `main` from
-  `04534a2` to `3397c22`; after fetch, parity was `0 0` and
-  `git status --short --branch` reported `## main...origin/main` with only
-  `working.md` modified.
+- Docs staged secret scan: `gitleaks protect --staged` scanned about 6.84 KB
+  and found no leaks before `93fb9cf`.
+- Docs full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.21 MB and found no leaks before the docs push.
 
 Issues:
 
 - No product/source blocker after generated timestamp panel display guard.
-- No source push blocker after staged and full-tree gitleaks verification.
-- Docs closeout commit is pending.
+- No docs closeout blocker; source and docs commits are pushed.
 
 Research:
 
-- No external research. This is direct display-safety hardening based on code
+- No external research. This was direct display-safety hardening based on code
   inspection plus a local browser user flow.
 
 Next Steps:
 
-- Stage only `working.md`, run staged gitleaks, commit
-  `docs: record generated timestamp panel verification`, run full-tree
-  gitleaks, push to private `origin/main`, and verify final fetch parity plus
-  GitHub private visibility.
+- Continue autonomous PromptVault hardening with the next narrow QA slice.
 
 ## Previous Slice - 2026-06-08 Import event timestamp display guard
 

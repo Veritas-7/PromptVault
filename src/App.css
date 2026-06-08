@@ -297,6 +297,19 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.work-log-proposal-approval {
+  align-items: center;
+  color: #3f5748;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.work-log-proposal-approval input {
+  accent-color: #52796f;
+  flex: 0 0 auto;
+}
+
 .work-log-candidate-excerpt {
   max-height: 8.5rem;
   overflow: auto;

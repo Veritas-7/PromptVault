@@ -188,6 +188,7 @@ pub struct ProjectWorkLogExtractionProposalsOptions {
     pub ai: Option<bool>,
     pub database_path: Option<String>,
     pub save: Option<bool>,
+    pub approved_candidate_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1263,6 +1264,8 @@ pub async fn run_project_work_log_extraction_proposals(
     if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
         return Err("database path requires a non-empty value".into());
     }
+    let approved_candidate_ids =
+        normalized_project_work_log_approved_candidate_ids(&options.approved_candidate_ids)?;
     let database_path = options
         .database_path
         .as_deref()
@@ -1288,9 +1291,27 @@ pub async fn run_project_work_log_extraction_proposals(
         result.persistence = Some(persist_project_work_log_extraction_proposals(
             &database_path,
             &result,
+            approved_candidate_ids.as_ref(),
         )?);
     }
     Ok(result)
+}
+
+fn normalized_project_work_log_approved_candidate_ids(
+    candidate_ids: &Option<Vec<String>>,
+) -> Result<Option<HashSet<String>>, Box<dyn std::error::Error>> {
+    let Some(candidate_ids) = candidate_ids else {
+        return Ok(None);
+    };
+    let mut normalized = HashSet::new();
+    for candidate_id in candidate_ids {
+        let trimmed = candidate_id.trim();
+        if trimmed.is_empty() {
+            return Err("approved candidate ids require non-empty values".into());
+        }
+        normalized.insert(trimmed.to_string());
+    }
+    Ok(Some(normalized))
 }
 
 pub fn run_list_project_work_log_extraction_items(
@@ -1371,6 +1392,7 @@ pub async fn run_project_work_summary(
                 ai: options.extraction_ai,
                 database_path: None,
                 save: None,
+                approved_candidate_ids: None,
             })
             .await?;
         Some(merge_project_work_log_extraction_proposals_into_report(
@@ -6157,6 +6179,7 @@ fn project_work_summary_snapshots_has_column(
 fn persist_project_work_log_extraction_proposals(
     database_path: &Path,
     result: &ProjectWorkLogExtractionProposalsResult,
+    approved_candidate_ids: Option<&HashSet<String>>,
 ) -> Result<ProjectWorkLogExtractionPersistence, Box<dyn std::error::Error>> {
     let mut conn = open_promptvault_database(database_path)?;
     let saved_at = Utc::now().to_rfc3339();
@@ -6166,6 +6189,11 @@ fn persist_project_work_log_extraction_proposals(
     for proposal in &result.proposals {
         if !proposal.accepted {
             continue;
+        }
+        if let Some(approved_candidate_ids) = approved_candidate_ids {
+            if !approved_candidate_ids.contains(&proposal.candidate_id) {
+                continue;
+            }
         }
         let Some(date) = proposal
             .date
@@ -10647,7 +10675,7 @@ Progress:
             warnings: vec!["provider warning".to_string()],
         };
 
-        let persistence = persist_project_work_log_extraction_proposals(&db_path, &result)
+        let persistence = persist_project_work_log_extraction_proposals(&db_path, &result, None)
             .expect("persist proposals");
 
         assert_eq!(persistence.database_path, db_path.display().to_string());
@@ -10676,6 +10704,78 @@ Progress:
         assert_eq!(stored.2, "2026-06-04");
         assert_eq!(stored.3, "workingd.md");
         assert!(stored.4.contains("provider warning"));
+
+        std::fs::remove_file(db_path).expect("remove extraction db");
+    }
+
+    #[test]
+    fn project_work_log_extraction_persistence_saves_only_approved_candidates() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-project-work-log-approved-extraction-{}.sqlite",
+            std::process::id()
+        ));
+        let result = ProjectWorkLogExtractionProposalsResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
+            provider: "local-extraction-rules".to_string(),
+            used_ai: false,
+            candidate_count: 2,
+            accepted_count: 2,
+            rejected_count: 0,
+            proposals: vec![
+                ProjectWorkLogExtractionProposal {
+                    candidate_id: "work-log-CareVault-a1b2c3d4e5".to_string(),
+                    project: "CareVault".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md"
+                        .to_string(),
+                    source_file: "workingd.md".to_string(),
+                    date: Some("2026-06-04".to_string()),
+                    title: "Backfilled older work notes".to_string(),
+                    status: "completed".to_string(),
+                    evidence: "2026-06-04: Backfilled older work notes".to_string(),
+                    confidence: 0.91,
+                    accepted: true,
+                    rejection_reason: None,
+                },
+                ProjectWorkLogExtractionProposal {
+                    candidate_id: "work-log-RepoTutorStudio-a1b2c3d4e5".to_string(),
+                    project: "RepoTutorStudio".to_string(),
+                    source_path:
+                        "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md".to_string(),
+                    source_file: "working.md".to_string(),
+                    date: Some("2026-06-05".to_string()),
+                    title: "Initialized work log parser".to_string(),
+                    status: "completed".to_string(),
+                    evidence: "2026-06-05: Initialized work log parser".to_string(),
+                    confidence: 0.88,
+                    accepted: true,
+                    rejection_reason: None,
+                },
+            ],
+            persistence: None,
+            warnings: Vec::new(),
+        };
+        let approved_candidate_ids = HashSet::from(["work-log-RepoTutorStudio-a1b2c3d4e5".to_string()]);
+
+        let persistence = persist_project_work_log_extraction_proposals(
+            &db_path,
+            &result,
+            Some(&approved_candidate_ids),
+        )
+        .expect("persist approved proposals");
+
+        assert_eq!(persistence.saved_item_count, 1);
+        assert_eq!(persistence.total_saved_item_count, 1);
+
+        let conn = Connection::open(&db_path).expect("open extraction db");
+        let stored_project: String = conn
+            .query_row(
+                "SELECT project FROM project_work_log_extraction_items",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read saved extraction");
+        assert_eq!(stored_project, "RepoTutorStudio");
 
         std::fs::remove_file(db_path).expect("remove extraction db");
     }

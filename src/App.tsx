@@ -255,6 +255,12 @@ const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
 const SCAN_PROGRESS_POLL_MS = 300;
+
+function acceptedWorkLogExtractionIds(result: ProjectWorkLogExtractionProposalsResult): string[] {
+  return result.proposals
+    .filter((proposal) => proposal.accepted && proposal.date?.trim())
+    .map((proposal) => proposal.candidate_id);
+}
 const FREQUENCY_DISPLAY_LIMIT = 12;
 const PROMPT_LIST_DISPLAY_LIMIT = 200;
 
@@ -317,6 +323,8 @@ function App() {
     useState<ProjectWorkLogExtractionProposalsResult | null>(null);
   const [workLogExtractionItemsResult, setWorkLogExtractionItemsResult] =
     useState<ProjectWorkLogExtractionItemsResult | null>(null);
+  const [approvedWorkLogExtractionCandidateIds, setApprovedWorkLogExtractionCandidateIds] =
+    useState<Set<string>>(() => new Set());
   const [workSummarySnapshotsResult, setWorkSummarySnapshotsResult] =
     useState<ProjectWorkSummarySnapshotsResult | null>(null);
   const [workSummarySnapshotDateFilter, setWorkSummarySnapshotDateFilter] = useState("");
@@ -368,7 +376,9 @@ function App() {
     workSummaryState === "loading"
     || workSummarySnapshotsState === "loading"
     || workLogCoverageState === "loading"
-    || workLogCandidatesState === "loading";
+    || workLogCandidatesState === "loading"
+    || workLogExtractionState === "loading"
+    || workLogExtractionItemsState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
   const isBrowserBridgeDisconnected = browserQaMode && browserBridgeStatus === "disconnected";
   const actionLockState = {
@@ -585,6 +595,12 @@ function App() {
   );
   const visibleWorkLogExtractionProposals =
     workLogExtractionResult?.proposals.slice(0, WORK_LOG_EXTRACTION_DISPLAY_LIMIT) ?? [];
+  const acceptedWorkLogExtractionCandidateIds = workLogExtractionResult
+    ? acceptedWorkLogExtractionIds(workLogExtractionResult)
+    : [];
+  const selectedApprovedWorkLogExtractionCandidateIds = acceptedWorkLogExtractionCandidateIds
+    .filter((candidateId) => approvedWorkLogExtractionCandidateIds.has(candidateId));
+  const selectedApprovedWorkLogExtractionCount = selectedApprovedWorkLogExtractionCandidateIds.length;
   const hiddenWorkLogExtractionProposalCount = Math.max(
     0,
     (workLogExtractionResult?.proposals.length ?? 0) - WORK_LOG_EXTRACTION_DISPLAY_LIMIT,
@@ -870,13 +886,37 @@ function App() {
     }
   }
 
-  async function refreshWorkLogExtraction({ save = false }: { save?: boolean } = {}) {
+  function toggleApprovedWorkLogExtractionCandidate(candidateId: string, checked: boolean) {
+    setApprovedWorkLogExtractionCandidateIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(candidateId);
+      } else {
+        next.delete(candidateId);
+      }
+      return next;
+    });
+  }
+
+  async function refreshWorkLogExtraction({
+    save = false,
+    approvedCandidateIds,
+  }: { save?: boolean; approvedCandidateIds?: string[] } = {}) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkLogExtractionState("loading");
     try {
-      const next = await loadProjectWorkLogExtractionProposals({ ai: true, save });
+      const next = await loadProjectWorkLogExtractionProposals({
+        ai: true,
+        save,
+        approved_candidate_ids: save ? approvedCandidateIds : undefined,
+      });
+      const nextAcceptedIds = new Set(acceptedWorkLogExtractionIds(next));
       setWorkLogExtractionResult(next);
+      setApprovedWorkLogExtractionCandidateIds((current) => {
+        if (!save) return nextAcceptedIds;
+        return new Set([...current].filter((candidateId) => nextAcceptedIds.has(candidateId)));
+      });
       setWorkLogExtractionState("ready");
       if (save) {
         setWorkLogExtractionItemsState("loading");
@@ -1606,15 +1646,25 @@ function App() {
                   : "AI 제안"}
             </button>
             <button
-              aria-label="accepted AI 작업 추출 제안을 SQLite 관리 데이터로 저장"
+              aria-label={
+                workLogExtractionResult
+                  ? selectedApprovedWorkLogExtractionCount
+                    ? `승인한 AI 작업 추출 제안 ${selectedApprovedWorkLogExtractionCount.toLocaleString()}개를 SQLite 관리 데이터로 저장`
+                    : "선택한 accepted AI 작업 추출 제안이 없어 저장할 수 없습니다"
+                  : "AI 작업 추출 제안을 먼저 생성한 뒤 선택 저장할 수 있습니다"
+              }
               className="inline-action"
               data-save-work-log-extraction="true"
-              disabled={isTopLevelActionLocked}
-              onClick={() => void refreshWorkLogExtraction({ save: true })}
+              disabled={isTopLevelActionLocked || selectedApprovedWorkLogExtractionCount === 0}
+              onClick={() =>
+                void refreshWorkLogExtraction({
+                  save: true,
+                  approvedCandidateIds: selectedApprovedWorkLogExtractionCandidateIds,
+                })}
               type="button"
             >
               <Database size={15} />
-              accepted 저장
+              {workLogExtractionState === "loading" ? "처리 중" : "선택 저장"}
             </button>
             <button
               aria-label={workLogExtractionItemsActionLabel(
@@ -1873,6 +1923,15 @@ function App() {
             <span>{workLogExtractionMeta}</span>
           </div>
         ) : null}
+        {workLogExtractionResult ? (
+          <div className="work-summary-index" data-work-log-extraction-approval-meta="true">
+            <CheckCircle2 size={15} />
+            <span>
+              저장 승인 {selectedApprovedWorkLogExtractionCount.toLocaleString()}개 / accepted{" "}
+              {acceptedWorkLogExtractionCandidateIds.length.toLocaleString()}개
+            </span>
+          </div>
+        ) : null}
         {workLogExtractionPersistenceStatus ? (
           <div className="work-summary-index" data-work-log-extraction-persistence="true">
             <Database size={15} />
@@ -1997,6 +2056,21 @@ function App() {
                   <div>
                     <strong>{proposal.project}</strong>
                     <span>{proposal.date ?? "날짜 미확정"}</span>
+                    {proposal.accepted ? (
+                      <label className="work-log-proposal-approval">
+                        <input
+                          checked={approvedWorkLogExtractionCandidateIds.has(proposal.candidate_id)}
+                          data-work-log-proposal-approval={proposal.candidate_id}
+                          onChange={(event) =>
+                            toggleApprovedWorkLogExtractionCandidate(
+                              proposal.candidate_id,
+                              event.currentTarget.checked,
+                            )}
+                          type="checkbox"
+                        />
+                        <span>저장 승인</span>
+                      </label>
+                    ) : null}
                   </div>
                   <p>{proposal.title}</p>
                   <p className="work-log-proposal-evidence">{proposal.evidence}</p>

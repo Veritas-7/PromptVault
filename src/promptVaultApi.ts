@@ -111,6 +111,7 @@ export interface ProjectWorkLogExtractionOptions {
   ai?: boolean;
   database_path?: string;
   save?: boolean;
+  approved_candidate_ids?: string[];
 }
 
 export interface ProjectWorkLogExtractionItemsOptions {

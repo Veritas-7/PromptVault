@@ -1,12 +1,126 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 04:55 KST
+Updated: 2026-06-09 05:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 work-log extraction review labels
+## Current Slice - 2026-06-09 reviewed work-log extraction save
+
+Current Goal:
+
+- Add a reviewed batch approval workflow for work-log extraction proposals.
+- Keep the existing CLI/API full-save behavior compatible, while allowing the
+  UI/browser bridge to save only operator-approved accepted proposals.
+- Verify the workflow on real project work-log candidates without creating
+  duplicate operating DB rows.
+
+Context:
+
+- The operating DB already contains one saved local extraction row from
+  `RepoTutorStudio / 2026-06-04`, so real UI save verification is expected to
+  return `saved_item_count=0` for the duplicate accepted row while still proving
+  the selected-save request shape.
+- `work-log-extract` still falls back to `local-extraction-rules` after the
+  GLM provider request fails, producing one accepted proposal and fifteen
+  rejected proposals from the current real candidate set.
+- Before this slice, the UI save button saved all accepted proposals immediately
+  and did not provide per-proposal approval controls.
+
+Progress:
+
+- Added `approved_candidate_ids` to work-log extraction save options.
+- Persistence now saves only accepted dated proposals whose candidate IDs are in
+  the approved set when that set is supplied.
+- Existing no-approval save behavior still saves all accepted dated proposals.
+- The UI now:
+  - selects accepted proposals by default after preview;
+  - renders a per-proposal `저장 승인` checkbox;
+  - shows `저장 승인 n개 / accepted m개`;
+  - disables `선택 저장` when no accepted proposal is selected;
+  - sends only selected accepted candidate IDs on save.
+- Work-log extraction/loading actions now participate in the top-level action
+  lock while they are in progress.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added `approved_candidate_ids` to `ProjectWorkLogExtractionProposalsOptions`;
+  - added approved candidate ID normalization/validation;
+  - updated persistence filtering;
+  - added a test proving only approved candidates are saved.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - preserves CLI full-save behavior by passing no approval filter.
+- `src/promptVaultApi.ts`:
+  - added `approved_candidate_ids` to browser/native options.
+- `src/App.tsx` and `src/App.css`:
+  - added approved proposal selection state, checkbox UI, selected-save button,
+    approval meta, and compact checkbox styling.
+- `tests/promptVaultApi.test.ts`:
+  - verifies browser bridge save requests include `approved_candidate_ids`.
+
+Tests:
+
+- RED:
+  - `cargo test project_work_log_extraction_persistence_saves_only_approved_candidates --lib`
+    failed because `persist_project_work_log_extraction_proposals` did not
+    accept an approval filter.
+- Targeted GREEN:
+  - `cargo test project_work_log_extraction_persistence_saves_only_approved_candidates --lib`:
+    PASS.
+  - `cargo test project_work_log_extraction_persistence --lib`: PASS, `2`
+    tests.
+  - `npm run test:ui -- tests/promptVaultApi.test.ts`: PASS, `409` tests.
+  - `npm run build`: PASS.
+- Headless UI check against temporary bridge/Vite:
+  - clicked `AI 제안`;
+  - first accepted proposal checkbox rendered checked by default;
+  - approval meta changed from `저장 승인 1개 / accepted 1개` to
+    `저장 승인 0개 / accepted 1개` after unchecking;
+  - `선택 저장` disabled at zero selected approvals;
+  - rechecking enabled `선택 저장`;
+  - save request body included exactly one
+    `approved_candidate_ids: ["work-log-RepoTutorStudio-fd24d8cc0c"]`;
+  - persistence text showed `accepted 제안 0개 저장 · 총 1개` because the
+    approved row was already present in the operating DB;
+  - saved item list refreshed to `저장 1개 · 표시 1개 · 1일 · 1개 프로젝트`;
+  - no browser console errors and no global error banner.
+- Full gate:
+  - `npm run check`: PASS.
+  - UI tests: `409` passed.
+  - TypeScript/Vite build: passed.
+  - Rust lib tests: `149` passed.
+  - CLI tests: `21` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- Cleanup:
+  - Stopped temporary bridge/Vite processes by exact test ports.
+  - Ports `5174` and `5177` had no remaining listeners.
+
+Issues:
+
+- External GLM extraction still fails before usable proposals are returned, so
+  current real approval workflow verification uses local fallback proposals.
+- The approval UI currently supports selection among visible/previewed accepted
+  proposals but does not yet provide project/date filtering inside the proposal
+  preview list.
+
+Research:
+
+- No external research used. This was a vertical implementation slice driven by
+  existing real candidate/proposal data and local tests.
+
+Next Steps:
+
+- Add project/date filtering or grouping to candidate/proposal preview lists so
+  larger candidate batches remain reviewable.
+- Add a saved extraction dashboard section that groups managed extraction rows
+  by project/date and links them into summary snapshots.
+- Revisit GLM/OpenAI extraction reliability so AI-reviewed proposals can be
+  tested beyond the current local fallback path.
+
+## Previous Slice - 2026-06-09 work-log extraction review labels
 
 Current Goal:
 

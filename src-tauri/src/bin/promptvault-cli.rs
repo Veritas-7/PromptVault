@@ -463,6 +463,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     ai: Some(ai),
                     database_path,
                     save: Some(save),
+                    approved_candidate_ids: None,
                 },
             )
             .await?;

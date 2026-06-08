@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   scanLimitChangedAfterFailure,
   scanProgressLabel,
+  scanResultTimestampText,
   scanRunFailureText,
   scanStopFailureText,
 } from "../src/scanStatus.ts";
@@ -79,6 +80,23 @@ test("scan progress label redacts secret-like source names", () => {
   assert.equal(label, "Codex [REDACTED_POSSIBLE_SECRET]: 1 / 1개 파일 · 1개 프롬프트 · 소스 1 / 2 · 제한 10");
   assert.ok(!label.includes(apiFlag));
   assert.ok(!label.includes(secretValue));
+});
+
+test("scan result timestamp text uses guarded date display", () => {
+  const generatedAt = "2026-06-06T00:00:00Z";
+  const tokenName = ["access", "token"].join("_");
+  const secretValue = ["scan", "result", "timestamp", "secret"].join("-");
+  const invalidGeneratedAt = `not-a-date?${tokenName}=${secretValue}`;
+
+  assert.equal(scanResultTimestampText(generatedAt), new Date(generatedAt).toLocaleString());
+  assert.notEqual(scanResultTimestampText(generatedAt), generatedAt);
+  assert.equal(scanResultTimestampText(null), "아직 스캔 안 함");
+  assert.equal(scanResultTimestampText(undefined), "아직 스캔 안 함");
+
+  const displayText = scanResultTimestampText(invalidGeneratedAt);
+
+  assert.match(displayText, /\[REDACTED_POSSIBLE_SECRET\]/);
+  assert.doesNotMatch(displayText, new RegExp(`${tokenName}|${secretValue}`));
 });
 
 test("scan failure text is hidden outside failed scans", () => {

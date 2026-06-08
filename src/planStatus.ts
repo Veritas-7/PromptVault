@@ -1,4 +1,13 @@
+import { dateTimeDisplayText } from "./dateDisplay.ts";
+
 export type PlanRunState = "idle" | "planning" | "ready" | "failed";
+
+export function planPanelTimestampText(generatedAt: string | null | undefined, state: PlanRunState): string {
+  if (generatedAt?.trim()) return dateTimeDisplayText(generatedAt);
+  if (state === "planning") return "계획 중";
+  if (state === "failed") return "실패";
+  return "대기";
+}
 
 export function planFailureText(state: PlanRunState, hasPlan: boolean): string | null {
   if (state !== "failed") return null;

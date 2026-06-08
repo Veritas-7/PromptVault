@@ -47,6 +47,7 @@ import {
 import {
   importProgressDisplay,
   importProgressLabel,
+  importRunTimestampText,
   importStateProgressPercent,
   importProgressValueText,
   importRunFailureText,
@@ -70,7 +71,7 @@ import {
 } from "./importQueue";
 import { ALERT_NOTICE_PROPS, STATUS_NOTICE_PROPS } from "./noticeA11y";
 import { panelRefreshActionLabel, refreshGlobalErrorAfterSuccess } from "./panelRefresh";
-import { planFailureText, planUnavailableText, type PlanRunState } from "./planStatus";
+import { planFailureText, planPanelTimestampText, planUnavailableText, type PlanRunState } from "./planStatus";
 import {
   effectivePromptListMode,
   pendingPreviewModeNotice,
@@ -123,6 +124,7 @@ import { QUICK_SCAN_SOURCE_LIMIT, quickScanSourceIds } from "./scanScope";
 import {
   scanLimitChangedAfterFailure,
   scanProgressLabel,
+  scanResultTimestampText,
   scanRunFailureText,
   scanStopFailureText,
   type ScanRunState,
@@ -1445,11 +1447,7 @@ function App() {
             <h2>가져오기 계획</h2>
             <div className="panel-heading-actions">
               <span data-plan-status="true">
-                {plan
-                  ? new Date(plan.generated_at).toLocaleString()
-                  : planState === "planning"
-                    ? "계획 중"
-                    : "실패"}
+                {planPanelTimestampText(plan?.generated_at, planState)}
               </span>
               <button
                 className="inline-action"
@@ -1656,13 +1654,7 @@ function App() {
         <section className="panel import-panel">
           <div className="panel-heading">
             <h2>증분 가져오기</h2>
-            <span>
-              {importResult
-                ? new Date(importResult.generated_at).toLocaleString()
-                : importRunFailureMessage
-                  ? "실패"
-                  : "시작 중"}
-            </span>
+            <span>{importRunTimestampText(importResult?.generated_at, importState)}</span>
             {isImportRunning && (importMode === "continuous" || importMode === "queue") ? (
               <button
                 aria-label={importStopActionLabel(importMode, stopRequested)}
@@ -1782,7 +1774,7 @@ function App() {
         <aside className="panel sources-panel">
           <div className="panel-heading">
             <h2>소스</h2>
-            <span>{result?.generated_at ? new Date(result.generated_at).toLocaleString() : "아직 스캔 안 함"}</span>
+            <span>{scanResultTimestampText(result?.generated_at)}</span>
           </div>
           <div className="sources">
             {sourceSummaries.length ? (

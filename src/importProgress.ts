@@ -1,4 +1,5 @@
 import type { ImportBatchResult, ImportState } from "./types";
+import { dateTimeDisplayText } from "./dateDisplay.ts";
 import { sourceLabelDisplayText } from "./promptRowA11y.ts";
 
 export type ImportRunState = "idle" | "importing" | "stopped" | "ready" | "failed";
@@ -39,6 +40,13 @@ export function importProgressLabel(sourceLabel: string | null | undefined): str
     ? sourceLabelDisplayText(sourceLabel)
     : "선택한 소스";
   return `${target} 가져오기 진행`;
+}
+
+export function importRunTimestampText(generatedAt: string | null | undefined, runState: ImportRunState): string {
+  if (generatedAt?.trim()) return dateTimeDisplayText(generatedAt);
+  if (runState === "failed") return "실패";
+  if (runState === "stopped") return "중지됨";
+  return "시작 중";
 }
 
 export function importProgressDisplay(

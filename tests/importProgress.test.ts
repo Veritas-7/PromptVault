@@ -6,6 +6,7 @@ import {
   importProgressPercent,
   importStateProgressPercent,
   importProgressValueText,
+  importRunTimestampText,
   importStopNoticeText,
   importRunFailureText,
   importStatusLabel,
@@ -173,6 +174,23 @@ test("import progress label names the source in Korean", () => {
   assert.equal(importProgressLabel("Codex"), "Codex 가져오기 진행");
   assert.equal(importProgressLabel("  "), "선택한 소스 가져오기 진행");
   assert.equal(importProgressLabel(null), "선택한 소스 가져오기 진행");
+});
+
+test("import run timestamp text uses guarded date display", () => {
+  const generatedAt = "2026-06-06T00:00:00Z";
+  const tokenName = ["access", "token"].join("_");
+  const secretValue = ["import", "run", "timestamp", "secret"].join("-");
+  const invalidGeneratedAt = `not-a-date?${tokenName}=${secretValue}`;
+
+  assert.equal(importRunTimestampText(generatedAt, "ready"), new Date(generatedAt).toLocaleString());
+  assert.notEqual(importRunTimestampText(generatedAt, "ready"), generatedAt);
+  assert.equal(importRunTimestampText(null, "importing"), "시작 중");
+  assert.equal(importRunTimestampText(undefined, "failed"), "실패");
+
+  const displayText = importRunTimestampText(invalidGeneratedAt, "ready");
+
+  assert.match(displayText, /\[REDACTED_POSSIBLE_SECRET\]/);
+  assert.doesNotMatch(displayText, new RegExp(`${tokenName}|${secretValue}`));
 });
 
 test("import progress labels redact secret-like source names", () => {

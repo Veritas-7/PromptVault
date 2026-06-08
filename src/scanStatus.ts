@@ -1,4 +1,5 @@
 import type { ScanProgress } from "./types";
+import { dateTimeDisplayText } from "./dateDisplay.ts";
 import { sourceLabelDisplayText } from "./promptRowA11y.ts";
 
 export type ScanRunState = "idle" | "scanning" | "canceling" | "ready" | "failed";
@@ -21,6 +22,10 @@ export function scanProgressLabel(progress: ScanProgress | null): string {
     : "소스 대기 중";
   const limit = progress.limit === null ? "" : ` · 제한 ${progress.limit.toLocaleString()}`;
   return `${source}: ${fileTotal} · ${countLabel(progress.prompts_found, "프롬프트")} · ${sourcePosition}${limit}`;
+}
+
+export function scanResultTimestampText(generatedAt: string | null | undefined): string {
+  return dateTimeDisplayText(generatedAt, "아직 스캔 안 함");
 }
 
 export function scanRunFailureText(state: ScanRunState, hasResult: boolean): string | null {

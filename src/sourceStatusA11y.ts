@@ -27,6 +27,10 @@ function compactSourceStatus(status: string): string {
   return status.replace(/\s+/g, " ").trim();
 }
 
+function sourceNoteDisplayText(note: string): string {
+  return compactSourceStatus(redactSensitiveDisplayText(note));
+}
+
 const SOURCE_STATUS_CLASSES: Record<string, string> = {
   empty: "empty",
   missing: "missing",
@@ -63,7 +67,8 @@ export function planSourceStatusLabel(
   notes: string[] = [],
 ): string {
   const displaySourceLabel = sourceLabelDisplayText(sourceLabel);
-  const noteText = notes.length ? `. ${notes.join(" ")}` : "";
+  const displayNotes = notes.map(sourceNoteDisplayText).filter(Boolean);
+  const noteText = displayNotes.length ? `. ${displayNotes.join(" ")}` : "";
   return `${displaySourceLabel} 소스 ${sourceStatusName(status)}: ${countLabel(fileCount, "파일")}, ${byteText}${noteText}`;
 }
 

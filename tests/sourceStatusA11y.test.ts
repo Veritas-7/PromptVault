@@ -41,6 +41,23 @@ test("plan source status labels include empty-source notes", () => {
   );
 });
 
+test("plan source labels redact secret-like notes", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["source", "note", "secret"].join("-");
+  const notes = [`missing config ${apiFlag} ${secretValue}`];
+
+  const labels = [
+    planSourceStatusLabel("Codex", "partial", 5, "5.0 KiB", notes),
+    planSourceSelectionLabel("Codex", "partial", 5, "5.0 KiB", notes),
+    planSourceActionLabel("continuous", "Codex", "partial", 5, "5.0 KiB", notes),
+  ];
+
+  for (const label of labels) {
+    assert.match(label, /missing config \[REDACTED_POSSIBLE_SECRET\]/);
+    assert.doesNotMatch(label, new RegExp(`${apiFlag}|${secretValue}`));
+  }
+});
+
 test("plan source selection labels include source status context", () => {
   assert.equal(
     planSourceSelectionLabel("Codex", "ok", 25105, "32.8 GiB"),

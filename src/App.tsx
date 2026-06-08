@@ -1562,7 +1562,7 @@ function App() {
                               source.status,
                               source.file_count,
                               formatBytes(source.byte_count),
-                              displayNotes,
+                              source.notes,
                               actionLockState,
                             )}
                             checked={selectedImportSourceIds.includes(source.id)}
@@ -1587,7 +1587,7 @@ function App() {
                           source.status,
                           source.file_count,
                           formatBytes(source.byte_count),
-                          displayNotes,
+                          source.notes,
                         )}
                         className={`status ${sourceStatusClass(source.status)}`}
                       >
@@ -1602,7 +1602,7 @@ function App() {
                             source.status,
                             source.file_count,
                             formatBytes(source.byte_count),
-                            displayNotes,
+                            source.notes,
                             actionLockState,
                           )}
                           className="inline-action"
@@ -1623,7 +1623,7 @@ function App() {
                             source.status,
                             source.file_count,
                             formatBytes(source.byte_count),
-                            displayNotes,
+                            source.notes,
                             actionLockState,
                           )}
                           className="inline-action"

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 22:13 KST
+Updated: 2026-06-08 22:15 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -52,6 +52,11 @@ Progress:
   prompt row risk badge and row `aria-label` rendered the redacted label, and
   the body omitted raw synthetic fragments.
 - Deleted the temporary browser QA script after verification.
+- Source commit `49fe4c0 fix: mask risk flag secrets` was pushed to private
+  `origin/main`; final fetch parity was `0 0`.
+- Repository visibility was rechecked with `gh repo view
+  Veritas-7/PromptVault --json nameWithOwner,visibility,isPrivate,url`:
+  `visibility=PRIVATE`, `isPrivate=true`.
 
 Changes:
 
@@ -89,11 +94,18 @@ Tests:
 - Full project check: `npm run check` passed, covering UI tests 361/361,
   production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
   `cargo clippy --all-targets --all-features -- -D warnings`.
+- Source staged secret scan: `gitleaks protect --staged` scanned about 8.76 KB
+  and found no leaks before `49fe4c0`.
+- Source full-tree secret scan: `gitleaks dir . --no-banner --redact` scanned
+  about 504.17 MB and found no leaks before the source push.
+- Source push verification: `git push origin main` advanced `main` from
+  `67cdb16` to `49fe4c0`; after fetch, parity was `0 0` and
+  `git status --short --branch` reported `## main...origin/main`.
 
 Issues:
 
 - No product blocker after risk flag display masking.
-- Source commit/push is pending staged and full-tree gitleaks verification.
+- No source push blocker after staged and full-tree gitleaks verification.
 
 Research:
 
@@ -102,9 +114,9 @@ Research:
 
 Next Steps:
 
-- Run `git diff --check`, stage explicit paths only, run staged gitleaks, commit
-  the source change, run full-tree gitleaks, push to private `origin/main`, and
-  verify fetch parity plus GitHub private visibility.
+- Commit this closeout `working.md` update after staged gitleaks, run full-tree
+  gitleaks again, push to private `origin/main`, and verify final fetch parity
+  plus GitHub private visibility.
 
 ## Previous Slice - 2026-06-08 Source status display secret masking
 

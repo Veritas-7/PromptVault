@@ -205,8 +205,13 @@ function isFrequencyItemsEachWithinTotal(value: unknown, total: unknown): boolea
     && value.every((item) => isFrequencyItem(item) && item.count <= total);
 }
 
-function isNonBlankStringArray(value: unknown): boolean {
+function isNonBlankStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(isNonBlankString);
+}
+
+function isUniqueNonBlankStringArray(value: unknown): boolean {
+  return isNonBlankStringArray(value)
+    && new Set(value).size === value.length;
 }
 
 function isNonBlankString(value: unknown): value is string {
@@ -277,8 +282,8 @@ function isPromptQuality(value: unknown): value is PromptQuality {
   return isRecord(value)
     && isQualityScore(value.score)
     && isNonBlankString(value.band)
-    && isNonBlankStringArray(value.missing)
-    && isNonBlankStringArray(value.suggestions);
+    && isUniqueNonBlankStringArray(value.missing)
+    && isUniqueNonBlankStringArray(value.suggestions);
 }
 
 function isPromptCharCount(text: unknown, charCount: unknown): boolean {
@@ -305,7 +310,7 @@ function isPromptRecord(value: unknown): boolean {
     && isPromptWordCount(value.text, value.word_count)
     && isPromptCharCount(value.text, value.char_count)
     && isNonBlankString(value.hash)
-    && isNonBlankStringArray(value.risk_flags)
+    && isUniqueNonBlankStringArray(value.risk_flags)
     && isPromptQuality(value.quality);
 }
 

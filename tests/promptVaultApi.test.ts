@@ -2207,6 +2207,33 @@ test("browser bridge scan results reject blank prompt quality helper text", asyn
   );
 });
 
+test("browser bridge scan results reject duplicate prompt quality suggestions", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(scanResultWithPrompt({
+    quality: {
+      score: 42,
+      band: "weak",
+      missing: ["context"],
+      suggestions: ["Add context.", "Add context."],
+    },
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => scanPrompts({ limit: 1 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Add context|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan results reject duplicate prompt ids", async (t) => {
   const originalFetch = globalThis.fetch;
   const duplicatePrompt = promptRecord({ id: "prompt-duplicate" });

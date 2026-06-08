@@ -1,12 +1,124 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 11:33 KST
+Updated: 2026-06-08 11:42 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Scan stats frequency uniqueness validation
+## Current Slice - 2026-06-08 Prompt quality helper uniqueness validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge prompt records whose quality helper arrays contain
+  duplicate entries that backend quality assessment cannot produce.
+
+Context:
+
+- The previous slice hardened scan stats frequency-list uniqueness.
+- Backend `assess_prompt_quality()` pushes each missing quality gap and
+  suggestion from fixed rule branches at most once per prompt.
+- The selected prompt UI renders suggestions with the suggestion string as the
+  React key, so duplicate suggestion payloads can create duplicate-key warning
+  noise and repeated user guidance.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `2e4a421 docs: close scan stat frequency handoff` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read prompt quality parser, selected prompt suggestion rendering, and
+  backend `assess_prompt_quality()`. Confirmed duplicate quality helper
+  strings are impossible from backend assessment but currently weakly validated
+  in browser-bridge prompt records.
+- Adding a RED API test for duplicate prompt quality suggestions.
+- Confirmed RED first: focused API suite failed 131/132 only on the new
+  duplicate prompt quality suggestion rejection case with
+  `Missing expected rejection`.
+- Tightened prompt validation so quality `missing`, quality `suggestions`, and
+  prompt `risk_flags` must be unique nonblank string arrays.
+- Confirmed GREEN: focused API suite passed 132/132 after the parser change.
+- Ran broader UI tests successfully: `npm run test:ui` passed 296/296.
+- Re-ran `npm run build`; the first attempt exposed that
+  `isNonBlankStringArray` needed to be a TypeScript type guard, then the fixed
+  build passed.
+- Verified the local preview quick-scan flow with Node Playwright: a malformed
+  result with duplicate quality suggestions was rejected without rendering
+  suggestion text, then a valid result rendered exactly one `Add context.`
+  suggestion and no browser console/page errors were observed.
+- Removed `/tmp/promptvault_quality_helper_uniqueness_qa.mjs` after preview QA
+  and confirmed port 5334 had no listener.
+- Ran the full project check successfully after preview QA.
+- Pre-staging verification passed with only the expected three modified files:
+  parser, API test, and working log.
+- Explicitly staged only `src/promptVaultApi.ts`,
+  `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 5.68 KB and finding no leaks.
+- Restaged `working.md` after recording the staged scan and reran the staged
+  secret scan; about 6.73 KB was scanned and no leaks were found.
+
+Changes:
+
+- `working.md`: records the current prompt quality helper uniqueness validation
+  slice.
+- `tests/promptVaultApi.test.ts`: adds a malformed duplicate prompt quality
+  suggestion rejection case.
+- `src/promptVaultApi.ts`: rejects duplicate prompt quality helper strings and
+  duplicate risk flags.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 131/132 only on the new duplicate prompt quality suggestion rejection
+  case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 132/132 after rejecting duplicate prompt quality helper arrays.
+- Broader UI: `npm run test:ui` passed 296/296.
+- Build: `npm run build` passed after the type guard fix.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5334" --port 5334 --timeout 30 node /tmp/promptvault_quality_helper_uniqueness_qa.mjs http://127.0.0.1:5334`
+  passed after aligning the assertion with the existing scan failure warning
+  plus top-level bridge error notice.
+- Cleanup: `/tmp/promptvault_quality_helper_uniqueness_qa.mjs` removed and
+  `lsof -nP -iTCP:5334 -sTCP:LISTEN` returned no listener.
+- Full project check: `npm run check` passed, covering UI tests 296/296,
+  production build, Rust lib tests 84/84, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  passed; repo root was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only the three expected modified files;
+  `git rev-list --left-right --count HEAD...origin/main` returned `0 0`;
+  origin was `https://github.com/Veritas-7/PromptVault.git`; `gh repo view`
+  reported `PRIVATE`; the temp QA file was absent; port 5334 was free.
+- Staged paths: `git diff --cached --name-only` listed only
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed with
+  no leaks found.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Commit, full-tree secret scan, push, and final parity verification.
+
+## Previous Slice - 2026-06-08 Scan stats frequency uniqueness validation
 
 Current Goal:
 

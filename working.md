@@ -1,12 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 12:08 KST
+Updated: 2026-06-08 12:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Improvement delta mixed gap visibility
+## Current Slice - 2026-06-08 Improvement delta gap overflow visibility
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Make recommendation quality-gap summaries disclose when resolved or remaining
+  gap lists contain more items than the compact panel displays.
+
+Context:
+
+- Previous mixed quality-gap visibility slice is pushed to `origin/main`:
+  implementation `aa0eebe fix: show mixed improvement quality gaps` and
+  closeout `aaf5655 docs: close mixed quality gap handoff`.
+- Final parity after the closeout push returned `HEAD...origin/main` as `0 0`.
+- The recommendation panel caps each resolved/remaining gap row with
+  `.slice(0, 4)`, but currently gives no indication that additional gaps were
+  hidden.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local tests plus local Vite/Playwright flows.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `aaf5655 docs: close mixed quality gap handoff`.
+- Re-read recommendation delta rendering. Confirmed resolved and remaining gap
+  rows each truncate to four labels without an overflow count.
+- Preparing a RED Playwright QA that expects a compact overflow indicator when
+  a quality-gap list has more than four entries.
+- Confirmed RED first: dev-mode Playwright QA showed both rows stopped after
+  four labels and omitted `외 1개`.
+- Added a shared `qualityGapSummary()` helper for recommendation quality-gap
+  rows, preserving the four-label compact cap while adding an overflow count.
+- Confirmed GREEN: the same dev-mode Playwright QA rendered `외 1개` for both
+  resolved and remaining rows with no browser console/page errors.
+- Removed `/tmp/promptvault_quality_gap_overflow_qa.mjs` after QA and confirmed
+  port 5338 had no listener.
+- Ran the full project check successfully after overflow QA.
+- Pre-staging verification passed with only the expected two modified files:
+  `src/App.tsx` and `working.md`.
+- Explicitly staged only `src/App.tsx` and `working.md`.
+- Staged secret scan passed with `gitleaks protect --staged --no-banner --redact`
+  after scanning about 4.58 KB and finding no leaks.
+- Restaged `working.md` after recording the staged scan and reran the staged
+  secret scan; about 4.97 KB was scanned and no leaks were found.
+
+Changes:
+
+- `working.md`: records the current quality-gap overflow visibility slice.
+- `src/App.tsx`: formats compact recommendation gap rows with an overflow
+  count when more than four gaps are present.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5338" --port 5338 --timeout 30 node /tmp/promptvault_quality_gap_overflow_qa.mjs http://127.0.0.1:5338`
+  failed because `.quality-delta` text rendered only four labels for each row:
+  `해결됨: 작업 동사, 맥락, 제약, 출력 형식` and
+  `남음: 구체적 목표, 과도한 길이, 검증, audience`.
+- GREEN: the same dev-mode Playwright QA passed after the overflow count was
+  rendered for both resolved and remaining rows.
+- Cleanup: `/tmp/promptvault_quality_gap_overflow_qa.mjs` removed and
+  `lsof -nP -iTCP:5338 -sTCP:LISTEN` returned no listener.
+- Full project check: `npm run check` passed, covering UI tests 297/297,
+  production build, Rust lib tests 84/84, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging: `git diff --check -- src/App.tsx working.md` passed; repo root
+  was `/Users/wj/Ai/System/10_Projects/PromptVault`;
+  `git status --short --branch` showed only `src/App.tsx` and `working.md`
+  modified; `git rev-list --left-right --count HEAD...origin/main` returned
+  `0 0`; origin was `https://github.com/Veritas-7/PromptVault.git`;
+  `gh repo view` reported `PRIVATE`; the temp QA file was absent; port 5338
+  was free.
+- Staged paths: `git diff --cached --name-only` listed only `src/App.tsx` and
+  `working.md`.
+- Staged security: `gitleaks protect --staged --no-banner --redact` passed with
+  no leaks found.
+- Final staged security before implementation commit:
+  `gitleaks protect --staged --no-banner --redact` passed after restaging
+  `working.md`.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Perform explicit-path staging, staged secret scan, commit, full-tree secret
+  scan, push, and final parity verification.
+
+## Previous Slice - 2026-06-08 Improvement delta mixed gap visibility
 
 Current Goal:
 

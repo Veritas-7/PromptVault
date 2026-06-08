@@ -170,6 +170,7 @@ const PREVIEW_LIMIT = 1000;
 const IMPORT_BATCH_FILES = 5;
 const CONTINUOUS_IMPORT_PAUSE_MS = 200;
 const SCAN_PROGRESS_POLL_MS = 300;
+const QUALITY_GAP_DISPLAY_LIMIT = 4;
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -220,6 +221,15 @@ function qualityGapLabel(gap: string): string {
     default:
       return gap || "알 수 없음";
   }
+}
+
+function qualityGapSummary(gaps: string[]): string {
+  const visible = gaps
+    .slice(0, QUALITY_GAP_DISPLAY_LIMIT)
+    .map(qualityGapLabel)
+    .join(", ");
+  const hiddenCount = gaps.length - QUALITY_GAP_DISPLAY_LIMIT;
+  return hiddenCount > 0 ? `${visible} 외 ${hiddenCount.toLocaleString()}개` : visible;
 }
 
 function riskFlagLabel(flag: string): string {
@@ -1983,20 +1993,12 @@ function App() {
                 </strong>
                 {activeImprovement.quality_delta.resolved_gaps.length ? (
                   <p>
-                    해결됨:{" "}
-                    {activeImprovement.quality_delta.resolved_gaps
-                      .slice(0, 4)
-                      .map(qualityGapLabel)
-                      .join(", ")}
+                    해결됨: {qualityGapSummary(activeImprovement.quality_delta.resolved_gaps)}
                   </p>
                 ) : null}
                 {activeImprovement.quality_delta.remaining_gaps.length ? (
                   <p>
-                    남음:{" "}
-                    {activeImprovement.quality_delta.remaining_gaps
-                      .slice(0, 4)
-                      .map(qualityGapLabel)
-                      .join(", ")}
+                    남음: {qualityGapSummary(activeImprovement.quality_delta.remaining_gaps)}
                   </p>
                 ) : activeImprovement.quality_delta.resolved_gaps.length ? null : (
                   <p>남음: 없음</p>

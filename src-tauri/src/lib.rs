@@ -3949,7 +3949,7 @@ fn risk_regexes() -> &'static Vec<(&'static str, Regex)> {
             (
                 "possible_api_key",
                 Regex::new(
-                    r#"(?im)\bbearer\s+[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
+                    r#"(?im)\bgh[oprsu]_[a-z0-9_]{20,}\b|\bbearer\s+[a-z0-9][a-z0-9]*[._~+/=-][a-z0-9._~+/=-]*[a-z0-9_=/+-]|\b[a-z][a-z0-9+.-]*://(?:[^@\s/?#:]*:)[^@\s/?#]+@\S+|^\s*(?:set-cookie|cookie)\s*:\s*[^\r\n]*|\b(?:[a-z0-9]+[_-])*((?:aws[ _-]?)?access[ _-]?key(?:[ _-]?id)?|(?:aws[ _-]?)?secret[ _-]?access[ _-]?key|api[ _-]?key|private[ _-]?key|(?:access|refresh|auth|id)[ _-]?token|authorization|cookie|credential|secret|signature|token|password)\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+\s+)?\S+)?"#,
                 )
                     .expect("api key regex"),
             ),
@@ -6396,6 +6396,18 @@ mod tests {
         assert_eq!(
             redact_sensitive_text(text),
             "Use [REDACTED_POSSIBLE_API_KEY] for the request."
+        );
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_standalone_provider_prefixed_tokens() {
+        let prefix = ["g", "h", "p"].join("");
+        let token = format!("{prefix}_{}", "A".repeat(36));
+        let text = format!("Use {token} for repo access.");
+
+        assert_eq!(
+            redact_sensitive_text(&text),
+            "Use [REDACTED_POSSIBLE_API_KEY] for repo access."
         );
     }
 

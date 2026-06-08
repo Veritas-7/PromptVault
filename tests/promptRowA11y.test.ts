@@ -198,6 +198,19 @@ test("prompt row previews redact standalone bearer tokens", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact standalone provider-prefixed tokens", () => {
+  const syntheticToken = `${["g", "h", "p"].join("")}_${"A".repeat(36)}`;
+  const text = `Use ${syntheticToken} for repo access.`;
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "Use [REDACTED_POSSIBLE_SECRET] for repo access.");
+  assert.doesNotMatch(preview, new RegExp(syntheticToken));
+  assert.doesNotMatch(label, new RegExp(syntheticToken));
+  assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+});
+
 test("prompt row previews redact authorization scheme headers", () => {
   const text = "Send Authorization: Basic short-basic-value before request.";
 

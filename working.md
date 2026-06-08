@@ -1,12 +1,112 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 18:02 KST
+Updated: 2026-06-08 18:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Standalone bearer token redaction
+## Current Slice - 2026-06-08 Provider-prefixed token redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  aligned for standalone provider-prefixed access tokens that are shorter than
+  the generic long-token threshold.
+
+Context:
+
+- Previous standalone bearer token redaction is pushed to `origin/main` with
+  source commit `02df409 fix: redact standalone bearer tokens` and docs
+  closeout `d80163a docs: record standalone bearer token verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed a standalone provider-prefixed token shape
+  remained visible because it was shorter than the existing 48+ character
+  long-token matcher and was not written as a key/value assignment.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact a standalone provider-prefixed access token assembled from
+  fragments.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same standalone provider-prefixed token shape.
+- Confirmed RED: frontend prompt row preview returned the original token, and
+  backend redaction returned the original token.
+- Extended frontend and backend possible-secret matchers with a minimal
+  provider-prefixed access token branch for common `gh*` prefixes.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a raw provider-prefixed token in a prompt row while
+  selecting a safe second prompt. It confirmed two stored prompt rows, possible
+  secret redaction marker visible, no provider token in row text, aria labels,
+  or page body, localized risk label visible, and zero console/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: redacts standalone provider-prefixed access tokens in
+  prompt row previews and accessible names.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for
+  standalone provider-prefixed token redaction using a fragmented fixture.
+- `src-tauri/src/lib.rs`: aligns backend possible-secret redaction with the
+  frontend matcher and adds Rust regression coverage.
+- `working.md`: records this slice.
+
+Tests:
+
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on standalone provider-prefixed token redaction because the original
+  token remained visible.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_standalone_provider_prefixed_tokens`
+  failed from `src-tauri` because backend redaction returned the original
+  token.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 26/26.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_standalone_provider_prefixed_tokens`
+  passed, 1/1 focused lib test, plus zero-test main and CLI targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5211" --port 5211 --timeout 120 -- /bin/bash -lc ...`
+  passed with `rowCount=2`, `redactionCount=1`, `rowLeaked=false`,
+  `ariaLeaked=false`, `bodyLeaked=false`, `riskVisible=true`,
+  `consoleErrors=0`, and `apiErrors=0`.
+- Full project check: `npm run check` passed, covering UI tests 332/332,
+  production build, Rust lib tests 103/103, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after aligning standalone provider-prefixed token
+  redaction.
+- The synthetic token fixture is assembled from fragments so the source does
+  not contain a real token-looking literal.
+- Python Playwright is not installed in this environment, so browser QA used
+  the repo's available Node Playwright package while still managing Vite with
+  the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity work
+  for copied provider-prefixed access token values.
+
+Next Steps:
+
+- Run whitespace/staged secret checks, commit and push the source slice, then
+  record final push evidence in a docs closeout.
+
+## Previous Slice - 2026-06-08 Standalone bearer token redaction
 
 Current Goal:
 

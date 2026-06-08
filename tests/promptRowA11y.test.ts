@@ -284,6 +284,21 @@ test("prompt row previews preserve quoted curl cookie header shape while redacti
   assert.match(label, /-H "\[REDACTED_POSSIBLE_SECRET\]" https:\/\/example\.com/);
 });
 
+test("prompt row previews preserve quoted curl authorization header shape while redacting", () => {
+  const authScheme = ["Bear", "er"].join("");
+  const tokenValue = ["short", "bearer", "value"].join("-");
+  const text = `Run curl -H "Authorization: ${authScheme} ${tokenValue}" https://example.com`;
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, 'Run curl -H "[REDACTED_POSSIBLE_SECRET]" https://example.com');
+  const leakPattern = new RegExp(`Authorization|${authScheme}|${tokenValue}`);
+  assert.doesNotMatch(preview, leakPattern);
+  assert.doesNotMatch(label, leakPattern);
+  assert.match(label, /-H "\[REDACTED_POSSIBLE_SECRET\]" https:\/\/example\.com/);
+});
+
 test("prompt row previews redact credential and signature query params", () => {
   const text =
     "Fetch https://example.test/file?X-Amz-Credential=short-credential-value&X-Amz-Signature=short-signature-value before request.";

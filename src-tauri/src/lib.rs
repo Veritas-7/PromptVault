@@ -2733,7 +2733,7 @@ fn detect_risks(text: &str) -> Vec<String> {
 }
 
 pub fn redact_sensitive_text(text: &str) -> String {
-    let mut redacted = quoted_curl_cookie_header_regex()
+    let mut redacted = quoted_curl_sensitive_header_regex()
         .replace_all(text, |captures: &Captures| {
             if let Some(prefix) = captures.get(1) {
                 return format!("{}\"[REDACTED_POSSIBLE_API_KEY]\"", prefix.as_str());
@@ -3953,13 +3953,13 @@ fn word_regex() -> &'static Regex {
         .get_or_init(|| Regex::new(r"[A-Za-z가-힣0-9][A-Za-z가-힣0-9_\-']*").expect("word regex"))
 }
 
-fn quoted_curl_cookie_header_regex() -> &'static Regex {
-    static QUOTED_CURL_COOKIE_HEADER_REGEX: OnceLock<Regex> = OnceLock::new();
-    QUOTED_CURL_COOKIE_HEADER_REGEX.get_or_init(|| {
+fn quoted_curl_sensitive_header_regex() -> &'static Regex {
+    static QUOTED_CURL_SENSITIVE_HEADER_REGEX: OnceLock<Regex> = OnceLock::new();
+    QUOTED_CURL_SENSITIVE_HEADER_REGEX.get_or_init(|| {
         Regex::new(
-            r#"(?m)((?:--header|-H)\s+)"(?:Cookie|cookie|Set-Cookie|set-cookie)\s*:\s*[^"\r\n]*"|((?:--header|-H)\s+)'(?:Cookie|cookie|Set-Cookie|set-cookie)\s*:\s*[^'\r\n]*'"#,
+            r#"(?m)((?:--header|-H)\s+)"(?:Authorization|authorization|Cookie|cookie|Set-Cookie|set-cookie)\s*:\s*[^"\r\n]*"|((?:--header|-H)\s+)'(?:Authorization|authorization|Cookie|cookie|Set-Cookie|set-cookie)\s*:\s*[^'\r\n]*'"#,
         )
-        .expect("quoted curl cookie header regex")
+        .expect("quoted curl sensitive header regex")
     })
 }
 
@@ -6486,6 +6486,20 @@ mod tests {
         let cookie = format!("session_id={value}");
         let header_flag = ["-", "H"].join("");
         let text = format!("Run curl {header_flag} \"Cookie: {cookie}\" https://example.com");
+
+        assert_eq!(
+            redact_sensitive_text(&text),
+            "Run curl -H \"[REDACTED_POSSIBLE_API_KEY]\" https://example.com"
+        );
+    }
+
+    #[test]
+    fn redact_sensitive_text_preserves_quoted_curl_authorization_header_shape() {
+        let auth_scheme = ["Bear", "er"].join("");
+        let token = ["short", "bearer", "value"].join("-");
+        let header_flag = ["-", "H"].join("");
+        let text =
+            format!("Run curl {header_flag} \"Authorization: {auth_scheme} {token}\" https://example.com");
 
         assert_eq!(
             redact_sensitive_text(&text),

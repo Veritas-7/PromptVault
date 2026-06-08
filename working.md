@@ -1,12 +1,99 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 20:26 KST
+Updated: 2026-06-08 20:32 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Selected detail secret masking
+## Current Slice - 2026-06-08 Improvement output secret masking
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Prevent generated recommendation output from re-exposing sensitive strings in
+  the visible revised prompt, rationale, checklist, or warning areas.
+
+Context:
+
+- Previous selected detail secret masking is pushed to `origin/main` with
+  source commit `8f213c7 fix: mask selected prompt secrets` and docs closeout
+  `d0c3bd8 docs: close selected detail masking slice`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A controlled browser RED test showed that a valid `/api/improve` response
+  containing a raw CLI secret in `revised_prompt`, rationale, and checklist
+  rendered the raw flag/value directly in the recommendation panel and page
+  body.
+
+Progress:
+
+- Reproduced the recommendation output leak by routing `/api/improve` to a
+  valid synthetic response containing `--api-key short-secret-value`.
+- Generalized the frontend sensitive display helper so row previews, selected
+  detail, and recommendation output use the same masking rules.
+- Masked visible recommendation strings in `revised_prompt`, rationale,
+  checklist, and warnings.
+- Added unit coverage for the generic display helper on recommendation-style
+  text.
+- Re-ran the same browser flow and confirmed recommendation output no longer
+  leaves raw flag/value in revised text or page body.
+- Re-ran focused frontend tests and build after a JSX whitespace cleanup.
+
+Changes:
+
+- `src/promptRowA11y.ts`: exports `redactSensitiveDisplayText()` and keeps row
+  preview plus selected detail display on that common path.
+- `src/App.tsx`: renders recommendation `revised_prompt`, rationale,
+  checklist, and warnings through `redactSensitiveDisplayText()`.
+- `tests/promptRowA11y.test.ts`: adds generic display redaction coverage for
+  recommendation-style text.
+- `working.md`: records this slice and its RED/GREEN/browser evidence.
+
+Tests:
+
+- RED browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5227" --port 5227 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_improvement_secret_red_qa.mjs'`
+  failed because the recommendation revised prompt displayed raw
+  `--api-key short-secret-value`.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 42/42.
+- Build check: `npm run build` passed.
+- Browser QA after the fix:
+  same `with_server.py` command on port `5227` passed with exit code `0`; the
+  recommendation revised prompt and page body no longer included the raw flag
+  or raw value.
+- Full project check: `npm run check` passed, covering UI tests 348/348,
+  production build, Rust lib tests 117/117, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after masking recommendation output display.
+- The app still keeps original prompt and improvement response values in state
+  and persistence paths where needed; this slice changes only visible
+  rendering.
+- Python Playwright is not installed, and PromptVault has no local Playwright
+  dependency. Browser QA used the installed shared workspace Playwright package
+  while still managing Vite with the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct UI security/UX hardening based on a
+  reproducible local browser flow.
+
+Next Steps:
+
+- Commit and push the source changes for this improvement-output masking slice,
+  then update and push the docs closeout from a clean source-pushed tree.
+
+## Previous Slice - 2026-06-08 Selected detail secret masking
 
 Current Goal:
 

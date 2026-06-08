@@ -4,6 +4,7 @@ import type { ActionLockState } from "../src/actionLocks.ts";
 import {
   promptRowAriaLabel,
   promptRowPreviewText,
+  redactSensitiveDisplayText,
   selectedPromptDisplayText,
   selectedPromptMetaLabel,
 } from "../src/promptRowA11y.ts";
@@ -79,6 +80,17 @@ test("selected prompt display redacts secrets without truncating safe context", 
   assert.match(displayText, /--format json/);
   assert.match(displayText, /Keep this detailed verification context visible/);
   assert.ok(displayText.length > 120);
+  assert.doesNotMatch(displayText, new RegExp(`${apiFlag}|${secretValue}`));
+});
+
+test("generic sensitive display redacts improvement text", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["short", "secret", "value"].join("-");
+  const text = `추천 결과: keep ${apiFlag} ${secretValue} out of visible output.`;
+
+  const displayText = redactSensitiveDisplayText(text);
+
+  assert.equal(displayText, "추천 결과: keep [REDACTED_POSSIBLE_SECRET] out of visible output.");
   assert.doesNotMatch(displayText, new RegExp(`${apiFlag}|${secretValue}`));
 });
 

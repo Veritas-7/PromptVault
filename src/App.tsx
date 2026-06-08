@@ -81,6 +81,7 @@ import {
 import {
   promptRowAriaLabel,
   promptRowPreviewText,
+  redactSensitiveDisplayText,
   selectedPromptDisplayText,
   selectedPromptMetaLabel,
 } from "./promptRowA11y";
@@ -2017,7 +2018,7 @@ function App() {
                   <p>남음: 없음</p>
                 )}
               </div>
-              <pre className="prompt-text revised">{activeImprovement.revised_prompt}</pre>
+              <pre className="prompt-text revised">{redactSensitiveDisplayText(activeImprovement.revised_prompt)}</pre>
               {activeImprovement.persistence ? (
                 <div className="notice success panel-notice" data-improvement-persistence="true">
                   <Database size={16} />
@@ -2029,20 +2030,22 @@ function App() {
               ) : null}
               <div className="advice">
                 {activeImprovement.rationale.map((item, index) => (
-                  <p key={textListItemKey(item, index)}>{item}</p>
+                  <p key={textListItemKey(item, index)}>{redactSensitiveDisplayText(item)}</p>
                 ))}
               </div>
               {activeImprovement.checklist.length ? (
                 <div className="checklist-list" data-improvement-checklist="true">
                   {activeImprovement.checklist.map((item, index) => (
-                    <p key={textListItemKey(item, index)}>{item}</p>
+                    <p key={textListItemKey(item, index)}>{redactSensitiveDisplayText(item)}</p>
                   ))}
                 </div>
               ) : null}
               {activeImprovement.warnings.length ? (
                 <div className="warning-list">
                   {activeImprovement.warnings.map((warning, index) => (
-                    <p key={textListItemKey(warning, index)}>{warning}</p>
+                    <p key={textListItemKey(warning, index)}>
+                      {redactSensitiveDisplayText(warning)}
+                    </p>
                   ))}
                 </div>
               ) : null}

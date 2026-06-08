@@ -9,7 +9,7 @@ function compactPromptText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function redactSensitivePromptText(text: string): string {
+export function redactSensitiveDisplayText(text: string): string {
   return text
     .replace(
       /-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----/gi,
@@ -38,14 +38,14 @@ function redactSensitivePromptText(text: string): string {
 }
 
 export function promptRowPreviewText(text: string): string {
-  const compact = compactPromptText(redactSensitivePromptText(text));
+  const compact = compactPromptText(redactSensitiveDisplayText(text));
   if (!compact) return "빈 프롬프트";
   if (compact.length <= PROMPT_ROW_SNIPPET_LENGTH) return compact;
   return `${compact.slice(0, PROMPT_ROW_SNIPPET_LENGTH - 3).trimEnd()}...`;
 }
 
 export function selectedPromptDisplayText(text: string): string {
-  return redactSensitivePromptText(text);
+  return redactSensitiveDisplayText(text);
 }
 
 export function promptRowAriaLabel(

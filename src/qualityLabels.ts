@@ -1,3 +1,5 @@
+import { redactSensitiveDisplayText } from "./displayRedaction.ts";
+
 const QUALITY_BAND_LABELS: Record<string, string> = {
   excellent: "우수",
   good: "좋음",
@@ -16,10 +18,14 @@ const QUALITY_BAND_CLASSES: Record<string, string> = {
   workable: "workable",
 };
 
+function compactQualityBandLabel(label: string): string {
+  return label.replace(/\s+/g, " ").trim();
+}
+
 export function qualityBandLabel(band: string): string {
   const normalized = band.trim().toLowerCase();
   if (!normalized) return "알 수 없음";
-  return QUALITY_BAND_LABELS[normalized] ?? band.trim();
+  return QUALITY_BAND_LABELS[normalized] ?? compactQualityBandLabel(redactSensitiveDisplayText(band.trim()));
 }
 
 export function qualityBandClass(band: string): string {

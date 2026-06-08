@@ -16,6 +16,15 @@ test("quality band labels handle legacy and fallback values", () => {
   assert.equal(qualityBandLabel("  "), "알 수 없음");
 });
 
+test("quality band labels redact secret-like unknown values", () => {
+  const apiFlag = ["--api", "key"].join("-");
+  const secretValue = ["quality", "band", "secret"].join("-");
+  const label = qualityBandLabel(`custom ${apiFlag} ${secretValue}`);
+
+  assert.equal(label, "custom [REDACTED_POSSIBLE_SECRET]");
+  assert.doesNotMatch(label, new RegExp(`${apiFlag}|${secretValue}`));
+});
+
 test("quality band classes normalize known and legacy values", () => {
   assert.equal(qualityBandClass("weak"), "weak");
   assert.equal(qualityBandClass("workable"), "workable");

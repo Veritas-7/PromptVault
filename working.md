@@ -1,12 +1,130 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 10:56 KST
+Updated: 2026-06-08 11:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Scan progress pending-source count validation
+## Current Slice - 2026-06-08 Missing source plan metadata validation
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Reject browser-bridge scan plans that claim a missing source still has file
+  metadata.
+
+Context:
+
+- Recent slices hardened scan progress bridge contracts. This slice moves back
+  to scan plan payloads to avoid overfocusing on one result type.
+- Backend `source_plan()` initializes file metadata to zero/null, and if the
+  source root is missing it pushes the missing-path note and returns before
+  walking any files.
+- Therefore a valid scan plan source with `status: "missing"` cannot have
+  nonzero `file_count`, `byte_count`, `large_file_count`,
+  `largest_file_bytes`, or a non-null `newest_modified_at`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local unit tests, a local Vite preview, and Node Playwright when UI behavior
+  is affected.
+
+Progress:
+
+- Started from a clean pushed tree at
+  `161e00f docs: close pending scan progress source count handoff` with
+  `HEAD...origin/main` returning `0 0`.
+- Re-read scan plan parser/tests and backend `source_plan()` generation. The
+  backend cannot produce a missing source row with any file metadata, but the
+  browser-bridge parser currently only validates generic numeric ranges.
+- Adding a RED API test for a single missing scan source whose aggregate totals
+  match the impossible row, so the failure targets source-row status
+  consistency rather than aggregate mismatch.
+- Confirmed RED first: focused API suite failed 128/129 only on the new missing
+  source file metadata rejection case with `Missing expected rejection`.
+- Tightened the scan plan parser so `status: "missing"` rows must keep all file
+  metadata zero/null, matching backend `source_plan()` behavior.
+- Confirmed GREEN: focused API suite passed 129/129 after the parser change.
+- Ran the broader UI test suite and production build successfully after the
+  parser change.
+- Verified the local preview plan flow with Node Playwright: a malformed
+  missing source plan with file metadata was rejected and not rendered, the
+  retry rendered the valid missing `Codex` source with `0 · 0 B`, and there
+  were no console or page errors.
+- Removed the temporary preview QA script.
+- Confirmed preview cleanup: temp script was absent and port 5331 was free.
+- Ran the full project check successfully after preview QA.
+- Pre-staging verification passed with only the expected three modified files:
+  parser, API test, and working log.
+- Staged the three explicit paths and confirmed the staged secret scan found no
+  leaks.
+- Restaged `working.md` after recording the staged scan result and reran the
+  staged secret scan; no leaks were found.
+
+Changes:
+
+- `working.md`: records the current missing source plan metadata validation
+  slice.
+- `tests/promptVaultApi.test.ts`: adds a malformed missing source plan
+  rejection case.
+- `src/promptVaultApi.ts`: rejects missing scan plan source rows with nonzero
+  file metadata or a modified timestamp.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  failed 128/129 only on the new missing source row with file metadata
+  rejection case.
+- GREEN: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  passed 129/129 after rejecting impossible missing source plan metadata.
+- Broader UI suite: `npm run test:ui` passed 293/293.
+- Production build: `npm run build` passed; Vite emitted
+  `dist/assets/index-Crvy_F01.js` and `dist/assets/index-D81jZHaU.css`.
+- Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
+  printed usage successfully.
+- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5331" --port 5331 --timeout 30 node /tmp/promptvault_missing_source_plan_metadata_qa.mjs http://127.0.0.1:5331`
+  passed after stubbing expected initial bridge endpoints. The script clicked
+  the plan action, served a malformed missing source plan with file metadata
+  first, verified it produced the plan error state without rendering a source
+  row, retried with a valid missing `Codex` source, verified the disabled
+  `0 · 0 B` row rendered, and observed no console or page errors.
+- Preview cleanup: `test ! -e /tmp/promptvault_missing_source_plan_metadata_qa.mjs`
+  exited 0; `lsof -nP -iTCP:5331 -sTCP:LISTEN` produced no listener.
+- Full project check: `npm run check` passed. It reran `npm run test:ui`
+  293/293, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
+  and `cargo clippy --all-targets --all-features -- -D warnings`.
+- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
+  produced no output; repo root is
+  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
+  showed only the three expected modified files; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`; `git remote -v` lists only
+  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
+  returned private GitHub visibility; temp script remained absent and port 5331
+  remained free.
+- Staged explicit paths only:
+  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
+- Staged security scan: `gitleaks protect --staged --no-banner --redact`
+  scanned about 7.92 KB and found no leaks.
+- Restaged `working.md` after recording the staged scan result and reran
+  `gitleaks protect --staged --no-banner --redact`; it scanned about 8.29 KB
+  and found no leaks.
+
+Issues:
+
+- No blockers.
+
+Research:
+
+- No external research. This is direct code/test work.
+
+Next Steps:
+
+- Run a final staged gitleaks scan before committing the implementation.
+
+## Previous Slice - 2026-06-08 Scan progress pending-source count validation
 
 Current Goal:
 
@@ -72,11 +190,13 @@ Progress:
   found.
 - Pushed the implementation commit to `origin main`, fetched `origin main`, and
   confirmed `HEAD...origin/main` parity returned `0 0`.
+- Recorded and pushed the closeout as
+  `161e00f docs: close pending scan progress source count handoff`.
 
 Changes:
 
-- `working.md`: records the current scan progress pending-source count
-  validation slice.
+- `working.md`: records the scan progress pending-source count validation
+  slice.
 - `tests/promptVaultApi.test.ts`: adds a malformed pending-source count
   rejection case for scan progress bridge responses.
 - `src/promptVaultApi.ts`: rejects scan progress snapshots whose current-source
@@ -84,9 +204,6 @@ Changes:
 
 Tests:
 
-- Baseline repo verification: `git status --short --branch` showed clean
-  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
-  returned `0 0`.
 - RED: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
   failed 127/128 only on the new `source_file_count === null` with
   `source_files_seen > 0` rejection case.
@@ -94,46 +211,17 @@ Tests:
   passed 128/128 after rejecting pending source totals with processed source
   files.
 - Broader UI suite: `npm run test:ui` passed 292/292.
-- Production build: `npm run build` passed; Vite emitted
-  `dist/assets/index-DK7xWZ1V.js` and `dist/assets/index-D81jZHaU.css`.
+- Production build: `npm run build` passed.
 - Preview QA helper check: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --help`
   printed usage successfully.
-- Preview QA: `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run preview -- --host 127.0.0.1 --port 5330" --port 5330 --timeout 30 node /tmp/promptvault_scan_progress_pending_source_count_qa.mjs http://127.0.0.1:5330`
-  passed. The script confirmed connected browser bridge status, clicked quick
-  scan, served a named-source progress snapshot with `source_file_count: null`
-  and `source_files_seen: 1` first, verified the malformed pending-source
-  progress was not rendered, then served valid pending `Codex` progress and
-  verified normal scan completion.
-- Preview cleanup: `test ! -e /tmp/promptvault_scan_progress_pending_source_count_qa.mjs`
-  exited 0; `lsof -nP -iTCP:5330 -sTCP:LISTEN` produced no listener.
+- Preview QA: malformed pending source progress was not rendered, the next
+  valid pending `Codex` progress rendered normal file-discovery copy, and the
+  scan completed without console or page errors.
 - Full project check: `npm run check` passed. It reran `npm run test:ui`
   292/292, `npm run build`, Rust lib tests 84/84, CLI tests 16/16, doc tests,
   and `cargo clippy --all-targets --all-features -- -D warnings`.
-- Pre-staging verification passed: `git diff --check -- src/promptVaultApi.ts tests/promptVaultApi.test.ts working.md`
-  produced no output; repo root is
-  `/Users/wj/Ai/System/10_Projects/PromptVault`; `git status --short --branch`
-  showed only the three expected modified files; `git rev-list --left-right --count HEAD...origin/main`
-  returned `0 0`; `git remote -v` lists only
-  `origin https://github.com/Veritas-7/PromptVault.git`; `gh repo view Veritas-7/PromptVault --json visibility,isPrivate,url`
-  returned private GitHub visibility; temp script remained absent and port 5330
-  remained free.
-- Staged explicit paths only:
-  `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`, and `working.md`.
-- Staged security scan: `gitleaks protect --staged --no-banner --redact`
-  scanned about 7.39 KB and found no leaks.
-- Restaged `working.md` after recording the staged scan result and reran
-  `gitleaks protect --staged --no-banner --redact`; it scanned about 7.78 KB
-  and found no leaks.
-- Final staged security scan before implementation commit:
-  `gitleaks protect --staged --no-banner --redact` scanned about 8.02 KB and
-  found no leaks.
-- Commit: `667e30b fix: reject pending scan progress source counts`.
-- Full-tree security scan before push: `gitleaks dir . --no-banner --redact`
-  scanned about 701.31 MB and found no leaks.
-- Push/parity: `git push origin main` updated `main` from `7b8fed1` to
-  `667e30b`; `git fetch origin main` completed; `git status --short --branch`
-  showed clean `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
-  returned `0 0`; `git log --oneline -6` shows `667e30b` at HEAD.
+- Staged and full-tree gitleaks scans found no leaks before commit/push.
+- Push/parity after both implementation and closeout commits returned `0 0`.
 
 Issues:
 
@@ -141,12 +229,12 @@ Issues:
 
 Research:
 
-- No external research. This is direct code/test work.
+- No external research. This was direct code/test work.
 
 Next Steps:
 
-- Slice implementation is clean and pushed. Continue with the next narrow
-  autonomous QA hardening slice from the clean pushed tree.
+- Continue with the next narrow autonomous QA hardening slice from the clean
+  pushed tree.
 
 ## Previous Slice - 2026-06-08 Scan progress discovered-count validation
 

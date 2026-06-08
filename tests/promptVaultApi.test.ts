@@ -4493,6 +4493,44 @@ test("browser bridge scan plans reject missing nullable source metadata", async 
   );
 });
 
+test("browser bridge scan plans reject missing sources with file metadata", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(emptyScanPlan({
+    total_sources: 1,
+    available_sources: 0,
+    total_files: 1,
+    total_bytes: 128,
+    largest_file_bytes: 128,
+    sources: [{
+      id: "codex",
+      label: "Codex",
+      root_path: "/tmp/codex",
+      status: "missing",
+      file_count: 1,
+      byte_count: 128,
+      large_file_count: 0,
+      largest_file_bytes: 128,
+      newest_modified_at: "2026-06-07T00:00:00Z",
+      notes: ["이 머신에 경로가 없습니다."],
+    }],
+  })), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => planScan(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /Codex|1개 파일|128 B|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge scan plans reject blank warnings", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify(emptyScanPlan({

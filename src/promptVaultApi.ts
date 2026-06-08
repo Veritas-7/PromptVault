@@ -435,7 +435,19 @@ function isSourcePlan(value: unknown): boolean {
   }
   return value.large_file_count <= value.file_count
     && value.largest_file_bytes <= value.byte_count
-    && (value.file_count > 0 || value.byte_count === 0);
+    && (value.file_count > 0 || value.byte_count === 0)
+    && isMissingSourcePlanMetadataConsistent(value);
+}
+
+function isMissingSourcePlanMetadataConsistent(value: Record<string, unknown>): boolean {
+  return value.status !== "missing"
+    || (
+      value.file_count === 0
+      && value.byte_count === 0
+      && value.large_file_count === 0
+      && value.largest_file_bytes === 0
+      && value.newest_modified_at === null
+    );
 }
 
 function isImportState(value: unknown): boolean {

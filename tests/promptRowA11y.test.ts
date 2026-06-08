@@ -79,6 +79,21 @@ test("prompt row previews redact secret-like tokens", () => {
   assert.match(label, /\[REDACTED_LONG_TOKEN\]/);
 });
 
+test("prompt row previews redact private key blocks case-insensitively", () => {
+  const text = [
+    "-----begin test private key-----",
+    "short-body",
+    "-----end test private key-----",
+  ].join("\n");
+
+  const preview = promptRowPreviewText(text);
+  const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+  assert.equal(preview, "[REDACTED_PRIVATE_KEY]");
+  assert.doesNotMatch(label, /begin test private key|short-body|end test private key/i);
+  assert.match(label, /\[REDACTED_PRIVATE_KEY\]/);
+});
+
 test("prompt row labels include localized risk flags", () => {
   const label = promptRowAriaLabel(
     promptRecord({ risk_flags: ["possible_api_key", "private_key"] }),

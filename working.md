@@ -1,12 +1,114 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 15:19 KST
+Updated: 2026-06-08 15:26 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Risky row aria label
+## Current Slice - 2026-06-08 Case-insensitive private-key preview redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview and row accessible-name redaction aligned with the
+  backend private-key block detector for case-insensitive marker variants.
+
+Context:
+
+- Previous risky row aria label implementation is pushed to `origin/main` as
+  `b2f6ab9 fix: expose row risk labels to assistive tech`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus browser automation; this slice uses Playwright route
+  fulfillment for a controlled synthetic bridge payload.
+- Project-local `AGENTS.md` and `design.md` are absent in this repo; the parent
+  `/Users/wj` policy applies.
+- Backend `redact_sensitive_text` already uses a case-insensitive private-key
+  block regex. Frontend row preview redaction used the same marker pattern
+  without the `i` flag, so lowercase or mixed-case private-key markers could
+  appear in prompt row previews and row `aria-label` text.
+
+Progress:
+
+- Reconfirmed the thread identity guard: persisted objective and current goal
+  both target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed the working tree was clean at `main...origin/main` and parity was
+  `0 0` before this slice.
+- Re-read test-driven-development and webapp-testing instructions before
+  implementation/verification.
+- Inspected backend `risk_regexes` and frontend `redactSensitivePromptPreview`.
+  Confirmed backend private-key detection is `(?is)` while frontend preview
+  regex was case-sensitive.
+- Added RED coverage to `tests/promptRowA11y.test.ts` requiring lowercase
+  private-key block markers to redact in both `promptRowPreviewText` and
+  `promptRowAriaLabel`.
+- Confirmed RED: the focused prompt-row test failed because preview returned
+  `-----begin test private key----- short-body -----end test private key-----`
+  instead of `[REDACTED_PRIVATE_KEY]`.
+- Added the `i` flag to the frontend private-key block preview regex.
+- Confirmed focused GREEN with prompt-row and risk-label tests.
+- Browser QA rendered the actual app with a controlled bridge `/api/prompts`
+  response containing a lowercase private-key block. It confirmed row preview
+  and row `aria-label` both used `[REDACTED_PRIVATE_KEY]`, neither included raw
+  private-key marker/body text, and there were zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+- Passed whitespace checks and staged/full gitleaks scans before GitHub push.
+
+Changes:
+
+- `src/promptRowA11y.ts`: makes private-key block preview redaction
+  case-insensitive.
+- `tests/promptRowA11y.test.ts`: adds regression coverage for lowercase
+  private-key block preview and aria-label redaction.
+- `working.md`: records this slice.
+
+Tests:
+
+- Baseline repo verification: `git status --short --branch` showed clean
+  `main...origin/main`; `git rev-list --left-right --count HEAD...origin/main`
+  returned `0 0`.
+- Goal identity guard:
+  `python3 /Users/wj/Ai/System/50_AutomationCode/scripts/codex/native_skills/codex-handoff/scripts/codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`
+  showed the persisted and current objectives both target PromptVault.
+- RED:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed on `prompt row previews redact private key blocks case-insensitively`
+  because the lowercase private-key block was not redacted.
+- GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts tests/riskLabels.test.ts`
+  passed, 12/12.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5215" --port 5215 --timeout 120 -- /bin/bash -lc ...`
+  passed with one synthetic prompt row, `[REDACTED_PRIVATE_KEY]` present in
+  row preview and row `aria-label`, raw private-key marker/body absent from
+  those row surfaces, and zero console/page/API failures.
+- Full project check: `npm run check` passed, covering UI tests 312/312,
+  production build, Rust lib tests 86/86, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+- `git diff --check` and `git diff --cached --check` passed.
+- `gitleaks protect --staged` passed with no leaks.
+- `gitleaks dir . --no-banner --redact` passed, scanning about 701.52 MB with
+  no leaks.
+
+Issues:
+
+- No product blocker after the private-key preview redaction fix.
+- Full selected prompt text remains intentionally unredacted for inspection;
+  this slice only covers row preview and row accessible-name surfaces.
+
+Research:
+
+- No external research. This is direct redaction parity QA and implementation
+  work.
+
+Next Steps:
+
+- Push this closeout commit to `origin/main`, run final parity/status checks,
+  then continue from a clean pushed tree and pick the next autonomous
+  QA/improvement slice.
+
+## Previous Slice - 2026-06-08 Risky row aria label
 
 Current Goal:
 

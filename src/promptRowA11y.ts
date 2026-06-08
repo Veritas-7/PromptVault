@@ -12,7 +12,7 @@ function compactPromptText(text: string): string {
 function redactSensitivePromptPreview(text: string): string {
   return text
     .replace(
-      /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+      /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gi,
       "[REDACTED_PRIVATE_KEY]",
     )
     .replace(

@@ -162,6 +162,40 @@ test("prompt row previews redact generic prefixed secret assignments", () => {
   assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
 });
 
+test("prompt row previews redact JSON-style sensitive properties", () => {
+  const apiKey = ["api", "key"].join("_");
+  const accessToken = ["access", "token"].join("_");
+  const cookieKey = ["cook", "ie"].join("");
+  const cookieValue = ["session", "short", "cookie", "value"].join("-");
+  const cases = [
+    {
+      text: `Use {"${apiKey}":"short-secret-value","format":"json"} locally.`,
+      expected: 'Use {[REDACTED_POSSIBLE_SECRET],"format":"json"} locally.',
+      leakPattern: new RegExp(`${apiKey}|short-secret-value`),
+    },
+    {
+      text: `Use {'${accessToken}': 'short-token-value', 'limit': '10'} locally.`,
+      expected: "Use {[REDACTED_POSSIBLE_SECRET], 'limit': '10'} locally.",
+      leakPattern: new RegExp(`${accessToken}|short-token-value`),
+    },
+    {
+      text: `Use {"${cookieKey}":"${cookieValue}","mode":"safe"} locally.`,
+      expected: 'Use {[REDACTED_POSSIBLE_SECRET],"mode":"safe"} locally.',
+      leakPattern: new RegExp(`${cookieKey}|${cookieValue}`),
+    },
+  ];
+
+  for (const { text, expected, leakPattern } of cases) {
+    const preview = promptRowPreviewText(text);
+    const label = promptRowAriaLabel(promptRecord({ text }), 0, 1);
+
+    assert.equal(preview, expected);
+    assert.doesNotMatch(preview, leakPattern);
+    assert.doesNotMatch(label, leakPattern);
+    assert.match(label, /\[REDACTED_POSSIBLE_SECRET\]/);
+  }
+});
+
 test("prompt row previews redact private key assignments", () => {
   const text = "Store ssh_private_key=short-key-material only in local secrets.";
 

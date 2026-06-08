@@ -2733,8 +2733,11 @@ fn detect_risks(text: &str) -> Vec<String> {
 }
 
 pub fn redact_sensitive_text(text: &str) -> String {
-    let mut redacted = quoted_curl_sensitive_header_regex()
-        .replace_all(text, |captures: &Captures| {
+    let mut redacted = json_sensitive_property_regex()
+        .replace_all(text, "[REDACTED_POSSIBLE_API_KEY]")
+        .to_string();
+    redacted = quoted_curl_sensitive_header_regex()
+        .replace_all(&redacted, |captures: &Captures| {
             if let Some(prefix) = captures.get(1) {
                 return format!("{}\"[REDACTED_POSSIBLE_API_KEY]\"", prefix.as_str());
             }
@@ -3960,6 +3963,16 @@ fn quoted_curl_sensitive_header_regex() -> &'static Regex {
             r#"(?im)((?:--header(?:\s+|=)|-H\s*))"(?:[a-z0-9_-]*(?:authorization|cookie|api[-_]?key|access[-_]?key|credential|secret|signature|token|password)[a-z0-9_-]*)\s*:\s*[^"\r\n]*"|((?:--header(?:\s+|=)|-H\s*))'(?:[a-z0-9_-]*(?:authorization|cookie|api[-_]?key|access[-_]?key|credential|secret|signature|token|password)[a-z0-9_-]*)\s*:\s*[^'\r\n]*'"#,
         )
         .expect("quoted curl sensitive header regex")
+    })
+}
+
+fn json_sensitive_property_regex() -> &'static Regex {
+    static JSON_SENSITIVE_PROPERTY_REGEX: OnceLock<Regex> = OnceLock::new();
+    JSON_SENSITIVE_PROPERTY_REGEX.get_or_init(|| {
+        Regex::new(
+            r#"(?im)"[a-z0-9_-]*(?:authorization|cookie|api[-_]?key|access[-_]?key|credential|secret|signature|token|password)[a-z0-9_-]*"\s*:\s*(?:"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*')|'[a-z0-9_-]*(?:authorization|cookie|api[-_]?key|access[-_]?key|credential|secret|signature|token|password)[a-z0-9_-]*'\s*:\s*(?:"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*')"#,
+        )
+        .expect("json sensitive property regex")
     })
 }
 
@@ -6397,6 +6410,42 @@ mod tests {
             redact_sensitive_text(text),
             "[REDACTED_POSSIBLE_API_KEY] [REDACTED_POSSIBLE_API_KEY] [REDACTED_POSSIBLE_API_KEY]"
         );
+    }
+
+    #[test]
+    fn redact_sensitive_text_redacts_json_style_sensitive_properties() {
+        let api_key = ["api", "key"].join("_");
+        let access_token = ["access", "token"].join("_");
+        let cookie_key = ["cook", "ie"].join("");
+        let cookie_value = ["session", "short", "cookie", "value"].join("-");
+        let api_key_text =
+            format!(r#"Use {{"{api_key}":"short-secret-value","format":"json"}} locally."#);
+        let access_token_text =
+            format!("Use {{'{access_token}': 'short-token-value', 'limit': '10'}} locally.");
+        let cookie_text = format!(r#"Use {{"{cookie_key}":"{cookie_value}","mode":"safe"}} locally."#);
+
+        let redacted_api_key = redact_sensitive_text(&api_key_text);
+        let redacted_access_token = redact_sensitive_text(&access_token_text);
+        let redacted_cookie = redact_sensitive_text(&cookie_text);
+
+        assert_eq!(
+            redacted_api_key,
+            r#"Use {[REDACTED_POSSIBLE_API_KEY],"format":"json"} locally."#
+        );
+        assert_eq!(
+            redacted_access_token,
+            "Use {[REDACTED_POSSIBLE_API_KEY], 'limit': '10'} locally."
+        );
+        assert_eq!(
+            redacted_cookie,
+            r#"Use {[REDACTED_POSSIBLE_API_KEY],"mode":"safe"} locally."#
+        );
+        assert!(!redacted_api_key.contains(&api_key));
+        assert!(!redacted_api_key.contains("short-secret-value"));
+        assert!(!redacted_access_token.contains(&access_token));
+        assert!(!redacted_access_token.contains("short-token-value"));
+        assert!(!redacted_cookie.contains(&cookie_key));
+        assert!(!redacted_cookie.contains(&cookie_value));
     }
 
     #[test]

@@ -1,12 +1,122 @@
 # PromptVault Working Log
 
-Updated: 2026-06-08 19:54 KST
+Updated: 2026-06-08 20:00 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-08 Sensitive query param redaction precision
+## Current Slice - 2026-06-08 JSON-style sensitive property redaction
+
+Current Goal:
+
+- Continue autonomous PromptVault QA/improvement in
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Keep prompt row preview/accessibility redaction and backend scan redaction
+  from leaking sensitive JSON-style quoted properties such as API keys, access
+  tokens, and cookies embedded in prompt text.
+
+Context:
+
+- Previous sensitive query-param precision fix is pushed to `origin/main` with
+  source commit `04d04b7 fix: preserve safe query params in redacted previews`
+  and docs closeout `c7e204c docs: record query param redaction verification`.
+- cmux/in-app browser remains excluded for this runtime. Verification uses
+  local Vite plus Playwright route fulfillment for controlled browser bridge
+  payloads.
+- Project-local `AGENTS.md`, `CLAUDE.md`, `PROJECT_STATUS.md`, and `design.md`
+  are absent in this repo; the parent `/Users/wj` and `/Users/wj/Ai` policies
+  apply.
+- A live frontend probe showed JSON-style snippets such as
+  `{"api_key":"short-secret-value","format":"json"}`,
+  `{"access_token": "short-token-value"}`, and
+  `{"cookie": "session=short-cookie-value"}` leaked sensitive property names
+  and values in prompt row previews. A nested bearer value under
+  `"Authorization"` was only partially redacted, leaving the sensitive key name.
+- A separate prose punctuation probe showed that preserving commas/semicolons
+  after unquoted secret values could leak if punctuation is actually part of an
+  unquoted password, so that ambiguous over-redaction was left unchanged.
+
+Progress:
+
+- Added RED frontend coverage requiring prompt row preview and accessible names
+  to redact JSON-style quoted sensitive properties while preserving neighboring
+  safe JSON properties.
+- Added RED backend coverage requiring `redact_sensitive_text` to redact the
+  same JSON-style sensitive property forms.
+- Confirmed RED: frontend prompt-row tests leaked the JSON `api_key` property
+  unchanged, and backend focused redaction leaked the same property unchanged.
+- Added a quote-aware JSON sensitive-property pre-pass before the broader
+  assignment/header matchers in both frontend and backend redaction.
+- Confirmed focused GREEN for frontend prompt row preview/accessibility
+  redaction and backend `redact_sensitive_text` JSON-property coverage.
+- Browser QA rendered the actual app with a controlled stored prompt bridge
+  payload containing a risky JSON object. It confirmed two stored prompt rows,
+  the `Use {[REDACTED_POSSIBLE_SECRET],"format":"json"} locally.` preview
+  visible in row text and aria labels, no raw sensitive JSON key/value leak in
+  row text, aria labels, or body text, safe `"format":"json"` still visible,
+  and zero console/page/API failures.
+- Ran full `npm run check` successfully after implementation.
+
+Changes:
+
+- `src/promptRowA11y.ts`: adds a JSON-style sensitive property redaction
+  pre-pass for quoted keys and quoted string values.
+- `tests/promptRowA11y.test.ts`: adds frontend regression coverage for API key,
+  access token, and cookie properties in JSON/object-like snippets.
+- `src-tauri/src/lib.rs`: aligns backend redaction with the same JSON-property
+  pre-pass and Rust regression coverage.
+- `working.md`: records this slice and corrects the stale previous next-step
+  state from the already-pushed query-param docs closeout.
+
+Tests:
+
+- Probe:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --input-type=module -e ...`
+  showed JSON-style API key, access token, and cookie properties leaked in row
+  previews.
+- RED frontend:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  failed 38/39 because the JSON `api_key` property was not redacted.
+- RED backend:
+  `cargo test redact_sensitive_text_redacts_json_style_sensitive_properties`
+  from `src-tauri` failed because backend redaction leaked the JSON `api_key`
+  property unchanged.
+- Focused frontend GREEN:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptRowA11y.test.ts`
+  passed, 39/39.
+- Focused backend GREEN:
+  `cargo test redact_sensitive_text_redacts_json_style_sensitive_properties`
+  from `src-tauri` passed, 1/1 focused lib test, plus zero-test main and CLI
+  targets.
+- Browser QA:
+  `python3 /Users/wj/.claude/skills/webapp-testing/scripts/with_server.py --server "npm run dev -- --host 127.0.0.1 --port 5224" --port 5224 --timeout 120 -- /bin/bash -lc 'node /tmp/promptvault_json_secret_property_qa.mjs'`
+  passed with `rowCount=2`, expected preview
+  `Use {[REDACTED_POSSIBLE_SECRET],"format":"json"} locally.`,
+  `consoleErrors=[]`, `pageErrors=[]`, and `apiErrors=[]`.
+- Full project check: `npm run check` passed, covering UI tests 345/345,
+  production build, Rust lib tests 116/116, CLI tests 16/16, doc tests, and
+  `cargo clippy --all-targets --all-features -- -D warnings`.
+
+Issues:
+
+- No product blocker after redacting JSON-style sensitive properties.
+- Python Playwright is not installed, and PromptVault has no local Playwright
+  dependency. Browser QA used the installed shared workspace Playwright package
+  while still managing Vite with the approved `with_server.py` helper.
+
+Research:
+
+- No external research. This is direct frontend/backend redaction parity and
+  UI/accessibility preview correctness work for JSON/object-like prompt
+  snippets.
+
+Next Steps:
+
+- Run whitespace checks, staged/full gitleaks, then commit and push this source
+  slice to the private `origin/main`.
+
+## Previous Slice - 2026-06-08 Sensitive query param redaction precision
 
 Current Goal:
 

@@ -9162,21 +9162,27 @@ fn update_project_work_session_evidence_review_queue_state(
     review_reason: &str,
     updated_at: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let current_review_state = conn
+    let current_row = conn
         .query_row(
-            "SELECT review_state
+            "SELECT review_state, needs_title_normalization
              FROM project_work_session_evidence_review_queue
              WHERE candidate_id=?1",
             params![candidate_id],
-            |row| row.get::<_, String>(0),
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?)),
         )
         .optional()?;
-    let Some(current_review_state) = current_review_state else {
+    let Some((current_review_state, needs_title_normalization)) = current_row else {
         return Err("work-session-evidence-review-queue candidate not found".into());
     };
     if current_review_state == "stale" && review_state == "approved" {
         return Err(
             "stale work-session-evidence-review-queue candidates cannot be approved; sync candidates first"
+                .into(),
+        );
+    }
+    if needs_title_normalization && review_state == "approved" {
+        return Err(
+            "work-session-evidence-review-queue candidates that need title normalization cannot be approved; normalize the project/day title first"
                 .into(),
         );
     }
@@ -20404,6 +20410,19 @@ Status: completed as a source-only/report-only hardening slice.
                 && item.needs_title_normalization
                 && item.source_files == vec!["workingd.md".to_string()]
         }));
+
+        let rough_approval_error = update_project_work_session_evidence_review_queue_state(
+            &conn,
+            "session-evidence-RoughProject-b1b2c3d4e5",
+            "approved",
+            "operator_approved_session_evidence_review",
+            "2026-06-09T00:15:00Z",
+        )
+        .expect_err("title-normalization row cannot be approved");
+        assert_eq!(
+            rough_approval_error.to_string(),
+            "work-session-evidence-review-queue candidates that need title normalization cannot be approved; normalize the project/day title first"
+        );
 
         update_project_work_session_evidence_review_queue_state(
             &conn,

@@ -973,14 +973,16 @@ async function runBrowserQa() {
       .map((item) =>
         `${item.project} · ${item.date} · ${item.review_state} · ${item.latest_source_file} · ${item.latest_source_role}`
       );
-    if (workSessionEvidenceReviewQueue.items.length > 0) {
-      const firstItem = workSessionEvidenceReviewQueue.items[0];
+    const firstApprovableItem = workSessionEvidenceReviewQueue.items.find(
+      (item) => !item.needs_title_normalization,
+    );
+    if (firstApprovableItem) {
       const approvedQueue = await bridgeJson(
         page,
         "/api/work-session-evidence-review-queue/update",
         {
           options: {
-            candidate_id: firstItem.candidate_id,
+            candidate_id: firstApprovableItem.candidate_id,
             review_state: "approved",
             review_reason: "browser_qa_approved_session_evidence_review",
             limit: 200,
@@ -991,7 +993,7 @@ async function runBrowserQa() {
         approvedQueue.database_path !== DATABASE_PATH
         || approvedQueue.approved_count < 1
         || !approvedQueue.items.some(
-          (item) => item.candidate_id === firstItem.candidate_id
+          (item) => item.candidate_id === firstApprovableItem.candidate_id
             && item.review_state === "approved"
             && item.review_reason === "browser_qa_approved_session_evidence_review",
         )
@@ -999,9 +1001,9 @@ async function runBrowserQa() {
         throw new Error(`Session evidence review queue approval failed: ${JSON.stringify(approvedQueue)}`);
       }
       workSessionEvidenceReviewQueueStateAfterApprove =
-        `${firstItem.candidate_id} · approved · ${approvedQueue.approved_count}`;
+        `${firstApprovableItem.candidate_id} · approved · ${approvedQueue.approved_count}`;
     } else {
-      workSessionEvidenceReviewQueueStateAfterApprove = "no session evidence review candidates";
+      workSessionEvidenceReviewQueueStateAfterApprove = "no approvable session evidence review candidates";
     }
     step("work session evidence proposals UI");
     await waitForEnabled(page, '[data-load-work-session-evidence-proposals="true"]');
@@ -1029,13 +1031,20 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-session-evidence-review-queue-meta="true"]')?.textContent ?? "";
       const rows = Array.from(document.querySelectorAll('[data-work-session-evidence-review-queue="true"] article'));
+      const titleRows = rows.filter((row) => (row.textContent ?? "").includes("제목 정규화 필요"));
+      const titleRowsAreApprovalBlocked = titleRows.every((row) =>
+        !row.querySelector("[data-approve-work-session-evidence-review-queue]")
+          && row.querySelector("[data-reject-work-session-evidence-review-queue]")
+      );
       return text.includes("세션근거 큐 저장")
         && text.includes("표시")
         && text.includes("검토")
         && rows.some((row) => {
           const rowText = row.textContent ?? "";
           return rowText.includes("unresolved-after-full-index") && rowText.includes("로그 유형");
-        });
+        })
+        && titleRows.length > 0
+        && titleRowsAreApprovalBlocked;
     }, undefined, { timeout: 120000 });
     workSessionEvidenceReviewQueueUiMeta =
       (await page.locator('[data-work-session-evidence-review-queue-meta="true"]').textContent())?.trim() ?? "";

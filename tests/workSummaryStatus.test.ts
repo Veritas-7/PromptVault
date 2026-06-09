@@ -1842,13 +1842,16 @@ test("work session evidence review queue labels describe persisted review rows",
 });
 
 test("work session evidence review queue actions keep stale rows approval-safe", () => {
-  const pending = sessionEvidenceReviewQueueItem();
-  const stale = { ...pending, review_state: "stale" as const };
-  const approved = { ...pending, review_state: "approved" as const };
-  const rejected = { ...pending, review_state: "rejected" as const };
+  const pendingNeedsTitle = sessionEvidenceReviewQueueItem();
+  const pendingReady = sessionEvidenceReviewQueueItem({ needs_title_normalization: false });
+  const stale = { ...pendingReady, review_state: "stale" as const };
+  const approved = { ...pendingReady, review_state: "approved" as const };
+  const rejected = { ...pendingReady, review_state: "rejected" as const };
 
-  assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(pending), true);
-  assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(pending), true);
+  assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(pendingNeedsTitle), false);
+  assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(pendingNeedsTitle), true);
+  assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(pendingReady), true);
+  assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(pendingReady), true);
   assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(stale), false);
   assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(stale), true);
   assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(approved), false);

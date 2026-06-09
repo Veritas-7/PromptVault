@@ -1,10 +1,123 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 00:48 KST
+Updated: 2026-06-10 01:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 session evidence title-normalization approval guard
+
+Current Goal:
+
+- Prevent session-evidence review queue rows that still need project/day title
+  normalization from being approved.
+- Keep rejection available so an operator can clear bad rows, but require title
+  cleanup before any durable session-evidence approval path.
+
+Context:
+
+- Live default DB recheck at 00:54-00:55 KST reported `98` project/day rows,
+  `31` projects, `26` days, `859` progress files, and `9352` parsed work
+  items.
+- `work-log-coverage --json` reported `858` parsed files, `0` unparsed files,
+  and `1` pointer file. `workingd.md` is included: `CareVault/workingd.md` is a
+  pointer, while `enterprise_diagnosis_flutter/workingd.md` parses into `154`
+  work items.
+- Full session-evidence status export with `--session-limit 10867` used the full
+  stored session index `10867 / 10867`, linked `183522` item matches from `1311`
+  unique session records, and still left `44` unresolved rows.
+- Of those unresolved rows, `40` need title normalization. The proposal
+  contract already blocks durable session-link proposals for such rows, so the
+  persisted review queue must enforce the same policy.
+
+Progress:
+
+- Rechecked goal identity and live work/session management status.
+- Located the backend queue update function, frontend approval helper, focused
+  Rust/TypeScript tests, and isolated browser bridge QA assertion points.
+- Added the backend approval guard for session-evidence review queue rows whose
+  stored `needs_title_normalization` flag is true.
+- Narrowed the frontend approval helper so pending title-normalization rows show
+  only reject cleanup, not approve.
+- Updated isolated browser bridge QA to approve the first safe row and assert
+  that title-normalization rows have no approve action.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - `update_project_work_session_evidence_review_queue_state` now reads
+    `needs_title_normalization` and rejects approval until the title is
+    normalized.
+  - Targeted review queue test now proves the rough `workingd.md` candidate
+    cannot be approved while a ready row can still be approved.
+- `src/workSummaryStatus.ts`:
+  - `canApproveWorkSessionEvidenceReviewQueueItem` now requires both
+    `pending_review` and `!needs_title_normalization`.
+- `tests/workSummaryStatus.test.ts`:
+  - Approval action test now covers pending-ready, pending-title-needed, stale,
+    approved, and rejected rows.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - Direct queue approval selects a title-ready item.
+  - UI wait assertion requires at least one `제목 정규화 필요` row and confirms it
+    has a reject action but no approve action.
+- `working.md`:
+  - Recorded live completion status and verification evidence.
+
+Tests:
+
+- PASS: `src-tauri/target/debug/promptvault-cli work-log-coverage --json`
+  - live scope: `859` files seen, `858` parsed, `0` unparsed, `31` projects,
+    `9352` work items.
+- PASS: `src-tauri/target/debug/promptvault-cli work-status-export --limit 200 --session-limit 10867 --json`
+  - live scope: `98` rows, `54` matched rows, `44` unresolved-after-full-index
+    rows, `40` title-normalization rows, full session index `10867 / 10867`.
+- PASS: `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 5 --json`
+  - live scope: `44` unresolved candidates, `9351` report items at command time,
+    full session index `10867 / 10867`.
+- PASS: `src-tauri/target/debug/promptvault-cli work-log-items --limit 5 --json`
+  - current durable saved extraction rows: `1`.
+- PASS: `src-tauri/target/debug/promptvault-cli work-log-normalized-items --limit 5 --json`
+  - current durable normalized rows: `0`.
+- PASS: `src-tauri/target/debug/promptvault-cli work-log-normalization-review-queue --limit 5 --json`
+  - current queue: `94` rows, `91` pending, `3` stale, `0` approved.
+- PASS: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  - `35` tests passed.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_evidence_review_queue_syncs_and_preserves_operator_state -- --nocapture`
+  - targeted Rust test passed.
+- PASS: `npm run build`.
+- PASS: `npm run check`
+  - UI tests `485`, Rust lib tests `205`, CLI tests `34`, and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - isolated DB result included session evidence review queue `65` rows,
+    `64` pending, `1` approved safe row, and `28` title-normalization rows.
+  - UI rows with `제목 정규화 필요` displayed reject-only actions; sampled rows
+    included `QualityGate` and `novel-source-collector`.
+
+Issues:
+
+- The app now inventories and groups project-local work logs and real session
+  evidence, but it is not yet a fully closed AI-managed durable work ledger.
+- GLM/OpenAI provider surfaces exist, but the latest live GLM proposal attempt
+  failed in this environment and fell back to local review-only proposals.
+- Codex SDK is not yet a separate provider route for work-log/session-evidence
+  reconciliation.
+
+Research:
+
+- No external research yet; this slice follows the existing queue gate pattern.
+
+Next Steps:
+
+- Next product slice should make AI provider reconciliation more complete:
+  either fix GLM/OpenAI credential/runtime failures so accepted rows can be
+  produced live, or add a Codex SDK provider route for work-log/session-evidence
+  normalization proposals.
+- Add a management-status dashboard that separates parsed inventory, frozen
+  durable rows, normalized durable rows, session-matched rows, unresolved rows,
+  and AI/provider-pending rows.
 
 ## Completed Slice - 2026-06-10 session evidence proposal contract
 

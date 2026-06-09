@@ -1177,7 +1177,7 @@ export function workSessionEvidenceReviewQueueFailureText(
 export function canApproveWorkSessionEvidenceReviewQueueItem(
   item: ProjectWorkSessionEvidenceReviewQueueItem,
 ): boolean {
-  return item.review_state === "pending_review";
+  return item.review_state === "pending_review" && !item.needs_title_normalization;
 }
 
 export function canRejectWorkSessionEvidenceReviewQueueItem(

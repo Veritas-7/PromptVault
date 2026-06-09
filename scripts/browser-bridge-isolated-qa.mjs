@@ -450,6 +450,8 @@ async function runBrowserQa() {
   let workStatusExportUnresolvedFixtureMeta = "";
   let workStatusExportUnresolvedFixtureRows = [];
   let workStatusExportUnresolvedFixtureRowDetail = "";
+  let workSessionEvidenceCandidatesMeta = "";
+  let workSessionEvidenceCandidateRows = [];
   let workStatusExportMarkdown = "";
   let workSummaryIndex = "";
   let workSessionIndexBackfill = null;
@@ -821,6 +823,46 @@ async function runBrowserQa() {
     }, undefined, { timeout: 30000 });
     workStatusExportUnresolvedFixtureRowDetail =
       (await page.locator('[data-work-status-export-row-detail="true"]').first().textContent())?.trim() ?? "";
+    step("work session evidence candidates bridge");
+    const workSessionEvidenceCandidates = await bridgeJson(page, "/api/work-session-evidence-candidates", {
+      options: { limit: 5 },
+    });
+    if (workSessionEvidenceCandidates.database_path !== DATABASE_PATH) {
+      throw new Error(
+        `Session evidence candidates did not use isolated DB: ${workSessionEvidenceCandidates.database_path}`,
+      );
+    }
+    if (workSessionEvidenceCandidates.requested_limit !== 5) {
+      throw new Error(
+        `Session evidence candidate limit mismatch: ${workSessionEvidenceCandidates.requested_limit}`,
+      );
+    }
+    if (
+      workSessionEvidenceCandidates.returned_candidate_count
+        !== workSessionEvidenceCandidates.candidates.length
+      || workSessionEvidenceCandidates.returned_candidate_count
+        > workSessionEvidenceCandidates.total_candidate_count
+      || workSessionEvidenceCandidates.total_candidate_count
+        !== workSessionEvidenceCandidates.unresolved_after_full_index_count
+      || workSessionEvidenceCandidates.report_session_evidence_index_count
+        > workSessionEvidenceCandidates.report_session_evidence_index_total_count
+    ) {
+      throw new Error(`Invalid session evidence candidate counters: ${JSON.stringify(workSessionEvidenceCandidates)}`);
+    }
+    if (
+      workSessionEvidenceCandidates.candidates.some(
+        (candidate) => candidate.session_evidence_audit !== "unresolved-after-full-index",
+      )
+    ) {
+      throw new Error(`Session evidence candidates included non-unresolved rows: ${JSON.stringify(workSessionEvidenceCandidates.candidates)}`);
+    }
+    workSessionEvidenceCandidatesMeta = [
+      `후보 ${workSessionEvidenceCandidates.returned_candidate_count} / ${workSessionEvidenceCandidates.total_candidate_count}`,
+      `세션 ${workSessionEvidenceCandidates.report_session_evidence_index_count} / ${workSessionEvidenceCandidates.report_session_evidence_index_total_count}`,
+      `limit ${workSessionEvidenceCandidates.session_limit_used}`,
+    ].join(" · ");
+    workSessionEvidenceCandidateRows = workSessionEvidenceCandidates.candidates
+      .map((candidate) => `${candidate.project} · ${candidate.date} · ${candidate.latest_source_file}`);
     await page.locator('[data-save-work-summary-snapshot="true"]').click();
     await page.waitForFunction((databasePath) => {
       const text = document.querySelector('[data-work-summary-persistence="true"]')?.textContent ?? "";
@@ -1228,6 +1270,8 @@ async function runBrowserQa() {
       workStatusExportUnresolvedFixtureMeta,
       workStatusExportUnresolvedFixtureRows,
       workStatusExportUnresolvedFixtureRowDetail,
+      workSessionEvidenceCandidatesMeta,
+      workSessionEvidenceCandidateRows,
       workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,
       workManagementDurabilityWarning,

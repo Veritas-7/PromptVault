@@ -10,18 +10,20 @@ use promptvault_lib::{
     run_project_work_log_normalization_review_queue,
     run_project_work_log_normalization_review_queue_update, run_project_work_log_review_queue,
     run_project_work_log_review_queue_update, run_project_work_report,
-    run_project_work_session_index, run_project_work_status_export, run_project_work_summary,
-    run_scan, source_specs, CancelScanOptions, ImportBatchOptions, ImportEventsOptions,
-    ImportStatesOptions, ImproveRequest, ProjectWorkLogExtractionCandidatesOptions,
+    run_project_work_session_evidence_candidates, run_project_work_session_index,
+    run_project_work_status_export, run_project_work_summary, run_scan, source_specs,
+    CancelScanOptions, ImportBatchOptions, ImportEventsOptions, ImportStatesOptions,
+    ImproveRequest, ProjectWorkLogExtractionCandidatesOptions,
     ProjectWorkLogExtractionItemsOptions, ProjectWorkLogExtractionProposalsOptions,
     ProjectWorkLogExtractionRunsOptions, ProjectWorkLogFreezeOptions,
     ProjectWorkLogNormalizationApplyOptions, ProjectWorkLogNormalizationCandidatesOptions,
     ProjectWorkLogNormalizationProposalsOptions, ProjectWorkLogNormalizationReviewQueueOptions,
     ProjectWorkLogNormalizationReviewQueueUpdateOptions, ProjectWorkLogNormalizedItemsOptions,
     ProjectWorkLogReviewQueueOptions, ProjectWorkLogReviewQueueUpdateOptions,
-    ProjectWorkReportOptions, ProjectWorkSessionIndexOptions, ProjectWorkStatusExportOptions,
-    ProjectWorkSummaryOptions, ProjectWorkSummarySnapshotsOptions, PromptRecord, ScanOptions,
-    ScanPlanOptions, ScanProgressOptions, StoredPromptFacetsOptions, StoredPromptsOptions,
+    ProjectWorkReportOptions, ProjectWorkSessionEvidenceCandidatesOptions,
+    ProjectWorkSessionIndexOptions, ProjectWorkStatusExportOptions, ProjectWorkSummaryOptions,
+    ProjectWorkSummarySnapshotsOptions, PromptRecord, ScanOptions, ScanPlanOptions,
+    ScanProgressOptions, StoredPromptFacetsOptions, StoredPromptsOptions,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -402,6 +404,90 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             println!("{}", result.markdown);
+        }
+        "work-session-evidence-candidates" => {
+            let json = take_flag(&mut args, "--json");
+            let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
+            let mut limit = None;
+            let mut session_limit = None;
+            let mut database_path = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--session-limit" => {
+                        session_limit =
+                            Some(parse_positive_usize_arg(iter.next(), "--session-limit")?);
+                    }
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?);
+                    }
+                    other => {
+                        return Err(format!(
+                            "unknown work-session-evidence-candidates argument: {other}"
+                        )
+                        .into())
+                    }
+                }
+            }
+
+            let result = run_project_work_session_evidence_candidates(
+                ProjectWorkSessionEvidenceCandidatesOptions {
+                    database_path,
+                    limit,
+                    session_limit,
+                    refresh_session_index: Some(refresh_session_index),
+                },
+            )?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+            println!("PromptVault session evidence candidates");
+            println!("database: {}", result.database_path);
+            println!("rows: {}", result.report_total_rows);
+            println!("items: {}", result.report_total_items);
+            println!("session_limit_used: {}", result.session_limit_used);
+            println!(
+                "session_index: {} / {}",
+                result.report_session_evidence_index_count,
+                result.report_session_evidence_index_total_count
+            );
+            println!(
+                "bounded_session_limit: {}",
+                result.bounded_session_limit_count
+            );
+            println!(
+                "unresolved_after_full_index: {}",
+                result.unresolved_after_full_index_count
+            );
+            println!("candidates: {}", result.total_candidate_count);
+            println!("returned: {}", result.returned_candidate_count);
+            if !result.warnings.is_empty() {
+                println!("warnings:");
+                for warning in &result.warnings {
+                    println!("- {warning}");
+                }
+            }
+            for candidate in &result.candidates {
+                println!(
+                    "\n{} · {} · {} · {} items",
+                    candidate.candidate_id,
+                    candidate.project,
+                    candidate.date,
+                    candidate.work_item_count
+                );
+                println!("- reason: {}", candidate.reason);
+                if !candidate.top_titles.is_empty() {
+                    println!("- titles: {}", candidate.top_titles.join(" | "));
+                }
+                if !candidate.sample_evidence.trim().is_empty() {
+                    println!("- evidence: {}", candidate.sample_evidence);
+                }
+                println!("  {}", candidate.latest_source_path);
+            }
         }
         "work-session-index" => {
             let json = take_flag(&mut args, "--json");
@@ -2013,6 +2099,7 @@ fn help_text() -> String {
         "  improve [--json] [--local] < prompt.txt\n",
         "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
         "  work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
+        "  work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
         "  work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
@@ -2039,6 +2126,7 @@ fn help_text() -> String {
         "  --no-persist keeps scan results out of the PromptVault database.\n",
         "  work-report reads project progress logs and groups slice work by date and project.\n",
         "  work-status-export renders compact project/day Markdown and JSON rows from the same progress-log plus session-evidence report.\n",
+        "  work-session-evidence-candidates lists project/day rows still missing session evidence after the selected session index.\n",
         "  work-log-coverage lists parsed and unparsed project progress logs by project.\n",
         "  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n",
         "  work-log-review-queue persists current extraction candidates into a review queue and marks disappeared candidates stale.\n",
@@ -2157,6 +2245,11 @@ struct ProjectWorkSummaryBridgePayload {
 #[derive(serde::Deserialize)]
 struct ProjectWorkStatusExportBridgePayload {
     options: Option<ProjectWorkStatusExportOptions>,
+}
+
+#[derive(serde::Deserialize)]
+struct ProjectWorkSessionEvidenceCandidatesBridgePayload {
+    options: Option<ProjectWorkSessionEvidenceCandidatesOptions>,
 }
 
 #[derive(serde::Deserialize)]
@@ -2461,6 +2554,17 @@ fn handle_bridge_route(
             let result = run_project_work_status_export(options)?;
             write_json_response(stream, 200, &result)
         }
+        ("POST", "/api/work-session-evidence-candidates") => {
+            let payload = serde_json::from_str::<ProjectWorkSessionEvidenceCandidatesBridgePayload>(
+                &request.body,
+            )?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_project_work_session_evidence_candidates(options)?;
+            write_json_response(stream, 200, &result)
+        }
         ("POST", "/api/work-summary-snapshots") => {
             let payload =
                 serde_json::from_str::<ProjectWorkSummarySnapshotsBridgePayload>(&request.body)?;
@@ -2641,6 +2745,7 @@ fn bridge_route_uses_database(method: &str, path: &str) -> bool {
             | ("POST", "/api/improve")
             | ("POST", "/api/work-summary")
             | ("POST", "/api/work-status-export")
+            | ("POST", "/api/work-session-evidence-candidates")
             | ("POST", "/api/work-summary-snapshots")
             | ("POST", "/api/work-session-index")
             | ("POST", "/api/work-log-review-queue")
@@ -2900,6 +3005,20 @@ mod tests {
 
         assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
         assert!(response.contains("work-status-export limit requires a positive integer"));
+        assert!(response.contains("Access-Control-Allow-Origin: *"));
+    }
+
+    #[test]
+    fn bridge_routes_work_session_evidence_candidates_validation_errors() {
+        let response = bridge_response_for(
+            "/api/work-session-evidence-candidates",
+            r#"{"options":{"limit":0}}"#,
+        );
+
+        assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(
+            response.contains("work-session-evidence-candidates limit requires a positive integer")
+        );
         assert!(response.contains("Access-Control-Allow-Origin: *"));
     }
 
@@ -3285,6 +3404,9 @@ mod tests {
         assert!(help.contains(
             "work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
         ));
+        assert!(help.contains(
+            "work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
+        ));
         assert!(
             help.contains(
                 "work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]"
@@ -3328,6 +3450,7 @@ mod tests {
         ));
         assert!(help.contains("work-report reads project progress logs"));
         assert!(help.contains("work-status-export renders compact project/day Markdown"));
+        assert!(help.contains("work-session-evidence-candidates lists project/day rows"));
         assert!(help.contains("work-session-index scans real session evidence"));
         assert!(help.contains("--batch-files resumes from per-source file cursors"));
         assert!(help.contains("--max-batches repeats checkpoint batches"));

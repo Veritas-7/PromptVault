@@ -1,10 +1,143 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 23:05 KST
+Updated: 2026-06-09 23:25 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-09 session evidence candidates bridge
+
+Current Goal:
+
+- Answer the operator concern about current completion level honestly:
+  project/day management and real session parsing exist, but full AI-managed
+  work-ledger resolution is not complete yet.
+- Add a deterministic review-target surface for project/day rows that still
+  have no matched session evidence after the full stored session index is used.
+- Keep it read-only and source-backed before adding AI/approval writes.
+
+Context:
+
+- Existing status export already groups project progress logs by project/date
+  and attaches sanitized session evidence from real local session stores.
+- The previous live full-index check showed `91` project/day rows with `36`
+  `unresolved-after-full-index` rows.
+- User specifically called out project-local `working.md`, `workingd.md`, and
+  related progress logs. Current parsing already includes known progress-log
+  filenames such as `working.md`, `workingd.md`, `WORKING_LOG.md`,
+  `PROJECT_STATUS.md`, and `PROGRESS_LOG.md`, but the unresolved session
+  evidence work needed a first-class candidate surface.
+
+Progress:
+
+- Added `work-session-evidence-candidates` CLI/API/bridge support.
+- Default behavior uses the full stored session evidence index count as the
+  `session_limit` when the caller omits `--session-limit`, avoiding the bounded
+  `200`-row view that can create false missing-evidence rows.
+- Candidate rows include:
+  - deterministic `candidate_id`;
+  - project/date;
+  - latest source path/file;
+  - source file list;
+  - top parsed titles;
+  - sample source evidence;
+  - reason flags such as `unresolved_after_full_index` and
+    `needs_title_normalization`.
+- Added browser bridge validation for `/api/work-session-evidence-candidates`.
+- Extended browser-bridge isolated QA to call the new route from the browser
+  context and assert isolated DB usage plus candidate counter consistency.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added `ProjectWorkSessionEvidenceCandidates*` structs;
+  - added `run_project_work_session_evidence_candidates`;
+  - added deterministic candidate derivation from status export rows;
+  - registered the Tauri command.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added CLI command `work-session-evidence-candidates`;
+  - added bridge route `/api/work-session-evidence-candidates`;
+  - updated help text and bridge validation tests.
+- `src/types.ts` and `src/promptVaultApi.ts`:
+  - added TypeScript result/candidate types;
+  - added `loadProjectWorkSessionEvidenceCandidates`;
+  - added strict bridge response validation.
+- `tests/promptVaultApi.test.ts`:
+  - added bridge request/response validation tests for the new endpoint.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added direct route QA for the session evidence candidates endpoint.
+- `README.md` and `docs/CLI.md`:
+  - documented the new CLI command and bridge endpoint.
+
+Tests:
+
+- `cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 5 --json`:
+  PASS.
+  - Used full stored session index: `10867 / 10867`.
+  - Returned production candidate summary:
+    `36` full-index unresolved rows out of `91` project/day rows.
+  - Current parsed progress-log scope at that run:
+    `853` files, `31` projects, `25` days, `9,231` work items.
+  - Sample candidate source files included `working.md`, `WORKING_LOG.md`, and
+    `PROJECT_STATUS.md`.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`:
+  PASS, `185` tests.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`:
+  PASS, `32` tests.
+- `cargo test session_evidence_candidates_keep_only_full_index_unresolved_rows`:
+  PASS.
+- `cargo test --bin promptvault-cli bridge_routes_work_session_evidence_candidates_validation_errors`:
+  PASS.
+- `cargo test --bin promptvault-cli help_text_documents_cli_validation_rules`:
+  PASS.
+- `cargo fmt --check`: PASS.
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `git diff --check`: PASS.
+- `npm run check`: PASS.
+  - UI tests: `476` passed.
+  - Production build: passed.
+  - Rust lib tests: `201` passed.
+  - CLI tests: `32` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  - New route evidence:
+    `workSessionEvidenceCandidatesMeta` showed
+    `후보 5 / 57 · 세션 349 / 349 · limit 349`.
+  - Candidate rows included `working.md`, `PROJECT_STATUS.md`, and `working.md`
+    entries from real isolated progress-log parsing.
+- `npm run typecheck`: not available in this repo (`Missing script:
+  "typecheck"`); use `npm run check` as the current gate.
+
+Issues:
+
+- This is still a read-only candidate surface. It does not yet resolve session
+  evidence gaps automatically and does not persist operator decisions.
+- AI/GLM/OpenAI provider integration exists for normalization proposals, but
+  session evidence repair still needs a separate review queue with source
+  trace and approval gates.
+- Some parsed project-local logs still have rough/generic titles; those remain
+  visible in normalization candidates and in the new session-evidence candidate
+  reason flags.
+
+Research:
+
+- No external research was needed. This slice reused existing project
+  progress-log parsing, sanitized session evidence indexing, and bridge
+  validation patterns.
+
+Next Steps:
+
+- Add a persisted AI/manual review queue for session evidence candidates:
+  pending/stale/approved/rejected state, source trace, confidence, and durable
+  application only after operator approval.
+- Expand the candidate pipeline to classify project-local work artifacts by
+  file role (`working.md`, `workingd.md`, `WORKING_LOG.md`,
+  `run-worklog-report.md`, `PROJECT_STATUS.md`, etc.) so the management view
+  can distinguish canonical project handoff logs from generated reports.
+- Add UI controls for the new candidates once the persisted queue contract is
+  in place.
 
 ## Completed Slice - 2026-06-09 full-index unresolved filter QA fixture
 

@@ -23,6 +23,7 @@ import type {
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkReport,
+  ProjectWorkSessionEvidenceCandidatesResult,
   ProjectWorkSessionIndexResult,
   ProjectWorkStatusExportResult,
   ProjectWorkSummaryResult,
@@ -108,6 +109,13 @@ export interface ProjectWorkStatusExportOptions {
   database_path?: string;
   limit?: number;
   offset?: number;
+  session_limit?: number;
+  refresh_session_index?: boolean;
+}
+
+export interface ProjectWorkSessionEvidenceCandidatesOptions {
+  database_path?: string;
+  limit?: number;
   session_limit?: number;
   refresh_session_index?: boolean;
 }
@@ -334,6 +342,22 @@ export async function loadProjectWorkStatusExport(
     "/api/work-status-export",
     { options },
     parseProjectWorkStatusExportResult,
+  );
+}
+
+export async function loadProjectWorkSessionEvidenceCandidates(
+  options: ProjectWorkSessionEvidenceCandidatesOptions = {},
+): Promise<ProjectWorkSessionEvidenceCandidatesResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkSessionEvidenceCandidatesResult>(
+      "project_work_session_evidence_candidates",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkSessionEvidenceCandidatesResult>(
+    "/api/work-session-evidence-candidates",
+    { options },
+    parseProjectWorkSessionEvidenceCandidatesResult,
   );
 }
 
@@ -2212,6 +2236,72 @@ function parseProjectWorkStatusExportResult(value: unknown): ProjectWorkStatusEx
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkStatusExportResult;
+}
+
+function isProjectWorkSessionEvidenceCandidate(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.candidate_id)
+    && isNonBlankString(value.date)
+    && isNonBlankString(value.project)
+    && ["active", "session-supported", "progress-log-only"].includes(String(value.operational_status))
+    && isPositiveSafeInteger(value.work_item_count)
+    && isPositiveSafeInteger(value.source_file_count)
+    && Array.isArray(value.source_files)
+    && isNonBlankStringArray(value.source_files)
+    && value.source_files.length === value.source_file_count
+    && Array.isArray(value.top_titles)
+    && isNonBlankStringArray(value.top_titles)
+    && typeof value.sample_evidence === "string"
+    && isNonBlankString(value.latest_source_path)
+    && isNonBlankString(value.latest_source_file)
+    && isNonBlankString(value.reason)
+    && value.session_evidence_audit === "unresolved-after-full-index"
+    && typeof value.needs_title_normalization === "boolean"
+    && isFrequencyItemsWithinTotal(value.source_statuses, value.work_item_count);
+}
+
+function parseProjectWorkSessionEvidenceCandidatesResult(
+  value: unknown,
+): ProjectWorkSessionEvidenceCandidatesResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !isPositiveSafeInteger(value.requested_limit)
+    || !isPositiveSafeInteger(value.session_limit_used)
+    || !isNonNegativeSafeInteger(value.total_candidate_count)
+    || !isNonNegativeSafeIntegerAtMost(value.returned_candidate_count, value.total_candidate_count)
+    || !isNonNegativeSafeInteger(value.report_total_rows)
+    || !isNonNegativeSafeInteger(value.report_total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.report_project_count, value.report_total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.report_date_count, value.report_total_items)
+    || !isNonNegativeSafeInteger(value.report_files_seen)
+    || !isNonNegativeSafeInteger(value.report_session_scan_prompt_count)
+    || !isNonNegativeSafeInteger(value.report_session_evidence_count)
+    || !isNonNegativeSafeIntegerAtMost(
+      value.report_unique_session_evidence_count,
+      value.report_session_evidence_count,
+    )
+    || typeof value.report_session_evidence_index_used !== "boolean"
+    || typeof value.report_session_evidence_index_updated !== "boolean"
+    || !isNonNegativeSafeInteger(value.report_session_evidence_index_count)
+    || !isNonNegativeSafeInteger(value.report_session_evidence_index_total_count)
+    || value.report_session_evidence_index_count > value.report_session_evidence_index_total_count
+    || !isNonBlankString(value.report_session_evidence_mode)
+    || !isNonNegativeSafeIntegerAtMost(value.bounded_session_limit_count, value.report_total_rows)
+    || !isNonNegativeSafeIntegerAtMost(
+      value.unresolved_after_full_index_count,
+      value.report_total_rows,
+    )
+    || value.total_candidate_count !== value.unresolved_after_full_index_count
+    || !isNonNegativeSafeIntegerAtMost(value.needs_title_normalization_count, value.report_total_rows)
+    || !Array.isArray(value.candidates)
+    || value.candidates.length !== value.returned_candidate_count
+    || !value.candidates.every(isProjectWorkSessionEvidenceCandidate)
+    || !recordStringFieldValuesAreUnique(value.candidates, "candidate_id")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkSessionEvidenceCandidatesResult;
 }
 
 function isProjectWorkSummary(value: unknown): boolean {

@@ -18,6 +18,7 @@ import {
   listProjectWorkLogExtractionRuns,
   loadStoredPrompts,
   loadProjectWorkSummary,
+  loadProjectWorkSessionEvidenceCandidates,
   loadProjectWorkStatusExport,
   runProjectWorkSessionIndex,
   listProjectWorkSummarySnapshots,
@@ -376,6 +377,52 @@ function projectWorkStatusExportPayload(overrides = {}) {
       needs_session_evidence: false,
       session_evidence_audit: "matched",
       needs_title_normalization: false,
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function projectWorkSessionEvidenceCandidatesPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    requested_limit: 20,
+    session_limit_used: 500,
+    total_candidate_count: 1,
+    returned_candidate_count: 1,
+    report_total_rows: 2,
+    report_total_items: 3,
+    report_project_count: 1,
+    report_date_count: 1,
+    report_files_seen: 2,
+    report_session_scan_prompt_count: 500,
+    report_session_evidence_count: 0,
+    report_unique_session_evidence_count: 0,
+    report_session_evidence_index_used: true,
+    report_session_evidence_index_updated: false,
+    report_session_evidence_index_count: 500,
+    report_session_evidence_index_total_count: 500,
+    report_session_evidence_mode: "metadata-first-raw-fallback",
+    bounded_session_limit_count: 0,
+    unresolved_after_full_index_count: 1,
+    needs_title_normalization_count: 1,
+    candidates: [{
+      candidate_id: "session-evidence-PromptVault-a1b2c3d4e5",
+      date: "2026-06-09",
+      project: "PromptVault",
+      operational_status: "progress-log-only",
+      source_statuses: [{ text: "current", count: 3 }],
+      work_item_count: 3,
+      source_file_count: 2,
+      source_files: ["working.md", "workingd.md"],
+      top_titles: ["Full-index evidence review"],
+      sample_evidence: "Added full-index evidence review candidate.",
+      latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+      latest_source_file: "working.md",
+      reason: "unresolved_after_full_index,no_session_evidence,needs_title_normalization",
+      session_evidence_audit: "unresolved-after-full-index",
+      needs_title_normalization: true,
     }],
     warnings: [],
     ...overrides,
@@ -828,6 +875,61 @@ test("browser bridge work status export rejects impossible index counters", asyn
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /report_session_evidence_index|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work session evidence candidates posts options and validates rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionEvidenceCandidatesPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkSessionEvidenceCandidates({
+    limit: 10,
+    session_limit: 500,
+    refresh_session_index: true,
+  });
+
+  assert.match(requestPath, /\/api\/work-session-evidence-candidates$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      limit: 10,
+      session_limit: 500,
+      refresh_session_index: true,
+    },
+  });
+  assert.equal(result.total_candidate_count, 1);
+  assert.equal(result.returned_candidate_count, 1);
+  assert.equal(result.session_limit_used, 500);
+  assert.equal(result.candidates[0].project, "PromptVault");
+  assert.equal(result.candidates[0].source_files[1], "workingd.md");
+  assert.equal(result.candidates[0].session_evidence_audit, "unresolved-after-full-index");
+});
+
+test("browser bridge work session evidence candidates rejects inconsistent counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSessionEvidenceCandidatesPayload({
+    total_candidate_count: 2,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkSessionEvidenceCandidates(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /session-evidence-PromptVault|workingd\.md|undefined/);
       return true;
     },
   );

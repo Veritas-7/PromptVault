@@ -16,6 +16,7 @@ cargo run --bin promptvault-cli -- improve [--local] --json --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve [--local] < prompt.txt
 cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [--count N>0] --json
 cargo run --bin promptvault-cli -- work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]
+cargo run --bin promptvault-cli -- work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]
 cargo run --bin promptvault-cli -- work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]
 cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PATH]
 ```
@@ -53,10 +54,11 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `work-status-export --json` returns grouped rows with source files, top titles, item counts, session evidence counts, and review flags without raw session bodies.
 - `work-status-export --json` separates the session index records used by the current `--session-limit` from the total sanitized records stored in SQLite, so long backfills stay visible even when the export is bounded.
 - `work-status-export --offset N>=0` pages through later project/day rows when paired with `--limit`, avoiding an unbounded all-row render.
+- `work-session-evidence-candidates` lists project/day rows that still have no matched session evidence after the selected session evidence index. When `--session-limit` is omitted it uses the full stored session index count by default.
 - `work-session-index` upserts sanitized Codex/Codex CX session records so progress-log work items can be linked to real session evidence without storing raw session bodies.
 - `work-session-index --batch-files` is capped at `1..500`; short backfills up to `--max-batches 2` need no confirmation.
 - `work-session-index --confirm-long-run` is required when the effective max batch count is above `2`, including `--until-complete` when no smaller `--max-batches` is supplied.
-- `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, `/api/import-events`, `/api/work-summary`, `/api/work-status-export`, `/api/work-summary-snapshots`, and `/api/work-session-index` on the requested local address.
+- `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, `/api/import-events`, `/api/work-summary`, `/api/work-status-export`, `/api/work-session-evidence-candidates`, `/api/work-summary-snapshots`, and `/api/work-session-index` on the requested local address.
 - `serve --database PATH` makes browser-bridge persistence use the supplied SQLite file by default, so full click QA can exercise save/import flows without touching the permanent vault. Per-request `database_path` payload fields still take precedence.
 
 ## Agent-Native Design Notes
@@ -96,6 +98,7 @@ cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
 cargo run --bin promptvault-cli -- work-status-export --limit 8 --session-limit 200
 cargo run --bin promptvault-cli -- work-status-export --limit 8 --offset 8 --session-limit 200
 cargo run --bin promptvault-cli -- work-status-export --limit 3 --session-limit 200 --json
+cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --json
 cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 2 --json
 cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 10 --confirm-long-run --json
 set +e; cargo run --bin promptvault-cli -- work-session-index --batch-files 1 --max-batches 3 --json; test "$?" -ne 0; set -e

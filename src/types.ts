@@ -255,6 +255,51 @@ export interface ProjectWorkStatusExportResult {
   warnings: string[];
 }
 
+export interface ProjectWorkSessionEvidenceCandidate {
+  candidate_id: string;
+  date: string;
+  project: string;
+  operational_status: string;
+  source_statuses: FrequencyItem[];
+  work_item_count: number;
+  source_file_count: number;
+  source_files: string[];
+  top_titles: string[];
+  sample_evidence: string;
+  latest_source_path: string;
+  latest_source_file: string;
+  reason: string;
+  session_evidence_audit: string;
+  needs_title_normalization: boolean;
+}
+
+export interface ProjectWorkSessionEvidenceCandidatesResult {
+  generated_at: string;
+  database_path: string;
+  requested_limit: number;
+  session_limit_used: number;
+  total_candidate_count: number;
+  returned_candidate_count: number;
+  report_total_rows: number;
+  report_total_items: number;
+  report_project_count: number;
+  report_date_count: number;
+  report_files_seen: number;
+  report_session_scan_prompt_count: number;
+  report_session_evidence_count: number;
+  report_unique_session_evidence_count: number;
+  report_session_evidence_index_used: boolean;
+  report_session_evidence_index_updated: boolean;
+  report_session_evidence_index_count: number;
+  report_session_evidence_index_total_count: number;
+  report_session_evidence_mode: string;
+  bounded_session_limit_count: number;
+  unresolved_after_full_index_count: number;
+  needs_title_normalization_count: number;
+  candidates: ProjectWorkSessionEvidenceCandidate[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSessionIndexSourceState {
   source_id: string;
   source_label: string;

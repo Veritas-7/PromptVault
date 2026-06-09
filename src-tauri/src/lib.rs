@@ -33,6 +33,8 @@ const MAX_PROJECT_WORK_SESSION_INDEX_BATCH_FILES: usize = 500;
 const CONFIRMATION_FREE_PROJECT_WORK_SESSION_INDEX_MAX_BATCHES: usize = 2;
 const DEFAULT_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 80;
 const MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 1_000;
+const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT: usize = 20;
+const MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT: usize = 200;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
 const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
 const PROJECT_WORK_METADATA_TAIL_TIMESTAMP_LINES: usize = 200;
@@ -846,6 +848,61 @@ pub struct ProjectWorkStatusExportResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSessionEvidenceCandidatesOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub session_limit: Option<usize>,
+    pub refresh_session_index: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceCandidate {
+    pub candidate_id: String,
+    pub date: String,
+    pub project: String,
+    pub operational_status: String,
+    pub source_statuses: Vec<FrequencyItem>,
+    pub work_item_count: usize,
+    pub source_file_count: usize,
+    pub source_files: Vec<String>,
+    pub top_titles: Vec<String>,
+    pub sample_evidence: String,
+    pub latest_source_path: String,
+    pub latest_source_file: String,
+    pub reason: String,
+    pub session_evidence_audit: String,
+    pub needs_title_normalization: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceCandidatesResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub requested_limit: usize,
+    pub session_limit_used: usize,
+    pub total_candidate_count: usize,
+    pub returned_candidate_count: usize,
+    pub report_total_rows: usize,
+    pub report_total_items: usize,
+    pub report_project_count: usize,
+    pub report_date_count: usize,
+    pub report_files_seen: usize,
+    pub report_session_scan_prompt_count: usize,
+    pub report_session_evidence_count: usize,
+    pub report_unique_session_evidence_count: usize,
+    pub report_session_evidence_index_used: bool,
+    pub report_session_evidence_index_updated: bool,
+    pub report_session_evidence_index_count: usize,
+    pub report_session_evidence_index_total_count: usize,
+    pub report_session_evidence_mode: String,
+    pub bounded_session_limit_count: usize,
+    pub unresolved_after_full_index_count: usize,
+    pub needs_title_normalization_count: usize,
+    pub candidates: Vec<ProjectWorkSessionEvidenceCandidate>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkSessionIndexOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
@@ -1248,6 +1305,14 @@ fn project_work_status_export(
     options: Option<ProjectWorkStatusExportOptions>,
 ) -> Result<ProjectWorkStatusExportResult, String> {
     run_project_work_status_export(options.unwrap_or_default()).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_session_evidence_candidates(
+    options: Option<ProjectWorkSessionEvidenceCandidatesOptions>,
+) -> Result<ProjectWorkSessionEvidenceCandidatesResult, String> {
+    run_project_work_session_evidence_candidates(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -1888,6 +1953,100 @@ fn project_work_session_index_effective_max_batches(
 fn project_work_session_index_needs_long_run_confirmation(max_batches: Option<usize>) -> bool {
     max_batches.is_some_and(|max_batches| {
         max_batches > CONFIRMATION_FREE_PROJECT_WORK_SESSION_INDEX_MAX_BATCHES
+    })
+}
+
+pub fn run_project_work_session_evidence_candidates(
+    options: ProjectWorkSessionEvidenceCandidatesOptions,
+) -> Result<ProjectWorkSessionEvidenceCandidatesResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-session-evidence-candidates limit requires a positive integer".into());
+    }
+    if matches!(options.session_limit, Some(0)) {
+        return Err(
+            "work-session-evidence-candidates session_limit requires a positive integer".into(),
+        );
+    }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err(
+            "work-session-evidence-candidates database path requires a non-empty value".into(),
+        );
+    }
+
+    let requested_limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT);
+    let limit = requested_limit.min(MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT);
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let stored_session_index_count = project_work_session_index_total_count(&database_path)?;
+    let session_limit = options
+        .session_limit
+        .unwrap_or_else(|| stored_session_index_count.max(DEFAULT_PROJECT_WORK_SESSION_LIMIT));
+    let report = run_project_work_report(ProjectWorkReportOptions {
+        limit: None,
+        session_limit: Some(session_limit),
+        database_path: Some(database_path.display().to_string()),
+        refresh_session_index: options.refresh_session_index,
+    })?;
+    let session_evidence_index_total_count =
+        project_work_session_index_total_count(&database_path)?;
+    let all_rows =
+        build_project_work_status_export_rows(&report, session_evidence_index_total_count);
+    let total_row_count = all_rows.len();
+    let bounded_session_limit_count = all_rows
+        .iter()
+        .filter(|row| row.session_evidence_audit == "bounded-session-limit")
+        .count();
+    let unresolved_after_full_index_count = all_rows
+        .iter()
+        .filter(|row| row.session_evidence_audit == "unresolved-after-full-index")
+        .count();
+    let needs_title_normalization_count = all_rows
+        .iter()
+        .filter(|row| row.needs_title_normalization)
+        .count();
+    let mut warnings = report.warnings.clone();
+    if requested_limit > MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT {
+        warnings.push(format!(
+            "work-session-evidence-candidates limit capped at {MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT}"
+        ));
+    }
+    if bounded_session_limit_count > 0 {
+        warnings.push(format!(
+            "Session evidence candidates use a bounded session index for {bounded_session_limit_count} project/day rows; increase session_limit or refresh the session index before treating them as full-index unresolved."
+        ));
+    }
+    let candidates = build_project_work_session_evidence_candidates_from_rows(&all_rows, limit);
+
+    Ok(ProjectWorkSessionEvidenceCandidatesResult {
+        generated_at: report.generated_at.clone(),
+        database_path: database_path.display().to_string(),
+        requested_limit,
+        session_limit_used: session_limit,
+        total_candidate_count: unresolved_after_full_index_count,
+        returned_candidate_count: candidates.len(),
+        report_total_rows: total_row_count,
+        report_total_items: report.total_items,
+        report_project_count: report.project_count,
+        report_date_count: report.date_count,
+        report_files_seen: report.files_seen,
+        report_session_scan_prompt_count: report.session_scan_prompt_count,
+        report_session_evidence_count: report.session_evidence_count,
+        report_unique_session_evidence_count: report.session_evidence_unique_count,
+        report_session_evidence_index_used: report.session_evidence_index_used,
+        report_session_evidence_index_updated: report.session_evidence_index_updated,
+        report_session_evidence_index_count: report.session_evidence_index_count,
+        report_session_evidence_index_total_count: session_evidence_index_total_count,
+        report_session_evidence_mode: report.session_evidence_mode,
+        bounded_session_limit_count,
+        unresolved_after_full_index_count,
+        needs_title_normalization_count,
+        candidates,
+        warnings,
     })
 }
 
@@ -7612,6 +7771,57 @@ fn project_work_status_session_evidence_audit(
     "unresolved-after-full-index".to_string()
 }
 
+fn build_project_work_session_evidence_candidates_from_rows(
+    rows: &[ProjectWorkStatusExportRow],
+    limit: usize,
+) -> Vec<ProjectWorkSessionEvidenceCandidate> {
+    let mut candidates = rows
+        .iter()
+        .filter(|row| row.session_evidence_audit == "unresolved-after-full-index")
+        .map(project_work_session_evidence_candidate_from_row)
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        right
+            .date
+            .cmp(&left.date)
+            .then_with(|| left.project.cmp(&right.project))
+            .then_with(|| left.candidate_id.cmp(&right.candidate_id))
+    });
+    candidates.truncate(limit);
+    candidates
+}
+
+fn project_work_session_evidence_candidate_from_row(
+    row: &ProjectWorkStatusExportRow,
+) -> ProjectWorkSessionEvidenceCandidate {
+    let hash = hash_text(&format!("{}:{}", row.project, row.date));
+    let hash_segment = hash.chars().take(10).collect::<String>();
+    let mut reasons = vec!["unresolved_after_full_index", "no_session_evidence"];
+    if row.needs_title_normalization {
+        reasons.push("needs_title_normalization");
+    }
+    ProjectWorkSessionEvidenceCandidate {
+        candidate_id: format!(
+            "session-evidence-{}-{hash_segment}",
+            summary_id_segment(&row.project)
+        ),
+        date: row.date.clone(),
+        project: row.project.clone(),
+        operational_status: row.operational_status.clone(),
+        source_statuses: row.source_statuses.clone(),
+        work_item_count: row.work_item_count,
+        source_file_count: row.source_file_count,
+        source_files: row.source_files.clone(),
+        top_titles: row.top_titles.clone(),
+        sample_evidence: row.sample_evidence.clone(),
+        latest_source_path: row.latest_source_path.clone(),
+        latest_source_file: row.latest_source_file.clone(),
+        reason: reasons.join(","),
+        session_evidence_audit: row.session_evidence_audit.clone(),
+        needs_title_normalization: row.needs_title_normalization,
+    }
+}
+
 fn paginate_project_work_status_export_rows(
     all_rows: Vec<ProjectWorkStatusExportRow>,
     limit: usize,
@@ -13045,6 +13255,7 @@ pub fn run() {
             improve_prompt,
             project_work_summary,
             project_work_status_export,
+            project_work_session_evidence_candidates,
             project_work_summary_snapshots,
             project_work_log_coverage,
             project_work_log_candidates,
@@ -16085,6 +16296,61 @@ Status: completed as a source-only/report-only hardening slice.
             project_work_status_session_evidence_audit(0, false, 0, 0),
             "no-session-index"
         );
+    }
+
+    #[test]
+    fn session_evidence_candidates_keep_only_full_index_unresolved_rows() {
+        let row = |project: &str, audit: &str, session_evidence_count: usize| {
+            ProjectWorkStatusExportRow {
+                date: "2026-06-09".to_string(),
+                project: project.to_string(),
+                operational_status: if session_evidence_count > 0 {
+                    "session-supported".to_string()
+                } else {
+                    "progress-log-only".to_string()
+                },
+                source_statuses: vec![FrequencyItem {
+                    text: "current".to_string(),
+                    count: 1,
+                }],
+                work_item_count: 2,
+                source_file_count: 1,
+                source_files: vec!["working.md".to_string()],
+                top_titles: vec![format!("{project} full-index evidence review")],
+                sample_evidence: format!("{project} still has no session evidence."),
+                latest_source_path: format!("/Users/wj/Ai/System/10_Projects/{project}/working.md"),
+                latest_source_file: "working.md".to_string(),
+                session_evidence_count,
+                unique_session_evidence_count: session_evidence_count,
+                session_sources: Vec::new(),
+                needs_session_evidence: session_evidence_count == 0,
+                session_evidence_audit: audit.to_string(),
+                needs_title_normalization: project == "NeedsTitle",
+            }
+        };
+        let rows = vec![
+            row("Matched", "matched", 1),
+            row("Bounded", "bounded-session-limit", 0),
+            row("NeedsTitle", "unresolved-after-full-index", 0),
+        ];
+
+        let candidates = build_project_work_session_evidence_candidates_from_rows(&rows, 10);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].project, "NeedsTitle");
+        assert!(candidates[0]
+            .candidate_id
+            .starts_with("session-evidence-NeedsTitle-"));
+        assert_eq!(
+            candidates[0].reason,
+            "unresolved_after_full_index,no_session_evidence,needs_title_normalization"
+        );
+        assert_eq!(
+            candidates[0].session_evidence_audit,
+            "unresolved-after-full-index"
+        );
+        assert_eq!(candidates[0].work_item_count, 2);
+        assert_eq!(candidates[0].latest_source_file, "working.md");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 09:56 KST
+Updated: 2026-06-09 09:58 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -58,6 +58,11 @@ Tests:
   `workManagementDurabilityWarning="라이브만 44개가 저장관리 1개보다 많습니다. 스냅샷 저장 또는 AI 추출 저장으로 관리 상태를 고정하세요."`.
 - `npm run check`: PASS. UI `432` tests, Vite build, Rust lib `164`
   tests, CLI `23` tests, doc-tests, and clippy all passed.
+- Final live `work-report --session-limit 200 --json` after push: PASS,
+  `total_items=8502`, `project_count=31`, `date_count=25`,
+  `files_seen=782`, `session_scan_prompt_count=200`,
+  `session_evidence_count=68789`, `session_evidence_unique_count=198`,
+  `session_evidence_mode=metadata-first-raw-fallback`, `warnings=[]`.
 
 Issues:
 
@@ -66,7 +71,6 @@ Issues:
 
 Next Steps:
 
-- Run diff/staged secret checks, then commit and push.
 - Next improvement slice: add an explicit save/freeze action for live-only
   management rows so parsed project/day progress rows can become durable
   records without requiring a separate extraction candidate.

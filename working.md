@@ -1,10 +1,66 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 07:38 KST
+Updated: 2026-06-10 07:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Provider request error detail
+
+Current Goal:
+
+- Make provider-backed work-management failures diagnosable before attempting
+  GLM/OpenAI/Codex-assisted review queue reduction.
+
+Context:
+
+- Persistent `work-ai-provider-status` reports GLM configured for work-summary,
+  work-log extraction, work-log normalization, and session-evidence proposals.
+- Actual read-only GLM work-log normalization probes still fall back locally, so
+  the UI/CLI must expose whether the request failed because of timeout,
+  connection, DNS, TLS, or another transport cause.
+
+Progress:
+
+- Added a shared `provider_request_error_detail` helper that preserves the
+  top-level `reqwest` error and its source chain.
+- Applied the helper to OpenAI/GLM transport-send failures across prompt
+  improvement, work-log extraction, session-evidence proposals, work-summary,
+  and work-log normalization.
+- Added a localhost transport-failure test to prove fallback warnings include
+  lower-level cause text.
+- Re-ran a real read-only persistent GLM normalization probe and confirmed the
+  warning now exposes `operation timed out`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds provider transport error cause-chain formatting
+  and a regression test for GLM work-log normalization fallback warnings.
+
+Tests:
+
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_log_normalization_provider_failure_warning_includes_error_cause --lib`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_log_normalization --lib` (`5` tests).
+- PASS/OBSERVED: `cargo run --manifest-path src-tauri/Cargo.toml --quiet --bin promptvault-cli -- work-log-normalization-proposals --needs-title-normalization --limit 1 --ai --json`.
+- PASS: `npm run check` (`499` UI tests, `215` Rust library tests, `34` CLI tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- Persistent CLI probe still fell back to `local-normalization-rules`, but the
+  GLM warning now includes the actionable transport cause:
+  `GLM work-log normalization 요청 실패: error sending request for url (https://api.z.ai/api/coding/paas/v4/chat/completions) / caused by: operation timed out; 로컬 fallback을 사용했습니다.`
+- Isolated browser bridge QA completed the work-management provider/status,
+  normalization proposal/review/apply, and saved extraction flows against
+  temporary DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-1JAd7E/qa.sqlite`.
+
+Remaining:
+
+- Provider-backed queue reduction is still blocked on the live GLM timeout or
+  an enabled Codex/OpenAI route. Do not claim full autonomous project/day
+  management until pending review queues are reduced or explicitly resolved.
 
 ## Completed Slice - 2026-06-10 Review resolution guidance
 

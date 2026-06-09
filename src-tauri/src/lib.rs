@@ -4124,7 +4124,10 @@ async fn request_openai_improvement(
         .send()
         .await
         .map_err(|err| {
-            format!("OpenAI 요청 실패: {err}; 다음 provider 또는 로컬 fallback을 사용합니다.")
+            format!(
+                "OpenAI 요청 실패: {}; 다음 provider 또는 로컬 fallback을 사용합니다.",
+                provider_request_error_detail(&err)
+            )
         })?;
 
     let status = response.status();
@@ -4175,7 +4178,12 @@ async fn request_glm_improvement(
         .json(&body)
         .send()
         .await
-        .map_err(|err| format!("GLM 요청 실패: {err}; 로컬 fallback을 사용했습니다."))?;
+        .map_err(|err| {
+            format!(
+                "GLM 요청 실패: {}; 로컬 fallback을 사용했습니다.",
+                provider_request_error_detail(&err)
+            )
+        })?;
 
     let status = response.status();
     if !status.is_success() {
@@ -5865,7 +5873,10 @@ async fn request_openai_project_work_log_extraction(
         .send()
         .await
         .map_err(|err| {
-            format!("OpenAI work-log extraction 요청 실패: {err}; 다음 provider 또는 로컬 fallback을 사용합니다.")
+            format!(
+                "OpenAI work-log extraction 요청 실패: {}; 다음 provider 또는 로컬 fallback을 사용합니다.",
+                provider_request_error_detail(&err)
+            )
         })?;
     let status = response.status();
     if !status.is_success() {
@@ -5930,7 +5941,10 @@ async fn request_glm_project_work_log_extraction(
         .send()
         .await
         .map_err(|err| {
-            format!("GLM work-log extraction 요청 실패: {err}; 로컬 fallback을 사용했습니다.")
+            format!(
+                "GLM work-log extraction 요청 실패: {}; 로컬 fallback을 사용했습니다.",
+                provider_request_error_detail(&err)
+            )
         })?;
     let status = response.status();
     if !status.is_success() {
@@ -6065,6 +6079,19 @@ fn project_work_log_extraction_http_client(provider: &str) -> Result<reqwest::Cl
                 "{provider} work-log extraction HTTP client 생성 실패: {err}; 로컬 fallback을 사용합니다."
             )
         })
+}
+
+fn provider_request_error_detail(err: &reqwest::Error) -> String {
+    let mut parts = vec![err.to_string()];
+    let mut source = std::error::Error::source(err);
+    while let Some(cause) = source {
+        let cause_text = cause.to_string();
+        if !cause_text.trim().is_empty() && !parts.iter().any(|part| part == &cause_text) {
+            parts.push(cause_text);
+        }
+        source = cause.source();
+    }
+    parts.join(" / caused by: ")
 }
 
 fn project_work_log_extraction_proposals_from_content(
@@ -8612,7 +8639,10 @@ async fn request_openai_project_work_session_evidence_proposals(
         .send()
         .await
         .map_err(|err| {
-            format!("OpenAI session-evidence proposal 요청 실패: {err}; 다음 provider 또는 로컬 fallback을 사용합니다.")
+            format!(
+                "OpenAI session-evidence proposal 요청 실패: {}; 다음 provider 또는 로컬 fallback을 사용합니다.",
+                provider_request_error_detail(&err)
+            )
         })?;
     let status = response.status();
     if !status.is_success() {
@@ -8734,7 +8764,10 @@ async fn request_glm_project_work_session_evidence_proposals(
         .send()
         .await
         .map_err(|err| {
-            format!("GLM session-evidence proposal 요청 실패: {err}; 로컬 fallback을 사용했습니다.")
+            format!(
+                "GLM session-evidence proposal 요청 실패: {}; 로컬 fallback을 사용했습니다.",
+                provider_request_error_detail(&err)
+            )
         })?;
     let status = response.status();
     if !status.is_success() {
@@ -9886,7 +9919,10 @@ async fn request_openai_project_work_summary(
         .send()
         .await
         .map_err(|err| {
-            format!("OpenAI work-summary 요청 실패: {err}; 다음 provider 또는 로컬 fallback을 사용합니다.")
+            format!(
+                "OpenAI work-summary 요청 실패: {}; 다음 provider 또는 로컬 fallback을 사용합니다.",
+                provider_request_error_detail(&err)
+            )
         })?;
     let status = response.status();
     if !status.is_success() {
@@ -9937,7 +9973,10 @@ async fn request_glm_project_work_summary(
         .send()
         .await
         .map_err(|err| {
-            format!("GLM work-summary 요청 실패: {err}; 로컬 fallback을 사용했습니다.")
+            format!(
+                "GLM work-summary 요청 실패: {}; 로컬 fallback을 사용했습니다.",
+                provider_request_error_detail(&err)
+            )
         })?;
     let status = response.status();
     if !status.is_success() {
@@ -13038,7 +13077,10 @@ async fn request_openai_project_work_log_normalization(
         .send()
         .await
         .map_err(|err| {
-            format!("OpenAI work-log normalization 요청 실패: {err}; 다음 provider 또는 로컬 fallback을 사용합니다.")
+            format!(
+                "OpenAI work-log normalization 요청 실패: {}; 다음 provider 또는 로컬 fallback을 사용합니다.",
+                provider_request_error_detail(&err)
+            )
         })?;
     let status = response.status();
     if !status.is_success() {
@@ -13156,7 +13198,10 @@ async fn request_glm_project_work_log_normalization(
         .send()
         .await
         .map_err(|err| {
-            format!("GLM work-log normalization 요청 실패: {err}; 로컬 fallback을 사용했습니다.")
+            format!(
+                "GLM work-log normalization 요청 실패: {}; 로컬 fallback을 사용했습니다.",
+                provider_request_error_detail(&err)
+            )
         })?;
     let status = response.status();
     if !status.is_success() {
@@ -20620,6 +20665,51 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(!first_request.contains("work-normalize-PromptVault-000000000008"));
         assert!(second_request.contains("work-normalize-PromptVault-000000000008"));
         assert!(!second_request.contains("work-normalize-PromptVault-000000000000"));
+    }
+
+    #[tokio::test]
+    async fn project_work_log_normalization_provider_failure_warning_includes_error_cause() {
+        let candidates = vec![normalization_candidate_for_test(
+            "work-normalize-PromptVault-request-failure".to_string(),
+            "2026-06-09: Normalization provider failure should expose the transport cause."
+                .to_string(),
+        )];
+        let candidates_result = ProjectWorkLogNormalizationCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            database_path: "/tmp/promptvault.sqlite".to_string(),
+            total_candidate_count: candidates.len(),
+            returned_candidate_count: candidates.len(),
+            report_total_items: 1,
+            report_project_count: 1,
+            report_date_count: 1,
+            candidates,
+            warnings: Vec::new(),
+        };
+        let mut env = HashMap::new();
+        env.insert("GLM_API_KEY".to_string(), "glm-key".to_string());
+        env.insert(
+            "GLM_CODING_ENDPOINT".to_string(),
+            "http://127.0.0.1:9/v4/chat/completions".to_string(),
+        );
+
+        let result =
+            project_work_log_normalization_proposals_with_env(candidates_result, false, env)
+                .await
+                .expect("fallback normalization proposals");
+
+        assert_eq!(result.provider, "local-normalization-rules");
+        assert_eq!(result.provider_runtime, "local-normalization-rules");
+        assert!(!result.used_ai);
+        let warning = result
+            .warnings
+            .iter()
+            .find(|warning| warning.contains("GLM work-log normalization 요청 실패"))
+            .expect("GLM request failure warning");
+        assert!(
+            warning.contains("error sending request for url"),
+            "{warning}"
+        );
+        assert!(warning.contains("caused by:"), "{warning}");
     }
 
     #[test]

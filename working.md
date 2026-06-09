@@ -6,7 +6,38 @@ Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 normalization fallback title evidence
+## Current Slice - 2026-06-09 AI normalization and session evidence remaining gaps
+
+Current Goal:
+
+- Continue reducing the remaining managed-work gaps now that project-local log
+  parsing and review-only fallback titles are stable.
+- Next highest gaps are `needs_session_evidence` rows and AI-backed
+  normalization proposals that can be reviewed/applied instead of staying
+  local fallback only.
+
+Context:
+
+- Current live status is not "fully complete": project/day rows are managed,
+  but a fresh export still shows rows that need stronger session evidence and
+  title normalization.
+- Existing code already has provider-backed paths for OpenAI Responses and GLM
+  chat normalization through `work-log-normalization-proposals --ai`, with
+  validation that rejects low confidence, invented evidence, bad statuses, and
+  risky content.
+- Local fallback titles are now source-backed enough for review, but still
+  intentionally rejected until operator approval or AI-backed validation.
+
+Next Steps:
+
+- Run an AI-backed normalization proposal pass only when provider keys are
+  available, then inspect accepted/rejected reasons before applying anything.
+- Continue real Codex/Codex CX session index backfill so `needs_session_evidence`
+  rows shrink with actual session evidence rather than inferred text.
+- Keep using browser-bridge QA after any UI/backend changes touching work-log
+  management.
+
+## Completed Slice - 2026-06-09 normalization fallback title evidence
 
 Current Goal:
 
@@ -98,10 +129,10 @@ Tests:
   - work management overview stayed at `91` managed rows and `0` live-only
     rows after freeze.
 
-Next Steps:
+Outcome:
 
-- Run secret scans.
-- Stage explicit touched files, commit, and push if clean.
+- Staged explicit touched files, passed full and staged gitleaks, committed,
+  and pushed as `32b0689`.
 
 ## Completed Slice - 2026-06-09 session backfill planned-run visibility
 

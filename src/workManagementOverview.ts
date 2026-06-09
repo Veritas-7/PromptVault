@@ -3,6 +3,8 @@ import type {
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
+  ProjectWorkLogNormalizedItem,
+  ProjectWorkLogNormalizedItemsResult,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
 } from "./types.ts";
@@ -12,6 +14,7 @@ export type WorkManagementOverviewSource =
   | "snapshot"
   | "extraction_proposal"
   | "saved_extraction"
+  | "normalized_row"
   | "progress_log";
 export type WorkManagementOverviewPersistenceState = "persisted" | "live_only";
 export type WorkManagementOverviewSort =
@@ -34,7 +37,12 @@ export interface WorkManagementOverviewInput {
   snapshots?: ProjectWorkSummarySnapshotsResult | null;
   extractionProposals?: ProjectWorkLogExtractionProposalsResult | null;
   extractionItems?: ProjectWorkLogExtractionItemsResult | null;
+  normalizedItems?: ProjectWorkLogNormalizedItemsResult | ProjectWorkLogNormalizedItemsInput | null;
   coverage?: ProjectWorkLogCoverageResult | null;
+}
+
+interface ProjectWorkLogNormalizedItemsInput {
+  items: ProjectWorkLogNormalizedItem[];
 }
 
 export interface WorkManagementOverviewRow {
@@ -46,6 +54,7 @@ export interface WorkManagementOverviewRow {
   snapshot_count: number;
   extraction_proposal_count: number;
   saved_extraction_count: number;
+  normalized_row_count: number;
   progress_log_count: number;
   work_item_count: number;
   session_evidence_count: number;
@@ -55,6 +64,7 @@ export interface WorkManagementOverviewRow {
   persistence_state: WorkManagementOverviewPersistenceState;
   latest_snapshot_created_at: string | null;
   latest_saved_extraction_at: string | null;
+  latest_normalized_at: string | null;
   latest_title: string | null;
 }
 
@@ -66,11 +76,13 @@ export interface WorkManagementOverview {
   snapshot_summary_count: number;
   extraction_proposal_count: number;
   saved_extraction_count: number;
+  normalized_row_count: number;
   progress_log_count: number;
   persisted_row_count: number;
   live_only_row_count: number;
   latest_snapshot_created_at: string | null;
   latest_saved_extraction_at: string | null;
+  latest_normalized_at: string | null;
   rows: WorkManagementOverviewRow[];
 }
 
@@ -101,12 +113,14 @@ const SOURCE_ORDER: WorkManagementOverviewSource[] = [
   "snapshot",
   "extraction_proposal",
   "saved_extraction",
+  "normalized_row",
   "progress_log",
 ];
 
 const SOURCE_LABELS: Record<WorkManagementOverviewSource, string> = {
   current_summary: "현재요약",
   extraction_proposal: "추출제안",
+  normalized_row: "정규화",
   progress_log: "진행로그",
   saved_extraction: "저장추출",
   snapshot: "스냅샷",
@@ -166,6 +180,20 @@ export function buildWorkManagementOverview(
     row.sourceSet.add("extraction_proposal");
   }
 
+  for (const item of input.normalizedItems?.items ?? []) {
+    const row = upsertRow(rowsByKey, item.date, item.project);
+    row.normalized_row_count += 1;
+    row.work_item_count = Math.max(row.work_item_count, item.work_item_count);
+    row.session_evidence_count = Math.max(
+      row.session_evidence_count,
+      item.session_evidence_count,
+    );
+    row.latest_title ??= item.normalized_title;
+    row.latest_normalized_at = latestTimestamp(row.latest_normalized_at, item.applied_at);
+    addRowConfidence(row, item.confidence);
+    row.sourceSet.add("normalized_row");
+  }
+
   for (const file of input.coverage?.files ?? []) {
     if (file.status !== "parsed" || !file.latest_date) continue;
     const row = upsertRow(rowsByKey, file.latest_date, file.project);
@@ -178,7 +206,9 @@ export function buildWorkManagementOverview(
   const rows = [...rowsByKey.values()]
     .map(({ sourceSet, ...row }) => ({
       ...row,
-      persistence_state: row.snapshot_count > 0 || row.saved_extraction_count > 0
+      persistence_state: row.snapshot_count > 0
+          || row.saved_extraction_count > 0
+          || row.normalized_row_count > 0
         ? "persisted" as const
         : "live_only" as const,
       sources: SOURCE_ORDER.filter((source) => sourceSet.has(source)),
@@ -197,11 +227,13 @@ export function buildWorkManagementOverview(
     snapshot_summary_count: sumRows(rows, "snapshot_count"),
     extraction_proposal_count: sumRows(rows, "extraction_proposal_count"),
     saved_extraction_count: sumRows(rows, "saved_extraction_count"),
+    normalized_row_count: sumRows(rows, "normalized_row_count"),
     progress_log_count: sumRows(rows, "progress_log_count"),
     persisted_row_count: rows.filter((row) => row.persistence_state === "persisted").length,
     live_only_row_count: rows.filter((row) => row.persistence_state === "live_only").length,
     latest_snapshot_created_at: latestTimestampFromRows(rows, "latest_snapshot_created_at"),
     latest_saved_extraction_at: latestTimestampFromRows(rows, "latest_saved_extraction_at"),
+    latest_normalized_at: latestTimestampFromRows(rows, "latest_normalized_at"),
     rows,
   };
 }
@@ -215,11 +247,13 @@ export function workManagementOverviewMetaText(overview: WorkManagementOverview)
     `스냅샷 ${overview.snapshot_summary_count.toLocaleString()}`,
     `추출제안 ${overview.extraction_proposal_count.toLocaleString()}`,
     `저장추출 ${overview.saved_extraction_count.toLocaleString()}`,
+    `정규화 ${overview.normalized_row_count.toLocaleString()}`,
     `진행로그 ${overview.progress_log_count.toLocaleString()}`,
     `저장관리 ${overview.persisted_row_count.toLocaleString()}`,
     `라이브만 ${overview.live_only_row_count.toLocaleString()}`,
     `최신스냅샷 ${overview.latest_snapshot_created_at ?? "없음"}`,
     `최신저장추출 ${overview.latest_saved_extraction_at ?? "없음"}`,
+    `최신정규화 ${overview.latest_normalized_at ?? "없음"}`,
   ].join(" · ");
 }
 
@@ -322,6 +356,9 @@ export function workManagementOverviewPersistenceText(row: WorkManagementOvervie
   if (row.latest_saved_extraction_at) {
     parts.push(`최신 저장추출 ${row.latest_saved_extraction_at}`);
   }
+  if (row.latest_normalized_at) {
+    parts.push(`최신 정규화 ${row.latest_normalized_at}`);
+  }
   return parts.join(" · ");
 }
 
@@ -357,6 +394,7 @@ function upsertRow(
     snapshot_count: 0,
     extraction_proposal_count: 0,
     saved_extraction_count: 0,
+    normalized_row_count: 0,
     progress_log_count: 0,
     work_item_count: 0,
     session_evidence_count: 0,
@@ -366,6 +404,7 @@ function upsertRow(
     persistence_state: "live_only",
     latest_snapshot_created_at: null,
     latest_saved_extraction_at: null,
+    latest_normalized_at: null,
     latest_title: null,
   };
   rowsByKey.set(key, row);
@@ -418,6 +457,7 @@ function sumRows(
     | "snapshot_count"
     | "extraction_proposal_count"
     | "saved_extraction_count"
+    | "normalized_row_count"
     | "progress_log_count",
 ): number {
   return rows.reduce((total, row) => total + row[field], 0);
@@ -431,7 +471,7 @@ function latestTimestamp(current: string | null, candidate: string | null): stri
 
 function latestTimestampFromRows(
   rows: WorkManagementOverviewRow[],
-  field: "latest_snapshot_created_at" | "latest_saved_extraction_at",
+  field: "latest_snapshot_created_at" | "latest_saved_extraction_at" | "latest_normalized_at",
 ): string | null {
   return rows.reduce<string | null>((latest, row) => latestTimestamp(latest, row[field]), null);
 }

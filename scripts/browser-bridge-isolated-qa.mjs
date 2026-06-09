@@ -198,6 +198,7 @@ async function runBrowserQa() {
   let workLogNormalizationReviewQueueRows = [];
   let workLogNormalizationReviewQueueStateAfterApprove = "";
   let workLogNormalizationApplyMeta = "";
+  let workManagementMetaAfterNormalizationApply = "";
   let workLogNormalizedRows = [];
   let workLogReviewQueueMeta = "";
   let approvedReviewQueueSaveDisabledWhenEmpty = null;
@@ -495,13 +496,18 @@ async function runBrowserQa() {
     await page.waitForFunction((candidateId) => {
       const meta = document.querySelector('[data-work-log-normalization-apply-meta="true"]')
         ?.textContent ?? "";
+      const managementMeta = document.querySelector('[data-work-management-overview-meta="true"]')
+        ?.textContent ?? "";
       const rows = Array.from(document.querySelectorAll('[data-work-log-normalized-items="true"] article'));
       return meta.includes("적용 1개")
         && meta.includes("저장 총 1개")
+        && managementMeta.includes("정규화 1")
         && rows.some((row) => (row.textContent ?? "").includes(candidateId));
     }, firstNormalizationCandidateId, { timeout: 90000 });
     workLogNormalizationApplyMeta =
       (await page.locator('[data-work-log-normalization-apply-meta="true"]').textContent())?.trim() ?? "";
+    workManagementMetaAfterNormalizationApply =
+      (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
     workLogNormalizedRows =
       await page.locator('[data-work-log-normalized-items="true"] article').allTextContents();
     await page.locator('[data-sync-work-log-review-queue="true"]').click();
@@ -611,6 +617,7 @@ async function runBrowserQa() {
       workLogNormalizationReviewQueueRows,
       workLogNormalizationReviewQueueStateAfterApprove,
       workLogNormalizationApplyMeta,
+      workManagementMetaAfterNormalizationApply,
       workLogNormalizedRows,
       workLogReviewQueueMeta,
       approvedReviewQueueSaveDisabledWhenEmpty,

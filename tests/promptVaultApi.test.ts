@@ -13,6 +13,7 @@ import {
   loadProjectWorkLogNormalizationReviewQueue,
   applyProjectWorkLogNormalizationQueue,
   loadProjectWorkLogReviewQueue,
+  listProjectWorkLogNormalizedItems,
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
   loadStoredPrompts,
@@ -638,6 +639,20 @@ function projectWorkLogNormalizationApplyPayload(overrides = {}) {
       provider_runtime: "local-normalization-rules",
       used_ai: false,
     }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function projectWorkLogNormalizedItemsPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_items: 1,
+    returned_item_count: 1,
+    available_dates: ["2026-06-09"],
+    available_projects: ["CareVault"],
+    items: projectWorkLogNormalizationApplyPayload().items,
     warnings: [],
     ...overrides,
   };
@@ -1585,6 +1600,61 @@ test("browser bridge work log normalization apply rejects impossible counters", 
 
   await assert.rejects(
     () => applyProjectWorkLogNormalizationQueue({ limit: 5 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /operator_approved_normalization|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work log normalized items posts filters and validates rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogNormalizedItemsPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await listProjectWorkLogNormalizedItems({
+    date: "2026-06-09",
+    limit: 5,
+    project: "CareVault",
+  });
+
+  assert.match(requestPath, /\/api\/work-log-normalized-items$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      date: "2026-06-09",
+      limit: 5,
+      project: "CareVault",
+    },
+  });
+  assert.equal(result.total_items, 1);
+  assert.equal(result.returned_item_count, 1);
+  assert.equal(result.available_dates[0], "2026-06-09");
+  assert.equal(result.available_projects[0], "CareVault");
+  assert.equal(result.items[0].candidate_id, "work-normalize-CareVault-a1b2c3d4e5f6");
+});
+
+test("browser bridge work log normalized items rejects impossible counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkLogNormalizedItemsPayload({
+    total_items: 0,
+    returned_item_count: 1,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listProjectWorkLogNormalizedItems({ limit: 5 }),
     (error) => {
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);

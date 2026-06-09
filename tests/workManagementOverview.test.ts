@@ -19,6 +19,7 @@ import type {
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
+  ProjectWorkLogNormalizedItemsResult,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
   ProjectWorkSummarySnapshotsResult,
@@ -218,6 +219,50 @@ function extractionProposalsResult(): ProjectWorkLogExtractionProposalsResult {
   };
 }
 
+function normalizedItemsResult(): ProjectWorkLogNormalizedItemsResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_items: 1,
+    returned_item_count: 1,
+    available_dates: ["2026-06-09"],
+    available_projects: ["PromptVault"],
+    items: [
+      {
+        id: 11,
+        applied_at: "2026-06-09T01:45:00Z",
+        candidate_id: "work-normalize-PromptVault-a1",
+        review_reason: "operator_approved_normalization",
+        provider: "local-normalization-rules",
+        provider_model: null,
+        provider_runtime: "local-normalization-rules",
+        used_ai: false,
+        project: "PromptVault",
+        date: "2026-06-09",
+        source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+        source_file: "working.md",
+        reason: "existing_project_day_group",
+        original_title: "Management overview",
+        original_status: "current",
+        original_evidence: "Management overview row from progress log.",
+        normalized_title: "PromptVault normalized management overview",
+        normalized_status: "current",
+        normalized_evidence: "PromptVault management work normalized for project/day reporting.",
+        confidence: 0.91,
+        accepted: true,
+        rejection_reason: null,
+        work_item_count: 5,
+        session_evidence_count: 2,
+        saved_extraction_count: 1,
+        ai_saved_extraction_count: 0,
+        best_ai_confidence: null,
+        risk_flags: [],
+      },
+    ],
+    warnings: [],
+  };
+}
+
 function coverageResult(): ProjectWorkLogCoverageResult {
   return {
     generated_at: "2026-06-09T00:00:00Z",
@@ -258,6 +303,7 @@ test("work management overview merges source evidence by project and date", () =
     coverage: coverageResult(),
     extractionItems: extractionItemsResult(),
     extractionProposals: extractionProposalsResult(),
+    normalizedItems: normalizedItemsResult(),
     snapshots: snapshotsResult(),
     summary: summaryResult(),
   });
@@ -276,21 +322,24 @@ test("work management overview merges source evidence by project and date", () =
     "current_summary",
     "snapshot",
     "saved_extraction",
+    "normalized_row",
     "progress_log",
   ]);
   assert.equal(promptVault.current_summary_count, 1);
   assert.equal(promptVault.snapshot_count, 1);
   assert.equal(promptVault.saved_extraction_count, 1);
+  assert.equal(promptVault.normalized_row_count, 1);
   assert.equal(promptVault.extraction_proposal_count, 0);
   assert.equal(promptVault.progress_log_count, 1);
   assert.equal(promptVault.work_item_count, 5);
   assert.equal(promptVault.session_evidence_count, 2);
-  assert.equal(promptVault.confidence_count, 1);
+  assert.equal(promptVault.confidence_count, 2);
   assert.equal(promptVault.min_confidence, 0.82);
-  assert.equal(promptVault.max_confidence, 0.82);
+  assert.equal(promptVault.max_confidence, 0.91);
   assert.equal(promptVault.persistence_state, "persisted");
   assert.equal(promptVault.latest_snapshot_created_at, "2026-06-09T01:00:00Z");
   assert.equal(promptVault.latest_saved_extraction_at, "2026-06-09T01:30:00Z");
+  assert.equal(promptVault.latest_normalized_at, "2026-06-09T01:45:00Z");
   assert.equal(promptVault.latest_title, "PromptVault management slice");
 
   const careVault = overview.rows[1];
@@ -310,6 +359,7 @@ test("work management overview merges source evidence by project and date", () =
   assert.equal(repoTutorStudio.max_confidence, 0.72);
   assert.equal(repoTutorStudio.latest_snapshot_created_at, null);
   assert.equal(repoTutorStudio.latest_saved_extraction_at, "2026-06-09T01:31:00Z");
+  assert.equal(repoTutorStudio.latest_normalized_at, null);
 });
 
 test("work management overview does not double count saved extraction proposals", () => {
@@ -362,28 +412,53 @@ test("work management overview counts saved extractions and parsed logs as work 
   assert.equal(promptVault.work_item_count, 5);
 });
 
+test("work management overview merges normalized rows without double counting progress logs", () => {
+  const normalizedOnly = buildWorkManagementOverview({
+    normalizedItems: normalizedItemsResult(),
+  });
+  const normalizedPromptVault = normalizedOnly.rows.find((row) => row.key === "2026-06-09::PromptVault");
+  assert.ok(normalizedPromptVault);
+  assert.equal(normalizedPromptVault.work_item_count, 5);
+  assert.equal(normalizedPromptVault.normalized_row_count, 1);
+  assert.equal(normalizedPromptVault.persistence_state, "persisted");
+
+  const merged = buildWorkManagementOverview({
+    coverage: coverageResult(),
+    normalizedItems: normalizedItemsResult(),
+  });
+  const promptVault = merged.rows.find((row) => row.key === "2026-06-09::PromptVault");
+  assert.ok(promptVault);
+  assert.deepEqual(promptVault.sources, ["normalized_row", "progress_log"]);
+  assert.equal(promptVault.work_item_count, 5);
+  assert.equal(promptVault.normalized_row_count, 1);
+  assert.equal(promptVault.progress_log_count, 1);
+  assert.equal(merged.normalized_row_count, 1);
+  assert.equal(merged.progress_log_count, 1);
+});
+
 test("work management overview status text exposes management coverage", () => {
   const overview = buildWorkManagementOverview({
     coverage: coverageResult(),
     extractionItems: extractionItemsResult(),
     extractionProposals: extractionProposalsResult(),
+    normalizedItems: normalizedItemsResult(),
     snapshots: snapshotsResult(),
     summary: summaryResult(),
   });
 
   assert.equal(
     workManagementOverviewMetaText(overview),
-    "관리 3개 · 3개 프로젝트 · 3일 · 현재요약 1 · 스냅샷 2 · 추출제안 1 · 저장추출 2 · 진행로그 1 · 저장관리 3 · 라이브만 0 · 최신스냅샷 2026-06-09T01:00:00Z · 최신저장추출 2026-06-09T01:31:00Z",
+    "관리 3개 · 3개 프로젝트 · 3일 · 현재요약 1 · 스냅샷 2 · 추출제안 1 · 저장추출 2 · 정규화 1 · 진행로그 1 · 저장관리 3 · 라이브만 0 · 최신스냅샷 2026-06-09T01:00:00Z · 최신저장추출 2026-06-09T01:31:00Z · 최신정규화 2026-06-09T01:45:00Z",
   );
   assert.equal(
     workManagementOverviewSourceText(overview.rows[0]),
-    "현재요약 · 스냅샷 · 저장추출 · 진행로그",
+    "현재요약 · 스냅샷 · 저장추출 · 정규화 · 진행로그",
   );
   assert.equal(
     workManagementOverviewPersistenceText(overview.rows[0]),
-    "저장관리 · 최신 스냅샷 2026-06-09T01:00:00Z · 최신 저장추출 2026-06-09T01:30:00Z",
+    "저장관리 · 최신 스냅샷 2026-06-09T01:00:00Z · 최신 저장추출 2026-06-09T01:30:00Z · 최신 정규화 2026-06-09T01:45:00Z",
   );
-  assert.equal(workManagementOverviewConfidenceText(overview.rows[0]), "confidence 0.82");
+  assert.equal(workManagementOverviewConfidenceText(overview.rows[0]), "confidence 0.82-0.91");
   assert.equal(
     workManagementOverviewPersistenceText(buildWorkManagementOverview({ coverage: coverageResult() }).rows[0]),
     "라이브만 · 저장근거 없음",

@@ -1,12 +1,111 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 15:10 KST
+Updated: 2026-06-09 15:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 durable normalization apply
+## Current Slice - 2026-06-09 normalized rows in work management overview
+
+Current Goal:
+
+- Merge durable normalized project/day rows into the work-management overview
+  and report-facing UI without double-counting already parsed progress-log rows.
+- Make durable normalized rows queryable after refresh/restart, not only in the
+  immediate `승인 적용` response.
+
+Context:
+
+- The previous slice wrote approved normalization queue rows into
+  `project_work_log_normalized_items`.
+- The gap was that those durable rows were still shown mainly as their own apply
+  artifact. The project/day management overview did not count them as managed
+  evidence, and a fresh work-management refresh did not query the durable table.
+- Existing parsed progress logs can already contribute large work counts for the
+  same project/date. Normalized rows therefore must merge by `project + date`
+  with `max(...)` work counts instead of adding another count on top.
+
+Progress:
+
+- Added `work-log-normalized-items` CLI command,
+  `POST /api/work-log-normalized-items` browser bridge route, and Tauri command
+  `project_work_log_normalized_items`.
+- Added date/project filters and available date/project facets for durable
+  normalized rows.
+- Work-management refresh now loads durable normalized rows alongside summary,
+  snapshots, coverage, extraction proposals, and saved extraction rows.
+- Work-management overview now has a `정규화` source, filter option,
+  `normalized_row_count`, latest normalized timestamp, and persistence text.
+- `승인 적용` now refreshes durable normalized rows and immediately updates the
+  overview meta. Browser QA verifies the meta changes from `정규화 0` to
+  `정규화 1`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`, `src-tauri/src/bin/promptvault-cli.rs`:
+  - added normalized row list options/result, runner, filters, command, bridge
+    route, help text, validation tests, and DB-lock routing.
+- `src/types.ts`, `src/promptVaultApi.ts`, `src/App.tsx`:
+  - added frontend list contract/parser/API/state;
+  - wired work-management refresh and normalization apply to load normalized
+    items;
+  - rendered `정규화` source/filter/count in project/date overview rows.
+- `src/workManagementOverview.ts`:
+  - merges normalized rows by project/date and treats them as persisted
+    evidence;
+  - avoids progress-log double counting by using max work counts.
+- `tests/workManagementOverview.test.ts`, `tests/promptVaultApi.test.ts`:
+  - added normalized list parser tests and overview double-count regression
+    tests.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - verifies normalized apply updates work-management overview meta.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts tests/promptVaultApi.test.ts`: PASS, `184` tests.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS.
+- `git diff --check`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml normalization`: PASS, `4`
+  lib normalization tests and `3` CLI normalization-route tests.
+- `npm run build`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml bridge_serializes_database_backed_routes_only`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules`: PASS.
+- `npm run test:ui`: PASS, `460` tests.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON included:
+  - `coverageMeta`: `820개 로그 · parsed 819개 · unparsed 0개 · 31개 프로젝트 · 작업 8,831개`;
+  - `workManagementMeta`: `... 정규화 0 ... 최신정규화 없음`;
+  - `workLogNormalizationApplyMeta`: `승인 큐 1개 · 처리 1개 · 적용 1개 · 중복 0개 · 저장 총 1개 · 표시 1개`;
+  - `workManagementMetaAfterNormalizationApply`: `... 정규화 1 ... 최신정규화 2026-06-09T06:26:47.460665+00:00`.
+- `npm run check`: PASS, including `test:ui`, `build`, full Rust tests
+  (`174` lib tests, `29` CLI tests), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- Provider-backed normalization is still local fallback in deterministic QA
+  because `OPENAI_API_KEY` and `GLM_API_KEY/GLM_API_KEY_2` were absent in the
+  isolated bridge environment.
+- Full all-history session backfill remains bounded by the active
+  `session_limit=200` QA path.
+- Large project/day groups still need chunked provider normalization before AI
+  accepted rows should be trusted broadly.
+
+Research:
+
+- No external research was needed. The implementation follows existing
+  PromptVault extraction item listing, browser bridge, strict parser, and
+  work-management overview merge patterns.
+
+Next Steps:
+
+- Add chunked provider normalization for large project/day candidate groups.
+- Add resumable all-history session backfill/checkpointing beyond the
+  `session_limit=200` verification path.
+- Evaluate a Codex SDK session-ingest adapter if it provides cleaner structured
+  session metadata than the current local JSONL/metadata-first index.
+
+## Previous Slice - 2026-06-09 durable normalization apply
 
 Current Goal:
 

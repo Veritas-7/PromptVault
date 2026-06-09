@@ -500,6 +500,13 @@ export interface ProjectWorkLogNormalizationApplyOptions {
   limit?: number;
 }
 
+export interface ProjectWorkLogNormalizedItemsOptions {
+  database_path?: string;
+  limit?: number;
+  date?: string;
+  project?: string;
+}
+
 export interface ProjectWorkLogNormalizedItem extends ProjectWorkLogNormalizationProposal {
   id: number;
   applied_at: string;
@@ -519,6 +526,17 @@ export interface ProjectWorkLogNormalizationApplyResult {
   skipped_existing_count: number;
   total_applied_item_count: number;
   returned_item_count: number;
+  items: ProjectWorkLogNormalizedItem[];
+  warnings: string[];
+}
+
+export interface ProjectWorkLogNormalizedItemsResult {
+  generated_at: string;
+  database_path: string;
+  total_items: number;
+  returned_item_count: number;
+  available_dates: string[];
+  available_projects: string[];
   items: ProjectWorkLogNormalizedItem[];
   warnings: string[];
 }

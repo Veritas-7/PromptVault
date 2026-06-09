@@ -118,6 +118,7 @@ import {
   loadProjectWorkLogNormalizationProposals,
   loadProjectWorkLogNormalizationReviewQueue,
   applyProjectWorkLogNormalizationQueue,
+  listProjectWorkLogNormalizedItems,
   loadProjectWorkLogReviewQueue,
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
@@ -131,6 +132,7 @@ import {
   scanProgress,
   scanPrompts,
   type ProjectWorkLogExtractionItemsOptions,
+  type ProjectWorkLogNormalizedItemsOptions,
   type ProjectWorkSummarySnapshotsOptions,
   updateProjectWorkLogNormalizationReviewQueueItem,
   updateProjectWorkLogReviewQueueItem,
@@ -243,6 +245,7 @@ import type {
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
   ProjectWorkLogNormalizationApplyResult,
+  ProjectWorkLogNormalizedItemsResult,
   ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
@@ -373,6 +376,7 @@ const WORK_MANAGEMENT_SOURCE_OPTIONS: Array<{
   { label: "스냅샷", value: "snapshot" },
   { label: "추출제안", value: "extraction_proposal" },
   { label: "저장추출", value: "saved_extraction" },
+  { label: "정규화", value: "normalized_row" },
   { label: "진행로그", value: "progress_log" },
 ];
 
@@ -489,6 +493,8 @@ function App() {
     useState<ProjectWorkLogNormalizationReviewQueueResult | null>(null);
   const [workLogNormalizationApplyResult, setWorkLogNormalizationApplyResult] =
     useState<ProjectWorkLogNormalizationApplyResult | null>(null);
+  const [workLogNormalizedItemsResult, setWorkLogNormalizedItemsResult] =
+    useState<ProjectWorkLogNormalizedItemsResult | null>(null);
   const [
     workLogNormalizationReviewQueueUpdatingCandidateId,
     setWorkLogNormalizationReviewQueueUpdatingCandidateId,
@@ -887,10 +893,10 @@ function App() {
       WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT,
     ) ?? [];
   const visibleWorkLogNormalizedItems =
-    workLogNormalizationApplyResult?.items.slice(
+    (workLogNormalizationApplyResult?.items ?? workLogNormalizedItemsResult?.items ?? []).slice(
       0,
       WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT,
-    ) ?? [];
+    );
   const visibleWorkLogExtractionItemGroups =
     groupWorkLogExtractionItemsByProjectDate(visibleWorkLogExtractionItems);
   const hiddenWorkLogExtractionItemCount = Math.max(
@@ -918,7 +924,7 @@ function App() {
   );
   const hiddenWorkLogNormalizedItemCount = Math.max(
     0,
-    (workLogNormalizationApplyResult?.items.length ?? 0)
+    ((workLogNormalizationApplyResult?.items ?? workLogNormalizedItemsResult?.items ?? []).length)
       - WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT,
   );
   const workManagementOverviewLoaded =
@@ -930,17 +936,22 @@ function App() {
     || workLogNormalizationCandidatesResult !== null
     || workLogNormalizationProposalsResult !== null
     || workLogNormalizationReviewQueueResult !== null
+    || workLogNormalizationApplyResult !== null
+    || workLogNormalizedItemsResult !== null
     || workLogCoverageResult !== null;
   const workManagementOverview = useMemo(() => buildWorkManagementOverview({
     coverage: workLogCoverageResult,
     extractionItems: workLogExtractionItemsResult,
     extractionProposals: workLogExtractionResult,
+    normalizedItems: workLogNormalizedItemsResult ?? workLogNormalizationApplyResult,
     snapshots: workSummarySnapshotsResult,
     summary: workSummaryResult,
   }), [
     workLogCoverageResult,
     workLogExtractionResult,
     workLogExtractionItemsResult,
+    workLogNormalizationApplyResult,
+    workLogNormalizedItemsResult,
     workSummaryResult,
     workSummarySnapshotsResult,
   ]);
@@ -1154,6 +1165,12 @@ function App() {
     };
   }
 
+  function workLogNormalizedItemOptions({
+    limit = WORK_LOG_NORMALIZATION_APPLY_MANAGEMENT_LIMIT,
+  }: { limit?: number } = {}): ProjectWorkLogNormalizedItemsOptions {
+    return { limit };
+  }
+
   async function refreshWorkSummarySnapshots(options = workSummarySnapshotOptions()) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
@@ -1346,6 +1363,8 @@ function App() {
         limit: WORK_LOG_NORMALIZATION_APPLY_MANAGEMENT_LIMIT,
       });
       setWorkLogNormalizationApplyResult(next);
+      const normalizedItems = await listProjectWorkLogNormalizedItems(workLogNormalizedItemOptions());
+      setWorkLogNormalizedItemsResult(normalizedItems);
       setWorkLogNormalizationApplyState("ready");
     } catch (err) {
       const message = displayErrorText(err);
@@ -1639,6 +1658,11 @@ function App() {
       const nextItems = await listProjectWorkLogExtractionItems(workLogExtractionItemOptions());
       setWorkLogExtractionItemsResult(nextItems);
       setWorkLogExtractionItemsState("ready");
+
+      const nextNormalizedItems = await listProjectWorkLogNormalizedItems(
+        workLogNormalizedItemOptions(),
+      );
+      setWorkLogNormalizedItemsResult(nextNormalizedItems);
 
       setWorkManagementRefreshState("ready");
     } catch (err) {
@@ -3247,7 +3271,8 @@ function App() {
                     {workManagementOverviewSourceText(row)} · 작업 {row.work_item_count.toLocaleString()}개 ·
                     세션 근거 {row.session_evidence_count.toLocaleString()}건 · 추출제안{" "}
                     {row.extraction_proposal_count.toLocaleString()}개 · 저장추출{" "}
-                    {row.saved_extraction_count.toLocaleString()}개 · {workManagementOverviewConfidenceText(row)}
+                    {row.saved_extraction_count.toLocaleString()}개 · 정규화{" "}
+                    {row.normalized_row_count.toLocaleString()}개 · {workManagementOverviewConfidenceText(row)}
                   </span>
                   <span data-work-management-row-persistence="true">
                     {workManagementOverviewPersistenceText(row)}
@@ -3799,7 +3824,7 @@ function App() {
             <span>{workLogNormalizationApplyMeta}</span>
           </div>
         ) : null}
-        {workLogNormalizationApplyResult ? (
+        {workLogNormalizationApplyResult || workLogNormalizedItemsResult ? (
           visibleWorkLogNormalizedItems.length ? (
             <div className="work-summary-list" data-work-log-normalized-items="true">
               {visibleWorkLogNormalizedItems.map((item) => (

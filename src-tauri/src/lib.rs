@@ -475,6 +475,14 @@ pub struct ProjectWorkLogNormalizationApplyOptions {
     pub limit: Option<usize>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkLogNormalizedItemsOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub date: Option<String>,
+    pub project: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkLogNormalizationCandidate {
     pub candidate_id: String,
@@ -644,6 +652,18 @@ pub struct ProjectWorkLogNormalizationApplyResult {
     pub skipped_existing_count: usize,
     pub total_applied_item_count: usize,
     pub returned_item_count: usize,
+    pub items: Vec<ProjectWorkLogNormalizedItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogNormalizedItemsResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub total_items: usize,
+    pub returned_item_count: usize,
+    pub available_dates: Vec<String>,
+    pub available_projects: Vec<String>,
     pub items: Vec<ProjectWorkLogNormalizedItem>,
     pub warnings: Vec<String>,
 }
@@ -1221,6 +1241,14 @@ fn project_work_log_normalization_apply(
     options: Option<ProjectWorkLogNormalizationApplyOptions>,
 ) -> Result<ProjectWorkLogNormalizationApplyResult, String> {
     run_project_work_log_normalization_apply(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_log_normalized_items(
+    options: Option<ProjectWorkLogNormalizedItemsOptions>,
+) -> Result<ProjectWorkLogNormalizedItemsResult, String> {
+    run_list_project_work_log_normalized_items(options.unwrap_or_default())
         .map_err(|err| err.to_string())
 }
 
@@ -2324,7 +2352,7 @@ pub fn run_project_work_log_normalization_apply(
     let applied_item_count =
         persist_project_work_log_normalized_items(&mut conn, &approved_rows, &generated_at)?;
     let skipped_existing_count = processed_queue_count.saturating_sub(applied_item_count);
-    let item_rows = read_project_work_log_normalized_items(&conn, limit)?;
+    let item_rows = read_project_work_log_normalized_items(&conn, limit, None, None)?;
     let mut warnings = Vec::new();
     if approved_queue_count == 0 {
         warnings.push(
@@ -2346,6 +2374,52 @@ pub fn run_project_work_log_normalization_apply(
         returned_item_count: item_rows.items.len(),
         items: item_rows.items,
         warnings,
+    })
+}
+
+pub fn run_list_project_work_log_normalized_items(
+    options: ProjectWorkLogNormalizedItemsOptions,
+) -> Result<ProjectWorkLogNormalizedItemsResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-log normalized item limit requires a positive integer".into());
+    }
+    let date_filter = normalized_optional_filter(
+        options.date.as_deref(),
+        "work-log normalized item date filter requires a non-empty value",
+    )?;
+    let project_filter = normalized_optional_filter(
+        options.project.as_deref(),
+        "work-log normalized item project filter requires a non-empty value",
+    )?;
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_LOG_NORMALIZED_ITEM_LIMIT)
+        .min(MAX_PROJECT_WORK_LOG_NORMALIZED_ITEM_LIMIT);
+    let conn = open_promptvault_database(&database_path)?;
+    let item_rows = read_project_work_log_normalized_items(
+        &conn,
+        limit,
+        date_filter.as_deref(),
+        project_filter.as_deref(),
+    )?;
+    Ok(ProjectWorkLogNormalizedItemsResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        total_items: item_rows.total_items,
+        returned_item_count: item_rows.items.len(),
+        available_dates: item_rows.available_dates,
+        available_projects: item_rows.available_projects,
+        items: item_rows.items,
+        warnings: Vec::new(),
     })
 }
 
@@ -8860,17 +8934,16 @@ fn persist_project_work_log_normalized_items(
 struct ProjectWorkLogNormalizedItemRows {
     total_items: usize,
     items: Vec<ProjectWorkLogNormalizedItem>,
+    available_dates: Vec<String>,
+    available_projects: Vec<String>,
 }
 
 fn read_project_work_log_normalized_items(
     conn: &Connection,
     limit: usize,
+    date_filter: Option<&str>,
+    project_filter: Option<&str>,
 ) -> Result<ProjectWorkLogNormalizedItemRows, Box<dyn std::error::Error>> {
-    let total_items: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM project_work_log_normalized_items",
-        [],
-        |row| row.get(0),
-    )?;
     let mut stmt = conn.prepare(
         "SELECT id, applied_at, candidate_id, review_reason, provider, provider_model,
             provider_runtime, used_ai, project, proposal_date, source_path, source_file,
@@ -8880,19 +8953,32 @@ fn read_project_work_log_normalized_items(
             saved_extraction_count, ai_saved_extraction_count, best_ai_confidence,
             risk_flags_json
          FROM project_work_log_normalized_items
-         ORDER BY applied_at DESC, id DESC
-         LIMIT ?1",
+         ORDER BY applied_at DESC, id DESC",
     )?;
-    let rows = stmt.query_map(params![limit as i64], |row| {
+    let mut rows = stmt.query([])?;
+    let mut total_items = 0usize;
+    let mut items = Vec::new();
+    let mut available_dates = BTreeSet::new();
+    let mut available_projects = BTreeSet::new();
+    while let Some(row) = rows.next()? {
+        let project: String = row.get(8)?;
+        let date: String = row.get(9)?;
+        if !project_work_log_normalized_item_matches_filters(
+            &date,
+            &project,
+            date_filter,
+            project_filter,
+        ) {
+            continue;
+        }
+        total_items += 1;
+        available_dates.insert(date.clone());
+        available_projects.insert(project.clone());
+        if items.len() >= limit {
+            continue;
+        }
         let risk_flags_json: String = row.get(27)?;
-        let risk_flags = serde_json::from_str(&risk_flags_json).map_err(|err| {
-            rusqlite::Error::FromSqlConversionFailure(
-                27,
-                rusqlite::types::Type::Text,
-                Box::new(err),
-            )
-        })?;
-        Ok(ProjectWorkLogNormalizedItem {
+        items.push(ProjectWorkLogNormalizedItem {
             id: row.get(0)?,
             applied_at: row.get(1)?,
             candidate_id: row.get(2)?,
@@ -8901,8 +8987,8 @@ fn read_project_work_log_normalized_items(
             provider_model: row.get(5)?,
             provider_runtime: row.get(6)?,
             used_ai: row.get::<_, i64>(7)? != 0,
-            project: row.get(8)?,
-            date: row.get(9)?,
+            project,
+            date,
             source_path: row.get(10)?,
             source_file: row.get(11)?,
             reason: row.get(12)?,
@@ -8920,15 +9006,25 @@ fn read_project_work_log_normalized_items(
             saved_extraction_count: row.get::<_, i64>(24)? as usize,
             ai_saved_extraction_count: row.get::<_, i64>(25)? as usize,
             best_ai_confidence: row.get(26)?,
-            risk_flags,
-        })
-    })?;
+            risk_flags: serde_json::from_str(&risk_flags_json)?,
+        });
+    }
     Ok(ProjectWorkLogNormalizedItemRows {
-        total_items: total_items as usize,
-        items: rows
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|err| -> Box<dyn std::error::Error> { Box::new(err) })?,
+        total_items,
+        items,
+        available_dates: available_dates.into_iter().collect(),
+        available_projects: available_projects.into_iter().collect(),
     })
+}
+
+fn project_work_log_normalized_item_matches_filters(
+    date: &str,
+    project: &str,
+    date_filter: Option<&str>,
+    project_filter: Option<&str>,
+) -> bool {
+    date_filter.is_none_or(|filter| date == filter)
+        && project_filter.is_none_or(|filter| project == filter)
 }
 
 fn persist_project_work_log_extraction_proposals(
@@ -11542,7 +11638,8 @@ pub fn run() {
             project_work_log_normalization_proposals,
             project_work_log_normalization_review_queue,
             project_work_log_normalization_review_queue_update,
-            project_work_log_normalization_apply
+            project_work_log_normalization_apply,
+            project_work_log_normalized_items
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -15741,6 +15838,23 @@ Progress:
         assert_eq!(second.skipped_existing_count, 1);
         assert_eq!(second.total_applied_item_count, 1);
         assert_eq!(second.returned_item_count, 1);
+
+        let listed =
+            run_list_project_work_log_normalized_items(ProjectWorkLogNormalizedItemsOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(10),
+                date: Some("2026-06-09".to_string()),
+                project: Some("SafeProject".to_string()),
+            })
+            .expect("list normalized rows");
+        assert_eq!(listed.total_items, 1);
+        assert_eq!(listed.returned_item_count, 1);
+        assert_eq!(listed.available_dates, vec!["2026-06-09".to_string()]);
+        assert_eq!(listed.available_projects, vec!["SafeProject".to_string()]);
+        assert_eq!(
+            listed.items[0].candidate_id,
+            "work-normalize-SafeProject-apply-a1b2c3d4"
+        );
 
         let _ = std::fs::remove_file(&db_path);
     }

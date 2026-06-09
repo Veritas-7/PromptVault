@@ -18,6 +18,7 @@ import type {
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
   ProjectWorkLogNormalizationApplyResult,
+  ProjectWorkLogNormalizedItemsResult,
   ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
@@ -187,6 +188,13 @@ export interface ProjectWorkLogNormalizationReviewQueueUpdateOptions {
 export interface ProjectWorkLogNormalizationApplyOptions {
   database_path?: string;
   limit?: number;
+}
+
+export interface ProjectWorkLogNormalizedItemsOptions {
+  database_path?: string;
+  limit?: number;
+  date?: string;
+  project?: string;
 }
 
 export interface ImprovePromptRequest {
@@ -471,6 +479,22 @@ export async function applyProjectWorkLogNormalizationQueue(
     "/api/work-log-normalization-apply",
     { options },
     parseProjectWorkLogNormalizationApplyResult,
+  );
+}
+
+export async function listProjectWorkLogNormalizedItems(
+  options: ProjectWorkLogNormalizedItemsOptions = {},
+): Promise<ProjectWorkLogNormalizedItemsResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogNormalizedItemsResult>(
+      "project_work_log_normalized_items",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkLogNormalizedItemsResult>(
+    "/api/work-log-normalized-items",
+    { options },
+    parseProjectWorkLogNormalizedItemsResult,
   );
 }
 
@@ -1945,6 +1969,37 @@ function parseProjectWorkLogNormalizationApplyResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkLogNormalizationApplyResult;
+}
+
+function projectWorkLogNormalizedItemsWithinResult(value: unknown): boolean {
+  if (!isRecord(value)
+    || !Array.isArray(value.items)
+    || !isNonNegativeSafeInteger(value.total_items)
+    || !isNonNegativeSafeInteger(value.returned_item_count)) {
+    return false;
+  }
+  return value.items.length === value.returned_item_count
+    && value.returned_item_count <= value.total_items;
+}
+
+function parseProjectWorkLogNormalizedItemsResult(
+  value: unknown,
+): ProjectWorkLogNormalizedItemsResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !Array.isArray(value.available_dates)
+    || !isNonBlankStringArray(value.available_dates)
+    || !Array.isArray(value.available_projects)
+    || !isNonBlankStringArray(value.available_projects)
+    || !Array.isArray(value.items)
+    || !value.items.every(isProjectWorkLogNormalizedItem)
+    || !recordStringFieldValuesAreUnique(value.items, "candidate_id")
+    || !projectWorkLogNormalizedItemsWithinResult(value)
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkLogNormalizedItemsResult;
 }
 
 function isProjectWorkLogExtractionMergeResult(value: unknown): boolean {

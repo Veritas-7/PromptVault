@@ -7139,14 +7139,31 @@ fn normalize_project_path_match(text: &str) -> Option<String> {
     Some(trimmed.to_string())
 }
 
+fn project_work_session_prompts_by_date(
+    prompts: &[PromptRecord],
+) -> HashMap<String, Vec<&PromptRecord>> {
+    let mut prompts_by_date: HashMap<String, Vec<&PromptRecord>> = HashMap::new();
+    for prompt in prompts {
+        prompts_by_date
+            .entry(prompt_date(prompt.timestamp.as_deref()))
+            .or_default()
+            .push(prompt);
+    }
+    prompts_by_date
+}
+
 fn attach_session_evidence(items: &mut [ProjectWorkItem], prompts: &[PromptRecord]) {
+    let prompts_by_date = project_work_session_prompts_by_date(prompts);
     for item in items {
         let mut source_counts = HashMap::new();
         let mut evidence_keys = BTreeSet::new();
-        for prompt in prompts {
-            if prompt_date(prompt.timestamp.as_deref()) != item.date {
-                continue;
-            }
+        let Some(same_date_prompts) = prompts_by_date.get(&item.date) else {
+            item.session_sources = Vec::new();
+            item.session_evidence_count = 0;
+            item.session_evidence_keys = Vec::new();
+            continue;
+        };
+        for prompt in same_date_prompts {
             if !prompt_matches_project(prompt, item) {
                 continue;
             }
@@ -14600,6 +14617,21 @@ Progress:
     #[test]
     fn prompt_date_uses_kst_for_utc_session_timestamps() {
         assert_eq!(prompt_date(Some("2026-06-08T15:13:32.844Z")), "2026-06-09");
+    }
+
+    #[test]
+    fn project_work_session_prompts_by_date_groups_kst_work_days() {
+        let prompt_a = dated_record("session-a", "2026-06-08T15:13:32.844Z");
+        let prompt_b = dated_record("session-b", "2026-06-09T12:00:00Z");
+        let prompt_c = dated_record("session-c", "2026-06-07T23:00:00Z");
+        let prompts = vec![prompt_a, prompt_b, prompt_c];
+
+        let prompts_by_date = project_work_session_prompts_by_date(&prompts);
+
+        assert_eq!(prompts_by_date["2026-06-09"].len(), 2);
+        assert_eq!(prompts_by_date["2026-06-08"].len(), 1);
+        assert_eq!(prompts_by_date["2026-06-09"][0].id, "session-a");
+        assert_eq!(prompts_by_date["2026-06-09"][1].id, "session-b");
     }
 
     #[test]

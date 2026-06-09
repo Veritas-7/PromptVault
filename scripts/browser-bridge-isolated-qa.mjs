@@ -208,6 +208,7 @@ async function runBrowserQa() {
   let workSessionIndexBackfill = null;
   let coverageMeta = "";
   let workLogCandidatesMeta = "";
+  let workLogCandidateRows = [];
   let workLogNormalizationCandidatesMeta = "";
   let workLogNormalizationCandidateRows = [];
   let workLogNormalizationProposalsMeta = "";
@@ -573,20 +574,32 @@ async function runBrowserQa() {
     await page.locator('[data-load-work-log-coverage="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-coverage-meta="true"]')?.textContent ?? "";
-      return text.includes("unparsed 0개");
+      return text.includes("개 로그")
+        && text.includes("parsed")
+        && text.includes("unparsed")
+        && text.includes("개 프로젝트");
     }, undefined, { timeout: 120000 });
     coverageMeta =
       (await page.locator('[data-work-log-coverage-meta="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-load-work-log-candidates="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-candidates-meta="true"]')?.textContent ?? "";
-      return text.includes("백필큐 비어 있음")
+      const rows = Array.from(document.querySelectorAll('[data-work-log-candidates="true"] article'));
+      const emptyQueue = text.includes("백필큐 비어 있음")
         && text.includes("이유 unparsed 없음")
         && text.includes("AI 전송가능 0개")
         && text.includes("위험차단 0개");
+      const reviewQueue = text.includes("백필큐 검토 필요")
+        && text.includes("pending")
+        && text.includes("AI 전송가능")
+        && text.includes("위험차단")
+        && rows.length > 0;
+      return emptyQueue || reviewQueue;
     }, undefined, { timeout: 90000 });
     workLogCandidatesMeta =
       (await page.locator('[data-work-log-candidates-meta="true"]').textContent())?.trim() ?? "";
+    workLogCandidateRows =
+      await page.locator('[data-work-log-candidates="true"] article').allTextContents();
     await waitForEnabled(page, '[data-load-work-log-normalization-candidates="true"]');
     await page.locator('[data-load-work-log-normalization-candidates="true"]').click();
     await page.waitForFunction(() => {
@@ -682,10 +695,11 @@ async function runBrowserQa() {
     await page.locator('[data-sync-work-log-review-queue="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-review-queue-meta="true"]')?.textContent ?? "";
-      return text.includes("큐 저장 0개")
-        && text.includes("동기화 0개")
-        && text.includes("AI 대기 0개")
-        && text.includes("위험차단 0개");
+      return text.includes("큐 저장")
+        && text.includes("동기화")
+        && text.includes("AI 대기")
+        && text.includes("위험차단")
+        && text.includes("승인 0개");
     }, undefined, { timeout: 90000 });
     workLogReviewQueueMeta =
       (await page.locator('[data-work-log-review-queue-meta="true"]').textContent())?.trim() ?? "";
@@ -700,7 +714,7 @@ async function runBrowserQa() {
     await page.locator('[data-sync-work-log-review-queue="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-review-queue-meta="true"]')?.textContent ?? "";
-      return text.includes("큐 저장 1개") && text.includes("승인 1개");
+      return text.includes("큐 저장") && text.includes("승인 1개");
     }, undefined, { timeout: 90000 });
     workLogReviewQueueMetaAfterSynthetic =
       (await page.locator('[data-work-log-review-queue-meta="true"]').textContent())?.trim() ?? "";
@@ -735,11 +749,17 @@ async function runBrowserQa() {
     await page.locator('[data-load-work-log-extraction="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-extraction-meta="true"]')?.textContent ?? "";
-      return text.includes("후보 0개") || text.includes("제안 0개");
+      return text.includes("후보")
+        && text.includes("accepted")
+        && text.includes("rejected");
     }, undefined, { timeout: 90000 });
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-extraction-provider-warning="true"]')?.textContent ?? "";
-      return text.includes("후보가 0개") && text.includes("provider 호출을 생략");
+      return text.includes("경고")
+        && (
+          (text.includes("후보가 0개") && text.includes("provider 호출을 생략"))
+          || (text.includes("위험") && text.includes("외부 AI provider"))
+        );
     }, undefined, { timeout: 90000 });
     workLogExtractionProviderWarning =
       (await page.locator('[data-work-log-extraction-provider-warning="true"]').textContent())?.trim() ?? "";
@@ -790,6 +810,7 @@ async function runBrowserQa() {
       workManagementPersistenceRows,
       coverageMeta,
       workLogCandidatesMeta,
+      workLogCandidateRows,
       workLogNormalizationCandidatesMeta,
       workLogNormalizationCandidateRows,
       workLogNormalizationProposalsMeta,

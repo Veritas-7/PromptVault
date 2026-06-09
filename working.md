@@ -1,12 +1,121 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 19:33 KST
+Updated: 2026-06-09 20:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 full-index management readiness follow-up
+## Current Slice - 2026-06-09 full-index status export optimization and dynamic QA
+
+Current Goal:
+
+- Make completed full session-index status export usable enough for operator
+  checks by reducing the largest backend matching bottleneck.
+- Keep browser-bridge QA valid when live project-local progress logs change
+  from `unparsed 0` to an auditable candidate/review state.
+
+Context:
+
+- Full session evidence indexing is now complete: Codex `25,150 / 25,150` and
+  Codex CX `11 / 11`, with `10,867` sanitized session evidence records stored.
+- The previous full-index status export with `session-limit=11000` was
+  operational but too slow for comfortable operator use.
+- While re-running QA, a new live unparsed worklog appeared in
+  `notebooklm-llm-wiki-flow`:
+  `docs/plans/2026-06-09-objective-coverage-repeat-prevention-worklog-filename-scan-worklog.md`.
+  It is correctly risk-blocked because the excerpt contains a
+  `long_base64_like_token` risk flag.
+
+Progress:
+
+- Identified the root cause for slow full-index export:
+  `attach_session_evidence` scanned every session prompt for every project work
+  item, then filtered by date and project. With roughly `9k` work items and
+  `10k+` session records, this created a large unnecessary comparison surface.
+- Added a date bucket for session prompts before project matching:
+  - preserves the existing `prompt_matches_project` semantics;
+  - keeps KST work-day grouping through the existing `prompt_date` function;
+  - avoids testing unrelated-date session records for each work item.
+- Measured the full-index status export before and after the backend change:
+  - baseline: `real 180.62s`, `user 161.75s`, `sys 5.80s`;
+  - optimized: `real 28.05s`, `user 8.17s`, `sys 1.87s`;
+  - same full index scope: `10,867 / 10,867` records used.
+- Verified optimized JSON output:
+  - `91` project/day rows;
+  - `31` projects, `25` dates;
+  - `182,074` session evidence links;
+  - `1,311` unique session evidence records;
+  - first page still has `12` rows needing session evidence and `8` needing
+    title normalization.
+- Updated browser bridge QA to stop assuming a static `unparsed 0` live corpus:
+  - coverage now validates parsed/unparsed/project totals without hard-coding
+    zero gaps;
+  - candidate QA accepts both empty queue and review-needed queue states;
+  - review queue QA accepts risk-blocked rows while keeping approved-save
+    disabled when `승인 0개`;
+  - extraction QA verifies risk-blocked candidates are rejected locally and not
+    sent to an external AI provider.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added `project_work_session_prompts_by_date`;
+  - changed `attach_session_evidence` to iterate only same-date prompts;
+  - added Rust coverage for KST work-day session prompt grouping.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - made work-log coverage/candidate/review/extraction assertions robust to
+    live unparsed/risk-blocked progress-log candidates;
+  - included candidate row text in the QA result JSON for auditability.
+
+Tests:
+
+- `work-status-export --limit 25 --session-limit 11000 --json`: PASS after
+  optimization, `real 28.05s`, full index `10,867 / 10,867`.
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_session_prompts_by_date_groups_kst_work_days -- --nocapture`:
+  PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_items_attach_session_evidence -- --nocapture`: PASS (`3`
+  tests).
+- `cargo test --manifest-path src-tauri/Cargo.toml work_status_export
+  -- --nocapture`: PASS (`3` lib tests plus `1` CLI bridge test).
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Evidence included:
+  - `coverageMeta`: `839개 로그 · parsed 837개 · unparsed 1개 · 31개 프로젝트
+    · 작업 9,015개`;
+  - `workLogCandidatesMeta`: `백필큐 검토 필요 · 이유 로컬 검토 필요 ·
+    pending 1개 · AI 전송가능 0개 · 위험차단 1개`;
+  - `workLogExtractionProviderWarning`: risk candidate was not sent to an
+    external AI provider;
+  - status export still showed `91` rows and bounded session evidence.
+- `npm run check`: PASS, including UI tests (`472`), production build, Rust lib
+  tests (`194`), CLI tests (`31`), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- Full-index export improved from ~`181s` to ~`28s`, but `28s` is still too
+  slow for a default UI action. A second optimization should index by project
+  key inside each date bucket, while preserving source-path/text fallback
+  semantics.
+- The live corpus now has one unparsed, risk-blocked worklog candidate from
+  `notebooklm-llm-wiki-flow`. This is managed by the review queue and blocked
+  from external provider submission, but it still needs operator/local
+  extraction handling.
+- First-page status export quality gaps remain: `12` rows need session evidence
+  and `8` rows need title normalization.
+
+Next Steps:
+
+- Add project-key indexing inside the date bucket to reduce full-index export
+  below interactive thresholds.
+- Add more granular QA step logs inside `work log management` so future stale
+  expectations reveal the exact sub-step without waiting for a 90-120s timeout.
+- Continue AI-assisted normalization as a proposal/review workflow, especially
+  for rows with generic titles or no session evidence.
+
+## Completed Slice - 2026-06-09 full-index management readiness follow-up
 
 Current Goal:
 

@@ -307,6 +307,22 @@ export function workSessionIndexCheckpointGuidanceText(
   ].join(" · ");
 }
 
+export function workSessionIndexPartialBackfillWarningText(
+  result: ProjectWorkSessionIndexResult | null,
+): string | null {
+  if (!result?.source_states.length || result.all_sources_completed) return null;
+  const totalFiles = result.source_states.reduce((sum, source) => sum + source.total_files, 0);
+  const processedFiles = result.source_states.reduce((sum, source) => sum + source.processed_files, 0);
+  const remainingFiles = Math.max(0, totalFiles - processedFiles);
+  if (totalFiles <= 0 || remainingFiles <= 0) return null;
+  return [
+    "세션 백필 미완료",
+    `처리 ${processedFiles.toLocaleString()}/${totalFiles.toLocaleString()}개`,
+    `남은 파일 ${remainingFiles.toLocaleString()}개`,
+    "상태 Export/요약/큐는 현재 인덱스 기준",
+  ].join(" · ");
+}
+
 export function workStatusExportIndexStatusText(result: ProjectWorkStatusExportResult): string {
   const indexState = result.report_session_evidence_index_updated
     ? "세션 인덱스 갱신"

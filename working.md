@@ -1,10 +1,78 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 04:12 KST
+Updated: 2026-06-10 04:15 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Work-management partial backfill warning
+
+Current Goal:
+
+- Keep the user-facing work-management view honest about the remaining
+  historical session backfill.
+- Make it clear that project/day status export, summaries, and review queues are
+  currently based on the indexed session subset when the session corpus is only
+  checkpointed, not fully complete.
+
+Context:
+
+- The previous slice added checkpoint guidance near the session-index controls.
+- Operators can still refresh the broader management overview after status
+  export and miss that the overview is based on a partial session index.
+- The source of truth for this warning is the existing
+  `ProjectWorkSessionIndexResult.source_states` count, not a guessed external
+  total.
+
+Progress:
+
+- Added an overview-level warning for partial session backfill:
+  `세션 백필 미완료 · 처리 ... · 남은 파일 ... · 상태 Export/요약/큐는 현재 인덱스 기준`.
+- The warning appears only when a session-index result exists, at least one
+  source is incomplete, and there are remaining files.
+- The warning is hidden after all sources are completed.
+- Browser bridge QA now checks this warning during the real work-management
+  overview flow, after session indexing, status export, summary snapshot,
+  session-evidence queue, and progress-log management have all run.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: added
+  `workSessionIndexPartialBackfillWarningText`.
+- `src/App.tsx`: renders the partial-backfill warning in the work-management
+  overview area with `data-work-management-session-backfill-warning`.
+- `tests/workSummaryStatus.test.ts`: covers active partial backfill, null input,
+  and completed-backfill hiding.
+- `scripts/browser-bridge-isolated-qa.mjs`: asserts the warning in the isolated
+  browser bridge QA management-overview flow and includes it in the QA result
+  JSON.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work session index planned remaining"` (`36` tests).
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts` (`9` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check`
+  - UI tests `490`, Rust lib tests `214`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated bridge QA ended with exit code `0`.
+  - Verified the new management-overview partial-backfill warning.
+  - QA output showed `31` projects, `26` days, `100` project/day rows, `9,606`
+    work items, `868` progress logs, `3,038` matched session-evidence rows, and
+    `/tmp/QAProject/workingd.md` saved through the approved extraction path.
+  - The same run still showed checkpointed backfill: `25,201` total session
+    files, `349` stored session records in the bounded QA context, and about
+    `24,840` files remaining after the long continue step.
+
+Remaining:
+
+- Full historical session backfill is still incomplete and should be completed
+  through repeated checkpointed `긴 이어 백필` runs.
+- Review queues still need operator triage before durable session-evidence or
+  title-normalization decisions are treated as final.
 
 ## Completed Slice - 2026-06-10 Session backfill checkpoint guidance
 

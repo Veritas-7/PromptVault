@@ -344,6 +344,7 @@ import {
   workSummaryFailureText,
   workSummaryIndexStatusText,
   workSessionIndexCheckpointGuidanceText,
+  workSessionIndexPartialBackfillWarningText,
   workSessionIndexPlannedRemainingText,
   workSummaryMetaText,
   workSummaryPersistenceText,
@@ -1041,6 +1042,8 @@ function App() {
     WORK_SESSION_INDEX_MAX_BATCHES,
     WORK_SESSION_INDEX_LONG_MAX_BATCHES,
   );
+  const workSessionIndexPartialBackfillWarning =
+    workSessionIndexPartialBackfillWarningText(workSessionIndexResult);
   const workSummaryIndexStatus = workSummaryResult ? workSummaryIndexStatusText(workSummaryResult) : null;
   const workSummaryPersistenceStatus = workSummaryResult ? workSummaryPersistenceText(workSummaryResult) : null;
   const workLogCoverageFailureMessage = workLogCoverageFailureText(workLogCoverageState);
@@ -4255,6 +4258,12 @@ function App() {
           <div className="work-summary-index" data-work-management-filter-meta="true">
             <Search size={15} />
             <span>{workManagementOverviewFilterMeta}</span>
+          </div>
+        ) : null}
+        {workManagementOverviewLoaded && workSessionIndexPartialBackfillWarning ? (
+          <div className="work-summary-index warning" data-work-management-session-backfill-warning="true">
+            <AlertTriangle size={15} />
+            <span>{workSessionIndexPartialBackfillWarning}</span>
           </div>
         ) : null}
         {workManagementDurabilityWarning ? (

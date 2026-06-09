@@ -437,6 +437,7 @@ async function runBrowserQa() {
   let workManagementPersistenceRows = [];
   let workManagementSessionRows = [];
   let workManagementDurabilityWarning = "";
+  let workManagementSessionBackfillWarning = "";
   let workManagementMeta = "";
   let workStatusExportLimitMeta = "";
   let workStatusExportMeta = "";
@@ -1200,6 +1201,14 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     workManagementDurabilityWarning =
       (await page.locator('[data-work-management-durability-warning="true"]').textContent())?.trim() ?? "";
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-management-session-backfill-warning="true"]')?.textContent ?? "";
+      return text.includes("세션 백필 미완료")
+        && text.includes("남은 파일")
+        && text.includes("상태 Export/요약/큐는 현재 인덱스 기준");
+    }, undefined, { timeout: 120000 });
+    workManagementSessionBackfillWarning =
+      (await page.locator('[data-work-management-session-backfill-warning="true"]').textContent())?.trim() ?? "";
     step("work management missing confidence sort");
     await waitForEnabled(page, '[data-work-management-sort="true"]');
     await page.locator('[data-work-management-sort="true"]').selectOption("missing_confidence_first");
@@ -1628,6 +1637,7 @@ async function runBrowserQa() {
       workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,
       workManagementDurabilityWarning,
+      workManagementSessionBackfillWarning,
       workManagementMetaAfterFreeze,
       workLogFreezePersistence,
       workManagementFilterMeta,

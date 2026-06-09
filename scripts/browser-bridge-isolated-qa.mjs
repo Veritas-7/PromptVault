@@ -298,6 +298,39 @@ async function runBrowserQa() {
         sourceStates: await page.locator('[data-work-session-index-source-state="true"]').allTextContents(),
       },
     };
+    const continuedCodexProcessedFiles = sourceProcessedFileCount(
+      workSessionIndexBackfill.continued.sourceStates,
+      "Codex",
+    );
+    await page.locator('[data-work-session-index-long-confirm="true"]').fill("긴 백필");
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-session-index-long-confirm-meta="true"]')?.textContent ?? "";
+      return text.includes("긴 백필 확인됨") && text.includes("source당 최대 250개");
+    }, undefined, { timeout: 60000 });
+    await page.locator('[data-run-work-session-index-long-continue-backfill="true"]').click();
+    await page.waitForFunction((previousCodexProcessedFiles) => {
+      const meta = document.querySelector('[data-work-session-index-meta="true"]')?.textContent ?? "";
+      const warning = document.querySelector('[data-work-session-index-warning="true"]')?.textContent ?? "";
+      const remaining = document.querySelector('[data-work-session-index-remaining="true"]')?.textContent ?? "";
+      const sourceStates = Array.from(document.querySelectorAll('[data-work-session-index-source-state="true"]'))
+        .map((row) => row.textContent ?? "");
+      const codexRow = sourceStates.find((row) => row.includes("Codex")) ?? "";
+      const match = codexRow.match(/파일\s+([\d,]+)\s+\//);
+      const processedFiles = match ? Number.parseInt(match[1].replaceAll(",", ""), 10) : 0;
+      return meta.includes("until-complete")
+        && meta.includes("이어가기")
+        && meta.includes("배치 10 / 10배치")
+        && warning.includes("max_batches")
+        && remaining.includes("남은 파일")
+        && remaining.includes("클릭당 소스별 최대 250개")
+        && processedFiles > previousCodexProcessedFiles;
+    }, continuedCodexProcessedFiles, { timeout: 180000 });
+    workSessionIndexBackfill.longContinued = {
+      meta: (await page.locator('[data-work-session-index-meta="true"]').textContent())?.trim() ?? "",
+      warning: (await page.locator('[data-work-session-index-warning="true"]').textContent())?.trim() ?? "",
+      remaining: (await page.locator('[data-work-session-index-remaining="true"]').textContent())?.trim() ?? "",
+      sourceStates: await page.locator('[data-work-session-index-source-state="true"]').allTextContents(),
+    };
     await page.locator('[data-browser-bridge-status="connected"]').waitFor({ timeout: 60000 });
     await page.locator('[data-work-summary-session-limit="true"]').fill(String(WORK_SESSION_LIMIT));
     await page.waitForFunction((expectedText) => {

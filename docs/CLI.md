@@ -16,6 +16,7 @@ cargo run --bin promptvault-cli -- improve [--local] --json --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve [--local] < prompt.txt
 cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [--count N>0] --json
 cargo run --bin promptvault-cli -- work-status-export [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]
+cargo run --bin promptvault-cli -- work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]
 cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PATH]
 ```
 
@@ -50,6 +51,9 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `repair` scans weakest prompts, runs deterministic local improvement for each one, writes no Markdown export, and returns redacted prompt/recommendation pairs. Repair batches are capped at 10 records.
 - `work-status-export` renders a compact project/day status Markdown table from the same project progress-log plus sanitized session-evidence report used by `work-report`.
 - `work-status-export --json` returns grouped rows with source files, top titles, item counts, session evidence counts, and review flags without raw session bodies.
+- `work-session-index` upserts sanitized Codex/Codex CX session records so progress-log work items can be linked to real session evidence without storing raw session bodies.
+- `work-session-index --batch-files` is capped at `1..500`; short backfills up to `--max-batches 2` need no confirmation.
+- `work-session-index --confirm-long-run` is required when the effective max batch count is above `2`, including `--until-complete` when no smaller `--max-batches` is supplied.
 - `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, and `/api/import-events` on the requested local address.
 - `serve --database PATH` makes browser-bridge persistence use the supplied SQLite file by default, so full click QA can exercise save/import flows without touching the permanent vault. Per-request `database_path` payload fields still take precedence.
 
@@ -89,6 +93,9 @@ set +e; cargo run --bin promptvault-cli -- improve --json --prompt ""; test "$?"
 cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
 cargo run --bin promptvault-cli -- work-status-export --limit 8 --session-limit 200
 cargo run --bin promptvault-cli -- work-status-export --limit 3 --session-limit 200 --json
+cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 2 --json
+cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 10 --confirm-long-run --json
+set +e; cargo run --bin promptvault-cli -- work-session-index --batch-files 1 --max-batches 3 --json; test "$?" -ne 0; set -e
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174 --database /tmp/promptvault-browser-qa.sqlite
 curl http://127.0.0.1:5174/api/health

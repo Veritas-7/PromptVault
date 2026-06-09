@@ -1,12 +1,123 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 17:43 KST
+Updated: 2026-06-09 17:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 compact project/day status export
+## Current Slice - 2026-06-09 confirmation-gated long session backfill
+
+Current Goal:
+
+- Let the operator intentionally continue filling the sanitized Codex/Codex CX
+  session index beyond the short UI backfill cadence.
+- Preserve the backend safety cap of `batch_files <= 500` and require explicit
+  confirmation before any API/CLI/UI path runs more than two session-index
+  batches in one request.
+
+Context:
+
+- The project/day status export now proves that progress logs are being parsed
+  and grouped across projects/days, but rows without enough indexed session
+  evidence still show up as `progress-log-only`.
+- The previous UI exposed reset/continue actions capped at two batches. That was
+  safe but made larger session-index catch-up work awkward and easy to confuse
+  with a normal short click.
+
+Progress:
+
+- Added a backend confirmation guard for long `work-session-index` runs.
+- Short `max_batches <= 2` runs remain confirmation-free.
+- Any effective `max_batches > 2`, including `--until-complete` with its default
+  long cap, now requires `confirm_long_run=true`.
+- Added CLI `--confirm-long-run`.
+- Added browser/UI long-continue mode that unlocks only after typing
+  `긴 백필`.
+- Long UI mode uses `max_batches=10`, so a single confirmed click can advance up
+  to `10 * batch_files` files per source while still respecting the backend
+  per-batch cap.
+- Updated README and `docs/CLI.md` with the long-run confirmation contract and
+  examples.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added `confirm_long_run` to `ProjectWorkSessionIndexOptions`;
+  - added the long-run threshold helper and backend rejection before indexing;
+  - added lib tests for unconfirmed rejection and threshold behavior.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added `--confirm-long-run` parsing and help text;
+  - added bridge validation coverage for unconfirmed long-run rejection.
+- `src/promptVaultApi.ts`:
+  - exposed `confirm_long_run` to browser bridge callers.
+- `src/App.tsx`:
+  - added `long-continue` mode, confirmation input, unlock status, and the
+    confirmed long-backfill button.
+- `tests/promptVaultApi.test.ts`:
+  - added browser bridge coverage for confirmed long-run request payloads.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - now verifies reset, continue, and confirmed long-continue session-index
+    backfills in the isolated browser bridge flow.
+- `README.md`, `docs/CLI.md`, and `working.md`:
+  - documented the operator-facing long-run confirmation contract.
+
+Tests:
+
+- `cargo fmt --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  run_project_work_session_index_rejects_unconfirmed_long_runs -- --nocapture`:
+  PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_session_index_long_run_confirmation_threshold -- --nocapture`:
+  PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli
+  bridge_routes_work_session_index_validation_errors -- --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli
+  help_text_documents_cli_validation_rules -- --nocapture`: PASS.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts --test-name-pattern "work session index"`:
+  PASS.
+- `npm run build`: PASS.
+- CLI negative proof:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli --
+  work-session-index --batch-files 1 --max-batches 3 --json`: expected
+  FAIL/PASS, rejected with `work-session-index long runs require
+  confirm_long_run=true when max_batches exceeds 2`.
+- CLI positive proof on an isolated temp DB:
+  `work-session-index --database /tmp/promptvault-confirmed-long-run.sqlite
+  --batch-files 1 --max-batches 3 --confirm-long-run --json`: PASS,
+  `batches_run=3`, `scanned_prompt_count=3`, `stored_prompt_count=3`.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  The isolated browser QA advanced Codex processed files through reset
+  `50 / 25,146`, continue `100 / 25,146`, and confirmed long-continue
+  `350 / 25,146`, with long mode reporting `배치 10 / 10배치`.
+- `npm run check`: PASS, including UI tests (`465`), production build, Rust lib
+  tests (`192`), CLI tests (`30`), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- Full all-history session exhaustion is still not complete; this slice adds a
+  safer intentional long-run lane rather than blindly exhausting every session
+  file.
+- AI provider-backed cleanup remains available through existing
+  OpenAI/GLM/local normalization flows, but this slice focused on session-index
+  backfill control, not automatic AI cleanup.
+
+Research:
+
+- No external research was needed. The implementation reused existing
+  work-session-index, browser bridge, and isolated QA contracts.
+
+Next Steps:
+
+- Continue confirmed session-index backfills until `progress-log-only` rows have
+  enough linked sanitized session evidence, or expose the compact project/day
+  export in the browser UI first.
+- Continue improving rough-title normalization review for rows marked
+  `needs_title_normalization`.
+
+## Completed Slice - 2026-06-09 compact project/day status export
 
 Current Goal:
 

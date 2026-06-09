@@ -337,12 +337,14 @@ type ScanState = ScanRunState;
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionIndexState = "idle" | "loading" | "ready" | "failed";
-type WorkSessionIndexBackfillMode = "reset" | "continue";
+type WorkSessionIndexBackfillMode = "reset" | "continue" | "long-continue";
 const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_SESSION_INDEX_MAX_BATCHES = 2;
+const WORK_SESSION_INDEX_LONG_MAX_BATCHES = 10;
+const WORK_SESSION_INDEX_LONG_CONFIRM_TEXT = "긴 백필";
 const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
 const WORK_LOG_CANDIDATE_DISPLAY_LIMIT = 5;
 const WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
@@ -403,13 +405,35 @@ function workSessionIndexBatchFilesStatusText(
   ].join(" · ");
 }
 
+function workSessionIndexLongRunConfirmed(input: string): boolean {
+  return input.trim() === WORK_SESSION_INDEX_LONG_CONFIRM_TEXT;
+}
+
+function workSessionIndexLongRunStatusText(
+  input: string,
+  effectiveBatchFiles: number | null,
+): string {
+  if (effectiveBatchFiles === null) return "긴 백필 계산 대기";
+  const filesPerSourceRun = effectiveBatchFiles * WORK_SESSION_INDEX_LONG_MAX_BATCHES;
+  if (workSessionIndexLongRunConfirmed(input)) {
+    return `긴 백필 확인됨 · source당 최대 ${filesPerSourceRun.toLocaleString()}개`;
+  }
+  return `긴 백필 잠김 · ${WORK_SESSION_INDEX_LONG_CONFIRM_TEXT} 입력 필요 · source당 최대 ${
+    filesPerSourceRun.toLocaleString()
+  }개`;
+}
+
 function workSessionIndexMetaText(
   state: WorkSessionIndexState,
   result: ProjectWorkSessionIndexResult | null,
   mode: WorkSessionIndexBackfillMode | null = null,
 ): string | null {
   if (state === "loading") {
-    const modeText = mode === "continue" ? "이어가기" : "처음부터";
+    const modeText = mode === "long-continue"
+      ? "긴 이어가기"
+      : mode === "continue"
+        ? "이어가기"
+        : "처음부터";
     return `세션 백필 ${modeText} 실행 중`;
   }
   if (state === "failed") return "세션 백필 실패";
@@ -572,6 +596,7 @@ function App() {
     String(WORK_SUMMARY_DEFAULT_SESSION_LIMIT),
   );
   const [workSessionIndexBatchFilesInput, setWorkSessionIndexBatchFilesInput] = useState("");
+  const [workSessionIndexLongConfirmInput, setWorkSessionIndexLongConfirmInput] = useState("");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -750,6 +775,11 @@ function App() {
     : workSessionIndexBatchFilesOverride ?? workSessionIndexBatchFiles(workSummarySessionLimit);
   const workSessionIndexBatchFilesStatus = workSessionIndexBatchFilesStatusText(
     workSessionIndexBatchFilesInput,
+    workSessionIndexEffectiveBatchFiles,
+  );
+  const workSessionIndexLongConfirmed = workSessionIndexLongRunConfirmed(workSessionIndexLongConfirmInput);
+  const workSessionIndexLongStatus = workSessionIndexLongRunStatusText(
+    workSessionIndexLongConfirmInput,
     workSessionIndexEffectiveBatchFiles,
   );
   const hasPromptResult = result !== null;
@@ -1706,15 +1736,25 @@ function App() {
       setWorkSessionIndexState("failed");
       return;
     }
+    const isLongContinue = mode === "long-continue";
+    if (isLongContinue && !workSessionIndexLongConfirmed) {
+      setError(workSessionIndexLongStatus);
+      setWorkSessionIndexState("failed");
+      return;
+    }
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkSessionIndexRunMode(mode);
     setWorkSessionIndexState("loading");
     try {
+      const maxBatches = isLongContinue
+        ? WORK_SESSION_INDEX_LONG_MAX_BATCHES
+        : WORK_SESSION_INDEX_MAX_BATCHES;
       const next = await runProjectWorkSessionIndex({
         batch_files: workSessionIndexEffectiveBatchFiles,
-        max_batches: WORK_SESSION_INDEX_MAX_BATCHES,
+        max_batches: maxBatches,
         until_complete: true,
+        confirm_long_run: isLongContinue ? true : undefined,
         reset: mode === "reset",
       });
       setWorkSessionIndexResult(next);
@@ -2414,6 +2454,18 @@ function App() {
                 onChange={(event) => setWorkSessionIndexBatchFilesInput(event.currentTarget.value)}
               />
             </label>
+            <label className="session-limit-control">
+              <span>긴 백필</span>
+              <input
+                aria-label={`긴 이어 백필 확인 문구. ${WORK_SESSION_INDEX_LONG_CONFIRM_TEXT} 입력`}
+                data-work-session-index-long-confirm="true"
+                disabled={isTopLevelActionLocked}
+                placeholder={WORK_SESSION_INDEX_LONG_CONFIRM_TEXT}
+                type="text"
+                value={workSessionIndexLongConfirmInput}
+                onChange={(event) => setWorkSessionIndexLongConfirmInput(event.currentTarget.value)}
+              />
+            </label>
             <button
               aria-label={workManagementRefreshActionLabel(
                 workManagementRefreshState,
@@ -2489,6 +2541,24 @@ function App() {
               {workSessionIndexState === "loading" && workSessionIndexRunMode === "continue"
                 ? "이어가는 중"
                 : "이어 백필"}
+            </button>
+            <button
+              aria-label={`확인 문구 입력 후 저장된 세션 인덱스 커서부터 최대 ${WORK_SESSION_INDEX_LONG_MAX_BATCHES.toLocaleString()}배치 긴 이어 백필`}
+              className="inline-action"
+              data-run-work-session-index-long-continue-backfill="true"
+              disabled={
+                isTopLevelActionLocked
+                || workSummarySessionLimitInvalid
+                || workSessionIndexBatchFilesInvalid
+                || !workSessionIndexLongConfirmed
+              }
+              onClick={() => void runWorkSessionIndexBackfill("long-continue")}
+              type="button"
+            >
+              <History size={15} />
+              {workSessionIndexState === "loading" && workSessionIndexRunMode === "long-continue"
+                ? "긴 백필 중"
+                : "긴 이어 백필"}
             </button>
             <button
               aria-label="현재 프로젝트 작업 요약을 SQLite 스냅샷으로 저장"
@@ -3359,6 +3429,13 @@ function App() {
         >
           <Database size={15} />
           <span>{workSessionIndexBatchFilesStatus}</span>
+        </div>
+        <div
+          className={`work-summary-index ${workSessionIndexLongConfirmed ? "" : "warning"}`}
+          data-work-session-index-long-confirm-meta="true"
+        >
+          <History size={15} />
+          <span>{workSessionIndexLongStatus}</span>
         </div>
         {workSessionIndexMeta ? (
           <div className="work-summary-index" data-work-session-index-meta="true">

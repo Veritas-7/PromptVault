@@ -30,6 +30,7 @@ const PROJECT_PROGRESS_TAIL_CHARS: usize = 8_000;
 const DEFAULT_PROJECT_WORK_SESSION_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_SESSION_INDEX_UNTIL_COMPLETE_MAX_BATCHES: usize = 1_000;
 const MAX_PROJECT_WORK_SESSION_INDEX_BATCH_FILES: usize = 500;
+const CONFIRMATION_FREE_PROJECT_WORK_SESSION_INDEX_MAX_BATCHES: usize = 2;
 const DEFAULT_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 80;
 const MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 1_000;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
@@ -843,6 +844,7 @@ pub struct ProjectWorkSessionIndexOptions {
     pub batch_files: Option<usize>,
     pub max_batches: Option<usize>,
     pub until_complete: Option<bool>,
+    pub confirm_long_run: Option<bool>,
     pub reset: Option<bool>,
 }
 
@@ -1849,6 +1851,12 @@ fn project_work_session_index_effective_max_batches(
     }
 }
 
+fn project_work_session_index_needs_long_run_confirmation(max_batches: Option<usize>) -> bool {
+    max_batches.is_some_and(|max_batches| {
+        max_batches > CONFIRMATION_FREE_PROJECT_WORK_SESSION_INDEX_MAX_BATCHES
+    })
+}
+
 pub fn run_project_work_session_index(
     options: ProjectWorkSessionIndexOptions,
 ) -> Result<ProjectWorkSessionIndexResult, Box<dyn std::error::Error>> {
@@ -1881,6 +1889,18 @@ pub fn run_project_work_session_index(
         return Err("work-session-index database path requires a non-empty value".into());
     }
 
+    let batch_files = options.batch_files;
+    let max_batches =
+        project_work_session_index_effective_max_batches(until_complete, options.max_batches);
+    if project_work_session_index_needs_long_run_confirmation(max_batches)
+        && !options.confirm_long_run.unwrap_or(false)
+    {
+        return Err(format!(
+            "work-session-index long runs require confirm_long_run=true when max_batches exceeds {CONFIRMATION_FREE_PROJECT_WORK_SESSION_INDEX_MAX_BATCHES}"
+        )
+        .into());
+    }
+
     let generated_at = Utc::now().to_rfc3339();
     let database_path = options
         .database_path
@@ -1888,9 +1908,6 @@ pub fn run_project_work_session_index(
         .map(PathBuf::from)
         .unwrap_or_else(default_database_path);
     let requested_limit = options.limit.unwrap_or(DEFAULT_PROJECT_WORK_SESSION_LIMIT);
-    let batch_files = options.batch_files;
-    let max_batches =
-        project_work_session_index_effective_max_batches(until_complete, options.max_batches);
     let reset = options.reset.unwrap_or(false);
     let mut warnings = Vec::new();
     let (prompts, source_states, batches_run) = if let Some(batch_files) = batch_files {
@@ -15099,6 +15116,46 @@ Progress:
         .to_string();
 
         assert!(missing_batch_err.contains("work-session-index max_batches requires batch_files"));
+    }
+
+    #[test]
+    fn run_project_work_session_index_rejects_unconfirmed_long_runs() {
+        let long_batches_err = run_project_work_session_index(ProjectWorkSessionIndexOptions {
+            batch_files: Some(1),
+            max_batches: Some(CONFIRMATION_FREE_PROJECT_WORK_SESSION_INDEX_MAX_BATCHES + 1),
+            ..Default::default()
+        })
+        .expect_err("long max_batches without confirmation should fail")
+        .to_string();
+
+        assert!(
+            long_batches_err.contains("work-session-index long runs require confirm_long_run=true")
+        );
+
+        let default_until_complete_err =
+            run_project_work_session_index(ProjectWorkSessionIndexOptions {
+                batch_files: Some(1),
+                until_complete: Some(true),
+                ..Default::default()
+            })
+            .expect_err("default until_complete without confirmation should fail")
+            .to_string();
+
+        assert!(default_until_complete_err
+            .contains("work-session-index long runs require confirm_long_run=true"));
+    }
+
+    #[test]
+    fn project_work_session_index_long_run_confirmation_threshold() {
+        assert!(!project_work_session_index_needs_long_run_confirmation(
+            Some(CONFIRMATION_FREE_PROJECT_WORK_SESSION_INDEX_MAX_BATCHES)
+        ));
+        assert!(project_work_session_index_needs_long_run_confirmation(
+            Some(CONFIRMATION_FREE_PROJECT_WORK_SESSION_INDEX_MAX_BATCHES + 1)
+        ));
+        assert!(!project_work_session_index_needs_long_run_confirmation(
+            None
+        ));
     }
 
     #[test]

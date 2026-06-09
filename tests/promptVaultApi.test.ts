@@ -822,6 +822,41 @@ test("browser bridge work session index posts continue-from-cursor options", asy
   assert.equal(result.source_states[0].processed_files, 400);
 });
 
+test("browser bridge work session index posts confirmed long-run options", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestBody = "";
+  globalThis.fetch = async (_input, init) => {
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionIndexPayload({
+      max_batches: 10,
+      batches_run: 10,
+    })), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await runProjectWorkSessionIndex({
+    batch_files: 25,
+    max_batches: 10,
+    until_complete: true,
+    confirm_long_run: true,
+    reset: false,
+  });
+
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      batch_files: 25,
+      max_batches: 10,
+      until_complete: true,
+      confirm_long_run: true,
+      reset: false,
+    },
+  });
+  assert.equal(result.max_batches, 10);
+  assert.equal(result.batches_run, 10);
+});
+
 test("browser bridge work summary posts extraction merge options and validates merge metadata", async (t) => {
   const originalFetch = globalThis.fetch;
   let requestPath = "";

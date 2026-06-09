@@ -109,6 +109,7 @@ export interface ProjectWorkSessionIndexOptions {
   batch_files?: number;
   max_batches?: number;
   until_complete?: boolean;
+  confirm_long_run?: boolean;
   reset?: boolean;
 }
 

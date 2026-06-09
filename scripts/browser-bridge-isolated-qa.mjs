@@ -136,6 +136,12 @@ async function runBrowserQa() {
   let workManagementMetaAfterFreeze = "";
   let workManagementFilterMeta = "";
   let workManagementFilteredRows = [];
+  let workManagementMissingConfidenceRows = [];
+  let workManagementPersistenceRows = [];
+  let workManagementDurabilityWarning = "";
+  let workManagementMeta = "";
+  let workSummaryIndex = "";
+  let coverageMeta = "";
 
   page.on("console", (message) => {
     if (["error", "warning"].includes(message.type())) {
@@ -241,6 +247,8 @@ async function runBrowserQa() {
       const text = document.querySelector('[data-work-summary-index="true"]')?.textContent ?? "";
       return text.includes("메타데이터 우선") && text.includes("raw fallback");
     }, undefined, { timeout: 120000 });
+    workSummaryIndex =
+      (await page.locator('[data-work-summary-index="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-save-work-summary-snapshot="true"]').click();
     await page.waitForFunction((databasePath) => {
       const text = document.querySelector('[data-work-summary-persistence="true"]')?.textContent ?? "";
@@ -263,6 +271,8 @@ async function runBrowserQa() {
       const text = document.querySelector('[data-work-management-overview-meta="true"]')?.textContent ?? "";
       return text.includes("저장관리") && text.includes("라이브만");
     }, undefined, { timeout: 120000 });
+    workManagementMeta =
+      (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
     await page.waitForFunction(() => {
       return [...document.querySelectorAll('[data-work-management-row-persistence="true"]')]
         .some((element) => (element.textContent ?? "").includes("저장관리"));
@@ -271,6 +281,15 @@ async function runBrowserQa() {
       const text = document.querySelector('[data-work-management-durability-warning="true"]')?.textContent ?? "";
       return text.includes("라이브만") && text.includes("저장관리");
     }, undefined, { timeout: 120000 });
+    workManagementDurabilityWarning =
+      (await page.locator('[data-work-management-durability-warning="true"]').textContent())?.trim() ?? "";
+    await page.locator('[data-work-management-sort="true"]').selectOption("missing_confidence_first");
+    await page.waitForFunction(() => {
+      const rows = [...document.querySelectorAll('[data-work-management-overview="true"] article')];
+      return rows.some((row) => (row.textContent ?? "").includes("confidence 없음"));
+    }, undefined, { timeout: 120000 });
+    workManagementMissingConfidenceRows =
+      await page.locator('[data-work-management-overview="true"] article').allTextContents();
     await page.locator('[data-freeze-work-management-live-rows="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-extraction-persistence="true"]')?.textContent ?? "";
@@ -283,6 +302,7 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       return !document.querySelector('[data-work-management-durability-warning="true"]');
     }, undefined, { timeout: 120000 });
+    workManagementDurabilityWarning = "";
     workLogFreezePersistence =
       (await page.locator('[data-work-log-extraction-persistence="true"]').textContent())?.trim() ?? "";
     workManagementMetaAfterFreeze =
@@ -306,11 +326,17 @@ async function runBrowserQa() {
       const text = document.querySelector('[data-work-management-filter-meta="true"]')?.textContent ?? "";
       return text.includes("관리 감사 필터 없음");
     }, undefined, { timeout: 120000 });
+    workManagementMeta =
+      (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
+    workManagementPersistenceRows =
+      await page.locator('[data-work-management-row-persistence="true"]').allTextContents();
     await page.locator('[data-load-work-log-coverage="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-coverage-meta="true"]')?.textContent ?? "";
       return text.includes("unparsed 0개");
     }, undefined, { timeout: 120000 });
+    coverageMeta =
+      (await page.locator('[data-work-log-coverage-meta="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-load-work-log-candidates="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-candidates-meta="true"]')?.textContent ?? "";
@@ -340,20 +366,16 @@ async function runBrowserQa() {
       importEvents: importEvents.total_events,
       snapshots: snapshots.total_snapshots,
       workSessionLimit: WORK_SESSION_LIMIT,
-      workSummaryIndex:
-        (await page.locator('[data-work-summary-index="true"]').textContent())?.trim() ?? "",
-      workManagementMeta:
-        (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "",
-      workManagementDurabilityWarning:
-        (await page.locator('[data-work-management-durability-warning="true"]').textContent().catch(() => ""))?.trim() ?? "",
+      workSummaryIndex,
+      workManagementMeta,
+      workManagementDurabilityWarning,
       workManagementMetaAfterFreeze,
       workLogFreezePersistence,
       workManagementFilterMeta,
       workManagementFilteredRows,
-      workManagementPersistenceRows:
-        await page.locator('[data-work-management-row-persistence="true"]').allTextContents(),
-      coverageMeta:
-        (await page.locator('[data-work-log-coverage-meta="true"]').textContent())?.trim() ?? "",
+      workManagementMissingConfidenceRows,
+      workManagementPersistenceRows,
+      coverageMeta,
     };
     console.log(JSON.stringify(result, null, 2));
   } finally {

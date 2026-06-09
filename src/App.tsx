@@ -190,6 +190,7 @@ import {
   buildWorkManagementOverview,
   emptyWorkManagementOverviewFilters,
   filterWorkManagementOverviewRows,
+  sortWorkManagementOverviewRows,
   workManagementOverviewConfidenceText,
   workManagementOverviewDateSuggestions,
   workManagementOverviewDurabilityWarningText,
@@ -200,6 +201,7 @@ import {
   workManagementOverviewSourceText,
   type WorkManagementOverviewFilters,
   type WorkManagementOverviewPersistenceState,
+  type WorkManagementOverviewSort,
   type WorkManagementOverviewSource,
 } from "./workManagementOverview";
 import {
@@ -331,6 +333,17 @@ const WORK_MANAGEMENT_PERSISTENCE_OPTIONS: Array<{
   { label: "라이브만", value: "live_only" },
 ];
 
+const WORK_MANAGEMENT_SORT_OPTIONS: Array<{
+  label: string;
+  value: WorkManagementOverviewSort;
+}> = [
+  { label: "최신 날짜순", value: "date_desc" },
+  { label: "라이브만 우선", value: "live_only_first" },
+  { label: "confidence 없음 우선", value: "missing_confidence_first" },
+  { label: "낮은 confidence 우선", value: "low_confidence_first" },
+  { label: "작업 많은 순", value: "work_items_desc" },
+];
+
 function waitForNextImportBatch(): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, CONTINUOUS_IMPORT_PAUSE_MS);
@@ -412,6 +425,8 @@ function App() {
   );
   const [workManagementOverviewFilters, setWorkManagementOverviewFilters] =
     useState<WorkManagementOverviewFilters>(() => emptyWorkManagementOverviewFilters());
+  const [workManagementOverviewSort, setWorkManagementOverviewSort] =
+    useState<WorkManagementOverviewSort>("date_desc");
   const [expandedWorkSummarySnapshotIds, setExpandedWorkSummarySnapshotIds] = useState<Set<number>>(
     () => new Set(),
   );
@@ -759,8 +774,12 @@ function App() {
     workManagementOverview.rows,
     workManagementOverviewFilters,
   );
+  const sortedWorkManagementOverviewRows = sortWorkManagementOverviewRows(
+    filteredWorkManagementOverviewRows,
+    workManagementOverviewSort,
+  );
   const visibleWorkManagementOverviewRows =
-    filteredWorkManagementOverviewRows.slice(0, WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT);
+    sortedWorkManagementOverviewRows.slice(0, WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT);
   const hiddenWorkManagementOverviewRowCount = Math.max(
     0,
     filteredWorkManagementOverviewRows.length - WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT,
@@ -2434,6 +2453,23 @@ function App() {
               type="number"
               value={workManagementOverviewFilters.minConfidence}
             />
+          </label>
+          <label>
+            <span>정렬</span>
+            <select
+              aria-label="프로젝트 일자 관리 감사 정렬"
+              data-work-management-sort="true"
+              disabled={isTopLevelActionLocked}
+              onChange={(event) =>
+                setWorkManagementOverviewSort(event.target.value as WorkManagementOverviewSort)}
+              value={workManagementOverviewSort}
+            >
+              {WORK_MANAGEMENT_SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
           <button
             aria-label={

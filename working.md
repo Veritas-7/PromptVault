@@ -1,10 +1,90 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 10:43 KST
+Updated: 2026-06-09 10:54 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 management audit sorting
+
+Current Goal:
+
+- Make project/day management rows easier to audit after real session/log
+  loading by exposing sort modes for live-only rows, missing confidence rows,
+  low-confidence rows, and high-volume work rows.
+- Keep sort separate from filter count so the operator can reorder the same
+  management result set without changing active filter semantics.
+
+Context:
+
+- The previous slices made progress-log rows durable and filterable, then added
+  row-level extraction confidence.
+- The remaining operator gap is finding the next weak management row quickly:
+  live-only rows, rows with `confidence 없음`, and low-confidence rows were
+  present but could be hidden behind date order and the 6-row compact display.
+
+Progress:
+
+- Added `WorkManagementOverviewSort` and
+  `sortWorkManagementOverviewRows()` with these modes: latest date,
+  live-only first, missing confidence first, low confidence first, and work
+  items descending.
+- Added a `정렬` select to the management audit controls without changing the
+  filter count.
+- Extended browser bridge QA to choose `confidence 없음 우선` before freeze and
+  verify that missing-confidence management rows are visible in the real DOM.
+- Hardened the QA result collection by saving inspected DOM values during each
+  flow step instead of re-querying every value after the last action.
+
+Changes:
+
+- `src/workManagementOverview.ts`:
+  - adds management sort types, deterministic sort helper, and comparator
+    helpers.
+- `src/App.tsx`:
+  - adds management sort state, options, select control, and sorted visible row
+    rendering.
+- `src/App.css`:
+  - widens the management control grid for the sort select.
+- `tests/workManagementOverview.test.ts`:
+  - adds sorting coverage for live-only, missing-confidence, low-confidence,
+    work-volume, and default date orders.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - verifies missing-confidence sorting in browser QA and stores final report
+    values before page shutdown.
+
+Tests:
+
+- `npm run test:ui -- tests/workManagementOverview.test.ts`: PASS. The package
+  script ran the UI suite and reported `436` passing tests.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final QA JSON included `workManagementMissingConfidenceRows` with
+  `confidence 없음` rows such as `CareVault`, `enterprise_diagnosis_flutter`,
+  `NuancedNarrator`, and `PromptVault`, then freeze saved `44` accepted rows
+  and left `라이브만 0`.
+- `npm run check`: PASS. UI `436` tests, Vite build, Rust lib `165` tests,
+  CLI `24` tests, doc-tests, and clippy all passed.
+
+Issues:
+
+- This is an auditability improvement over the currently loaded management
+  rows. It is not the full all-history scheduler/backfill worker.
+- Missing-confidence rows may include persisted snapshot-only rows as well as
+  live-only rows; that is intentional because both lack extraction confidence.
+
+Research:
+
+- No external research needed. The change followed the existing local
+  management overview/filter architecture.
+
+Next Steps:
+
+- Commit and push this management sorting slice.
+- Next product slice: add an explicit all-history backfill/report view or a
+  saved project/day fact table so full historical coverage is visible without
+  relying on the current loaded UI result set.
 
 ## Current Slice - 2026-06-09 management confidence audit
 

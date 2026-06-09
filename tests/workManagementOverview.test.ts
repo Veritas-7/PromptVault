@@ -5,6 +5,7 @@ import {
   buildWorkManagementOverview,
   emptyWorkManagementOverviewFilters,
   filterWorkManagementOverviewRows,
+  sortWorkManagementOverviewRows,
   workManagementOverviewConfidenceText,
   workManagementOverviewDateSuggestions,
   workManagementOverviewDurabilityWarningText,
@@ -468,6 +469,78 @@ test("work management overview filters expose auditable project date rows", () =
   assert.equal(
     workManagementOverviewFilterMetaText(3, 3, 0),
     "관리 감사 필터 없음 · 결과 3 / 3개",
+  );
+});
+
+test("work management overview sorting exposes audit-first row orders", () => {
+  const coverage = coverageResult();
+  const overview = buildWorkManagementOverview({
+    coverage: {
+      ...coverage,
+      files: [
+        ...coverage.files,
+        {
+          project: "OnlyProgress",
+          source_path: "/Users/wj/Ai/System/10_Projects/OnlyProgress/working.md",
+          source_file: "working.md",
+          status: "parsed",
+          work_item_count: 50,
+          latest_date: "2026-06-01",
+          latest_title: "Progress-only backlog",
+          modified_at: "2026-06-09T01:40:00Z",
+        },
+      ],
+    },
+    extractionItems: extractionItemsResult(),
+    extractionProposals: extractionProposalsResult(),
+    snapshots: snapshotsResult(),
+    summary: summaryResult(),
+  });
+
+  assert.deepEqual(
+    sortWorkManagementOverviewRows(overview.rows, "date_desc").map((row) => row.key),
+    [
+      "2026-06-09::PromptVault",
+      "2026-06-08::CareVault",
+      "2026-06-04::RepoTutorStudio",
+      "2026-06-01::OnlyProgress",
+    ],
+  );
+  assert.deepEqual(
+    sortWorkManagementOverviewRows(overview.rows, "live_only_first").map((row) => row.key),
+    [
+      "2026-06-01::OnlyProgress",
+      "2026-06-09::PromptVault",
+      "2026-06-08::CareVault",
+      "2026-06-04::RepoTutorStudio",
+    ],
+  );
+  assert.deepEqual(
+    sortWorkManagementOverviewRows(overview.rows, "missing_confidence_first").map((row) => row.key),
+    [
+      "2026-06-01::OnlyProgress",
+      "2026-06-09::PromptVault",
+      "2026-06-08::CareVault",
+      "2026-06-04::RepoTutorStudio",
+    ],
+  );
+  assert.deepEqual(
+    sortWorkManagementOverviewRows(overview.rows, "low_confidence_first").map((row) => row.key),
+    [
+      "2026-06-04::RepoTutorStudio",
+      "2026-06-08::CareVault",
+      "2026-06-09::PromptVault",
+      "2026-06-01::OnlyProgress",
+    ],
+  );
+  assert.deepEqual(
+    sortWorkManagementOverviewRows(overview.rows, "work_items_desc").map((row) => row.key),
+    [
+      "2026-06-01::OnlyProgress",
+      "2026-06-09::PromptVault",
+      "2026-06-08::CareVault",
+      "2026-06-04::RepoTutorStudio",
+    ],
   );
 });
 

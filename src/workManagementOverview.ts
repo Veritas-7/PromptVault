@@ -14,6 +14,12 @@ export type WorkManagementOverviewSource =
   | "saved_extraction"
   | "progress_log";
 export type WorkManagementOverviewPersistenceState = "persisted" | "live_only";
+export type WorkManagementOverviewSort =
+  | "date_desc"
+  | "live_only_first"
+  | "missing_confidence_first"
+  | "low_confidence_first"
+  | "work_items_desc";
 
 export interface WorkManagementOverviewFilters {
   date: string;
@@ -238,6 +244,33 @@ export function filterWorkManagementOverviewRows(
   });
 }
 
+export function sortWorkManagementOverviewRows(
+  rows: readonly WorkManagementOverviewRow[],
+  sort: WorkManagementOverviewSort,
+): WorkManagementOverviewRow[] {
+  const next = [...rows];
+  next.sort((left, right) => {
+    if (sort === "live_only_first") {
+      const persistenceOrder = persistenceSortValue(left) - persistenceSortValue(right);
+      if (persistenceOrder !== 0) return persistenceOrder;
+    }
+    if (sort === "missing_confidence_first") {
+      const confidenceOrder = missingConfidenceSortValue(left) - missingConfidenceSortValue(right);
+      if (confidenceOrder !== 0) return confidenceOrder;
+    }
+    if (sort === "low_confidence_first") {
+      const confidenceOrder = confidenceSortValue(left) - confidenceSortValue(right);
+      if (confidenceOrder !== 0) return confidenceOrder;
+    }
+    if (sort === "work_items_desc") {
+      const workItemOrder = right.work_item_count - left.work_item_count;
+      if (workItemOrder !== 0) return workItemOrder;
+    }
+    return compareWorkManagementRowsByDate(left, right);
+  });
+  return next;
+}
+
 export function workManagementOverviewDateSuggestions(
   rows: readonly WorkManagementOverviewRow[],
 ): string[] {
@@ -355,6 +388,27 @@ function normalizedConfidenceFilter(value: string): number | null {
   if (!trimmed) return null;
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function compareWorkManagementRowsByDate(
+  left: WorkManagementOverviewRow,
+  right: WorkManagementOverviewRow,
+): number {
+  const dateOrder = right.date.localeCompare(left.date);
+  if (dateOrder !== 0) return dateOrder;
+  return left.project.localeCompare(right.project);
+}
+
+function persistenceSortValue(row: WorkManagementOverviewRow): number {
+  return row.persistence_state === "live_only" ? 0 : 1;
+}
+
+function missingConfidenceSortValue(row: WorkManagementOverviewRow): number {
+  return row.confidence_count === 0 ? 0 : 1;
+}
+
+function confidenceSortValue(row: WorkManagementOverviewRow): number {
+  return row.min_confidence ?? Number.POSITIVE_INFINITY;
 }
 
 function sumRows(

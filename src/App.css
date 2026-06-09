@@ -248,6 +248,15 @@ h3 {
     auto;
 }
 
+.work-summary-filter-row.work-backfill-queue-filter-row {
+  grid-template-columns:
+    minmax(140px, 0.45fr)
+    minmax(120px, 0.32fr)
+    minmax(170px, 0.55fr)
+    auto
+    auto;
+}
+
 .work-status-export-page-controls {
   flex-wrap: wrap;
 }

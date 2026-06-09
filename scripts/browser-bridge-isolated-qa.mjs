@@ -504,6 +504,8 @@ async function runBrowserQa() {
   let workLogReviewQueueMeta = "";
   let approvedReviewQueueSaveDisabledWhenEmpty = null;
   let workLogReviewQueueMetaAfterSynthetic = "";
+  let workLogReviewQueueFilterMeta = "";
+  let workLogReviewQueueFilteredRows = [];
   let approvedReviewQueuePersistence = "";
   let workLogRunsMeta = "";
   let workLogRunRows = [];
@@ -1696,6 +1698,31 @@ async function runBrowserQa() {
     }, undefined, { timeout: 90000 });
     workLogReviewQueueMetaAfterSynthetic =
       (await page.locator('[data-work-log-review-queue-meta="true"]').textContent())?.trim() ?? "";
+    const workLogReviewQueueProject =
+      (await page.locator('[data-work-log-review-queue="true"] article strong').first().textContent())?.trim()
+      ?? "";
+    if (!workLogReviewQueueProject) {
+      throw new Error("Work log review queue project should be visible before filter QA");
+    }
+    await page.locator('[data-work-log-review-queue-project-filter="true"]').fill(workLogReviewQueueProject);
+    await page.locator('[data-apply-work-log-review-queue-filters="true"]').click();
+    await page.waitForFunction((project) => {
+      const metaText = document.querySelector('[data-work-log-review-queue-filter-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-log-review-queue="true"] article'));
+      return metaText.includes("백필큐 필터")
+        && metaText.includes("필터 1개")
+        && rows.length > 0
+        && rows.every((row) => row.querySelector("strong")?.textContent?.trim() === project);
+    }, workLogReviewQueueProject, { timeout: 90000 });
+    workLogReviewQueueFilterMeta =
+      (await page.locator('[data-work-log-review-queue-filter-meta="true"]').textContent())?.trim() ?? "";
+    workLogReviewQueueFilteredRows =
+      await page.locator('[data-work-log-review-queue="true"] article').allTextContents();
+    await page.locator('[data-clear-work-log-review-queue-filters="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-review-queue-filter-meta="true"]')?.textContent ?? "";
+      return text.includes("백필큐 필터") && text.includes("필터 없음");
+    }, undefined, { timeout: 90000 });
     await waitForEnabled(page, '[data-save-approved-work-log-review-queue="true"]');
     await page.locator('[data-save-approved-work-log-review-queue="true"]').click();
     await page.waitForFunction(() => {
@@ -1843,6 +1870,8 @@ async function runBrowserQa() {
       workLogReviewQueueMeta,
       approvedReviewQueueSaveDisabledWhenEmpty,
       workLogReviewQueueMetaAfterSynthetic,
+      workLogReviewQueueFilterMeta,
+      workLogReviewQueueFilteredRows,
       approvedReviewQueuePersistence,
       workLogRunsMeta,
       workLogRunRows,

@@ -4,6 +4,7 @@ import {
   activeWorkReviewQueueFilterCount,
   emptyWorkReviewQueueFilters,
   filterWorkLogNormalizationReviewQueueItems,
+  filterWorkLogReviewQueueItems,
   filterWorkSessionEvidenceReviewQueueItems,
   workReviewQueueDateSuggestions,
   workReviewQueueFilterMetaText,
@@ -13,6 +14,7 @@ import {
 } from "../src/reviewQueueFilters.ts";
 import type {
   ProjectWorkLogNormalizationReviewQueueItem,
+  ProjectWorkLogReviewQueueItem,
   ProjectWorkSessionEvidenceReviewQueueItem,
 } from "../src/types.ts";
 
@@ -49,6 +51,29 @@ function normalizationItem(
     source_path: "/tmp/PromptVault/workingd.md",
     used_ai: true,
     work_item_count: 4,
+    ...overrides,
+  };
+}
+
+function workLogReviewQueueItem(
+  overrides: Partial<ProjectWorkLogReviewQueueItem> = {},
+): ProjectWorkLogReviewQueueItem {
+  return {
+    candidate_id: "work-log-review-PromptVault-a1",
+    candidate_reason: "missing_dated_heading",
+    char_count: 54,
+    excerpt: "- 2026-06-09: Verified approved queue browser save",
+    first_seen_at: "2026-06-09T00:00:00Z",
+    last_seen_at: "2026-06-09T00:01:00Z",
+    line_count: 1,
+    modified_at: null,
+    project: "PromptVault",
+    provider_route: "safe_ai",
+    review_reason: "queued_for_ai_backfill",
+    review_state: "pending_ai_review",
+    risk_flags: [],
+    source_file: "workingd.md",
+    source_path: "/tmp/PromptVault/workingd.md",
     ...overrides,
   };
 }
@@ -108,6 +133,36 @@ test("review queue filters narrow normalization rows by project date state and r
   assert.equal(
     workReviewQueueFilterMetaText("정규화 큐", 1, rows.length, activeWorkReviewQueueFilterCount(filters)),
     "정규화 큐 필터 · 필터 4개 · 결과 1 / 2개",
+  );
+});
+
+test("review queue filters narrow backfill queue rows by project state and reason", () => {
+  const rows = [
+    workLogReviewQueueItem(),
+    workLogReviewQueueItem({
+      candidate_id: "work-log-review-CareVault-b1",
+      project: "CareVault",
+      provider_route: "local_review_only",
+      review_reason: "risk_flags_require_manual_review",
+      review_state: "risk_blocked",
+      risk_flags: ["local_secret_path"],
+    }),
+  ];
+  const filters: WorkReviewQueueFilters = {
+    ...emptyWorkReviewQueueFilters(),
+    project: "PromptVault",
+    reason: "safe_ai",
+    state: "pending_ai_review",
+  };
+
+  assert.equal(activeWorkReviewQueueFilterCount(filters), 3);
+  assert.deepEqual(
+    filterWorkLogReviewQueueItems(rows, filters).map((row) => row.candidate_id),
+    ["work-log-review-PromptVault-a1"],
+  );
+  assert.equal(
+    workReviewQueueFilterMetaText("백필큐", 1, rows.length, activeWorkReviewQueueFilterCount(filters)),
+    "백필큐 필터 · 필터 3개 · 결과 1 / 2개",
   );
 });
 

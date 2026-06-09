@@ -212,6 +212,7 @@ import {
   activeWorkReviewQueueFilterCount,
   emptyWorkReviewQueueFilters,
   filterWorkLogNormalizationReviewQueueItems,
+  filterWorkLogReviewQueueItems,
   filterWorkSessionEvidenceReviewQueueItems,
   workReviewQueueDateSuggestions,
   workReviewQueueFilterMetaText,
@@ -665,6 +666,18 @@ const WORK_REVIEW_QUEUE_STATE_FILTER_OPTIONS: Array<{
   { label: "거절", value: "rejected" },
 ];
 
+const WORK_LOG_REVIEW_QUEUE_STATE_FILTER_OPTIONS: Array<{
+  label: string;
+  value: WorkReviewQueueStateFilter;
+}> = [
+  { label: "전체 상태", value: "" },
+  { label: "AI 검토 대기", value: "pending_ai_review" },
+  { label: "위험 차단", value: "risk_blocked" },
+  { label: "stale", value: "stale" },
+  { label: "승인", value: "approved" },
+  { label: "거절", value: "rejected" },
+];
+
 function waitForNextImportBatch(): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, CONTINUOUS_IMPORT_PAUSE_MS);
@@ -814,6 +827,8 @@ function App() {
   const [workLogPreviewFilters, setWorkLogPreviewFilters] = useState<WorkLogPreviewFilters>(() =>
     emptyWorkLogPreviewFilters(),
   );
+  const [workLogReviewQueueFilters, setWorkLogReviewQueueFilters] =
+    useState<WorkReviewQueueFilters>(() => emptyWorkReviewQueueFilters());
   const [workLogNormalizationReviewQueueFilters, setWorkLogNormalizationReviewQueueFilters] =
     useState<WorkReviewQueueFilters>(() => emptyWorkReviewQueueFilters());
   const [workSessionEvidenceReviewQueueFilters, setWorkSessionEvidenceReviewQueueFilters] =
@@ -1256,6 +1271,23 @@ function App() {
   const workLogPreviewDateFilterSuggestions = workLogProposalDateSuggestions(
     workLogExtractionResult?.proposals ?? [],
   );
+  const workLogReviewQueueFilterCount = activeWorkReviewQueueFilterCount(workLogReviewQueueFilters);
+  const filteredWorkLogReviewQueueItems = filterWorkLogReviewQueueItems(
+    workLogReviewQueueResult?.items ?? [],
+    workLogReviewQueueFilters,
+  );
+  const workLogReviewQueueFilterMeta = workLogReviewQueueResult
+    ? workReviewQueueFilterMetaText(
+        "백필큐",
+        filteredWorkLogReviewQueueItems.length,
+        workLogReviewQueueResult.items.length,
+        workLogReviewQueueFilterCount,
+      )
+    : null;
+  const workLogReviewQueueProjectFilterSuggestions =
+    workReviewQueueProjectSuggestions(workLogReviewQueueResult?.items ?? []);
+  const workLogReviewQueueReasonFilterSuggestions =
+    workReviewQueueReasonSuggestions(workLogReviewQueueResult?.items ?? []);
   const workLogNormalizationReviewQueueFilterCount = activeWorkReviewQueueFilterCount(
     workLogNormalizationReviewQueueFilters,
   );
@@ -1334,11 +1366,11 @@ function App() {
     filteredWorkLogCandidates.length - WORK_LOG_CANDIDATE_DISPLAY_LIMIT,
   );
   const visibleWorkLogReviewQueueItems =
-    workLogReviewQueueResult?.items.slice(0, WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT) ?? [];
+    filteredWorkLogReviewQueueItems.slice(0, WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT);
   const approvedWorkLogReviewQueueCount = workLogReviewQueueResult?.approved_count ?? 0;
   const hiddenWorkLogReviewQueueItemCount = Math.max(
     0,
-    (workLogReviewQueueResult?.items.length ?? 0) - WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT,
+    filteredWorkLogReviewQueueItems.length - WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT,
   );
   const visibleWorkLogExtractionProposals =
     filteredWorkLogExtractionProposals.slice(0, WORK_LOG_EXTRACTION_DISPLAY_LIMIT);
@@ -4171,6 +4203,103 @@ function App() {
           ))}
         </datalist>
         <form
+          className="work-summary-filter-row work-backfill-queue-filter-row"
+          data-work-log-review-queue-filters="true"
+          onSubmit={(event) => {
+            event.preventDefault();
+          }}
+        >
+          <label>
+            <span>백필 프로젝트</span>
+            <input
+              aria-label="백필큐 프로젝트 필터"
+              data-work-log-review-queue-project-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-review-queue-project-options"
+              onChange={(event) =>
+                setWorkLogReviewQueueFilters((current) => ({
+                  ...current,
+                  project: event.target.value,
+                }))}
+              placeholder="PromptVault"
+              type="text"
+              value={workLogReviewQueueFilters.project}
+            />
+          </label>
+          <label>
+            <span>상태</span>
+            <select
+              aria-label="백필큐 상태 필터"
+              data-work-log-review-queue-state-filter="true"
+              disabled={isTopLevelActionLocked}
+              onChange={(event) =>
+                setWorkLogReviewQueueFilters((current) => ({
+                  ...current,
+                  state: event.target.value as WorkReviewQueueStateFilter,
+                }))}
+              value={workLogReviewQueueFilters.state}
+            >
+              {WORK_LOG_REVIEW_QUEUE_STATE_FILTER_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>사유</span>
+            <input
+              aria-label="백필큐 사유 필터"
+              data-work-log-review-queue-reason-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-review-queue-reason-options"
+              onChange={(event) =>
+                setWorkLogReviewQueueFilters((current) => ({
+                  ...current,
+                  reason: event.target.value,
+                }))}
+              placeholder="safe_ai"
+              type="text"
+              value={workLogReviewQueueFilters.reason}
+            />
+          </label>
+          <button
+            aria-label={
+              workLogReviewQueueFilterCount
+                ? `백필큐 필터 ${workLogReviewQueueFilterCount.toLocaleString()}개 적용`
+                : "필터 없이 백필큐 보기"
+            }
+            className="inline-action"
+            data-apply-work-log-review-queue-filters="true"
+            disabled={isTopLevelActionLocked}
+            type="submit"
+          >
+            <Search size={15} />
+            필터 적용
+          </button>
+          <button
+            aria-label="백필큐 필터 초기화"
+            className="inline-action"
+            data-clear-work-log-review-queue-filters="true"
+            disabled={isTopLevelActionLocked || workLogReviewQueueFilterCount === 0}
+            onClick={() => setWorkLogReviewQueueFilters(emptyWorkReviewQueueFilters())}
+            type="button"
+          >
+            <XCircle size={15} />
+            초기화
+          </button>
+        </form>
+        <datalist id="work-log-review-queue-project-options">
+          {workLogReviewQueueProjectFilterSuggestions.map((project) => (
+            <option key={project} value={project} />
+          ))}
+        </datalist>
+        <datalist id="work-log-review-queue-reason-options">
+          {workLogReviewQueueReasonFilterSuggestions.map((reason) => (
+            <option key={reason} value={reason} />
+          ))}
+        </datalist>
+        <form
           className="work-summary-filter-row work-review-queue-filter-row"
           data-work-log-normalization-review-queue-filters="true"
           onSubmit={(event) => {
@@ -4620,6 +4749,15 @@ function App() {
             <span>{workLogReviewQueueMeta}</span>
           </div>
         ) : null}
+        {workLogReviewQueueFilterMeta ? (
+          <div
+            className="work-summary-index"
+            data-work-log-review-queue-filter-meta="true"
+          >
+            <Search size={15} />
+            <span>{workLogReviewQueueFilterMeta}</span>
+          </div>
+        ) : null}
         {workLogExtractionResult || workLogExtractionState !== "idle" ? (
           <div className="work-summary-index" data-work-log-extraction-meta="true">
             <Sparkles size={15} />
@@ -5035,7 +5173,9 @@ function App() {
             </div>
           ) : (
             <div className="empty compact" data-empty-work-log-review-queue="true">
-              저장된 백필큐 후보 없음
+              {workLogReviewQueueFilterCount && workLogReviewQueueResult.items.length
+                ? "필터에 맞는 백필큐 후보 없음"
+                : "저장된 백필큐 후보 없음"}
             </div>
           )
         ) : null}

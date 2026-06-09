@@ -1,10 +1,75 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 06:03 KST
+Updated: 2026-06-10 06:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Backfill review queue filter
+
+Current Goal:
+
+- Finish the remaining work-management review queue filter surface by making
+  the saved work-log backfill review queue (`백필큐`) narrowable before
+  approved rows are persisted.
+
+Context:
+
+- The prior slice added project/date/state/reason filters for the
+  session-evidence and work-log normalization review queues.
+- Backfill review queue rows do not have a durable work date field, so the
+  filter surface intentionally uses project, review state, and reason only.
+
+Progress:
+
+- Extended the shared review-queue filter helper to support backfill queue
+  states (`pending_ai_review`, `risk_blocked`) and reason fields.
+- Added 백필큐 project/state/reason controls, filter meta, datalist
+  suggestions, and filtered rendering.
+- Extended isolated browser QA to insert a synthetic approved backfill row,
+  filter the visible queue by project, verify the narrowed row set, clear the
+  filter, and then persist the approved row through the existing save flow.
+
+Changes:
+
+- `src/reviewQueueFilters.ts`: supports `ProjectWorkLogReviewQueueItem` rows.
+- `src/App.tsx`: adds 백필큐 filter state, controls, meta, suggestions, and
+  filtered empty-state copy.
+- `src/App.css`: adds a compact grid for the three-field backfill queue filter.
+- `tests/reviewQueueFilters.test.ts`: covers 백필큐 project/state/reason
+  filtering.
+- `scripts/browser-bridge-isolated-qa.mjs`: captures 백필큐 filter evidence in
+  the browser QA result.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/reviewQueueFilters.test.ts` (`4` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`496` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge >
+  /tmp/promptvault-backfill-queue-filter-qa.log 2>&1`.
+
+QA Evidence:
+
+- Backfill queue filter meta: `백필큐 필터 · 필터 1개 · 결과 1 / 1개`.
+- Filtered backfill row: `QAProject` / `work-log-QA-approved-browser-a1`.
+- Approved queue persistence still completed after clearing the filter:
+  `accepted 제안 1개 저장 · 총 101개`.
+- Existing queue filter evidence remained green in the same run:
+  `세션근거 큐 필터 · 필터 1개 · 결과 5 / 40개`,
+  `정규화 큐 필터 · 필터 1개 · 결과 2 / 40개`.
+- The same QA run reported `31개 프로젝트`, `26일`, `작업 9,811개`,
+  `진행로그 875개`, `세션 근거 3,756건`, and `고유 50건`.
+
+Remaining:
+
+- Full historical session backfill is still incomplete:
+  `361/25,211개`, with `24,850개` remaining.
+- Review queue decisions still require operator or AI-assisted review before
+  the work-management state can be called complete.
 
 ## Completed Slice - 2026-06-10 Review queue project filters
 

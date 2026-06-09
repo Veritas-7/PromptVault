@@ -1,12 +1,15 @@
 import { storedFilterSuggestionValues } from "./storedFilters.ts";
 import type {
+  ProjectWorkLogReviewQueueItem,
   ProjectWorkLogNormalizationReviewQueueItem,
   ProjectWorkSessionEvidenceReviewQueueItem,
 } from "./types.ts";
 
 export type WorkReviewQueueStateFilter =
   | ""
+  | "pending_ai_review"
   | "pending_review"
+  | "risk_blocked"
   | "stale"
   | "approved"
   | "rejected";
@@ -53,6 +56,24 @@ export function filterWorkLogNormalizationReviewQueueItems(
   );
 }
 
+export function filterWorkLogReviewQueueItems(
+  items: readonly ProjectWorkLogReviewQueueItem[],
+  filters: WorkReviewQueueFilters,
+): ProjectWorkLogReviewQueueItem[] {
+  return items.filter((item) =>
+    matchesCommonReviewQueueFilters(item, filters)
+    && matchesReasonFilter(filters.reason, [
+      item.review_reason,
+      item.candidate_reason,
+      item.provider_route,
+      item.source_file,
+      item.source_path,
+      item.excerpt,
+      item.risk_flags.join(" "),
+    ])
+  );
+}
+
 export function filterWorkSessionEvidenceReviewQueueItems(
   items: readonly ProjectWorkSessionEvidenceReviewQueueItem[],
   filters: WorkReviewQueueFilters,
@@ -84,12 +105,21 @@ export function workReviewQueueProjectSuggestions(
 
 export function workReviewQueueReasonSuggestions(
   items: readonly (
-    ProjectWorkLogNormalizationReviewQueueItem
+    ProjectWorkLogReviewQueueItem
+    | ProjectWorkLogNormalizationReviewQueueItem
     | ProjectWorkSessionEvidenceReviewQueueItem
   )[],
 ): string[] {
   return storedFilterSuggestionValues(items.flatMap((item) => {
     if ("candidate_reason" in item) {
+      if ("provider_route" in item) {
+        return [
+          item.review_reason,
+          item.candidate_reason,
+          item.provider_route,
+          ...item.risk_flags,
+        ];
+      }
       return [
         item.review_reason,
         item.candidate_reason,
@@ -121,7 +151,7 @@ export function workReviewQueueFilterMetaText(
 }
 
 function matchesCommonReviewQueueFilters(
-  item: { date: string; project: string; review_state: string },
+  item: { date?: string; project: string; review_state: string },
   filters: WorkReviewQueueFilters,
 ): boolean {
   const date = filters.date.trim();

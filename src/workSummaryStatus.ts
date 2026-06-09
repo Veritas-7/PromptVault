@@ -317,6 +317,47 @@ export function workSessionIndexCheckpointGuidanceText(
   ].join(" · ");
 }
 
+export function workSessionIndexNextRunImpactText(
+  result: ProjectWorkSessionIndexResult | null,
+  effectiveBatchFiles: number | null,
+  standardMaxBatches: number,
+  longMaxBatches: number,
+  longRunConfirmed: boolean,
+): string | null {
+  if (!result?.source_states.length || effectiveBatchFiles === null) return null;
+  if (effectiveBatchFiles <= 0 || standardMaxBatches <= 0 || longMaxBatches <= 0) return null;
+  const remainingBySource = result.source_states.map((source) =>
+    Math.max(0, source.total_files - source.processed_files)
+  );
+  const remainingFiles = remainingBySource.reduce((sum, remaining) => sum + remaining, 0);
+  if (remainingFiles === 0) return "다음 실행 효과 · 세션 백필 완료 · 추가 실행 없음";
+  const maxBatches = longRunConfirmed ? longMaxBatches : standardMaxBatches;
+  const mode = longRunConfirmed ? "긴 이어 백필" : "이어 백필";
+  const filesPerSourceRun = effectiveBatchFiles * maxBatches;
+  const remainingAfterRunBySource = remainingBySource.map((remaining) =>
+    Math.max(0, remaining - filesPerSourceRun)
+  );
+  const remainingAfterRun = remainingAfterRunBySource.reduce((sum, remaining) => sum + remaining, 0);
+  const estimatedRunsAfter = remainingAfterRunBySource.length
+    ? Math.max(...remainingAfterRunBySource.map((remaining) =>
+      filesPerSourceRun > 0 ? Math.ceil(remaining / filesPerSourceRun) : 0
+    ))
+    : 0;
+  const parts = [
+    "다음 실행 효과",
+    mode,
+    `이번 클릭 source당 최대 ${filesPerSourceRun.toLocaleString()}개`,
+    `남은 파일 ${remainingFiles.toLocaleString()}→${remainingAfterRun.toLocaleString()}개`,
+  ];
+  parts.push(estimatedRunsAfter > 0
+    ? `이후 예상 ${estimatedRunsAfter.toLocaleString()}회`
+    : "이번 클릭 후 완료 예상");
+  if (!longRunConfirmed && longMaxBatches > standardMaxBatches) {
+    parts.push("긴 백필 확인 시 더 빠름");
+  }
+  return parts.join(" · ");
+}
+
 export function workSessionIndexPartialBackfillWarningText(
   result: ProjectWorkSessionIndexResult | null,
 ): string | null {

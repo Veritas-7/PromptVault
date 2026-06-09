@@ -1,10 +1,86 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 04:46 KST
+Updated: 2026-06-10 05:00 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Session backfill next-run impact row
+
+Current Goal:
+
+- Make the remaining historical session backfill less ambiguous by showing what
+  the next backfill click will actually do.
+- Keep this as a UI/status helper only: no automatic long-running session
+  processing and no durable review writes.
+
+Context:
+
+- The prior slice showed the next high-level action (`다음 조치`), and the
+  existing checkpoint guidance already estimated total remaining runs.
+- Operators still had to mentally translate `대용량 적용`, `긴 백필`, remaining
+  file counts, and estimated runs into the effect of one next click.
+- The full historical session corpus remains incomplete; the latest isolated QA
+  run had `24,845` files remaining after a bounded long-continue step.
+
+Progress:
+
+- Added a `다음 실행 효과` row beside the session-backfill checkpoint rows.
+- The row shows:
+  - whether the next enabled path is `이어 백필` or `긴 이어 백필`;
+  - the source-local max files processed by the next click;
+  - remaining files before and after that click;
+  - how many estimated runs remain afterwards;
+  - a hint that confirming long backfill is faster when the long path is still
+    locked.
+- Browser bridge QA now verifies the row after `대용량 적용`, so the tested path
+  proves the large-batch/long-confirm controls feed the impact calculation.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: added `workSessionIndexNextRunImpactText`.
+- `src/App.tsx`: renders `data-work-session-index-next-run-impact`.
+- `tests/workSummaryStatus.test.ts`: covers normal, long-confirmed, completed,
+  and invalid-input impact states.
+- `scripts/browser-bridge-isolated-qa.mjs`: asserts the impact row after
+  applying the large-batch preset and records it in the QA JSON.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work session index planned remaining"` (`37` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work session index planned remaining|work session evidence review queue"` (`37` tests).
+- PASS: `npm run build`.
+- PASS: `npm run check` (`491` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- After `대용량 적용`, the isolated browser bridge QA captured
+  `다음 실행 효과 · 긴 이어 백필 · 이번 클릭 source당 최대 5,000개 · 남은 파일 24,845→19,845개 · 이후 예상 4회`.
+- The status export path reported `31개 프로젝트`, `26일`, `작업 9,689개`,
+  `진행로그 871개`, `세션 근거 3,157건`, and `고유 50건` under the bounded QA
+  limit.
+- The progress-log extraction path saved and listed `/tmp/QAProject/workingd.md`
+  through the approved browser-bridge workflow.
+
+Issue Fixed During QA:
+
+- The first full isolated browser bridge QA run timed out in the
+  session-evidence review queue because it required a visible
+  title-normalization row on the first queue page.
+- The assertion now treats title-normalization rows as approval-blocked when
+  visible, while still allowing queue-page data distribution where no title row
+  appears on the first page.
+
+Remaining:
+
+- Full historical session backfill still needs repeated checkpoint runs or a
+  run-until-complete operator flow.
+- Review queues still need operator triage before durable session-evidence and
+  title-normalization decisions are final.
 
 ## Completed Slice - 2026-06-10 Work-management next-action row
 

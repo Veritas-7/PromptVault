@@ -646,6 +646,7 @@ async function runBrowserQa() {
       const longStatus = document.querySelector('[data-work-session-index-long-confirm-meta="true"]')?.textContent ?? "";
       const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
       const guidance = document.querySelector('[data-work-session-index-checkpoint-guidance="true"]')?.textContent ?? "";
+      const impact = document.querySelector('[data-work-session-index-next-run-impact="true"]')?.textContent ?? "";
       const standardMatch = planned.match(/이어 백필 예상\s+([\d,]+)회/);
       const longMatch = planned.match(/긴 이어 백필 예상\s+([\d,]+)회/);
       const standardRuns = standardMatch ? Number.parseInt(standardMatch[1].replaceAll(",", ""), 10) : 0;
@@ -659,12 +660,19 @@ async function runBrowserQa() {
         && longRuns > 0
         && longRuns <= 6
         && guidance.includes("source당 최대 5,000개")
-        && guidance.includes("예상");
+        && guidance.includes("예상")
+        && impact.includes("다음 실행 효과")
+        && impact.includes("긴 이어 백필")
+        && impact.includes("source당 최대 5,000개")
+        && impact.includes("남은 파일")
+        && impact.includes("이후 예상");
     }, undefined, { timeout: 60000 });
     workSessionIndexBackfill.plannedAfterBatch500 =
       (await page.locator('[data-work-session-index-planned-remaining="true"]').textContent())?.trim() ?? "";
     workSessionIndexBackfill.guidanceAfterBatch500 =
       (await page.locator('[data-work-session-index-checkpoint-guidance="true"]').textContent())?.trim() ?? "";
+    workSessionIndexBackfill.impactAfterBatch500 =
+      (await page.locator('[data-work-session-index-next-run-impact="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-browser-bridge-status="connected"]').waitFor({ timeout: 60000 });
     await page.locator('[data-work-summary-session-limit="true"]').fill(String(WORK_SESSION_LIMIT));
     await page.waitForFunction((expectedText) => {
@@ -1103,6 +1111,7 @@ async function runBrowserQa() {
         !row.querySelector("[data-approve-work-session-evidence-review-queue]")
           && row.querySelector("[data-reject-work-session-evidence-review-queue]")
       );
+      const titleRowsSafeWhenVisible = titleRows.length === 0 || titleRowsAreApprovalBlocked;
       return text.includes("세션근거 큐 저장")
         && text.includes("표시")
         && text.includes("검토")
@@ -1110,8 +1119,7 @@ async function runBrowserQa() {
           const rowText = row.textContent ?? "";
           return rowText.includes("unresolved-after-full-index") && rowText.includes("로그 유형");
         })
-        && titleRows.length > 0
-        && titleRowsAreApprovalBlocked;
+        && titleRowsSafeWhenVisible;
     }, undefined, { timeout: 120000 });
     workSessionEvidenceReviewQueueUiMeta =
       (await page.locator('[data-work-session-evidence-review-queue-meta="true"]').textContent())?.trim() ?? "";

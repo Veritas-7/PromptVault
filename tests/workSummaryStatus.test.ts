@@ -69,6 +69,7 @@ import {
   workSummaryFailureText,
   workSummaryIndexStatusText,
   workSessionIndexCheckpointGuidanceText,
+  workSessionIndexNextRunImpactText,
   workSessionIndexPartialBackfillWarningText,
   workSessionIndexPlannedRemainingText,
   workSummaryMetaText,
@@ -988,6 +989,10 @@ test("work session index planned remaining text follows current batch controls",
     "체크포인트 계획 · 권장 다음 실행 긴 이어 백필 · source당 최대 250개 · 남은 파일 24,800개 · 예상 100회 · 각 실행 후 상태 Export/큐 재확인",
   );
   assert.equal(
+    workSessionIndexNextRunImpactText(result, 25, 2, 10, false),
+    "다음 실행 효과 · 이어 백필 · 이번 클릭 source당 최대 50개 · 남은 파일 24,800→24,750개 · 이후 예상 495회 · 긴 백필 확인 시 더 빠름",
+  );
+  assert.equal(
     workSessionIndexPartialBackfillWarningText(result),
     "세션 백필 미완료 · 처리 361/25,161개 · 남은 파일 24,800개 · 상태 Export/요약/큐는 현재 인덱스 기준",
   );
@@ -999,8 +1004,13 @@ test("work session index planned remaining text follows current batch controls",
     workSessionIndexCheckpointGuidanceText(result, 500, 2, 10),
     "체크포인트 계획 · 권장 다음 실행 긴 이어 백필 · source당 최대 5,000개 · 남은 파일 24,800개 · 예상 5회 · 각 실행 후 상태 Export/큐 재확인",
   );
+  assert.equal(
+    workSessionIndexNextRunImpactText(result, 500, 2, 10, true),
+    "다음 실행 효과 · 긴 이어 백필 · 이번 클릭 source당 최대 5,000개 · 남은 파일 24,800→19,800개 · 이후 예상 4회",
+  );
   assert.equal(workSessionIndexPlannedRemainingText(result, null, 2, 10), null);
   assert.equal(workSessionIndexCheckpointGuidanceText(result, null, 2, 10), null);
+  assert.equal(workSessionIndexNextRunImpactText(result, null, 2, 10, true), null);
   assert.equal(workSessionIndexPartialBackfillWarningText(null), null);
   assert.equal(
     workSessionIndexPlannedRemainingText({
@@ -1027,6 +1037,19 @@ test("work session index planned remaining text follows current batch controls",
       })),
     }, 25, 2, 10),
     "체크포인트 계획 · 세션 백필 완료 · 상태 Export와 요약을 새로고침하세요",
+  );
+  assert.equal(
+    workSessionIndexNextRunImpactText({
+      ...result,
+      all_sources_completed: true,
+      source_states: result.source_states.map((source) => ({
+        ...source,
+        processed_files: source.total_files,
+        next_file_index: source.total_files,
+        completed: true,
+      })),
+    }, 25, 2, 10, true),
+    "다음 실행 효과 · 세션 백필 완료 · 추가 실행 없음",
   );
   assert.equal(
     workSessionIndexPartialBackfillWarningText({

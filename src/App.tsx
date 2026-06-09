@@ -346,6 +346,7 @@ import {
   workSummaryFailureText,
   workSummaryIndexStatusText,
   workSessionIndexCheckpointGuidanceText,
+  workSessionIndexNextRunImpactText,
   workSessionIndexPartialBackfillWarningText,
   workSessionIndexPlannedRemainingText,
   workSummaryMetaText,
@@ -1047,6 +1048,13 @@ function App() {
     workSessionIndexEffectiveBatchFiles,
     WORK_SESSION_INDEX_MAX_BATCHES,
     WORK_SESSION_INDEX_LONG_MAX_BATCHES,
+  );
+  const workSessionIndexNextRunImpact = workSessionIndexNextRunImpactText(
+    workSessionIndexResult,
+    workSessionIndexEffectiveBatchFiles,
+    WORK_SESSION_INDEX_MAX_BATCHES,
+    WORK_SESSION_INDEX_LONG_MAX_BATCHES,
+    workSessionIndexLongConfirmed,
   );
   const workSessionIndexPartialBackfillWarning =
     workSessionIndexPartialBackfillWarningText(workSessionIndexResult);
@@ -4063,6 +4071,12 @@ function App() {
           <div className="work-summary-index" data-work-session-index-checkpoint-guidance="true">
             <CheckCircle2 size={15} />
             <span>{workSessionIndexCheckpointGuidance}</span>
+          </div>
+        ) : null}
+        {workSessionIndexNextRunImpact ? (
+          <div className="work-summary-index" data-work-session-index-next-run-impact="true">
+            <Play size={15} />
+            <span>{workSessionIndexNextRunImpact}</span>
           </div>
         ) : null}
         {workSessionIndexResult?.source_states.length ? (

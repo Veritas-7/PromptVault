@@ -239,7 +239,7 @@ async function runBrowserQa() {
     }
     step("work session index");
     workSessionIndexBackfill = await bridgeJson(page, "/api/work-session-index", {
-      options: { limit: Math.min(WORK_SESSION_LIMIT, 5), reset: true },
+      options: { limit: WORK_SESSION_LIMIT, reset: true },
     });
     if (
       workSessionIndexBackfill.database_path !== DATABASE_PATH

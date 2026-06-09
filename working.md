@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 15:56 KST
+Updated: 2026-06-09 16:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -26,7 +26,7 @@ Context:
 - Verified current QA scope:
   - `31` projects;
   - `25` days;
-  - `8,852` parsed work items;
+  - `8,856` parsed work items;
   - `822` project progress logs seen, `821` parsed, `0` unparsed, plus `1`
     pointer log;
   - `91` normalization candidates.
@@ -101,11 +101,12 @@ Tests:
   `-D warnings`.
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
   Final JSON included:
-  - `workSessionIndexBackfill`: isolated DB, requested `5`, scanned `5`,
-    sanitized `5`, stored `5`, reset `true`, warnings `[]`;
-  - `coverageMeta`: `822개 로그 · parsed 821개 · unparsed 0개 · 31개 프로젝트 · 작업 8,852개`;
+  - `workSessionIndexBackfill`: isolated DB, requested `200`, scanned `200`,
+    sanitized `200`, stored `200`, reset `true`, warnings `[]`;
+  - `workSummaryIndex`: `세션 인덱스 사용 · 근거 메타데이터 우선/raw fallback · 스캔 200개 · 보관 200개 · 매칭 80건 · 고유 1건`;
+  - `coverageMeta`: `822개 로그 · parsed 821개 · unparsed 0개 · 31개 프로젝트 · 작업 8,856개`;
   - `workManagementMeta`: `관리 91개 · 31개 프로젝트 · 25일 ... 저장관리 91 · 라이브만 0`;
-  - `workLogNormalizationCandidatesMeta`: `정규화 후보 91개 ... 원본 작업 8,852개 · 31개 프로젝트 · 25일`;
+  - `workLogNormalizationCandidatesMeta`: `정규화 후보 91개 ... 원본 작업 8,856개 · 31개 프로젝트 · 25일`;
   - `workManagementMetaAfterNormalizationApply`: included `정규화 1`.
 
 Issues:

@@ -16,8 +16,8 @@ cargo run --bin promptvault-cli -- improve [--local] --json --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve [--local] < prompt.txt
 cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [--count N>0] --json
 cargo run --bin promptvault-cli -- work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]
-cargo run --bin promptvault-cli -- work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]
-cargo run --bin promptvault-cli -- work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--ai] [--json]
+cargo run --bin promptvault-cli -- work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]
+cargo run --bin promptvault-cli -- work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]
 cargo run --bin promptvault-cli -- work-session-evidence-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]
 cargo run --bin promptvault-cli -- work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]
 cargo run --bin promptvault-cli -- work-ai-provider-status [--json]
@@ -58,8 +58,8 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `work-status-export --json` returns grouped rows with source files, source artifact roles, top titles, item counts, session evidence counts, and review flags without raw session bodies.
 - `work-status-export --json` separates the session index records used by the current `--session-limit` from the total sanitized records stored in SQLite, so long backfills stay visible even when the export is bounded.
 - `work-status-export --offset N>=0` pages through later project/day rows when paired with `--limit`, avoiding an unbounded all-row render.
-- `work-session-evidence-candidates` lists project/day rows that still have no matched session evidence after the selected session evidence index. When `--session-limit` is omitted it uses the full stored session index count by default. Candidate JSON includes `source_file_roles` and `latest_source_role` for project-local artifacts such as `working.md`, `workingd.md`, `WORKING_LOG.md`, generated reports, and `PROJECT_STATUS.md`.
-- `work-session-evidence-proposals` returns read-only source-traced OpenAI/GLM/local proposals for unresolved full-index rows. It only accepts copied traces from candidate titles or sample evidence, reports accepted/rejected proposal counts, and never writes durable session evidence.
+- `work-session-evidence-candidates` lists project/day rows that still have no matched session evidence after the selected session evidence index. When `--session-limit` is omitted it uses the full stored session index count by default. Candidate JSON includes `source_file_roles` and `latest_source_role` for project-local artifacts such as `working.md`, `workingd.md`, `WORKING_LOG.md`, generated reports, and `PROJECT_STATUS.md`. Add `--needs-title-normalization` to focus only unresolved rows whose titles are too rough for review-complete decisions.
+- `work-session-evidence-proposals` returns read-only source-traced OpenAI/GLM/local proposals for unresolved full-index rows. It only accepts copied traces from candidate titles or sample evidence, reports accepted/rejected proposal counts, and never writes durable session evidence. Add `--needs-title-normalization` to generate title-first proposals for rows that need work-log title cleanup before session-evidence review.
 - `work-session-evidence-review-queue --sync-candidates` persists the current unresolved full-index candidates into SQLite for operator review. It keeps review-complete/rejected rows stable across later syncs, marks disappeared pending rows stale only when the full candidate set was available, recomputes source artifact roles for existing queue rows, and never writes or invents session evidence.
 - `work-session-evidence-review-queue-update --state approved|rejected` records one operator decision with an audit reason. The `approved` API state means review-complete, not durable session-evidence creation. Stale rows cannot be approved until candidates are synced again, but they can be rejected for cleanup.
 - `work-ai-provider-status` reports OpenAI, GLM, and Codex SDK work-management provider readiness without exposing secret values. Codex SDK is surfaced as an explicit unavailable route until it is wired as a real provider.
@@ -106,8 +106,8 @@ cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
 cargo run --bin promptvault-cli -- work-status-export --limit 8 --session-limit 200
 cargo run --bin promptvault-cli -- work-status-export --limit 8 --offset 8 --session-limit 200
 cargo run --bin promptvault-cli -- work-status-export --limit 3 --session-limit 200 --json
-cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --ai --json
+cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --needs-title-normalization --json
+cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
 cargo run --bin promptvault-cli -- work-session-evidence-review-queue --sync-candidates --limit 20 --json
 cargo run --bin promptvault-cli -- work-ai-provider-status --json
 cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 2 --json

@@ -1,10 +1,92 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 02:02 KST
+Updated: 2026-06-10 02:18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 title-normalization-only session evidence proposals
+
+Current Goal:
+
+- Make the project/day work-management surface more actionable for unresolved
+  full-index rows that are blocked by rough titles.
+- Let operators focus session-evidence proposal generation on rows where
+  `needs_title_normalization` is true before trying durable session-evidence
+  review.
+
+Context:
+
+- The live work-status export currently manages project/day rows from
+  project-local progress logs and joins sanitized Codex/Codex CX session
+  evidence.
+- Full stored session evidence candidates already expose
+  `needs_title_normalization`, but proposal generation could not focus only
+  those blockers from CLI/API/UI.
+- Review-complete queue rows still do not create durable session evidence; this
+  slice only narrows candidate/proposal review work.
+
+Progress:
+
+- Added a `needs_title_normalization` option to session-evidence candidates and
+  proposals.
+- Added CLI `--needs-title-normalization` for
+  `work-session-evidence-candidates` and `work-session-evidence-proposals`.
+- Added a browser UI checkbox labeled `제목정규화만` next to the
+  `세션근거 제안` action. Toggling it clears stale proposal results and passes
+  the filter to the bridge/Tauri API.
+- Updated browser QA so the UI clicks the new checkbox and verifies
+  `제목 정규화 우선` proposal rows.
+- Tightened the QA selector for the existing local-improvement checkbox so the
+  two checkbox controls do not collide.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added the title-normalization filter to
+  candidates/proposals options, filtering logic, and Rust coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`: added
+  `--needs-title-normalization` parsing, help text, and CLI output notes.
+- `src/promptVaultApi.ts`, `src/App.tsx`: exposed the option in TypeScript and
+  added the UI checkbox.
+- `tests/promptVaultApi.test.ts`: verified bridge request payloads include the
+  new option.
+- `scripts/browser-bridge-isolated-qa.mjs`: clicked the new UI checkbox and
+  verified title-first proposal rows.
+- `README.md`, `docs/CLI.md`: documented the new focused workflow.
+
+Tests:
+
+- PASS: `cargo fmt --check`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work session evidence"`
+  - `193` matching tests passed.
+- PASS: `cargo test session_evidence_candidates_keep_only_full_index_unresolved_rows`.
+- PASS: `cargo test help_text_documents_cli_validation_rules`.
+- PASS: `npm run build`.
+- PASS: `cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 5 --needs-title-normalization --json`
+  - Live DB returned `total_candidate_count: 13` title-normalization blockers
+    out of `unresolved_after_full_index_count: 45`, using the full stored
+    session index count `10,867`; returned rows all had
+    `needs_title_normalization: true`.
+- PASS: `cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 5 --needs-title-normalization --json`
+  - Returned `title_normalization_first` local review-only proposals for the
+    filtered blockers.
+- PASS: `npm run check`
+  - UI tests `489`, Rust lib tests `207`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser QA ended with exit code `0`.
+  - Verified the new UI checkbox and proposal list:
+    `workSessionEvidenceProposalsUiMeta` showed `후보 28개 · 표시 28개`, and
+    rendered rows included `제목 정규화 우선`.
+
+Remaining:
+
+- The focused proposal filter does not normalize or apply titles by itself; it
+  makes those blocker rows easier to review first.
+- Durable session-evidence writes remain intentionally unavailable until a
+  source-traced, review-gated evidence model is designed.
 
 ## Completed Slice - 2026-06-10 session evidence review copy clarity
 

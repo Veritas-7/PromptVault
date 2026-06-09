@@ -662,7 +662,7 @@ async function runBrowserQa() {
 
     step("improve");
     await page.locator('[data-prompt-row="true"]').first().click();
-    const localToggle = page.locator(".local-recommendation-toggle input");
+    const localToggle = page.locator('input[aria-label="로컬 규칙 추천만 사용"]');
     if (!(await localToggle.isChecked())) {
       await localToggle.check();
     }
@@ -1047,6 +1047,7 @@ async function runBrowserQa() {
     }
     step("work session evidence proposals UI");
     await waitForEnabled(page, '[data-load-work-session-evidence-proposals="true"]');
+    await page.locator('[data-work-session-evidence-needs-title-only="true"]').check();
     await page.locator('[data-load-work-session-evidence-proposals="true"]').click();
     await page.waitForFunction(() => {
       const meta = document.querySelector('[data-work-session-evidence-proposals-meta="true"]')?.textContent ?? "";
@@ -1054,10 +1055,12 @@ async function runBrowserQa() {
       return meta.includes("세션인덱스")
         && meta.includes("후보")
         && meta.includes("표시")
+        && document.querySelector('[data-work-session-evidence-needs-title-only="true"]')?.checked
         && rows.some((row) => {
           const text = row.textContent ?? "";
           return text.includes("unresolved-after-full-index")
             && text.includes("provider")
+            && text.includes("제목 정규화 우선")
             && (text.includes("승인 검토 가능") || text.includes("local_fallback_requires"));
         });
     }, undefined, { timeout: 120000 });

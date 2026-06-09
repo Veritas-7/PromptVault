@@ -870,6 +870,7 @@ pub struct ProjectWorkSessionEvidenceCandidatesOptions {
     pub limit: Option<usize>,
     pub session_limit: Option<usize>,
     pub refresh_session_index: Option<bool>,
+    pub needs_title_normalization: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -928,6 +929,7 @@ pub struct ProjectWorkSessionEvidenceProposalsOptions {
     pub session_limit: Option<usize>,
     pub refresh_session_index: Option<bool>,
     pub ai: Option<bool>,
+    pub needs_title_normalization: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2203,14 +2205,27 @@ pub fn run_project_work_session_evidence_candidates(
             "Session evidence candidates use a bounded session index for {bounded_session_limit_count} project/day rows; increase session_limit or refresh the session index before treating them as full-index unresolved."
         ));
     }
-    let candidates = build_project_work_session_evidence_candidates_from_rows(&all_rows, limit);
+    let candidates = build_project_work_session_evidence_candidates_from_rows(
+        &all_rows,
+        limit,
+        options.needs_title_normalization,
+    );
+    let total_candidate_count = all_rows
+        .iter()
+        .filter(|row| row.session_evidence_audit == "unresolved-after-full-index")
+        .filter(|row| {
+            options
+                .needs_title_normalization
+                .is_none_or(|needs_title| row.needs_title_normalization == needs_title)
+        })
+        .count();
 
     Ok(ProjectWorkSessionEvidenceCandidatesResult {
         generated_at: report.generated_at.clone(),
         database_path: database_path.display().to_string(),
         requested_limit,
         session_limit_used: session_limit,
-        total_candidate_count: unresolved_after_full_index_count,
+        total_candidate_count,
         returned_candidate_count: candidates.len(),
         report_total_rows: total_row_count,
         report_total_items: report.total_items,
@@ -2265,6 +2280,7 @@ pub async fn run_project_work_session_evidence_proposals(
             limit: Some(limit),
             session_limit: options.session_limit,
             refresh_session_index: options.refresh_session_index,
+            needs_title_normalization: options.needs_title_normalization,
         },
     )?;
     let mut result = project_work_session_evidence_proposals_with_env(
@@ -2317,6 +2333,7 @@ pub fn run_project_work_session_evidence_review_queue(
                 limit: Some(MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT),
                 session_limit: options.session_limit,
                 refresh_session_index: options.refresh_session_index,
+                needs_title_normalization: None,
             },
         )?;
         if candidates.returned_candidate_count < candidates.total_candidate_count {
@@ -8203,10 +8220,15 @@ fn project_work_source_file_role(source_file: &str) -> &'static str {
 fn build_project_work_session_evidence_candidates_from_rows(
     rows: &[ProjectWorkStatusExportRow],
     limit: usize,
+    needs_title_normalization: Option<bool>,
 ) -> Vec<ProjectWorkSessionEvidenceCandidate> {
     let mut candidates = rows
         .iter()
         .filter(|row| row.session_evidence_audit == "unresolved-after-full-index")
+        .filter(|row| {
+            needs_title_normalization
+                .is_none_or(|needs_title| row.needs_title_normalization == needs_title)
+        })
         .map(project_work_session_evidence_candidate_from_row)
         .collect::<Vec<_>>();
     candidates.sort_by(|left, right| {
@@ -18087,11 +18109,12 @@ Status: completed as a source-only/report-only hardening slice.
             row("Matched", "matched", 1),
             row("Bounded", "bounded-session-limit", 0),
             row("NeedsTitle", "unresolved-after-full-index", 0),
+            row("Ready", "unresolved-after-full-index", 0),
         ];
 
-        let candidates = build_project_work_session_evidence_candidates_from_rows(&rows, 10);
+        let candidates = build_project_work_session_evidence_candidates_from_rows(&rows, 10, None);
 
-        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates.len(), 2);
         assert_eq!(candidates[0].project, "NeedsTitle");
         assert!(candidates[0]
             .candidate_id
@@ -18106,6 +18129,16 @@ Status: completed as a source-only/report-only hardening slice.
         );
         assert_eq!(candidates[0].work_item_count, 2);
         assert_eq!(candidates[0].latest_source_file, "working.md");
+
+        let title_only =
+            build_project_work_session_evidence_candidates_from_rows(&rows, 10, Some(true));
+        assert_eq!(title_only.len(), 1);
+        assert_eq!(title_only[0].project, "NeedsTitle");
+
+        let title_ready =
+            build_project_work_session_evidence_candidates_from_rows(&rows, 10, Some(false));
+        assert_eq!(title_ready.len(), 1);
+        assert_eq!(title_ready[0].project, "Ready");
     }
 
     fn session_evidence_candidate_fixture(

@@ -94,13 +94,14 @@ For project/day work-ledger checks outside the UI, use:
 ```bash
 cd src-tauri
 cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --ai --json
+cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
 cargo run --bin promptvault-cli -- work-session-evidence-review-queue --sync-candidates --limit 20 --json
 ```
 
 The candidates command is read-only. The proposals command is also read-only:
 it uses OpenAI, GLM, or local fallback rules to triage unresolved full-index rows
-with copied source traces only, and it never creates durable session evidence.
+with copied source traces only, supports `--needs-title-normalization` for
+title-first blocker work, and it never creates durable session evidence.
 The review-queue command stores unresolved full-index session-evidence candidates
 for operator approval/rejection, preserving source trace from project logs such
 as `working.md`, `workingd.md`, `WORKING_LOG.md`, and `PROJECT_STATUS.md`.
@@ -140,9 +141,11 @@ Recommended agent workflow:
    --limit 20 --json` to list project/day rows that still have no matched
    session evidence after the selected, full stored session index.
 9. Use `cargo run --bin promptvault-cli -- work-session-evidence-proposals
-   --limit 20 --ai --json` to generate read-only OpenAI/GLM/local proposals
-   for those rows. Accepted proposals still require later operator review, and
-   review-complete queue rows do not write durable session evidence.
+   --limit 20 --needs-title-normalization --ai --json` to generate read-only
+   OpenAI/GLM/local proposals for title-normalization blockers, or omit the
+   filter for all unresolved rows. Accepted proposals still require later
+   operator review, and review-complete queue rows do not write durable session
+   evidence.
 10. Use `cargo run --bin promptvault-cli -- work-session-index --batch-files 25
    --max-batches 2 --json` for short sanitized session-index backfills, and add
    `--confirm-long-run` when intentionally running above the short two-batch cap.
@@ -174,15 +177,15 @@ cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
 cargo run --bin promptvault-cli -- work-status-export --limit 25 --session-limit 200
 cargo run --bin promptvault-cli -- work-status-export --limit 25 --offset 25 --session-limit 200
 cargo run --bin promptvault-cli -- work-status-export --limit 25 --session-limit 200 --json
-cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --ai --json
+cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --needs-title-normalization --json
+cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
 cargo run --bin promptvault-cli -- work-ai-provider-status --json
 cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 2 --json
 cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 10 --confirm-long-run --json
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 ```
 
-Run `plan` before an unrestricted scan on large stores. It inventories matching source files, total bytes, large-file counts, and warnings without reading prompt bodies. Use `import-batch --source ID --files N` to persist one resumable source slice, advance that source's DB cursor in `import_states`, and append an audit row to `import_events`. Use `work-status-export` when an agent needs a compact project/day management view outside the app; it reuses the project progress-log plus sanitized session-evidence report, renders Markdown by default, returns grouped JSON rows with `--json`, classifies progress-log source artifact roles, separates current `--session-limit` index usage from total sanitized records stored in SQLite, and accepts `--offset` with `--limit` for paging later project/day rows. Use `work-session-evidence-candidates` to list project/day rows that remain unresolved after the selected session evidence index; when `--session-limit` is omitted it defaults to the full stored session index count. Use `work-session-evidence-proposals` to get read-only source-traced OpenAI/GLM/local suggestions for those unresolved rows before syncing or deciding a queue item; the review queue records operator review-complete/rejected decisions and deliberately does not write durable session evidence. Use `work-ai-provider-status` to confirm whether OpenAI, GLM, or the still-unwired Codex SDK route can be used for work-management reconciliation before expecting AI-backed proposals. Use `work-session-index` to keep the sanitized Codex/Codex CX session evidence index moving; short runs up to two batches are confirmation-free, while longer CLI/API runs require `--confirm-long-run` and the browser UI requires typing `긴 백필` before the long-continue action unlocks. The browser UI can run one source continuously from the plan table, select all available import sources, queue selected sources in order, and stop after the current batch without losing the saved cursor. Stored-prompt loading can be narrowed by text query, exact source label, prompt date, and workspace path so the permanent vault can be reviewed without re-scanning source files. The toolbar `빠른 스캔` action intentionally scans the responsive source set `antigravity-cli-conversation-db`, `antigravity-ide-conversation-db`, `gemini-tmp-chat`, `antigravity-cli-history`, `claude-code-history`, and `codex-cx`, capped at 5 prompts per source; use stored loading, planning/import, or explicit CLI `--source` scans when reviewing the large Codex session tree. Omit `--limit` for a full CLI scan. Use `--source ID` to verify one source without scanning the whole history. Use `--source-limit N` to sample across selected sources while keeping the overall `--limit` cap. In limited scans, `total_files` and source `files_seen` count visited files only, not every matching file in the source root. Use `--no-export` when an agent only needs JSON stats and should not create a large Markdown file. Use `--weakest-first` or `--preview-sort quality-asc` when the preview should prioritize the weakest prompts for repair. Source summaries include average prompt quality and weak-prompt counts so agents can prioritize noisy stores first. The scan command writes prompt bodies to the Markdown output path by default and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N --include-prompts` only when an agent or test needs a bounded prompt preview in the JSON result. Stdout prompt previews are capped at 25 records and redacted for token/key/private-key risk patterns.
+Run `plan` before an unrestricted scan on large stores. It inventories matching source files, total bytes, large-file counts, and warnings without reading prompt bodies. Use `import-batch --source ID --files N` to persist one resumable source slice, advance that source's DB cursor in `import_states`, and append an audit row to `import_events`. Use `work-status-export` when an agent needs a compact project/day management view outside the app; it reuses the project progress-log plus sanitized session-evidence report, renders Markdown by default, returns grouped JSON rows with `--json`, classifies progress-log source artifact roles, separates current `--session-limit` index usage from total sanitized records stored in SQLite, and accepts `--offset` with `--limit` for paging later project/day rows. Use `work-session-evidence-candidates` to list project/day rows that remain unresolved after the selected session evidence index; when `--session-limit` is omitted it defaults to the full stored session index count, and `--needs-title-normalization` focuses the subset blocked by rough work-log titles. Use `work-session-evidence-proposals` to get read-only source-traced OpenAI/GLM/local suggestions for those unresolved rows before syncing or deciding a queue item; the same title-normalization filter focuses title-first proposal work, and the review queue records operator review-complete/rejected decisions without writing durable session evidence. Use `work-ai-provider-status` to confirm whether OpenAI, GLM, or the still-unwired Codex SDK route can be used for work-management reconciliation before expecting AI-backed proposals. Use `work-session-index` to keep the sanitized Codex/Codex CX session evidence index moving; short runs up to two batches are confirmation-free, while longer CLI/API runs require `--confirm-long-run` and the browser UI requires typing `긴 백필` before the long-continue action unlocks. The browser UI can run one source continuously from the plan table, select all available import sources, queue selected sources in order, and stop after the current batch without losing the saved cursor. Stored-prompt loading can be narrowed by text query, exact source label, prompt date, and workspace path so the permanent vault can be reviewed without re-scanning source files. The toolbar `빠른 스캔` action intentionally scans the responsive source set `antigravity-cli-conversation-db`, `antigravity-ide-conversation-db`, `gemini-tmp-chat`, `antigravity-cli-history`, `claude-code-history`, and `codex-cx`, capped at 5 prompts per source; use stored loading, planning/import, or explicit CLI `--source` scans when reviewing the large Codex session tree. Omit `--limit` for a full CLI scan. Use `--source ID` to verify one source without scanning the whole history. Use `--source-limit N` to sample across selected sources while keeping the overall `--limit` cap. In limited scans, `total_files` and source `files_seen` count visited files only, not every matching file in the source root. Use `--no-export` when an agent only needs JSON stats and should not create a large Markdown file. Use `--weakest-first` or `--preview-sort quality-asc` when the preview should prioritize the weakest prompts for repair. Source summaries include average prompt quality and weak-prompt counts so agents can prioritize noisy stores first. The scan command writes prompt bodies to the Markdown output path by default and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N --include-prompts` only when an agent or test needs a bounded prompt preview in the JSON result. Stdout prompt previews are capped at 25 records and redacted for token/key/private-key risk patterns.
 
 The Tauri UI runs full exports but receives only a latest-prompt preview over IPC, so the large Markdown file remains on disk instead of being serialized into the frontend.
 
@@ -238,8 +241,8 @@ cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-
 cargo run --bin promptvault-cli -- work-status-export --limit 8 --session-limit 200
 cargo run --bin promptvault-cli -- work-status-export --limit 8 --offset 8 --session-limit 200
 cargo run --bin promptvault-cli -- work-status-export --limit 3 --session-limit 200 --json
-cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --ai --json
+cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --needs-title-normalization --json
+cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
 cargo run --bin promptvault-cli -- work-ai-provider-status --json
 cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 2 --json
 cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 10 --confirm-long-run --json

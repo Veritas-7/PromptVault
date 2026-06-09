@@ -412,6 +412,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "work-session-evidence-candidates" => {
             let json = take_flag(&mut args, "--json");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
+            let needs_title_normalization = take_flag(&mut args, "--needs-title-normalization");
             let mut limit = None;
             let mut session_limit = None;
             let mut database_path = None;
@@ -443,6 +444,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     limit,
                     session_limit,
                     refresh_session_index: Some(refresh_session_index),
+                    needs_title_normalization: needs_title_normalization.then_some(true),
                 },
             )?;
             if json {
@@ -469,6 +471,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             );
             println!("candidates: {}", result.total_candidate_count);
             println!("returned: {}", result.returned_candidate_count);
+            if needs_title_normalization {
+                println!("filter: needs_title_normalization");
+            }
             if !result.warnings.is_empty() {
                 println!("warnings:");
                 for warning in &result.warnings {
@@ -497,6 +502,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let json = take_flag(&mut args, "--json");
             let ai = take_flag(&mut args, "--ai");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
+            let needs_title_normalization = take_flag(&mut args, "--needs-title-normalization");
             let mut limit = None;
             let mut session_limit = None;
             let mut database_path = None;
@@ -529,6 +535,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     session_limit,
                     refresh_session_index: Some(refresh_session_index),
                     ai: Some(ai),
+                    needs_title_normalization: needs_title_normalization.then_some(true),
                 },
             )
             .await?;
@@ -543,6 +550,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("used_ai: {}", result.used_ai);
             println!("candidates: {}", result.total_candidate_count);
             println!("returned: {}", result.returned_proposal_count);
+            if needs_title_normalization {
+                println!("filter: needs_title_normalization");
+            }
             println!("accepted: {}", result.accepted_count);
             println!("rejected: {}", result.rejected_count);
             println!(
@@ -2363,8 +2373,8 @@ fn help_text() -> String {
         "  improve [--json] [--local] < prompt.txt\n",
         "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
         "  work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
-        "  work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
-        "  work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--ai] [--json]\n",
+        "  work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]\n",
+        "  work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]\n",
         "  work-session-evidence-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]\n",
         "  work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]\n",
@@ -2394,8 +2404,8 @@ fn help_text() -> String {
         "  --no-persist keeps scan results out of the PromptVault database.\n",
         "  work-report reads project progress logs and groups slice work by date and project.\n",
         "  work-status-export renders compact project/day Markdown and JSON rows from the same progress-log plus session-evidence report.\n",
-        "  work-session-evidence-candidates lists project/day rows still missing session evidence after the selected session index.\n",
-        "  work-session-evidence-proposals returns read-only source-traced AI/GLM/local proposals for unresolved project/day session-evidence rows; durable writes still require later operator gates.\n",
+        "  work-session-evidence-candidates lists project/day rows still missing session evidence after the selected session index; --needs-title-normalization limits rows to title-normalization blockers.\n",
+        "  work-session-evidence-proposals returns read-only source-traced AI/GLM/local proposals for unresolved project/day session-evidence rows; --needs-title-normalization focuses title-first proposal work; durable writes still require later operator gates.\n",
         "  work-session-evidence-review-queue persists unresolved session-evidence candidates into an operator review queue and marks disappeared candidates stale when a full candidate sync is available.\n",
         "  work-session-evidence-review-queue-update marks one persisted session-evidence candidate approved or rejected with an audit reason.\n",
         "  work-log-coverage lists parsed and unparsed project progress logs by project.\n",
@@ -3778,10 +3788,10 @@ mod tests {
             "work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
         ));
         assert!(help.contains(
-            "work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
+            "work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]"
         ));
         assert!(help.contains(
-            "work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--ai] [--json]"
+            "work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]"
         ));
         assert!(help.contains(
             "work-session-evidence-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]"

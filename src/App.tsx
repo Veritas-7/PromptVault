@@ -654,6 +654,7 @@ function App() {
   const [workLogExtractionState, setWorkLogExtractionState] = useState<WorkLogExtractionState>("idle");
   const [workLogExtractionRunMode, setWorkLogExtractionRunMode] =
     useState<WorkLogExtractionRunMode>("ai");
+  const [workSessionEvidenceNeedsTitleOnly, setWorkSessionEvidenceNeedsTitleOnly] = useState(false);
   const [workLogExtractionItemsState, setWorkLogExtractionItemsState] =
     useState<WorkLogExtractionItemsState>("idle");
   const [workLogExtractionRunsState, setWorkLogExtractionRunsState] =
@@ -1715,6 +1716,7 @@ function App() {
       const next = await loadProjectWorkSessionEvidenceProposals({
         ai: true,
         limit: WORK_SESSION_EVIDENCE_PROPOSAL_MANAGEMENT_LIMIT,
+        needs_title_normalization: workSessionEvidenceNeedsTitleOnly ? true : undefined,
       });
       setWorkSessionEvidenceProposalsResult(next);
       setWorkSessionEvidenceProposalsState("ready");
@@ -3175,6 +3177,20 @@ function App() {
                   ? "세션근거 제안 새로고침"
                   : "세션근거 제안"}
             </button>
+            <label className="local-recommendation-toggle">
+              <input
+                checked={workSessionEvidenceNeedsTitleOnly}
+                data-work-session-evidence-needs-title-only="true"
+                disabled={isTopLevelActionLocked}
+                onChange={(event) => {
+                  setWorkSessionEvidenceNeedsTitleOnly(event.currentTarget.checked);
+                  setWorkSessionEvidenceProposalsResult(null);
+                  setWorkSessionEvidenceProposalsState("idle");
+                }}
+                type="checkbox"
+              />
+              <span>제목정규화만</span>
+            </label>
             <button
               aria-label={workSessionEvidenceReviewQueueActionLabel(
                 workSessionEvidenceReviewQueueState,

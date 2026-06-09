@@ -1020,6 +1020,7 @@ test("browser bridge work session evidence candidates posts options and validate
     limit: 10,
     session_limit: 500,
     refresh_session_index: true,
+    needs_title_normalization: true,
   });
 
   assert.match(requestPath, /\/api\/work-session-evidence-candidates$/);
@@ -1028,6 +1029,7 @@ test("browser bridge work session evidence candidates posts options and validate
       limit: 10,
       session_limit: 500,
       refresh_session_index: true,
+      needs_title_normalization: true,
     },
   });
   assert.equal(result.total_candidate_count, 1);
@@ -1078,6 +1080,7 @@ test("browser bridge work session evidence proposals posts options and validates
     session_limit: 500,
     refresh_session_index: true,
     ai: true,
+    needs_title_normalization: true,
   });
 
   assert.match(requestPath, /\/api\/work-session-evidence-proposals$/);
@@ -1087,6 +1090,7 @@ test("browser bridge work session evidence proposals posts options and validates
       session_limit: 500,
       refresh_session_index: true,
       ai: true,
+      needs_title_normalization: true,
     },
   });
   assert.equal(result.provider, "glm");

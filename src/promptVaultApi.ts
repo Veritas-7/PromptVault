@@ -121,6 +121,7 @@ export interface ProjectWorkSessionEvidenceCandidatesOptions {
   limit?: number;
   session_limit?: number;
   refresh_session_index?: boolean;
+  needs_title_normalization?: boolean;
 }
 
 export interface ProjectWorkSessionEvidenceProposalsOptions {
@@ -129,6 +130,7 @@ export interface ProjectWorkSessionEvidenceProposalsOptions {
   session_limit?: number;
   refresh_session_index?: boolean;
   ai?: boolean;
+  needs_title_normalization?: boolean;
 }
 
 export interface ProjectWorkSessionEvidenceReviewQueueOptions {

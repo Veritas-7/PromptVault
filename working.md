@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 16:16 KST
+Updated: 2026-06-09 16:27 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 checkpointed session evidence index backfill
+## Current Slice - 2026-06-09 multi-batch session evidence backfill runner
 
 Current Goal:
 
@@ -14,6 +14,8 @@ Current Goal:
   resumable all-history backfill path.
 - Keep raw Codex session content out of SQLite by storing only sanitized
   project-target evidence records and per-source cursor state.
+- Let one CLI/API call run multiple checkpoint batches so backfill progress can
+  advance without manual repeated invocations.
 - Answer the completion-level question honestly: current project/day management
   is verified over real sessions and real project progress logs, but arbitrary
   progress-log AI interpretation and full all-history exhaustion remain next
@@ -27,8 +29,8 @@ Context:
 - Verified browser QA scope after this slice:
   - `31` projects;
   - `25` days;
-  - `8,865` parsed work items;
-  - `824` project progress logs seen, `823` parsed, `0` unparsed, plus `1`
+  - `8,871` parsed work items;
+  - `825` project progress logs seen, `824` parsed, `0` unparsed, plus `1`
     pointer log;
   - `91` normalization candidates.
 - Project-local progress logs are already part of the managed input surface.
@@ -52,8 +54,11 @@ Progress:
 - Added `ProjectWorkSessionIndexSourceState` to the backend result contract.
 - Added `batch_files` to `ProjectWorkSessionIndexOptions` and
   `ProjectWorkSessionIndexResult`.
+- Added `max_batches`, `batches_run`, and `all_sources_completed` to the
+  session-index runner/result contract.
 - Added checkpointed session metadata traversal for Codex/Codex CX sources:
   - `--batch-files N` starts from each source's saved `next_file_index`;
+  - `--max-batches N` repeats checkpoint batches within one call;
   - `--reset` clears cursor rows and rebuilds from the newest matching files;
   - existing `--limit` behavior remains available for the older bounded
     one-shot path.
@@ -62,26 +67,34 @@ Progress:
 - Added a synthetic JSONL test proving two checkpointed batches advance
   `processed_files`, `next_file_index`, `matched_prompt_count`, and stored
   sanitized records.
-- Updated CLI help/output and bridge validation for `--batch-files`.
+- Added a synthetic JSONL test proving `batch_files=2`, `max_batches=3`
+  completes five session files and stores five sanitized rows.
+- Updated CLI help/output and bridge validation for `--batch-files` and
+  `--max-batches`.
 - Updated browser bridge QA so `/api/work-session-index` uses
-  `batch_files=WORK_SESSION_LIMIT` and verifies source states.
+  `batch_files=WORK_SESSION_LIMIT/2`, `max_batches=2`, and verifies source
+  states.
 
 Changes:
 
 - `src-tauri/src/lib.rs`:
-  - added `batch_files` and source-state fields to session-index options/result
-    structs;
+  - added `batch_files`, `max_batches`, `batches_run`,
+    `all_sources_completed`, and source-state fields to session-index
+    options/result structs;
   - added checkpointed session metadata traversal;
+  - added multi-batch checkpoint traversal;
   - added `project_work_session_index_states` schema;
   - added state read/write helpers;
-  - added tests for checkpoint advancement and zero `batch_files` validation.
+  - added tests for checkpoint advancement, multi-batch completion, and invalid
+    `batch_files`/`max_batches` validation.
 - `src-tauri/src/bin/promptvault-cli.rs`:
-  - added `--batch-files`;
+  - added `--batch-files` and `--max-batches`;
   - prints per-source cursor state in human output;
   - updated help text and bridge validation tests.
 - `scripts/browser-bridge-isolated-qa.mjs`:
-  - changed work-session-index QA to use checkpointed `batch_files`;
-  - validates `batch_files`, source-state presence, and processed source files.
+  - changed work-session-index QA to use checkpointed multi-batch indexing;
+  - validates `batch_files`, `max_batches`, `batches_run`, completion flag,
+    source-state presence, and processed source files.
 - `working.md`:
   - recorded the verified completion level, actual session/file counters, and
     remaining AI/SDK-backed log interpretation gap.
@@ -90,36 +103,39 @@ Tests:
 
 - `cargo fmt --manifest-path src-tauri/Cargo.toml`: PASS.
 - `cargo test --manifest-path src-tauri/Cargo.toml work_session_index -- --nocapture`:
-  PASS, `5` lib tests and `1` CLI bridge validation test.
+  PASS, `7` lib tests and `1` CLI bridge validation test.
 - `cargo test --manifest-path src-tauri/Cargo.toml bridge_serializes_database_backed_routes_only -- --nocapture`:
   PASS.
 - `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules -- --nocapture`:
   PASS.
 - Temp DB CLI smoke:
-  `cargo run --quiet --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-session-index --batch-files 5 --reset --database "$tmp/session.sqlite" --json`:
+  `cargo run --quiet --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-session-index --batch-files 3 --max-batches 2 --reset --database "$tmp/session.sqlite" --json`:
   PASS. Real session sources returned:
-  - Codex: `total_files=25,145`, `processed_files=5`, `matched_prompt_count=5`,
-    `next_file_index=5`;
-  - Codex CX: `total_files=11`, `processed_files=5`, `matched_prompt_count=0`,
-    `next_file_index=5`;
+  - `batch_files=3`, `max_batches=2`, `batches_run=2`,
+    `all_sources_completed=false`;
+  - Codex: `total_files=25,145`, `processed_files=6`, `matched_prompt_count=6`,
+    `next_file_index=6`;
+  - Codex CX: `total_files=11`, `processed_files=6`, `matched_prompt_count=0`,
+    `next_file_index=6`;
   - `scanned=5`, `sanitized=5`, `stored=5`, warnings `[]`.
 - `npm run check`: PASS, including `test:ui` (`460` tests), production build,
-  full Rust tests (`182` lib tests and `30` CLI tests), doc-tests, and clippy
+  full Rust tests (`184` lib tests and `30` CLI tests), doc-tests, and clippy
   `-D warnings`.
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
   Final JSON included:
   - `workSessionIndexBackfill`: isolated DB, requested `200`,
-    `batch_files=200`, scanned `199`, sanitized `199`, stored `199`, reset
-    `true`, warnings `[]`;
+    `batch_files=100`, `max_batches=2`, `batches_run=2`, scanned `199`,
+    sanitized `199`, stored `199`, reset `true`, `all_sources_completed=false`,
+    warnings `[]`;
   - source states:
     - Codex: `total_files=25,145`, `processed_files=200`,
       `matched_prompt_count=199`, `next_file_index=200`, `completed=false`;
     - Codex CX: `total_files=11`, `processed_files=11`,
       `matched_prompt_count=0`, `next_file_index=11`, `completed=true`;
   - `workSummaryIndex`: `세션 인덱스 사용 · 근거 메타데이터 우선/raw fallback · 스캔 199개 · 보관 199개 · 매칭 80건 · 고유 1건`;
-  - `coverageMeta`: `824개 로그 · parsed 823개 · unparsed 0개 · 31개 프로젝트 · 작업 8,865개`;
+  - `coverageMeta`: `825개 로그 · parsed 824개 · unparsed 0개 · 31개 프로젝트 · 작업 8,871개`;
   - `workManagementMeta`: `관리 91개 · 31개 프로젝트 · 25일 ... 저장관리 91 · 라이브만 0`;
-  - `workLogNormalizationCandidatesMeta`: `정규화 후보 91개 ... 원본 작업 8,866개 · 31개 프로젝트 · 25일`;
+  - `workLogNormalizationCandidatesMeta`: `정규화 후보 91개 ... 원본 작업 8,871개 · 31개 프로젝트 · 25일`;
   - `workManagementMetaAfterNormalizationApply`: included `정규화 1`.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS after this
   log update.
@@ -130,9 +146,10 @@ Issues:
 - This is still not an automatically exhausted all-history ledger. It is a
   real-session, real-progress-log, checkpoint-capable and QA-proven management
   surface.
-- `--batch-files` stores cursors, but a scheduler/loop/UI control still needs to
-  repeatedly run it until Codex `processed_files == total_files` for all
-  session sources.
+- `--max-batches` now provides bounded repeated checkpoint processing in one
+  call, but an explicit until-complete scheduler/UI control still needs to run
+  enough batches for Codex `processed_files == total_files` across all session
+  sources.
 - Project-local arbitrary progress logs beyond current recognized Markdown
   patterns still need an AI extraction/normalization layer with strict review
   gates. The existing queue design is ready for this, but live Codex SDK/GLM SDK
@@ -149,8 +166,10 @@ Research:
 
 Next Steps:
 
-- Add a command/UI loop to run `work-session-index --batch-files N` repeatedly
-  until all source states are complete, then expose full backfill progress.
+- Add an explicit `--until-complete` or UI-controlled backfill action that keeps
+  invoking bounded checkpoint batches until all source states are complete.
+- Add progress UI for session index state rows: source, processed/total files,
+  matched evidence count, batches run, and completion state.
 - Add a project-local progress-log AI extraction adapter for odd `working.md`,
   `workingd.md`, `PROGRESS_LOG.md`, and nested context log shapes that fail or
   under-express the deterministic parser.

@@ -788,6 +788,7 @@ pub struct ProjectWorkSessionIndexOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
     pub batch_files: Option<usize>,
+    pub max_batches: Option<usize>,
     pub reset: Option<bool>,
 }
 
@@ -810,10 +811,13 @@ pub struct ProjectWorkSessionIndexResult {
     pub database_path: String,
     pub requested_limit: usize,
     pub batch_files: Option<usize>,
+    pub max_batches: Option<usize>,
+    pub batches_run: usize,
     pub scanned_prompt_count: usize,
     pub sanitized_prompt_count: usize,
     pub stored_prompt_count: usize,
     pub reset: bool,
+    pub all_sources_completed: bool,
     pub source_states: Vec<ProjectWorkSessionIndexSourceState>,
     pub warnings: Vec<String>,
 }
@@ -1732,6 +1736,12 @@ pub fn run_project_work_session_index(
     if matches!(options.batch_files, Some(0)) {
         return Err("work-session-index batch_files requires a positive integer".into());
     }
+    if matches!(options.max_batches, Some(0)) {
+        return Err("work-session-index max_batches requires a positive integer".into());
+    }
+    if options.max_batches.is_some() && options.batch_files.is_none() {
+        return Err("work-session-index max_batches requires batch_files".into());
+    }
     if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
         return Err("work-session-index database path requires a non-empty value".into());
     }
@@ -1744,12 +1754,14 @@ pub fn run_project_work_session_index(
         .unwrap_or_else(default_database_path);
     let requested_limit = options.limit.unwrap_or(DEFAULT_PROJECT_WORK_SESSION_LIMIT);
     let batch_files = options.batch_files;
+    let max_batches = options.max_batches;
     let reset = options.reset.unwrap_or(false);
     let mut warnings = Vec::new();
-    let (prompts, source_states) = if let Some(batch_files) = batch_files {
+    let (prompts, source_states, batches_run) = if let Some(batch_files) = batch_files {
         checkpointed_project_work_session_prompts(
             &database_path,
             batch_files,
+            max_batches.unwrap_or(1),
             reset,
             &mut warnings,
         )?
@@ -1757,19 +1769,25 @@ pub fn run_project_work_session_index(
         (
             project_work_session_prompts(requested_limit, &mut warnings)?,
             Vec::new(),
+            0,
         )
     };
     let persistence = upsert_project_work_session_index(&database_path, &prompts, reset)?;
+    let all_sources_completed =
+        !source_states.is_empty() && source_states.iter().all(|state| state.completed);
 
     Ok(ProjectWorkSessionIndexResult {
         generated_at,
         database_path: database_path.display().to_string(),
         requested_limit,
         batch_files,
+        max_batches,
+        batches_run,
         scanned_prompt_count: prompts.len(),
         sanitized_prompt_count: persistence.sanitized_prompt_count,
         stored_prompt_count: persistence.stored_prompt_count,
         reset,
+        all_sources_completed,
         source_states,
         warnings,
     })
@@ -6343,6 +6361,14 @@ struct ProjectWorkSessionIndexPersistence {
     stored_prompt_count: usize,
 }
 
+type ProjectWorkSessionIndexBatchResult = (
+    Vec<PromptRecord>,
+    Vec<ProjectWorkSessionIndexSourceState>,
+    usize,
+);
+type ProjectWorkSessionIndexSourceBatchResult =
+    (Vec<PromptRecord>, Vec<ProjectWorkSessionIndexSourceState>);
+
 fn project_work_session_evidence(
     database_path: &Path,
     limit: usize,
@@ -6423,17 +6449,50 @@ fn project_work_codex_metadata_prompts_from_sources(
 fn checkpointed_project_work_session_prompts(
     database_path: &Path,
     batch_files: usize,
+    max_batches: usize,
     reset: bool,
     warnings: &mut Vec<String>,
-) -> Result<(Vec<PromptRecord>, Vec<ProjectWorkSessionIndexSourceState>), Box<dyn std::error::Error>>
-{
-    checkpointed_project_work_session_prompts_from_sources(
+) -> Result<ProjectWorkSessionIndexBatchResult, Box<dyn std::error::Error>> {
+    checkpointed_project_work_session_prompts_from_sources_batches(
         database_path,
         batch_files,
+        max_batches,
         reset,
         source_specs(),
         warnings,
     )
+}
+
+fn checkpointed_project_work_session_prompts_from_sources_batches(
+    database_path: &Path,
+    batch_files: usize,
+    max_batches: usize,
+    reset: bool,
+    sources: Vec<SourceSpec>,
+    warnings: &mut Vec<String>,
+) -> Result<ProjectWorkSessionIndexBatchResult, Box<dyn std::error::Error>> {
+    let mut prompts = Vec::new();
+    let mut source_states = Vec::new();
+    let mut batches_run = 0;
+    for batch_index in 0..max_batches {
+        let (batch_prompts, batch_states) = checkpointed_project_work_session_prompts_from_sources(
+            database_path,
+            batch_files,
+            reset && batch_index == 0,
+            sources.clone(),
+            warnings,
+        )?;
+        prompts.extend(batch_prompts);
+        source_states = batch_states;
+        batches_run += 1;
+        if !source_states.is_empty() && source_states.iter().all(|state| state.completed) {
+            break;
+        }
+    }
+
+    let prompt_count = prompts.len();
+    normalize_project_work_session_prompts(&mut prompts, prompt_count);
+    Ok((prompts, source_states, batches_run))
 }
 
 fn checkpointed_project_work_session_prompts_from_sources(
@@ -6442,8 +6501,7 @@ fn checkpointed_project_work_session_prompts_from_sources(
     reset: bool,
     sources: Vec<SourceSpec>,
     warnings: &mut Vec<String>,
-) -> Result<(Vec<PromptRecord>, Vec<ProjectWorkSessionIndexSourceState>), Box<dyn std::error::Error>>
-{
+) -> Result<ProjectWorkSessionIndexSourceBatchResult, Box<dyn std::error::Error>> {
     let conn = open_promptvault_database(database_path)?;
     if reset {
         conn.execute("DELETE FROM project_work_session_index_states", [])?;
@@ -14564,6 +14622,68 @@ Progress:
     }
 
     #[test]
+    fn project_work_session_index_checkpoint_batches_until_complete() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-session-index-batches-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let source_root = root.join("sessions");
+        std::fs::create_dir_all(&source_root).expect("create session root");
+        let db_path = root.join("promptvault.sqlite");
+        for idx in 0..5 {
+            let project = format!("BatchProject{idx}");
+            let timestamp = format!("2026-06-09T13:0{idx}:00Z");
+            std::fs::write(
+                source_root.join(format!("session-{idx}.jsonl")),
+                format!(
+                    "{{\"timestamp\":\"{timestamp}\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"thread-batch-{idx}\",\"cwd\":\"/Users/wj\"}}}}\n\
+                     {{\"timestamp\":\"{timestamp}\",\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"Continue /Users/wj/Ai/System/10_Projects/{project}\"}}]}}}}\n"
+                ),
+            )
+            .expect("write session jsonl");
+        }
+        let source = SourceSpec {
+            id: "codex",
+            label: "Codex",
+            root: source_root,
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let mut warnings = Vec::new();
+        let (prompts, states, batches_run) =
+            checkpointed_project_work_session_prompts_from_sources_batches(
+                &db_path,
+                2,
+                3,
+                true,
+                vec![source],
+                &mut warnings,
+            )
+            .expect("checkpointed batches");
+        assert!(warnings.is_empty());
+        assert_eq!(batches_run, 3);
+        assert_eq!(prompts.len(), 5);
+        assert_eq!(states.len(), 1);
+        assert_eq!(states[0].total_files, 5);
+        assert_eq!(states[0].processed_files, 5);
+        assert_eq!(states[0].next_file_index, 5);
+        assert_eq!(states[0].matched_prompt_count, 5);
+        assert!(states[0].completed);
+
+        let persistence =
+            upsert_project_work_session_index(&db_path, &prompts, true).expect("persist batches");
+        assert_eq!(persistence.stored_prompt_count, 5);
+        let indexed =
+            project_work_session_prompts_from_index(&db_path, 10).expect("read batch index");
+        assert_eq!(indexed.len(), 5);
+
+        std::fs::remove_dir_all(root).expect("remove batch temp root");
+    }
+
+    #[test]
     fn run_project_work_session_index_rejects_zero_limit() {
         let err = run_project_work_session_index(ProjectWorkSessionIndexOptions {
             limit: Some(0),
@@ -14585,6 +14705,28 @@ Progress:
         .to_string();
 
         assert!(err.contains("work-session-index batch_files requires a positive integer"));
+    }
+
+    #[test]
+    fn run_project_work_session_index_rejects_invalid_max_batches() {
+        let zero_err = run_project_work_session_index(ProjectWorkSessionIndexOptions {
+            batch_files: Some(1),
+            max_batches: Some(0),
+            ..Default::default()
+        })
+        .expect_err("zero max_batches should fail")
+        .to_string();
+
+        assert!(zero_err.contains("work-session-index max_batches requires a positive integer"));
+
+        let missing_batch_err = run_project_work_session_index(ProjectWorkSessionIndexOptions {
+            max_batches: Some(2),
+            ..Default::default()
+        })
+        .expect_err("max_batches without batch_files should fail")
+        .to_string();
+
+        assert!(missing_batch_err.contains("work-session-index max_batches requires batch_files"));
     }
 
     #[test]

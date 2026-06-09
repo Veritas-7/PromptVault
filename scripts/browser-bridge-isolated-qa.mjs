@@ -12,6 +12,11 @@ const WORK_SESSION_LIMIT = Number.parseInt(
   process.env.PROMPTVAULT_QA_WORK_SESSION_LIMIT ?? "50",
   10,
 );
+const WORK_SESSION_INDEX_MAX_BATCHES = 2;
+const WORK_SESSION_INDEX_BATCH_FILES = Math.max(
+  1,
+  Math.ceil(WORK_SESSION_LIMIT / WORK_SESSION_INDEX_MAX_BATCHES),
+);
 const DATABASE_PATH = process.env.PROMPTVAULT_QA_DATABASE
   ?? join(mkdtempSync(join(tmpdir(), "promptvault-browser-qa-")), "qa.sqlite");
 const SECRET_ENV_DIR = mkdtempSync(join(tmpdir(), "promptvault-browser-qa-env-"));
@@ -239,14 +244,22 @@ async function runBrowserQa() {
     }
     step("work session index");
     workSessionIndexBackfill = await bridgeJson(page, "/api/work-session-index", {
-      options: { batch_files: WORK_SESSION_LIMIT, reset: true },
+      options: {
+        batch_files: WORK_SESSION_INDEX_BATCH_FILES,
+        max_batches: WORK_SESSION_INDEX_MAX_BATCHES,
+        reset: true,
+      },
     });
     if (
       workSessionIndexBackfill.database_path !== DATABASE_PATH
-      || workSessionIndexBackfill.batch_files !== WORK_SESSION_LIMIT
+      || workSessionIndexBackfill.batch_files !== WORK_SESSION_INDEX_BATCH_FILES
+      || workSessionIndexBackfill.max_batches !== WORK_SESSION_INDEX_MAX_BATCHES
+      || workSessionIndexBackfill.batches_run < 1
+      || workSessionIndexBackfill.batches_run > WORK_SESSION_INDEX_MAX_BATCHES
       || workSessionIndexBackfill.requested_limit < 1
       || workSessionIndexBackfill.stored_prompt_count > workSessionIndexBackfill.scanned_prompt_count
       || workSessionIndexBackfill.reset !== true
+      || typeof workSessionIndexBackfill.all_sources_completed !== "boolean"
       || !Array.isArray(workSessionIndexBackfill.source_states)
       || !workSessionIndexBackfill.source_states.some((state) => state.processed_files > 0)
     ) {

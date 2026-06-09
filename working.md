@@ -1,10 +1,72 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 07:56 KST
+Updated: 2026-06-10 08:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Provider status timeout visibility
+
+Current Goal:
+
+- Make AI provider status explain configured-vs-live-health clearly enough that
+  GLM/Codex queue-reduction blockers are visible before running proposals.
+
+Context:
+
+- The previous slice proved the configured GLM work-log normalization route is
+  timing out at request time, even though provider status says GLM is configured.
+- OpenAI/GLM work-management HTTP routes share a `12s` request timeout. Codex
+  CLI uses the opt-in work provider timeout, defaulting to `90s`.
+
+Progress:
+
+- Added `timeout_seconds` to every work AI provider status row.
+- OpenAI/GLM rows now expose the 12-second HTTP request cap.
+- Codex rows expose the configured CLI timeout when the executable route is
+  detected, even if proposal generation is still disabled.
+- Configured OpenAI/GLM rows now explicitly warn that configured key/endpoint
+  state is not live health proof; proposal warnings remain the live evidence.
+- UI provider row text now includes `timeout Ns`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: extends provider status rows with timeout metadata and
+  configured-vs-health caveat notes.
+- `src/types.ts` and `src/promptVaultApi.ts`: extend and validate the frontend
+  bridge contract.
+- `src/workSummaryStatus.ts`: displays timeout metadata in provider rows.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`: update
+  fixtures and assertions for the timeout field.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work AI provider status"`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work AI provider status"`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_ai_provider_status --lib`.
+- PASS/OBSERVED: `cargo run --manifest-path src-tauri/Cargo.toml --quiet --bin promptvault-cli -- work-ai-provider-status --json`.
+- PASS: `npm run check` (`499` UI tests, `215` Rust library tests, `34` CLI tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- Persistent provider status now reports GLM as configured/usable with
+  `timeout_seconds: 12` plus the note:
+  `Configured only means the key and endpoint are present; proposal warnings are the live health evidence.`
+- Persistent provider status reports Codex CLI detected with `timeout_seconds:
+  90` but still not usable until `PROMPTVAULT_CODEX_WORK_PROVIDER=1`.
+- Isolated browser bridge QA reached `work AI provider status`, then continued
+  through normalization proposals, review queue, apply, approved queue save, and
+  saved work-log items against temporary DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-Lmv26a/qa.sqlite`.
+
+Remaining:
+
+- Provider status now explains the live-health boundary, but it still does not
+  reduce the pending normalization/session-evidence review queues. Next useful
+  slice is either a controlled provider health probe or enabling a safe Codex
+  opt-in proposal route in the operator environment.
 
 ## Completed Slice - 2026-06-10 Provider request error detail
 

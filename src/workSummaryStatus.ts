@@ -1162,6 +1162,9 @@ export function workAiProviderStatusProviderText(
   if (provider.endpoint) {
     parts.push(provider.endpoint);
   }
+  if (provider.timeout_seconds !== null) {
+    parts.push(`timeout ${provider.timeout_seconds.toLocaleString()}s`);
+  }
   if (provider.capabilities.length > 0) {
     parts.push(`capabilities ${provider.capabilities.map(workAiProviderCapabilityLabel).join(", ")}`);
   }

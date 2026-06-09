@@ -685,6 +685,7 @@ function projectWorkAiProviderStatusPayload(overrides = {}) {
         capabilities: [],
         model: "gpt-test",
         endpoint: "https://api.openai.com/v1/responses",
+        timeout_seconds: 12,
         notes: ["OPENAI_API_KEY is not configured."],
       },
       {
@@ -695,6 +696,7 @@ function projectWorkAiProviderStatusPayload(overrides = {}) {
         capabilities: [],
         model: "glm-test",
         endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        timeout_seconds: 12,
         notes: ["GLM_API_KEY/GLM_API_KEY_2 is not configured."],
       },
       {
@@ -705,6 +707,7 @@ function projectWorkAiProviderStatusPayload(overrides = {}) {
         capabilities: [],
         model: null,
         endpoint: null,
+        timeout_seconds: null,
         notes: ["No Codex SDK work-management provider is wired yet."],
       },
     ],
@@ -1820,6 +1823,8 @@ test("browser bridge work AI provider status validates configured providers", as
   assert.equal(result.providers[2].provider, "codex");
   assert.equal(result.providers[2].provider_runtime, "codex-sdk");
   assert.equal(result.providers[2].usable_for_work_management, false);
+  assert.equal(result.providers[0].timeout_seconds, 12);
+  assert.equal(result.providers[2].timeout_seconds, null);
   assert.deepEqual(result.providers[2].capabilities, []);
 });
 

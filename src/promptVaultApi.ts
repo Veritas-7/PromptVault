@@ -1951,6 +1951,7 @@ function isProjectWorkAiProviderStatusProvider(value: unknown): boolean {
     && (value.capabilities.length === 0 || value.usable_for_work_management === true)
     && isNullableNonBlankString(value.model)
     && isNullableNonBlankString(value.endpoint)
+    && isNullablePositiveSafeInteger(value.timeout_seconds)
     && isNonBlankStringArray(value.notes);
 }
 

@@ -1332,6 +1332,7 @@ pub struct ProjectWorkAiProviderStatusProvider {
     pub capabilities: Vec<String>,
     pub model: Option<String>,
     pub endpoint: Option<String>,
+    pub timeout_seconds: Option<u64>,
     pub notes: Vec<String>,
 }
 
@@ -15347,8 +15348,12 @@ fn project_work_ai_provider_status_from_env(
                 capabilities: provider_work_management_capabilities(openai_configured),
                 model: Some(openai_model_from_env(&env)),
                 endpoint: Some(openai_endpoint),
+                timeout_seconds: Some(PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS),
                 notes: if openai_configured {
-                    vec!["work-log extraction, normalization, summaries, and session-evidence proposals can attempt OpenAI first.".to_string()]
+                    vec![
+                        "work-log extraction, normalization, summaries, and session-evidence proposals can attempt OpenAI first.".to_string(),
+                        "Configured only means the key and endpoint are present; proposal warnings are the live health evidence.".to_string(),
+                    ]
                 } else {
                     vec!["OPENAI_API_KEY is not configured.".to_string()]
                 },
@@ -15361,8 +15366,12 @@ fn project_work_ai_provider_status_from_env(
                 capabilities: provider_work_management_capabilities(glm_configured),
                 model: Some(glm_model_from_env(&env)),
                 endpoint: Some(glm_endpoint),
+                timeout_seconds: Some(PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS),
                 notes: if glm_configured {
-                    vec!["work-log extraction, normalization, summaries, and session-evidence proposals can attempt GLM after OpenAI.".to_string()]
+                    vec![
+                        "work-log extraction, normalization, summaries, and session-evidence proposals can attempt GLM after OpenAI.".to_string(),
+                        "Configured only means the key and endpoint are present; proposal warnings are the live health evidence.".to_string(),
+                    ]
                 } else {
                     vec!["GLM_API_KEY/GLM_API_KEY_2 is not configured.".to_string()]
                 },
@@ -15379,6 +15388,8 @@ fn project_work_ai_provider_status_from_env(
                 capabilities: codex_work_management_capabilities(codex_usable),
                 model: non_empty_env_value(&env, "CODEX_MODEL"),
                 endpoint: codex_exec_path.clone(),
+                timeout_seconds: codex_configured
+                    .then(|| codex_work_provider_timeout_seconds(&env)),
                 notes: if let Some(path) = codex_exec_path {
                     let mut notes = if codex_usable {
                         vec![format!(

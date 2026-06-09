@@ -174,6 +174,7 @@ function aiProviderStatusResult(
         capabilities: [],
         model: "gpt-test",
         endpoint: "https://api.openai.com/v1/responses",
+        timeout_seconds: 12,
         notes: ["OPENAI_API_KEY is not configured."],
       },
       {
@@ -184,6 +185,7 @@ function aiProviderStatusResult(
         capabilities: [],
         model: "glm-test",
         endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        timeout_seconds: 12,
         notes: ["GLM_API_KEY/GLM_API_KEY_2 is not configured."],
       },
       {
@@ -194,6 +196,7 @@ function aiProviderStatusResult(
         capabilities: [],
         model: null,
         endpoint: null,
+        timeout_seconds: null,
         notes: ["No Codex SDK work-management provider is wired yet."],
       },
     ],
@@ -215,6 +218,7 @@ function codexDetectedProviderStatusResult(): ProjectWorkAiProviderStatusResult 
         capabilities: [],
         model: "gpt-5.3-codex",
         endpoint: "/usr/local/bin/codex",
+        timeout_seconds: 90,
         notes: ["codex exec was detected, but proposal generation is not wired yet."],
       },
     ],
@@ -1996,6 +2000,7 @@ test("work AI provider status labels expose external readiness and codex gap", (
         ],
         model: "gpt-test",
         endpoint: "https://api.openai.com/v1/responses",
+        timeout_seconds: 12,
         notes: ["OpenAI can be attempted first."],
       },
       {
@@ -2006,6 +2011,7 @@ test("work AI provider status labels expose external readiness and codex gap", (
         capabilities: [],
         model: "glm-test",
         endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        timeout_seconds: 12,
         notes: ["GLM_API_KEY/GLM_API_KEY_2 is not configured."],
       },
       {
@@ -2016,6 +2022,7 @@ test("work AI provider status labels expose external readiness and codex gap", (
         capabilities: [],
         model: null,
         endpoint: null,
+        timeout_seconds: null,
         notes: ["No Codex SDK work-management provider is wired yet."],
       },
     ],
@@ -2062,7 +2069,7 @@ test("work AI provider status labels expose external readiness and codex gap", (
   assert.equal(workAiProviderStatusFailureText("ready"), null);
   assert.equal(
     workAiProviderStatusProviderText(configured.providers[0]),
-    "OpenAI · configured · work-management 사용 가능 · openai-responses · model gpt-test · https://api.openai.com/v1/responses · capabilities 작업 요약, 진행로그 추출, 제목 정규화, 세션근거 제안",
+    "OpenAI · configured · work-management 사용 가능 · openai-responses · model gpt-test · https://api.openai.com/v1/responses · timeout 12s · capabilities 작업 요약, 진행로그 추출, 제목 정규화, 세션근거 제안",
   );
   assert.equal(
     workAiProviderStatusProviderText(aiProviderStatusResult().providers[2]),
@@ -2070,7 +2077,7 @@ test("work AI provider status labels expose external readiness and codex gap", (
   );
   assert.equal(
     workAiProviderStatusProviderText(codexDetectedProviderStatusResult().providers[2]),
-    "Codex · configured · 사용 불가 · codex-cli-exec · model gpt-5.3-codex · /usr/local/bin/codex",
+    "Codex · configured · 사용 불가 · codex-cli-exec · model gpt-5.3-codex · /usr/local/bin/codex · timeout 90s",
   );
 });
 

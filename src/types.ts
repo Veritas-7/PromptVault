@@ -872,6 +872,7 @@ export interface ProjectWorkAiProviderStatusProvider {
   capabilities: string[];
   model: string | null;
   endpoint: string | null;
+  timeout_seconds: number | null;
   notes: string[];
 }
 

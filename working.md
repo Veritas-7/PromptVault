@@ -1,20 +1,20 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 21:47 KST
+Updated: 2026-06-09 22:04 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 AI normalization and session evidence remaining gaps
+## Current Slice - 2026-06-09 session evidence and AI normalization follow-up
 
 Current Goal:
 
-- Continue reducing the remaining managed-work gaps now that project-local log
-  parsing and review-only fallback titles are stable.
-- Next highest gaps are `needs_session_evidence` rows and AI-backed
-  normalization proposals that can be reviewed/applied instead of staying
-  local fallback only.
+- Continue reducing the remaining managed-work gaps after provider attempt
+  visibility was added to the normalization proposal/review queue UI.
+- Focus next on shrinking `needs_session_evidence` with real Codex/Codex CX
+  session index backfill, then inspect AI-backed normalization proposals before
+  applying any accepted rows.
 
 Context:
 
@@ -27,6 +27,9 @@ Context:
   risky content.
 - Local fallback titles are now source-backed enough for review, but still
   intentionally rejected until operator approval or AI-backed validation.
+- The app now attempts AI-backed normalization when syncing the persisted
+  review queue and surfaces provider fallback warnings in compact meta text, so
+  provider failures are not hidden in the review flow.
 
 Next Steps:
 
@@ -36,6 +39,84 @@ Next Steps:
   rows shrink with actual session evidence rather than inferred text.
 - Keep using browser-bridge QA after any UI/backend changes touching work-log
   management.
+
+## Completed Slice - 2026-06-09 AI normalization provider visibility
+
+Current Goal:
+
+- Make the persisted normalization review queue use the existing AI provider
+  proposal path instead of silently syncing local-only fallback proposals.
+- Surface provider fallback warnings in the proposal and review-queue meta text
+  so failed GLM/OpenAI attempts are visible during operation.
+
+Context:
+
+- Live CLI check before this slice still showed `91` project/day rows, with
+  `63` rows needing stronger session evidence and `39` rows needing title
+  normalization.
+- `work-log-normalization-proposals --ai --limit 5 --json` attempted GLM, then
+  fell back to `local-normalization-rules` with a warning:
+  `GLM work-log normalization 요청 실패 ... 로컬 fallback을 사용했습니다.`
+- `refreshWorkLogNormalizationProposals()` already passed `ai: true`, but
+  `syncWorkLogNormalizationReviewQueue()` forced `ai: false`, so the saved
+  review queue did not exercise the provider path.
+
+Progress:
+
+- Changed review-queue synchronization to request AI-backed normalization
+  proposals.
+- Added warning-count visibility to normalization proposal and review-queue
+  compact meta text.
+- Strengthened isolated browser QA so the normalization proposal and review
+  queue waits require either an AI provider row or a visible warning count.
+
+Changes:
+
+- `src/App.tsx`:
+  - `syncWorkLogNormalizationReviewQueue()` now calls
+    `loadProjectWorkLogNormalizationReviewQueue({ ai: true, ... })`.
+- `src/workSummaryStatus.ts`:
+  - `workLogNormalizationProposalsMetaText()` and
+    `workLogNormalizationReviewQueueMetaText()` append `경고 N개` when provider
+    warnings are present.
+- `tests/workSummaryStatus.test.ts`:
+  - added proposal and review-queue meta assertions for warning counts.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added provider-attempt visibility checks for normalization proposals and
+    review queue.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`:
+  PASS, `32` tests passed.
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `npm run check`: PASS.
+  - UI tests: `474` passed.
+  - Production build: passed.
+  - Rust lib tests: `197` passed.
+  - CLI tests: `31` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  Evidence from isolated browser result:
+  - status export showed `91` rows, `31` projects, `25` days, `9,138`
+    work items, `847` progress files, and `20,971` session evidence links
+    from `50` unique records;
+  - coverage showed `847` logs, `846` parsed, `0` unparsed, `31` projects,
+    and `9,140` work items;
+  - normalization candidates showed `91` candidates with `0` risk-marked rows;
+  - normalization proposals showed `40` review-only local proposals from
+    `91` candidates and surfaced `경고 1개`;
+  - normalization review queue synced `91` rows, displayed `40`, preserved
+    review-only state, and surfaced `경고 1개`;
+  - a QA-approved normalization row applied in the isolated temp database,
+    moving the management meta to `정규화 1` while keeping `91` managed rows.
+
+Outcome:
+
+- Provider attempts/fallbacks are now visible in both the proposal and persisted
+  review-queue management path. The actual data remains approval-safe: local
+  fallback proposals still require explicit review before application.
 
 ## Completed Slice - 2026-06-09 normalization fallback title evidence
 

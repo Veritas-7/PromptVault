@@ -1417,6 +1417,13 @@ test("work log normalization proposal labels describe AI cleanup proposals", () 
     "정규화 제안 5개 · accepted 1개 · review 4개 · 후보 18개 · local-normalization-rules · 12개 프로젝트 · 9일",
   );
   assert.equal(
+    workLogNormalizationProposalsMetaText(
+      "ready",
+      normalizationProposalsResult({ warnings: ["GLM fallback"] }),
+    ),
+    "정규화 제안 5개 · accepted 1개 · review 4개 · 후보 18개 · local-normalization-rules · 12개 프로젝트 · 9일 · 경고 1개",
+  );
+  assert.equal(
     workLogNormalizationProposalsMetaText(failed, null),
     "AI 정규화 제안을 사용할 수 없음",
   );
@@ -1470,6 +1477,13 @@ test("work log normalization review queue labels describe persisted review rows"
   assert.equal(
     workLogNormalizationReviewQueueMetaText("ready", normalizationReviewQueueResult()),
     "정규화 큐 저장 9개 · 표시 5개 · 동기화 5개 · stale 전환 1개 · 검토 3개 · stale 1개 · 승인 2개 · 거절 3개 · AI accepted 1개 · review 8개",
+  );
+  assert.equal(
+    workLogNormalizationReviewQueueMetaText(
+      "ready",
+      normalizationReviewQueueResult({ warnings: ["GLM fallback", "OpenAI fallback"] }),
+    ),
+    "정규화 큐 저장 9개 · 표시 5개 · 동기화 5개 · stale 전환 1개 · 검토 3개 · stale 1개 · 승인 2개 · 거절 3개 · AI accepted 1개 · review 8개 · 경고 2개",
   );
   assert.equal(
     workLogNormalizationReviewQueueMetaText(failed, null),

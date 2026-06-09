@@ -805,8 +805,11 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-normalization-proposals-meta="true"]')?.textContent ?? "";
       const rows = Array.from(document.querySelectorAll('[data-work-log-normalization-proposals="true"] article'));
+      const providerAttemptVisible = text.includes("경고")
+        || rows.some((row) => /provider (glm-chat-completions|openai-responses)/.test(row.textContent ?? ""));
       return text.includes("정규화 제안")
         && text.includes("review")
+        && providerAttemptVisible
         && rows.some((row) => (row.textContent ?? "").includes("AI 검토 필요"));
     }, undefined, { timeout: 120000 });
     workLogNormalizationProposalsMeta =
@@ -819,8 +822,11 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-normalization-review-queue-meta="true"]')?.textContent ?? "";
       const rows = Array.from(document.querySelectorAll('[data-work-log-normalization-review-queue="true"] article'));
+      const providerAttemptVisible = text.includes("경고")
+        || rows.some((row) => /provider (glm-chat-completions|openai-responses)/.test(row.textContent ?? ""));
       return text.includes("정규화 큐 저장")
         && text.includes("표시")
+        && providerAttemptVisible
         && rows.some((row) => (row.textContent ?? "").includes("confidence"));
     }, undefined, { timeout: 120000 });
     workLogNormalizationReviewQueueMeta =

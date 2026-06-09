@@ -1558,7 +1558,7 @@ function App() {
     setWorkLogNormalizationReviewQueueState("loading");
     try {
       const nextQueue = await loadProjectWorkLogNormalizationReviewQueue({
-        ai: false,
+        ai: true,
         limit: WORK_LOG_NORMALIZATION_REVIEW_QUEUE_MANAGEMENT_LIMIT,
         session_limit: sessionLimit,
         sync_proposals: true,

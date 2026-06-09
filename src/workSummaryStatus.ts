@@ -865,7 +865,7 @@ export function workLogNormalizationProposalsMetaText(
   const providerText = result.used_ai
     ? `${result.provider}${result.provider_model ? `/${result.provider_model}` : ""}`
     : result.provider;
-  return [
+  const parts = [
     `정규화 제안 ${result.returned_proposal_count.toLocaleString()}개`,
     `accepted ${result.accepted_count.toLocaleString()}개`,
     `review ${result.rejected_count.toLocaleString()}개`,
@@ -873,7 +873,11 @@ export function workLogNormalizationProposalsMetaText(
     providerText,
     `${result.report_project_count.toLocaleString()}개 프로젝트`,
     `${result.report_date_count.toLocaleString()}일`,
-  ].join(" · ");
+  ];
+  if (result.warnings.length > 0) {
+    parts.push(`경고 ${result.warnings.length.toLocaleString()}개`);
+  }
+  return parts.join(" · ");
 }
 
 export function workLogNormalizationProposalsFailureText(
@@ -931,7 +935,7 @@ export function workLogNormalizationReviewQueueMetaText(
       ? "정규화 검토 큐를 사용할 수 없음"
       : "아직 동기화한 정규화 검토 큐 없음";
   }
-  return [
+  const parts = [
     `정규화 큐 저장 ${result.total_items.toLocaleString()}개`,
     `표시 ${result.returned_item_count.toLocaleString()}개`,
     `동기화 ${result.synced_proposal_count.toLocaleString()}개`,
@@ -942,7 +946,11 @@ export function workLogNormalizationReviewQueueMetaText(
     `거절 ${result.rejected_count.toLocaleString()}개`,
     `AI accepted ${result.accepted_proposal_count.toLocaleString()}개`,
     `review ${result.rejected_proposal_count.toLocaleString()}개`,
-  ].join(" · ");
+  ];
+  if (result.warnings.length > 0) {
+    parts.push(`경고 ${result.warnings.length.toLocaleString()}개`);
+  }
+  return parts.join(" · ");
 }
 
 export function workLogNormalizationReviewQueueFailureText(

@@ -1,10 +1,113 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 22:46 KST
+Updated: 2026-06-09 22:58 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-09 session evidence audit filters
+
+Current Goal:
+
+- Let operators separate missing session evidence caused by a bounded session
+  evidence view from rows that remain unresolved after the full stored session
+  index is used.
+- Keep the filter visible in the project/day status export UI and covered by
+  unit plus browser-bridge QA.
+
+Context:
+
+- The previous slice added row-level `session_evidence_audit` values:
+  `matched`, `bounded-session-limit`, `unresolved-after-full-index`, and
+  `no-session-index`.
+- A live check before this slice showed current real corpus status:
+  `851` progress files seen, `850` parsed, `0` unparsed, `31` projects,
+  `25` days, `9,192` work items, and `91` project/day status rows.
+- Default bounded status export used `200 / 10,867` stored session evidence
+  rows and showed `63` bounded missing-evidence rows.
+- Full-index status export used all `10,867 / 10,867` stored session evidence
+  rows and showed `55` matched rows plus `36` unresolved-after-full-index rows.
+- Normalization is still not complete: current review queue showed `94` rows,
+  with `91` pending, `3` stale, and `0` durable normalized items.
+
+Progress:
+
+- Added status export row filters for:
+  - `bounded-session-limit`: bounded view likely needs more session evidence;
+  - `unresolved-session-evidence`: full index still lacks matching evidence.
+- Updated status export filter meta text to always expose:
+  - broad `세션근거 필요`;
+  - `근거limit`;
+  - `전체미해결`;
+  - title-normalization counts.
+- Added the new filters to the UI dropdown immediately after broad
+  `세션 근거 필요`.
+- Extended browser-bridge QA to select the bounded-limit filter, assert its meta
+  text, open the first row, and verify the detail says
+  `매칭된 세션 근거 없음 · 제한된 근거만 사용 중`.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - extended `WorkStatusExportRowFilter`;
+  - added bounded/full-unresolved filter predicates and Korean labels;
+  - added bounded/full-unresolved counts to filter meta text.
+- `src/App.tsx`:
+  - added the new status export filters to the row filter dropdown.
+- `tests/workSummaryStatus.test.ts`:
+  - added assertions for the new labels, predicates, and meta counts.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added direct QA coverage for the bounded-limit filter and row detail.
+- `working.md`:
+  - recorded the current live status, changes, tests, remaining issues, and
+    next work.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`:
+  PASS, `32` tests passed.
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `npm run check`: PASS.
+  - UI tests: `474` passed.
+  - Production build: passed.
+  - Rust lib tests: `200` passed.
+  - CLI tests: `31` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  Evidence from isolated browser result:
+  - `workStatusExportFilterMeta` showed
+    `필터 세션 근거 필요 · 결과 11 / 25행 · 세션근거 필요 11행 · 근거limit 11행 · 전체미해결 0행 · 제목정규화 필요 8행`;
+  - `workStatusExportBoundedFilterMeta` showed
+    `필터 근거 limit 영향 · 결과 11 / 25행 · 세션근거 필요 11행 · 근거limit 11행 · 전체미해결 0행 · 제목정규화 필요 8행`;
+  - `workStatusExportBoundedFilteredRowDetail` showed
+    `매칭된 세션 근거 없음 · 제한된 근거만 사용 중`;
+  - management overview, freeze, extraction, normalization, review queue, apply,
+    stale/rejected-AI fixtures, run history, and saved-item routes completed.
+
+Issues:
+
+- Full-index evidence coverage still has `36 / 91` project/day rows in
+  `unresolved-after-full-index`; these are now easier to target but are not
+  automatically resolved.
+- Title/status normalization still has `39 / 91` rows needing cleanup.
+- Durable normalized project/day rows remain empty in the production database
+  until operator-approved normalization proposals are applied.
+
+Research:
+
+- No external research was needed. This slice reused the existing audit state
+  and UI/QA surfaces.
+
+Next Steps:
+
+- Add a dedicated full-index unresolved filter/browser QA path, likely via a
+  controlled fixture or a full-index CLI/UI mode, so the `전체 인덱스 미해결`
+  branch is click-tested without slowing the default bounded QA.
+- Build an AI-assisted evidence review queue for
+  `unresolved-after-full-index` rows, keeping source trace and operator
+  approval gates before durable writes.
 
 ## Completed Slice - 2026-06-09 session evidence row audit state
 

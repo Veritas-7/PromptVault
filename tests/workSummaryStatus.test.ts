@@ -849,9 +849,24 @@ test("work status export text exposes project day evidence coverage", () => {
     "매칭된 세션 근거 없음 · 전체 인덱스에서도 미해결",
   );
   assert.equal(workStatusExportRowFilterLabel("needs-session-evidence"), "세션 근거 필요");
+  assert.equal(workStatusExportRowFilterLabel("bounded-session-limit"), "근거 limit 영향");
+  assert.equal(workStatusExportRowFilterLabel("unresolved-session-evidence"), "전체 인덱스 미해결");
   assert.deepEqual(
     filterWorkStatusExportRows(result.rows, "needs-session-evidence").map((row) => row.project),
     ["PromptVault"],
+  );
+  assert.deepEqual(
+    filterWorkStatusExportRows(result.rows, "bounded-session-limit").map((row) => row.project),
+    ["PromptVault"],
+  );
+  const rowsWithUnresolvedSessionEvidence = [{
+    ...result.rows[0],
+    project: "ResearchFlowAI",
+    session_evidence_audit: "unresolved-after-full-index",
+  }, result.rows[1]];
+  assert.deepEqual(
+    filterWorkStatusExportRows(rowsWithUnresolvedSessionEvidence, "unresolved-session-evidence").map((row) => row.project),
+    ["ResearchFlowAI"],
   );
   assert.deepEqual(
     filterWorkStatusExportRows(result.rows, "session-supported").map((row) => row.project),
@@ -863,7 +878,15 @@ test("work status export text exposes project day evidence coverage", () => {
       result.rows,
       filterWorkStatusExportRows(result.rows, "needs-session-evidence"),
     ),
-    "필터 세션 근거 필요 · 결과 1 / 2행 · 세션근거 필요 1행 · 제목정규화 필요 1행",
+    "필터 세션 근거 필요 · 결과 1 / 2행 · 세션근거 필요 1행 · 근거limit 1행 · 전체미해결 0행 · 제목정규화 필요 1행",
+  );
+  assert.equal(
+    workStatusExportFilterMetaText(
+      "unresolved-session-evidence",
+      rowsWithUnresolvedSessionEvidence,
+      filterWorkStatusExportRows(rowsWithUnresolvedSessionEvidence, "unresolved-session-evidence"),
+    ),
+    "필터 전체 인덱스 미해결 · 결과 1 / 2행 · 세션근거 필요 1행 · 근거limit 0행 · 전체미해결 1행 · 제목정규화 필요 1행",
   );
   assert.equal(workStatusExportMetaText("loading", result), "프로젝트/일별 상태 export 생성 중");
   assert.equal(workStatusExportMetaText("failed", null), "상태 export를 사용할 수 없음");

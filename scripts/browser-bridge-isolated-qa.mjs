@@ -353,6 +353,9 @@ async function runBrowserQa() {
   let workStatusExportFilterMeta = "";
   let workStatusExportFilteredRows = [];
   let workStatusExportFilteredRowDetail = "";
+  let workStatusExportBoundedFilterMeta = "";
+  let workStatusExportBoundedFilteredRows = [];
+  let workStatusExportBoundedFilteredRowDetail = "";
   let workStatusExportMarkdown = "";
   let workSummaryIndex = "";
   let workSessionIndexBackfill = null;
@@ -670,6 +673,26 @@ async function runBrowserQa() {
         && (detail.includes("제한된 근거만 사용 중") || detail.includes("전체 인덱스에서도 미해결"));
     }, undefined, { timeout: 30000 });
     workStatusExportFilteredRowDetail =
+      (await page.locator('[data-work-status-export-row-detail="true"]').first().textContent())?.trim() ?? "";
+    await page.locator('[data-work-status-export-filter="true"]').selectOption("bounded-session-limit");
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-status-export-filter-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-status-export-row="true"]'));
+      return meta.includes("근거 limit 영향")
+        && meta.includes("근거limit")
+        && rows.length > 0
+        && rows.every((row) => (row.textContent ?? "").includes("세션 근거 필요"));
+    }, undefined, { timeout: 30000 });
+    workStatusExportBoundedFilterMeta =
+      (await page.locator('[data-work-status-export-filter-meta="true"]').textContent())?.trim() ?? "";
+    workStatusExportBoundedFilteredRows =
+      await page.locator('[data-work-status-export-row="true"]').allTextContents();
+    await page.locator('[data-work-status-export-row-toggle="true"]').first().click();
+    await page.waitForFunction(() => {
+      const detail = document.querySelector('[data-work-status-export-row-detail="true"]')?.textContent ?? "";
+      return detail.includes("매칭된 세션 근거 없음") && detail.includes("제한된 근거만 사용 중");
+    }, undefined, { timeout: 30000 });
+    workStatusExportBoundedFilteredRowDetail =
       (await page.locator('[data-work-status-export-row-detail="true"]').first().textContent())?.trim() ?? "";
     workStatusExportMarkdown =
       (await page.locator('[data-work-status-export-markdown="true"]').textContent())?.trim() ?? "";
@@ -1074,6 +1097,9 @@ async function runBrowserQa() {
       workStatusExportFilterMeta,
       workStatusExportFilteredRows,
       workStatusExportFilteredRowDetail,
+      workStatusExportBoundedFilterMeta,
+      workStatusExportBoundedFilteredRows,
+      workStatusExportBoundedFilteredRowDetail,
       workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,
       workManagementDurabilityWarning,

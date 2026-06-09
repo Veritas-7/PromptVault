@@ -45,6 +45,8 @@ export type WorkLogExtractionRunMode = "ai" | "local";
 export type WorkStatusExportRowFilter =
   | "all"
   | "needs-session-evidence"
+  | "bounded-session-limit"
+  | "unresolved-session-evidence"
   | "needs-title-normalization"
   | "active"
   | "session-supported"
@@ -177,6 +179,10 @@ export function filterWorkStatusExportRows(
   if (filter === "all") return rows;
   return rows.filter((row) => {
     if (filter === "needs-session-evidence") return row.needs_session_evidence;
+    if (filter === "bounded-session-limit") return row.session_evidence_audit === "bounded-session-limit";
+    if (filter === "unresolved-session-evidence") {
+      return row.session_evidence_audit === "unresolved-after-full-index";
+    }
     if (filter === "needs-title-normalization") return row.needs_title_normalization;
     return row.operational_status === filter;
   });
@@ -186,6 +192,8 @@ export function workStatusExportRowFilterLabel(filter: WorkStatusExportRowFilter
   const labels: Record<WorkStatusExportRowFilter, string> = {
     all: "전체",
     "needs-session-evidence": "세션 근거 필요",
+    "bounded-session-limit": "근거 limit 영향",
+    "unresolved-session-evidence": "전체 인덱스 미해결",
     "needs-title-normalization": "제목 정규화 필요",
     active: "현재 진행",
     "session-supported": "세션 근거 있음",
@@ -200,11 +208,17 @@ export function workStatusExportFilterMetaText(
   filteredRows: ProjectWorkStatusExportRow[],
 ): string {
   const needsSessionEvidenceCount = rows.filter((row) => row.needs_session_evidence).length;
+  const boundedSessionLimitCount = rows.filter((row) => row.session_evidence_audit === "bounded-session-limit").length;
+  const unresolvedSessionEvidenceCount = rows.filter(
+    (row) => row.session_evidence_audit === "unresolved-after-full-index",
+  ).length;
   const needsTitleNormalizationCount = rows.filter((row) => row.needs_title_normalization).length;
   return [
     `필터 ${workStatusExportRowFilterLabel(filter)}`,
     `결과 ${filteredRows.length.toLocaleString()} / ${rows.length.toLocaleString()}행`,
     `세션근거 필요 ${needsSessionEvidenceCount.toLocaleString()}행`,
+    `근거limit ${boundedSessionLimitCount.toLocaleString()}행`,
+    `전체미해결 ${unresolvedSessionEvidenceCount.toLocaleString()}행`,
     `제목정규화 필요 ${needsTitleNormalizationCount.toLocaleString()}행`,
   ].join(" · ");
 }

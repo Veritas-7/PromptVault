@@ -373,6 +373,8 @@ const WORK_STATUS_EXPORT_DISPLAY_LIMIT = 6;
 const WORK_STATUS_EXPORT_ROW_FILTER_OPTIONS: WorkStatusExportRowFilter[] = [
   "all",
   "needs-session-evidence",
+  "bounded-session-limit",
+  "unresolved-session-evidence",
   "needs-title-normalization",
   "active",
   "session-supported",

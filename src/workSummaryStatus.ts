@@ -197,6 +197,42 @@ export function workStatusExportRowStatusText(row: ProjectWorkStatusExportRow): 
   ].join(" · ");
 }
 
+export function workStatusExportRowAuditToggleText(
+  row: ProjectWorkStatusExportRow,
+  expanded: boolean,
+): string {
+  return `${row.project} ${row.date} 상태 export 근거 ${expanded ? "접기" : "펼치기"}`;
+}
+
+export function workStatusExportRowSourceFilesText(row: ProjectWorkStatusExportRow): string {
+  const visibleFiles = row.source_files.slice(0, 4);
+  const hiddenFileCount = Math.max(0, row.source_files.length - visibleFiles.length);
+  const suffix = hiddenFileCount ? ` 외 ${hiddenFileCount.toLocaleString()}개` : "";
+  return `진행로그 ${row.source_file_count.toLocaleString()}개 · ${visibleFiles.join(", ")}${suffix}`;
+}
+
+export function workStatusExportRowSourceStatusesText(row: ProjectWorkStatusExportRow): string {
+  if (!row.source_statuses.length) return "진행 상태값 없음";
+  return `진행 상태 · ${frequencyItemsInlineText(row.source_statuses)}`;
+}
+
+export function workStatusExportRowSessionSourcesText(row: ProjectWorkStatusExportRow): string {
+  if (row.session_evidence_count <= 0 || !row.session_sources.length) {
+    return "매칭된 세션 근거 없음";
+  }
+  return [
+    `세션 소스 · ${frequencyItemsInlineText(row.session_sources)}`,
+    `고유 ${row.unique_session_evidence_count.toLocaleString()}건`,
+  ].join(" · ");
+}
+
+function frequencyItemsInlineText(items: { text: string; count: number }[]): string {
+  return items
+    .slice(0, 4)
+    .map((item) => `${item.text} ${item.count.toLocaleString()}건`)
+    .join(", ");
+}
+
 function workSummarySessionEvidenceModeLabel(mode: string): string {
   if (mode === "metadata-first-raw-fallback") {
     return "근거 메타데이터 우선/raw fallback";

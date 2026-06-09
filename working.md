@@ -1,12 +1,106 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 18:14 KST
+Updated: 2026-06-09 18:26 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 app-visible project/day status export
+## Current Slice - 2026-06-09 status export row audit drill-down
+
+Current Goal:
+
+- Let the operator audit a project/day status row from the app without jumping
+  straight to the raw Markdown export.
+- Expose the exact source-log list, parsed status distribution, session source
+  distribution, latest source path, and sample evidence behind each visible
+  status export row.
+
+Context:
+
+- The app-visible status export already answers the broad management question:
+  progress logs are parsed across projects/days and joined to a bounded real
+  session index.
+- The next missing UX was per-row auditability. A row could say
+  `session-supported` or `progress-log-only`, but the operator had to inspect
+  the full Markdown export to see why.
+- No backend/API expansion was needed because each
+  `ProjectWorkStatusExportRow` already carries `source_files`,
+  `source_statuses`, `session_sources`, `latest_source_path`, and
+  `sample_evidence`.
+
+Progress:
+
+- Added an expand/collapse control to each visible status export row.
+- The expanded detail shows:
+  - progress-log file names such as `working.md` / `workingd.md`;
+  - parsed source status counts;
+  - matched session source counts or an explicit "no matching session evidence"
+    state;
+  - latest source path;
+  - sample evidence text.
+- Status export expansion resets whenever a new export result is loaded, so
+  stale row details are not left open after refresh.
+- Extended browser bridge QA to click the first status export row toggle and
+  assert that row detail text includes progress-log and session-source evidence.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - added row audit toggle/source-file/source-status/session-source helper
+    text.
+- `src/App.tsx`:
+  - added expanded row state, row keys, status export row toggle buttons, and
+    detail rendering.
+- `src/App.css`:
+  - added compact row heading, stable icon button sizing, and full-row detail
+    styling.
+- `tests/workSummaryStatus.test.ts`:
+  - added helper assertions for expanded audit text.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added click assertion and JSON output for `workStatusExportRowDetail`.
+- `working.md`:
+  - recorded this auditability slice and fresh verification evidence.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts --test-name-pattern "work status export"`:
+  PASS.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Browser bridge evidence:
+  - status export meta: `표시 12행 · 31개 프로젝트 · 25일 · 작업 8,919개 ·
+    진행로그 832개 · 세션 근거 73,367건 · 고유 200건 · 표시 제한`;
+  - row detail opened and showed `진행로그 1개 · working.md`, parsed status
+    counts, `세션 소스 · Codex session metadata 314건 · 고유 1건`, latest
+    source path, and sample evidence text.
+- `npm run check`: PASS, including UI tests (`468`), production build, Rust lib
+  tests (`192`), CLI tests (`31`), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- The drill-down surfaces row evidence already present in the export; it does
+  not yet deep-link to exact source line ranges or individual session IDs.
+- Full all-history session indexing is still incomplete. The latest QA still
+  used a bounded `session_limit=200`, with long backfill remaining available
+  through the confirmed flow.
+
+Research:
+
+- No external research was needed. This reused the existing row payload and
+  browser bridge QA surface.
+
+Next Steps:
+
+- Add source-line or session-record drill-down when a specific row needs deeper
+  forensic audit beyond the compact row evidence.
+- Continue confirmed long session-index backfills to reduce
+  `progress-log-only` rows.
+- Use the existing normalization review queue to approve AI/local cleanup for
+  generic or rough project/day titles.
+
+## Completed Slice - 2026-06-09 app-visible project/day status export
 
 Current Goal:
 

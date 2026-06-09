@@ -254,6 +254,7 @@ import type {
   ProjectWorkLogReviewQueueResult,
   PromptRecord,
   ProjectWorkSessionIndexResult,
+  ProjectWorkStatusExportRow,
   ProjectWorkStatusExportResult,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
@@ -315,6 +316,10 @@ import {
   workStatusExportFailureText,
   workStatusExportIndexStatusText,
   workStatusExportMetaText,
+  workStatusExportRowAuditToggleText,
+  workStatusExportRowSessionSourcesText,
+  workStatusExportRowSourceFilesText,
+  workStatusExportRowSourceStatusesText,
   workStatusExportRowStatusText,
   workSummarySnapshotsActionLabel,
   workSummarySnapshotsFailureText,
@@ -566,6 +571,10 @@ function formatBytes(bytes: number): string {
   return unit === 0 ? `${bytes} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
 }
 
+function workStatusExportRowKey(row: ProjectWorkStatusExportRow): string {
+  return `${row.date}::${row.project}`;
+}
+
 function App() {
   const browserQaMode = isBrowserQaMode();
   const [scanState, setScanState] = useState<ScanState>("idle");
@@ -667,6 +676,9 @@ function App() {
   const [workManagementOverviewSort, setWorkManagementOverviewSort] =
     useState<WorkManagementOverviewSort>("date_desc");
   const [expandedWorkSummarySnapshotIds, setExpandedWorkSummarySnapshotIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [expandedWorkStatusExportRowKeys, setExpandedWorkStatusExportRowKeys] = useState<Set<string>>(
     () => new Set(),
   );
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -1591,6 +1603,18 @@ function App() {
     });
   }
 
+  function toggleWorkStatusExportRowDetails(rowKey: string) {
+    setExpandedWorkStatusExportRowKeys((current) => {
+      const next = new Set(current);
+      if (next.has(rowKey)) {
+        next.delete(rowKey);
+      } else {
+        next.add(rowKey);
+      }
+      return next;
+    });
+  }
+
   async function refreshWorkLogCoverage() {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
@@ -1860,6 +1884,7 @@ function App() {
         refresh_session_index: refreshSessionIndex,
       });
       setWorkStatusExportResult(next);
+      setExpandedWorkStatusExportRowKeys(new Set());
       setWorkStatusExportState("ready");
     } catch (err) {
       const message = displayErrorText(err);
@@ -1898,6 +1923,7 @@ function App() {
         session_limit: sessionLimit,
       });
       setWorkStatusExportResult(nextStatusExport);
+      setExpandedWorkStatusExportRowKeys(new Set());
       setWorkStatusExportState("ready");
 
       const nextSummary = await loadProjectWorkSummary({
@@ -3743,21 +3769,44 @@ function App() {
         {workStatusExportResult ? (
           <div className="work-summary-content work-status-export-content" data-work-status-export="true">
             <div className="work-summary-list compact">
-              {visibleWorkStatusExportRows.map((row) => (
-                <article
-                  className={`work-summary-row work-status-export-row status-${row.operational_status}`}
-                  data-work-status-export-row="true"
-                  key={`${row.date}-${row.project}`}
-                >
-                  <div>
-                    <strong>{row.project}</strong>
-                    <span>{row.date}</span>
-                  </div>
-                  <p>{(row.top_titles[0] ?? row.sample_evidence) || "제목 없는 프로젝트/일별 상태"}</p>
-                  <span>{workStatusExportRowStatusText(row)}</span>
-                  <span>{pathDisplayText(row.latest_source_path)}</span>
-                </article>
-              ))}
+              {visibleWorkStatusExportRows.map((row) => {
+                const rowKey = workStatusExportRowKey(row);
+                const detailsExpanded = expandedWorkStatusExportRowKeys.has(rowKey);
+                return (
+                  <article
+                    className={`work-summary-row work-status-export-row status-${row.operational_status}`}
+                    data-work-status-export-row="true"
+                    key={rowKey}
+                  >
+                    <div className="work-status-export-row-heading">
+                      <strong>{row.project}</strong>
+                      <span>{row.date}</span>
+                      <button
+                        aria-expanded={detailsExpanded}
+                        aria-label={workStatusExportRowAuditToggleText(row, detailsExpanded)}
+                        className="inline-action work-status-export-detail-toggle"
+                        data-work-status-export-row-toggle="true"
+                        onClick={() => toggleWorkStatusExportRowDetails(rowKey)}
+                        type="button"
+                      >
+                        {detailsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    </div>
+                    <p>{(row.top_titles[0] ?? row.sample_evidence) || "제목 없는 프로젝트/일별 상태"}</p>
+                    <span>{workStatusExportRowStatusText(row)}</span>
+                    <span>{pathDisplayText(row.latest_source_path)}</span>
+                    {detailsExpanded ? (
+                      <div className="work-status-export-row-detail" data-work-status-export-row-detail="true">
+                        <span>{workStatusExportRowSourceFilesText(row)}</span>
+                        <span>{workStatusExportRowSourceStatusesText(row)}</span>
+                        <span>{workStatusExportRowSessionSourcesText(row)}</span>
+                        <span>최근 근거 파일 · {pathDisplayText(row.latest_source_path)}</span>
+                        <p>{row.sample_evidence || "샘플 근거 없음"}</p>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
               {hiddenWorkStatusExportRowCount ? (
                 <div className="work-summary-overflow" data-work-status-export-overflow="true">
                   그 외 상태 row {hiddenWorkStatusExportRowCount.toLocaleString()}개

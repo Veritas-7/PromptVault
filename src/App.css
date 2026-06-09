@@ -345,6 +345,35 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.work-status-export-row-heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.work-status-export-detail-toggle {
+  min-height: 26px;
+  padding: 0 7px;
+}
+
+.work-status-export-row-detail {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  grid-column: 1 / -1;
+  padding: 9px 10px;
+}
+
+.work-status-export-row-detail p {
+  color: #2f3d34;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
 .work-log-proposal-approval {
   align-items: center;
   color: #3f5748;

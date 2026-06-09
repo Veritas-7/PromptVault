@@ -54,6 +54,10 @@ import {
   workStatusExportFailureText,
   workStatusExportIndexStatusText,
   workStatusExportMetaText,
+  workStatusExportRowAuditToggleText,
+  workStatusExportRowSessionSourcesText,
+  workStatusExportRowSourceFilesText,
+  workStatusExportRowSourceStatusesText,
   workStatusExportRowStatusText,
   workSummarySnapshotsActionLabel,
   workSummarySnapshotsFailureText,
@@ -731,6 +735,24 @@ test("work status export text exposes project day evidence coverage", () => {
   assert.equal(
     workStatusExportRowStatusText(result.rows[0]),
     "진행로그만 있음 · 작업 2개 · 파일 1개 · 세션 0건 · 고유 0건 · 세션 근거 필요 · 제목 정규화 필요",
+  );
+  assert.equal(
+    workStatusExportRowAuditToggleText(result.rows[0], false),
+    "PromptVault 2026-06-09 상태 export 근거 펼치기",
+  );
+  assert.equal(
+    workStatusExportRowAuditToggleText(result.rows[0], true),
+    "PromptVault 2026-06-09 상태 export 근거 접기",
+  );
+  assert.equal(
+    workStatusExportRowSourceFilesText(result.rows[1]),
+    "진행로그 3개 · working.md, workingd.md, WORKLOG.md",
+  );
+  assert.equal(workStatusExportRowSourceStatusesText(result.rows[0]), "진행 상태 · done 2건");
+  assert.equal(workStatusExportRowSessionSourcesText(result.rows[0]), "매칭된 세션 근거 없음");
+  assert.equal(
+    workStatusExportRowSessionSourcesText(result.rows[1]),
+    "세션 소스 · Codex local sessions 9건 · 고유 3건",
   );
   assert.equal(workStatusExportMetaText("loading", result), "프로젝트/일별 상태 export 생성 중");
   assert.equal(workStatusExportMetaText("failed", null), "상태 export를 사용할 수 없음");

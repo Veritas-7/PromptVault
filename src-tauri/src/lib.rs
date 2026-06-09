@@ -28,6 +28,8 @@ const PROJECT_PROGRESS_MAX_DEPTH: usize = 4;
 const PROJECT_PROGRESS_HEAD_CHARS: usize = 24_000;
 const PROJECT_PROGRESS_TAIL_CHARS: usize = 8_000;
 const DEFAULT_PROJECT_WORK_SESSION_LIMIT: usize = 200;
+const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
+const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
 const PROJECT_WORK_SESSION_SOURCE_IDS: &[&str] = &[
     "codex",
     "codex-cx",
@@ -2580,6 +2582,79 @@ fn matching_source_file_candidates(
     matching_source_file_candidates_with_cancel(root, kind, None, None)
 }
 
+fn recent_codex_session_file_candidates(
+    root: &Path,
+    kind: SourceKind,
+    limit: usize,
+) -> Option<Vec<SourceFileCandidate>> {
+    if limit == 0 || !matches!(kind, SourceKind::CodexJsonl) || !root.is_dir() {
+        return None;
+    }
+
+    let mut day_dirs = Vec::new();
+    for (year, year_path) in numeric_child_dirs(root) {
+        for (month, month_path) in numeric_child_dirs(&year_path) {
+            for (day, day_path) in numeric_child_dirs(&month_path) {
+                day_dirs.push((year, month, day, day_path));
+            }
+        }
+    }
+    if day_dirs.is_empty() {
+        return None;
+    }
+    day_dirs.sort_by(|left, right| {
+        (right.0, right.1, right.2)
+            .cmp(&(left.0, left.1, left.2))
+            .then_with(|| right.3.cmp(&left.3))
+    });
+
+    let mut candidates = Vec::new();
+    for (_, _, _, day_path) in day_dirs {
+        let Some(entries) = fs::read_dir(day_path).ok() else {
+            continue;
+        };
+        let mut day_candidates = entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| source_file_matches(path, kind))
+            .map(|path| file_candidate(&path))
+            .collect::<Vec<_>>();
+        day_candidates.sort_by(|left, right| {
+            right
+                .modified_ms
+                .cmp(&left.modified_ms)
+                .then_with(|| right.path.cmp(&left.path))
+        });
+        candidates.extend(day_candidates);
+        if candidates.len() >= limit {
+            candidates.truncate(limit);
+            break;
+        }
+    }
+
+    if candidates.is_empty() {
+        None
+    } else {
+        Some(candidates)
+    }
+}
+
+fn numeric_child_dirs(root: &Path) -> Vec<(u32, PathBuf)> {
+    let Some(entries) = fs::read_dir(root).ok() else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            if !entry.file_type().ok()?.is_dir() {
+                return None;
+            }
+            let value = entry.file_name().to_str()?.parse::<u32>().ok()?;
+            Some((value, entry.path()))
+        })
+        .collect()
+}
+
 fn matching_source_file_candidates_with_cancel(
     root: &Path,
     kind: SourceKind,
@@ -4795,24 +4870,64 @@ fn project_work_session_prompts(
     limit: usize,
     warnings: &mut Vec<String>,
 ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
-    let source_ids = source_specs()
-        .into_iter()
+    project_work_session_prompts_from_sources(limit, source_specs(), warnings)
+}
+
+fn project_work_session_prompts_from_sources(
+    limit: usize,
+    sources: Vec<SourceSpec>,
+    warnings: &mut Vec<String>,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut prompts = project_work_codex_metadata_prompts_from_sources(limit, &sources, warnings)?;
+    normalize_project_work_session_prompts(&mut prompts, limit);
+    let remaining = limit.saturating_sub(prompts.len());
+    if remaining == 0 {
+        return Ok(prompts);
+    }
+
+    let source_ids = sources
+        .iter()
         .filter(|source| PROJECT_WORK_SESSION_SOURCE_IDS.contains(&source.id))
         .map(|source| source.id.to_string())
         .collect::<Vec<_>>();
     if source_ids.is_empty() {
-        return Ok(Vec::new());
+        return Ok(prompts);
     }
 
-    let scan = run_scan(project_work_session_scan_options(limit, source_ids))?;
+    let scan = run_scan(project_work_session_scan_options(remaining, source_ids))?;
     warnings.extend(
         scan.warnings
             .into_iter()
             .map(|warning| format!("Session evidence: {warning}")),
     );
-    let mut prompts = scan.prompts;
-    prompts.extend(project_work_codex_metadata_prompts(limit, warnings)?);
+    prompts.extend(scan.prompts);
+    normalize_project_work_session_prompts(&mut prompts, limit);
     Ok(prompts)
+}
+
+fn normalize_project_work_session_prompts(prompts: &mut Vec<PromptRecord>, limit: usize) {
+    prompts.sort_by(|left, right| {
+        let left_date = prompt_date(left.timestamp.as_deref());
+        let right_date = prompt_date(right.timestamp.as_deref());
+        right_date
+            .cmp(&left_date)
+            .then_with(|| {
+                right
+                    .timestamp
+                    .as_deref()
+                    .unwrap_or("")
+                    .cmp(left.timestamp.as_deref().unwrap_or(""))
+            })
+            .then_with(|| left.source.cmp(&right.source))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    let mut seen = HashSet::new();
+    prompts.retain(|prompt| seen.insert((prompt.source.clone(), prompt.hash.clone())));
+    prompts.truncate(limit);
 }
 
 fn project_work_session_scan_options(limit: usize, source_ids: Vec<String>) -> ScanOptions {
@@ -4864,24 +4979,38 @@ fn project_work_session_evidence(
     })
 }
 
-fn project_work_codex_metadata_prompts(
+fn project_work_codex_metadata_prompts_from_sources(
     limit: usize,
+    sources: &[SourceSpec],
     warnings: &mut Vec<String>,
 ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
     let mut prompts = Vec::new();
-    for source in source_specs()
-        .into_iter()
+    let candidate_budget = limit.saturating_mul(3);
+    for source in sources
+        .iter()
         .filter(|source| PROJECT_WORK_CODEX_METADATA_SOURCE_IDS.contains(&source.id))
     {
+        if prompts.len() >= limit {
+            break;
+        }
         if !source.root.exists() {
             continue;
         }
-        let candidates = matching_source_file_candidates(&source.root, source.kind);
-        for candidate in candidates.into_iter().take(limit) {
+        let candidates =
+            recent_codex_session_file_candidates(&source.root, source.kind, candidate_budget)
+                .map(|candidates| candidates.into_iter().map(Ok).collect::<Vec<_>>())
+                .unwrap_or_else(|| matching_source_file_candidates(&source.root, source.kind));
+        for candidate in candidates.into_iter().take(candidate_budget) {
+            if prompts.len() >= limit {
+                break;
+            }
             match candidate {
                 Ok(candidate) => {
                     let modified_at = timestamp_millis_to_rfc3339(candidate.modified_ms);
-                    match parse_codex_project_metadata_prompt(&source, &candidate.path, modified_at)
+                    match parse_codex_project_metadata_prompt(source, &candidate.path, modified_at)
                     {
                         Ok(Some(prompt)) => prompts.push(prompt),
                         Ok(None) => {}
@@ -5052,8 +5181,9 @@ fn parse_codex_project_metadata_prompt(
         .unwrap_or_else(|| "unknown-session".to_string());
     let mut cwd = None;
     let mut last_timestamp = None;
+    let mut lines_after_project_path = None;
 
-    for line in jsonl_lines(path)? {
+    for (line_index, line) in jsonl_lines(path)?.into_iter().enumerate() {
         let value: Value = serde_json::from_str(&line)?;
         if let Some(timestamp) = extract_timestamp(&value) {
             last_timestamp = Some(timestamp);
@@ -5094,6 +5224,18 @@ fn parse_codex_project_metadata_prompt(
                 project_paths.extend(project_paths_from_text(&text));
             }
             _ => {}
+        }
+        if modified_timestamp.is_some() {
+            if !project_paths.is_empty() {
+                let count = lines_after_project_path.get_or_insert(0);
+                *count += 1;
+                if *count >= PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH {
+                    break;
+                }
+            }
+            if line_index + 1 >= PROJECT_WORK_METADATA_MAX_SCAN_LINES {
+                break;
+            }
         }
     }
 
@@ -9841,6 +9983,33 @@ mod tests {
     }
 
     #[test]
+    fn recent_codex_session_file_candidates_prefers_newest_date_dirs() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-recent-codex-candidates-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let old_dir = root.join("2026/06/08");
+        let new_dir = root.join("2026/06/09");
+        std::fs::create_dir_all(&old_dir).expect("create old date dir");
+        std::fs::create_dir_all(&new_dir).expect("create new date dir");
+        let old_file = old_dir.join("rollout-old.jsonl");
+        let new_file = new_dir.join("rollout-new.jsonl");
+        std::fs::write(&old_file, "\n").expect("write old candidate");
+        std::fs::write(&new_file, "\n").expect("write new candidate");
+
+        let candidates = recent_codex_session_file_candidates(&root, SourceKind::CodexJsonl, 1)
+            .expect("recent candidates");
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].path, new_file);
+
+        std::fs::remove_dir_all(root).expect("remove recent candidates fixture");
+    }
+
+    #[test]
     fn gemini_tmp_chat_matching_finds_only_chat_json_files() {
         let root = std::env::temp_dir().join(format!(
             "promptvault-gemini-tmp-match-{}",
@@ -10301,6 +10470,96 @@ Progress:
             .contains("/Users/wj/Ai/System/10_Projects/ExampleProject"));
 
         std::fs::remove_dir_all(root).expect("remove metadata root");
+    }
+
+    #[test]
+    fn codex_session_metadata_prompt_stops_after_project_path_budget() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-codex-metadata-budget-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create metadata budget root");
+        let path = root.join("rollout-budget.jsonl");
+        let mut lines = vec![
+            r#"{"timestamp":"2026-06-08T12:00:00Z","type":"session_meta","payload":{"id":"session-budget","cwd":"/Users/wj"}}"#.to_string(),
+            r#"{"timestamp":"2026-06-08T12:01:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject."}]}}"#.to_string(),
+        ];
+        for idx in 0..(PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH + 5) {
+            lines.push(format!(
+                r#"{{"timestamp":"2026-06-08T12:{:02}:00Z","type":"turn_context","payload":{{"cwd":"/Users/wj"}}}}"#,
+                idx + 2
+            ));
+        }
+        lines.push("{broken json".to_string());
+        std::fs::write(&path, lines.join("\n")).expect("write metadata budget jsonl");
+        let source = SourceSpec {
+            id: "codex",
+            label: "Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let record = parse_codex_project_metadata_prompt(
+            &source,
+            &path,
+            Some("2026-06-08T15:30:00Z".to_string()),
+        )
+        .expect("parse metadata before broken tail")
+        .expect("metadata prompt");
+
+        assert_eq!(record.session_id, "session-budget");
+        assert!(record
+            .text
+            .contains("/Users/wj/Ai/System/10_Projects/ExampleProject"));
+
+        std::fs::remove_dir_all(root).expect("remove metadata budget root");
+    }
+
+    #[test]
+    fn project_work_session_prompts_use_metadata_before_raw_scan_budget() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-session-metadata-budget-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create metadata budget root");
+        for idx in 1..=2 {
+            std::fs::write(
+                root.join(format!("rollout-{idx}.jsonl")),
+                format!(
+                    r#"{{"timestamp":"2026-06-09T0{idx}:00:00Z","type":"session_meta","payload":{{"id":"session-{idx}","cwd":"/Users/wj"}}}}
+{{"timestamp":"2026-06-09T0{idx}:01:00Z","type":"response_item","payload":{{"type":"message","role":"user","content":[{{"type":"input_text","text":"Work on /Users/wj/Ai/System/10_Projects/ExampleProject{idx} and also run raw prompt parsing."}}]}}}}
+"#,
+                ),
+            )
+            .expect("write metadata budget session");
+        }
+        let source = SourceSpec {
+            id: "codex",
+            label: "Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+        let mut warnings = Vec::new();
+
+        let prompts = project_work_session_prompts_from_sources(2, vec![source], &mut warnings)
+            .expect("collect session prompts");
+
+        assert_eq!(prompts.len(), 2);
+        assert!(warnings.is_empty());
+        assert!(prompts
+            .iter()
+            .all(|prompt| prompt.source == "Codex session metadata"));
+        assert!(prompts
+            .iter()
+            .all(|prompt| !prompt.text.contains("raw prompt parsing")));
+
+        std::fs::remove_dir_all(root).expect("remove metadata budget root");
     }
 
     #[test]

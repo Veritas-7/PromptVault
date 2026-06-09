@@ -1,10 +1,98 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 09:13 KST
+Updated: 2026-06-09 09:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 fast 200-session evidence indexing
+
+Current Goal:
+
+- Make first-time `session_limit=200` work-management evidence indexing fast
+  enough for the checked-in browser QA and real interactive use.
+- Preserve bounded, sanitized project evidence rather than falling back to raw
+  full-session prompt scans unless metadata cannot fill the requested budget.
+
+Context:
+
+- The previous slice made the UI session scan depth explicit, but a fresh
+  isolated DB run at `--session-limit 200` still took `real 154.14s`.
+- Metadata-first collection reduced the raw fallback but still took
+  `real 95.37s` when one missing metadata prompt triggered raw scan fallback,
+  and `real 93.22s` after filling all 200 metadata prompts because each large
+  recent rollout JSONL was still read to EOF.
+- The faster route is to use Codex session metadata as project evidence first:
+  it keeps source paths/date/session identity while avoiding raw prompt-body
+  ingestion for routine project/day management.
+
+Progress:
+
+- `project_work_session_prompts` now collects Codex session metadata first,
+  normalizes/dedupes/truncates to the requested limit, and only runs raw
+  multi-source scanning for the remaining budget.
+- Codex metadata candidate discovery now uses the known
+  `sessions/YYYY/MM/DD/*.jsonl` layout to inspect newest date directories first
+  instead of walking and sorting the entire session tree.
+- Metadata parsing now stops after it has found project path evidence and a
+  small line budget, with an absolute scan cap for metadata mode.
+- Fresh isolated DB `work-report --session-limit 200 --json` now completes in
+  `real 15.93s`, returns `session_scan_prompt_count=200`,
+  `session_evidence_unique_count=200`, `session_evidence_index_count=200`,
+  and `warnings=[]`.
+- The checked-in browser QA now passes with
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - adds metadata-first session evidence collection;
+  - adds bounded recent Codex session candidate discovery;
+  - adds metadata parser line budgets;
+  - adds regression coverage for newest date-dir selection, metadata parser
+    early stop, and metadata-before-raw session budget behavior.
+
+Tests:
+
+- RED/performance baseline:
+  - Fresh DB `work-report --session-limit 200 --json`: `real 154.14s`.
+  - Intermediate metadata-first run with raw fallback: `real 95.37s` and a
+    `Session evidence: 설정된 제한 1개...` warning.
+  - Intermediate no-warning run before metadata parser early-stop:
+    `real 93.22s`.
+- GREEN:
+  - `cargo test --manifest-path src-tauri/Cargo.toml recent_codex_session_file_candidates_prefers_newest_date_dirs`: PASS.
+  - `cargo test --manifest-path src-tauri/Cargo.toml codex_session_metadata_prompt_stops_after_project_path_budget`: PASS.
+  - `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_prompts_use_metadata_before_raw_scan_budget`: PASS.
+  - Fresh DB `work-report --session-limit 200 --json`: PASS,
+    `real 15.93s`, `project_count=31`, `date_count=25`,
+    `total_items=8476`, `files_seen=780`, `session_scan_prompt_count=200`,
+    `session_evidence_unique_count=200`,
+    `session_evidence_index_count=200`, `warnings=[]`.
+  - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS
+    with `workSessionLimit=200`, `snapshots=1`, management meta
+    `31개 프로젝트`, and coverage meta
+    `780개 로그 · parsed 779개 · unparsed 0개 · 31개 프로젝트 · 작업 8,477개`.
+  - `npm run check`: PASS. UI `430` tests, Vite build, Rust lib `164`
+    tests, CLI `23` tests, doc-tests, and clippy all passed.
+
+Issues:
+
+- The optimized path prioritizes Codex metadata evidence for speed and safety.
+  Raw multi-source session scan still exists as fallback when metadata cannot
+  fill the requested budget, but it can remain expensive on very large trees.
+- Current corpus still has no unparsed progress-log candidate, so live
+  OpenAI/GLM normalization of a new candidate remains unexercised in this
+  snapshot.
+
+Next Steps:
+
+- Run final diff/secret checks, commit, and push this backend performance
+  slice.
+- Next improvement slice: add an explicit UI/report note that fast session
+  evidence is metadata-first and raw scan is fallback, so operators understand
+  the evidence source mix.
 
 ## Current Slice - 2026-06-09 work-summary session-depth control
 

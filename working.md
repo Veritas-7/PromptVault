@@ -1,10 +1,93 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 22:31 KST
+Updated: 2026-06-09 22:46 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-09 session evidence row audit state
+
+Current Goal:
+
+- Make each project/day status row say whether missing session evidence is only
+  a bounded-view artifact or still unresolved after the full stored session
+  index is used.
+- Keep the signal machine-readable in the CLI/bridge JSON and visible in the
+  expanded status row detail.
+
+Context:
+
+- The previous slice proved that the default bounded status export uses only
+  `200 / 10,867` stored session evidence rows, while full-index export uses all
+  `10,867` rows.
+- Default bounded export can therefore overstate `needs_session_evidence`.
+  Full-index export still leaves `36 / 91` rows unresolved.
+- Before this slice, rows only exposed `needs_session_evidence: true`; the UI
+  did not say whether the row needed a deeper index run or AI/manual evidence
+  review after a full index.
+
+Progress:
+
+- Added a row-level `session_evidence_audit` state to status export rows.
+- States:
+  - `matched`: session evidence is attached.
+  - `bounded-session-limit`: no row evidence yet, but the export used only a
+    subset of stored session evidence.
+  - `unresolved-after-full-index`: no row evidence after all stored session
+    evidence was used.
+  - `no-session-index`: no usable session index was available.
+- Updated UI detail text so missing-evidence rows show a readable reason such
+  as `매칭된 세션 근거 없음 · 제한된 근거만 사용 중` or
+  `매칭된 세션 근거 없음 · 전체 인덱스에서도 미해결`.
+- Rebuilt the CLI and verified live distributions:
+  - default bounded status export: `bounded-session-limit 63`, `matched 28`;
+  - full indexed status export: `matched 55`,
+    `unresolved-after-full-index 36`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added `session_evidence_audit` to `ProjectWorkStatusExportRow`;
+  - added row audit state calculation and Rust tests.
+- `src/types.ts` and `src/promptVaultApi.ts`:
+  - added strict bridge type/validator support for the audit enum.
+- `src/workSummaryStatus.ts`:
+  - added human-readable audit text in row session source details.
+- `tests/workSummaryStatus.test.ts` and `tests/promptVaultApi.test.ts`:
+  - updated fixtures/assertions for the new row contract.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added direct UI assertion that the filtered missing-evidence row detail
+    exposes the audit reason.
+
+Tests:
+
+- `cargo test --manifest-path src-tauri/Cargo.toml project_work_status --lib`:
+  PASS, `3` tests passed.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts tests/promptVaultApi.test.ts`:
+  PASS, `215` tests passed.
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `npm run check`: PASS.
+  - UI tests: `474` passed.
+  - Production build: passed.
+  - Rust lib tests: `200` passed.
+  - CLI tests: `31` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  Evidence from isolated browser result:
+  - status export index showed `근거 limit 적용`;
+  - filtered missing-evidence detail showed
+    `매칭된 세션 근거 없음 · 제한된 근거만 사용 중`;
+  - management overview, freeze, extraction, normalization, review queue, apply,
+    and saved-item routes completed.
+
+Outcome:
+
+- Missing session evidence is now split into “run/use more session evidence” vs
+  “full index still unresolved” at row level. This makes the next AI-assisted
+  evidence review slice safer because it can target only
+  `unresolved-after-full-index` rows instead of guessing from a bounded view.
 
 ## Completed Slice - 2026-06-09 session timestamps and bounded evidence visibility
 

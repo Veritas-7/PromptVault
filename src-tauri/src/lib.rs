@@ -816,6 +816,7 @@ pub struct ProjectWorkStatusExportRow {
     pub unique_session_evidence_count: usize,
     pub session_sources: Vec<FrequencyItem>,
     pub needs_session_evidence: bool,
+    pub session_evidence_audit: String,
     pub needs_title_normalization: bool,
 }
 
@@ -1835,7 +1836,8 @@ pub fn run_project_work_status_export(
         ));
     }
 
-    let all_rows = build_project_work_status_export_rows(&report);
+    let all_rows =
+        build_project_work_status_export_rows(&report, session_evidence_index_total_count);
     let (rows, total_row_count, row_offset, rows_truncated, next_row_offset) =
         paginate_project_work_status_export_rows(all_rows, limit, options.offset.unwrap_or(0));
     let markdown = render_project_work_status_export_markdown(
@@ -7343,11 +7345,15 @@ fn project_paths_from_text(text: &str) -> Vec<String> {
 }
 
 fn latest_jsonl_tail_timestamp(lines: &[String]) -> Option<String> {
-    lines.iter().rev().take(PROJECT_WORK_METADATA_TAIL_TIMESTAMP_LINES).find_map(|line| {
-        serde_json::from_str::<Value>(line)
-            .ok()
-            .and_then(|value| extract_timestamp(&value))
-    })
+    lines
+        .iter()
+        .rev()
+        .take(PROJECT_WORK_METADATA_TAIL_TIMESTAMP_LINES)
+        .find_map(|line| {
+            serde_json::from_str::<Value>(line)
+                .ok()
+                .and_then(|value| extract_timestamp(&value))
+        })
 }
 
 fn normalize_project_path_match(text: &str) -> Option<String> {
@@ -7487,6 +7493,7 @@ fn refresh_project_work_session_summary(report: &mut ProjectWorkReport) {
 
 fn build_project_work_status_export_rows(
     report: &ProjectWorkReport,
+    session_evidence_index_total_count: usize,
 ) -> Vec<ProjectWorkStatusExportRow> {
     let mut grouped = BTreeMap::<(String, String), Vec<&ProjectWorkItem>>::new();
     for item in &report.items {
@@ -7567,6 +7574,12 @@ fn build_project_work_status_export_rows(
                 unique_session_evidence_count: unique_session_keys.len(),
                 session_sources: rank_counts(session_source_counts, usize::MAX),
                 needs_session_evidence: session_evidence_count == 0,
+                session_evidence_audit: project_work_status_session_evidence_audit(
+                    session_evidence_count,
+                    report.session_evidence_index_used || report.session_evidence_index_updated,
+                    report.session_evidence_index_count,
+                    session_evidence_index_total_count,
+                ),
                 needs_title_normalization,
             }
         })
@@ -7579,6 +7592,24 @@ fn build_project_work_status_export_rows(
             .then_with(|| left.project.cmp(&right.project))
     });
     rows
+}
+
+fn project_work_status_session_evidence_audit(
+    session_evidence_count: usize,
+    session_index_available: bool,
+    session_evidence_index_count: usize,
+    session_evidence_index_total_count: usize,
+) -> String {
+    if session_evidence_count > 0 {
+        return "matched".to_string();
+    }
+    if !session_index_available || session_evidence_index_count == 0 {
+        return "no-session-index".to_string();
+    }
+    if session_evidence_index_total_count > session_evidence_index_count {
+        return "bounded-session-limit".to_string();
+    }
+    "unresolved-after-full-index".to_string()
 }
 
 fn paginate_project_work_status_export_rows(
@@ -15965,7 +15996,7 @@ Status: completed as a source-only/report-only hardening slice.
         refresh_project_work_item_summary(&mut report);
         refresh_project_work_session_summary(&mut report);
 
-        let rows = build_project_work_status_export_rows(&report);
+        let rows = build_project_work_status_export_rows(&report, 1);
         let markdown =
             render_project_work_status_export_markdown(&report, &rows, &[], 0, rows.len(), 1);
 
@@ -15977,6 +16008,7 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(rows[0].session_evidence_count, 2);
         assert_eq!(rows[0].unique_session_evidence_count, 1);
         assert!(!rows[0].needs_session_evidence);
+        assert_eq!(rows[0].session_evidence_audit, "matched");
         assert!(rows[0]
             .top_titles
             .iter()
@@ -16011,6 +16043,7 @@ Status: completed as a source-only/report-only hardening slice.
                 count: 1,
             }],
             needs_session_evidence: false,
+            session_evidence_audit: "matched".to_string(),
             needs_title_normalization: false,
         };
 
@@ -16032,6 +16065,26 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(!truncated);
         assert_eq!(next, None);
         assert!(page.is_empty());
+    }
+
+    #[test]
+    fn project_work_status_session_evidence_audit_explains_gap_source() {
+        assert_eq!(
+            project_work_status_session_evidence_audit(2, true, 200, 500),
+            "matched"
+        );
+        assert_eq!(
+            project_work_status_session_evidence_audit(0, true, 200, 500),
+            "bounded-session-limit"
+        );
+        assert_eq!(
+            project_work_status_session_evidence_audit(0, true, 500, 500),
+            "unresolved-after-full-index"
+        );
+        assert_eq!(
+            project_work_status_session_evidence_audit(0, false, 0, 0),
+            "no-session-index"
+        );
     }
 
     #[test]

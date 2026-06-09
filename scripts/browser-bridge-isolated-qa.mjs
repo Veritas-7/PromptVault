@@ -352,6 +352,7 @@ async function runBrowserQa() {
   let workStatusExportRowDetail = "";
   let workStatusExportFilterMeta = "";
   let workStatusExportFilteredRows = [];
+  let workStatusExportFilteredRowDetail = "";
   let workStatusExportMarkdown = "";
   let workSummaryIndex = "";
   let workSessionIndexBackfill = null;
@@ -662,6 +663,14 @@ async function runBrowserQa() {
     workStatusExportFilterMeta =
       (await page.locator('[data-work-status-export-filter-meta="true"]').textContent())?.trim() ?? "";
     workStatusExportFilteredRows = await page.locator('[data-work-status-export-row="true"]').allTextContents();
+    await page.locator('[data-work-status-export-row-toggle="true"]').first().click();
+    await page.waitForFunction(() => {
+      const detail = document.querySelector('[data-work-status-export-row-detail="true"]')?.textContent ?? "";
+      return detail.includes("매칭된 세션 근거 없음")
+        && (detail.includes("제한된 근거만 사용 중") || detail.includes("전체 인덱스에서도 미해결"));
+    }, undefined, { timeout: 30000 });
+    workStatusExportFilteredRowDetail =
+      (await page.locator('[data-work-status-export-row-detail="true"]').first().textContent())?.trim() ?? "";
     workStatusExportMarkdown =
       (await page.locator('[data-work-status-export-markdown="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-save-work-summary-snapshot="true"]').click();
@@ -1064,6 +1073,7 @@ async function runBrowserQa() {
       workStatusExportRowDetail,
       workStatusExportFilterMeta,
       workStatusExportFilteredRows,
+      workStatusExportFilteredRowDetail,
       workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,
       workManagementDurabilityWarning,

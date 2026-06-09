@@ -374,6 +374,7 @@ function projectWorkStatusExportPayload(overrides = {}) {
       unique_session_evidence_count: 2,
       session_sources: [{ text: "Codex local sessions", count: 7 }],
       needs_session_evidence: false,
+      session_evidence_audit: "matched",
       needs_title_normalization: false,
     }],
     warnings: [],

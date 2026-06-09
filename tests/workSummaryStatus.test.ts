@@ -197,6 +197,7 @@ function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = 
       unique_session_evidence_count: 0,
       session_sources: [],
       needs_session_evidence: true,
+      session_evidence_audit: "bounded-session-limit",
       needs_title_normalization: true,
     }, {
       date: "2026-06-08",
@@ -214,6 +215,7 @@ function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = 
       unique_session_evidence_count: 3,
       session_sources: [{ text: "Codex local sessions", count: 9 }],
       needs_session_evidence: false,
+      session_evidence_audit: "matched",
       needs_title_normalization: false,
     }],
     warnings: [],
@@ -831,10 +833,20 @@ test("work status export text exposes project day evidence coverage", () => {
     "진행로그 3개 · working.md, workingd.md, WORKLOG.md",
   );
   assert.equal(workStatusExportRowSourceStatusesText(result.rows[0]), "진행 상태 · done 2건");
-  assert.equal(workStatusExportRowSessionSourcesText(result.rows[0]), "매칭된 세션 근거 없음");
+  assert.equal(
+    workStatusExportRowSessionSourcesText(result.rows[0]),
+    "매칭된 세션 근거 없음 · 제한된 근거만 사용 중",
+  );
   assert.equal(
     workStatusExportRowSessionSourcesText(result.rows[1]),
     "세션 소스 · Codex local sessions 9건 · 고유 3건",
+  );
+  assert.equal(
+    workStatusExportRowSessionSourcesText({
+      ...result.rows[0],
+      session_evidence_audit: "unresolved-after-full-index",
+    }),
+    "매칭된 세션 근거 없음 · 전체 인덱스에서도 미해결",
   );
   assert.equal(workStatusExportRowFilterLabel("needs-session-evidence"), "세션 근거 필요");
   assert.deepEqual(

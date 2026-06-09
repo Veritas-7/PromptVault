@@ -317,12 +317,22 @@ export function workStatusExportRowSourceStatusesText(row: ProjectWorkStatusExpo
 
 export function workStatusExportRowSessionSourcesText(row: ProjectWorkStatusExportRow): string {
   if (row.session_evidence_count <= 0 || !row.session_sources.length) {
-    return "매칭된 세션 근거 없음";
+    return `매칭된 세션 근거 없음 · ${workStatusExportRowSessionEvidenceAuditText(row)}`;
   }
   return [
     `세션 소스 · ${frequencyItemsInlineText(row.session_sources)}`,
     `고유 ${row.unique_session_evidence_count.toLocaleString()}건`,
   ].join(" · ");
+}
+
+export function workStatusExportRowSessionEvidenceAuditText(row: ProjectWorkStatusExportRow): string {
+  const labels: Record<string, string> = {
+    matched: "세션 근거 매칭 완료",
+    "bounded-session-limit": "제한된 근거만 사용 중",
+    "unresolved-after-full-index": "전체 인덱스에서도 미해결",
+    "no-session-index": "세션 인덱스 없음",
+  };
+  return labels[row.session_evidence_audit] ?? `알 수 없는 세션 감사 상태 ${row.session_evidence_audit}`;
 }
 
 function frequencyItemsInlineText(items: { text: string; count: number }[]): string {

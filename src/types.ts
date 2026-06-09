@@ -227,6 +227,7 @@ export interface ProjectWorkStatusExportRow {
   unique_session_evidence_count: number;
   session_sources: FrequencyItem[];
   needs_session_evidence: boolean;
+  session_evidence_audit: string;
   needs_title_normalization: boolean;
 }
 

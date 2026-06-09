@@ -21,6 +21,10 @@ cargo run --bin promptvault-cli -- work-session-evidence-proposals [--limit N>0]
 cargo run --bin promptvault-cli -- work-session-evidence-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]
 cargo run --bin promptvault-cli -- work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]
 cargo run --bin promptvault-cli -- work-ai-provider-status [--json]
+cargo run --bin promptvault-cli -- work-log-normalization-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]
+cargo run --bin promptvault-cli -- work-log-normalization-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]
+cargo run --bin promptvault-cli -- work-log-normalization-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-proposals] [--refresh-session-index] [--ai] [--json]
+cargo run --bin promptvault-cli -- work-log-normalization-apply [--limit N>0] [--database PATH] [--json]
 cargo run --bin promptvault-cli -- work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]
 cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PATH]
 ```
@@ -63,10 +67,13 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `work-session-evidence-review-queue --sync-candidates` persists the current unresolved full-index candidates into SQLite for operator review. It keeps review-complete/rejected rows stable across later syncs, marks disappeared pending rows stale only when the full candidate set was available, recomputes source artifact roles for existing queue rows, and never writes or invents session evidence.
 - `work-session-evidence-review-queue-update --state approved|rejected` records one operator decision with an audit reason. The `approved` API state means review-complete, not durable session-evidence creation. Stale rows cannot be approved until candidates are synced again, but they can be rejected for cleanup.
 - `work-ai-provider-status` reports OpenAI, GLM, and Codex SDK work-management provider readiness without exposing secret values. Codex SDK is surfaced as an explicit unavailable route until it is wired as a real provider.
+- `work-log-normalization-candidates --needs-title-normalization` focuses project/day rows whose parsed titles are generic or rough, such as time-only `working.md` headings that block reliable session-evidence review.
+- `work-log-normalization-proposals --needs-title-normalization` asks OpenAI/GLM/local fallback only for those rough-title rows. It is read-only; use the normalization review queue and apply command for durable writes.
+- `work-log-normalization-review-queue --sync-proposals` intentionally syncs the full proposal set, not a title-only subset, so existing pending queue rows are not marked stale by a filtered partial sync.
 - `work-session-index` upserts sanitized Codex/Codex CX session records so progress-log work items can be linked to real session evidence without storing raw session bodies.
 - `work-session-index --batch-files` is capped at `1..500`; short backfills up to `--max-batches 2` need no confirmation.
 - `work-session-index --confirm-long-run` is required when the effective max batch count is above `2`, including `--until-complete` when no smaller `--max-batches` is supplied.
-- `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, `/api/import-events`, `/api/work-summary`, `/api/work-status-export`, `/api/work-session-evidence-candidates`, `/api/work-session-evidence-proposals`, `/api/work-session-evidence-review-queue`, `/api/work-session-evidence-review-queue/update`, `/api/work-ai-provider-status`, `/api/work-summary-snapshots`, and `/api/work-session-index` on the requested local address.
+- `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, `/api/import-events`, `/api/work-summary`, `/api/work-status-export`, `/api/work-session-evidence-candidates`, `/api/work-session-evidence-proposals`, `/api/work-session-evidence-review-queue`, `/api/work-session-evidence-review-queue/update`, `/api/work-ai-provider-status`, `/api/work-log-normalization-candidates`, `/api/work-log-normalization-proposals`, `/api/work-log-normalization-review-queue`, `/api/work-log-normalization-review-queue/update`, `/api/work-log-normalization-apply`, `/api/work-summary-snapshots`, and `/api/work-session-index` on the requested local address.
 - `serve --database PATH` makes browser-bridge persistence use the supplied SQLite file by default, so full click QA can exercise save/import flows without touching the permanent vault. Per-request `database_path` payload fields still take precedence.
 
 ## Agent-Native Design Notes
@@ -110,6 +117,8 @@ cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 -
 cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
 cargo run --bin promptvault-cli -- work-session-evidence-review-queue --sync-candidates --limit 20 --json
 cargo run --bin promptvault-cli -- work-ai-provider-status --json
+cargo run --bin promptvault-cli -- work-log-normalization-candidates --limit 20 --needs-title-normalization --json
+cargo run --bin promptvault-cli -- work-log-normalization-proposals --limit 20 --needs-title-normalization --ai --json
 cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 2 --json
 cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 10 --confirm-long-run --json
 set +e; cargo run --bin promptvault-cli -- work-session-index --batch-files 1 --max-batches 3 --json; test "$?" -ne 0; set -e

@@ -215,6 +215,7 @@ export interface ProjectWorkLogNormalizationCandidatesOptions {
   limit?: number;
   session_limit?: number;
   refresh_session_index?: boolean;
+  needs_title_normalization?: boolean;
 }
 
 export interface ProjectWorkLogNormalizationProposalsOptions {
@@ -222,6 +223,7 @@ export interface ProjectWorkLogNormalizationProposalsOptions {
   limit?: number;
   session_limit?: number;
   refresh_session_index?: boolean;
+  needs_title_normalization?: boolean;
   ai?: boolean;
 }
 

@@ -466,6 +466,7 @@ pub struct ProjectWorkLogNormalizationCandidatesOptions {
     pub limit: Option<usize>,
     pub session_limit: Option<usize>,
     pub refresh_session_index: Option<bool>,
+    pub needs_title_normalization: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -474,6 +475,7 @@ pub struct ProjectWorkLogNormalizationProposalsOptions {
     pub limit: Option<usize>,
     pub session_limit: Option<usize>,
     pub refresh_session_index: Option<bool>,
+    pub needs_title_normalization: Option<bool>,
     pub ai: Option<bool>,
 }
 
@@ -2999,8 +3001,12 @@ pub fn run_project_work_log_normalization_candidates(
     })?;
     let conn = open_promptvault_database(&database_path)?;
     let saved_counts = read_project_work_log_saved_ai_counts(&conn)?;
-    let mut result =
-        build_project_work_log_normalization_candidates_from_report(&report, &saved_counts, limit);
+    let mut result = build_project_work_log_normalization_candidates_from_report(
+        &report,
+        &saved_counts,
+        limit,
+        options.needs_title_normalization,
+    );
     result.generated_at = generated_at;
     result.database_path = database_path.display().to_string();
     Ok(result)
@@ -3036,6 +3042,7 @@ pub async fn run_project_work_log_normalization_proposals(
             limit: Some(limit),
             session_limit: options.session_limit,
             refresh_session_index: options.refresh_session_index,
+            needs_title_normalization: options.needs_title_normalization,
         },
     )?;
     let mut result = project_work_log_normalization_proposals_with_env(
@@ -3085,6 +3092,7 @@ pub async fn run_project_work_log_normalization_review_queue(
                 limit: Some(MAX_PROJECT_WORK_LOG_NORMALIZATION_PROPOSAL_LIMIT),
                 session_limit: options.session_limit,
                 refresh_session_index: options.refresh_session_index,
+                needs_title_normalization: None,
                 ai: options.ai,
             },
         )
@@ -12310,6 +12318,7 @@ fn build_project_work_log_normalization_candidates_from_report(
     report: &ProjectWorkReport,
     saved_counts: &HashMap<(String, String), ProjectWorkLogSavedAiCounts>,
     limit: usize,
+    needs_title_normalization: Option<bool>,
 ) -> ProjectWorkLogNormalizationCandidatesResult {
     let mut groups: BTreeMap<(String, String), ProjectWorkLogNormalizationGroup> = BTreeMap::new();
     for item in &report.items {
@@ -12353,6 +12362,12 @@ fn build_project_work_log_normalization_candidates_from_report(
                 .unwrap_or_default();
             project_work_log_normalization_candidate_from_group(group, counts)
         })
+        .filter(|candidate| {
+            needs_title_normalization.is_none_or(|needs_title| {
+                project_work_log_normalization_candidate_needs_title_normalization(candidate)
+                    == needs_title
+            })
+        })
         .collect::<Vec<_>>();
     candidates.sort_by(|a, b| {
         let a_no_ai = a.ai_saved_extraction_count == 0;
@@ -12387,6 +12402,15 @@ fn build_project_work_log_normalization_candidates_from_report(
         candidates,
         warnings: report.warnings.clone(),
     }
+}
+
+fn project_work_log_normalization_candidate_needs_title_normalization(
+    candidate: &ProjectWorkLogNormalizationCandidate,
+) -> bool {
+    candidate
+        .reason
+        .split(',')
+        .any(|reason| reason == "generic_title")
 }
 
 fn project_work_log_normalization_candidate_from_group(
@@ -19226,8 +19250,12 @@ Status: completed as a source-only/report-only hardening slice.
             },
         );
 
-        let result =
-            build_project_work_log_normalization_candidates_from_report(&report, &saved_counts, 10);
+        let result = build_project_work_log_normalization_candidates_from_report(
+            &report,
+            &saved_counts,
+            10,
+            None,
+        );
 
         assert_eq!(result.total_candidate_count, 1);
         assert_eq!(result.returned_candidate_count, 1);
@@ -19319,6 +19347,7 @@ Status: completed as a source-only/report-only hardening slice.
             &report,
             &HashMap::new(),
             3,
+            None,
         );
 
         assert_eq!(result.total_candidate_count, 3);
@@ -19335,6 +19364,76 @@ Status: completed as a source-only/report-only hardening slice.
         );
         assert!(result.candidates[1].reason.contains("generic_title"));
         assert_eq!(result.candidates[2].project, "LargeCleanProject");
+    }
+
+    #[test]
+    fn normalization_candidates_filter_title_normalization_rows() {
+        let report = ProjectWorkReport {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            total_items: 2,
+            project_count: 2,
+            date_count: 1,
+            files_seen: 2,
+            items_by_date: Vec::new(),
+            items_by_project: Vec::new(),
+            session_scan_prompt_count: 0,
+            session_scan_sources: Vec::new(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_unique_count: 0,
+            session_evidence_unique_sources: Vec::new(),
+            session_evidence_index_used: false,
+            session_evidence_index_updated: false,
+            session_evidence_index_count: 0,
+            session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
+            items: vec![
+                ProjectWorkItem {
+                    date: "2026-06-09".to_string(),
+                    project: "RoughTitleProject".to_string(),
+                    title: "13:41 KST".to_string(),
+                    status: "logged".to_string(),
+                    source_path: "/tmp/RoughTitleProject/working.md".to_string(),
+                    source_file: "working.md".to_string(),
+                    evidence: "13:41 KST\nUpdated work status.".to_string(),
+                    session_evidence_count: 0,
+                    session_sources: Vec::new(),
+                    session_evidence_keys: Vec::new(),
+                },
+                ProjectWorkItem {
+                    date: "2026-06-09".to_string(),
+                    project: "ClearTitleProject".to_string(),
+                    title: "Implemented clear work-management slice".to_string(),
+                    status: "current".to_string(),
+                    source_path: "/tmp/ClearTitleProject/working.md".to_string(),
+                    source_file: "working.md".to_string(),
+                    evidence: "Implemented clear work-management slice.".to_string(),
+                    session_evidence_count: 0,
+                    session_sources: Vec::new(),
+                    session_evidence_keys: Vec::new(),
+                },
+            ],
+            warnings: Vec::new(),
+        };
+
+        let title_only = build_project_work_log_normalization_candidates_from_report(
+            &report,
+            &HashMap::new(),
+            10,
+            Some(true),
+        );
+        let non_title = build_project_work_log_normalization_candidates_from_report(
+            &report,
+            &HashMap::new(),
+            10,
+            Some(false),
+        );
+
+        assert_eq!(title_only.total_candidate_count, 1);
+        assert_eq!(title_only.candidates[0].project, "RoughTitleProject");
+        assert!(title_only.candidates[0].reason.contains("generic_title"));
+        assert_eq!(non_title.total_candidate_count, 1);
+        assert_eq!(non_title.candidates[0].project, "ClearTitleProject");
+        assert!(!non_title.candidates[0].reason.contains("generic_title"));
     }
 
     #[test]

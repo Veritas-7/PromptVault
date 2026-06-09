@@ -2106,12 +2106,13 @@ test("browser bridge work log normalization candidates posts options and validat
 
   const result = await loadProjectWorkLogNormalizationCandidates({
     limit: 5,
+    needs_title_normalization: true,
     session_limit: 200,
   });
 
   assert.match(requestPath, /\/api\/work-log-normalization-candidates$/);
   assert.deepEqual(JSON.parse(requestBody), {
-    options: { limit: 5, session_limit: 200 },
+    options: { limit: 5, needs_title_normalization: true, session_limit: 200 },
   });
   assert.equal(result.returned_candidate_count, 1);
   assert.equal(result.candidates[0].project, "CareVault");
@@ -2161,12 +2162,13 @@ test("browser bridge work log normalization proposals posts options and validate
   const result = await loadProjectWorkLogNormalizationProposals({
     ai: true,
     limit: 5,
+    needs_title_normalization: true,
     session_limit: 200,
   });
 
   assert.match(requestPath, /\/api\/work-log-normalization-proposals$/);
   assert.deepEqual(JSON.parse(requestBody), {
-    options: { ai: true, limit: 5, session_limit: 200 },
+    options: { ai: true, limit: 5, needs_title_normalization: true, session_limit: 200 },
   });
   assert.equal(result.provider, "local-normalization-rules");
   assert.equal(result.returned_proposal_count, 1);

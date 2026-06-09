@@ -654,6 +654,7 @@ function App() {
   const [workLogExtractionState, setWorkLogExtractionState] = useState<WorkLogExtractionState>("idle");
   const [workLogExtractionRunMode, setWorkLogExtractionRunMode] =
     useState<WorkLogExtractionRunMode>("ai");
+  const [workLogNormalizationNeedsTitleOnly, setWorkLogNormalizationNeedsTitleOnly] = useState(false);
   const [workSessionEvidenceNeedsTitleOnly, setWorkSessionEvidenceNeedsTitleOnly] = useState(false);
   const [workLogExtractionItemsState, setWorkLogExtractionItemsState] =
     useState<WorkLogExtractionItemsState>("idle");
@@ -1602,6 +1603,7 @@ function App() {
     try {
       const next = await loadProjectWorkLogNormalizationCandidates({
         limit: WORK_LOG_NORMALIZATION_CANDIDATE_MANAGEMENT_LIMIT,
+        needs_title_normalization: workLogNormalizationNeedsTitleOnly ? true : undefined,
         session_limit: sessionLimit,
       });
       setWorkLogNormalizationCandidatesResult(next);
@@ -1632,6 +1634,7 @@ function App() {
       const next = await loadProjectWorkLogNormalizationProposals({
         ai: true,
         limit: WORK_LOG_NORMALIZATION_PROPOSAL_MANAGEMENT_LIMIT,
+        needs_title_normalization: workLogNormalizationNeedsTitleOnly ? true : undefined,
         session_limit: sessionLimit,
       });
       setWorkLogNormalizationProposalsResult(next);
@@ -3139,6 +3142,23 @@ function App() {
                   ? "정규화 제안 새로고침"
                   : "정규화 제안"}
             </button>
+            <label className="local-recommendation-toggle">
+              <input
+                aria-label="작업 로그 정규화 제목 정규화 후보만 사용"
+                checked={workLogNormalizationNeedsTitleOnly}
+                data-work-log-normalization-needs-title-only="true"
+                disabled={isTopLevelActionLocked}
+                onChange={(event) => {
+                  setWorkLogNormalizationNeedsTitleOnly(event.currentTarget.checked);
+                  setWorkLogNormalizationCandidatesResult(null);
+                  setWorkLogNormalizationCandidatesState("idle");
+                  setWorkLogNormalizationProposalsResult(null);
+                  setWorkLogNormalizationProposalsState("idle");
+                }}
+                type="checkbox"
+              />
+              <span>정규화 제목만</span>
+            </label>
             <button
               aria-label={workLogNormalizationReviewQueueActionLabel(
                 workLogNormalizationReviewQueueState,
@@ -4763,6 +4783,7 @@ function App() {
                     {proposal.saved_extraction_count.toLocaleString()}개 · AI 저장{" "}
                     {proposal.ai_saved_extraction_count.toLocaleString()}개
                   </span>
+                  <span>{proposal.reason}</span>
                   {proposal.risk_flags.length ? (
                     <span>위험표시 {proposal.risk_flags.map(riskFlagLabel).join(", ")}</span>
                   ) : null}

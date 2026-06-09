@@ -1292,6 +1292,11 @@ async function runBrowserQa() {
     workAiProviderStatusRows =
       await page.locator('[data-work-ai-provider-status="true"] article').allTextContents();
     step("work log normalization candidates");
+    await page.locator('[data-work-log-normalization-needs-title-only="true"]').check();
+    await page.waitForFunction(() => {
+      const input = document.querySelector('[data-work-log-normalization-needs-title-only="true"]');
+      return Boolean(input && input.checked);
+    }, undefined, { timeout: 30000 });
     await waitForEnabled(page, '[data-load-work-log-normalization-candidates="true"]');
     await page.locator('[data-load-work-log-normalization-candidates="true"]').click();
     await page.waitForFunction(() => {
@@ -1299,7 +1304,10 @@ async function runBrowserQa() {
       const rows = Array.from(document.querySelectorAll('[data-work-log-normalization-candidates="true"] article'));
       return text.includes("정규화 후보")
         && text.includes("원본 작업")
-        && rows.some((row) => (row.textContent ?? "").includes("AI 저장"));
+        && rows.some((row) => {
+          const rowText = row.textContent ?? "";
+          return rowText.includes("AI 저장") && rowText.includes("generic_title");
+        });
     }, undefined, { timeout: 120000 });
     workLogNormalizationCandidatesMeta =
       (await page.locator('[data-work-log-normalization-candidates-meta="true"]').textContent())?.trim() ?? "";
@@ -1316,7 +1324,10 @@ async function runBrowserQa() {
       return text.includes("정규화 제안")
         && text.includes("review")
         && providerAttemptVisible
-        && rows.some((row) => (row.textContent ?? "").includes("AI 검토 필요"));
+        && rows.some((row) => {
+          const rowText = row.textContent ?? "";
+          return rowText.includes("AI 검토 필요") && rowText.includes("generic_title");
+        });
     }, undefined, { timeout: 120000 });
     workLogNormalizationProposalsMeta =
       (await page.locator('[data-work-log-normalization-proposals-meta="true"]').textContent())?.trim() ?? "";

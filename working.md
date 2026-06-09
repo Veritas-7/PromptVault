@@ -1,10 +1,92 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 02:18 KST
+Updated: 2026-06-10 02:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 title-only work-log normalization candidates
+
+Current Goal:
+
+- Let operators focus work-log normalization on project/day rows whose parsed
+  titles are generic, rough, or time-only before trying session-evidence review.
+- Keep normalization review queue sync full-set, so filtered title-only runs do
+  not mark unrelated pending queue rows stale.
+
+Context:
+
+- The live work-management export already manages project/day rows from
+  project-local progress logs and sanitized Codex/Codex CX session evidence.
+- Full work-log normalization candidates currently include rough-title rows
+  marked by the `generic_title` reason.
+- Session-evidence review remains intentionally separate from durable
+  work-log normalization apply.
+
+Progress:
+
+- Added `needs_title_normalization` filtering to work-log normalization
+  candidates and proposals.
+- Added CLI `--needs-title-normalization` for
+  `work-log-normalization-candidates` and
+  `work-log-normalization-proposals`.
+- Added a browser UI checkbox labeled `정규화 제목만` for the work-log
+  normalization candidate/proposal controls.
+- Kept `work-log-normalization-review-queue --sync-proposals` on the full
+  proposal set instead of the filtered title-only subset.
+- Added proposal-row reason display so the UI visibly proves title-only rows are
+  driven by `generic_title`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added title-only work-log normalization option,
+  filter helper, proposal pass-through, full-set queue sync guard, and Rust
+  coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`: added CLI flag parsing and help text.
+- `src/promptVaultApi.ts`, `tests/promptVaultApi.test.ts`: exposed and verified
+  the bridge option.
+- `src/App.tsx`: added the UI checkbox and proposal reason display.
+- `scripts/browser-bridge-isolated-qa.mjs`: clicked the checkbox and verified
+  candidate/proposal rows include `generic_title`.
+- `README.md`, `docs/CLI.md`: documented the title-only workflow and queue sync
+  boundary.
+
+Tests:
+
+- PASS: `cargo fmt --check`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work log normalization"`
+  - `193` matching tests passed.
+- PASS: `cargo test normalization_candidates_filter_title_normalization_rows`.
+- PASS: `cargo test help_text_documents_cli_validation_rules`.
+- PASS: `cargo run --quiet --bin promptvault-cli -- work-log-normalization-candidates --limit 10 --needs-title-normalization --json`
+  - Live DB returned `total_candidate_count: 32`, and returned rows all had
+    `generic_title`.
+- PASS: `cargo run --quiet --bin promptvault-cli -- work-log-normalization-proposals --limit 5 --needs-title-normalization --json`
+  - Live DB returned title-only local fallback proposals whose reasons all had
+    `generic_title`.
+- PASS: `cargo run --quiet --bin promptvault-cli -- work-log-normalization-proposals --limit 5 --needs-title-normalization --ai --json`
+  - GLM request failed in this runtime and local fallback was used; returned
+    proposals still stayed inside the `32` title-only candidates.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser QA ended with exit code `0`.
+  - Verified `workLogNormalizationCandidatesMeta` and
+    `workLogNormalizationProposalsMeta` expose title-only rows.
+  - `workLogNormalizationProposalsMeta` showed `정규화 제안 32개` and rendered
+    rows included `no_ai_normalization,no_session_evidence,generic_title`.
+- PASS: `npm run check`
+  - UI tests `489`, Rust lib tests `208`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+
+Remaining:
+
+- Title-only work-log normalization is now selectable, but applying durable
+  normalized rows still requires review-queue approval and apply.
+- Codex SDK remains an explicit unavailable work-management provider route; GLM
+  can be attempted but may fall back to local rules when the API request fails.
+- Durable session-evidence writes remain intentionally unavailable until a
+  source-traced, review-gated evidence model is designed.
 
 ## Completed Slice - 2026-06-10 title-normalization-only session evidence proposals
 

@@ -1342,6 +1342,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "work-log-normalization-candidates" => {
             let json = take_flag(&mut args, "--json");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
+            let needs_title_normalization = take_flag(&mut args, "--needs-title-normalization");
             let mut limit = None;
             let mut session_limit = None;
             let mut database_path = None;
@@ -1372,6 +1373,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     limit,
                     session_limit,
                     refresh_session_index: Some(refresh_session_index),
+                    needs_title_normalization: Some(needs_title_normalization)
+                        .filter(|value| *value),
                 },
             )?;
             if json {
@@ -1414,6 +1417,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let json = take_flag(&mut args, "--json");
             let ai = take_flag(&mut args, "--ai");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
+            let needs_title_normalization = take_flag(&mut args, "--needs-title-normalization");
             let mut limit = None;
             let mut session_limit = None;
             let mut database_path = None;
@@ -1444,6 +1448,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     limit,
                     session_limit,
                     refresh_session_index: Some(refresh_session_index),
+                    needs_title_normalization: Some(needs_title_normalization)
+                        .filter(|value| *value),
                     ai: Some(ai),
                 },
             )
@@ -2387,8 +2393,8 @@ fn help_text() -> String {
         "  work-log-freeze [--limit N>0] [--database PATH] [--json]\n",
         "  work-log-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n",
         "  work-log-runs [--limit N>0] [--database PATH] [--json]\n",
-        "  work-log-normalization-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
-        "  work-log-normalization-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--ai] [--json]\n",
+        "  work-log-normalization-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]\n",
+        "  work-log-normalization-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]\n",
         "  work-log-normalization-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-proposals] [--refresh-session-index] [--ai] [--json]\n",
         "  work-log-normalization-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n",
         "  work-log-normalization-apply [--limit N>0] [--database PATH] [--json]\n",
@@ -2417,8 +2423,8 @@ fn help_text() -> String {
         "  work-log-freeze saves live-only parsed project/date progress-log rows to SQLite without running AI extraction.\n",
         "  work-log-items lists saved accepted AI extraction rows by project and date without reading raw progress logs.\n",
         "  work-log-runs lists approved queue extraction attempt history with provider/runtime, candidate IDs, saved counts, warnings, and errors.\n",
-        "  work-log-normalization-candidates lists parsed project/date rows that still need AI semantic cleanup.\n",
-        "  work-log-normalization-proposals asks OpenAI/GLM to normalize parsed project/date rows and falls back to local review-only proposals.\n",
+        "  work-log-normalization-candidates lists parsed project/date rows that still need AI semantic cleanup; --needs-title-normalization focuses rough-title rows.\n",
+        "  work-log-normalization-proposals asks OpenAI/GLM to normalize parsed project/date rows and falls back to local review-only proposals; --needs-title-normalization focuses title cleanup before session-evidence review.\n",
         "  work-log-normalization-review-queue persists current normalization proposals for operator review and marks disappeared proposals stale.\n",
         "  work-log-normalization-review-queue-update marks one persisted normalization proposal approved or rejected without writing normalized project/day rows.\n",
         "  work-log-normalization-apply writes operator-approved normalization queue rows into an idempotent durable normalized project/day table.\n",
@@ -3821,10 +3827,10 @@ mod tests {
         ));
         assert!(help.contains("work-log-runs [--limit N>0] [--database PATH] [--json]"));
         assert!(
-            help.contains("work-log-normalization-candidates [--limit N>0] [--session-limit N>0]")
+            help.contains("work-log-normalization-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]")
         );
         assert!(
-            help.contains("work-log-normalization-proposals [--limit N>0] [--session-limit N>0]")
+            help.contains("work-log-normalization-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]")
         );
         assert!(help
             .contains("work-log-normalization-review-queue [--limit N>0] [--session-limit N>0]"));
@@ -3863,8 +3869,8 @@ mod tests {
         assert!(help.contains("work-log-freeze saves live-only parsed project/date"));
         assert!(help.contains("work-log-items lists saved accepted AI extraction rows"));
         assert!(help.contains("work-log-runs lists approved queue extraction attempt history"));
-        assert!(help.contains("work-log-normalization-candidates lists parsed project/date rows"));
-        assert!(help.contains("work-log-normalization-proposals asks OpenAI/GLM"));
+        assert!(help.contains("work-log-normalization-candidates lists parsed project/date rows that still need AI semantic cleanup; --needs-title-normalization focuses rough-title rows"));
+        assert!(help.contains("work-log-normalization-proposals asks OpenAI/GLM to normalize parsed project/date rows and falls back to local review-only proposals; --needs-title-normalization focuses title cleanup"));
         assert!(help.contains("work-log-normalization-review-queue persists current normalization"));
         assert!(help.contains("without writing normalized project/day rows"));
         assert!(help.contains("idempotent durable normalized project/day table"));

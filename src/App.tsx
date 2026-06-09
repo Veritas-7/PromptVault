@@ -208,6 +208,18 @@ import {
   workLogProposalDateSuggestions,
   type WorkLogPreviewFilters,
 } from "./workLogPreviewFilters";
+import {
+  activeWorkReviewQueueFilterCount,
+  emptyWorkReviewQueueFilters,
+  filterWorkLogNormalizationReviewQueueItems,
+  filterWorkSessionEvidenceReviewQueueItems,
+  workReviewQueueDateSuggestions,
+  workReviewQueueFilterMetaText,
+  workReviewQueueProjectSuggestions,
+  workReviewQueueReasonSuggestions,
+  type WorkReviewQueueFilters,
+  type WorkReviewQueueStateFilter,
+} from "./reviewQueueFilters";
 import { groupWorkLogExtractionItemsByProjectDate } from "./workLogExtractionItemGroups";
 import {
   activeWorkManagementOverviewFilterCount,
@@ -642,6 +654,17 @@ const WORK_MANAGEMENT_SORT_OPTIONS: Array<{
   { label: "작업 많은 순", value: "work_items_desc" },
 ];
 
+const WORK_REVIEW_QUEUE_STATE_FILTER_OPTIONS: Array<{
+  label: string;
+  value: WorkReviewQueueStateFilter;
+}> = [
+  { label: "전체 상태", value: "" },
+  { label: "검토 대기", value: "pending_review" },
+  { label: "stale", value: "stale" },
+  { label: "승인/완료", value: "approved" },
+  { label: "거절", value: "rejected" },
+];
+
 function waitForNextImportBatch(): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, CONTINUOUS_IMPORT_PAUSE_MS);
@@ -791,6 +814,10 @@ function App() {
   const [workLogPreviewFilters, setWorkLogPreviewFilters] = useState<WorkLogPreviewFilters>(() =>
     emptyWorkLogPreviewFilters(),
   );
+  const [workLogNormalizationReviewQueueFilters, setWorkLogNormalizationReviewQueueFilters] =
+    useState<WorkReviewQueueFilters>(() => emptyWorkReviewQueueFilters());
+  const [workSessionEvidenceReviewQueueFilters, setWorkSessionEvidenceReviewQueueFilters] =
+    useState<WorkReviewQueueFilters>(() => emptyWorkReviewQueueFilters());
   const [workManagementOverviewFilters, setWorkManagementOverviewFilters] =
     useState<WorkManagementOverviewFilters>(() => emptyWorkManagementOverviewFilters());
   const [workManagementOverviewSort, setWorkManagementOverviewSort] =
@@ -1229,6 +1256,48 @@ function App() {
   const workLogPreviewDateFilterSuggestions = workLogProposalDateSuggestions(
     workLogExtractionResult?.proposals ?? [],
   );
+  const workLogNormalizationReviewQueueFilterCount = activeWorkReviewQueueFilterCount(
+    workLogNormalizationReviewQueueFilters,
+  );
+  const filteredWorkLogNormalizationReviewQueueItems = filterWorkLogNormalizationReviewQueueItems(
+    workLogNormalizationReviewQueueResult?.items ?? [],
+    workLogNormalizationReviewQueueFilters,
+  );
+  const workLogNormalizationReviewQueueFilterMeta = workLogNormalizationReviewQueueResult
+    ? workReviewQueueFilterMetaText(
+        "정규화 큐",
+        filteredWorkLogNormalizationReviewQueueItems.length,
+        workLogNormalizationReviewQueueResult.items.length,
+        workLogNormalizationReviewQueueFilterCount,
+      )
+    : null;
+  const workLogNormalizationReviewQueueDateFilterSuggestions =
+    workReviewQueueDateSuggestions(workLogNormalizationReviewQueueResult?.items ?? []);
+  const workLogNormalizationReviewQueueProjectFilterSuggestions =
+    workReviewQueueProjectSuggestions(workLogNormalizationReviewQueueResult?.items ?? []);
+  const workLogNormalizationReviewQueueReasonFilterSuggestions =
+    workReviewQueueReasonSuggestions(workLogNormalizationReviewQueueResult?.items ?? []);
+  const workSessionEvidenceReviewQueueFilterCount = activeWorkReviewQueueFilterCount(
+    workSessionEvidenceReviewQueueFilters,
+  );
+  const filteredWorkSessionEvidenceReviewQueueItems = filterWorkSessionEvidenceReviewQueueItems(
+    workSessionEvidenceReviewQueueResult?.items ?? [],
+    workSessionEvidenceReviewQueueFilters,
+  );
+  const workSessionEvidenceReviewQueueFilterMeta = workSessionEvidenceReviewQueueResult
+    ? workReviewQueueFilterMetaText(
+        "세션근거 큐",
+        filteredWorkSessionEvidenceReviewQueueItems.length,
+        workSessionEvidenceReviewQueueResult.items.length,
+        workSessionEvidenceReviewQueueFilterCount,
+      )
+    : null;
+  const workSessionEvidenceReviewQueueDateFilterSuggestions =
+    workReviewQueueDateSuggestions(workSessionEvidenceReviewQueueResult?.items ?? []);
+  const workSessionEvidenceReviewQueueProjectFilterSuggestions =
+    workReviewQueueProjectSuggestions(workSessionEvidenceReviewQueueResult?.items ?? []);
+  const workSessionEvidenceReviewQueueReasonFilterSuggestions =
+    workReviewQueueReasonSuggestions(workSessionEvidenceReviewQueueResult?.items ?? []);
   const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
   const filteredWorkStatusExportRows = useMemo(() => {
     return filterWorkStatusExportRows(workStatusExportResult?.rows ?? [], workStatusExportRowFilter);
@@ -1308,20 +1377,20 @@ function App() {
       WORK_LOG_NORMALIZATION_PROPOSAL_DISPLAY_LIMIT,
     ) ?? [];
   const visibleWorkLogNormalizationReviewQueueItems =
-    workLogNormalizationReviewQueueResult?.items.slice(
+    filteredWorkLogNormalizationReviewQueueItems.slice(
       0,
       WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT,
-    ) ?? [];
+    );
   const visibleWorkSessionEvidenceProposals =
     workSessionEvidenceProposalsResult?.proposals.slice(
       0,
       WORK_SESSION_EVIDENCE_PROPOSAL_DISPLAY_LIMIT,
     ) ?? [];
   const visibleWorkSessionEvidenceReviewQueueItems =
-    workSessionEvidenceReviewQueueResult?.items.slice(
+    filteredWorkSessionEvidenceReviewQueueItems.slice(
       0,
       WORK_SESSION_EVIDENCE_REVIEW_QUEUE_DISPLAY_LIMIT,
-    ) ?? [];
+    );
   const visibleWorkLogNormalizedItems =
     (workLogNormalizationApplyResult?.items ?? workLogNormalizedItemsResult?.items ?? []).slice(
       0,
@@ -1349,7 +1418,7 @@ function App() {
   );
   const hiddenWorkLogNormalizationReviewQueueItemCount = Math.max(
     0,
-    (workLogNormalizationReviewQueueResult?.items.length ?? 0)
+    filteredWorkLogNormalizationReviewQueueItems.length
       - WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT,
   );
   const hiddenWorkSessionEvidenceProposalCount = Math.max(
@@ -1359,7 +1428,7 @@ function App() {
   );
   const hiddenWorkSessionEvidenceReviewQueueItemCount = Math.max(
     0,
-    (workSessionEvidenceReviewQueueResult?.items.length ?? 0)
+    filteredWorkSessionEvidenceReviewQueueItems.length
       - WORK_SESSION_EVIDENCE_REVIEW_QUEUE_DISPLAY_LIMIT,
   );
   const hiddenWorkLogNormalizedItemCount = Math.max(
@@ -4101,6 +4170,244 @@ function App() {
             <option key={project} value={project} />
           ))}
         </datalist>
+        <form
+          className="work-summary-filter-row work-review-queue-filter-row"
+          data-work-log-normalization-review-queue-filters="true"
+          onSubmit={(event) => {
+            event.preventDefault();
+          }}
+        >
+          <label>
+            <span>정규화 날짜</span>
+            <input
+              aria-label="정규화 검토 큐 날짜 필터"
+              data-work-log-normalization-review-queue-date-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-normalization-review-queue-date-options"
+              onChange={(event) =>
+                setWorkLogNormalizationReviewQueueFilters((current) => ({
+                  ...current,
+                  date: event.target.value,
+                }))}
+              placeholder="2026-06-09"
+              type="text"
+              value={workLogNormalizationReviewQueueFilters.date}
+            />
+          </label>
+          <label>
+            <span>프로젝트</span>
+            <input
+              aria-label="정규화 검토 큐 프로젝트 필터"
+              data-work-log-normalization-review-queue-project-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-normalization-review-queue-project-options"
+              onChange={(event) =>
+                setWorkLogNormalizationReviewQueueFilters((current) => ({
+                  ...current,
+                  project: event.target.value,
+                }))}
+              placeholder="PromptVault"
+              type="text"
+              value={workLogNormalizationReviewQueueFilters.project}
+            />
+          </label>
+          <label>
+            <span>상태</span>
+            <select
+              aria-label="정규화 검토 큐 상태 필터"
+              data-work-log-normalization-review-queue-state-filter="true"
+              disabled={isTopLevelActionLocked}
+              onChange={(event) =>
+                setWorkLogNormalizationReviewQueueFilters((current) => ({
+                  ...current,
+                  state: event.target.value as WorkReviewQueueStateFilter,
+                }))}
+              value={workLogNormalizationReviewQueueFilters.state}
+            >
+              {WORK_REVIEW_QUEUE_STATE_FILTER_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>사유</span>
+            <input
+              aria-label="정규화 검토 큐 사유 필터"
+              data-work-log-normalization-review-queue-reason-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-normalization-review-queue-reason-options"
+              onChange={(event) =>
+                setWorkLogNormalizationReviewQueueFilters((current) => ({
+                  ...current,
+                  reason: event.target.value,
+                }))}
+              placeholder="generic_title"
+              type="text"
+              value={workLogNormalizationReviewQueueFilters.reason}
+            />
+          </label>
+          <button
+            aria-label={
+              workLogNormalizationReviewQueueFilterCount
+                ? `정규화 검토 큐 필터 ${workLogNormalizationReviewQueueFilterCount.toLocaleString()}개 적용`
+                : "필터 없이 정규화 검토 큐 보기"
+            }
+            className="inline-action"
+            data-apply-work-log-normalization-review-queue-filters="true"
+            disabled={isTopLevelActionLocked}
+            type="submit"
+          >
+            <Search size={15} />
+            필터 적용
+          </button>
+          <button
+            aria-label="정규화 검토 큐 필터 초기화"
+            className="inline-action"
+            data-clear-work-log-normalization-review-queue-filters="true"
+            disabled={isTopLevelActionLocked || workLogNormalizationReviewQueueFilterCount === 0}
+            onClick={() => setWorkLogNormalizationReviewQueueFilters(emptyWorkReviewQueueFilters())}
+            type="button"
+          >
+            <XCircle size={15} />
+            초기화
+          </button>
+        </form>
+        <datalist id="work-log-normalization-review-queue-date-options">
+          {workLogNormalizationReviewQueueDateFilterSuggestions.map((date) => (
+            <option key={date} value={date} />
+          ))}
+        </datalist>
+        <datalist id="work-log-normalization-review-queue-project-options">
+          {workLogNormalizationReviewQueueProjectFilterSuggestions.map((project) => (
+            <option key={project} value={project} />
+          ))}
+        </datalist>
+        <datalist id="work-log-normalization-review-queue-reason-options">
+          {workLogNormalizationReviewQueueReasonFilterSuggestions.map((reason) => (
+            <option key={reason} value={reason} />
+          ))}
+        </datalist>
+        <form
+          className="work-summary-filter-row work-review-queue-filter-row"
+          data-work-session-evidence-review-queue-filters="true"
+          onSubmit={(event) => {
+            event.preventDefault();
+          }}
+        >
+          <label>
+            <span>세션 날짜</span>
+            <input
+              aria-label="세션 근거 검토 큐 날짜 필터"
+              data-work-session-evidence-review-queue-date-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-session-evidence-review-queue-date-options"
+              onChange={(event) =>
+                setWorkSessionEvidenceReviewQueueFilters((current) => ({
+                  ...current,
+                  date: event.target.value,
+                }))}
+              placeholder="2026-06-09"
+              type="text"
+              value={workSessionEvidenceReviewQueueFilters.date}
+            />
+          </label>
+          <label>
+            <span>프로젝트</span>
+            <input
+              aria-label="세션 근거 검토 큐 프로젝트 필터"
+              data-work-session-evidence-review-queue-project-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-session-evidence-review-queue-project-options"
+              onChange={(event) =>
+                setWorkSessionEvidenceReviewQueueFilters((current) => ({
+                  ...current,
+                  project: event.target.value,
+                }))}
+              placeholder="PromptVault"
+              type="text"
+              value={workSessionEvidenceReviewQueueFilters.project}
+            />
+          </label>
+          <label>
+            <span>상태</span>
+            <select
+              aria-label="세션 근거 검토 큐 상태 필터"
+              data-work-session-evidence-review-queue-state-filter="true"
+              disabled={isTopLevelActionLocked}
+              onChange={(event) =>
+                setWorkSessionEvidenceReviewQueueFilters((current) => ({
+                  ...current,
+                  state: event.target.value as WorkReviewQueueStateFilter,
+                }))}
+              value={workSessionEvidenceReviewQueueFilters.state}
+            >
+              {WORK_REVIEW_QUEUE_STATE_FILTER_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>사유</span>
+            <input
+              aria-label="세션 근거 검토 큐 사유 필터"
+              data-work-session-evidence-review-queue-reason-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-session-evidence-review-queue-reason-options"
+              onChange={(event) =>
+                setWorkSessionEvidenceReviewQueueFilters((current) => ({
+                  ...current,
+                  reason: event.target.value,
+                }))}
+              placeholder="full-index"
+              type="text"
+              value={workSessionEvidenceReviewQueueFilters.reason}
+            />
+          </label>
+          <button
+            aria-label={
+              workSessionEvidenceReviewQueueFilterCount
+                ? `세션 근거 검토 큐 필터 ${workSessionEvidenceReviewQueueFilterCount.toLocaleString()}개 적용`
+                : "필터 없이 세션 근거 검토 큐 보기"
+            }
+            className="inline-action"
+            data-apply-work-session-evidence-review-queue-filters="true"
+            disabled={isTopLevelActionLocked}
+            type="submit"
+          >
+            <Search size={15} />
+            필터 적용
+          </button>
+          <button
+            aria-label="세션 근거 검토 큐 필터 초기화"
+            className="inline-action"
+            data-clear-work-session-evidence-review-queue-filters="true"
+            disabled={isTopLevelActionLocked || workSessionEvidenceReviewQueueFilterCount === 0}
+            onClick={() => setWorkSessionEvidenceReviewQueueFilters(emptyWorkReviewQueueFilters())}
+            type="button"
+          >
+            <XCircle size={15} />
+            초기화
+          </button>
+        </form>
+        <datalist id="work-session-evidence-review-queue-date-options">
+          {workSessionEvidenceReviewQueueDateFilterSuggestions.map((date) => (
+            <option key={date} value={date} />
+          ))}
+        </datalist>
+        <datalist id="work-session-evidence-review-queue-project-options">
+          {workSessionEvidenceReviewQueueProjectFilterSuggestions.map((project) => (
+            <option key={project} value={project} />
+          ))}
+        </datalist>
+        <datalist id="work-session-evidence-review-queue-reason-options">
+          {workSessionEvidenceReviewQueueReasonFilterSuggestions.map((reason) => (
+            <option key={reason} value={reason} />
+          ))}
+        </datalist>
         <div
           className={`work-summary-index ${workSummarySessionLimitInvalid ? "warning" : ""}`}
           data-work-summary-session-limit-meta="true"
@@ -4379,6 +4686,15 @@ function App() {
             <span>{workLogNormalizationReviewQueueMeta}</span>
           </div>
         ) : null}
+        {workLogNormalizationReviewQueueFilterMeta ? (
+          <div
+            className="work-summary-index"
+            data-work-log-normalization-review-queue-filter-meta="true"
+          >
+            <Search size={15} />
+            <span>{workLogNormalizationReviewQueueFilterMeta}</span>
+          </div>
+        ) : null}
         {workSessionEvidenceProposalsResult || workSessionEvidenceProposalsState !== "idle" ? (
           <div className="work-summary-index" data-work-session-evidence-proposals-meta="true">
             <Sparkles size={15} />
@@ -4389,6 +4705,15 @@ function App() {
           <div className="work-summary-index" data-work-session-evidence-review-queue-meta="true">
             <ShieldCheck size={15} />
             <span>{workSessionEvidenceReviewQueueMeta}</span>
+          </div>
+        ) : null}
+        {workSessionEvidenceReviewQueueFilterMeta ? (
+          <div
+            className="work-summary-index"
+            data-work-session-evidence-review-queue-filter-meta="true"
+          >
+            <Search size={15} />
+            <span>{workSessionEvidenceReviewQueueFilterMeta}</span>
           </div>
         ) : null}
         {workManagementOverviewLoaded ? (

@@ -1,10 +1,81 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 05:47 KST
+Updated: 2026-06-10 06:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Review queue project filters
+
+Current Goal:
+
+- Make the remaining work-management review queues easier to operate by
+  filtering session-evidence and work-log normalization queue rows by project,
+  date, review state, and reason before approval/rejection.
+
+Context:
+
+- The previous slices made project/day overview rows show next actions and sort
+  review-action rows first.
+- Remaining blockers are no longer only discovery: the review queues contain
+  many rows, so operators need a reliable way to narrow a queue to one
+  project/day/reason before applying review decisions.
+
+Progress:
+
+- Added a shared review-queue filter helper for project, date, state, and
+  reason matching.
+- Wired both the session-evidence review queue and work-log normalization
+  review queue through filtered visible rows.
+- Added UI controls and filter meta rows for both queues.
+- Extended the isolated browser QA script to type a queue project filter, verify
+  the visible rows are narrowed, clear the filter, and then continue the
+  existing approval flow.
+
+Changes:
+
+- `src/reviewQueueFilters.ts`: new pure filter/suggestion/meta helpers.
+- `src/App.tsx`: adds queue filter state, controls, datalist suggestions, and
+  filtered queue rendering.
+- `src/App.css`: adds a compact grid for review-queue filter controls.
+- `tests/reviewQueueFilters.test.ts`: covers filtering and suggestions.
+- `scripts/browser-bridge-isolated-qa.mjs`: captures queue filter evidence in
+  browser QA output.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/reviewQueueFilters.test.ts` (`3` tests).
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "review queue"` (`37` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`495` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge >
+  /tmp/promptvault-review-queue-filter-qa.log 2>&1`.
+
+QA Evidence:
+
+- Isolated browser QA typed a project filter into the session-evidence review
+  queue, verified visible rows all belonged to that project, cleared the
+  filter, and then completed the existing approval flow.
+- Session-evidence queue filter meta: `세션근거 큐 필터 · 필터 1개 · 결과 5 /
+  40개`.
+- Isolated browser QA typed a project filter into the work-log normalization
+  review queue, verified visible rows all belonged to that project, cleared the
+  filter, and then completed the existing approval/apply flow.
+- Normalization queue filter meta: `정규화 큐 필터 · 필터 1개 · 결과 2 / 40개`.
+- The same QA run reported `31개 프로젝트`, `26일`, `작업 9,794개`,
+  `진행로그 874개`, `세션 근거 3,624건`, and `고유 50건`.
+- Management readiness still reports partial historical session backfill:
+  `361/25,210개`, with `24,849개` remaining.
+
+Remaining:
+
+- Full historical session backfill remains operator-gated.
+- Review queues are now easier to narrow by project/date/state/reason, but the
+  remaining queue decisions still need operator or AI-assisted review before
+  all durable session-evidence/title-normalization state is final.
 
 ## Completed Slice - 2026-06-10 Work-management review action sort
 

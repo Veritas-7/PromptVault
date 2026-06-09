@@ -238,6 +238,16 @@ h3 {
   grid-template-columns: minmax(170px, 260px) minmax(260px, 1fr);
 }
 
+.work-summary-filter-row.work-review-queue-filter-row {
+  grid-template-columns:
+    minmax(115px, 0.35fr)
+    minmax(140px, 0.45fr)
+    minmax(110px, 0.32fr)
+    minmax(150px, 0.55fr)
+    auto
+    auto;
+}
+
 .work-status-export-page-controls {
   flex-wrap: wrap;
 }

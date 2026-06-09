@@ -473,6 +473,8 @@ async function runBrowserQa() {
   let workSessionEvidenceReviewQueueStateAfterApprove = "";
   let workSessionEvidenceReviewQueueUiMeta = "";
   let workSessionEvidenceReviewQueueUiRows = [];
+  let workSessionEvidenceReviewQueueFilterMeta = "";
+  let workSessionEvidenceReviewQueueFilteredRows = [];
   let workSessionEvidenceReviewQueueUiStateAfterApprove = "";
   let workStatusExportMarkdown = "";
   let workSummaryIndex = "";
@@ -488,6 +490,8 @@ async function runBrowserQa() {
   let workLogNormalizationProposalRows = [];
   let workLogNormalizationReviewQueueMeta = "";
   let workLogNormalizationReviewQueueRows = [];
+  let workLogNormalizationReviewQueueFilterMeta = "";
+  let workLogNormalizationReviewQueueFilteredRows = [];
   let workLogNormalizationReviewQueueStateAfterApprove = "";
   let workLogNormalizationStaleFixtureMeta = "";
   let workLogNormalizationStaleFixtureRows = [];
@@ -1149,6 +1153,39 @@ async function runBrowserQa() {
       (await page.locator('[data-work-session-evidence-review-queue-meta="true"]').textContent())?.trim() ?? "";
     workSessionEvidenceReviewQueueUiRows =
       await page.locator('[data-work-session-evidence-review-queue="true"] article').allTextContents();
+    const firstSessionEvidenceQueueProject =
+      (await page
+        .locator('[data-work-session-evidence-review-queue="true"] article strong')
+        .first()
+        .textContent())?.trim() ?? "";
+    if (!firstSessionEvidenceQueueProject) {
+      throw new Error("Session evidence review queue did not expose a project for filtering");
+    }
+    await page
+      .locator('[data-work-session-evidence-review-queue-project-filter="true"]')
+      .fill(firstSessionEvidenceQueueProject);
+    await page.locator('[data-apply-work-session-evidence-review-queue-filters="true"]').click();
+    await page.waitForFunction((project) => {
+      const meta = document.querySelector('[data-work-session-evidence-review-queue-filter-meta="true"]')
+        ?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-session-evidence-review-queue="true"] article'));
+      return meta.includes("세션근거 큐 필터")
+        && meta.includes("필터 1개")
+        && rows.length > 0
+        && rows.every((row) => row.querySelector("strong")?.textContent?.trim() === project);
+    }, firstSessionEvidenceQueueProject, { timeout: 30000 });
+    workSessionEvidenceReviewQueueFilterMeta =
+      (await page
+        .locator('[data-work-session-evidence-review-queue-filter-meta="true"]')
+        .textContent())?.trim() ?? "";
+    workSessionEvidenceReviewQueueFilteredRows =
+      await page.locator('[data-work-session-evidence-review-queue="true"] article').allTextContents();
+    await page.locator('[data-clear-work-session-evidence-review-queue-filters="true"]').click();
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-session-evidence-review-queue-filter-meta="true"]')
+        ?.textContent ?? "";
+      return meta.includes("필터 없음");
+    }, undefined, { timeout: 30000 });
     const firstSessionEvidenceApprove = page
       .locator('[data-approve-work-session-evidence-review-queue]')
       .first();
@@ -1479,6 +1516,39 @@ async function runBrowserQa() {
       (await page.locator('[data-work-log-normalization-review-queue-meta="true"]').textContent())?.trim() ?? "";
     workLogNormalizationReviewQueueRows =
       await page.locator('[data-work-log-normalization-review-queue="true"] article').allTextContents();
+    const firstNormalizationQueueProject =
+      (await page
+        .locator('[data-work-log-normalization-review-queue="true"] article strong')
+        .first()
+        .textContent())?.trim() ?? "";
+    if (!firstNormalizationQueueProject) {
+      throw new Error("Normalization review queue did not expose a project for filtering");
+    }
+    await page
+      .locator('[data-work-log-normalization-review-queue-project-filter="true"]')
+      .fill(firstNormalizationQueueProject);
+    await page.locator('[data-apply-work-log-normalization-review-queue-filters="true"]').click();
+    await page.waitForFunction((project) => {
+      const meta = document.querySelector('[data-work-log-normalization-review-queue-filter-meta="true"]')
+        ?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-log-normalization-review-queue="true"] article'));
+      return meta.includes("정규화 큐 필터")
+        && meta.includes("필터 1개")
+        && rows.length > 0
+        && rows.every((row) => row.querySelector("strong")?.textContent?.trim() === project);
+    }, firstNormalizationQueueProject, { timeout: 30000 });
+    workLogNormalizationReviewQueueFilterMeta =
+      (await page
+        .locator('[data-work-log-normalization-review-queue-filter-meta="true"]')
+        .textContent())?.trim() ?? "";
+    workLogNormalizationReviewQueueFilteredRows =
+      await page.locator('[data-work-log-normalization-review-queue="true"] article').allTextContents();
+    await page.locator('[data-clear-work-log-normalization-review-queue-filters="true"]').click();
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-log-normalization-review-queue-filter-meta="true"]')
+        ?.textContent ?? "";
+      return meta.includes("필터 없음");
+    }, undefined, { timeout: 30000 });
     const firstNormalizationApprove = page
       .locator('[data-approve-work-log-normalization-review-queue]')
       .first();
@@ -1730,6 +1800,8 @@ async function runBrowserQa() {
       workSessionEvidenceReviewQueueStateAfterApprove,
       workSessionEvidenceReviewQueueUiMeta,
       workSessionEvidenceReviewQueueUiRows,
+      workSessionEvidenceReviewQueueFilterMeta,
+      workSessionEvidenceReviewQueueFilteredRows,
       workSessionEvidenceReviewQueueUiStateAfterApprove,
       workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,
@@ -1757,6 +1829,8 @@ async function runBrowserQa() {
       workLogNormalizationProposalRows,
       workLogNormalizationReviewQueueMeta,
       workLogNormalizationReviewQueueRows,
+      workLogNormalizationReviewQueueFilterMeta,
+      workLogNormalizationReviewQueueFilteredRows,
       workLogNormalizationReviewQueueStateAfterApprove,
       workLogNormalizationStaleFixtureMeta,
       workLogNormalizationStaleFixtureRows,

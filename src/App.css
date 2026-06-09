@@ -238,6 +238,14 @@ h3 {
   grid-template-columns: minmax(170px, 260px) minmax(260px, 1fr);
 }
 
+.work-summary-filter-row.work-log-coverage-filter-row {
+  grid-template-columns:
+    minmax(150px, 0.55fr)
+    minmax(130px, 0.35fr)
+    auto
+    auto;
+}
+
 .work-summary-filter-row.work-review-queue-filter-row {
   grid-template-columns:
     minmax(115px, 0.35fr)

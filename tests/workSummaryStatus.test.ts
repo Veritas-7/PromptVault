@@ -1458,6 +1458,24 @@ test("work log coverage labels describe parsed and unparsed progress logs", () =
     workLogCoverageMetaText("ready", coverageResult()),
     "32개 로그 · parsed 28개 · unparsed 4개 · 14개 프로젝트 · 작업 3,532개",
   );
+  assert.equal(
+    workLogCoverageMetaText("ready", coverageResult({
+      files: [{
+        latest_date: null,
+        latest_title: null,
+        modified_at: "2026-06-09T00:00:00Z",
+        project: "PromptVault",
+        source_file: "workingd.md",
+        source_path: "/tmp/PromptVault/workingd.md",
+        status: "pointer",
+        work_item_count: 0,
+      }],
+      files_seen: 32,
+      parsed_file_count: 31,
+      unparsed_file_count: 0,
+    })),
+    "32개 로그 · parsed 31개 · unparsed 0개 · pointer 1개 · 14개 프로젝트 · 작업 3,532개",
+  );
   assert.equal(workLogCoverageMetaText(failed, null), "작업 로그 범위를 사용할 수 없음");
   assert.equal(
     workLogCoverageFailureText(failed),

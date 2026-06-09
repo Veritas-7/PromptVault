@@ -209,6 +209,15 @@ import {
   type WorkLogPreviewFilters,
 } from "./workLogPreviewFilters";
 import {
+  activeWorkLogCoverageFilterCount,
+  emptyWorkLogCoverageFilters,
+  filterWorkLogCoverageFiles,
+  workLogCoverageFilterMetaText,
+  workLogCoverageProjectSuggestions,
+  type WorkLogCoverageFilters,
+  type WorkLogCoverageStatusFilter,
+} from "./workLogCoverageFilters";
+import {
   activeWorkReviewQueueFilterCount,
   emptyWorkReviewQueueFilters,
   filterWorkLogNormalizationReviewQueueItems,
@@ -655,6 +664,18 @@ const WORK_MANAGEMENT_SORT_OPTIONS: Array<{
   { label: "작업 많은 순", value: "work_items_desc" },
 ];
 
+const WORK_LOG_COVERAGE_STATUS_FILTER_OPTIONS: Array<{
+  label: string;
+  value: WorkLogCoverageStatusFilter;
+}> = [
+  { label: "전체 상태", value: "" },
+  { label: "문제 로그", value: "needs_review" },
+  { label: "parsed", value: "parsed" },
+  { label: "pointer", value: "pointer" },
+  { label: "unparsed", value: "unparsed" },
+  { label: "unreadable", value: "unreadable" },
+];
+
 const WORK_REVIEW_QUEUE_STATE_FILTER_OPTIONS: Array<{
   label: string;
   value: WorkReviewQueueStateFilter;
@@ -824,6 +845,9 @@ function App() {
   const [workSummarySnapshotProjectFilter, setWorkSummarySnapshotProjectFilter] = useState("");
   const [workLogExtractionItemDateFilter, setWorkLogExtractionItemDateFilter] = useState("");
   const [workLogExtractionItemProjectFilter, setWorkLogExtractionItemProjectFilter] = useState("");
+  const [workLogCoverageFilters, setWorkLogCoverageFilters] = useState<WorkLogCoverageFilters>(() =>
+    emptyWorkLogCoverageFilters(),
+  );
   const [workLogPreviewFilters, setWorkLogPreviewFilters] = useState<WorkLogPreviewFilters>(() =>
     emptyWorkLogPreviewFilters(),
   );
@@ -1256,6 +1280,20 @@ function App() {
   const workSummarySnapshotProjectSuggestions = workSummarySnapshotsResult?.available_projects ?? [];
   const workLogExtractionItemDateSuggestions = workLogExtractionItemsResult?.available_dates ?? [];
   const workLogExtractionItemProjectSuggestions = workLogExtractionItemsResult?.available_projects ?? [];
+  const workLogCoverageFilterCount = activeWorkLogCoverageFilterCount(workLogCoverageFilters);
+  const filteredWorkLogCoverageFiles = filterWorkLogCoverageFiles(
+    workLogCoverageResult?.files ?? [],
+    workLogCoverageFilters,
+  );
+  const workLogCoverageFilterMeta = workLogCoverageResult
+    ? workLogCoverageFilterMetaText(
+        filteredWorkLogCoverageFiles.length,
+        workLogCoverageResult.files.length,
+        workLogCoverageFilterCount,
+      )
+    : null;
+  const workLogCoverageProjectFilterSuggestions =
+    workLogCoverageProjectSuggestions(workLogCoverageResult?.files ?? []);
   const filteredWorkLogCandidates = filterWorkLogExtractionCandidates(
     workLogCandidatesResult?.candidates ?? [],
     workLogPreviewFilters,
@@ -1354,10 +1392,10 @@ function App() {
   const visibleWorkSummarySnapshots =
     workSummarySnapshotsResult?.snapshots.slice(0, WORK_SUMMARY_HISTORY_LIMIT) ?? [];
   const visibleWorkLogCoverageFiles =
-    workLogCoverageResult?.files.slice(0, WORK_LOG_COVERAGE_DISPLAY_LIMIT) ?? [];
+    filteredWorkLogCoverageFiles.slice(0, WORK_LOG_COVERAGE_DISPLAY_LIMIT);
   const hiddenWorkLogCoverageFileCount = Math.max(
     0,
-    (workLogCoverageResult?.files.length ?? 0) - WORK_LOG_COVERAGE_DISPLAY_LIMIT,
+    filteredWorkLogCoverageFiles.length - WORK_LOG_COVERAGE_DISPLAY_LIMIT,
   );
   const visibleWorkLogCandidates =
     filteredWorkLogCandidates.slice(0, WORK_LOG_CANDIDATE_DISPLAY_LIMIT);
@@ -3902,6 +3940,81 @@ function App() {
           ))}
         </datalist>
         <form
+          className="work-summary-filter-row work-log-coverage-filter-row"
+          data-work-log-coverage-filters="true"
+          onSubmit={(event) => {
+            event.preventDefault();
+          }}
+        >
+          <label>
+            <span>로그 프로젝트</span>
+            <input
+              aria-label="프로젝트 작업 로그 범위 프로젝트 필터"
+              data-work-log-coverage-project-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-coverage-project-options"
+              onChange={(event) =>
+                setWorkLogCoverageFilters((current) => ({
+                  ...current,
+                  project: event.target.value,
+                }))}
+              placeholder="PromptVault"
+              type="text"
+              value={workLogCoverageFilters.project}
+            />
+          </label>
+          <label>
+            <span>상태</span>
+            <select
+              aria-label="프로젝트 작업 로그 범위 상태 필터"
+              data-work-log-coverage-status-filter="true"
+              disabled={isTopLevelActionLocked}
+              onChange={(event) =>
+                setWorkLogCoverageFilters((current) => ({
+                  ...current,
+                  status: event.target.value as WorkLogCoverageStatusFilter,
+                }))}
+              value={workLogCoverageFilters.status}
+            >
+              {WORK_LOG_COVERAGE_STATUS_FILTER_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            aria-label={
+              workLogCoverageFilterCount
+                ? `프로젝트 작업 로그 범위 필터 ${workLogCoverageFilterCount.toLocaleString()}개 적용`
+                : "필터 없이 프로젝트 작업 로그 범위 보기"
+            }
+            className="inline-action"
+            data-apply-work-log-coverage-filters="true"
+            disabled={isTopLevelActionLocked}
+            type="submit"
+          >
+            <Search size={15} />
+            필터 적용
+          </button>
+          <button
+            aria-label="프로젝트 작업 로그 범위 필터 초기화"
+            className="inline-action"
+            data-clear-work-log-coverage-filters="true"
+            disabled={isTopLevelActionLocked || workLogCoverageFilterCount === 0}
+            onClick={() => setWorkLogCoverageFilters(emptyWorkLogCoverageFilters())}
+            type="button"
+          >
+            <XCircle size={15} />
+            초기화
+          </button>
+        </form>
+        <datalist id="work-log-coverage-project-options">
+          {workLogCoverageProjectFilterSuggestions.map((project) => (
+            <option key={project} value={project} />
+          ))}
+        </datalist>
+        <form
           className="work-summary-filter-row"
           data-work-log-preview-filters="true"
           onSubmit={(event) => {
@@ -4731,6 +4844,12 @@ function App() {
             <span>{workLogCoverageMeta}</span>
           </div>
         ) : null}
+        {workLogCoverageFilterMeta ? (
+          <div className="work-summary-index" data-work-log-coverage-filter-meta="true">
+            <Search size={15} />
+            <span>{workLogCoverageFilterMeta}</span>
+          </div>
+        ) : null}
         {workLogCandidatesResult || workLogCandidatesState !== "idle" ? (
           <div className="work-summary-index" data-work-log-candidates-meta="true">
             <Brain size={15} />
@@ -5049,7 +5168,9 @@ function App() {
             </div>
           ) : (
             <div className="empty compact" data-empty-work-log-coverage="true">
-              감지된 프로젝트 작업 로그 없음
+              {workLogCoverageFilterCount && workLogCoverageResult.files.length
+                ? "필터에 맞는 프로젝트 작업 로그 없음"
+                : "감지된 프로젝트 작업 로그 없음"}
             </div>
           )
         ) : null}

@@ -480,6 +480,8 @@ async function runBrowserQa() {
   let workSummaryIndex = "";
   let workSessionIndexBackfill = null;
   let coverageMeta = "";
+  let coverageFilterMeta = "";
+  let coverageFilteredRows = [];
   let workLogCandidatesMeta = "";
   let workLogCandidateRows = [];
   let workAiProviderStatusMeta = "";
@@ -1411,6 +1413,29 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     coverageMeta =
       (await page.locator('[data-work-log-coverage-meta="true"]').textContent())?.trim() ?? "";
+    await page.locator('[data-work-log-coverage-status-filter="true"]').selectOption("needs_review");
+    await page.locator('[data-apply-work-log-coverage-filters="true"]').click();
+    await page.waitForFunction(() => {
+      const metaText = document.querySelector('[data-work-log-coverage-filter-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-log-coverage="true"] article'));
+      const emptyText = document.querySelector('[data-empty-work-log-coverage="true"]')?.textContent ?? "";
+      const rowsAreGapLogs = rows.length > 0 && rows.every((row) => {
+        const text = row.textContent ?? "";
+        return text.includes("unparsed") || text.includes("unreadable");
+      });
+      return metaText.includes("작업로그 필터")
+        && metaText.includes("필터 1개")
+        && (rowsAreGapLogs || emptyText.includes("필터에 맞는 프로젝트 작업 로그 없음"));
+    }, undefined, { timeout: 90000 });
+    coverageFilterMeta =
+      (await page.locator('[data-work-log-coverage-filter-meta="true"]').textContent())?.trim() ?? "";
+    coverageFilteredRows =
+      await page.locator('[data-work-log-coverage="true"] article').allTextContents();
+    await page.locator('[data-clear-work-log-coverage-filters="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-coverage-filter-meta="true"]')?.textContent ?? "";
+      return text.includes("작업로그 필터") && text.includes("필터 없음");
+    }, undefined, { timeout: 90000 });
     step("work log candidates");
     await page.locator('[data-load-work-log-candidates="true"]').click();
     await page.waitForFunction(() => {
@@ -1846,6 +1871,8 @@ async function runBrowserQa() {
       workManagementSessionRows,
       workManagementActionRows,
       coverageMeta,
+      coverageFilterMeta,
+      coverageFilteredRows,
       workLogCandidatesMeta,
       workLogCandidateRows,
       workAiProviderStatusMeta,

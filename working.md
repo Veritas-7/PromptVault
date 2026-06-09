@@ -1,10 +1,82 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 06:14 KST
+Updated: 2026-06-10 06:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Work-log coverage filters
+
+Current Goal:
+
+- Make the progress-log coverage surface operational enough to find remaining
+  non-parsed project logs directly, instead of relying on aggregate counters.
+
+Context:
+
+- Browser QA showed the project/work management system was scanning hundreds
+  of project-local progress logs (`working.md`, `workingd.md`, etc.), but a
+  `parsed X/Y` counter could still be ambiguous when the remaining non-parsed
+  file was a pointer rather than an extraction gap.
+- Pointer logs intentionally do not count as unparsed gaps, but operators need
+  that distinction visible in the dashboard.
+
+Progress:
+
+- Added pure project/status filters for the work-log coverage file list.
+- Added a status filter option for `문제 로그` (`unparsed`/`unreadable`) plus
+  explicit `parsed`, `pointer`, `unparsed`, and `unreadable` filters.
+- Added filter meta and filtered empty-state copy so zero-gap states are clear.
+- Updated work-management readiness and coverage meta to show pointer counts
+  when pointer progress logs are present.
+- Extended isolated browser QA to select the `문제 로그` filter and verify that
+  visible rows are only `unparsed`/`unreadable` or that the filtered empty state
+  is shown.
+
+Changes:
+
+- `src/workLogCoverageFilters.ts`: new pure coverage filter/suggestion/meta helpers.
+- `tests/workLogCoverageFilters.test.ts`: covers project/status filtering.
+- `src/App.tsx`: adds work-log coverage filters, suggestions, meta, and
+  filtered rendering.
+- `src/App.css`: adds a compact grid for coverage filters.
+- `src/workSummaryStatus.ts`: surfaces pointer log counts in coverage/readiness text.
+- `tests/workSummaryStatus.test.ts`: covers pointer count display.
+- `scripts/browser-bridge-isolated-qa.mjs`: captures coverage filter evidence.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts tests/workSummaryStatus.test.ts --test-name-pattern "work log coverage|readiness"` (`39` filtered tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`498` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge >
+  /tmp/promptvault-coverage-filter-pointer-qa.log 2>&1`.
+
+QA Evidence:
+
+- Coverage meta: `876개 로그 · parsed 875개 · unparsed 0개 · pointer 1개 ·
+  31개 프로젝트 · 작업 9,838개`.
+- Coverage filter meta after selecting `문제 로그`: `작업로그 필터 · 필터
+  1개 · 결과 0 / 876개`.
+- Readiness now distinguishes the remaining non-parsed log:
+  `진행로그 parsed 875/876개 · pointer 1개`.
+- The same QA run still verified the review queue filters:
+  `백필큐 필터 · 필터 1개 · 결과 1 / 1개`,
+  `세션근거 큐 필터 · 필터 1개 · 결과 5 / 40개`,
+  `정규화 큐 필터 · 필터 1개 · 결과 2 / 40개`.
+
+Remaining:
+
+- Progress-log coverage has no current unparsed/unreadable gap in the QA run;
+  the remaining non-parsed progress file is a pointer.
+- Full historical session backfill is still incomplete:
+  `361/25,213개`, with `24,852개` remaining.
+- Review queue decisions still require operator or AI-assisted review before
+  the work-management state can be called complete.
 
 ## Completed Slice - 2026-06-10 Backfill review queue filter
 

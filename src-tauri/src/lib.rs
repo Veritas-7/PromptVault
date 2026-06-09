@@ -10661,6 +10661,9 @@ fn project_work_log_title_is_generic_or_rough(title: &str) -> bool {
     ) {
         return true;
     }
+    if normalized.ends_with(" parsed work rows") && find_iso_date_start(trimmed).is_some() {
+        return true;
+    }
     let semantic_remainder = normalized
         .replace("kst", "")
         .replace("utc", "")
@@ -11423,10 +11426,109 @@ fn local_project_work_log_normalization_title(
         .unwrap_or(candidate.title.as_str())
         .trim();
     if project_work_log_titles_are_generic(&[title.to_string()]) {
-        format!("{} {} parsed work rows", candidate.project, candidate.date)
+        local_project_work_log_normalization_title_from_evidence(candidate)
+            .unwrap_or_else(|| format!("{} {} parsed work rows", candidate.project, candidate.date))
     } else {
         truncate_chars(title, 180)
     }
+}
+
+fn local_project_work_log_normalization_title_from_evidence(
+    candidate: &ProjectWorkLogNormalizationCandidate,
+) -> Option<String> {
+    candidate
+        .evidence
+        .lines()
+        .filter_map(local_project_work_log_normalization_evidence_title_line)
+        .find(|title| {
+            !project_work_log_title_is_generic_or_rough(title)
+                && !title.eq_ignore_ascii_case(&candidate.title)
+        })
+}
+
+fn local_project_work_log_normalization_evidence_title_line(line: &str) -> Option<String> {
+    let raw = line
+        .trim()
+        .trim_matches('|')
+        .trim()
+        .trim_start_matches(['#', '-', '*', '>', ' ', '\t'])
+        .trim();
+    if raw.is_empty() || raw == "---" {
+        return None;
+    }
+    let without_list_prefix = local_project_work_log_strip_ordered_list_prefix(raw);
+    let without_date = if let Some(date_start) = find_iso_date_start(without_list_prefix) {
+        let prefix = without_list_prefix[..date_start].trim();
+        if prefix.is_empty()
+            || prefix
+                .chars()
+                .all(|ch| matches!(ch, '-' | '*' | '>' | '#' | ' ' | '\t'))
+        {
+            local_project_work_log_title_after_date(&without_list_prefix[date_start + 10..])?
+        } else {
+            without_list_prefix.to_string()
+        }
+    } else {
+        without_list_prefix.to_string()
+    };
+    if local_project_work_log_normalization_line_is_metadata(&without_date) {
+        return None;
+    }
+    let cleaned = without_date
+        .replace("**", "")
+        .replace("__", "")
+        .replace('`', "")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if local_project_work_log_normalization_line_is_metadata(&cleaned) {
+        return None;
+    }
+    local_project_work_log_safe_context_line(&cleaned).map(|title| truncate_chars(&title, 180))
+}
+
+fn local_project_work_log_strip_ordered_list_prefix(line: &str) -> &str {
+    let trimmed = line.trim_start();
+    let mut end = 0usize;
+    let mut saw_digit = false;
+    for (index, ch) in trimmed.char_indices() {
+        if ch.is_ascii_digit() {
+            saw_digit = true;
+            end = index + ch.len_utf8();
+            continue;
+        }
+        if saw_digit && matches!(ch, '.' | ')') {
+            let rest = &trimmed[index + ch.len_utf8()..];
+            return rest.trim_start();
+        }
+        break;
+    }
+    if saw_digit && end == trimmed.len() {
+        return "";
+    }
+    trimmed
+}
+
+fn local_project_work_log_normalization_line_is_metadata(line: &str) -> bool {
+    let lower = line.trim().to_ascii_lowercase();
+    [
+        "date:",
+        "last updated:",
+        "last_updated:",
+        "modified:",
+        "participating ai:",
+        "status:",
+        "updated:",
+        "version:",
+        "업데이트:",
+        "버전:",
+        "마지막 업데이트:",
+        "참여 ai:",
+        "참여 surface:",
+    ]
+    .iter()
+    .any(|prefix| lower.starts_with(prefix))
+        || lower.ends_with(" and")
 }
 
 fn local_project_work_log_normalization_status(
@@ -16838,13 +16940,74 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(proposal.project, "PromptVault");
         assert_eq!(
             proposal.normalized_title,
-            "PromptVault 2026-06-09 parsed work rows"
+            "Added normalization proposal route."
         );
         assert_eq!(proposal.normalized_status, "current");
         assert_eq!(proposal.confidence, 0.5);
         assert!(!proposal.accepted);
         assert_eq!(
             proposal.rejection_reason.as_deref(),
+            Some("local_fallback_requires_ai_review")
+        );
+    }
+
+    #[test]
+    fn local_normalization_fallback_titles_use_safe_evidence_lines() {
+        let mut dashboard = normalization_candidate_for_test(
+            "work-normalize-NovelSourceCollector-dashboard".to_string(),
+            "1. **Web Dashboard** (`/dashboard`): Real-time collection progress, integrity check, merge controls"
+                .to_string(),
+        );
+        dashboard.project = "novel-source-collector".to_string();
+        dashboard.title = "novel-source-collector 2026-06-09 parsed work rows".to_string();
+        let metadata_then_status = normalization_candidate_for_test(
+            "work-normalize-SnapTranslate-status".to_string(),
+            "업데이트: 2026-06-09\nSnapTranslate — 프로젝트 상태".to_string(),
+        );
+        let risky = normalization_candidate_for_test(
+            "work-normalize-Risky-key".to_string(),
+            "api_key: secret-value\n2026-06-09: Added safe follow-up.".to_string(),
+        );
+        let metadata = normalization_candidate_for_test(
+            "work-normalize-BookForge-version".to_string(),
+            "**버전**: v0.8.0\n500줄 초과 파일 전부 분할 완료".to_string(),
+        );
+        let wrapped = normalization_candidate_for_test(
+            "work-normalize-NotebookLm-wrapped".to_string(),
+            "Re-read `git status --short --branch` and\nRegenerated the remaining repo-code proposal chain"
+                .to_string(),
+        );
+
+        let dashboard_proposal = local_project_work_log_normalization_proposal(&dashboard);
+        let status_proposal = local_project_work_log_normalization_proposal(&metadata_then_status);
+        let risky_proposal = local_project_work_log_normalization_proposal(&risky);
+        let metadata_proposal = local_project_work_log_normalization_proposal(&metadata);
+        let wrapped_proposal = local_project_work_log_normalization_proposal(&wrapped);
+
+        assert_eq!(
+            dashboard_proposal.normalized_title,
+            "Web Dashboard (/dashboard): Real-time collection progress, integrity check, merge controls"
+        );
+        assert_eq!(
+            status_proposal.normalized_title,
+            "SnapTranslate — 프로젝트 상태"
+        );
+        assert_eq!(risky_proposal.normalized_title, "Added safe follow-up.");
+        assert_eq!(
+            metadata_proposal.normalized_title,
+            "500줄 초과 파일 전부 분할 완료"
+        );
+        assert_eq!(
+            wrapped_proposal.normalized_title,
+            "Regenerated the remaining repo-code proposal chain"
+        );
+        assert!(!dashboard_proposal.accepted);
+        assert!(!status_proposal.accepted);
+        assert!(!risky_proposal.accepted);
+        assert!(!metadata_proposal.accepted);
+        assert!(!wrapped_proposal.accepted);
+        assert_eq!(
+            dashboard_proposal.rejection_reason.as_deref(),
             Some("local_fallback_requires_ai_review")
         );
     }

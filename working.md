@@ -1,12 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 21:30 KST
+Updated: 2026-06-09 21:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 session backfill planned-run visibility
+## Current Slice - 2026-06-09 normalization fallback title evidence
+
+Current Goal:
+
+- Improve project/day work-log normalization review quality for rows whose
+  parsed titles are generic, without auto-approving local fallback proposals.
+- Make `PROJECT_STATUS.md`, `PROGRESS_LOG.md`, `working.md`, `workingd.md`,
+  and filename-dated worklogs show source-backed title candidates in the
+  review queue even when OpenAI/GLM normalization is unavailable.
+
+Context:
+
+- Fresh live coverage showed `846` progress-log files seen, `845` parsed,
+  `0` unparsed, `31` projects, and `9,109` work items.
+- Fresh status export showed `91` project/day rows across `31` projects, with
+  `63` rows still needing stronger session evidence and `39` rows still
+  needing title normalization.
+- Fresh normalization candidates showed `91` candidates, including `31`
+  `generic_title` rows. Several useful rows were displayed only as
+  `<project> <date> parsed work rows` even though their evidence contained a
+  readable task line.
+- Existing AI normalization already supports OpenAI Responses and GLM chat
+  providers through `work-log-normalization-proposals --ai`; local fallback
+  must remain review-only.
+
+Progress:
+
+- Reused the existing safe-context and risk-detection helpers to derive
+  review-only title candidates from candidate evidence when the original title
+  is generic or generated as `parsed work rows`.
+- Added cleanup for common evidence shapes:
+  - ISO date prefixes such as `2026-06-09: ...`;
+  - ordered markdown bullets such as `1. **Web Dashboard** (...)`;
+  - markdown emphasis/backticks;
+  - metadata-only lines such as `업데이트:`, `버전:`, `participating ai:`,
+    and `참여 surface:`;
+  - wrapped first lines ending in `and`.
+- Kept all local fallback normalization proposals rejected with
+  `local_fallback_requires_ai_review`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - treats generated `parsed work rows` titles as generic;
+  - added evidence-backed local normalization title fallback helpers;
+  - added targeted tests for review-only fallback titles from date-prefixed
+    evidence, `PROJECT_STATUS.md` bullets, metadata-heavy progress logs, and
+    wrapped evidence lines.
+- `working.md`:
+  - recorded the current slice and live completion status.
+
+Tests:
+
+- `cargo test --manifest-path src-tauri/Cargo.toml local_normalization --lib`:
+  PASS, `2` tests passed.
+- `cargo build --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`:
+  PASS.
+- Live CLI check:
+  - `work-log-normalization-proposals --limit 12 --json` stayed
+    `local-normalization-rules`, `used_ai=false`, `accepted=0`, `rejected=12`;
+  - `novel-source-collector` now suggests
+    `Web Dashboard (/dashboard): Real-time collection progress, integrity check, merge controls`;
+  - `book-forge-tauri` now skips version metadata and suggests
+    `500줄 초과 파일 전부 분할 완료`;
+  - `notebooklm-llm-wiki-flow` now skips a wrapped `... and` line and suggests
+    `Regenerated the remaining repo-code proposal/manual/adoption downstream chain`.
+- `npm run check`: PASS.
+  - UI tests: `474` passed.
+  - Production build: passed.
+  - Rust lib tests: `197` passed.
+  - CLI tests: `31` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  Evidence from isolated browser result:
+  - status export showed `91` rows, `31` projects, `25` days, `9,121`
+    work items, `846` progress files, and `20,891` session evidence links
+    from `50` unique records;
+  - coverage showed `846` logs, `845` parsed, `0` unparsed, `31` projects,
+    and `9,122` work items;
+  - normalization candidates showed `91` candidates with `0` risk-marked
+    rows;
+  - normalization proposals showed `40` review-only local proposals from
+    `91` candidates;
+  - UI rows showed source-backed local fallback titles for
+    `novel-source-collector`, `book-forge-tauri`, and
+    `notebooklm-llm-wiki-flow`;
+  - normalization review queue synced `91` rows and preserved review-only
+    state with `local_fallback_requires_ai_review`;
+  - work management overview stayed at `91` managed rows and `0` live-only
+    rows after freeze.
+
+Next Steps:
+
+- Run secret scans.
+- Stage explicit touched files, commit, and push if clean.
+
+## Completed Slice - 2026-06-09 session backfill planned-run visibility
 
 Current Goal:
 
@@ -88,10 +185,10 @@ Tests:
     - work management overview stayed at `91` managed rows and `0` live-only
       rows after freeze.
 
-Next Steps:
+Outcome:
 
-- Run diff and secret checks, then stage explicit files, commit, and push if
-  clean.
+- Staged explicit touched files, passed staged gitleaks, committed, and pushed
+  as `2f97e8a`.
 
 ## Completed Slice - 2026-06-09 filename-date worklog parser coverage
 

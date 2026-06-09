@@ -335,6 +335,7 @@ import {
   workLogExtractionUnsavedAcceptedIds,
   workManagementFreezeActionLabel,
   workManagementRefreshActionLabel,
+  workManagementNextActionText,
   workManagementReadinessText,
   filterWorkStatusExportRows,
   workLogCoverageActionLabel,
@@ -1125,6 +1126,20 @@ function App() {
     normalizationReviewQueue: workLogNormalizationReviewQueueResult,
     sessionEvidenceReviewQueue: workSessionEvidenceReviewQueueResult,
   });
+  const workManagementNextAction = workManagementNextActionText(
+    {
+      coverage: workLogCoverageResult,
+      sessionIndex: workSessionIndexResult,
+      statusExport: workStatusExportResult,
+      aiProviderStatus: workAiProviderStatusResult,
+      workLogReviewQueue: workLogReviewQueueResult,
+      normalizationReviewQueue: workLogNormalizationReviewQueueResult,
+      sessionEvidenceReviewQueue: workSessionEvidenceReviewQueueResult,
+    },
+    workSessionIndexEffectiveBatchFiles,
+    WORK_SESSION_INDEX_MAX_BATCHES,
+    WORK_SESSION_INDEX_LONG_MAX_BATCHES,
+  );
   const hasApprovedWorkLogNormalizationRows =
     (workLogNormalizationReviewQueueResult?.approved_count ?? 0) > 0;
   const workLogNormalizationApplyFailureMessage =
@@ -4286,6 +4301,12 @@ function App() {
           <div className="work-summary-index" data-work-management-readiness="true">
             <ShieldCheck size={15} />
             <span>{workManagementReadiness}</span>
+          </div>
+        ) : null}
+        {workManagementNextAction ? (
+          <div className="work-summary-index" data-work-management-next-action="true">
+            <ClipboardList size={15} />
+            <span>{workManagementNextAction}</span>
           </div>
         ) : null}
         {workManagementOverviewLoaded ? (

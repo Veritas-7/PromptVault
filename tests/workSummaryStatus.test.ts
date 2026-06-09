@@ -59,6 +59,7 @@ import {
   filterWorkStatusExportRows,
   workLogProposalSaveStateText,
   workManagementFreezeActionLabel,
+  workManagementNextActionText,
   workManagementReadinessText,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
@@ -1104,6 +1105,17 @@ test("work management readiness text summarizes coverage, session backfill, queu
     "관리 준비도 · 진행로그 parsed 28/32개 · unparsed 4개 · 세션 백필 미완료 110/200개 · 남음 90개 · 검토대기 추출 15개 · 정규화 4개 · 세션 32개 · AI provider GLM 사용 가능 · Codex opt-in 필요",
   );
   assert.equal(
+    workManagementNextActionText({
+      coverage: coverageResult(),
+      sessionIndex,
+      aiProviderStatus: providerStatus,
+      workLogReviewQueue: reviewQueueResult(),
+      normalizationReviewQueue: normalizationReviewQueueResult(),
+      sessionEvidenceReviewQueue: sessionEvidenceReviewQueueResult(),
+    }, 25, 2, 10),
+    "다음 조치 · 백필큐 추출 검토 15개 · 제목 정규화 큐 검토 4개 · 대용량 적용 후 긴 이어 백필 · 남은 파일 90개 · 예상 1회",
+  );
+  assert.equal(
     workManagementReadinessText({
       coverage: coverageResult({ files_seen: 32, parsed_file_count: 32, unparsed_file_count: 0 }),
       sessionIndex: {
@@ -1134,9 +1146,44 @@ test("work management readiness text summarizes coverage, session backfill, queu
     "관리 준비도 · 진행로그 parsed 32/32개 · 세션 백필 완료 200/200개 · 검토대기 없음 · AI provider GLM 사용 가능 · Codex opt-in 필요",
   );
   assert.equal(
+    workManagementNextActionText({
+      coverage: coverageResult({ files_seen: 32, parsed_file_count: 32, unparsed_file_count: 0 }),
+      sessionIndex: {
+        ...sessionIndex,
+        all_sources_completed: true,
+        source_states: sessionIndex.source_states.map((source) => ({
+          ...source,
+          processed_files: source.total_files,
+          next_file_index: source.total_files,
+          completed: true,
+        })),
+      },
+      aiProviderStatus: providerStatus,
+      workLogReviewQueue: reviewQueueResult({
+        pending_ai_review_count: 0,
+        risk_blocked_count: 0,
+        stale_count: 0,
+      }),
+      normalizationReviewQueue: normalizationReviewQueueResult({
+        pending_review_count: 0,
+        stale_count: 0,
+      }),
+      sessionEvidenceReviewQueue: sessionEvidenceReviewQueueResult({
+        pending_review_count: 0,
+        stale_count: 0,
+      }),
+    }, 25, 2, 10),
+    "다음 조치 · 작업관리 주요 게이트 통과 · 상태 Export/요약 새로고침으로 최신화",
+  );
+  assert.equal(
     workManagementReadinessText({ statusExport: statusExportResult() }),
     "관리 준비도 · 진행로그 미확인 · 세션 인덱스 limit 적용 200/500개 · 검토 큐 미확인 · AI provider 미확인",
   );
+  assert.equal(
+    workManagementNextActionText({ statusExport: statusExportResult() }, null, 2, 10),
+    "다음 조치 · 진행로그 coverage 확인 · 세션 인덱스 전체 적용 또는 export limit 확대 · 사용 200/500개 · AI provider 상태 확인",
+  );
+  assert.equal(workManagementNextActionText({}, 25, 2, 10), null);
 });
 
 test("work status export text exposes project day evidence coverage", () => {

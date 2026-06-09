@@ -1,10 +1,82 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 04:36 KST
+Updated: 2026-06-10 04:46 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Work-management next-action row
+
+Current Goal:
+
+- Make the partial/completed work-management state actionable, not just
+  descriptive.
+- Answer the user's completion question in the product surface by showing the
+  next concrete operator action after the `관리 준비도` row.
+
+Context:
+
+- PromptVault already parses project-local progress logs such as `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, `progress.md`, and
+  `PROJECT_STATUS.md`.
+- The browser bridge QA has repeatedly exercised this with a real
+  `/tmp/QAProject/workingd.md` extraction fixture and actual Codex session
+  corpus backfill/indexing.
+- The current state is still partial: bounded QA proves the paths work, but the
+  full historical session corpus is not fully backfilled and review queues need
+  operator decisions.
+
+Progress:
+
+- Added a `다음 조치` row to the work-management panel.
+- The row prioritizes:
+  - project progress-log extraction/backfill queue review;
+  - title-normalization queue review;
+  - actual Codex session backfill with large-batch guidance;
+  - session-evidence review queue;
+  - AI provider readiness when no provider is usable.
+- The row shows a completed-gates message only when progress-log parsing,
+  session backfill/index usage, review queues, and provider checks have no
+  actionable blockers in the loaded result set.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: added `workManagementNextActionText` and helpers
+  for pending queue counts, session-backfill remaining counts, and provider
+  readiness actions.
+- `src/App.tsx`: renders `data-work-management-next-action` next to the
+  readiness row.
+- `tests/workSummaryStatus.test.ts`: covers partial, completed, status-export
+  limit, and empty next-action states.
+- `scripts/browser-bridge-isolated-qa.mjs`: waits for the next-action row during
+  the real work-management overview flow and includes it in QA JSON output.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work management readiness"` (`37` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check`
+  - UI tests `491`, Rust lib tests `214`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated bridge QA ended with exit code `0`.
+  - Verified the new `다음 조치` row during the work-management overview flow.
+  - QA output showed `31` projects, `26` days, `100` project/day rows,
+    `9,661` work items, `870` progress logs, and a real session index of
+    `349` stored records in the bounded QA context.
+  - The same run saved `/tmp/QAProject/workingd.md` through the approved
+    extraction path and still showed checkpointed backfill: `25,205` total
+    session files, `361` processed files after long continue, and `24,844`
+    files remaining.
+
+Remaining:
+
+- Full historical session backfill still needs repeated checkpoint runs or a
+  run-until-complete operator flow.
+- Review queues still need operator triage before durable session-evidence and
+  title-normalization decisions are final.
 
 ## Completed Slice - 2026-06-10 Work-management readiness row
 

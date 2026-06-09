@@ -354,6 +354,61 @@ export function workManagementReadinessText(
   return parts.join(" · ");
 }
 
+export function workManagementNextActionText(
+  input: WorkManagementReadinessInput,
+  effectiveBatchFiles: number | null | undefined,
+  standardMaxBatches: number,
+  longMaxBatches: number,
+): string | null {
+  if (!hasWorkManagementReadinessInput(input)) return null;
+  const actions: string[] = [];
+  const workLogPending = workManagementWorkLogReviewPendingCount(input.workLogReviewQueue ?? null);
+  const normalizationPending = workManagementNormalizationReviewPendingCount(
+    input.normalizationReviewQueue ?? null,
+  );
+  const sessionEvidencePending = workManagementSessionEvidenceReviewPendingCount(
+    input.sessionEvidenceReviewQueue ?? null,
+  );
+  const sessionBackfill = workManagementSessionBackfillRemaining(input.sessionIndex ?? null);
+
+  if (!input.coverage) {
+    actions.push("진행로그 coverage 확인");
+  } else if (input.coverage.unparsed_file_count > 0 && !input.workLogReviewQueue) {
+    actions.push(`진행로그 추출 후보 생성 · unparsed ${input.coverage.unparsed_file_count.toLocaleString()}개`);
+  }
+  if (workLogPending > 0) {
+    actions.push(`백필큐 추출 검토 ${workLogPending.toLocaleString()}개`);
+  }
+  if (normalizationPending > 0) {
+    actions.push(`제목 정규화 큐 검토 ${normalizationPending.toLocaleString()}개`);
+  }
+  if (sessionBackfill) {
+    actions.push(workManagementSessionBackfillNextAction(
+      sessionBackfill,
+      effectiveBatchFiles,
+      standardMaxBatches,
+      longMaxBatches,
+    ));
+  } else if (!input.sessionIndex && input.statusExport
+    && input.statusExport.report_session_evidence_index_total_count
+      > input.statusExport.report_session_evidence_index_count) {
+    actions.push([
+      "세션 인덱스 전체 적용 또는 export limit 확대",
+      `사용 ${input.statusExport.report_session_evidence_index_count.toLocaleString()}/${input.statusExport.report_session_evidence_index_total_count.toLocaleString()}개`,
+    ].join(" · "));
+  }
+  if (sessionEvidencePending > 0) {
+    actions.push(`세션 근거 큐 검토 ${sessionEvidencePending.toLocaleString()}개`);
+  }
+  const providerAction = workManagementProviderNextAction(input.aiProviderStatus ?? null);
+  if (providerAction) actions.push(providerAction);
+
+  if (actions.length === 0) {
+    return "다음 조치 · 작업관리 주요 게이트 통과 · 상태 Export/요약 새로고침으로 최신화";
+  }
+  return `다음 조치 · ${actions.slice(0, 3).join(" · ")}`;
+}
+
 function hasWorkManagementReadinessInput(input: WorkManagementReadinessInput): boolean {
   return Boolean(
     input.coverage
@@ -432,6 +487,71 @@ function workManagementReadinessProviderText(
     parts.push("Codex opt-in 필요");
   }
   return parts.join(" · ");
+}
+
+function workManagementWorkLogReviewPendingCount(
+  result: ProjectWorkLogReviewQueueResult | null,
+): number {
+  return (result?.pending_ai_review_count ?? 0)
+    + (result?.risk_blocked_count ?? 0)
+    + (result?.stale_count ?? 0);
+}
+
+function workManagementNormalizationReviewPendingCount(
+  result: ProjectWorkLogNormalizationReviewQueueResult | null,
+): number {
+  return (result?.pending_review_count ?? 0) + (result?.stale_count ?? 0);
+}
+
+function workManagementSessionEvidenceReviewPendingCount(
+  result: ProjectWorkSessionEvidenceReviewQueueResult | null,
+): number {
+  return (result?.pending_review_count ?? 0) + (result?.stale_count ?? 0);
+}
+
+function workManagementSessionBackfillRemaining(
+  result: ProjectWorkSessionIndexResult | null,
+): { remainingFiles: number; remainingBySource: number[] } | null {
+  if (!result?.source_states.length || result.all_sources_completed) return null;
+  const remainingBySource = result.source_states
+    .map((source) => Math.max(0, source.total_files - source.processed_files))
+    .filter((remaining) => remaining > 0);
+  const remainingFiles = remainingBySource.reduce((sum, remaining) => sum + remaining, 0);
+  return remainingFiles > 0 ? { remainingFiles, remainingBySource } : null;
+}
+
+function workManagementSessionBackfillNextAction(
+  backfill: { remainingFiles: number; remainingBySource: number[] },
+  effectiveBatchFiles: number | null | undefined,
+  standardMaxBatches: number,
+  longMaxBatches: number,
+): string {
+  const parts = [
+    "대용량 적용 후 긴 이어 백필",
+    `남은 파일 ${backfill.remainingFiles.toLocaleString()}개`,
+  ];
+  if (effectiveBatchFiles && effectiveBatchFiles > 0 && longMaxBatches > 0) {
+    const filesPerSourceRun = effectiveBatchFiles * longMaxBatches;
+    const estimatedRuns = Math.max(
+      ...backfill.remainingBySource.map((remaining) => Math.ceil(remaining / filesPerSourceRun)),
+    );
+    parts.push(`예상 ${estimatedRuns.toLocaleString()}회`);
+  } else if (standardMaxBatches > 0) {
+    parts.push("batch 크기 확인");
+  }
+  return parts.join(" · ");
+}
+
+function workManagementProviderNextAction(
+  result: ProjectWorkAiProviderStatusResult | null,
+): string | null {
+  if (!result) return "AI provider 상태 확인";
+  if (result.providers.some((provider) => provider.usable_for_work_management)) return null;
+  const codex = result.providers.find((provider) => provider.provider === "codex");
+  if (codex?.configured && !codex.usable_for_work_management) {
+    return "GLM/OpenAI 키 또는 Codex opt-in 확인";
+  }
+  return "GLM/OpenAI 키 확인";
 }
 
 export function workStatusExportIndexStatusText(result: ProjectWorkStatusExportResult): string {

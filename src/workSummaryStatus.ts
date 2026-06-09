@@ -8,6 +8,8 @@ import type {
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposal,
   ProjectWorkLogExtractionProposalsResult,
+  ProjectWorkLogReviewQueueItem,
+  ProjectWorkLogReviewQueueResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
@@ -18,6 +20,7 @@ export type WorkSummaryState = "idle" | "loading" | "ready" | "failed";
 export type WorkSummarySnapshotsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCoverageState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCandidatesState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionItemsState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
@@ -261,6 +264,63 @@ function workLogCandidateQueueReasonText(reason: string): string {
 export function workLogCandidatesFailureText(state: WorkLogCandidatesState): string | null {
   if (state !== "failed") return null;
   return "AI 추출 후보를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.";
+}
+
+export function workLogReviewQueueActionLabel(
+  state: WorkLogReviewQueueState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "백필큐 동기화 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 백필큐를 ${hasResult ? "새로고침" : "동기화"}할 수 없습니다`;
+  }
+  return hasResult ? "백필큐 새로고침" : "백필큐 동기화";
+}
+
+export function workLogReviewQueueMetaText(
+  state: WorkLogReviewQueueState,
+  result: ProjectWorkLogReviewQueueResult | null,
+): string {
+  if (state === "loading") return "백필큐 동기화 중";
+  if (!result) return state === "failed" ? "백필큐를 사용할 수 없음" : "아직 동기화한 백필큐 없음";
+  return [
+    `큐 저장 ${result.total_items.toLocaleString()}개`,
+    `표시 ${result.returned_item_count.toLocaleString()}개`,
+    `동기화 ${result.synced_candidate_count.toLocaleString()}개`,
+    `stale 전환 ${result.stale_candidate_count.toLocaleString()}개`,
+    `AI 대기 ${result.pending_ai_review_count.toLocaleString()}개`,
+    `위험차단 ${result.risk_blocked_count.toLocaleString()}개`,
+    `stale ${result.stale_count.toLocaleString()}개`,
+    `승인 ${result.approved_count.toLocaleString()}개`,
+    `거절 ${result.rejected_count.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+export function workLogReviewQueueFailureText(state: WorkLogReviewQueueState): string | null {
+  if (state !== "failed") return null;
+  return "백필큐를 동기화하지 못했습니다. 데이터베이스 경로, 진행 로그 후보, 브리지 상태를 확인하세요.";
+}
+
+export function workLogReviewQueueItemStateText(item: ProjectWorkLogReviewQueueItem): string {
+  const labels: Record<string, string> = {
+    approved: "승인됨",
+    pending_ai_review: "AI 검토 대기",
+    rejected: "거절됨",
+    risk_blocked: "위험 차단",
+    stale: "현재 후보 아님",
+  };
+  return `${labels[item.review_state] ?? item.review_state} · ${workLogReviewQueueReasonText(item.review_reason)}`;
+}
+
+function workLogReviewQueueReasonText(reason: string): string {
+  const labels: Record<string, string> = {
+    candidate_no_longer_live: "live 후보에서 사라짐",
+    risk_flags_require_local_review: "위험 패턴으로 로컬 검토 필요",
+    safe_ai_candidate_ready: "AI provider 전송 가능",
+  };
+  return labels[reason] ?? reason;
 }
 
 export function workLogCandidateReviewLabel(

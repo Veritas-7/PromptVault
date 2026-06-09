@@ -265,6 +265,40 @@ export interface ProjectWorkLogExtractionCandidatesResult {
   warnings: string[];
 }
 
+export interface ProjectWorkLogReviewQueueItem {
+  candidate_id: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  review_state: string;
+  review_reason: string;
+  provider_route: string;
+  project: string;
+  source_path: string;
+  source_file: string;
+  candidate_reason: string;
+  excerpt: string;
+  line_count: number;
+  char_count: number;
+  risk_flags: string[];
+  modified_at: string | null;
+}
+
+export interface ProjectWorkLogReviewQueueResult {
+  generated_at: string;
+  database_path: string;
+  synced_candidate_count: number;
+  stale_candidate_count: number;
+  total_items: number;
+  returned_item_count: number;
+  pending_ai_review_count: number;
+  risk_blocked_count: number;
+  stale_count: number;
+  approved_count: number;
+  rejected_count: number;
+  items: ProjectWorkLogReviewQueueItem[];
+  warnings: string[];
+}
+
 export interface ProjectWorkLogExtractionProposal {
   candidate_id: string;
   project: string;

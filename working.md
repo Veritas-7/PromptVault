@@ -1,10 +1,119 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 11:43 KST
+Updated: 2026-06-09 12:08 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 persisted AI backfill review queue
+
+Current Goal:
+
+- Persist current unparsed progress-log extraction candidates into a SQLite
+  review queue before any provider extraction step.
+- Keep the queue auditable from CLI, browser bridge, and UI: how many current
+  candidates were synced, how many became stale, and how many are pending AI
+  review vs risk-blocked/manual.
+
+Context:
+
+- The previous slice exposed in-memory candidate queue state but did not save
+  a durable queue.
+- Live progress-log coverage currently has no unparsed candidates, so the
+  expected production state is an empty persisted queue after sync. Fixture and
+  Rust tests cover non-empty safe/risk/stale behavior.
+- This slice deliberately does not add approve/reject UI mutation yet; it
+  creates the durable queue table and status surface that the next slice can
+  mutate.
+
+Progress:
+
+- Added `project_work_log_review_queue` SQLite table with current candidate
+  metadata, first/last seen timestamps, `review_state`, `review_reason`, and
+  provider route.
+- Added queue sync behavior:
+  - safe candidates become `pending_ai_review` with `ai_provider` route;
+  - risk-flagged candidates become `risk_blocked` with `local_review` route;
+  - pending/risk candidates that disappear from the current candidate scan
+    become `stale`.
+- Added `work-log-review-queue` CLI command and `/api/work-log-review-queue`
+  browser bridge endpoint, both supporting `--sync-candidates` /
+  `sync_candidates`.
+- Added UI button `백필큐 동기화`, queue meta row, empty state, and persisted
+  queue row rendering.
+- Browser QA now clicks the new queue sync button and verifies the rendered
+  queue meta in the DOM.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added review queue options/result/item types, Tauri command, DB schema,
+    sync/read helpers, and Rust stale-transition coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added CLI command, help text, bridge route, DB serialization guard, and
+    bridge validation tests.
+- `src/types.ts`, `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`,
+  `src/App.tsx`:
+  - added review queue types, bridge parser validation, Korean status text,
+    action labels, UI button, meta, and list rendering.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`:
+  - cover bridge request/response validation and status copy.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - asserts `workLogReviewQueueMeta` after clicking the sync button.
+
+Tests:
+
+- `cargo check --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml project_work_log_review_queue`: PASS.
+- `npm run test:ui -- tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`: PASS. The package script ran the full UI suite, `439` tests.
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-review-queue --sync-candidates --json`: PASS. Live summary:
+  `synced=0`, `stale_transitions=0`, `total_items=0`,
+  `pending_ai_review=0`, `risk_blocked=0`, `stale=0`, `approved=0`,
+  `rejected=0`, no warnings.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`: PASS, `25` tests.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final isolated browser QA JSON included:
+  - `coverageMeta`: `794개 로그 · parsed 793개 · unparsed 0개 · 31개 프로젝트 · 작업 8,613개`;
+  - `workLogCandidatesMeta`: `백필큐 비어 있음 · 이유 unparsed 없음 · pending 0개 · AI 전송가능 0개 · 위험차단 0개`;
+  - `workLogReviewQueueMeta`: `큐 저장 0개 · 표시 0개 · 동기화 0개 · stale 전환 0개 · AI 대기 0개 · 위험차단 0개 · stale 0개 · 승인 0개 · 거절 0개`.
+- Post-QA live recheck,
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-coverage --json`: PASS.
+  Final live summary: `files_seen=794`, `parsed=793`, `unparsed=0`,
+  `project_count=31`, `work_item_count=8,613`, no warnings.
+- Post-QA live review queue recheck,
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-review-queue --sync-candidates --json`: PASS.
+  Final live summary: `synced=0`, `stale_transitions=0`,
+  `total_items=0`, `pending_ai_review=0`, `risk_blocked=0`,
+  `stale=0`, `approved=0`, `rejected=0`, no warnings.
+- `npm run check`: PASS. Covered UI `439` tests, production build, Rust
+  library `168` tests, CLI `25` tests, doc-tests, and clippy with
+  `-D warnings`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS after
+  formatting.
+- `git diff --check` and `git diff --cached --check`: PASS.
+- `gitleaks protect --staged --redact`: PASS, no leaks found.
+
+Issues:
+
+- Approval/rejection mutation is still the next slice. The queue table has
+  approval/rejection state slots, but no UI/CLI command yet to mark a candidate
+  approved or rejected.
+- Live production data still has `candidate_count=0`, so non-empty queue sync
+  is verified by tests rather than current live progress logs.
+- This slice is limited to durable queue sync/status. It does not yet route
+  approved queue rows into provider extraction.
+
+Research:
+
+- No external research needed. This continues the existing work-log extraction
+  and browser bridge architecture.
+
+Next Steps:
+
+- Next product slice: add explicit approve/reject queue mutation and route
+  approved queue candidates into saved extraction/backfill flow.
 
 ## Current Slice - 2026-06-09 AI backfill review queue audit metadata
 
@@ -99,7 +208,8 @@ Issues:
 - Live data still has `candidate_count=0`, so provider behavior for real
   unparsed candidates is covered by fixture tests, not by current production
   progress logs.
-- Staged secret scan, commit, and push are still pending for this slice.
+- Staged secret scan, commit, and push completed for this slice:
+  `bafd424 feat: expose work-log backfill queue state`.
 
 Research:
 
@@ -108,11 +218,9 @@ Research:
 
 Next Steps:
 
-- Run full `npm run check`, diff checks, staged secret scan, then commit and
-  push.
 - Next product slice after this: persist explicit candidate queue review state
   for unparsed/ambiguous logs before extraction, including approval/rejection
-  audit rows.
+  audit rows. This is now underway in the current top section.
 
 ## Current Slice - 2026-06-09 extraction runtime metadata
 

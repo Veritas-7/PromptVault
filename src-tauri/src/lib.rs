@@ -45,6 +45,8 @@ const DEFAULT_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT: usize = 10;
 const MAX_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT: usize = 100;
 const DEFAULT_PROJECT_WORK_LOG_CANDIDATE_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT: usize = 100;
+const DEFAULT_PROJECT_WORK_LOG_REVIEW_QUEUE_LIMIT: usize = 50;
+const MAX_PROJECT_WORK_LOG_REVIEW_QUEUE_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 200;
@@ -198,6 +200,13 @@ pub struct ProjectWorkLogExtractionCandidatesOptions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkLogReviewQueueOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub sync_candidates: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkLogExtractionProposalsOptions {
     pub limit: Option<usize>,
     pub ai: Option<bool>,
@@ -242,6 +251,42 @@ pub struct ProjectWorkLogExtractionCandidatesResult {
     pub risk_blocked_candidate_count: usize,
     pub candidate_count: usize,
     pub candidates: Vec<ProjectWorkLogExtractionCandidate>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogReviewQueueItem {
+    pub candidate_id: String,
+    pub first_seen_at: String,
+    pub last_seen_at: String,
+    pub review_state: String,
+    pub review_reason: String,
+    pub provider_route: String,
+    pub project: String,
+    pub source_path: String,
+    pub source_file: String,
+    pub candidate_reason: String,
+    pub excerpt: String,
+    pub line_count: usize,
+    pub char_count: usize,
+    pub risk_flags: Vec<String>,
+    pub modified_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogReviewQueueResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub synced_candidate_count: usize,
+    pub stale_candidate_count: usize,
+    pub total_items: usize,
+    pub returned_item_count: usize,
+    pub pending_ai_review_count: usize,
+    pub risk_blocked_count: usize,
+    pub stale_count: usize,
+    pub approved_count: usize,
+    pub rejected_count: usize,
+    pub items: Vec<ProjectWorkLogReviewQueueItem>,
     pub warnings: Vec<String>,
 }
 
@@ -814,6 +859,13 @@ fn project_work_log_candidates(
 }
 
 #[tauri::command]
+fn project_work_log_review_queue(
+    options: Option<ProjectWorkLogReviewQueueOptions>,
+) -> Result<ProjectWorkLogReviewQueueResult, String> {
+    run_project_work_log_review_queue(options.unwrap_or_default()).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
 async fn project_work_log_extract(
     options: Option<ProjectWorkLogExtractionProposalsOptions>,
 ) -> Result<ProjectWorkLogExtractionProposalsResult, String> {
@@ -1291,6 +1343,58 @@ pub fn run_project_work_log_extraction_candidates(
                 .min(MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT),
         ),
     )
+}
+
+pub fn run_project_work_log_review_queue(
+    options: ProjectWorkLogReviewQueueOptions,
+) -> Result<ProjectWorkLogReviewQueueResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-log review queue limit requires a positive integer".into());
+    }
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_LOG_REVIEW_QUEUE_LIMIT)
+        .min(MAX_PROJECT_WORK_LOG_REVIEW_QUEUE_LIMIT);
+    let mut conn = open_promptvault_database(&database_path)?;
+    let mut warnings = Vec::new();
+    let mut synced_candidate_count = 0usize;
+    let mut stale_candidate_count = 0usize;
+    if options.sync_candidates.unwrap_or(false) {
+        let candidates = run_project_work_log_extraction_candidates(
+            ProjectWorkLogExtractionCandidatesOptions {
+                limit: Some(MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT),
+            },
+        )?;
+        synced_candidate_count = candidates.candidates.len();
+        stale_candidate_count =
+            sync_project_work_log_review_queue(&mut conn, &candidates.candidates, &generated_at)?;
+        warnings.extend(candidates.warnings);
+    }
+    let rows = read_project_work_log_review_queue(&conn, limit)?;
+    Ok(ProjectWorkLogReviewQueueResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        synced_candidate_count,
+        stale_candidate_count,
+        total_items: rows.total_items,
+        returned_item_count: rows.items.len(),
+        pending_ai_review_count: rows.pending_ai_review_count,
+        risk_blocked_count: rows.risk_blocked_count,
+        stale_count: rows.stale_count,
+        approved_count: rows.approved_count,
+        rejected_count: rows.rejected_count,
+        items: rows.items,
+        warnings,
+    })
 }
 
 pub async fn run_project_work_log_extraction_proposals(
@@ -7073,6 +7177,27 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             ON project_work_session_evidence(prompt_date);
         CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_source
             ON project_work_session_evidence(source);
+        CREATE TABLE IF NOT EXISTS project_work_log_review_queue (
+            candidate_id TEXT PRIMARY KEY,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            review_state TEXT NOT NULL,
+            review_reason TEXT NOT NULL,
+            provider_route TEXT NOT NULL,
+            project TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            source_file TEXT NOT NULL,
+            candidate_reason TEXT NOT NULL,
+            excerpt TEXT NOT NULL,
+            line_count INTEGER NOT NULL,
+            char_count INTEGER NOT NULL,
+            risk_flags_json TEXT NOT NULL,
+            modified_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_work_log_review_queue_state
+            ON project_work_log_review_queue(review_state, last_seen_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_project_work_log_review_queue_project
+            ON project_work_log_review_queue(project, last_seen_at DESC);
         CREATE TABLE IF NOT EXISTS project_work_log_extraction_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             saved_at TEXT NOT NULL,
@@ -7175,6 +7300,174 @@ fn sqlite_table_has_column(
         }
     }
     Ok(false)
+}
+
+fn sync_project_work_log_review_queue(
+    conn: &mut Connection,
+    candidates: &[ProjectWorkLogExtractionCandidate],
+    sync_at: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let tx = conn.transaction()?;
+    for candidate in candidates {
+        let (review_state, review_reason, provider_route) =
+            project_work_log_review_queue_defaults(candidate);
+        let risk_flags_json = serde_json::to_string(&candidate.risk_flags)?;
+        tx.execute(
+            "INSERT INTO project_work_log_review_queue (
+                candidate_id, first_seen_at, last_seen_at, review_state, review_reason,
+                provider_route, project, source_path, source_file, candidate_reason, excerpt,
+                line_count, char_count, risk_flags_json, modified_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+            ON CONFLICT(candidate_id) DO UPDATE SET
+                last_seen_at=excluded.last_seen_at,
+                provider_route=excluded.provider_route,
+                project=excluded.project,
+                source_path=excluded.source_path,
+                source_file=excluded.source_file,
+                candidate_reason=excluded.candidate_reason,
+                excerpt=excluded.excerpt,
+                line_count=excluded.line_count,
+                char_count=excluded.char_count,
+                risk_flags_json=excluded.risk_flags_json,
+                modified_at=excluded.modified_at,
+                review_state=CASE
+                    WHEN project_work_log_review_queue.review_state IN ('approved', 'rejected')
+                    THEN project_work_log_review_queue.review_state
+                    ELSE excluded.review_state
+                END,
+                review_reason=CASE
+                    WHEN project_work_log_review_queue.review_state IN ('approved', 'rejected')
+                    THEN project_work_log_review_queue.review_reason
+                    ELSE excluded.review_reason
+                END",
+            params![
+                &candidate.candidate_id,
+                sync_at,
+                sync_at,
+                review_state,
+                review_reason,
+                provider_route,
+                &candidate.project,
+                &candidate.source_path,
+                &candidate.source_file,
+                &candidate.reason,
+                &candidate.excerpt,
+                candidate.line_count as i64,
+                candidate.char_count as i64,
+                &risk_flags_json,
+                candidate.modified_at.as_deref(),
+            ],
+        )?;
+    }
+    let stale_candidate_count = tx.execute(
+        "UPDATE project_work_log_review_queue
+         SET review_state='stale', review_reason='candidate_no_longer_live', last_seen_at=?1
+         WHERE review_state IN ('pending_ai_review', 'risk_blocked')
+            AND last_seen_at <> ?1",
+        params![sync_at],
+    )?;
+    tx.commit()?;
+    Ok(stale_candidate_count)
+}
+
+fn project_work_log_review_queue_defaults(
+    candidate: &ProjectWorkLogExtractionCandidate,
+) -> (&'static str, &'static str, &'static str) {
+    if candidate.risk_flags.is_empty() {
+        (
+            "pending_ai_review",
+            "safe_ai_candidate_ready",
+            "ai_provider",
+        )
+    } else {
+        (
+            "risk_blocked",
+            "risk_flags_require_local_review",
+            "local_review",
+        )
+    }
+}
+
+struct ProjectWorkLogReviewQueueRows {
+    total_items: usize,
+    pending_ai_review_count: usize,
+    risk_blocked_count: usize,
+    stale_count: usize,
+    approved_count: usize,
+    rejected_count: usize,
+    items: Vec<ProjectWorkLogReviewQueueItem>,
+}
+
+fn read_project_work_log_review_queue(
+    conn: &Connection,
+    limit: usize,
+) -> Result<ProjectWorkLogReviewQueueRows, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT candidate_id, first_seen_at, last_seen_at, review_state, review_reason,
+            provider_route, project, source_path, source_file, candidate_reason, excerpt,
+            line_count, char_count, risk_flags_json, modified_at
+         FROM project_work_log_review_queue
+         ORDER BY
+            CASE review_state
+                WHEN 'pending_ai_review' THEN 0
+                WHEN 'risk_blocked' THEN 1
+                WHEN 'stale' THEN 2
+                WHEN 'approved' THEN 3
+                WHEN 'rejected' THEN 4
+                ELSE 5
+            END,
+            last_seen_at DESC",
+    )?;
+    let mut rows = stmt.query([])?;
+    let mut total_items = 0usize;
+    let mut pending_ai_review_count = 0usize;
+    let mut risk_blocked_count = 0usize;
+    let mut stale_count = 0usize;
+    let mut approved_count = 0usize;
+    let mut rejected_count = 0usize;
+    let mut items = Vec::new();
+    while let Some(row) = rows.next()? {
+        let review_state: String = row.get(3)?;
+        total_items += 1;
+        match review_state.as_str() {
+            "pending_ai_review" => pending_ai_review_count += 1,
+            "risk_blocked" => risk_blocked_count += 1,
+            "stale" => stale_count += 1,
+            "approved" => approved_count += 1,
+            "rejected" => rejected_count += 1,
+            _ => {}
+        }
+        if items.len() >= limit {
+            continue;
+        }
+        let risk_flags_json: String = row.get(13)?;
+        items.push(ProjectWorkLogReviewQueueItem {
+            candidate_id: row.get(0)?,
+            first_seen_at: row.get(1)?,
+            last_seen_at: row.get(2)?,
+            review_state,
+            review_reason: row.get(4)?,
+            provider_route: row.get(5)?,
+            project: row.get(6)?,
+            source_path: row.get(7)?,
+            source_file: row.get(8)?,
+            candidate_reason: row.get(9)?,
+            excerpt: row.get(10)?,
+            line_count: row.get::<_, i64>(11)? as usize,
+            char_count: row.get::<_, i64>(12)? as usize,
+            risk_flags: serde_json::from_str(&risk_flags_json)?,
+            modified_at: row.get(14)?,
+        });
+    }
+    Ok(ProjectWorkLogReviewQueueRows {
+        total_items,
+        pending_ai_review_count,
+        risk_blocked_count,
+        stale_count,
+        approved_count,
+        rejected_count,
+        items,
+    })
 }
 
 fn persist_project_work_log_extraction_proposals(
@@ -8734,6 +9027,7 @@ pub fn run() {
             project_work_summary_snapshots,
             project_work_log_coverage,
             project_work_log_candidates,
+            project_work_log_review_queue,
             project_work_log_extract,
             project_work_log_freeze,
             project_work_log_items
@@ -12365,6 +12659,74 @@ Progress:
             .items
             .iter()
             .any(|item| item.project == "CareVault" && item.status == "extracted"));
+    }
+
+    #[test]
+    fn project_work_log_review_queue_syncs_candidates_and_marks_stale_rows() {
+        let suffix = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-project-work-log-review-queue-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut conn = open_promptvault_database(&db_path).expect("open db");
+        let safe = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-Safe-a1b2c3d4e5".to_string(),
+            project: "SafeProject".to_string(),
+            source_path: "/tmp/SafeProject/working.md".to_string(),
+            source_file: "working.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt: "- 2026-06-09: Safe work".to_string(),
+            line_count: 1,
+            char_count: 24,
+            risk_flags: Vec::new(),
+            modified_at: Some("2026-06-09T00:00:00Z".to_string()),
+        };
+        let risky = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-Risky-a1b2c3d4e5".to_string(),
+            project: "RiskyProject".to_string(),
+            source_path: "/tmp/RiskyProject/workingd.md".to_string(),
+            source_file: "workingd.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt: "- api_key = [REDACTED]".to_string(),
+            line_count: 1,
+            char_count: 22,
+            risk_flags: vec!["possible_api_key".to_string()],
+            modified_at: None,
+        };
+
+        let stale_count = sync_project_work_log_review_queue(
+            &mut conn,
+            &[safe.clone(), risky],
+            "2026-06-09T00:00:00Z",
+        )
+        .expect("sync queue");
+        assert_eq!(stale_count, 0);
+        let rows = read_project_work_log_review_queue(&conn, 10).expect("read queue");
+        assert_eq!(rows.total_items, 2);
+        assert_eq!(rows.pending_ai_review_count, 1);
+        assert_eq!(rows.risk_blocked_count, 1);
+        assert_eq!(rows.stale_count, 0);
+        assert_eq!(rows.items[0].candidate_id, "work-log-Safe-a1b2c3d4e5");
+        assert_eq!(rows.items[0].review_state, "pending_ai_review");
+        assert_eq!(rows.items[0].provider_route, "ai_provider");
+        assert_eq!(rows.items[1].review_state, "risk_blocked");
+        assert_eq!(rows.items[1].provider_route, "local_review");
+
+        let stale_count =
+            sync_project_work_log_review_queue(&mut conn, &[safe], "2026-06-09T01:00:00Z")
+                .expect("sync queue again");
+        assert_eq!(stale_count, 1);
+        let rows = read_project_work_log_review_queue(&conn, 10).expect("read queue again");
+        assert_eq!(rows.total_items, 2);
+        assert_eq!(rows.pending_ai_review_count, 1);
+        assert_eq!(rows.risk_blocked_count, 0);
+        assert_eq!(rows.stale_count, 1);
+        assert!(rows.items.iter().any(|item| {
+            item.candidate_id == "work-log-Risky-a1b2c3d4e5"
+                && item.review_state == "stale"
+                && item.review_reason == "candidate_no_longer_live"
+        }));
     }
 
     #[test]

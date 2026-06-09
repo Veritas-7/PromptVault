@@ -8,6 +8,7 @@ import {
   loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
   loadProjectWorkLogExtractionProposals,
+  loadProjectWorkLogReviewQueue,
   listProjectWorkLogExtractionItems,
   loadStoredPrompts,
   loadProjectWorkSummary,
@@ -368,6 +369,41 @@ function projectWorkLogCandidatesPayload(overrides = {}) {
       source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
       source_file: "workingd.md",
       reason: "missing_dated_heading",
+      excerpt: "Ideas\n- Backfill older work notes",
+      line_count: 2,
+      char_count: 35,
+      risk_flags: ["possible_api_key"],
+      modified_at: null,
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function projectWorkLogReviewQueuePayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    synced_candidate_count: 1,
+    stale_candidate_count: 0,
+    total_items: 1,
+    returned_item_count: 1,
+    pending_ai_review_count: 0,
+    risk_blocked_count: 1,
+    stale_count: 0,
+    approved_count: 0,
+    rejected_count: 0,
+    items: [{
+      candidate_id: "work-log-CareVault-a1b2c3d4e5",
+      first_seen_at: "2026-06-09T00:00:00Z",
+      last_seen_at: "2026-06-09T00:00:00Z",
+      review_state: "risk_blocked",
+      review_reason: "risk_flags_require_local_review",
+      provider_route: "local_review",
+      project: "CareVault",
+      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      source_file: "workingd.md",
+      candidate_reason: "missing_dated_heading",
       excerpt: "Ideas\n- Backfill older work notes",
       line_count: 2,
       char_count: 35,
@@ -741,6 +777,49 @@ test("browser bridge work log candidates rejects impossible counters", async (t)
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /candidate_count|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work log review queue posts sync option and validates persisted rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogReviewQueuePayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkLogReviewQueue({ limit: 5, sync_candidates: true });
+
+  assert.match(requestPath, /\/api\/work-log-review-queue$/);
+  assert.deepEqual(JSON.parse(requestBody), { options: { limit: 5, sync_candidates: true } });
+  assert.equal(result.synced_candidate_count, 1);
+  assert.equal(result.risk_blocked_count, 1);
+  assert.equal(result.items[0].review_state, "risk_blocked");
+  assert.equal(result.items[0].provider_route, "local_review");
+});
+
+test("browser bridge work log review queue rejects impossible counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkLogReviewQueuePayload({
+    total_items: 0,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkLogReviewQueue({ sync_candidates: true }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /review_state|workingd\.md|undefined/);
       return true;
     },
   );

@@ -15,6 +15,7 @@ import type {
   ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
+  ProjectWorkLogReviewQueueResult,
   ProjectWorkReport,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
@@ -104,6 +105,12 @@ export interface ProjectWorkSummarySnapshotsOptions {
 
 export interface ProjectWorkLogCandidatesOptions {
   limit?: number;
+}
+
+export interface ProjectWorkLogReviewQueueOptions {
+  database_path?: string;
+  limit?: number;
+  sync_candidates?: boolean;
 }
 
 export interface ProjectWorkLogExtractionOptions {
@@ -250,6 +257,19 @@ export async function loadProjectWorkLogCandidates(
     "/api/work-log-candidates",
     { options },
     parseProjectWorkLogExtractionCandidatesResult,
+  );
+}
+
+export async function loadProjectWorkLogReviewQueue(
+  options: ProjectWorkLogReviewQueueOptions = {},
+): Promise<ProjectWorkLogReviewQueueResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogReviewQueueResult>("project_work_log_review_queue", { options });
+  }
+  return postBridge<ProjectWorkLogReviewQueueResult>(
+    "/api/work-log-review-queue",
+    { options },
+    parseProjectWorkLogReviewQueueResult,
   );
 }
 
@@ -1328,6 +1348,68 @@ function parseProjectWorkLogExtractionCandidatesResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkLogExtractionCandidatesResult;
+}
+
+function isProjectWorkLogReviewQueueItem(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.candidate_id)
+    && isTimestampString(value.first_seen_at)
+    && isTimestampString(value.last_seen_at)
+    && ["pending_ai_review", "risk_blocked", "stale", "approved", "rejected"].includes(String(value.review_state))
+    && isNonBlankString(value.review_reason)
+    && ["ai_provider", "local_review"].includes(String(value.provider_route))
+    && isNonBlankString(value.project)
+    && isNonBlankString(value.source_path)
+    && isNonBlankString(value.source_file)
+    && isNonBlankString(value.candidate_reason)
+    && isNonBlankString(value.excerpt)
+    && isPositiveSafeInteger(value.line_count)
+    && isPositiveSafeInteger(value.char_count)
+    && isNonBlankStringArray(value.risk_flags)
+    && isNullableTimestampString(value.modified_at);
+}
+
+function projectWorkLogReviewQueueWithinResult(value: unknown): boolean {
+  if (!isRecord(value)
+    || !Array.isArray(value.items)
+    || !isNonNegativeSafeInteger(value.synced_candidate_count)
+    || !isNonNegativeSafeInteger(value.stale_candidate_count)
+    || !isNonNegativeSafeInteger(value.total_items)
+    || !isNonNegativeSafeInteger(value.returned_item_count)
+    || !isNonNegativeSafeInteger(value.pending_ai_review_count)
+    || !isNonNegativeSafeInteger(value.risk_blocked_count)
+    || !isNonNegativeSafeInteger(value.stale_count)
+    || !isNonNegativeSafeInteger(value.approved_count)
+    || !isNonNegativeSafeInteger(value.rejected_count)) {
+    return false;
+  }
+  const stateCount = value.pending_ai_review_count
+    + value.risk_blocked_count
+    + value.stale_count
+    + value.approved_count
+    + value.rejected_count;
+  return Number.isSafeInteger(stateCount)
+    && stateCount <= value.total_items
+    && value.items.length === value.returned_item_count
+    && value.returned_item_count <= value.total_items
+    && value.stale_candidate_count <= value.total_items
+    && value.synced_candidate_count <= value.total_items + value.stale_candidate_count;
+}
+
+function parseProjectWorkLogReviewQueueResult(
+  value: unknown,
+): ProjectWorkLogReviewQueueResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !Array.isArray(value.items)
+    || !value.items.every(isProjectWorkLogReviewQueueItem)
+    || !recordStringFieldValuesAreUnique(value.items, "candidate_id")
+    || !projectWorkLogReviewQueueWithinResult(value)
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkLogReviewQueueResult;
 }
 
 function isProjectWorkLogExtractionProposal(value: unknown): boolean {

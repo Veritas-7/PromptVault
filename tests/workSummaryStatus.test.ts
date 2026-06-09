@@ -6,6 +6,10 @@ import {
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
   workLogCandidateReviewLabel,
+  workLogReviewQueueActionLabel,
+  workLogReviewQueueFailureText,
+  workLogReviewQueueItemStateText,
+  workLogReviewQueueMetaText,
   workLogExtractionActionLabel,
   workLogExtractionFailureText,
   workLogExtractionItemsActionLabel,
@@ -40,6 +44,7 @@ import {
   workSummarySnapshotVisibleSummaries,
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
+  type WorkLogReviewQueueState,
   type WorkLogExtractionState,
   type WorkLogExtractionItemsState,
   type WorkManagementFreezeState,
@@ -54,6 +59,8 @@ import type {
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposal,
   ProjectWorkLogExtractionProposalsResult,
+  ProjectWorkLogReviewQueueItem,
+  ProjectWorkLogReviewQueueResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
@@ -168,6 +175,50 @@ function extractionCandidate(
     source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md",
     source_file: "working.md",
     reason: "unparsed_work_log",
+    excerpt: "- 2026-06-04: Created project root.",
+    line_count: 1,
+    char_count: 36,
+    risk_flags: [],
+    modified_at: "2026-06-04T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function reviewQueueResult(
+  overrides: Partial<ProjectWorkLogReviewQueueResult> = {},
+): ProjectWorkLogReviewQueueResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    synced_candidate_count: 13,
+    stale_candidate_count: 2,
+    total_items: 18,
+    returned_item_count: 5,
+    pending_ai_review_count: 10,
+    risk_blocked_count: 3,
+    stale_count: 2,
+    approved_count: 2,
+    rejected_count: 1,
+    items: [],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function reviewQueueItem(
+  overrides: Partial<ProjectWorkLogReviewQueueItem> = {},
+): ProjectWorkLogReviewQueueItem {
+  return {
+    candidate_id: "work-log-RepoTutorStudio-a1b2c3d4",
+    first_seen_at: "2026-06-09T00:00:00Z",
+    last_seen_at: "2026-06-09T00:00:00Z",
+    review_state: "pending_ai_review",
+    review_reason: "safe_ai_candidate_ready",
+    provider_route: "ai_provider",
+    project: "RepoTutorStudio",
+    source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md",
+    source_file: "working.md",
+    candidate_reason: "missing_dated_heading",
     excerpt: "- 2026-06-04: Created project root.",
     line_count: 1,
     char_count: 36,
@@ -546,6 +597,43 @@ test("work log candidate review labels expose candidate handling expectations", 
   assert.equal(
     workLogCandidateReviewLabel(extractionCandidate({ risk_flags: ["long_base64_like_token"] })),
     "문서 위험 패턴 있음 · 줄 단위 안전 추출만 허용: 긴 토큰 형식 문자열",
+  );
+});
+
+test("work log review queue labels describe persisted candidate state", () => {
+  const failed: WorkLogReviewQueueState = "failed";
+  assert.equal(workLogReviewQueueActionLabel("idle", false, lockState()), "백필큐 동기화");
+  assert.equal(workLogReviewQueueActionLabel("ready", true, lockState()), "백필큐 새로고침");
+  assert.equal(
+    workLogReviewQueueActionLabel("loading", true, lockState({ workSummaryRunning: true })),
+    "백필큐 동기화 중",
+  );
+  assert.equal(
+    workLogReviewQueueActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 백필큐를 새로고침할 수 없습니다",
+  );
+  assert.equal(workLogReviewQueueMetaText("idle", null), "아직 동기화한 백필큐 없음");
+  assert.equal(workLogReviewQueueMetaText("loading", reviewQueueResult()), "백필큐 동기화 중");
+  assert.equal(
+    workLogReviewQueueMetaText("ready", reviewQueueResult()),
+    "큐 저장 18개 · 표시 5개 · 동기화 13개 · stale 전환 2개 · AI 대기 10개 · 위험차단 3개 · stale 2개 · 승인 2개 · 거절 1개",
+  );
+  assert.equal(workLogReviewQueueMetaText(failed, null), "백필큐를 사용할 수 없음");
+  assert.equal(
+    workLogReviewQueueFailureText(failed),
+    "백필큐를 동기화하지 못했습니다. 데이터베이스 경로, 진행 로그 후보, 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workLogReviewQueueFailureText("ready"), null);
+  assert.equal(
+    workLogReviewQueueItemStateText(reviewQueueItem()),
+    "AI 검토 대기 · AI provider 전송 가능",
+  );
+  assert.equal(
+    workLogReviewQueueItemStateText(reviewQueueItem({
+      review_state: "risk_blocked",
+      review_reason: "risk_flags_require_local_review",
+    })),
+    "위험 차단 · 위험 패턴으로 로컬 검토 필요",
   );
 });
 

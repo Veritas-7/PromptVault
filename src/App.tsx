@@ -113,6 +113,7 @@ import {
   loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
   loadProjectWorkLogExtractionProposals,
+  loadProjectWorkLogReviewQueue,
   listProjectWorkLogExtractionItems,
   loadProjectWorkSummary,
   listProjectWorkSummarySnapshots,
@@ -231,6 +232,7 @@ import type {
   ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
+  ProjectWorkLogReviewQueueResult,
   PromptRecord,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
@@ -244,6 +246,10 @@ import {
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
   workLogCandidateReviewLabel,
+  workLogReviewQueueActionLabel,
+  workLogReviewQueueFailureText,
+  workLogReviewQueueItemStateText,
+  workLogReviewQueueMetaText,
   workLogExtractionActionLabel,
   workLogExtractionApprovalText,
   workLogExtractionFailureText,
@@ -277,6 +283,7 @@ import {
   workSummarySnapshotSummaryOverflowText,
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
+  type WorkLogReviewQueueState,
   type WorkLogExtractionRunMode,
   type WorkLogExtractionState,
   type WorkLogExtractionItemsState,
@@ -295,6 +302,7 @@ const WORK_SUMMARY_DISPLAY_LIMIT = 5;
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
 const WORK_LOG_CANDIDATE_DISPLAY_LIMIT = 5;
+const WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_ITEM_MANAGEMENT_LIMIT = 1_000;
@@ -381,6 +389,7 @@ function App() {
   const [workSummarySnapshotsState, setWorkSummarySnapshotsState] = useState<WorkSummarySnapshotsState>("idle");
   const [workLogCoverageState, setWorkLogCoverageState] = useState<WorkLogCoverageState>("idle");
   const [workLogCandidatesState, setWorkLogCandidatesState] = useState<WorkLogCandidatesState>("idle");
+  const [workLogReviewQueueState, setWorkLogReviewQueueState] = useState<WorkLogReviewQueueState>("idle");
   const [workLogExtractionState, setWorkLogExtractionState] = useState<WorkLogExtractionState>("idle");
   const [workLogExtractionRunMode, setWorkLogExtractionRunMode] =
     useState<WorkLogExtractionRunMode>("ai");
@@ -408,6 +417,8 @@ function App() {
   const [workLogCoverageResult, setWorkLogCoverageResult] = useState<ProjectWorkLogCoverageResult | null>(null);
   const [workLogCandidatesResult, setWorkLogCandidatesResult] =
     useState<ProjectWorkLogExtractionCandidatesResult | null>(null);
+  const [workLogReviewQueueResult, setWorkLogReviewQueueResult] =
+    useState<ProjectWorkLogReviewQueueResult | null>(null);
   const [workLogExtractionResult, setWorkLogExtractionResult] =
     useState<ProjectWorkLogExtractionProposalsResult | null>(null);
   const [workLogExtractionItemsResult, setWorkLogExtractionItemsResult] =
@@ -473,6 +484,7 @@ function App() {
     || workSummarySnapshotsState === "loading"
     || workLogCoverageState === "loading"
     || workLogCandidatesState === "loading"
+    || workLogReviewQueueState === "loading"
     || workLogExtractionState === "loading"
     || workLogExtractionItemsState === "loading"
     || workManagementRefreshState === "loading"
@@ -652,6 +664,8 @@ function App() {
   const workLogCoverageMeta = workLogCoverageMetaText(workLogCoverageState, workLogCoverageResult);
   const workLogCandidatesFailureMessage = workLogCandidatesFailureText(workLogCandidatesState);
   const workLogCandidatesMeta = workLogCandidatesMetaText(workLogCandidatesState, workLogCandidatesResult);
+  const workLogReviewQueueFailureMessage = workLogReviewQueueFailureText(workLogReviewQueueState);
+  const workLogReviewQueueMeta = workLogReviewQueueMetaText(workLogReviewQueueState, workLogReviewQueueResult);
   const workLogExtractionFailureMessage = workLogExtractionFailureText(workLogExtractionState);
   const workLogExtractionMeta = workLogExtractionMetaText(
     workLogExtractionState,
@@ -718,6 +732,12 @@ function App() {
   const hiddenWorkLogCandidateCount = Math.max(
     0,
     filteredWorkLogCandidates.length - WORK_LOG_CANDIDATE_DISPLAY_LIMIT,
+  );
+  const visibleWorkLogReviewQueueItems =
+    workLogReviewQueueResult?.items.slice(0, WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT) ?? [];
+  const hiddenWorkLogReviewQueueItemCount = Math.max(
+    0,
+    (workLogReviewQueueResult?.items.length ?? 0) - WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT,
   );
   const visibleWorkLogExtractionProposals =
     filteredWorkLogExtractionProposals.slice(0, WORK_LOG_EXTRACTION_DISPLAY_LIMIT);
@@ -1070,6 +1090,29 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkLogCandidatesState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function syncWorkLogReviewQueue() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkLogCandidatesState("loading");
+    setWorkLogReviewQueueState("loading");
+    try {
+      const nextCandidates = await loadProjectWorkLogCandidates();
+      setWorkLogCandidatesResult(nextCandidates);
+      setWorkLogCandidatesState("ready");
+      const nextQueue = await loadProjectWorkLogReviewQueue({ sync_candidates: true });
+      setWorkLogReviewQueueResult(nextQueue);
+      setWorkLogReviewQueueState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogCandidatesState((current) => (current === "loading" ? "failed" : current));
+      setWorkLogReviewQueueState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -1961,6 +2004,25 @@ function App() {
                   : "추출 후보"}
             </button>
             <button
+              aria-label={workLogReviewQueueActionLabel(
+                workLogReviewQueueState,
+                workLogReviewQueueResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-sync-work-log-review-queue="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void syncWorkLogReviewQueue()}
+              type="button"
+            >
+              <Database size={15} />
+              {workLogReviewQueueState === "loading"
+                ? "큐 동기화 중"
+                : workLogReviewQueueResult
+                  ? "큐 새로고침"
+                  : "백필큐 동기화"}
+            </button>
+            <button
               aria-label={workLogExtractionActionLabel(
                 workLogExtractionState,
                 workLogExtractionResult !== null,
@@ -2095,6 +2157,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workLogCandidatesFailureMessage}</span>
+          </div>
+        ) : null}
+        {workLogReviewQueueFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-log-review-queue-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={16} />
+            <span>{workLogReviewQueueFailureMessage}</span>
           </div>
         ) : null}
         {workLogExtractionFailureMessage ? (
@@ -2544,6 +2616,12 @@ function App() {
             <span>{workLogCandidatesMeta}</span>
           </div>
         ) : null}
+        {workLogReviewQueueResult || workLogReviewQueueState !== "idle" ? (
+          <div className="work-summary-index" data-work-log-review-queue-meta="true">
+            <Database size={15} />
+            <span>{workLogReviewQueueMeta}</span>
+          </div>
+        ) : null}
         {workLogExtractionResult || workLogExtractionState !== "idle" ? (
           <div className="work-summary-index" data-work-log-extraction-meta="true">
             <Sparkles size={15} />
@@ -2744,6 +2822,43 @@ function App() {
               {hasWorkLogPreviewFilters && workLogCandidatesResult.candidates.length
                 ? "필터에 맞는 AI 추출 후보 없음"
                 : "AI 추출 후보로 보낼 unparsed 진행 로그 없음"}
+            </div>
+          )
+        ) : null}
+        {workLogReviewQueueResult ? (
+          visibleWorkLogReviewQueueItems.length ? (
+            <div className="work-summary-list" data-work-log-review-queue="true">
+              {visibleWorkLogReviewQueueItems.map((item) => (
+                <article className="work-summary-row work-log-candidate-row" key={item.candidate_id}>
+                  <div>
+                    <strong>{item.project}</strong>
+                    <span>{item.source_file}</span>
+                  </div>
+                  <p className="work-log-candidate-excerpt">{item.excerpt}</p>
+                  <span data-work-log-review-queue-state={item.candidate_id}>
+                    {workLogReviewQueueItemStateText(item)}
+                  </span>
+                  <span>
+                    {item.provider_route} · {item.candidate_id} · seen {item.first_seen_at} / {item.last_seen_at}
+                  </span>
+                  <span>
+                    risk{" "}
+                    {item.risk_flags.length
+                      ? item.risk_flags.map(riskFlagLabel).join(", ")
+                      : "없음"}{" "}
+                    · {item.source_path}
+                  </span>
+                </article>
+              ))}
+              {hiddenWorkLogReviewQueueItemCount ? (
+                <div className="work-summary-overflow">
+                  그 외 백필큐 row {hiddenWorkLogReviewQueueItemCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-log-review-queue="true">
+              저장된 백필큐 후보 없음
             </div>
           )
         ) : null}

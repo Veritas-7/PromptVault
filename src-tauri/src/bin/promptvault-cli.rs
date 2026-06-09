@@ -365,12 +365,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let json = take_flag(&mut args, "--json");
             let reset = take_flag(&mut args, "--reset");
             let mut limit = None;
+            let mut batch_files = None;
             let mut database_path = None;
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
                     "--limit" => {
                         limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--batch-files" => {
+                        batch_files = Some(parse_positive_usize_arg(iter.next(), "--batch-files")?);
                     }
                     "--database" => {
                         database_path = Some(parse_required_arg(iter.next(), "--database")?);
@@ -384,6 +388,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let result = run_project_work_session_index(ProjectWorkSessionIndexOptions {
                 database_path,
                 limit,
+                batch_files,
                 reset: Some(reset),
             })?;
             if json {
@@ -394,13 +399,29 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("PromptVault project work session index");
             println!("database: {}", result.database_path);
             println!("requested_limit: {}", result.requested_limit);
+            if let Some(batch_files) = result.batch_files {
+                println!("batch_files: {batch_files}");
+            }
             println!("scanned_prompts: {}", result.scanned_prompt_count);
             println!("sanitized_prompts: {}", result.sanitized_prompt_count);
             println!("stored_prompts: {}", result.stored_prompt_count);
             println!("reset: {}", result.reset);
+            if !result.source_states.is_empty() {
+                println!("source_states:");
+                for state in &result.source_states {
+                    println!(
+                        "- {}: files {}/{}, matched {}, completed {}",
+                        state.source_label,
+                        state.processed_files,
+                        state.total_files,
+                        state.matched_prompt_count,
+                        state.completed
+                    );
+                }
+            }
             if !result.warnings.is_empty() {
                 println!("warnings:");
-                for warning in result.warnings {
+                for warning in &result.warnings {
                     println!("- {warning}");
                 }
             }
@@ -1934,7 +1955,7 @@ fn help_text() -> String {
         "  improve [--json] [--local] --prompt TEXT\n",
         "  improve [--json] [--local] < prompt.txt\n",
         "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
-        "  work-session-index [--limit N>0] [--database PATH] [--reset] [--json]\n",
+        "  work-session-index [--limit N>0] [--batch-files N>0] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
         "  work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]\n",
@@ -1973,7 +1994,7 @@ fn help_text() -> String {
         "  work-log-normalization-review-queue-update marks one persisted normalization proposal approved or rejected without writing normalized project/day rows.\n",
         "  work-log-normalization-apply writes operator-approved normalization queue rows into an idempotent durable normalized project/day table.\n",
         "  work-log-normalized-items lists durable normalized project/day rows by project and date without applying queue changes.\n",
-        "  work-session-index scans real session evidence and upserts sanitized project-target records; --reset rebuilds the index explicitly.\n",
+        "  work-session-index scans real session evidence and upserts sanitized project-target records; --batch-files resumes from per-source file cursors and --reset rebuilds explicitly.\n",
         "  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n",
         "  work-report session evidence is bounded by --session-limit.\n",
         "  work-summary builds project/date summaries with citation IDs; --include-extractions merges accepted AI work-log proposals into the summary preview; --include-saved-extractions merges stored accepted AI extraction rows without rereading raw progress logs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n",
@@ -2825,6 +2846,17 @@ mod tests {
         assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
         assert!(response.contains("work-session-index limit requires a positive integer"));
         assert!(response.contains("Access-Control-Allow-Origin: *"));
+
+        let batch_response = bridge_response_for(
+            "/api/work-session-index",
+            r#"{"options":{"batch_files":0}}"#,
+        );
+
+        assert!(batch_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(
+            batch_response.contains("work-session-index batch_files requires a positive integer")
+        );
+        assert!(batch_response.contains("Access-Control-Allow-Origin: *"));
     }
 
     #[test]
@@ -3115,7 +3147,9 @@ mod tests {
             "work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
         ));
         assert!(
-            help.contains("work-session-index [--limit N>0] [--database PATH] [--reset] [--json]")
+            help.contains(
+                "work-session-index [--limit N>0] [--batch-files N>0] [--database PATH] [--reset] [--json]"
+            )
         );
         assert!(help.contains("work-log-coverage [--json]"));
         assert!(help.contains("work-log-candidates [--limit N>0] [--json]"));
@@ -3155,6 +3189,7 @@ mod tests {
         ));
         assert!(help.contains("work-report reads project progress logs"));
         assert!(help.contains("work-session-index scans real session evidence"));
+        assert!(help.contains("--batch-files resumes from per-source file cursors"));
         assert!(help.contains("work-log-coverage lists parsed and unparsed"));
         assert!(help.contains("work-log-candidates prepares unparsed progress logs"));
         assert!(help.contains("work-log-review-queue persists current extraction candidates"));

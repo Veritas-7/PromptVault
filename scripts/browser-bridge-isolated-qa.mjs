@@ -239,13 +239,16 @@ async function runBrowserQa() {
     }
     step("work session index");
     workSessionIndexBackfill = await bridgeJson(page, "/api/work-session-index", {
-      options: { limit: WORK_SESSION_LIMIT, reset: true },
+      options: { batch_files: WORK_SESSION_LIMIT, reset: true },
     });
     if (
       workSessionIndexBackfill.database_path !== DATABASE_PATH
+      || workSessionIndexBackfill.batch_files !== WORK_SESSION_LIMIT
       || workSessionIndexBackfill.requested_limit < 1
       || workSessionIndexBackfill.stored_prompt_count > workSessionIndexBackfill.scanned_prompt_count
       || workSessionIndexBackfill.reset !== true
+      || !Array.isArray(workSessionIndexBackfill.source_states)
+      || !workSessionIndexBackfill.source_states.some((state) => state.processed_files > 0)
     ) {
       throw new Error(
         `Work session index bridge route returned invalid counters: ${JSON.stringify(workSessionIndexBackfill)}`,

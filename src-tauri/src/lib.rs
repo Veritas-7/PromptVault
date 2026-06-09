@@ -1,6 +1,6 @@
 use chrono::{FixedOffset, Local, NaiveDate, TimeZone, Utc};
 use regex::{Captures, Regex};
-use rusqlite::{params, Connection, OpenFlags, ToSql};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension, ToSql};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -787,7 +787,21 @@ pub struct ProjectWorkReportOptions {
 pub struct ProjectWorkSessionIndexOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
+    pub batch_files: Option<usize>,
     pub reset: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionIndexSourceState {
+    pub source_id: String,
+    pub source_label: String,
+    pub root_path: String,
+    pub total_files: usize,
+    pub next_file_index: usize,
+    pub processed_files: usize,
+    pub matched_prompt_count: usize,
+    pub completed: bool,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -795,10 +809,12 @@ pub struct ProjectWorkSessionIndexResult {
     pub generated_at: String,
     pub database_path: String,
     pub requested_limit: usize,
+    pub batch_files: Option<usize>,
     pub scanned_prompt_count: usize,
     pub sanitized_prompt_count: usize,
     pub stored_prompt_count: usize,
     pub reset: bool,
+    pub source_states: Vec<ProjectWorkSessionIndexSourceState>,
     pub warnings: Vec<String>,
 }
 
@@ -1713,6 +1729,9 @@ pub fn run_project_work_session_index(
     if matches!(options.limit, Some(0)) {
         return Err("work-session-index limit requires a positive integer".into());
     }
+    if matches!(options.batch_files, Some(0)) {
+        return Err("work-session-index batch_files requires a positive integer".into());
+    }
     if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
         return Err("work-session-index database path requires a non-empty value".into());
     }
@@ -1724,19 +1743,34 @@ pub fn run_project_work_session_index(
         .map(PathBuf::from)
         .unwrap_or_else(default_database_path);
     let requested_limit = options.limit.unwrap_or(DEFAULT_PROJECT_WORK_SESSION_LIMIT);
+    let batch_files = options.batch_files;
     let reset = options.reset.unwrap_or(false);
     let mut warnings = Vec::new();
-    let prompts = project_work_session_prompts(requested_limit, &mut warnings)?;
+    let (prompts, source_states) = if let Some(batch_files) = batch_files {
+        checkpointed_project_work_session_prompts(
+            &database_path,
+            batch_files,
+            reset,
+            &mut warnings,
+        )?
+    } else {
+        (
+            project_work_session_prompts(requested_limit, &mut warnings)?,
+            Vec::new(),
+        )
+    };
     let persistence = upsert_project_work_session_index(&database_path, &prompts, reset)?;
 
     Ok(ProjectWorkSessionIndexResult {
         generated_at,
         database_path: database_path.display().to_string(),
         requested_limit,
+        batch_files,
         scanned_prompt_count: prompts.len(),
         sanitized_prompt_count: persistence.sanitized_prompt_count,
         stored_prompt_count: persistence.stored_prompt_count,
         reset,
+        source_states,
         warnings,
     })
 }
@@ -6386,6 +6420,180 @@ fn project_work_codex_metadata_prompts_from_sources(
     Ok(prompts)
 }
 
+fn checkpointed_project_work_session_prompts(
+    database_path: &Path,
+    batch_files: usize,
+    reset: bool,
+    warnings: &mut Vec<String>,
+) -> Result<(Vec<PromptRecord>, Vec<ProjectWorkSessionIndexSourceState>), Box<dyn std::error::Error>>
+{
+    checkpointed_project_work_session_prompts_from_sources(
+        database_path,
+        batch_files,
+        reset,
+        source_specs(),
+        warnings,
+    )
+}
+
+fn checkpointed_project_work_session_prompts_from_sources(
+    database_path: &Path,
+    batch_files: usize,
+    reset: bool,
+    sources: Vec<SourceSpec>,
+    warnings: &mut Vec<String>,
+) -> Result<(Vec<PromptRecord>, Vec<ProjectWorkSessionIndexSourceState>), Box<dyn std::error::Error>>
+{
+    let conn = open_promptvault_database(database_path)?;
+    if reset {
+        conn.execute("DELETE FROM project_work_session_index_states", [])?;
+    }
+
+    let mut prompts = Vec::new();
+    let mut states = Vec::new();
+    for source in sources
+        .iter()
+        .filter(|source| PROJECT_WORK_CODEX_METADATA_SOURCE_IDS.contains(&source.id))
+    {
+        let updated_at = Utc::now().to_rfc3339();
+        if !source.root.exists() {
+            let state = ProjectWorkSessionIndexSourceState {
+                source_id: source.id.to_string(),
+                source_label: source.label.to_string(),
+                root_path: source.root.display().to_string(),
+                total_files: 0,
+                next_file_index: 0,
+                processed_files: 0,
+                matched_prompt_count: 0,
+                completed: true,
+                updated_at,
+            };
+            persist_project_work_session_index_state(&conn, &state)?;
+            states.push(state);
+            continue;
+        }
+
+        let previous = if reset {
+            None
+        } else {
+            project_work_session_index_state(&conn, source.id)?
+        };
+        let mut candidates = Vec::new();
+        for candidate in matching_source_file_candidates(&source.root, source.kind) {
+            match candidate {
+                Ok(candidate) => candidates.push(candidate),
+                Err(err) => warnings.push(format!(
+                    "Session evidence checkpoint {}: {err}",
+                    source.label
+                )),
+            }
+        }
+
+        let total_files = candidates.len();
+        let start_index = previous
+            .as_ref()
+            .map(|state| state.next_file_index)
+            .unwrap_or(0)
+            .min(total_files);
+        let end_index = start_index.saturating_add(batch_files).min(total_files);
+        let mut matched_in_batch = 0;
+        for candidate in &candidates[start_index..end_index] {
+            let modified_at = timestamp_millis_to_rfc3339(candidate.modified_ms);
+            match parse_codex_project_metadata_prompt(source, &candidate.path, modified_at) {
+                Ok(Some(prompt)) => {
+                    matched_in_batch += 1;
+                    prompts.push(prompt);
+                }
+                Ok(None) => {}
+                Err(err) => warnings.push(format!(
+                    "Session evidence checkpoint {}: {}: {err}",
+                    source.label,
+                    candidate.path.display()
+                )),
+            }
+        }
+        let matched_prompt_count = if start_index == 0 {
+            matched_in_batch
+        } else {
+            previous
+                .as_ref()
+                .map(|state| state.matched_prompt_count)
+                .unwrap_or(0)
+                .saturating_add(matched_in_batch)
+        };
+        let state = ProjectWorkSessionIndexSourceState {
+            source_id: source.id.to_string(),
+            source_label: source.label.to_string(),
+            root_path: source.root.display().to_string(),
+            total_files,
+            next_file_index: end_index,
+            processed_files: end_index,
+            matched_prompt_count,
+            completed: end_index >= total_files,
+            updated_at,
+        };
+        persist_project_work_session_index_state(&conn, &state)?;
+        states.push(state);
+    }
+
+    let prompt_count = prompts.len();
+    normalize_project_work_session_prompts(&mut prompts, prompt_count);
+    Ok((prompts, states))
+}
+
+fn project_work_session_index_state(
+    conn: &Connection,
+    source_id: &str,
+) -> Result<Option<ProjectWorkSessionIndexSourceState>, Box<dyn std::error::Error>> {
+    let state = conn
+        .query_row(
+            "SELECT source_id, source_label, root_path, total_files, next_file_index,
+                processed_files, matched_prompt_count, completed, updated_at
+             FROM project_work_session_index_states
+             WHERE source_id = ?1",
+            [source_id],
+            |row| {
+                Ok(ProjectWorkSessionIndexSourceState {
+                    source_id: row.get(0)?,
+                    source_label: row.get(1)?,
+                    root_path: row.get(2)?,
+                    total_files: row.get::<_, i64>(3)? as usize,
+                    next_file_index: row.get::<_, i64>(4)? as usize,
+                    processed_files: row.get::<_, i64>(5)? as usize,
+                    matched_prompt_count: row.get::<_, i64>(6)? as usize,
+                    completed: row.get::<_, i64>(7)? != 0,
+                    updated_at: row.get(8)?,
+                })
+            },
+        )
+        .optional()?;
+    Ok(state)
+}
+
+fn persist_project_work_session_index_state(
+    conn: &Connection,
+    state: &ProjectWorkSessionIndexSourceState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute(
+        "INSERT OR REPLACE INTO project_work_session_index_states (
+            source_id, source_label, root_path, total_files, next_file_index,
+            processed_files, matched_prompt_count, completed, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            &state.source_id,
+            &state.source_label,
+            &state.root_path,
+            state.total_files as i64,
+            state.next_file_index as i64,
+            state.processed_files as i64,
+            state.matched_prompt_count as i64,
+            if state.completed { 1_i64 } else { 0_i64 },
+            &state.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
 fn project_work_session_prompts_from_index(
     database_path: &Path,
     limit: usize,
@@ -8185,6 +8393,17 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             ON project_work_session_evidence(prompt_date);
         CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_source
             ON project_work_session_evidence(source);
+        CREATE TABLE IF NOT EXISTS project_work_session_index_states (
+            source_id TEXT PRIMARY KEY,
+            source_label TEXT NOT NULL,
+            root_path TEXT NOT NULL,
+            total_files INTEGER NOT NULL,
+            next_file_index INTEGER NOT NULL,
+            processed_files INTEGER NOT NULL,
+            matched_prompt_count INTEGER NOT NULL,
+            completed INTEGER NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS project_work_log_review_queue (
             candidate_id TEXT PRIMARY KEY,
             first_seen_at TEXT NOT NULL,
@@ -14255,6 +14474,96 @@ Progress:
     }
 
     #[test]
+    fn project_work_session_index_checkpoint_advances_source_state() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-session-index-checkpoint-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let source_root = root.join("sessions");
+        std::fs::create_dir_all(&source_root).expect("create session root");
+        let db_path = root.join("promptvault.sqlite");
+        for idx in 0..3 {
+            let project = format!("CheckpointProject{idx}");
+            let timestamp = format!("2026-06-09T12:0{idx}:00Z");
+            std::fs::write(
+                source_root.join(format!("session-{idx}.jsonl")),
+                format!(
+                    "{{\"timestamp\":\"{timestamp}\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"thread-{idx}\",\"cwd\":\"/Users/wj\"}}}}\n\
+                     {{\"timestamp\":\"{timestamp}\",\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"Target source path: /Users/wj/Ai/System/10_Projects/{project}\"}}]}}}}\n"
+                ),
+            )
+            .expect("write session jsonl");
+        }
+        let source = SourceSpec {
+            id: "codex",
+            label: "Codex",
+            root: source_root,
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let mut warnings = Vec::new();
+        let (first_prompts, first_states) = checkpointed_project_work_session_prompts_from_sources(
+            &db_path,
+            2,
+            true,
+            vec![source.clone()],
+            &mut warnings,
+        )
+        .expect("first checkpoint batch");
+        assert!(warnings.is_empty());
+        assert_eq!(first_prompts.len(), 2);
+        assert_eq!(first_states.len(), 1);
+        assert_eq!(first_states[0].total_files, 3);
+        assert_eq!(first_states[0].processed_files, 2);
+        assert_eq!(first_states[0].next_file_index, 2);
+        assert_eq!(first_states[0].matched_prompt_count, 2);
+        assert!(!first_states[0].completed);
+        let first_persistence = upsert_project_work_session_index(&db_path, &first_prompts, true)
+            .expect("persist first checkpoint batch");
+        assert_eq!(first_persistence.stored_prompt_count, 2);
+
+        let (second_prompts, second_states) =
+            checkpointed_project_work_session_prompts_from_sources(
+                &db_path,
+                2,
+                false,
+                vec![source],
+                &mut warnings,
+            )
+            .expect("second checkpoint batch");
+        assert!(warnings.is_empty());
+        assert_eq!(second_prompts.len(), 1);
+        assert_eq!(second_states.len(), 1);
+        assert_eq!(second_states[0].total_files, 3);
+        assert_eq!(second_states[0].processed_files, 3);
+        assert_eq!(second_states[0].next_file_index, 3);
+        assert_eq!(second_states[0].matched_prompt_count, 3);
+        assert!(second_states[0].completed);
+        let second_persistence =
+            upsert_project_work_session_index(&db_path, &second_prompts, false)
+                .expect("persist second checkpoint batch");
+        assert_eq!(second_persistence.stored_prompt_count, 3);
+
+        let indexed =
+            project_work_session_prompts_from_index(&db_path, 10).expect("read checkpointed index");
+        assert_eq!(indexed.len(), 3);
+        assert!(indexed
+            .iter()
+            .any(|prompt| prompt.text.contains("CheckpointProject0")));
+        assert!(indexed
+            .iter()
+            .any(|prompt| prompt.text.contains("CheckpointProject1")));
+        assert!(indexed
+            .iter()
+            .any(|prompt| prompt.text.contains("CheckpointProject2")));
+
+        std::fs::remove_dir_all(root).expect("remove checkpoint temp root");
+    }
+
+    #[test]
     fn run_project_work_session_index_rejects_zero_limit() {
         let err = run_project_work_session_index(ProjectWorkSessionIndexOptions {
             limit: Some(0),
@@ -14264,6 +14573,18 @@ Progress:
         .to_string();
 
         assert!(err.contains("work-session-index limit requires a positive integer"));
+    }
+
+    #[test]
+    fn run_project_work_session_index_rejects_zero_batch_files() {
+        let err = run_project_work_session_index(ProjectWorkSessionIndexOptions {
+            batch_files: Some(0),
+            ..Default::default()
+        })
+        .expect_err("zero batch_files should fail")
+        .to_string();
+
+        assert!(err.contains("work-session-index batch_files requires a positive integer"));
     }
 
     #[test]

@@ -1,124 +1,142 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 16:02 KST
+Updated: 2026-06-09 16:16 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 session evidence index backfill surface
+## Current Slice - 2026-06-09 checkpointed session evidence index backfill
 
 Current Goal:
 
-- Make the current project/day work-management system honest about its
-  completion level and add a small maintainable surface for session evidence
-  backfill.
+- Move the session evidence index from a bounded one-shot scan toward a
+  resumable all-history backfill path.
 - Keep raw Codex session content out of SQLite by storing only sanitized
-  project-target evidence records.
-- Prove the new route against real session files through CLI and browser bridge
-  QA.
+  project-target evidence records and per-source cursor state.
+- Answer the completion-level question honestly: current project/day management
+  is verified over real sessions and real project progress logs, but arbitrary
+  progress-log AI interpretation and full all-history exhaustion remain next
+  layers.
 
 Context:
 
 - The work-management surface is not yet a full all-history project/day ledger.
-  It is a verified bounded-management path over real session evidence and
-  project-local progress logs.
-- Verified current QA scope:
+  It is now a verified bounded-management path plus resumable session-index
+  cursor support over real session files.
+- Verified browser QA scope after this slice:
   - `31` projects;
   - `25` days;
-  - `8,856` parsed work items;
-  - `822` project progress logs seen, `821` parsed, `0` unparsed, plus `1`
+  - `8,865` parsed work items;
+  - `824` project progress logs seen, `823` parsed, `0` unparsed, plus `1`
     pointer log;
   - `91` normalization candidates.
 - Project-local progress logs are already part of the managed input surface.
   The parser scans known progress Markdown files such as `working.md`,
   `WORKING.md`, `workingd.md`, `PROGRESS_LOG.md`, and nested context logs under
   `/Users/wj/Ai/System/10_Projects`.
-- The gap that remains is deeper all-history checkpointing and richer AI
-  interpretation of arbitrary project-local progress log shapes. A Codex SDK or
-  GLM-backed adapter is a plausible next layer, but it still needs a strict
-  accepted/review queue and citation-preserving output contract before automatic
-  adoption.
+- The deterministic progress-log parser already feeds project/day rows,
+  freeze-to-durable rows, extraction review queues, normalization review queues,
+  and normalized rows. The gap that remains is richer AI interpretation of
+  arbitrary project-local progress log shapes and scheduled exhaustion of all
+  historical session files.
+- A Codex SDK or GLM-backed adapter is a plausible next layer, but it still
+  needs the existing accepted/review queue contract: no automatic durable
+  project/day writes without validation, confidence, citation IDs, and
+  operator-review states.
 
 Progress:
 
-- Added `ProjectWorkSessionIndexOptions` and
+- Added `project_work_session_index_states` SQLite table for per-source session
+  backfill cursors.
+- Added `ProjectWorkSessionIndexSourceState` to the backend result contract.
+- Added `batch_files` to `ProjectWorkSessionIndexOptions` and
   `ProjectWorkSessionIndexResult`.
-- Added `run_project_work_session_index` as a reusable backend runner.
-- Added `work-session-index [--limit N>0] [--database PATH] [--reset] [--json]`
-  CLI command.
-- Added `POST /api/work-session-index` browser bridge route with isolated
-  database routing.
-- Added a Tauri command `project_work_session_index` for future UI use.
-- Refactored session evidence persistence from delete-and-insert only to an
-  upsert-capable path:
-  - default `work-session-index` calls accumulate sanitized records with
-    `INSERT OR REPLACE`;
-  - `--reset` explicitly rebuilds the index;
-  - existing `work-report --refresh-session-index` still performs a reset-style
-    refresh.
-- Extended browser bridge QA so it calls `/api/work-session-index` after health
-  check and validates real scanned/sanitized/stored counters in the isolated DB.
-- Restored the default user DB session evidence index to the current bounded QA
-  depth after a CLI smoke run:
-  `work-session-index --limit 200 --reset --json` returned `scanned=200`,
-  `sanitized=200`, `stored=200`, warnings `[]`.
+- Added checkpointed session metadata traversal for Codex/Codex CX sources:
+  - `--batch-files N` starts from each source's saved `next_file_index`;
+  - `--reset` clears cursor rows and rebuilds from the newest matching files;
+  - existing `--limit` behavior remains available for the older bounded
+    one-shot path.
+- Added persistent source-state read/write helpers with SQLite
+  `INSERT OR REPLACE`.
+- Added a synthetic JSONL test proving two checkpointed batches advance
+  `processed_files`, `next_file_index`, `matched_prompt_count`, and stored
+  sanitized records.
+- Updated CLI help/output and bridge validation for `--batch-files`.
+- Updated browser bridge QA so `/api/work-session-index` uses
+  `batch_files=WORK_SESSION_LIMIT` and verifies source states.
 
 Changes:
 
 - `src-tauri/src/lib.rs`:
-  - added session index options/result structs and Tauri command;
-  - added `run_project_work_session_index`;
-  - added upsert/reset session evidence persistence;
-  - added tests for upsert-without-reset, explicit reset, and zero-limit
-    validation.
+  - added `batch_files` and source-state fields to session-index options/result
+    structs;
+  - added checkpointed session metadata traversal;
+  - added `project_work_session_index_states` schema;
+  - added state read/write helpers;
+  - added tests for checkpoint advancement and zero `batch_files` validation.
 - `src-tauri/src/bin/promptvault-cli.rs`:
-  - added CLI command, help text, bridge payload/route, DB-lock routing, and
-    validation tests.
+  - added `--batch-files`;
+  - prints per-source cursor state in human output;
+  - updated help text and bridge validation tests.
 - `scripts/browser-bridge-isolated-qa.mjs`:
-  - added real `/api/work-session-index` smoke validation using the isolated QA
-    database.
+  - changed work-session-index QA to use checkpointed `batch_files`;
+  - validates `batch_files`, source-state presence, and processed source files.
+- `working.md`:
+  - recorded the verified completion level, actual session/file counters, and
+    remaining AI/SDK-backed log interpretation gap.
 
 Tests:
 
 - `cargo fmt --manifest-path src-tauri/Cargo.toml`: PASS.
 - `cargo test --manifest-path src-tauri/Cargo.toml work_session_index -- --nocapture`:
-  PASS, `3` lib tests and `1` CLI bridge validation test.
+  PASS, `5` lib tests and `1` CLI bridge validation test.
 - `cargo test --manifest-path src-tauri/Cargo.toml bridge_serializes_database_backed_routes_only -- --nocapture`:
   PASS.
 - `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules -- --nocapture`:
   PASS.
-- `cargo run --quiet --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-session-index --limit 5 --reset --json`:
-  PASS, real default DB smoke produced `scanned=5`, `sanitized=5`,
-  `stored=5`.
-- `cargo run --quiet --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-session-index --limit 200 --reset --json`:
-  PASS, restored default DB session evidence index to `scanned=200`,
-  `sanitized=200`, `stored=200`, warnings `[]`.
-- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS.
-- `git diff --check`: PASS.
+- Temp DB CLI smoke:
+  `cargo run --quiet --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-session-index --batch-files 5 --reset --database "$tmp/session.sqlite" --json`:
+  PASS. Real session sources returned:
+  - Codex: `total_files=25,145`, `processed_files=5`, `matched_prompt_count=5`,
+    `next_file_index=5`;
+  - Codex CX: `total_files=11`, `processed_files=5`, `matched_prompt_count=0`,
+    `next_file_index=5`;
+  - `scanned=5`, `sanitized=5`, `stored=5`, warnings `[]`.
 - `npm run check`: PASS, including `test:ui` (`460` tests), production build,
-  full Rust tests (`180` lib tests and `30` CLI tests), doc-tests, and clippy
+  full Rust tests (`182` lib tests and `30` CLI tests), doc-tests, and clippy
   `-D warnings`.
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
   Final JSON included:
-  - `workSessionIndexBackfill`: isolated DB, requested `200`, scanned `200`,
-    sanitized `200`, stored `200`, reset `true`, warnings `[]`;
-  - `workSummaryIndex`: `세션 인덱스 사용 · 근거 메타데이터 우선/raw fallback · 스캔 200개 · 보관 200개 · 매칭 80건 · 고유 1건`;
-  - `coverageMeta`: `822개 로그 · parsed 821개 · unparsed 0개 · 31개 프로젝트 · 작업 8,856개`;
+  - `workSessionIndexBackfill`: isolated DB, requested `200`,
+    `batch_files=200`, scanned `199`, sanitized `199`, stored `199`, reset
+    `true`, warnings `[]`;
+  - source states:
+    - Codex: `total_files=25,145`, `processed_files=200`,
+      `matched_prompt_count=199`, `next_file_index=200`, `completed=false`;
+    - Codex CX: `total_files=11`, `processed_files=11`,
+      `matched_prompt_count=0`, `next_file_index=11`, `completed=true`;
+  - `workSummaryIndex`: `세션 인덱스 사용 · 근거 메타데이터 우선/raw fallback · 스캔 199개 · 보관 199개 · 매칭 80건 · 고유 1건`;
+  - `coverageMeta`: `824개 로그 · parsed 823개 · unparsed 0개 · 31개 프로젝트 · 작업 8,865개`;
   - `workManagementMeta`: `관리 91개 · 31개 프로젝트 · 25일 ... 저장관리 91 · 라이브만 0`;
-  - `workLogNormalizationCandidatesMeta`: `정규화 후보 91개 ... 원본 작업 8,856개 · 31개 프로젝트 · 25일`;
+  - `workLogNormalizationCandidatesMeta`: `정규화 후보 91개 ... 원본 작업 8,866개 · 31개 프로젝트 · 25일`;
   - `workManagementMetaAfterNormalizationApply`: included `정규화 1`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS after this
+  log update.
+- `git diff --check`: PASS after this log update.
 
 Issues:
 
-- This is still not a complete all-history ledger. It is a real-session,
-  real-progress-log, bounded and QA-proven management surface.
-- The new `work-session-index` supports upsert/reset maintenance, but it does
-  not yet store per-source file cursors or exhaustively walk every old session
-  across all history.
+- This is still not an automatically exhausted all-history ledger. It is a
+  real-session, real-progress-log, checkpoint-capable and QA-proven management
+  surface.
+- `--batch-files` stores cursors, but a scheduler/loop/UI control still needs to
+  repeatedly run it until Codex `processed_files == total_files` for all
+  session sources.
 - Project-local arbitrary progress logs beyond current recognized Markdown
   patterns still need an AI extraction/normalization layer with strict review
-  gates.
+  gates. The existing queue design is ready for this, but live Codex SDK/GLM SDK
+  ingestion has not been wired as an automatic writer.
 - Live OpenAI/GLM normalization was not exercised in deterministic QA because
   the isolated environment intentionally clears provider keys. Provider request
   chunking remains covered by localhost GLM mock tests.
@@ -131,16 +149,17 @@ Research:
 
 Next Steps:
 
-- Add checkpointed all-history session traversal with per-source cursor/state
-  rows so backfill can resume across all Codex session files.
+- Add a command/UI loop to run `work-session-index --batch-files N` repeatedly
+  until all source states are complete, then expose full backfill progress.
 - Add a project-local progress-log AI extraction adapter for odd `working.md`,
-  `workingd.md`, `PROGRESS_LOG.md`, and nested context log shapes that fail the
-  deterministic parser.
+  `workingd.md`, `PROGRESS_LOG.md`, and nested context log shapes that fail or
+  under-express the deterministic parser.
 - Evaluate Codex SDK and GLM SDK/provider integration only behind the existing
   accepted/review queue contracts: no automatic durable project/day writes
   without validation, confidence, citation IDs, and operator-review states.
-- Add UI controls for `work-session-index` once the checkpointed all-history
-  runner exists.
+- Add summary drill-down that shows per-project/per-day source mix:
+  session evidence, parsed progress logs, saved extraction rows, normalized rows,
+  and any AI-reviewed rows.
 
 ## Previous Slice - 2026-06-09 chunked provider normalization
 

@@ -190,6 +190,8 @@ async function runBrowserQa() {
   let workSummaryIndex = "";
   let coverageMeta = "";
   let workLogCandidatesMeta = "";
+  let workLogNormalizationCandidatesMeta = "";
+  let workLogNormalizationCandidateRows = [];
   let workLogReviewQueueMeta = "";
   let approvedReviewQueueSaveDisabledWhenEmpty = null;
   let workLogReviewQueueMetaAfterSynthetic = "";
@@ -408,6 +410,19 @@ async function runBrowserQa() {
     }, undefined, { timeout: 90000 });
     workLogCandidatesMeta =
       (await page.locator('[data-work-log-candidates-meta="true"]').textContent())?.trim() ?? "";
+    await waitForEnabled(page, '[data-load-work-log-normalization-candidates="true"]');
+    await page.locator('[data-load-work-log-normalization-candidates="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-normalization-candidates-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-log-normalization-candidates="true"] article'));
+      return text.includes("정규화 후보")
+        && text.includes("원본 작업")
+        && rows.some((row) => (row.textContent ?? "").includes("AI 저장"));
+    }, undefined, { timeout: 120000 });
+    workLogNormalizationCandidatesMeta =
+      (await page.locator('[data-work-log-normalization-candidates-meta="true"]').textContent())?.trim() ?? "";
+    workLogNormalizationCandidateRows =
+      await page.locator('[data-work-log-normalization-candidates="true"] article').allTextContents();
     await page.locator('[data-sync-work-log-review-queue="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-review-queue-meta="true"]')?.textContent ?? "";
@@ -507,6 +522,8 @@ async function runBrowserQa() {
       workManagementPersistenceRows,
       coverageMeta,
       workLogCandidatesMeta,
+      workLogNormalizationCandidatesMeta,
+      workLogNormalizationCandidateRows,
       workLogReviewQueueMeta,
       approvedReviewQueueSaveDisabledWhenEmpty,
       workLogReviewQueueMetaAfterSynthetic,

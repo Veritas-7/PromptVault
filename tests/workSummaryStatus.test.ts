@@ -18,6 +18,9 @@ import {
   workLogExtractionRunsActionLabel,
   workLogExtractionRunsFailureText,
   workLogExtractionRunsMetaText,
+  workLogNormalizationCandidatesActionLabel,
+  workLogNormalizationCandidatesFailureText,
+  workLogNormalizationCandidatesMetaText,
   workLogExtractionMetaText,
   workLogExtractionApprovalText,
   workLogExtractionPersistenceText,
@@ -51,6 +54,7 @@ import {
   type WorkLogExtractionState,
   type WorkLogExtractionItemsState,
   type WorkLogExtractionRunsState,
+  type WorkLogNormalizationCandidatesState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
@@ -64,6 +68,7 @@ import type {
   ProjectWorkLogExtractionProposal,
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
+  ProjectWorkLogNormalizationCandidatesResult,
   ProjectWorkLogReviewQueueItem,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSummary,
@@ -314,6 +319,39 @@ function extractionRunsResult(
       candidate_ids: ["work-log-CareVault-a1"],
       warnings: [],
       error_message: null,
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function normalizationCandidatesResult(
+  overrides: Partial<ProjectWorkLogNormalizationCandidatesResult> = {},
+): ProjectWorkLogNormalizationCandidatesResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_candidate_count: 18,
+    returned_candidate_count: 5,
+    report_total_items: 120,
+    report_project_count: 12,
+    report_date_count: 9,
+    candidates: [{
+      candidate_id: "work-normalize-CareVault-a1",
+      project: "CareVault",
+      date: "2026-06-09",
+      title: "Backfilled workingd notes",
+      status: "current",
+      source_path: "/tmp/CareVault/workingd.md",
+      source_file: "workingd.md",
+      reason: "no_ai_normalization,no_session_evidence",
+      evidence: "Backfilled workingd notes",
+      work_item_count: 3,
+      session_evidence_count: 0,
+      saved_extraction_count: 1,
+      ai_saved_extraction_count: 0,
+      best_ai_confidence: null,
+      risk_flags: ["long_base64_like_token"],
     }],
     warnings: [],
     ...overrides,
@@ -965,6 +1003,43 @@ test("work log extraction run labels describe approved queue audit history", () 
     "작업 추출 실행 이력을 불러오지 못했습니다. 데이터베이스 경로나 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogExtractionRunsFailureText("ready"), null);
+});
+
+test("work log normalization candidate labels describe parsed rows needing AI cleanup", () => {
+  const failed: WorkLogNormalizationCandidatesState = "failed";
+  assert.equal(
+    workLogNormalizationCandidatesActionLabel("idle", false, lockState()),
+    "AI 정규화 후보 확인",
+  );
+  assert.equal(
+    workLogNormalizationCandidatesActionLabel("ready", true, lockState()),
+    "AI 정규화 후보 새로고침",
+  );
+  assert.equal(
+    workLogNormalizationCandidatesActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 AI 정규화 후보를 새로고침할 수 없습니다",
+  );
+  assert.equal(
+    workLogNormalizationCandidatesMetaText("idle", null),
+    "아직 확인한 AI 정규화 후보 없음",
+  );
+  assert.equal(
+    workLogNormalizationCandidatesMetaText("loading", normalizationCandidatesResult()),
+    "AI 정규화 후보 확인 중",
+  );
+  assert.equal(
+    workLogNormalizationCandidatesMetaText("ready", normalizationCandidatesResult()),
+    "정규화 후보 18개 · 표시 5개 · 원본 작업 120개 · 12개 프로젝트 · 9일 · 위험표시 1개",
+  );
+  assert.equal(
+    workLogNormalizationCandidatesMetaText(failed, null),
+    "AI 정규화 후보를 사용할 수 없음",
+  );
+  assert.equal(
+    workLogNormalizationCandidatesFailureText(failed),
+    "AI 정규화 후보를 불러오지 못했습니다. 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workLogNormalizationCandidatesFailureText("ready"), null);
 });
 
 test("work log extraction save state excludes already managed rows", () => {

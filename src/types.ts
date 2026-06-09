@@ -394,6 +394,36 @@ export interface ProjectWorkLogExtractionRunsResult {
   warnings: string[];
 }
 
+export interface ProjectWorkLogNormalizationCandidate {
+  candidate_id: string;
+  project: string;
+  date: string;
+  title: string;
+  status: string;
+  source_path: string;
+  source_file: string;
+  reason: string;
+  evidence: string;
+  work_item_count: number;
+  session_evidence_count: number;
+  saved_extraction_count: number;
+  ai_saved_extraction_count: number;
+  best_ai_confidence: number | null;
+  risk_flags: string[];
+}
+
+export interface ProjectWorkLogNormalizationCandidatesResult {
+  generated_at: string;
+  database_path: string;
+  total_candidate_count: number;
+  returned_candidate_count: number;
+  report_total_items: number;
+  report_project_count: number;
+  report_date_count: number;
+  candidates: ProjectWorkLogNormalizationCandidate[];
+  warnings: string[];
+}
+
 export interface ProjectWorkLogExtractionMergeResult {
   provider: string;
   used_ai: boolean;

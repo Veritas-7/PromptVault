@@ -51,6 +51,8 @@ const DEFAULT_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_EXTRACTION_RUN_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_EXTRACTION_RUN_LIMIT: usize = 200;
+const DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_CANDIDATE_LIMIT: usize = 20;
+const MAX_PROJECT_WORK_LOG_NORMALIZATION_CANDIDATE_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 200;
 const MAX_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 1_000;
 const PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS: u64 = 12;
@@ -415,6 +417,46 @@ pub struct ProjectWorkLogExtractionRunsResult {
     pub total_runs: usize,
     pub returned_run_count: usize,
     pub runs: Vec<ProjectWorkLogExtractionRun>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkLogNormalizationCandidatesOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub session_limit: Option<usize>,
+    pub refresh_session_index: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogNormalizationCandidate {
+    pub candidate_id: String,
+    pub project: String,
+    pub date: String,
+    pub title: String,
+    pub status: String,
+    pub source_path: String,
+    pub source_file: String,
+    pub reason: String,
+    pub evidence: String,
+    pub work_item_count: usize,
+    pub session_evidence_count: usize,
+    pub saved_extraction_count: usize,
+    pub ai_saved_extraction_count: usize,
+    pub best_ai_confidence: Option<f64>,
+    pub risk_flags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogNormalizationCandidatesResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub total_candidate_count: usize,
+    pub returned_candidate_count: usize,
+    pub report_total_items: usize,
+    pub report_project_count: usize,
+    pub report_date_count: usize,
+    pub candidates: Vec<ProjectWorkLogNormalizationCandidate>,
     pub warnings: Vec<String>,
 }
 
@@ -950,6 +992,14 @@ fn project_work_log_runs(
     options: Option<ProjectWorkLogExtractionRunsOptions>,
 ) -> Result<ProjectWorkLogExtractionRunsResult, String> {
     run_list_project_work_log_extraction_runs(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_log_normalization_candidates(
+    options: Option<ProjectWorkLogNormalizationCandidatesOptions>,
+) -> Result<ProjectWorkLogNormalizationCandidatesResult, String> {
+    run_project_work_log_normalization_candidates(options.unwrap_or_default())
         .map_err(|err| err.to_string())
 }
 
@@ -1817,6 +1867,46 @@ pub fn run_list_project_work_log_extraction_runs(
         runs: run_rows.runs,
         warnings: Vec::new(),
     })
+}
+
+pub fn run_project_work_log_normalization_candidates(
+    options: ProjectWorkLogNormalizationCandidatesOptions,
+) -> Result<ProjectWorkLogNormalizationCandidatesResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-log normalization candidate limit requires a positive integer".into());
+    }
+    if matches!(options.session_limit, Some(0)) {
+        return Err(
+            "work-log normalization candidate session_limit requires a positive integer".into(),
+        );
+    }
+
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_CANDIDATE_LIMIT)
+        .min(MAX_PROJECT_WORK_LOG_NORMALIZATION_CANDIDATE_LIMIT);
+    let report = run_project_work_report(ProjectWorkReportOptions {
+        limit: None,
+        session_limit: options.session_limit,
+        database_path: Some(database_path.display().to_string()),
+        refresh_session_index: options.refresh_session_index,
+    })?;
+    let conn = open_promptvault_database(&database_path)?;
+    let saved_counts = read_project_work_log_saved_ai_counts(&conn)?;
+    let mut result =
+        build_project_work_log_normalization_candidates_from_report(&report, &saved_counts, limit);
+    result.generated_at = generated_at;
+    result.database_path = database_path.display().to_string();
+    Ok(result)
 }
 
 pub fn run_project_work_log_freeze(
@@ -8201,6 +8291,245 @@ fn read_project_work_log_extraction_runs(
     })
 }
 
+#[derive(Debug, Clone, Default)]
+struct ProjectWorkLogSavedAiCounts {
+    saved_extraction_count: usize,
+    ai_saved_extraction_count: usize,
+    best_ai_confidence: Option<f64>,
+}
+
+fn read_project_work_log_saved_ai_counts(
+    conn: &Connection,
+) -> Result<HashMap<(String, String), ProjectWorkLogSavedAiCounts>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT project, proposal_date, used_ai, confidence
+         FROM project_work_log_extraction_items",
+    )?;
+    let mut rows = stmt.query([])?;
+    let mut counts: HashMap<(String, String), ProjectWorkLogSavedAiCounts> = HashMap::new();
+    while let Some(row) = rows.next()? {
+        let project: String = row.get(0)?;
+        let date: String = row.get(1)?;
+        let used_ai = row.get::<_, i64>(2)? != 0;
+        let confidence: f64 = row.get(3)?;
+        let entry = counts.entry((project, date)).or_default();
+        entry.saved_extraction_count += 1;
+        if used_ai {
+            entry.ai_saved_extraction_count += 1;
+            entry.best_ai_confidence = Some(
+                entry
+                    .best_ai_confidence
+                    .map_or(confidence, |best| best.max(confidence)),
+            );
+        }
+    }
+    Ok(counts)
+}
+
+#[derive(Debug, Clone)]
+struct ProjectWorkLogNormalizationGroup {
+    project: String,
+    date: String,
+    source_path: String,
+    source_file: String,
+    titles: Vec<String>,
+    statuses: BTreeSet<String>,
+    evidence: Vec<String>,
+    work_item_count: usize,
+    session_evidence_count: usize,
+}
+
+fn build_project_work_log_normalization_candidates_from_report(
+    report: &ProjectWorkReport,
+    saved_counts: &HashMap<(String, String), ProjectWorkLogSavedAiCounts>,
+    limit: usize,
+) -> ProjectWorkLogNormalizationCandidatesResult {
+    let mut groups: BTreeMap<(String, String), ProjectWorkLogNormalizationGroup> = BTreeMap::new();
+    for item in &report.items {
+        let key = (item.project.clone(), item.date.clone());
+        let group = groups
+            .entry(key)
+            .or_insert_with(|| ProjectWorkLogNormalizationGroup {
+                project: item.project.clone(),
+                date: item.date.clone(),
+                source_path: item.source_path.clone(),
+                source_file: item.source_file.clone(),
+                titles: Vec::new(),
+                statuses: BTreeSet::new(),
+                evidence: Vec::new(),
+                work_item_count: 0,
+                session_evidence_count: 0,
+            });
+        group.work_item_count += 1;
+        group.session_evidence_count += item.session_evidence_count;
+        if group.titles.len() < 4 && !item.title.trim().is_empty() {
+            group.titles.push(item.title.clone());
+        }
+        if !item.status.trim().is_empty() {
+            group.statuses.insert(item.status.clone());
+        }
+        if group.evidence.len() < 4 && !item.evidence.trim().is_empty() {
+            group.evidence.push(item.evidence.clone());
+        }
+        if item.source_path < group.source_path {
+            group.source_path = item.source_path.clone();
+            group.source_file = item.source_file.clone();
+        }
+    }
+
+    let mut candidates = groups
+        .values()
+        .filter_map(|group| {
+            let counts = saved_counts
+                .get(&(group.project.clone(), group.date.clone()))
+                .cloned()
+                .unwrap_or_default();
+            project_work_log_normalization_candidate_from_group(group, counts)
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|a, b| {
+        let a_no_ai = a.ai_saved_extraction_count == 0;
+        let b_no_ai = b.ai_saved_extraction_count == 0;
+        b_no_ai
+            .cmp(&a_no_ai)
+            .then_with(|| {
+                let a_no_session = a.session_evidence_count == 0;
+                let b_no_session = b.session_evidence_count == 0;
+                b_no_session.cmp(&a_no_session)
+            })
+            .then_with(|| b.work_item_count.cmp(&a.work_item_count))
+            .then_with(|| b.date.cmp(&a.date))
+            .then_with(|| a.project.cmp(&b.project))
+            .then_with(|| a.candidate_id.cmp(&b.candidate_id))
+    });
+    let total_candidate_count = candidates.len();
+    candidates.truncate(limit);
+    ProjectWorkLogNormalizationCandidatesResult {
+        generated_at: String::new(),
+        database_path: String::new(),
+        total_candidate_count,
+        returned_candidate_count: candidates.len(),
+        report_total_items: report.total_items,
+        report_project_count: report.project_count,
+        report_date_count: report.date_count,
+        candidates,
+        warnings: report.warnings.clone(),
+    }
+}
+
+fn project_work_log_normalization_candidate_from_group(
+    group: &ProjectWorkLogNormalizationGroup,
+    counts: ProjectWorkLogSavedAiCounts,
+) -> Option<ProjectWorkLogNormalizationCandidate> {
+    let mut reasons = Vec::new();
+    if counts.ai_saved_extraction_count == 0 {
+        reasons.push("no_ai_normalization");
+    } else if counts
+        .best_ai_confidence
+        .is_some_and(|confidence| confidence < 0.85)
+    {
+        reasons.push("low_ai_confidence");
+    }
+    if group.session_evidence_count == 0 {
+        reasons.push("no_session_evidence");
+    }
+    if project_work_log_titles_are_generic(&group.titles) {
+        reasons.push("generic_title");
+    }
+    if reasons.is_empty() {
+        return None;
+    }
+
+    let title = project_work_log_normalization_title(group);
+    let status = if group.statuses.len() == 1 {
+        group.statuses.iter().next().cloned().unwrap_or_default()
+    } else {
+        "mixed".to_string()
+    };
+    let evidence = project_work_log_normalization_evidence(group);
+    let risk_flags = detect_risks(&evidence);
+    let id_hash = hash_text(&format!(
+        "{}\n{}\n{}\n{}",
+        group.project, group.date, group.source_path, evidence
+    ));
+    Some(ProjectWorkLogNormalizationCandidate {
+        candidate_id: format!(
+            "work-normalize-{}-{}",
+            summary_id_segment(&group.project),
+            &id_hash[..12]
+        ),
+        project: group.project.clone(),
+        date: group.date.clone(),
+        title,
+        status,
+        source_path: group.source_path.clone(),
+        source_file: group.source_file.clone(),
+        reason: reasons.join(","),
+        evidence,
+        work_item_count: group.work_item_count,
+        session_evidence_count: group.session_evidence_count,
+        saved_extraction_count: counts.saved_extraction_count,
+        ai_saved_extraction_count: counts.ai_saved_extraction_count,
+        best_ai_confidence: counts.best_ai_confidence,
+        risk_flags,
+    })
+}
+
+fn project_work_log_titles_are_generic(titles: &[String]) -> bool {
+    if titles.is_empty() {
+        return true;
+    }
+    titles.iter().all(|title| {
+        let normalized = title.trim().to_ascii_lowercase();
+        matches!(
+            normalized.as_str(),
+            "progress log updated"
+                | "project status snapshot updated"
+                | "untitled work"
+                | "work log updated"
+        )
+    })
+}
+
+fn project_work_log_normalization_title(group: &ProjectWorkLogNormalizationGroup) -> String {
+    let first_title = group
+        .titles
+        .iter()
+        .find(|title| !title.trim().is_empty())
+        .map(|title| title.as_str())
+        .unwrap_or("Parsed work row");
+    if group.work_item_count > 1 {
+        truncate_chars(
+            &format!(
+                "{} (+{} more parsed work items)",
+                first_title,
+                group.work_item_count.saturating_sub(1)
+            ),
+            180,
+        )
+    } else {
+        truncate_chars(first_title, 180)
+    }
+}
+
+fn project_work_log_normalization_evidence(group: &ProjectWorkLogNormalizationGroup) -> String {
+    let mut parts = Vec::new();
+    if !group.evidence.is_empty() {
+        parts.extend(group.evidence.iter().map(String::as_str));
+    } else {
+        parts.extend(group.titles.iter().map(String::as_str));
+    }
+    let joined = if parts.is_empty() {
+        format!(
+            "{} {} has {} parsed work item(s) that need AI normalization.",
+            group.project, group.date, group.work_item_count
+        )
+    } else {
+        parts.join("\n")
+    };
+    truncate_chars(&redact_sensitive_text(&joined), 700)
+}
+
 fn read_project_work_persisted_pairs(
     conn: &Connection,
 ) -> Result<HashSet<(String, String)>, Box<dyn std::error::Error>> {
@@ -9614,7 +9943,8 @@ pub fn run() {
             project_work_log_extract,
             project_work_log_freeze,
             project_work_log_items,
-            project_work_log_runs
+            project_work_log_runs,
+            project_work_log_normalization_candidates
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -12770,6 +13100,107 @@ Progress:
             "last_updated: 2026-04-24\nGamma — Project Status"
         );
         assert_eq!(result.proposals[1].rejection_reason.as_deref(), None);
+    }
+
+    #[test]
+    fn normalization_candidates_find_parsed_rows_without_ai_cleanup() {
+        let report = ProjectWorkReport {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            total_items: 3,
+            project_count: 2,
+            date_count: 2,
+            files_seen: 2,
+            items_by_date: Vec::new(),
+            items_by_project: Vec::new(),
+            session_scan_prompt_count: 2,
+            session_scan_sources: Vec::new(),
+            session_evidence_count: 5,
+            session_sources: Vec::new(),
+            session_evidence_unique_count: 2,
+            session_evidence_unique_sources: Vec::new(),
+            session_evidence_index_used: true,
+            session_evidence_index_updated: false,
+            session_evidence_index_count: 2,
+            session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
+            items: vec![
+                ProjectWorkItem {
+                    date: "2026-06-09".to_string(),
+                    project: "PromptVault".to_string(),
+                    title: "Progress log updated".to_string(),
+                    status: "current".to_string(),
+                    source_path: "/tmp/PromptVault/working.md".to_string(),
+                    source_file: "working.md".to_string(),
+                    evidence: "api_key = should-redact\nUpdated work log.".to_string(),
+                    session_evidence_count: 0,
+                    session_sources: Vec::new(),
+                    session_evidence_keys: Vec::new(),
+                },
+                ProjectWorkItem {
+                    date: "2026-06-09".to_string(),
+                    project: "PromptVault".to_string(),
+                    title: "Added normalization candidate surface.".to_string(),
+                    status: "current".to_string(),
+                    source_path: "/tmp/PromptVault/workingd.md".to_string(),
+                    source_file: "workingd.md".to_string(),
+                    evidence: "Added normalization candidate surface.".to_string(),
+                    session_evidence_count: 0,
+                    session_sources: Vec::new(),
+                    session_evidence_keys: Vec::new(),
+                },
+                ProjectWorkItem {
+                    date: "2026-06-08".to_string(),
+                    project: "CareVault".to_string(),
+                    title: "Already normalized.".to_string(),
+                    status: "done".to_string(),
+                    source_path: "/tmp/CareVault/working.md".to_string(),
+                    source_file: "working.md".to_string(),
+                    evidence: "Already normalized.".to_string(),
+                    session_evidence_count: 5,
+                    session_sources: Vec::new(),
+                    session_evidence_keys: Vec::new(),
+                },
+            ],
+            warnings: vec!["session warning".to_string()],
+        };
+        let mut saved_counts = HashMap::new();
+        saved_counts.insert(
+            ("PromptVault".to_string(), "2026-06-09".to_string()),
+            ProjectWorkLogSavedAiCounts {
+                saved_extraction_count: 1,
+                ai_saved_extraction_count: 0,
+                best_ai_confidence: None,
+            },
+        );
+        saved_counts.insert(
+            ("CareVault".to_string(), "2026-06-08".to_string()),
+            ProjectWorkLogSavedAiCounts {
+                saved_extraction_count: 1,
+                ai_saved_extraction_count: 1,
+                best_ai_confidence: Some(0.94),
+            },
+        );
+
+        let result =
+            build_project_work_log_normalization_candidates_from_report(&report, &saved_counts, 10);
+
+        assert_eq!(result.total_candidate_count, 1);
+        assert_eq!(result.returned_candidate_count, 1);
+        assert_eq!(result.report_total_items, 3);
+        assert_eq!(result.warnings, vec!["session warning"]);
+        let candidate = &result.candidates[0];
+        assert!(candidate
+            .candidate_id
+            .starts_with("work-normalize-PromptVault-"));
+        assert_eq!(candidate.project, "PromptVault");
+        assert_eq!(candidate.date, "2026-06-09");
+        assert_eq!(candidate.work_item_count, 2);
+        assert_eq!(candidate.session_evidence_count, 0);
+        assert_eq!(candidate.saved_extraction_count, 1);
+        assert_eq!(candidate.ai_saved_extraction_count, 0);
+        assert!(candidate.reason.contains("no_ai_normalization"));
+        assert!(candidate.reason.contains("no_session_evidence"));
+        assert!(candidate.evidence.contains("[REDACTED_POSSIBLE_API_KEY]"));
+        assert!(!candidate.evidence.contains("should-redact"));
     }
 
     #[test]

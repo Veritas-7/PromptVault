@@ -114,6 +114,7 @@ import {
   loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
   loadProjectWorkLogExtractionProposals,
+  loadProjectWorkLogNormalizationCandidates,
   loadProjectWorkLogReviewQueue,
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
@@ -236,6 +237,7 @@ import type {
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
+  ProjectWorkLogNormalizationCandidatesResult,
   ProjectWorkLogReviewQueueResult,
   PromptRecord,
   ProjectWorkSummaryResult,
@@ -263,6 +265,9 @@ import {
   workLogExtractionRunsActionLabel,
   workLogExtractionRunsFailureText,
   workLogExtractionRunsMetaText,
+  workLogNormalizationCandidatesActionLabel,
+  workLogNormalizationCandidatesFailureText,
+  workLogNormalizationCandidatesMetaText,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
   workLogExtractionProviderNoticeText,
@@ -295,6 +300,7 @@ import {
   type WorkLogExtractionState,
   type WorkLogExtractionItemsState,
   type WorkLogExtractionRunsState,
+  type WorkLogNormalizationCandidatesState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
@@ -316,6 +322,8 @@ const WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_ITEM_MANAGEMENT_LIMIT = 1_000;
 const WORK_LOG_EXTRACTION_RUN_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_RUN_MANAGEMENT_LIMIT = 100;
+const WORK_LOG_NORMALIZATION_CANDIDATE_DISPLAY_LIMIT = 5;
+const WORK_LOG_NORMALIZATION_CANDIDATE_MANAGEMENT_LIMIT = 100;
 const WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT = 6;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
@@ -407,6 +415,8 @@ function App() {
     useState<WorkLogExtractionItemsState>("idle");
   const [workLogExtractionRunsState, setWorkLogExtractionRunsState] =
     useState<WorkLogExtractionRunsState>("idle");
+  const [workLogNormalizationCandidatesState, setWorkLogNormalizationCandidatesState] =
+    useState<WorkLogNormalizationCandidatesState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
   const [workManagementFreezeState, setWorkManagementFreezeState] =
@@ -439,6 +449,8 @@ function App() {
     useState<ProjectWorkLogExtractionItemsResult | null>(null);
   const [workLogExtractionRunsResult, setWorkLogExtractionRunsResult] =
     useState<ProjectWorkLogExtractionRunsResult | null>(null);
+  const [workLogNormalizationCandidatesResult, setWorkLogNormalizationCandidatesResult] =
+    useState<ProjectWorkLogNormalizationCandidatesResult | null>(null);
   const [approvedWorkLogExtractionCandidateIds, setApprovedWorkLogExtractionCandidateIds] =
     useState<Set<string>>(() => new Set());
   const [workSummarySnapshotsResult, setWorkSummarySnapshotsResult] =
@@ -504,6 +516,7 @@ function App() {
     || workLogExtractionState === "loading"
     || workLogExtractionItemsState === "loading"
     || workLogExtractionRunsState === "loading"
+    || workLogNormalizationCandidatesState === "loading"
     || workManagementRefreshState === "loading"
     || workManagementFreezeState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
@@ -706,6 +719,12 @@ function App() {
     workLogExtractionRunsState,
     workLogExtractionRunsResult,
   );
+  const workLogNormalizationCandidatesFailureMessage =
+    workLogNormalizationCandidatesFailureText(workLogNormalizationCandidatesState);
+  const workLogNormalizationCandidatesMeta = workLogNormalizationCandidatesMetaText(
+    workLogNormalizationCandidatesState,
+    workLogNormalizationCandidatesResult,
+  );
   const workSummarySnapshotsFailureMessage = workSummarySnapshotsFailureText(workSummarySnapshotsState);
   const workSummarySnapshotsMeta = workSummarySnapshotsMetaText(
     workSummarySnapshotsState,
@@ -787,6 +806,11 @@ function App() {
     workLogExtractionItemsResult?.items.slice(0, WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT) ?? [];
   const visibleWorkLogExtractionRuns =
     workLogExtractionRunsResult?.runs.slice(0, WORK_LOG_EXTRACTION_RUN_DISPLAY_LIMIT) ?? [];
+  const visibleWorkLogNormalizationCandidates =
+    workLogNormalizationCandidatesResult?.candidates.slice(
+      0,
+      WORK_LOG_NORMALIZATION_CANDIDATE_DISPLAY_LIMIT,
+    ) ?? [];
   const visibleWorkLogExtractionItemGroups =
     groupWorkLogExtractionItemsByProjectDate(visibleWorkLogExtractionItems);
   const hiddenWorkLogExtractionItemCount = Math.max(
@@ -797,12 +821,18 @@ function App() {
     0,
     (workLogExtractionRunsResult?.runs.length ?? 0) - WORK_LOG_EXTRACTION_RUN_DISPLAY_LIMIT,
   );
+  const hiddenWorkLogNormalizationCandidateCount = Math.max(
+    0,
+    (workLogNormalizationCandidatesResult?.candidates.length ?? 0)
+      - WORK_LOG_NORMALIZATION_CANDIDATE_DISPLAY_LIMIT,
+  );
   const workManagementOverviewLoaded =
     workSummaryResult !== null
     || workSummarySnapshotsResult !== null
     || workLogExtractionResult !== null
     || workLogExtractionItemsResult !== null
     || workLogExtractionRunsResult !== null
+    || workLogNormalizationCandidatesResult !== null
     || workLogCoverageResult !== null;
   const workManagementOverview = useMemo(() => buildWorkManagementOverview({
     coverage: workLogCoverageResult,
@@ -1086,6 +1116,35 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkLogExtractionRunsState("failed");
+    }
+  }
+
+  async function refreshWorkLogNormalizationCandidates() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    const sessionLimit = workSummarySessionLimit;
+    if (sessionLimit === null) {
+      const message = workSummarySessionLimitStatus;
+      setError(message);
+      setWorkLogNormalizationCandidatesState("failed");
+      releaseExclusiveAction(topLevelActionClaimRef);
+      return;
+    }
+    setError(null);
+    setWorkLogNormalizationCandidatesState("loading");
+    try {
+      const next = await loadProjectWorkLogNormalizationCandidates({
+        limit: WORK_LOG_NORMALIZATION_CANDIDATE_MANAGEMENT_LIMIT,
+        session_limit: sessionLimit,
+      });
+      setWorkLogNormalizationCandidatesResult(next);
+      setWorkLogNormalizationCandidatesState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogNormalizationCandidatesState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
 
@@ -2095,7 +2154,26 @@ function App() {
                 ? "확인 중"
                 : workLogCandidatesResult
                   ? "후보 새로고침"
-                  : "추출 후보"}
+                : "추출 후보"}
+            </button>
+            <button
+              aria-label={workLogNormalizationCandidatesActionLabel(
+                workLogNormalizationCandidatesState,
+                workLogNormalizationCandidatesResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-log-normalization-candidates="true"
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
+              onClick={() => void refreshWorkLogNormalizationCandidates()}
+              type="button"
+            >
+              <Sparkles size={15} />
+              {workLogNormalizationCandidatesState === "loading"
+                ? "정규화 확인 중"
+                : workLogNormalizationCandidatesResult
+                  ? "정규화 후보 새로고침"
+                  : "정규화 후보"}
             </button>
             <button
               aria-label={workLogReviewQueueActionLabel(
@@ -2349,6 +2427,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workLogExtractionRunsFailureMessage}</span>
+          </div>
+        ) : null}
+        {workLogNormalizationCandidatesFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-log-normalization-candidates-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workLogNormalizationCandidatesFailureMessage}</span>
           </div>
         ) : null}
         <form
@@ -2813,6 +2901,12 @@ function App() {
             <span>{workLogExtractionRunsMeta}</span>
           </div>
         ) : null}
+        {workLogNormalizationCandidatesResult || workLogNormalizationCandidatesState !== "idle" ? (
+          <div className="work-summary-index" data-work-log-normalization-candidates-meta="true">
+            <Sparkles size={15} />
+            <span>{workLogNormalizationCandidatesMeta}</span>
+          </div>
+        ) : null}
         {workManagementOverviewLoaded ? (
           <div className="work-summary-index" data-work-management-overview-meta="true">
             <ClipboardList size={15} />
@@ -3211,6 +3305,51 @@ function App() {
           ) : (
             <div className="empty compact" data-empty-work-log-runs="true">
               저장된 작업 추출 실행 이력 없음
+            </div>
+          )
+        ) : null}
+        {workLogNormalizationCandidatesResult ? (
+          visibleWorkLogNormalizationCandidates.length ? (
+            <div className="work-summary-list" data-work-log-normalization-candidates="true">
+              {visibleWorkLogNormalizationCandidates.map((candidate) => (
+                <article
+                  className="work-summary-row work-log-proposal-row"
+                  key={candidate.candidate_id}
+                >
+                  <div>
+                    <strong>{candidate.project}</strong>
+                    <span>{candidate.date}</span>
+                  </div>
+                  <p>{candidate.title}</p>
+                  <p className="work-log-proposal-evidence">{candidate.evidence}</p>
+                  <span>
+                    {candidate.reason} · 작업 {candidate.work_item_count.toLocaleString()}개 · 세션근거{" "}
+                    {candidate.session_evidence_count.toLocaleString()}건
+                  </span>
+                  <span>
+                    저장추출 {candidate.saved_extraction_count.toLocaleString()}개 · AI 저장{" "}
+                    {candidate.ai_saved_extraction_count.toLocaleString()}개
+                    {candidate.best_ai_confidence === null
+                      ? " · AI confidence 없음"
+                      : ` · best AI confidence ${candidate.best_ai_confidence.toFixed(2)}`}
+                  </span>
+                  {candidate.risk_flags.length ? (
+                    <span>
+                      위험표시 {candidate.risk_flags.map(riskFlagLabel).join(", ")}
+                    </span>
+                  ) : null}
+                  <span>{candidate.source_file} · {candidate.source_path}</span>
+                </article>
+              ))}
+              {hiddenWorkLogNormalizationCandidateCount ? (
+                <div className="work-summary-overflow">
+                  그 외 AI 정규화 후보 {hiddenWorkLogNormalizationCandidateCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-log-normalization-candidates="true">
+              AI 정규화가 필요한 프로젝트/일자 후보 없음
             </div>
           )
         ) : null}

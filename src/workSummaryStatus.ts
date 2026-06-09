@@ -6,6 +6,7 @@ import type {
   ProjectWorkLogExtractionCandidate,
   ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkLogExtractionItemsResult,
+  ProjectWorkLogNormalizationCandidatesResult,
   ProjectWorkLogExtractionProposal,
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
@@ -25,6 +26,7 @@ export type WorkLogReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionItemsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunsState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogNormalizationCandidatesState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementFreezeState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunMode = "ai" | "local";
@@ -575,6 +577,47 @@ export function workLogExtractionRunsFailureText(
 ): string | null {
   if (state !== "failed") return null;
   return "작업 추출 실행 이력을 불러오지 못했습니다. 데이터베이스 경로나 브리지 상태를 확인하세요.";
+}
+
+export function workLogNormalizationCandidatesActionLabel(
+  state: WorkLogNormalizationCandidatesState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "AI 정규화 후보 확인 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 AI 정규화 후보를 ${hasResult ? "새로고침" : "확인"}할 수 없습니다`;
+  }
+  return hasResult ? "AI 정규화 후보 새로고침" : "AI 정규화 후보 확인";
+}
+
+export function workLogNormalizationCandidatesMetaText(
+  state: WorkLogNormalizationCandidatesState,
+  result: ProjectWorkLogNormalizationCandidatesResult | null,
+): string {
+  if (state === "loading") return "AI 정규화 후보 확인 중";
+  if (!result) {
+    return state === "failed"
+      ? "AI 정규화 후보를 사용할 수 없음"
+      : "아직 확인한 AI 정규화 후보 없음";
+  }
+  const riskyCount = result.candidates.filter((candidate) => candidate.risk_flags.length > 0).length;
+  return [
+    `정규화 후보 ${result.total_candidate_count.toLocaleString()}개`,
+    `표시 ${result.returned_candidate_count.toLocaleString()}개`,
+    `원본 작업 ${result.report_total_items.toLocaleString()}개`,
+    `${result.report_project_count.toLocaleString()}개 프로젝트`,
+    `${result.report_date_count.toLocaleString()}일`,
+    `위험표시 ${riskyCount.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+export function workLogNormalizationCandidatesFailureText(
+  state: WorkLogNormalizationCandidatesState,
+): string | null {
+  if (state !== "failed") return null;
+  return "AI 정규화 후보를 불러오지 못했습니다. 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.";
 }
 
 export function workSummarySnapshotVisibleSummaries(

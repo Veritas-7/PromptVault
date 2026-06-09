@@ -16,6 +16,7 @@ import type {
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
+  ProjectWorkLogNormalizationCandidatesResult,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkReport,
   ProjectWorkSummaryResult,
@@ -146,6 +147,13 @@ export interface ProjectWorkLogExtractionItemsOptions {
 export interface ProjectWorkLogExtractionRunsOptions {
   database_path?: string;
   limit?: number;
+}
+
+export interface ProjectWorkLogNormalizationCandidatesOptions {
+  database_path?: string;
+  limit?: number;
+  session_limit?: number;
+  refresh_session_index?: boolean;
 }
 
 export interface ImprovePromptRequest {
@@ -350,6 +358,22 @@ export async function listProjectWorkLogExtractionRuns(
     "/api/work-log-runs",
     { options },
     parseProjectWorkLogExtractionRunsResult,
+  );
+}
+
+export async function loadProjectWorkLogNormalizationCandidates(
+  options: ProjectWorkLogNormalizationCandidatesOptions = {},
+): Promise<ProjectWorkLogNormalizationCandidatesResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogNormalizationCandidatesResult>(
+      "project_work_log_normalization_candidates",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkLogNormalizationCandidatesResult>(
+    "/api/work-log-normalization-candidates",
+    { options },
+    parseProjectWorkLogNormalizationCandidatesResult,
   );
 }
 
@@ -1600,6 +1624,53 @@ function parseProjectWorkLogExtractionRunsResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkLogExtractionRunsResult;
+}
+
+function isProjectWorkLogNormalizationCandidate(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.candidate_id)
+    && isNonBlankString(value.project)
+    && isNonBlankString(value.date)
+    && isNonBlankString(value.title)
+    && isNonBlankString(value.status)
+    && isNonBlankString(value.source_path)
+    && isNonBlankString(value.source_file)
+    && isNonBlankString(value.reason)
+    && isNonBlankString(value.evidence)
+    && isPositiveSafeInteger(value.work_item_count)
+    && isNonNegativeSafeInteger(value.session_evidence_count)
+    && isNonNegativeSafeInteger(value.saved_extraction_count)
+    && isNonNegativeSafeInteger(value.ai_saved_extraction_count)
+    && value.ai_saved_extraction_count <= value.saved_extraction_count
+    && (value.best_ai_confidence === null
+      || (isFiniteNumber(value.best_ai_confidence)
+        && value.best_ai_confidence >= 0
+        && value.best_ai_confidence <= 1))
+    && isNonBlankStringArray(value.risk_flags);
+}
+
+function parseProjectWorkLogNormalizationCandidatesResult(
+  value: unknown,
+): ProjectWorkLogNormalizationCandidatesResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !isNonNegativeSafeInteger(value.total_candidate_count)
+    || !isNonNegativeSafeIntegerAtMost(
+      value.returned_candidate_count,
+      value.total_candidate_count,
+    )
+    || !isNonNegativeSafeInteger(value.report_total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.report_project_count, value.report_total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.report_date_count, value.report_total_items)
+    || !Array.isArray(value.candidates)
+    || value.candidates.length !== value.returned_candidate_count
+    || !value.candidates.every(isProjectWorkLogNormalizationCandidate)
+    || !recordStringFieldValuesAreUnique(value.candidates, "candidate_id")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkLogNormalizationCandidatesResult;
 }
 
 function isProjectWorkLogExtractionMergeResult(value: unknown): boolean {

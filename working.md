@@ -1,10 +1,120 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 13:15 KST
+Updated: 2026-06-09 13:39 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 parsed row AI normalization candidates
+
+Current Goal:
+
+- Surface already parsed project/date work-log rows that still need AI semantic
+  normalization, instead of only handling unparsed progress logs.
+- Keep this slice read-only: identify and review candidate rows first, without
+  running provider writes or mutating durable management rows.
+
+Context:
+
+- Real progress-log coverage is already parsing project-local `working.md`,
+  `workingd.md`, `WORKLOG.md`, `PROGRESS_LOG.md`, `PROJECT_STATUS.md`, and
+  related progress files into project/date/task rows.
+- Live `work-log-candidates` remains `0` because there are no unparsed
+  progress-log files, so the existing AI extraction lane has no live corpus
+  candidate to send.
+- The missing operator view was different: many parsed project/date rows are
+  frozen/deterministically managed but have no `used_ai=true` normalized
+  extraction, and many have weak/no session evidence.
+
+Progress:
+
+- Added a read-only normalization candidate lane:
+  `work-log-normalization-candidates`.
+- Backend groups parsed `ProjectWorkReport` items by project/date and joins
+  saved extraction rows from SQLite.
+- A project/date row is a normalization candidate when it has no AI-backed
+  saved extraction, low AI confidence, no session evidence, or generic titles.
+- Candidate rows include project/date, representative title/evidence,
+  source path/file, work item count, session evidence count, saved extraction
+  count, AI-saved count, best AI confidence, reason, and risk flags.
+- Added CLI command, browser bridge route, Tauri command, TypeScript parser,
+  status labels, UI button `정규화 후보`, meta row, and candidate list.
+- Browser QA now clicks `정규화 후보` and verifies a non-empty rendered list.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added normalization candidate structs/options/result;
+  - added `run_project_work_log_normalization_candidates`;
+  - added saved AI extraction count reader and pure candidate builder;
+  - added Tauri command and Rust coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added `work-log-normalization-candidates`;
+  - added bridge route `POST /api/work-log-normalization-candidates`;
+  - added route serialization, validation, and help coverage.
+- `src/types.ts`, `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`,
+  `src/App.tsx`:
+  - added frontend contract, bridge validation, labels, button, meta, and
+    rendered candidate rows.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`:
+  - added parser/status tests for normalization candidates.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added end-to-end click proof for the new `정규화 후보` flow.
+
+Tests:
+
+- `cargo check --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml normalization_candidates_find_parsed_rows_without_ai_cleanup -- --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli bridge_routes_work_log_normalization_candidate_validation_errors -- --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli bridge_serializes_database_backed_routes_only -- --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli help_text_documents_cli_validation_rules -- --nocapture`: PASS.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`: PASS, `192` tests.
+- `npm run test:ui`: PASS, `447` tests.
+- `npm run build`: PASS.
+- Live CLI smoke:
+  `work-log-normalization-candidates --limit 5 --session-limit 200 --json`:
+  PASS, `total_candidate_count=91`, `returned_candidate_count=5`,
+  `report_total_items=8,701`, `report_project_count=31`,
+  `report_date_count=25`.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON included:
+  - `workLogNormalizationCandidatesMeta`: `정규화 후보 91개 · 표시 91개 · 원본 작업 8,705개 · 31개 프로젝트 · 25일 · 위험표시 0개`;
+  - first rendered candidate row contained `RepoTutorStudio`,
+    `no_ai_normalization,no_session_evidence`, `AI 저장 0개`, and
+    `AI confidence 없음`;
+  - existing approved queue save/run history/saved item checks still passed.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS.
+- `npm run check`: PASS, including `test:ui`, `build`, full Rust lib tests
+  (`171`), CLI tests (`27`), doc-tests, and clippy `-D warnings`.
+- `git diff --check`: PASS.
+
+Issues:
+
+- This slice does not yet run OpenAI/GLM/Codex SDK normalization. It makes the
+  parsed-row backlog visible and testable so provider-backed normalization can
+  be added safely next.
+- Candidate count is project/date grouped, not per raw item. Large project/day
+  rows such as RepoTutorStudio still need a deeper chunked normalization pass
+  before provider execution.
+- The current browser QA uses providerless/local fallback for save paths to
+  avoid external API cost and network dependence.
+
+Research:
+
+- No external research was needed. The implementation follows existing
+  PromptVault work-log report, extraction item, bridge, and UI patterns.
+
+Next Steps:
+
+- Add a provider-backed AI normalization proposal route for these parsed-row
+  candidates, using safe excerpts and chunking for very large project/day rows.
+- Persist normalization proposals into a review queue with approve/reject state
+  before writing durable AI-normalized management rows.
+- Add resumable all-history session backfill/checkpointing so session evidence
+  is not limited to the recent `session_limit=200` verification path.
+- Evaluate a Codex SDK session-ingest adapter if it yields cleaner structured
+  session metadata than the current local JSONL/metadata-first index.
 
 ## Current Slice - 2026-06-09 approved queue extraction run audit
 

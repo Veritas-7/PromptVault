@@ -264,6 +264,7 @@ export function workStatusExportIndexStatusText(result: ProjectWorkStatusExportR
     parts.push(
       `사용 ${result.report_session_evidence_index_count.toLocaleString()}개`,
       `보관 총 ${result.report_session_evidence_index_total_count.toLocaleString()}개`,
+      "근거 limit 적용",
     );
   } else {
     parts.push(`보관 ${result.report_session_evidence_index_count.toLocaleString()}개`);

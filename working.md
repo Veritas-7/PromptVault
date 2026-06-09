@@ -1,44 +1,102 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 22:04 KST
+Updated: 2026-06-09 22:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 session evidence and AI normalization follow-up
+## Completed Slice - 2026-06-09 session timestamps and bounded evidence visibility
 
 Current Goal:
 
-- Continue reducing the remaining managed-work gaps after provider attempt
-  visibility was added to the normalization proposal/review queue UI.
-- Focus next on shrinking `needs_session_evidence` with real Codex/Codex CX
-  session index backfill, then inspect AI-backed normalization proposals before
-  applying any accepted rows.
+- Make the project/day status answer explicit about how much is fully backed by
+  real Codex/Codex CX session evidence versus progress-log-only records.
+- Keep full session parsing date-aware so long-running sessions use real session
+  activity timestamps instead of stale filesystem modified time.
+- Surface when the status export is using only a bounded subset of the stored
+  session evidence index.
 
 Context:
 
-- Current live status is not "fully complete": project/day rows are managed,
-  but a fresh export still shows rows that need stronger session evidence and
-  title normalization.
-- Existing code already has provider-backed paths for OpenAI Responses and GLM
-  chat normalization through `work-log-normalization-proposals --ai`, with
-  validation that rejects low confidence, invented evidence, bad statuses, and
-  risky content.
-- Local fallback titles are now source-backed enough for review, but still
-  intentionally rejected until operator approval or AI-backed validation.
-- The app now attempts AI-backed normalization when syncing the persisted
-  review queue and surfaces provider fallback warnings in compact meta text, so
-  provider failures are not hidden in the review flow.
+- This is still not a fully complete managed-work system. The app now manages
+  project/day rows from progress logs and session evidence, but some rows remain
+  progress-log-only or title-normalization candidates.
+- Actual progress-log coverage was verified with the live CLI: `849` progress
+  log files seen, `848` parsed, `0` unparsed, `31` projects, and `9,171` work
+  items. The matched progress-log surface includes `working.md`, `Working.md`,
+  `workingd.md`, `PROGRESS_LOG.md`, `PROJECT_STATUS.md`, and similar tracked
+  project progress files.
+- A full real session index reset was run against the user's Codex/Codex CX
+  sessions: `25,150` Codex files and `11` Codex CX files scanned, `11,105`
+  matched Codex prompts, `10,867` stored sanitized prompt evidence rows, `0`
+  warnings, `real 82.03s`.
+- Full indexed export was verified with
+  `work-status-export --limit 200 --session-limit 20000 --json`: `91` rows,
+  `36` rows still needing session evidence, `39` rows still needing title
+  normalization, `183,053` linked session evidence matches, and all `10,867`
+  stored evidence rows used.
+- Default bounded export was verified with `work-status-export --limit 200
+  --json`: `91` rows, `63` rows needing session evidence, `39` rows needing
+  title normalization, `74,347` linked session evidence matches, and only
+  `200 / 10,867` stored evidence rows used.
 
-Next Steps:
+Progress:
 
-- Run an AI-backed normalization proposal pass only when provider keys are
-  available, then inspect accepted/rejected reasons before applying anything.
-- Continue real Codex/Codex CX session index backfill so `needs_session_evidence`
-  rows shrink with actual session evidence rather than inferred text.
-- Keep using browser-bridge QA after any UI/backend changes touching work-log
-  management.
+- Changed Codex project metadata prompt parsing to use the latest valid JSONL
+  session timestamp from the tail of the real session file before falling back
+  to earlier prompt timestamps or filesystem modified time.
+- Added regression tests for stale file modified time versus actual session
+  activity time, including long-running sessions that continue on the next day.
+- Updated work status index text so bounded evidence exports explicitly show
+  `근거 limit 적용` when the app is using fewer stored evidence rows than exist
+  in the durable session index.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added tail timestamp extraction for Codex project metadata prompts;
+  - added tests covering stale modified time and latest activity timestamp
+    attachment to project/day work rows.
+- `src/workSummaryStatus.ts`:
+  - added bounded evidence visibility to the status export index text.
+- `tests/workSummaryStatus.test.ts`:
+  - updated the status export text assertion for the new limit marker.
+
+Tests:
+
+- `cargo test --manifest-path src-tauri/Cargo.toml codex_session_metadata_prompt --lib`:
+  PASS, `4` tests passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml project_work_session --lib`:
+  PASS, `16` tests passed.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`:
+  PASS, `32` tests passed.
+- `npm run check`: PASS.
+  - UI tests: `474` passed.
+  - Production build: passed.
+  - Rust lib tests: `199` passed.
+  - CLI tests: `31` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  Evidence from isolated browser result:
+  - work status export showed `91` rows, `31` projects, `25` days, `9,167`
+    work items, `849` progress files, and `21,125` session evidence links
+    from `50` unique records;
+  - index text showed `세션 인덱스 사용 · ... 보관 총 349개 · 근거 limit 적용`;
+  - work management overview, freeze, coverage, extraction, normalization,
+    review queue, apply, and saved-item routes completed in the isolated temp
+    database.
+
+Outcome:
+
+- The app can now answer the user's status question with live bounded-versus-
+  full evidence numbers instead of implying that the default view is exhaustive.
+- Remaining rows are no longer a blind parsing failure: `36 / 91` project/day
+  rows still need stronger real session evidence even after the full stored
+  session index is used. The next work should be AI-assisted evidence
+  inference/review or stronger project-target extraction, not auto-claiming
+  completion.
 
 ## Completed Slice - 2026-06-09 AI normalization provider visibility
 

@@ -35,6 +35,7 @@ const DEFAULT_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 80;
 const MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 1_000;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
 const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
+const PROJECT_WORK_METADATA_TAIL_TIMESTAMP_LINES: usize = 200;
 const PROJECT_WORK_SESSION_SOURCE_IDS: &[&str] = &[
     "codex",
     "codex-cx",
@@ -7243,9 +7244,11 @@ fn parse_codex_project_metadata_prompt(
     let mut cwd = None;
     let mut last_timestamp = None;
     let mut lines_after_project_path = None;
+    let lines = jsonl_lines(path)?;
+    let latest_timestamp = latest_jsonl_tail_timestamp(&lines);
 
-    for (line_index, line) in jsonl_lines(path)?.into_iter().enumerate() {
-        let value: Value = serde_json::from_str(&line)?;
+    for (line_index, line) in lines.iter().enumerate() {
+        let value: Value = serde_json::from_str(line)?;
         if let Some(timestamp) = extract_timestamp(&value) {
             last_timestamp = Some(timestamp);
         }
@@ -7309,7 +7312,7 @@ fn parse_codex_project_metadata_prompt(
         source.label,
         project_paths.into_iter().collect::<Vec<_>>().join(", ")
     );
-    let timestamp = modified_timestamp.or(last_timestamp);
+    let timestamp = latest_timestamp.or(last_timestamp).or(modified_timestamp);
     let hash = hash_text(&format!("{}:{}:{}", source.id, session_id, text));
     let risk_flags = detect_risks(&text);
     let quality = assess_prompt_quality(&text, &risk_flags);
@@ -7337,6 +7340,14 @@ fn project_paths_from_text(text: &str) -> Vec<String> {
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect()
+}
+
+fn latest_jsonl_tail_timestamp(lines: &[String]) -> Option<String> {
+    lines.iter().rev().take(PROJECT_WORK_METADATA_TAIL_TIMESTAMP_LINES).find_map(|line| {
+        serde_json::from_str::<Value>(line)
+            .ok()
+            .and_then(|value| extract_timestamp(&value))
+    })
 }
 
 fn normalize_project_path_match(text: &str) -> Option<String> {
@@ -15148,11 +15159,112 @@ Status: completed as a source-only/report-only hardening slice.
 
         assert_eq!(record.source, "Codex session metadata");
         assert_eq!(record.session_id, "session-target");
-        assert_eq!(record.timestamp.as_deref(), Some("2026-06-08T15:30:00Z"));
+        assert_eq!(record.timestamp.as_deref(), Some("2026-06-08T12:01:00Z"));
         assert_eq!(record.cwd.as_deref(), Some("/Users/wj"));
         assert!(record
             .text
             .contains("/Users/wj/Ai/System/10_Projects/ExampleProject"));
+
+        std::fs::remove_dir_all(root).expect("remove metadata root");
+    }
+
+    #[test]
+    fn codex_session_metadata_prompt_prefers_session_timestamp_over_file_modified_at() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-codex-metadata-session-time-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create metadata root");
+        let path = root.join("rollout-session-time.jsonl");
+        std::fs::write(
+            &path,
+            r#"{"timestamp":"2026-06-08T01:33:16.751Z","type":"session_meta","payload":{"id":"session-time","cwd":"/Users/wj"}}
+{"timestamp":"2026-06-08T01:33:16.760Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject."}]}}
+"#,
+        )
+        .expect("write metadata jsonl");
+        let source = SourceSpec {
+            id: "codex",
+            label: "Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let record = parse_codex_project_metadata_prompt(
+            &source,
+            &path,
+            Some("2026-06-09T13:11:25Z".to_string()),
+        )
+        .expect("parse metadata")
+        .expect("metadata prompt");
+        let mut items = project_progress_work_items_from_text_for_project(
+            &PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md"),
+            r#"## Current Slice - 2026-06-08 Session date evidence
+
+- Verified that session evidence stays attached to the worklog date.
+"#,
+            "ExampleProject",
+        );
+
+        assert_eq!(prompt_date(record.timestamp.as_deref()), "2026-06-08");
+        attach_session_evidence(&mut items, &[record]);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].date, "2026-06-08");
+        assert_eq!(items[0].session_evidence_count, 1);
+
+        std::fs::remove_dir_all(root).expect("remove metadata root");
+    }
+
+    #[test]
+    fn codex_session_metadata_prompt_uses_latest_session_activity_timestamp() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-codex-metadata-latest-time-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create metadata root");
+        let path = root.join("rollout-latest-time.jsonl");
+        std::fs::write(
+            &path,
+            r#"{"timestamp":"2026-06-08T01:33:16.751Z","type":"session_meta","payload":{"id":"session-latest","cwd":"/Users/wj"}}
+{"timestamp":"2026-06-08T01:33:16.760Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject."}]}}
+{"timestamp":"2026-06-09T03:00:00.000Z","type":"turn_context","payload":{"cwd":"/Users/wj"}}
+"#,
+        )
+        .expect("write metadata jsonl");
+        let source = SourceSpec {
+            id: "codex",
+            label: "Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let record = parse_codex_project_metadata_prompt(
+            &source,
+            &path,
+            Some("2026-06-10T13:11:25Z".to_string()),
+        )
+        .expect("parse metadata")
+        .expect("metadata prompt");
+        let mut items = project_progress_work_items_from_text_for_project(
+            &PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md"),
+            r#"## Current Slice - 2026-06-09 Multi-day session evidence
+
+- Verified that long-running session evidence follows the latest session activity date.
+"#,
+            "ExampleProject",
+        );
+
+        assert_eq!(prompt_date(record.timestamp.as_deref()), "2026-06-09");
+        attach_session_evidence(&mut items, &[record]);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].date, "2026-06-09");
+        assert_eq!(items[0].session_evidence_count, 1);
 
         std::fs::remove_dir_all(root).expect("remove metadata root");
     }

@@ -5,16 +5,17 @@ use promptvault_lib::{
     run_list_project_work_summary_snapshots, run_list_stored_prompt_facets,
     run_load_stored_prompts, run_project_work_log_coverage,
     run_project_work_log_extraction_candidates, run_project_work_log_extraction_proposals,
-    run_project_work_log_freeze, run_project_work_log_normalization_candidates,
-    run_project_work_log_normalization_proposals, run_project_work_log_normalization_review_queue,
+    run_project_work_log_freeze, run_project_work_log_normalization_apply,
+    run_project_work_log_normalization_candidates, run_project_work_log_normalization_proposals,
+    run_project_work_log_normalization_review_queue,
     run_project_work_log_normalization_review_queue_update, run_project_work_log_review_queue,
     run_project_work_log_review_queue_update, run_project_work_report, run_project_work_summary,
     run_scan, source_specs, CancelScanOptions, ImportBatchOptions, ImportEventsOptions,
     ImportStatesOptions, ImproveRequest, ProjectWorkLogExtractionCandidatesOptions,
     ProjectWorkLogExtractionItemsOptions, ProjectWorkLogExtractionProposalsOptions,
     ProjectWorkLogExtractionRunsOptions, ProjectWorkLogFreezeOptions,
-    ProjectWorkLogNormalizationCandidatesOptions, ProjectWorkLogNormalizationProposalsOptions,
-    ProjectWorkLogNormalizationReviewQueueOptions,
+    ProjectWorkLogNormalizationApplyOptions, ProjectWorkLogNormalizationCandidatesOptions,
+    ProjectWorkLogNormalizationProposalsOptions, ProjectWorkLogNormalizationReviewQueueOptions,
     ProjectWorkLogNormalizationReviewQueueUpdateOptions, ProjectWorkLogReviewQueueOptions,
     ProjectWorkLogReviewQueueUpdateOptions, ProjectWorkReportOptions, ProjectWorkSummaryOptions,
     ProjectWorkSummarySnapshotsOptions, PromptRecord, ScanOptions, ScanPlanOptions,
@@ -1172,6 +1173,63 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
         }
+        "work-log-normalization-apply" => {
+            let json = take_flag(&mut args, "--json");
+            let mut limit = None;
+            let mut database_path = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?);
+                    }
+                    other => {
+                        return Err(format!(
+                            "unknown work-log-normalization-apply argument: {other}"
+                        )
+                        .into())
+                    }
+                }
+            }
+            let result = run_project_work_log_normalization_apply(
+                ProjectWorkLogNormalizationApplyOptions {
+                    database_path,
+                    limit,
+                },
+            )?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+
+            println!("PromptVault work log normalization apply");
+            println!("database: {}", result.database_path);
+            println!("approved_queue: {}", result.approved_queue_count);
+            println!("processed_queue: {}", result.processed_queue_count);
+            println!("applied_items: {}", result.applied_item_count);
+            println!("skipped_existing: {}", result.skipped_existing_count);
+            println!("total_applied_items: {}", result.total_applied_item_count);
+            println!("returned_items: {}", result.returned_item_count);
+            for item in &result.items {
+                println!(
+                    "\n{} · {} · {} · {} · {}",
+                    item.candidate_id,
+                    item.date,
+                    item.project,
+                    item.normalized_status,
+                    item.provider_runtime
+                );
+                println!("- normalized_title: {}", item.normalized_title);
+                println!("- normalized_evidence: {}", item.normalized_evidence);
+                println!("  {}", item.source_path);
+            }
+            if !result.warnings.is_empty() {
+                println!("\nwarnings: {}", result.warnings.join("; "));
+            }
+        }
         "work-summary" => {
             let json = take_flag(&mut args, "--json");
             let ai = take_flag(&mut args, "--ai");
@@ -1781,6 +1839,7 @@ fn help_text() -> String {
         "  work-log-normalization-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--ai] [--json]\n",
         "  work-log-normalization-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-proposals] [--refresh-session-index] [--ai] [--json]\n",
         "  work-log-normalization-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n",
+        "  work-log-normalization-apply [--limit N>0] [--database PATH] [--json]\n",
         "  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]\n",
         "  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n",
         "  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n",
@@ -1803,6 +1862,7 @@ fn help_text() -> String {
         "  work-log-normalization-proposals asks OpenAI/GLM to normalize parsed project/date rows and falls back to local review-only proposals.\n",
         "  work-log-normalization-review-queue persists current normalization proposals for operator review and marks disappeared proposals stale.\n",
         "  work-log-normalization-review-queue-update marks one persisted normalization proposal approved or rejected without writing normalized project/day rows.\n",
+        "  work-log-normalization-apply writes operator-approved normalization queue rows into an idempotent durable normalized project/day table.\n",
         "  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n",
         "  work-report session evidence is bounded by --session-limit.\n",
         "  work-summary builds project/date summaries with citation IDs; --include-extractions merges accepted AI work-log proposals into the summary preview; --include-saved-extractions merges stored accepted AI extraction rows without rereading raw progress logs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n",
@@ -1956,6 +2016,11 @@ struct ProjectWorkLogNormalizationReviewQueueBridgePayload {
 #[derive(serde::Deserialize)]
 struct ProjectWorkLogNormalizationReviewQueueUpdateBridgePayload {
     options: ProjectWorkLogNormalizationReviewQueueUpdateOptions,
+}
+
+#[derive(serde::Deserialize)]
+struct ProjectWorkLogNormalizationApplyBridgePayload {
+    options: Option<ProjectWorkLogNormalizationApplyOptions>,
 }
 
 #[derive(serde::Deserialize, Default)]
@@ -2313,6 +2378,17 @@ fn handle_bridge_route(
             let result = run_project_work_log_normalization_review_queue_update(options)?;
             write_json_response(stream, 200, &result)
         }
+        ("POST", "/api/work-log-normalization-apply") => {
+            let payload = serde_json::from_str::<ProjectWorkLogNormalizationApplyBridgePayload>(
+                &request.body,
+            )?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_project_work_log_normalization_apply(options)?;
+            write_json_response(stream, 200, &result)
+        }
         _ => write_response(stream, 404, "text/plain", "Not found"),
     }
 }
@@ -2339,6 +2415,7 @@ fn bridge_route_uses_database(method: &str, path: &str) -> bool {
             | ("POST", "/api/work-log-normalization-proposals")
             | ("POST", "/api/work-log-normalization-review-queue")
             | ("POST", "/api/work-log-normalization-review-queue/update")
+            | ("POST", "/api/work-log-normalization-apply")
     )
 }
 
@@ -2702,6 +2779,16 @@ mod tests {
         assert!(update_response
             .contains("work-log normalization review queue state must be approved or rejected"));
         assert!(update_response.contains("Access-Control-Allow-Origin: *"));
+
+        let apply_response = bridge_response_for(
+            "/api/work-log-normalization-apply",
+            r#"{"options":{"limit":0}}"#,
+        );
+
+        assert!(apply_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(apply_response
+            .contains("work-log normalization apply limit requires a positive integer"));
+        assert!(apply_response.contains("Access-Control-Allow-Origin: *"));
     }
 
     #[test]
@@ -2780,6 +2867,7 @@ mod tests {
             "/api/work-log-normalization-proposals",
             "/api/work-log-normalization-review-queue",
             "/api/work-log-normalization-review-queue/update",
+            "/api/work-log-normalization-apply",
         ] {
             assert!(
                 bridge_route_uses_database("POST", path),
@@ -2888,6 +2976,7 @@ mod tests {
         assert!(help.contains(
             "work-log-normalization-review-queue-update --candidate-id ID --state approved|rejected"
         ));
+        assert!(help.contains("work-log-normalization-apply [--limit N>0] [--database PATH]"));
         assert!(help.contains(
             "work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]"
         ));
@@ -2909,6 +2998,7 @@ mod tests {
         assert!(help.contains("work-log-normalization-proposals asks OpenAI/GLM"));
         assert!(help.contains("work-log-normalization-review-queue persists current normalization"));
         assert!(help.contains("without writing normalized project/day rows"));
+        assert!(help.contains("idempotent durable normalized project/day table"));
         assert!(help.contains("work-report stores only sanitized session evidence"));
         assert!(help.contains("--refresh-session-index to rescan raw sessions"));
         assert!(help.contains("work-summary builds project/date summaries with citation IDs"));

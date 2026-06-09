@@ -495,6 +495,34 @@ export interface ProjectWorkLogNormalizationReviewQueueResult {
   warnings: string[];
 }
 
+export interface ProjectWorkLogNormalizationApplyOptions {
+  database_path?: string;
+  limit?: number;
+}
+
+export interface ProjectWorkLogNormalizedItem extends ProjectWorkLogNormalizationProposal {
+  id: number;
+  applied_at: string;
+  review_reason: string;
+  provider: string;
+  provider_model: string | null;
+  provider_runtime: string;
+  used_ai: boolean;
+}
+
+export interface ProjectWorkLogNormalizationApplyResult {
+  generated_at: string;
+  database_path: string;
+  approved_queue_count: number;
+  processed_queue_count: number;
+  applied_item_count: number;
+  skipped_existing_count: number;
+  total_applied_item_count: number;
+  returned_item_count: number;
+  items: ProjectWorkLogNormalizedItem[];
+  warnings: string[];
+}
+
 export interface ProjectWorkLogExtractionMergeResult {
   provider: string;
   used_ai: boolean;

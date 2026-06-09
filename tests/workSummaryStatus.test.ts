@@ -24,6 +24,9 @@ import {
   workLogNormalizationProposalsActionLabel,
   workLogNormalizationProposalsFailureText,
   workLogNormalizationProposalsMetaText,
+  workLogNormalizationApplyActionLabel,
+  workLogNormalizationApplyFailureText,
+  workLogNormalizationApplyMetaText,
   workLogNormalizationReviewQueueActionLabel,
   workLogNormalizationReviewQueueFailureText,
   workLogNormalizationReviewQueueItemStateText,
@@ -62,6 +65,7 @@ import {
   type WorkLogExtractionItemsState,
   type WorkLogExtractionRunsState,
   type WorkLogNormalizationCandidatesState,
+  type WorkLogNormalizationApplyState,
   type WorkLogNormalizationProposalsState,
   type WorkLogNormalizationReviewQueueState,
   type WorkManagementFreezeState,
@@ -78,6 +82,7 @@ import type {
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
+  ProjectWorkLogNormalizationApplyResult,
   ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueItem,
@@ -436,6 +441,33 @@ function normalizationReviewQueueResult(
       last_seen_at: "2026-06-09T00:00:00Z",
       review_state: "pending_review",
       review_reason: "local_fallback_requires_ai_review",
+      provider: "local-normalization-rules",
+      provider_model: null,
+      provider_runtime: "local-normalization-rules",
+      used_ai: false,
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function normalizationApplyResult(
+  overrides: Partial<ProjectWorkLogNormalizationApplyResult> = {},
+): ProjectWorkLogNormalizationApplyResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    approved_queue_count: 2,
+    processed_queue_count: 2,
+    applied_item_count: 1,
+    skipped_existing_count: 1,
+    total_applied_item_count: 6,
+    returned_item_count: 5,
+    items: [{
+      ...normalizationProposalsResult().proposals[0],
+      id: 3,
+      applied_at: "2026-06-09T00:01:00Z",
+      review_reason: "operator_approved_normalization",
       provider: "local-normalization-rules",
       provider_model: null,
       provider_runtime: "local-normalization-rules",
@@ -1220,6 +1252,43 @@ test("work log normalization review queue labels describe persisted review rows"
     }),
     "승인됨 · operator_approved_normalization · AI accepted · glm/glm-test-model · confidence 0.50",
   );
+});
+
+test("work log normalization apply labels describe durable approved rows", () => {
+  const failed: WorkLogNormalizationApplyState = "failed";
+  assert.equal(
+    workLogNormalizationApplyActionLabel("idle", false, lockState()),
+    "승인된 정규화 큐 row가 없어 적용할 수 없습니다",
+  );
+  assert.equal(
+    workLogNormalizationApplyActionLabel("ready", true, lockState()),
+    "승인된 정규화 큐 row를 durable table에 적용",
+  );
+  assert.equal(
+    workLogNormalizationApplyActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 승인된 정규화 row를 적용할 수 없습니다",
+  );
+  assert.equal(
+    workLogNormalizationApplyMetaText("idle", null),
+    "아직 적용한 승인 정규화 row 없음",
+  );
+  assert.equal(
+    workLogNormalizationApplyMetaText("loading", normalizationApplyResult()),
+    "승인된 정규화 row 적용 중",
+  );
+  assert.equal(
+    workLogNormalizationApplyMetaText("ready", normalizationApplyResult()),
+    "승인 큐 2개 · 처리 2개 · 적용 1개 · 중복 1개 · 저장 총 6개 · 표시 5개",
+  );
+  assert.equal(
+    workLogNormalizationApplyMetaText(failed, null),
+    "정규화 적용 결과를 사용할 수 없음",
+  );
+  assert.equal(
+    workLogNormalizationApplyFailureText(failed),
+    "승인된 정규화 row를 durable table에 적용하지 못했습니다. 데이터베이스 경로, 승인 큐 상태, 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workLogNormalizationApplyFailureText("ready"), null);
 });
 
 test("work log extraction save state excludes already managed rows", () => {

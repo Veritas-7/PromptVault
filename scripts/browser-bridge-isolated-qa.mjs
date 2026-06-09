@@ -197,6 +197,8 @@ async function runBrowserQa() {
   let workLogNormalizationReviewQueueMeta = "";
   let workLogNormalizationReviewQueueRows = [];
   let workLogNormalizationReviewQueueStateAfterApprove = "";
+  let workLogNormalizationApplyMeta = "";
+  let workLogNormalizedRows = [];
   let workLogReviewQueueMeta = "";
   let approvedReviewQueueSaveDisabledWhenEmpty = null;
   let workLogReviewQueueMetaAfterSynthetic = "";
@@ -488,6 +490,20 @@ async function runBrowserQa() {
     }
     workLogNormalizationReviewQueueStateAfterApprove =
       `${approvedNormalizationRow.review_state} · ${approvedNormalizationRow.review_reason}`;
+    await waitForEnabled(page, '[data-apply-work-log-normalization-review-queue="true"]');
+    await page.locator('[data-apply-work-log-normalization-review-queue="true"]').click();
+    await page.waitForFunction((candidateId) => {
+      const meta = document.querySelector('[data-work-log-normalization-apply-meta="true"]')
+        ?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-log-normalized-items="true"] article'));
+      return meta.includes("적용 1개")
+        && meta.includes("저장 총 1개")
+        && rows.some((row) => (row.textContent ?? "").includes(candidateId));
+    }, firstNormalizationCandidateId, { timeout: 90000 });
+    workLogNormalizationApplyMeta =
+      (await page.locator('[data-work-log-normalization-apply-meta="true"]').textContent())?.trim() ?? "";
+    workLogNormalizedRows =
+      await page.locator('[data-work-log-normalized-items="true"] article').allTextContents();
     await page.locator('[data-sync-work-log-review-queue="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-review-queue-meta="true"]')?.textContent ?? "";
@@ -594,6 +610,8 @@ async function runBrowserQa() {
       workLogNormalizationReviewQueueMeta,
       workLogNormalizationReviewQueueRows,
       workLogNormalizationReviewQueueStateAfterApprove,
+      workLogNormalizationApplyMeta,
+      workLogNormalizedRows,
       workLogReviewQueueMeta,
       approvedReviewQueueSaveDisabledWhenEmpty,
       workLogReviewQueueMetaAfterSynthetic,

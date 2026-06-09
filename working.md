@@ -1,12 +1,122 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 14:50 KST
+Updated: 2026-06-09 15:10 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 normalization proposal review queue
+## Current Slice - 2026-06-09 durable normalization apply
+
+Current Goal:
+
+- Write operator-approved normalization queue rows into an idempotent durable
+  normalized project/day table.
+- Expose the apply path through CLI, browser bridge, Tauri, TypeScript, UI, and
+  browser QA.
+- Keep this slice scoped: durable normalized rows are stored and auditable, but
+  full work-management/report merge of normalized rows remains a follow-up.
+
+Context:
+
+- The previous slice persisted normalization proposals and operator
+  approve/reject decisions in `project_work_log_normalization_review_queue`.
+- The remaining gap was that approving a normalization row still did not create
+  a durable normalized project/day artifact.
+- Existing extraction review queue save behavior provided the pattern, but
+  normalization needed idempotency by `candidate_id` to avoid duplicate apply
+  rows when an operator clicks the apply action more than once.
+
+Progress:
+
+- Added durable table `project_work_log_normalized_items`.
+- Added `work-log-normalization-apply` CLI command and
+  `POST /api/work-log-normalization-apply` browser bridge route.
+- Added Tauri command `project_work_log_normalization_apply`.
+- Apply runner now reads `approved` normalization queue rows, writes them once
+  with `INSERT OR IGNORE`, reports `approved_queue_count`,
+  `processed_queue_count`, `applied_item_count`, `skipped_existing_count`, and
+  `total_applied_item_count`.
+- UI now has an `승인 적용` button that is enabled only when the normalization
+  queue has approved rows, plus an apply meta row and durable normalized row
+  preview.
+- Browser QA now approves a normalization queue row, clicks the apply button,
+  and verifies a durable normalized row appears in the UI.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added apply options/result and normalized item structs;
+  - added durable table/indexes, approved queue reader, idempotent insert helper,
+    normalized item reader, Tauri command, and Rust idempotency test.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added `work-log-normalization-apply`;
+  - added bridge payload/route, DB-lock routing, validation, and help coverage.
+- `src/types.ts`, `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`,
+  `src/App.tsx`:
+  - added frontend contracts, strict parser, status/meta labels, toolbar apply
+    button, failure notice, meta row, and durable normalized item list.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`:
+  - added parser/status tests for normalization apply payloads and impossible
+    counter rejection.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added click proof for normalization approval followed by durable apply.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`: PASS, `202` tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml normalization`: PASS, `4`
+  lib tests and `3` CLI normalization tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml bridge_routes_work_log_normalization_review_queue_validation_errors`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml bridge_serializes_database_backed_routes_only`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules`: PASS.
+- `npm run build`: PASS.
+- `cargo check --manifest-path src-tauri/Cargo.toml`: PASS.
+- Isolated CLI smoke:
+  `work-log-normalization-review-queue --sync-proposals` -> approve first row
+  -> `work-log-normalization-apply` -> repeat apply: PASS.
+  Result: first apply `applied_item_count=1`, repeat apply
+  `applied_item_count=0`, `skipped_existing_count=1`,
+  `total_applied_item_count=1`.
+- `npm run test:ui`: PASS, `457` tests.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS.
+- `git diff --check`: PASS.
+- `npm run check`: PASS, including `test:ui`, `build`, full Rust tests
+  (`174` lib tests, `29` CLI tests), doc-tests, and clippy `-D warnings`.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON included:
+  - `coverageMeta`: `817개 로그 · parsed 816개 · unparsed 0개 · 31개 프로젝트 · 작업 8,818개`;
+  - `workManagementMeta`: `관리 91개 · 31개 프로젝트 · 25일 ... 저장관리 91 · 라이브만 0`;
+  - `workLogNormalizationReviewQueueStateAfterApprove`: `approved · operator_approved_normalization`;
+  - `workLogNormalizationApplyMeta`: `승인 큐 1개 · 처리 1개 · 적용 1개 · 중복 0개 · 저장 총 1개 · 표시 1개`.
+
+Issues:
+
+- Durable normalized rows are not yet merged back into the work-management
+  overview/report summaries. They are stored and displayed as their own
+  auditable apply artifact.
+- UI queue sync still uses local review-only proposals (`ai: false`) for
+  deterministic QA. Provider-backed accepted normalization needs a working
+  provider environment and chunking before broad adoption.
+- Large project/day groups still need chunked provider normalization.
+
+Research:
+
+- No external research was needed. The implementation follows existing
+  PromptVault extraction persistence, review queue, browser bridge, and strict
+  parser patterns.
+
+Next Steps:
+
+- Merge durable normalized rows into work-management overview/report summaries
+  without double-counting parsed progress-log rows.
+- Add chunked provider normalization for large project/day candidate groups.
+- Add resumable all-history session backfill/checkpointing beyond the
+  `session_limit=200` verification path.
+- Evaluate a Codex SDK session-ingest adapter if it provides cleaner structured
+  session metadata than the current local JSONL/metadata-first index.
+
+## Previous Slice - 2026-06-09 normalization proposal review queue
 
 Current Goal:
 

@@ -12,6 +12,7 @@ import type {
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogReviewQueueItem,
   ProjectWorkLogNormalizationProposalsResult,
+  ProjectWorkLogNormalizationApplyResult,
   ProjectWorkLogNormalizationReviewQueueItem,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
@@ -32,6 +33,7 @@ export type WorkLogExtractionRunsState = "idle" | "loading" | "ready" | "failed"
 export type WorkLogNormalizationCandidatesState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogNormalizationProposalsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogNormalizationReviewQueueState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogNormalizationApplyState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementFreezeState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunMode = "ai" | "local";
@@ -736,6 +738,47 @@ export function workLogNormalizationReviewQueueItemStateText(
     providerText,
     `confidence ${item.confidence.toFixed(2)}`,
   ].join(" · ");
+}
+
+export function workLogNormalizationApplyActionLabel(
+  state: WorkLogNormalizationApplyState,
+  hasApprovedRows: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "승인된 정규화 row 적용 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 승인된 정규화 row를 적용할 수 없습니다`;
+  }
+  if (!hasApprovedRows) return "승인된 정규화 큐 row가 없어 적용할 수 없습니다";
+  return "승인된 정규화 큐 row를 durable table에 적용";
+}
+
+export function workLogNormalizationApplyMetaText(
+  state: WorkLogNormalizationApplyState,
+  result: ProjectWorkLogNormalizationApplyResult | null,
+): string {
+  if (state === "loading") return "승인된 정규화 row 적용 중";
+  if (!result) {
+    return state === "failed"
+      ? "정규화 적용 결과를 사용할 수 없음"
+      : "아직 적용한 승인 정규화 row 없음";
+  }
+  return [
+    `승인 큐 ${result.approved_queue_count.toLocaleString()}개`,
+    `처리 ${result.processed_queue_count.toLocaleString()}개`,
+    `적용 ${result.applied_item_count.toLocaleString()}개`,
+    `중복 ${result.skipped_existing_count.toLocaleString()}개`,
+    `저장 총 ${result.total_applied_item_count.toLocaleString()}개`,
+    `표시 ${result.returned_item_count.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+export function workLogNormalizationApplyFailureText(
+  state: WorkLogNormalizationApplyState,
+): string | null {
+  if (state !== "failed") return null;
+  return "승인된 정규화 row를 durable table에 적용하지 못했습니다. 데이터베이스 경로, 승인 큐 상태, 브리지 상태를 확인하세요.";
 }
 
 export function workSummarySnapshotVisibleSummaries(

@@ -57,6 +57,8 @@ const DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_PROPOSAL_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_NORMALIZATION_PROPOSAL_LIMIT: usize = 100;
 const DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_REVIEW_QUEUE_LIMIT: usize = 50;
 const MAX_PROJECT_WORK_LOG_NORMALIZATION_REVIEW_QUEUE_LIMIT: usize = 200;
+const DEFAULT_PROJECT_WORK_LOG_NORMALIZED_ITEM_LIMIT: usize = 20;
+const MAX_PROJECT_WORK_LOG_NORMALIZED_ITEM_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 200;
 const MAX_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 1_000;
 const PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS: u64 = 12;
@@ -467,6 +469,12 @@ pub struct ProjectWorkLogNormalizationReviewQueueUpdateOptions {
     pub review_reason: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkLogNormalizationApplyOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkLogNormalizationCandidate {
     pub candidate_id: String,
@@ -591,6 +599,52 @@ pub struct ProjectWorkLogNormalizationReviewQueueResult {
     pub accepted_proposal_count: usize,
     pub rejected_proposal_count: usize,
     pub items: Vec<ProjectWorkLogNormalizationReviewQueueItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogNormalizedItem {
+    pub id: i64,
+    pub applied_at: String,
+    pub candidate_id: String,
+    pub review_reason: String,
+    pub provider: String,
+    pub provider_model: Option<String>,
+    pub provider_runtime: String,
+    pub used_ai: bool,
+    pub project: String,
+    pub date: String,
+    pub source_path: String,
+    pub source_file: String,
+    pub reason: String,
+    pub original_title: String,
+    pub original_status: String,
+    pub original_evidence: String,
+    pub normalized_title: String,
+    pub normalized_status: String,
+    pub normalized_evidence: String,
+    pub confidence: f64,
+    pub accepted: bool,
+    pub rejection_reason: Option<String>,
+    pub work_item_count: usize,
+    pub session_evidence_count: usize,
+    pub saved_extraction_count: usize,
+    pub ai_saved_extraction_count: usize,
+    pub best_ai_confidence: Option<f64>,
+    pub risk_flags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogNormalizationApplyResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub approved_queue_count: usize,
+    pub processed_queue_count: usize,
+    pub applied_item_count: usize,
+    pub skipped_existing_count: usize,
+    pub total_applied_item_count: usize,
+    pub returned_item_count: usize,
+    pub items: Vec<ProjectWorkLogNormalizedItem>,
     pub warnings: Vec<String>,
 }
 
@@ -1160,6 +1214,14 @@ fn project_work_log_normalization_review_queue_update(
     options: ProjectWorkLogNormalizationReviewQueueUpdateOptions,
 ) -> Result<ProjectWorkLogNormalizationReviewQueueResult, String> {
     run_project_work_log_normalization_review_queue_update(options).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_log_normalization_apply(
+    options: Option<ProjectWorkLogNormalizationApplyOptions>,
+) -> Result<ProjectWorkLogNormalizationApplyResult, String> {
+    run_project_work_log_normalization_apply(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
 }
 
 fn scan_cancel_flags() -> &'static Mutex<HashMap<String, ScanCancelFlag>> {
@@ -2231,6 +2293,59 @@ pub fn run_project_work_log_normalization_review_queue_update(
         rejected_proposal_count: rows.rejected_proposal_count,
         items: rows.items,
         warnings: Vec::new(),
+    })
+}
+
+pub fn run_project_work_log_normalization_apply(
+    options: ProjectWorkLogNormalizationApplyOptions,
+) -> Result<ProjectWorkLogNormalizationApplyResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-log normalization apply limit requires a positive integer".into());
+    }
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_LOG_NORMALIZED_ITEM_LIMIT)
+        .min(MAX_PROJECT_WORK_LOG_NORMALIZED_ITEM_LIMIT);
+    let mut conn = open_promptvault_database(&database_path)?;
+    let approved_queue_count =
+        count_project_work_log_normalization_review_queue_state(&conn, "approved")?;
+    let approved_rows =
+        read_project_work_log_normalization_review_queue_items_by_state(&conn, "approved", limit)?;
+    let processed_queue_count = approved_rows.len();
+    let applied_item_count =
+        persist_project_work_log_normalized_items(&mut conn, &approved_rows, &generated_at)?;
+    let skipped_existing_count = processed_queue_count.saturating_sub(applied_item_count);
+    let item_rows = read_project_work_log_normalized_items(&conn, limit)?;
+    let mut warnings = Vec::new();
+    if approved_queue_count == 0 {
+        warnings.push(
+            "승인된 정규화 큐 row가 없어 durable normalized row를 적용하지 않았습니다.".to_string(),
+        );
+    } else if processed_queue_count < approved_queue_count {
+        warnings.push(format!(
+            "승인된 정규화 큐 row {approved_queue_count}개 중 {processed_queue_count}개만 이번 실행에서 처리했습니다."
+        ));
+    }
+    Ok(ProjectWorkLogNormalizationApplyResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        approved_queue_count,
+        processed_queue_count,
+        applied_item_count,
+        skipped_existing_count,
+        total_applied_item_count: item_rows.total_items,
+        returned_item_count: item_rows.items.len(),
+        items: item_rows.items,
+        warnings,
     })
 }
 
@@ -8009,6 +8124,40 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             ON project_work_log_normalization_review_queue(review_state, last_seen_at DESC);
         CREATE INDEX IF NOT EXISTS idx_project_work_log_normalization_review_queue_project_date
             ON project_work_log_normalization_review_queue(project, proposal_date);
+        CREATE TABLE IF NOT EXISTS project_work_log_normalized_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            applied_at TEXT NOT NULL,
+            candidate_id TEXT NOT NULL UNIQUE,
+            review_reason TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            provider_model TEXT,
+            provider_runtime TEXT NOT NULL,
+            used_ai INTEGER NOT NULL,
+            project TEXT NOT NULL,
+            proposal_date TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            source_file TEXT NOT NULL,
+            candidate_reason TEXT NOT NULL,
+            original_title TEXT NOT NULL,
+            original_status TEXT NOT NULL,
+            original_evidence TEXT NOT NULL,
+            normalized_title TEXT NOT NULL,
+            normalized_status TEXT NOT NULL,
+            normalized_evidence TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            accepted INTEGER NOT NULL,
+            rejection_reason TEXT,
+            work_item_count INTEGER NOT NULL,
+            session_evidence_count INTEGER NOT NULL,
+            saved_extraction_count INTEGER NOT NULL,
+            ai_saved_extraction_count INTEGER NOT NULL,
+            best_ai_confidence REAL,
+            risk_flags_json TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_work_log_normalized_items_applied_at
+            ON project_work_log_normalized_items(applied_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_project_work_log_normalized_items_project_date
+            ON project_work_log_normalized_items(project, proposal_date);
         CREATE TABLE IF NOT EXISTS project_work_summary_snapshots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             created_at TEXT NOT NULL,
@@ -8572,6 +8721,213 @@ fn read_project_work_log_normalization_review_queue(
         accepted_proposal_count,
         rejected_proposal_count,
         items,
+    })
+}
+
+fn count_project_work_log_normalization_review_queue_state(
+    conn: &Connection,
+    review_state: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM project_work_log_normalization_review_queue WHERE review_state=?1",
+        params![review_state],
+        |row| row.get(0),
+    )?;
+    Ok(count as usize)
+}
+
+fn read_project_work_log_normalization_review_queue_items_by_state(
+    conn: &Connection,
+    review_state: &str,
+    limit: usize,
+) -> Result<Vec<ProjectWorkLogNormalizationReviewQueueItem>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT candidate_id, first_seen_at, last_seen_at, review_state, review_reason,
+            provider, provider_model, provider_runtime, used_ai, project, proposal_date,
+            source_path, source_file, candidate_reason, original_title, original_status,
+            original_evidence, normalized_title, normalized_status, normalized_evidence,
+            confidence, accepted, rejection_reason, work_item_count, session_evidence_count,
+            saved_extraction_count, ai_saved_extraction_count, best_ai_confidence,
+            risk_flags_json
+         FROM project_work_log_normalization_review_queue
+         WHERE review_state=?1
+         ORDER BY last_seen_at DESC
+         LIMIT ?2",
+    )?;
+    let rows = stmt.query_map(params![review_state, limit as i64], |row| {
+        let risk_flags_json: String = row.get(28)?;
+        let risk_flags = serde_json::from_str(&risk_flags_json).map_err(|err| {
+            rusqlite::Error::FromSqlConversionFailure(
+                28,
+                rusqlite::types::Type::Text,
+                Box::new(err),
+            )
+        })?;
+        Ok(ProjectWorkLogNormalizationReviewQueueItem {
+            candidate_id: row.get(0)?,
+            first_seen_at: row.get(1)?,
+            last_seen_at: row.get(2)?,
+            review_state: row.get(3)?,
+            review_reason: row.get(4)?,
+            provider: row.get(5)?,
+            provider_model: row.get(6)?,
+            provider_runtime: row.get(7)?,
+            used_ai: row.get::<_, i64>(8)? != 0,
+            project: row.get(9)?,
+            date: row.get(10)?,
+            source_path: row.get(11)?,
+            source_file: row.get(12)?,
+            reason: row.get(13)?,
+            original_title: row.get(14)?,
+            original_status: row.get(15)?,
+            original_evidence: row.get(16)?,
+            normalized_title: row.get(17)?,
+            normalized_status: row.get(18)?,
+            normalized_evidence: row.get(19)?,
+            confidence: row.get(20)?,
+            accepted: row.get::<_, i64>(21)? != 0,
+            rejection_reason: row.get(22)?,
+            work_item_count: row.get::<_, i64>(23)? as usize,
+            session_evidence_count: row.get::<_, i64>(24)? as usize,
+            saved_extraction_count: row.get::<_, i64>(25)? as usize,
+            ai_saved_extraction_count: row.get::<_, i64>(26)? as usize,
+            best_ai_confidence: row.get(27)?,
+            risk_flags,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|err| err.into())
+}
+
+fn persist_project_work_log_normalized_items(
+    conn: &mut Connection,
+    rows: &[ProjectWorkLogNormalizationReviewQueueItem],
+    applied_at: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let tx = conn.transaction()?;
+    let mut applied_item_count = 0usize;
+    for row in rows {
+        let risk_flags_json = serde_json::to_string(&row.risk_flags)?;
+        let changed = tx.execute(
+            "INSERT OR IGNORE INTO project_work_log_normalized_items (
+                applied_at, candidate_id, review_reason, provider, provider_model,
+                provider_runtime, used_ai, project, proposal_date, source_path, source_file,
+                candidate_reason, original_title, original_status, original_evidence,
+                normalized_title, normalized_status, normalized_evidence, confidence, accepted,
+                rejection_reason, work_item_count, session_evidence_count,
+                saved_extraction_count, ai_saved_extraction_count, best_ai_confidence,
+                risk_flags_json
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
+                ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27
+            )",
+            params![
+                applied_at,
+                &row.candidate_id,
+                &row.review_reason,
+                &row.provider,
+                row.provider_model.as_deref(),
+                &row.provider_runtime,
+                row.used_ai as i64,
+                &row.project,
+                &row.date,
+                &row.source_path,
+                &row.source_file,
+                &row.reason,
+                &row.original_title,
+                &row.original_status,
+                &row.original_evidence,
+                &row.normalized_title,
+                &row.normalized_status,
+                &row.normalized_evidence,
+                row.confidence,
+                row.accepted as i64,
+                row.rejection_reason.as_deref(),
+                row.work_item_count as i64,
+                row.session_evidence_count as i64,
+                row.saved_extraction_count as i64,
+                row.ai_saved_extraction_count as i64,
+                row.best_ai_confidence,
+                &risk_flags_json,
+            ],
+        )?;
+        applied_item_count += changed;
+    }
+    tx.commit()?;
+    Ok(applied_item_count)
+}
+
+struct ProjectWorkLogNormalizedItemRows {
+    total_items: usize,
+    items: Vec<ProjectWorkLogNormalizedItem>,
+}
+
+fn read_project_work_log_normalized_items(
+    conn: &Connection,
+    limit: usize,
+) -> Result<ProjectWorkLogNormalizedItemRows, Box<dyn std::error::Error>> {
+    let total_items: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM project_work_log_normalized_items",
+        [],
+        |row| row.get(0),
+    )?;
+    let mut stmt = conn.prepare(
+        "SELECT id, applied_at, candidate_id, review_reason, provider, provider_model,
+            provider_runtime, used_ai, project, proposal_date, source_path, source_file,
+            candidate_reason, original_title, original_status, original_evidence,
+            normalized_title, normalized_status, normalized_evidence, confidence, accepted,
+            rejection_reason, work_item_count, session_evidence_count,
+            saved_extraction_count, ai_saved_extraction_count, best_ai_confidence,
+            risk_flags_json
+         FROM project_work_log_normalized_items
+         ORDER BY applied_at DESC, id DESC
+         LIMIT ?1",
+    )?;
+    let rows = stmt.query_map(params![limit as i64], |row| {
+        let risk_flags_json: String = row.get(27)?;
+        let risk_flags = serde_json::from_str(&risk_flags_json).map_err(|err| {
+            rusqlite::Error::FromSqlConversionFailure(
+                27,
+                rusqlite::types::Type::Text,
+                Box::new(err),
+            )
+        })?;
+        Ok(ProjectWorkLogNormalizedItem {
+            id: row.get(0)?,
+            applied_at: row.get(1)?,
+            candidate_id: row.get(2)?,
+            review_reason: row.get(3)?,
+            provider: row.get(4)?,
+            provider_model: row.get(5)?,
+            provider_runtime: row.get(6)?,
+            used_ai: row.get::<_, i64>(7)? != 0,
+            project: row.get(8)?,
+            date: row.get(9)?,
+            source_path: row.get(10)?,
+            source_file: row.get(11)?,
+            reason: row.get(12)?,
+            original_title: row.get(13)?,
+            original_status: row.get(14)?,
+            original_evidence: row.get(15)?,
+            normalized_title: row.get(16)?,
+            normalized_status: row.get(17)?,
+            normalized_evidence: row.get(18)?,
+            confidence: row.get(19)?,
+            accepted: row.get::<_, i64>(20)? != 0,
+            rejection_reason: row.get(21)?,
+            work_item_count: row.get::<_, i64>(22)? as usize,
+            session_evidence_count: row.get::<_, i64>(23)? as usize,
+            saved_extraction_count: row.get::<_, i64>(24)? as usize,
+            ai_saved_extraction_count: row.get::<_, i64>(25)? as usize,
+            best_ai_confidence: row.get(26)?,
+            risk_flags,
+        })
+    })?;
+    Ok(ProjectWorkLogNormalizedItemRows {
+        total_items: total_items as usize,
+        items: rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| -> Box<dyn std::error::Error> { Box::new(err) })?,
     })
 }
 
@@ -11185,7 +11541,8 @@ pub fn run() {
             project_work_log_normalization_candidates,
             project_work_log_normalization_proposals,
             project_work_log_normalization_review_queue,
-            project_work_log_normalization_review_queue_update
+            project_work_log_normalization_review_queue_update,
+            project_work_log_normalization_apply
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -15251,6 +15608,140 @@ Progress:
         }));
 
         drop(conn);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
+    fn project_work_log_normalization_apply_persists_approved_rows_once() {
+        let suffix = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-project-work-log-normalization-apply-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut conn = open_promptvault_database(&db_path).expect("open db");
+        let approved = ProjectWorkLogNormalizationProposal {
+            candidate_id: "work-normalize-SafeProject-apply-a1b2c3d4".to_string(),
+            project: "SafeProject".to_string(),
+            date: "2026-06-09".to_string(),
+            source_path: "/tmp/SafeProject/working.md".to_string(),
+            source_file: "working.md".to_string(),
+            reason: "no_ai_normalization".to_string(),
+            original_title: "Progress log updated".to_string(),
+            original_status: "current".to_string(),
+            original_evidence: "Updated progress log.".to_string(),
+            normalized_title: "SafeProject durable normalized row".to_string(),
+            normalized_status: "current".to_string(),
+            normalized_evidence: "SafeProject durable normalization was approved.".to_string(),
+            confidence: 0.92,
+            accepted: true,
+            rejection_reason: None,
+            work_item_count: 2,
+            session_evidence_count: 1,
+            saved_extraction_count: 1,
+            ai_saved_extraction_count: 1,
+            best_ai_confidence: Some(0.92),
+            risk_flags: Vec::new(),
+        };
+        let rejected = ProjectWorkLogNormalizationProposal {
+            candidate_id: "work-normalize-SafeProject-apply-rejected-b1b2c3d4".to_string(),
+            project: "SafeProject".to_string(),
+            date: "2026-06-08".to_string(),
+            source_path: "/tmp/SafeProject/workingd.md".to_string(),
+            source_file: "workingd.md".to_string(),
+            reason: "no_session_evidence".to_string(),
+            original_title: "Review-only note".to_string(),
+            original_status: "current".to_string(),
+            original_evidence: "Needs review.".to_string(),
+            normalized_title: "Rejected normalization row".to_string(),
+            normalized_status: "current".to_string(),
+            normalized_evidence: "Rejected row must not be applied.".to_string(),
+            confidence: 0.5,
+            accepted: false,
+            rejection_reason: Some("local_fallback_requires_ai_review".to_string()),
+            work_item_count: 1,
+            session_evidence_count: 0,
+            saved_extraction_count: 0,
+            ai_saved_extraction_count: 0,
+            best_ai_confidence: None,
+            risk_flags: Vec::new(),
+        };
+        let result = ProjectWorkLogNormalizationProposalsResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            database_path: db_path.display().to_string(),
+            provider: "glm".to_string(),
+            provider_model: Some("glm-test-model".to_string()),
+            provider_runtime: "glm-chat-completions".to_string(),
+            used_ai: true,
+            total_candidate_count: 2,
+            returned_proposal_count: 2,
+            accepted_count: 1,
+            rejected_count: 1,
+            report_total_items: 3,
+            report_project_count: 1,
+            report_date_count: 2,
+            proposals: vec![approved, rejected],
+            warnings: Vec::new(),
+        };
+        sync_project_work_log_normalization_review_queue(
+            &mut conn,
+            &result,
+            "2026-06-09T00:00:00Z",
+        )
+        .expect("sync normalization queue");
+        update_project_work_log_normalization_review_queue_state(
+            &conn,
+            "work-normalize-SafeProject-apply-a1b2c3d4",
+            "approved",
+            "operator_approved_normalization",
+            "2026-06-09T00:10:00Z",
+        )
+        .expect("approve normalization row");
+        update_project_work_log_normalization_review_queue_state(
+            &conn,
+            "work-normalize-SafeProject-apply-rejected-b1b2c3d4",
+            "rejected",
+            "operator_rejected_normalization",
+            "2026-06-09T00:10:00Z",
+        )
+        .expect("reject normalization row");
+        drop(conn);
+
+        let first =
+            run_project_work_log_normalization_apply(ProjectWorkLogNormalizationApplyOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(10),
+            })
+            .expect("apply approved normalization");
+        assert_eq!(first.approved_queue_count, 1);
+        assert_eq!(first.processed_queue_count, 1);
+        assert_eq!(first.applied_item_count, 1);
+        assert_eq!(first.skipped_existing_count, 0);
+        assert_eq!(first.total_applied_item_count, 1);
+        assert_eq!(first.returned_item_count, 1);
+        assert_eq!(
+            first.items[0].candidate_id,
+            "work-normalize-SafeProject-apply-a1b2c3d4"
+        );
+        assert_eq!(
+            first.items[0].normalized_title,
+            "SafeProject durable normalized row"
+        );
+        assert!(first.items[0].used_ai);
+
+        let second =
+            run_project_work_log_normalization_apply(ProjectWorkLogNormalizationApplyOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(10),
+            })
+            .expect("apply approved normalization again");
+        assert_eq!(second.approved_queue_count, 1);
+        assert_eq!(second.processed_queue_count, 1);
+        assert_eq!(second.applied_item_count, 0);
+        assert_eq!(second.skipped_existing_count, 1);
+        assert_eq!(second.total_applied_item_count, 1);
+        assert_eq!(second.returned_item_count, 1);
+
         let _ = std::fs::remove_file(&db_path);
     }
 

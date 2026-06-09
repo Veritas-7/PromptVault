@@ -117,6 +117,7 @@ import {
   loadProjectWorkLogNormalizationCandidates,
   loadProjectWorkLogNormalizationProposals,
   loadProjectWorkLogNormalizationReviewQueue,
+  applyProjectWorkLogNormalizationQueue,
   loadProjectWorkLogReviewQueue,
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
@@ -241,6 +242,7 @@ import type {
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
+  ProjectWorkLogNormalizationApplyResult,
   ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
@@ -276,6 +278,9 @@ import {
   workLogNormalizationProposalsActionLabel,
   workLogNormalizationProposalsFailureText,
   workLogNormalizationProposalsMetaText,
+  workLogNormalizationApplyActionLabel,
+  workLogNormalizationApplyFailureText,
+  workLogNormalizationApplyMetaText,
   workLogNormalizationReviewQueueActionLabel,
   workLogNormalizationReviewQueueFailureText,
   workLogNormalizationReviewQueueItemStateText,
@@ -313,6 +318,7 @@ import {
   type WorkLogExtractionItemsState,
   type WorkLogExtractionRunsState,
   type WorkLogNormalizationCandidatesState,
+  type WorkLogNormalizationApplyState,
   type WorkLogNormalizationProposalsState,
   type WorkLogNormalizationReviewQueueState,
   type WorkManagementFreezeState,
@@ -342,6 +348,8 @@ const WORK_LOG_NORMALIZATION_PROPOSAL_DISPLAY_LIMIT = 5;
 const WORK_LOG_NORMALIZATION_PROPOSAL_MANAGEMENT_LIMIT = 40;
 const WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
 const WORK_LOG_NORMALIZATION_REVIEW_QUEUE_MANAGEMENT_LIMIT = 40;
+const WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT = 5;
+const WORK_LOG_NORMALIZATION_APPLY_MANAGEMENT_LIMIT = 40;
 const WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT = 6;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
@@ -439,6 +447,8 @@ function App() {
     useState<WorkLogNormalizationProposalsState>("idle");
   const [workLogNormalizationReviewQueueState, setWorkLogNormalizationReviewQueueState] =
     useState<WorkLogNormalizationReviewQueueState>("idle");
+  const [workLogNormalizationApplyState, setWorkLogNormalizationApplyState] =
+    useState<WorkLogNormalizationApplyState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
   const [workManagementFreezeState, setWorkManagementFreezeState] =
@@ -477,6 +487,8 @@ function App() {
     useState<ProjectWorkLogNormalizationProposalsResult | null>(null);
   const [workLogNormalizationReviewQueueResult, setWorkLogNormalizationReviewQueueResult] =
     useState<ProjectWorkLogNormalizationReviewQueueResult | null>(null);
+  const [workLogNormalizationApplyResult, setWorkLogNormalizationApplyResult] =
+    useState<ProjectWorkLogNormalizationApplyResult | null>(null);
   const [
     workLogNormalizationReviewQueueUpdatingCandidateId,
     setWorkLogNormalizationReviewQueueUpdatingCandidateId,
@@ -549,6 +561,7 @@ function App() {
     || workLogNormalizationCandidatesState === "loading"
     || workLogNormalizationProposalsState === "loading"
     || workLogNormalizationReviewQueueState === "loading"
+    || workLogNormalizationApplyState === "loading"
     || workManagementRefreshState === "loading"
     || workManagementFreezeState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
@@ -769,6 +782,14 @@ function App() {
     workLogNormalizationReviewQueueState,
     workLogNormalizationReviewQueueResult,
   );
+  const hasApprovedWorkLogNormalizationRows =
+    (workLogNormalizationReviewQueueResult?.approved_count ?? 0) > 0;
+  const workLogNormalizationApplyFailureMessage =
+    workLogNormalizationApplyFailureText(workLogNormalizationApplyState);
+  const workLogNormalizationApplyMeta = workLogNormalizationApplyMetaText(
+    workLogNormalizationApplyState,
+    workLogNormalizationApplyResult,
+  );
   const workSummarySnapshotsFailureMessage = workSummarySnapshotsFailureText(workSummarySnapshotsState);
   const workSummarySnapshotsMeta = workSummarySnapshotsMetaText(
     workSummarySnapshotsState,
@@ -865,6 +886,11 @@ function App() {
       0,
       WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT,
     ) ?? [];
+  const visibleWorkLogNormalizedItems =
+    workLogNormalizationApplyResult?.items.slice(
+      0,
+      WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT,
+    ) ?? [];
   const visibleWorkLogExtractionItemGroups =
     groupWorkLogExtractionItemsByProjectDate(visibleWorkLogExtractionItems);
   const hiddenWorkLogExtractionItemCount = Math.max(
@@ -889,6 +915,11 @@ function App() {
     0,
     (workLogNormalizationReviewQueueResult?.items.length ?? 0)
       - WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT,
+  );
+  const hiddenWorkLogNormalizedItemCount = Math.max(
+    0,
+    (workLogNormalizationApplyResult?.items.length ?? 0)
+      - WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT,
   );
   const workManagementOverviewLoaded =
     workSummaryResult !== null
@@ -1302,6 +1333,26 @@ function App() {
       setWorkLogNormalizationReviewQueueState("failed");
     } finally {
       setWorkLogNormalizationReviewQueueUpdatingCandidateId(null);
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function applyApprovedWorkLogNormalizationRows() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkLogNormalizationApplyState("loading");
+    try {
+      const next = await applyProjectWorkLogNormalizationQueue({
+        limit: WORK_LOG_NORMALIZATION_APPLY_MANAGEMENT_LIMIT,
+      });
+      setWorkLogNormalizationApplyResult(next);
+      setWorkLogNormalizationApplyState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogNormalizationApplyState("failed");
+    } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
@@ -2372,6 +2423,25 @@ function App() {
                   : "정규화 큐"}
             </button>
             <button
+              aria-label={workLogNormalizationApplyActionLabel(
+                workLogNormalizationApplyState,
+                hasApprovedWorkLogNormalizationRows,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-apply-work-log-normalization-review-queue="true"
+              disabled={isTopLevelActionLocked || !hasApprovedWorkLogNormalizationRows}
+              onClick={() => void applyApprovedWorkLogNormalizationRows()}
+              type="button"
+            >
+              <CheckCircle2 size={15} />
+              {workLogNormalizationApplyState === "loading"
+                ? "적용 중"
+                : workLogNormalizationApplyResult
+                  ? "승인 적용 다시"
+                  : "승인 적용"}
+            </button>
+            <button
               aria-label={workLogReviewQueueActionLabel(
                 workLogReviewQueueState,
                 workLogReviewQueueResult !== null,
@@ -2653,6 +2723,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workLogNormalizationReviewQueueFailureMessage}</span>
+          </div>
+        ) : null}
+        {workLogNormalizationApplyFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-log-normalization-apply-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workLogNormalizationApplyFailureMessage}</span>
           </div>
         ) : null}
         <form
@@ -3711,6 +3791,59 @@ function App() {
           ) : (
             <div className="empty compact" data-empty-work-log-normalization-review-queue="true">
               저장된 정규화 검토 큐 없음
+            </div>
+          )
+        ) : null}
+        {workLogNormalizationApplyResult || workLogNormalizationApplyState !== "idle" ? (
+          <div className="work-summary-index" data-work-log-normalization-apply-meta="true">
+            <span>{workLogNormalizationApplyMeta}</span>
+          </div>
+        ) : null}
+        {workLogNormalizationApplyResult ? (
+          visibleWorkLogNormalizedItems.length ? (
+            <div className="work-summary-list" data-work-log-normalized-items="true">
+              {visibleWorkLogNormalizedItems.map((item) => (
+                <article
+                  className="work-summary-row work-log-proposal-row"
+                  key={item.candidate_id}
+                >
+                  <div>
+                    <strong>{item.project}</strong>
+                    <span>{item.date}</span>
+                    <span>applied {item.applied_at}</span>
+                  </div>
+                  <p>{item.normalized_title}</p>
+                  <p className="work-log-proposal-evidence">{item.normalized_evidence}</p>
+                  <span>
+                    {item.review_reason} · {item.normalized_status} · confidence{" "}
+                    {item.confidence.toFixed(2)} · {item.candidate_id}
+                  </span>
+                  <span>
+                    provider {item.provider_runtime}
+                    {item.provider_model ? ` · model ${item.provider_model}` : ""}
+                    {item.used_ai ? " · AI" : " · local"} · 원본 {item.original_title}
+                  </span>
+                  <span>
+                    작업 {item.work_item_count.toLocaleString()}개 · 세션근거{" "}
+                    {item.session_evidence_count.toLocaleString()}건 · 저장추출{" "}
+                    {item.saved_extraction_count.toLocaleString()}개 · AI 저장{" "}
+                    {item.ai_saved_extraction_count.toLocaleString()}개
+                  </span>
+                  {item.risk_flags.length ? (
+                    <span>위험표시 {item.risk_flags.map(riskFlagLabel).join(", ")}</span>
+                  ) : null}
+                  <span>{item.source_file} · {item.source_path}</span>
+                </article>
+              ))}
+              {hiddenWorkLogNormalizedItemCount ? (
+                <div className="work-summary-overflow">
+                  그 외 적용된 정규화 row {hiddenWorkLogNormalizedItemCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-log-normalized-items="true">
+              적용된 정규화 row 없음
             </div>
           )
         ) : null}

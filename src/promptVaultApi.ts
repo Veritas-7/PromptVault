@@ -17,6 +17,7 @@ import type {
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
+  ProjectWorkLogNormalizationApplyResult,
   ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
@@ -181,6 +182,11 @@ export interface ProjectWorkLogNormalizationReviewQueueUpdateOptions {
   candidate_id: string;
   review_state: "approved" | "rejected";
   review_reason?: string;
+}
+
+export interface ProjectWorkLogNormalizationApplyOptions {
+  database_path?: string;
+  limit?: number;
 }
 
 export interface ImprovePromptRequest {
@@ -449,6 +455,22 @@ export async function updateProjectWorkLogNormalizationReviewQueueItem(
     "/api/work-log-normalization-review-queue/update",
     { options },
     parseProjectWorkLogNormalizationReviewQueueResult,
+  );
+}
+
+export async function applyProjectWorkLogNormalizationQueue(
+  options: ProjectWorkLogNormalizationApplyOptions = {},
+): Promise<ProjectWorkLogNormalizationApplyResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogNormalizationApplyResult>(
+      "project_work_log_normalization_apply",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkLogNormalizationApplyResult>(
+    "/api/work-log-normalization-apply",
+    { options },
+    parseProjectWorkLogNormalizationApplyResult,
   );
 }
 
@@ -1877,6 +1899,52 @@ function parseProjectWorkLogNormalizationReviewQueueResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkLogNormalizationReviewQueueResult;
+}
+
+function isProjectWorkLogNormalizedItem(value: unknown): boolean {
+  return isProjectWorkLogNormalizationProposal(value)
+    && isRecord(value)
+    && isPositiveSafeInteger(value.id)
+    && isTimestampString(value.applied_at)
+    && isNonBlankString(value.review_reason)
+    && isNonBlankString(value.provider)
+    && isNullableNonBlankString(value.provider_model)
+    && isNonBlankString(value.provider_runtime)
+    && typeof value.used_ai === "boolean";
+}
+
+function projectWorkLogNormalizationApplyWithinResult(value: unknown): boolean {
+  if (!isRecord(value)
+    || !Array.isArray(value.items)
+    || !isNonNegativeSafeInteger(value.approved_queue_count)
+    || !isNonNegativeSafeInteger(value.processed_queue_count)
+    || !isNonNegativeSafeInteger(value.applied_item_count)
+    || !isNonNegativeSafeInteger(value.skipped_existing_count)
+    || !isNonNegativeSafeInteger(value.total_applied_item_count)
+    || !isNonNegativeSafeInteger(value.returned_item_count)) {
+    return false;
+  }
+  return value.processed_queue_count <= value.approved_queue_count
+    && value.applied_item_count + value.skipped_existing_count === value.processed_queue_count
+    && value.applied_item_count <= value.total_applied_item_count
+    && value.items.length === value.returned_item_count
+    && value.returned_item_count <= value.total_applied_item_count;
+}
+
+function parseProjectWorkLogNormalizationApplyResult(
+  value: unknown,
+): ProjectWorkLogNormalizationApplyResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !Array.isArray(value.items)
+    || !value.items.every(isProjectWorkLogNormalizedItem)
+    || !recordStringFieldValuesAreUnique(value.items, "candidate_id")
+    || !projectWorkLogNormalizationApplyWithinResult(value)
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkLogNormalizationApplyResult;
 }
 
 function isProjectWorkLogExtractionMergeResult(value: unknown): boolean {

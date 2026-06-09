@@ -28,6 +28,7 @@ const PROJECT_PROGRESS_MAX_DEPTH: usize = 4;
 const PROJECT_PROGRESS_HEAD_CHARS: usize = 24_000;
 const PROJECT_PROGRESS_TAIL_CHARS: usize = 8_000;
 const DEFAULT_PROJECT_WORK_SESSION_LIMIT: usize = 200;
+const DEFAULT_PROJECT_WORK_SESSION_INDEX_UNTIL_COMPLETE_MAX_BATCHES: usize = 1_000;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
 const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
 const PROJECT_WORK_SESSION_SOURCE_IDS: &[&str] = &[
@@ -789,6 +790,7 @@ pub struct ProjectWorkSessionIndexOptions {
     pub limit: Option<usize>,
     pub batch_files: Option<usize>,
     pub max_batches: Option<usize>,
+    pub until_complete: Option<bool>,
     pub reset: Option<bool>,
 }
 
@@ -812,6 +814,7 @@ pub struct ProjectWorkSessionIndexResult {
     pub requested_limit: usize,
     pub batch_files: Option<usize>,
     pub max_batches: Option<usize>,
+    pub until_complete: bool,
     pub batches_run: usize,
     pub scanned_prompt_count: usize,
     pub sanitized_prompt_count: usize,
@@ -1727,9 +1730,21 @@ pub fn run_project_work_report(
     Ok(report)
 }
 
+fn project_work_session_index_effective_max_batches(
+    until_complete: bool,
+    max_batches: Option<usize>,
+) -> Option<usize> {
+    if until_complete {
+        Some(max_batches.unwrap_or(DEFAULT_PROJECT_WORK_SESSION_INDEX_UNTIL_COMPLETE_MAX_BATCHES))
+    } else {
+        max_batches
+    }
+}
+
 pub fn run_project_work_session_index(
     options: ProjectWorkSessionIndexOptions,
 ) -> Result<ProjectWorkSessionIndexResult, Box<dyn std::error::Error>> {
+    let until_complete = options.until_complete.unwrap_or(false);
     if matches!(options.limit, Some(0)) {
         return Err("work-session-index limit requires a positive integer".into());
     }
@@ -1741,6 +1756,9 @@ pub fn run_project_work_session_index(
     }
     if options.max_batches.is_some() && options.batch_files.is_none() {
         return Err("work-session-index max_batches requires batch_files".into());
+    }
+    if until_complete && options.batch_files.is_none() {
+        return Err("work-session-index until_complete requires batch_files".into());
     }
     if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
         return Err("work-session-index database path requires a non-empty value".into());
@@ -1754,7 +1772,8 @@ pub fn run_project_work_session_index(
         .unwrap_or_else(default_database_path);
     let requested_limit = options.limit.unwrap_or(DEFAULT_PROJECT_WORK_SESSION_LIMIT);
     let batch_files = options.batch_files;
-    let max_batches = options.max_batches;
+    let max_batches =
+        project_work_session_index_effective_max_batches(until_complete, options.max_batches);
     let reset = options.reset.unwrap_or(false);
     let mut warnings = Vec::new();
     let (prompts, source_states, batches_run) = if let Some(batch_files) = batch_files {
@@ -1775,6 +1794,15 @@ pub fn run_project_work_session_index(
     let persistence = upsert_project_work_session_index(&database_path, &prompts, reset)?;
     let all_sources_completed =
         !source_states.is_empty() && source_states.iter().all(|state| state.completed);
+    if until_complete
+        && !all_sources_completed
+        && max_batches.is_some_and(|max_batches| batches_run >= max_batches)
+    {
+        warnings.push(
+            "work-session-index until_complete stopped at max_batches before all sources completed"
+                .to_string(),
+        );
+    }
 
     Ok(ProjectWorkSessionIndexResult {
         generated_at,
@@ -1782,6 +1810,7 @@ pub fn run_project_work_session_index(
         requested_limit,
         batch_files,
         max_batches,
+        until_complete,
         batches_run,
         scanned_prompt_count: prompts.len(),
         sanitized_prompt_count: persistence.sanitized_prompt_count,
@@ -14727,6 +14756,34 @@ Progress:
         .to_string();
 
         assert!(missing_batch_err.contains("work-session-index max_batches requires batch_files"));
+    }
+
+    #[test]
+    fn run_project_work_session_index_rejects_until_complete_without_batch_files() {
+        let err = run_project_work_session_index(ProjectWorkSessionIndexOptions {
+            until_complete: Some(true),
+            ..Default::default()
+        })
+        .expect_err("until_complete without batch_files should fail")
+        .to_string();
+
+        assert!(err.contains("work-session-index until_complete requires batch_files"));
+    }
+
+    #[test]
+    fn project_work_session_index_until_complete_defaults_to_safety_cap() {
+        assert_eq!(
+            project_work_session_index_effective_max_batches(true, None),
+            Some(DEFAULT_PROJECT_WORK_SESSION_INDEX_UNTIL_COMPLETE_MAX_BATCHES)
+        );
+        assert_eq!(
+            project_work_session_index_effective_max_batches(true, Some(7)),
+            Some(7)
+        );
+        assert_eq!(
+            project_work_session_index_effective_max_batches(false, None),
+            None
+        );
     }
 
     #[test]

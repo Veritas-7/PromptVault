@@ -1,12 +1,141 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 16:27 KST
+Updated: 2026-06-09 16:40 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 multi-batch session evidence backfill runner
+## Current Slice - 2026-06-09 explicit until-complete session index contract
+
+Current Goal:
+
+- Make the session evidence backfill intent explicit with an `until_complete`
+  option instead of relying on repeated manual `--max-batches` calls.
+- Keep the real-session backfill bounded by `max_batches` or a default safety
+  cap so an operator cannot accidentally start an unbounded all-history scan.
+- Preserve the existing review-first work-log management contract: real session
+  evidence and project-local progress logs are managed now, while arbitrary AI
+  interpretation of unusual progress logs remains review-gated future work.
+
+Context:
+
+- The previous slice already added per-source cursor state and multi-batch
+  checkpoint traversal over real Codex/Codex CX session files.
+- Existing multi-batch traversal already stops early when every source state is
+  complete. The missing piece was a clear CLI/API flag that expresses
+  "run toward completion" and exposes whether the call stopped because it hit
+  the bounded batch cap.
+- A full all-history Codex backfill is still not run in browser QA. The current
+  QA proves the route with real session sources, an isolated database, and
+  `max_batches=2`.
+
+Progress:
+
+- Added `until_complete` to `ProjectWorkSessionIndexOptions` and
+  `ProjectWorkSessionIndexResult`.
+- Added a default safety cap of `1,000` batches for `until_complete=true` when
+  the caller does not provide `max_batches`.
+- Added validation: `until_complete=true` requires `batch_files` because it is
+  only meaningful for checkpointed source traversal.
+- Added a warning when `until_complete` stops at the effective `max_batches`
+  before all session sources are complete.
+- Added `--until-complete` to the CLI and browser bridge route contract.
+- Updated isolated browser QA to call `/api/work-session-index` with
+  `until_complete=true`, `batch_files=100`, `max_batches=2`, and `reset=true`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added the `until_complete` option/result field;
+  - added `project_work_session_index_effective_max_batches`;
+  - added validation and cap-hit warning behavior;
+  - added unit tests for missing `batch_files` and default safety-cap behavior.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added `--until-complete` parsing;
+  - prints `until_complete` in human output;
+  - updated help text and bridge validation coverage.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - now verifies the work-session-index bridge route with
+    `until_complete=true` and bounded `max_batches`.
+- `working.md`:
+  - recorded the new contract, bounded real-session proof, and remaining gaps.
+
+Tests:
+
+- `cargo fmt --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml work_session_index -- --nocapture`:
+  PASS. Covered `9` lib tests plus the CLI bridge validation test.
+- `cargo test --manifest-path src-tauri/Cargo.toml bridge_routes_work_session_index_validation_errors -- --nocapture`:
+  PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules -- --nocapture`:
+  PASS.
+- Temp DB real-session smoke:
+  `cargo run --quiet --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-session-index --batch-files 3 --max-batches 2 --until-complete --reset --database "$tmp/session.sqlite" --json`:
+  PASS. Result:
+  - `until_complete=true`, `max_batches=2`, `batches_run=2`;
+  - `all_sources_completed=false`;
+  - `scanned=6`, `sanitized=6`, `stored=6`;
+  - warning: `work-session-index until_complete stopped at max_batches before
+    all sources completed`;
+  - Codex: `total_files=25,145`, `processed_files=6`,
+    `matched_prompt_count=6`, `next_file_index=6`, `completed=false`;
+  - Codex CX: `total_files=11`, `processed_files=6`,
+    `matched_prompt_count=0`, `next_file_index=6`, `completed=false`.
+- `npm run check`: PASS, including UI tests (`460`), production build, Rust lib
+  tests (`186`), CLI tests (`30`), doc-tests, and clippy `-D warnings`.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON included:
+  - `workSessionIndexBackfill`: isolated DB, requested `200`,
+    `batch_files=100`, `max_batches=2`, `until_complete=true`,
+    `batches_run=2`, scanned `199`, sanitized `199`, stored `199`,
+    `all_sources_completed=false`;
+  - warning: `work-session-index until_complete stopped at max_batches before
+    all sources completed`;
+  - Codex state: `total_files=25,145`, `processed_files=200`,
+    `matched_prompt_count=199`, `next_file_index=200`, `completed=false`;
+  - Codex CX state: `total_files=11`, `processed_files=11`,
+    `matched_prompt_count=0`, `next_file_index=11`, `completed=true`;
+  - work summary index used metadata-first/raw fallback with `199` stored
+    evidence records and `80` matches;
+  - coverage: `826` progress logs, `825` parsed, `0` unparsed, `31` projects,
+    `8,882` work items;
+  - work management after freeze: `91` managed rows, `31` projects, `25` days,
+    `저장관리 91`, `라이브만 0`;
+  - normalization queue/apply flow saved one approved normalized row.
+
+Issues:
+
+- This is still a bounded contract, not a completed all-history backfill run.
+  The full Codex source still reports `25,145` files, with only `200` processed
+  in the browser QA proof.
+- The next UI gap is showing session index source progress directly in the app:
+  source label, processed/total files, matched count, cap warning, and
+  completion state.
+- The next data-quality gap is AI-assisted interpretation for odd project-local
+  progress logs that are currently parsed weakly but not semantically
+  normalized without review.
+- Live OpenAI/GLM provider calls remain intentionally excluded from isolated QA;
+  provider paths stay covered by unit/mock tests and review-queue contracts.
+
+Research:
+
+- No external research was needed. This slice used the existing session JSONL
+  parser, SQLite cursor state, CLI route, and browser-bridge QA patterns.
+
+Next Steps:
+
+- Add a visible session-index progress panel/action in the work-management UI
+  so operators can start bounded backfill and see Codex/Codex CX cursor state.
+- Add a guarded AI extraction adapter for non-standard `working.md`,
+  `workingd.md`, `PROGRESS_LOG.md`, and nested context logs. Route proposals
+  through confidence, citation IDs, and operator review before durable writes.
+- Consider Codex SDK or GLM SDK integration only as an extractor/provider behind
+  the existing review queue, not as an automatic writer.
+- Add drill-down by project/day source mix: parsed progress logs, saved frozen
+  rows, normalized rows, and session evidence support.
+
+## Previous Slice - 2026-06-09 multi-batch session evidence backfill runner
 
 Current Goal:
 

@@ -364,6 +364,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "work-session-index" => {
             let json = take_flag(&mut args, "--json");
             let reset = take_flag(&mut args, "--reset");
+            let until_complete = take_flag(&mut args, "--until-complete");
             let mut limit = None;
             let mut batch_files = None;
             let mut max_batches = None;
@@ -394,6 +395,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 limit,
                 batch_files,
                 max_batches,
+                until_complete: Some(until_complete),
                 reset: Some(reset),
             })?;
             if json {
@@ -410,6 +412,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(max_batches) = result.max_batches {
                 println!("max_batches: {max_batches}");
             }
+            println!("until_complete: {}", result.until_complete);
             println!("batches_run: {}", result.batches_run);
             println!("scanned_prompts: {}", result.scanned_prompt_count);
             println!("sanitized_prompts: {}", result.sanitized_prompt_count);
@@ -1965,7 +1968,7 @@ fn help_text() -> String {
         "  improve [--json] [--local] --prompt TEXT\n",
         "  improve [--json] [--local] < prompt.txt\n",
         "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
-        "  work-session-index [--limit N>0] [--batch-files N>0] [--max-batches N>0] [--database PATH] [--reset] [--json]\n",
+        "  work-session-index [--limit N>0] [--batch-files N>0] [--max-batches N>0] [--until-complete] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
         "  work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]\n",
@@ -2004,7 +2007,7 @@ fn help_text() -> String {
         "  work-log-normalization-review-queue-update marks one persisted normalization proposal approved or rejected without writing normalized project/day rows.\n",
         "  work-log-normalization-apply writes operator-approved normalization queue rows into an idempotent durable normalized project/day table.\n",
         "  work-log-normalized-items lists durable normalized project/day rows by project and date without applying queue changes.\n",
-        "  work-session-index scans real session evidence and upserts sanitized project-target records; --batch-files resumes from per-source file cursors, --max-batches repeats checkpoint batches in one call, and --reset rebuilds explicitly.\n",
+        "  work-session-index scans real session evidence and upserts sanitized project-target records; --batch-files resumes from per-source file cursors, --max-batches repeats checkpoint batches in one call, --until-complete keeps running bounded checkpoint batches until completion or the max-batches/default safety cap, and --reset rebuilds explicitly.\n",
         "  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n",
         "  work-report session evidence is bounded by --session-limit.\n",
         "  work-summary builds project/date summaries with citation IDs; --include-extractions merges accepted AI work-log proposals into the summary preview; --include-saved-extractions merges stored accepted AI extraction rows without rereading raw progress logs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n",
@@ -2888,6 +2891,16 @@ mod tests {
             missing_batch_response.contains("work-session-index max_batches requires batch_files")
         );
         assert!(missing_batch_response.contains("Access-Control-Allow-Origin: *"));
+
+        let until_complete_response = bridge_response_for(
+            "/api/work-session-index",
+            r#"{"options":{"until_complete":true}}"#,
+        );
+
+        assert!(until_complete_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(until_complete_response
+            .contains("work-session-index until_complete requires batch_files"));
+        assert!(until_complete_response.contains("Access-Control-Allow-Origin: *"));
     }
 
     #[test]
@@ -3179,7 +3192,7 @@ mod tests {
         ));
         assert!(
             help.contains(
-                "work-session-index [--limit N>0] [--batch-files N>0] [--max-batches N>0] [--database PATH] [--reset] [--json]"
+                "work-session-index [--limit N>0] [--batch-files N>0] [--max-batches N>0] [--until-complete] [--database PATH] [--reset] [--json]"
             )
         );
         assert!(help.contains("work-log-coverage [--json]"));
@@ -3222,6 +3235,7 @@ mod tests {
         assert!(help.contains("work-session-index scans real session evidence"));
         assert!(help.contains("--batch-files resumes from per-source file cursors"));
         assert!(help.contains("--max-batches repeats checkpoint batches"));
+        assert!(help.contains("--until-complete keeps running bounded checkpoint batches"));
         assert!(help.contains("work-log-coverage lists parsed and unparsed"));
         assert!(help.contains("work-log-candidates prepares unparsed progress logs"));
         assert!(help.contains("work-log-review-queue persists current extraction candidates"));

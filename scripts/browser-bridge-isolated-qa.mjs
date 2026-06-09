@@ -247,6 +247,7 @@ async function runBrowserQa() {
       options: {
         batch_files: WORK_SESSION_INDEX_BATCH_FILES,
         max_batches: WORK_SESSION_INDEX_MAX_BATCHES,
+        until_complete: true,
         reset: true,
       },
     });
@@ -254,6 +255,7 @@ async function runBrowserQa() {
       workSessionIndexBackfill.database_path !== DATABASE_PATH
       || workSessionIndexBackfill.batch_files !== WORK_SESSION_INDEX_BATCH_FILES
       || workSessionIndexBackfill.max_batches !== WORK_SESSION_INDEX_MAX_BATCHES
+      || workSessionIndexBackfill.until_complete !== true
       || workSessionIndexBackfill.batches_run < 1
       || workSessionIndexBackfill.batches_run > WORK_SESSION_INDEX_MAX_BATCHES
       || workSessionIndexBackfill.requested_limit < 1

@@ -1,12 +1,114 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 17:19 KST
+Updated: 2026-06-09 17:29 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 bounded session backfill batch control and status answer
+## Current Slice - 2026-06-09 backend session backfill batch safety cap
+
+Current Goal:
+
+- Make the session-index backfill safety cap enforceable across backend,
+  browser-bridge, CLI, and frontend response validation.
+- Keep the UI/backend contract aligned: `batch_files` must be `1..500`, and
+  oversized calls must fail before any session scan starts.
+
+Context:
+
+- The previous slice added a frontend-only `백필` input cap of `500` files per
+  source batch.
+- Without backend validation, direct CLI/API/browser-bridge calls could still
+  request larger `batch_files` values.
+- The operator-facing goal remains bounded, cursor-based real-session indexing,
+  not silent full-history scanning.
+
+Progress:
+
+- Added `MAX_PROJECT_WORK_SESSION_INDEX_BATCH_FILES = 500` to the Rust backend.
+- `run_project_work_session_index()` now rejects `batch_files > 500`.
+- Browser-bridge `/api/work-session-index` returns HTTP 400 for oversized
+  `batch_files`.
+- CLI help now documents `--batch-files 1..500`.
+- Frontend bridge response validation now rejects malformed responses with
+  `batch_files > 500`.
+- `App.tsx` now imports the same frontend API cap constant instead of keeping
+  a duplicate local UI cap.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added backend cap constant, validation, and unit test.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - updated CLI help text;
+  - extended browser-bridge validation tests for oversized batches.
+- `src/promptVaultApi.ts`:
+  - exported `PROJECT_WORK_SESSION_INDEX_MAX_BATCH_FILES`;
+  - added nullable positive integer max validation for session-index results.
+- `src/App.tsx`:
+  - reused `PROJECT_WORK_SESSION_INDEX_MAX_BATCH_FILES` for UI validation and
+    input `max`.
+- `tests/promptVaultApi.test.ts`:
+  - added malformed bridge response coverage for oversized `batch_files`.
+- `working.md`:
+  - recorded the safety-cap slice and verification results.
+
+Tests:
+
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  run_project_work_session_index_rejects_batch_files_above_safety_cap --
+  --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli
+  bridge_routes_work_session_index_validation_errors -- --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli
+  help_text_documents_cli_validation_rules -- --nocapture`: PASS.
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli --
+  work-session-index --batch-files 501 --json`: expected FAIL/PASS,
+  reported `promptvault-cli error: work-session-index batch_files must be at
+  most 500` before scanning.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts --test-name-pattern "work session
+  index"`: PASS. Node ran the full file; `180` tests passed, including the new
+  oversized batch response rejection.
+- `npm run build`: PASS.
+- `npm run check`: PASS, including UI tests (`464`), production build, Rust lib
+  tests (`187`), CLI tests (`30`), doc-tests, and clippy `-D warnings`.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON included:
+  - reset source state: Codex `50 / 25,145`, Codex CX `11 / 11`;
+  - continue source state: Codex `100 / 25,145`, Codex CX `11 / 11`;
+  - remaining helper: `남은 파일 25,045개 · 활성 소스 1개 · 클릭당 소스별
+    최대 50개 · 이어 백필 예상 501회`;
+  - work summary index: `99` stored session evidence records and `80` matches;
+  - work management: `91` managed rows, `31` projects, `25` days,
+    `저장관리 91`, `라이브만 0`;
+  - coverage: `830` logs, `829` parsed, `0` unparsed, `31` projects;
+  - approved review queue save and normalization apply flows both saved one row.
+
+Issues:
+
+- One attempted command,
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli
+  bridge_routes_work_session_index_validation_errors
+  help_text_documents_cli_validation_rules -- --nocapture`, failed because
+  Cargo accepts a single test-name filter. Both tests were rerun individually
+  and passed.
+- `max_batches` can still be large by explicit caller request. Existing
+  `until_complete` default safety cap remains, but a future "long run" mode
+  should require confirmation and surface estimated runtime/capacity.
+
+Research:
+
+- No external research was needed. This is a direct contract-hardening slice.
+
+Next Steps:
+
+- Add a confirmation-gated long-continue mode that still honors backend caps.
+- Improve normalization candidate ranking for rough project-log titles.
+- Add a compact project/day status export for review outside the app.
+
+## Completed Slice - 2026-06-09 bounded session backfill batch control and status answer
 
 Current Goal:
 

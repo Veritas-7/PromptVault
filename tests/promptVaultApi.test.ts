@@ -1934,6 +1934,26 @@ test("browser bridge work session index rejects inconsistent source completion",
   );
 });
 
+test("browser bridge work session index rejects oversized batch response", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSessionIndexPayload({
+    batch_files: 501,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => runProjectWorkSessionIndex({ batch_files: 100, max_batches: 2, until_complete: true }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /501|undefined|TypeError/);
+      return true;
+    },
+  );
+});
+
 test("browser bridge work summary rejects missing session evidence mode", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => {

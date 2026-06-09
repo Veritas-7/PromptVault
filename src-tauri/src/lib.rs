@@ -29,6 +29,7 @@ const PROJECT_PROGRESS_HEAD_CHARS: usize = 24_000;
 const PROJECT_PROGRESS_TAIL_CHARS: usize = 8_000;
 const DEFAULT_PROJECT_WORK_SESSION_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_SESSION_INDEX_UNTIL_COMPLETE_MAX_BATCHES: usize = 1_000;
+const MAX_PROJECT_WORK_SESSION_INDEX_BATCH_FILES: usize = 500;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
 const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
 const PROJECT_WORK_SESSION_SOURCE_IDS: &[&str] = &[
@@ -1750,6 +1751,15 @@ pub fn run_project_work_session_index(
     }
     if matches!(options.batch_files, Some(0)) {
         return Err("work-session-index batch_files requires a positive integer".into());
+    }
+    if options
+        .batch_files
+        .is_some_and(|batch_files| batch_files > MAX_PROJECT_WORK_SESSION_INDEX_BATCH_FILES)
+    {
+        return Err(format!(
+            "work-session-index batch_files must be at most {MAX_PROJECT_WORK_SESSION_INDEX_BATCH_FILES}"
+        )
+        .into());
     }
     if matches!(options.max_batches, Some(0)) {
         return Err("work-session-index max_batches requires a positive integer".into());
@@ -14734,6 +14744,18 @@ Progress:
         .to_string();
 
         assert!(err.contains("work-session-index batch_files requires a positive integer"));
+    }
+
+    #[test]
+    fn run_project_work_session_index_rejects_batch_files_above_safety_cap() {
+        let err = run_project_work_session_index(ProjectWorkSessionIndexOptions {
+            batch_files: Some(MAX_PROJECT_WORK_SESSION_INDEX_BATCH_FILES + 1),
+            ..Default::default()
+        })
+        .expect_err("oversized batch_files should fail")
+        .to_string();
+
+        assert!(err.contains("work-session-index batch_files must be at most 500"));
     }
 
     #[test]

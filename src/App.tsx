@@ -123,6 +123,7 @@ import {
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
   loadProjectWorkSummary,
+  PROJECT_WORK_SESSION_INDEX_MAX_BATCH_FILES,
   runProjectWorkSessionIndex,
   listProjectWorkSummarySnapshots,
   listImportEvents,
@@ -342,7 +343,6 @@ const WORK_SUMMARY_LIMIT = 80;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_SESSION_INDEX_MAX_BATCHES = 2;
-const WORK_SESSION_INDEX_MAX_BATCH_FILES = 500;
 const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
 const WORK_LOG_CANDIDATE_DISPLAY_LIMIT = 5;
 const WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
@@ -379,7 +379,7 @@ function parseWorkSessionIndexBatchFiles(value: string): number | null {
   const trimmed = value.trim();
   if (!/^\d+$/.test(trimmed)) return null;
   const parsed = Number.parseInt(trimmed, 10);
-  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > WORK_SESSION_INDEX_MAX_BATCH_FILES) {
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > PROJECT_WORK_SESSION_INDEX_MAX_BATCH_FILES) {
     return null;
   }
   return parsed;
@@ -390,7 +390,7 @@ function workSessionIndexBatchFilesStatusText(
   effectiveBatchFiles: number | null,
 ): string {
   if (input.trim() !== "" && parseWorkSessionIndexBatchFiles(input) === null) {
-    return `백필 배치 파일은 1-${WORK_SESSION_INDEX_MAX_BATCH_FILES.toLocaleString()} 사이 숫자 또는 빈 값`;
+    return `백필 배치 파일은 1-${PROJECT_WORK_SESSION_INDEX_MAX_BATCH_FILES.toLocaleString()} 사이 숫자 또는 빈 값`;
   }
   if (effectiveBatchFiles === null) {
     return "세션 백필 배치 계산 대기";
@@ -2403,7 +2403,7 @@ function App() {
                 data-work-session-index-batch-files="true"
                 disabled={isTopLevelActionLocked}
                 min={1}
-                max={WORK_SESSION_INDEX_MAX_BATCH_FILES}
+                max={PROJECT_WORK_SESSION_INDEX_MAX_BATCH_FILES}
                 step={10}
                 type="number"
                 placeholder={`기본 ${

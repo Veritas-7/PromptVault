@@ -540,6 +540,7 @@ export function isBrowserQaMode(): boolean {
 
 const MALFORMED_BRIDGE_RESPONSE_MESSAGE = "PromptVault 브라우저 브리지 응답 형식이 올바르지 않습니다.";
 const MAX_QUALITY_SCORE = 100;
+export const PROJECT_WORK_SESSION_INDEX_MAX_BATCH_FILES = 500;
 const PROMPT_WORD_REGEX = /[A-Za-z가-힣0-9][A-Za-z가-힣0-9_\-']*/g;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -616,6 +617,10 @@ function isPositiveSafeInteger(value: unknown): value is number {
 
 function isNullablePositiveSafeInteger(value: unknown): boolean {
   return value === null || isPositiveSafeInteger(value);
+}
+
+function isNullablePositiveSafeIntegerAtMost(value: unknown, max: number): boolean {
+  return value === null || (isPositiveSafeInteger(value) && value <= max);
 }
 
 function isNonNegativeSafeIntegerAtMost(value: unknown, max: unknown): boolean {
@@ -2162,7 +2167,10 @@ function isProjectWorkSessionIndexResult(value: unknown): boolean {
     || !isTimestampString(value.generated_at)
     || !isNonBlankString(value.database_path)
     || !isPositiveSafeInteger(value.requested_limit)
-    || !isNullablePositiveSafeInteger(value.batch_files)
+    || !isNullablePositiveSafeIntegerAtMost(
+      value.batch_files,
+      PROJECT_WORK_SESSION_INDEX_MAX_BATCH_FILES,
+    )
     || !isNullablePositiveSafeInteger(value.max_batches)
     || typeof value.until_complete !== "boolean"
     || !isNonNegativeSafeInteger(value.batches_run)

@@ -1968,7 +1968,7 @@ fn help_text() -> String {
         "  improve [--json] [--local] --prompt TEXT\n",
         "  improve [--json] [--local] < prompt.txt\n",
         "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
-        "  work-session-index [--limit N>0] [--batch-files N>0] [--max-batches N>0] [--until-complete] [--database PATH] [--reset] [--json]\n",
+        "  work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
         "  work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]\n",
@@ -2871,6 +2871,17 @@ mod tests {
         );
         assert!(batch_response.contains("Access-Control-Allow-Origin: *"));
 
+        let oversized_batch_response = bridge_response_for(
+            "/api/work-session-index",
+            r#"{"options":{"batch_files":501}}"#,
+        );
+
+        assert!(oversized_batch_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(
+            oversized_batch_response.contains("work-session-index batch_files must be at most 500")
+        );
+        assert!(oversized_batch_response.contains("Access-Control-Allow-Origin: *"));
+
         let max_batch_response = bridge_response_for(
             "/api/work-session-index",
             r#"{"options":{"batch_files":1,"max_batches":0}}"#,
@@ -3192,7 +3203,7 @@ mod tests {
         ));
         assert!(
             help.contains(
-                "work-session-index [--limit N>0] [--batch-files N>0] [--max-batches N>0] [--until-complete] [--database PATH] [--reset] [--json]"
+                "work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--database PATH] [--reset] [--json]"
             )
         );
         assert!(help.contains("work-log-coverage [--json]"));

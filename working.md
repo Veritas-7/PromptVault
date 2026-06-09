@@ -1,12 +1,85 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 20:31 KST
+Updated: 2026-06-09 20:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 stale normalization review guard
+## Current Slice - 2026-06-09 stale normalization browser fixture
+
+Current Goal:
+
+- Add direct isolated-browser proof that stale normalization review queue rows
+  do not expose an approval button in the rendered UI.
+- Keep the existing real-data browser QA path intact.
+
+Context:
+
+- The backend already rejects stale normalization approval and helper tests cover
+  pending/stale/approved/rejected action visibility.
+- The previous browser QA proved pending normalization approve/apply, but did
+  not put a stale row into the visible DOM. Pending rows sort before stale rows,
+  so a live corpus with many pending rows can hide stale rows below the display
+  limit.
+
+Progress:
+
+- Added a one-shot mocked browser response for
+  `/api/work-log-normalization-review-queue` inside the isolated QA script.
+- Built the fixture from a real normalization queue row shape after the normal
+  pending approve/apply flow has already passed.
+- The fixture renders one pending row and one stale row:
+  - pending row still displays approve + reject;
+  - stale row displays reject only;
+  - stale candidate approval button count is asserted as `0`;
+  - stale candidate reject button count is asserted as `1`.
+- Preserved the rest of the QA flow after the fixture by un-routing the mock
+  route before continuing to work-log review queue, approved save, run history,
+  local-provider guard, and saved items.
+
+Changes:
+
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added a stale normalization review queue fixture builder;
+  - added one-shot Playwright route mocking for the normalization review queue
+    route;
+  - added `work log normalization stale fixture` step and result JSON fields.
+
+Tests:
+
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- First QA attempt failed as expected from an overly strict wait condition that
+  searched for `candidate_id` in row body text; the UI stores the candidate id
+  in button data attributes instead.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS after
+  fixing the wait condition.
+  Evidence from the browser result:
+  - stale fixture meta:
+    `정규화 큐 저장 2개 · 표시 2개 · 동기화 1개 · stale 전환 1개 · 검토 1개 · stale 1개 · 승인 0개 · 거절 0개`;
+  - stale fixture row text starts with `QAFixture2026-06-09거절...stale ·
+    proposal_no_longer_live`;
+  - `workLogNormalizationStaleFixtureActionState`:
+    `candidateId=work-normalize-QAFixture-stale-a1`,
+    `approveButtonCount=0`, `rejectButtonCount=1`.
+
+Issues:
+
+- The stale browser fixture uses a mocked bridge response for deterministic DOM
+  coverage; backend stale approval prevention remains covered by Rust DB tests.
+- Normalization proposals are still conservative and review-only without
+  proven AI-backed acceptance thresholds.
+
+Next Steps:
+
+- Continue AI-assisted normalization/review for rough titles and rows without
+  session evidence.
+- Consider adding AI provider quality thresholds before allowing any automatic
+  normalization approval path.
+- Consider cached/full-index status export snapshots if operator full-index
+  checks still feel slow after the project-key optimization.
+
+## Completed Slice - 2026-06-09 stale normalization review guard
 
 Current Goal:
 

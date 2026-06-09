@@ -93,6 +93,66 @@ function insertSyntheticApprovedReviewQueueRow() {
   ], { stdio: "pipe" });
 }
 
+function normalizationReviewQueueFixtureFromItem(item) {
+  const now = new Date().toISOString();
+  const base = {
+    ...item,
+    first_seen_at: now,
+    last_seen_at: now,
+    provider: "local-normalization-rules",
+    provider_model: null,
+    provider_runtime: "local-normalization-rules",
+    used_ai: false,
+    accepted: false,
+    rejection_reason: "local_fallback_requires_ai_review",
+    original_status: "logged",
+    normalized_status: "unknown",
+    confidence: 0.5,
+    risk_flags: [],
+  };
+  const pending = {
+    ...base,
+    candidate_id: "work-normalize-QAFixture-pending-a1",
+    review_state: "pending_review",
+    review_reason: "local_fallback_requires_ai_review",
+    project: "QAFixture",
+    date: "2026-06-09",
+    source_path: "/tmp/QAFixture/working.md",
+    source_file: "working.md",
+    reason: "no_ai_normalization,no_session_evidence",
+    original_title: "QA fixture pending normalization row",
+    original_evidence: "A live pending row should keep approve and reject actions.",
+    normalized_title: "QA fixture pending normalized row",
+    normalized_evidence: "Pending fixture row remains actionable in both directions.",
+  };
+  const stale = {
+    ...pending,
+    candidate_id: "work-normalize-QAFixture-stale-a1",
+    review_state: "stale",
+    review_reason: "proposal_no_longer_live",
+    original_title: "QA fixture stale normalization row",
+    original_evidence: "A stale row is no longer part of the live proposal set.",
+    normalized_title: "QA fixture stale normalized row",
+    normalized_evidence: "Stale fixture row should expose reject cleanup only.",
+  };
+  return {
+    generated_at: now,
+    database_path: DATABASE_PATH,
+    synced_proposal_count: 1,
+    stale_proposal_count: 1,
+    total_items: 2,
+    returned_item_count: 2,
+    pending_review_count: 1,
+    stale_count: 1,
+    approved_count: 0,
+    rejected_count: 0,
+    accepted_proposal_count: 0,
+    rejected_proposal_count: 2,
+    items: [pending, stale],
+    warnings: [],
+  };
+}
+
 function waitForHttp(url, timeoutMs) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
@@ -180,6 +240,28 @@ async function clickAndWait(page, selector, predicate, timeout = 120000) {
   await page.waitForFunction(predicate, undefined, { timeout });
 }
 
+async function withMockedNormalizationReviewQueue(page, result, callback) {
+  const url = `http://${HOST}:${BRIDGE_PORT}/api/work-log-normalization-review-queue`;
+  let fulfilled = false;
+  await page.route(url, async (route) => {
+    if (route.request().method() !== "POST" || fulfilled) {
+      await route.continue();
+      return;
+    }
+    fulfilled = true;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(result),
+    });
+  });
+  try {
+    await callback();
+  } finally {
+    await page.unroute(url);
+  }
+}
+
 async function runBrowserQa() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -216,6 +298,9 @@ async function runBrowserQa() {
   let workLogNormalizationReviewQueueMeta = "";
   let workLogNormalizationReviewQueueRows = [];
   let workLogNormalizationReviewQueueStateAfterApprove = "";
+  let workLogNormalizationStaleFixtureMeta = "";
+  let workLogNormalizationStaleFixtureRows = [];
+  let workLogNormalizationStaleFixtureActionState = {};
   let workLogNormalizationApplyMeta = "";
   let workManagementMetaAfterNormalizationApply = "";
   let workLogNormalizedRows = [];
@@ -702,6 +787,45 @@ async function runBrowserQa() {
       (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
     workLogNormalizedRows =
       await page.locator('[data-work-log-normalized-items="true"] article').allTextContents();
+    step("work log normalization stale fixture");
+    const staleFixture = normalizationReviewQueueFixtureFromItem(approvedNormalizationRow);
+    const staleFixtureCandidateId = "work-normalize-QAFixture-stale-a1";
+    await withMockedNormalizationReviewQueue(page, staleFixture, async () => {
+      await waitForEnabled(page, '[data-sync-work-log-normalization-review-queue="true"]');
+      await page.locator('[data-sync-work-log-normalization-review-queue="true"]').click();
+      await page.waitForFunction((candidateId) => {
+        const rejectButton = document.querySelector(
+          `[data-reject-work-log-normalization-review-queue="${candidateId}"]`,
+        );
+        const staleRow = rejectButton?.closest("article") ?? null;
+        if (!staleRow) return false;
+        const text = staleRow.textContent ?? "";
+        return text.includes("stale")
+          && text.includes("proposal_no_longer_live")
+          && !staleRow.querySelector(`[data-approve-work-log-normalization-review-queue="${candidateId}"]`)
+          && Boolean(rejectButton);
+      }, staleFixtureCandidateId, { timeout: 90000 });
+    });
+    const staleApproveButtonCount = await page
+      .locator(`[data-approve-work-log-normalization-review-queue="${staleFixtureCandidateId}"]`)
+      .count();
+    const staleRejectButtonCount = await page
+      .locator(`[data-reject-work-log-normalization-review-queue="${staleFixtureCandidateId}"]`)
+      .count();
+    if (staleApproveButtonCount !== 0 || staleRejectButtonCount !== 1) {
+      throw new Error(
+        `Stale normalization fixture action state mismatch: approve=${staleApproveButtonCount}, reject=${staleRejectButtonCount}`,
+      );
+    }
+    workLogNormalizationStaleFixtureMeta =
+      (await page.locator('[data-work-log-normalization-review-queue-meta="true"]').textContent())?.trim() ?? "";
+    workLogNormalizationStaleFixtureRows =
+      await page.locator('[data-work-log-normalization-review-queue="true"] article').allTextContents();
+    workLogNormalizationStaleFixtureActionState = {
+      candidateId: staleFixtureCandidateId,
+      approveButtonCount: staleApproveButtonCount,
+      rejectButtonCount: staleRejectButtonCount,
+    };
     step("work log review queue");
     await page.locator('[data-sync-work-log-review-queue="true"]').click();
     await page.waitForFunction(() => {
@@ -833,6 +957,9 @@ async function runBrowserQa() {
       workLogNormalizationReviewQueueMeta,
       workLogNormalizationReviewQueueRows,
       workLogNormalizationReviewQueueStateAfterApprove,
+      workLogNormalizationStaleFixtureMeta,
+      workLogNormalizationStaleFixtureRows,
+      workLogNormalizationStaleFixtureActionState,
       workLogNormalizationApplyMeta,
       workManagementMetaAfterNormalizationApply,
       workLogNormalizedRows,

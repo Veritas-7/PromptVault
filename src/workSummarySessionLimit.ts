@@ -1,5 +1,5 @@
 export const WORK_SUMMARY_DEFAULT_SESSION_LIMIT = 20;
-export const WORK_SUMMARY_MAX_SESSION_LIMIT = 1000;
+export const WORK_SUMMARY_MAX_SESSION_LIMIT = 50_000;
 
 export function parseWorkSummarySessionLimit(value: string): number | null {
   const trimmed = value.trim();

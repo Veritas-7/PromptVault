@@ -1,10 +1,75 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 01:35 KST
+Updated: 2026-06-10 01:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 full stored session index UI control
+
+Current Goal:
+
+- Let the browser work-management surface reproduce the full stored session
+  index scan depth when the status export proves a larger stored index exists.
+- Keep the default bounded session limit intact, but remove the UI blocker that
+  capped manual entry at `1,000` even when the real stored session index is
+  larger.
+
+Context:
+
+- The backend and CLI can already use the stored session evidence index, and
+  the live repository status export currently reports `10,867` stored sanitized
+  session records.
+- The frontend `세션` input previously capped values at `1,000`, so the UI could
+  not enter the current full stored index count or rerun management actions
+  against that full scope.
+
+Progress:
+
+- Raised the frontend work-summary session limit cap to `50,000`.
+- Added a `보관 전체` toolbar action that appears after a status export and
+  fills the `세션` input from
+  `report_session_evidence_index_total_count`.
+- Extended isolated browser QA to require the status export bounded index text
+  to expose `보관 총 N개`, click `보관 전체`, and verify that the session limit
+  input and meta text switch to that stored total.
+
+Changes:
+
+- `src/workSummarySessionLimit.ts`: changed
+  `WORK_SUMMARY_MAX_SESSION_LIMIT` from `1,000` to `50,000`.
+- `src/App.tsx`: added stored-session-index total detection and the
+  `data-use-full-session-index-limit` action.
+- `tests/workSummarySessionLimit.test.ts`: added `10,867` parser/status
+  coverage and updated the invalid-range copy.
+- `scripts/browser-bridge-isolated-qa.mjs`: expanded QA limit validation and
+  added browser verification for the full stored index action.
+
+Tests:
+
+- PASS: `node --test tests/workSummarySessionLimit.test.ts`
+  - `3` tests passed.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run check`
+  - UI tests `489`, Rust lib tests `207`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser QA ended with exit code `0`.
+  - Verified bounded status export text:
+    `스캔 50개 · 사용 50개 · 보관 총 349개 · 근거 limit 적용`.
+  - Verified the new UI action set
+    `workStatusExportFullSessionLimitInput` to `349` and meta text to
+    `세션 스캔 349개 기준`.
+
+Remaining:
+
+- Full stored-index operation is now available from the UI, but automatic
+  AI-backed durable reconciliation remains review-gated. Unresolved rows still
+  need title normalization, session-evidence review, and apply/save flows.
+- The live environment count is larger than isolated QA (`10,867` stored
+  sanitized session records), so production-like browser validation should use
+  an operator-approved long/full scan when runtime cost is acceptable.
 
 ## Completed Slice - 2026-06-10 work AI provider status and management readiness
 

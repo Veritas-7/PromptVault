@@ -1014,6 +1014,10 @@ function App() {
   const workStatusExportIndexStatus = workStatusExportResult
     ? workStatusExportIndexStatusText(workStatusExportResult)
     : null;
+  const storedSessionIndexLimit =
+    workStatusExportResult?.report_session_evidence_index_total_count ?? 0;
+  const canUseStoredSessionIndexLimit =
+    storedSessionIndexLimit > 0 && storedSessionIndexLimit <= WORK_SUMMARY_MAX_SESSION_LIMIT;
   const workSummaryMeta = workSummaryMetaText(workSummaryState, workSummaryResult);
   const workSessionIndexMeta = workSessionIndexMetaText(
     workSessionIndexState,
@@ -2787,6 +2791,19 @@ function App() {
                 onChange={(event) => setWorkSummarySessionLimitInput(event.currentTarget.value)}
               />
             </label>
+            {storedSessionIndexLimit > 0 ? (
+              <button
+                aria-label={`보관된 전체 세션 인덱스 ${storedSessionIndexLimit.toLocaleString()}개를 작업관리 세션 범위로 사용`}
+                className="inline-action"
+                data-use-full-session-index-limit="true"
+                disabled={isTopLevelActionLocked || !canUseStoredSessionIndexLimit}
+                onClick={() => setWorkSummarySessionLimitInput(String(storedSessionIndexLimit))}
+                type="button"
+              >
+                <ShieldCheck size={14} />
+                보관 전체
+              </button>
+            ) : null}
             <label className="session-limit-control">
               <span>상태행</span>
               <input

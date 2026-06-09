@@ -10,6 +10,7 @@ import {
 test("work summary session limit parser accepts bounded positive integers", () => {
   assert.equal(parseWorkSummarySessionLimit("1"), 1);
   assert.equal(parseWorkSummarySessionLimit(" 200 "), 200);
+  assert.equal(parseWorkSummarySessionLimit("10867"), 10867);
   assert.equal(
     parseWorkSummarySessionLimit(String(WORK_SUMMARY_MAX_SESSION_LIMIT)),
     WORK_SUMMARY_MAX_SESSION_LIMIT,
@@ -31,8 +32,9 @@ test("work summary session limit parser rejects unsafe or ambiguous values", () 
 
 test("work summary session limit status text exposes the active scan depth", () => {
   assert.equal(workSummarySessionLimitStatusText("200"), "세션 스캔 200개 기준");
+  assert.equal(workSummarySessionLimitStatusText("10867"), "세션 스캔 10,867개 기준");
   assert.equal(
     workSummarySessionLimitStatusText("x"),
-    "세션 스캔 범위는 1-1,000 사이 숫자",
+    "세션 스캔 범위는 1-50,000 사이 숫자",
   );
 });

@@ -31,9 +31,9 @@ function validatePort(value, name) {
 
 validatePort(BRIDGE_PORT, "PROMPTVAULT_QA_BRIDGE_PORT");
 validatePort(APP_PORT, "PROMPTVAULT_QA_APP_PORT");
-if (!Number.isInteger(WORK_SESSION_LIMIT) || WORK_SESSION_LIMIT < 1 || WORK_SESSION_LIMIT > 1000) {
+if (!Number.isInteger(WORK_SESSION_LIMIT) || WORK_SESSION_LIMIT < 1 || WORK_SESSION_LIMIT > 50_000) {
   throw new Error(
-    `PROMPTVAULT_QA_WORK_SESSION_LIMIT must be an integer from 1 to 1000, got ${WORK_SESSION_LIMIT}`,
+    `PROMPTVAULT_QA_WORK_SESSION_LIMIT must be an integer from 1 to 50000, got ${WORK_SESSION_LIMIT}`,
   );
 }
 
@@ -444,6 +444,8 @@ async function runBrowserQa() {
   let workStatusExportNextPageMeta = "";
   let workStatusExportNextPageRows = [];
   let workStatusExportIndex = "";
+  let workStatusExportFullSessionLimitInput = "";
+  let workStatusExportFullSessionLimitMeta = "";
   let workStatusExportRows = [];
   let workStatusExportRowDetail = "";
   let workStatusExportFilterMeta = "";
@@ -744,6 +746,41 @@ async function runBrowserQa() {
       (await page.locator('[data-work-status-export-page-meta="true"]').textContent())?.trim() ?? "";
     workStatusExportIndex =
       (await page.locator('[data-work-status-export-index="true"]').textContent())?.trim() ?? "";
+    const fullSessionLimitMatch =
+      workStatusExportIndex.match(/보관 총\s+([\d,]+)개/)
+      ?? workStatusExportIndex.match(/보관\s+([\d,]+)개/);
+    if (!fullSessionLimitMatch) {
+      throw new Error(`Work status export did not expose the full stored session index: ${workStatusExportIndex}`);
+    }
+    const fullSessionLimit = fullSessionLimitMatch[1].replaceAll(",", "");
+    const formattedFullSessionLimit = new Intl.NumberFormat("ko-KR").format(
+      Number.parseInt(fullSessionLimit, 10),
+    );
+    await page.locator('[data-use-full-session-index-limit="true"]').click();
+    await page.waitForFunction((expected) => {
+      const input = document.querySelector('[data-work-summary-session-limit="true"]');
+      const value = input instanceof HTMLInputElement ? input.value : "";
+      const text = document.querySelector('[data-work-summary-session-limit-meta="true"]')?.textContent ?? "";
+      const formatted = new Intl.NumberFormat("ko-KR").format(Number.parseInt(expected, 10));
+      return value === expected && text.includes(`세션 스캔 ${formatted}개 기준`);
+    }, fullSessionLimit, { timeout: 30000 });
+    workStatusExportFullSessionLimitInput =
+      await page.locator('[data-work-summary-session-limit="true"]').inputValue();
+    workStatusExportFullSessionLimitMeta =
+      (await page.locator('[data-work-summary-session-limit-meta="true"]').textContent())?.trim() ?? "";
+    if (
+      workStatusExportFullSessionLimitInput !== fullSessionLimit
+      || !workStatusExportFullSessionLimitMeta.includes(`세션 스캔 ${formattedFullSessionLimit}개 기준`)
+    ) {
+      throw new Error(
+        `Full session index limit action failed: ${workStatusExportFullSessionLimitInput} / ${workStatusExportFullSessionLimitMeta}`,
+      );
+    }
+    await page.locator('[data-work-summary-session-limit="true"]').fill(String(WORK_SESSION_LIMIT));
+    await page.waitForFunction((expectedText) => {
+      const text = document.querySelector('[data-work-summary-session-limit-meta="true"]')?.textContent ?? "";
+      return text.includes(expectedText);
+    }, `세션 스캔 ${new Intl.NumberFormat("ko-KR").format(WORK_SESSION_LIMIT)}개 기준`, { timeout: 30000 });
     workStatusExportRows = await page.locator('[data-work-status-export-row="true"]').allTextContents();
     await page.locator('[data-work-status-export-page-next="true"]').click();
     await page.waitForFunction(() => {
@@ -1526,6 +1563,8 @@ async function runBrowserQa() {
       workStatusExportNextPageMeta,
       workStatusExportNextPageRows,
       workStatusExportIndex,
+      workStatusExportFullSessionLimitInput,
+      workStatusExportFullSessionLimitMeta,
       workStatusExportRows,
       workStatusExportRowDetail,
       workStatusExportFilterMeta,

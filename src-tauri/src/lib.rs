@@ -6230,6 +6230,16 @@ fn project_progress_work_items_from_text_for_project(
         }
     }
     if items.is_empty() {
+        if let Some(item) = project_progress_work_item_from_filename_date_worklog(
+            text,
+            project,
+            &source_path,
+            &source_file,
+        ) {
+            items.push(item);
+        }
+    }
+    if items.is_empty() {
         items.extend(project_progress_work_items_from_safe_dated_lines(
             text,
             project,
@@ -6285,6 +6295,208 @@ fn project_progress_work_item_from_safe_date_field(
         session_sources: Vec::new(),
         session_evidence_keys: Vec::new(),
     })
+}
+
+fn project_progress_work_item_from_filename_date_worklog(
+    text: &str,
+    project: &str,
+    source_path: &str,
+    source_file: &str,
+) -> Option<ProjectWorkItem> {
+    let date = project_progress_work_log_filename_date(source_file)?;
+    let title = project_progress_work_log_filename_title(source_file)
+        .or_else(|| {
+            let lines = text.lines().collect::<Vec<_>>();
+            local_project_work_log_first_safe_heading(&lines)
+        })
+        .unwrap_or_else(|| "Progress log updated".to_string());
+    let status =
+        project_progress_work_log_filename_status(text).unwrap_or_else(|| "logged".to_string());
+    let context =
+        project_progress_work_log_filename_evidence(text).unwrap_or_else(|| title.clone());
+    let mut evidence = format!("Filename date: {date}\n{context}");
+    if !detect_risks(&format!("{date}\n{title}\n{evidence}")).is_empty() {
+        evidence = format!("Filename date: {date}\n{title}");
+        if !detect_risks(&format!("{date}\n{title}\n{evidence}")).is_empty() {
+            return None;
+        }
+    }
+    Some(ProjectWorkItem {
+        date,
+        project: project.to_string(),
+        title,
+        status,
+        source_path: source_path.to_string(),
+        source_file: source_file.to_string(),
+        evidence,
+        session_evidence_count: 0,
+        session_sources: Vec::new(),
+        session_evidence_keys: Vec::new(),
+    })
+}
+
+fn project_progress_work_log_filename_date(source_file: &str) -> Option<String> {
+    let lower = source_file.to_ascii_lowercase();
+    if !lower.ends_with(".md")
+        || !["worklog", "working", "progress"]
+            .iter()
+            .any(|marker| lower.contains(marker))
+    {
+        return None;
+    }
+    let date_start = find_iso_date_start(source_file)?;
+    let date = &source_file[date_start..date_start + 10];
+    NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
+    Some(date.to_string())
+}
+
+fn project_progress_work_log_filename_title(source_file: &str) -> Option<String> {
+    let stem = Path::new(source_file).file_stem()?.to_str()?.trim();
+    let date_start = find_iso_date_start(stem)?;
+    let raw_after_date = stem[date_start + 10..]
+        .trim_start_matches(['-', '_', ' ', ':'])
+        .trim();
+    let without_suffix = project_progress_work_log_trim_filename_suffix(raw_after_date);
+    let spaced = without_suffix
+        .chars()
+        .map(|ch| if ch == '-' || ch == '_' { ' ' } else { ch })
+        .collect::<String>();
+    let normalized = spaced.split_whitespace().collect::<Vec<_>>().join(" ");
+    local_project_work_log_safe_context_line(&normalized)
+}
+
+fn project_progress_work_log_trim_filename_suffix(value: &str) -> &str {
+    let mut trimmed = value.trim();
+    loop {
+        let lower = trimmed.to_ascii_lowercase();
+        let mut next = None;
+        for suffix in [
+            "-working-log",
+            "_working_log",
+            " working log",
+            "-worklog",
+            "_worklog",
+            " worklog",
+            "-progress",
+            "_progress",
+            " progress",
+        ] {
+            if lower.ends_with(suffix) {
+                next = Some(trimmed[..trimmed.len() - suffix.len()].trim());
+                break;
+            }
+        }
+        let Some(candidate) = next else {
+            break;
+        };
+        if candidate == trimmed {
+            break;
+        }
+        trimmed = candidate;
+    }
+    trimmed
+}
+
+fn project_progress_work_log_filename_status(text: &str) -> Option<String> {
+    for line in text.lines().take(PROJECT_WORK_METADATA_MAX_SCAN_LINES) {
+        let field = line
+            .trim_start()
+            .trim_start_matches(['#', '-', '*', '>', ' ', '\t'])
+            .trim_start();
+        let lower = field.to_ascii_lowercase();
+        if lower.starts_with("completed at:") || lower.starts_with("completed at ") {
+            return Some("completed".to_string());
+        }
+        if !(lower.starts_with("status:") || lower.starts_with("status ")) {
+            continue;
+        }
+        let value = lower
+            .trim_start_matches("status")
+            .trim_start_matches([':', ' ', '\t'])
+            .trim();
+        if value.contains("completed") || value.contains("complete") || value.contains("done") {
+            return Some("completed".to_string());
+        }
+        if value.contains("in progress") || value.contains("ongoing") {
+            return Some("in_progress".to_string());
+        }
+        if value.contains("blocked") {
+            return Some("blocked".to_string());
+        }
+        if value.contains("planned") || value.contains("pending") {
+            return Some("planned".to_string());
+        }
+        return Some("logged".to_string());
+    }
+    None
+}
+
+fn project_progress_work_log_filename_evidence(text: &str) -> Option<String> {
+    let lines = text.lines().collect::<Vec<_>>();
+    for heading in ["summary", "implemented", "goal", "verification", "evidence"] {
+        if let Some(context) =
+            project_progress_work_log_first_safe_line_after_heading(&lines, heading)
+        {
+            return Some(context);
+        }
+    }
+    lines
+        .iter()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty()
+                || trimmed.starts_with('#')
+                || project_progress_work_log_metadata_line(trimmed)
+            {
+                return None;
+            }
+            local_project_work_log_safe_context_line(trimmed)
+        })
+        .next()
+}
+
+fn project_progress_work_log_first_safe_line_after_heading(
+    lines: &[&str],
+    heading_name: &str,
+) -> Option<String> {
+    let mut in_section = false;
+    for line in lines {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            let heading = trimmed.trim_start_matches('#').trim().to_ascii_lowercase();
+            if in_section {
+                break;
+            }
+            in_section =
+                heading == heading_name || heading.starts_with(&format!("{heading_name} "));
+            continue;
+        }
+        if !in_section || trimmed.is_empty() || project_progress_work_log_metadata_line(trimmed) {
+            continue;
+        }
+        if let Some(context) = local_project_work_log_safe_context_line(trimmed) {
+            return Some(context);
+        }
+    }
+    None
+}
+
+fn project_progress_work_log_metadata_line(line: &str) -> bool {
+    let lower = line
+        .trim_start_matches(['-', '*', '>', ' ', '\t'])
+        .to_ascii_lowercase();
+    [
+        "slice:",
+        "mode:",
+        "status:",
+        "date:",
+        "timestamp:",
+        "completed at:",
+        "start time:",
+        "started:",
+    ]
+    .iter()
+    .any(|prefix| lower.starts_with(prefix))
 }
 
 fn project_progress_work_items_from_safe_dated_lines(
@@ -14638,6 +14850,46 @@ Progress:
             "Timestamp: 2026-06-06\nReport Recertification Status Summary Surface Worklog"
         );
         assert!(detect_risks(&timestamp_items[0].evidence).is_empty());
+    }
+
+    #[test]
+    fn project_progress_work_items_extract_filename_date_worklog_fallbacks() {
+        let path = PathBuf::from(
+            "/tmp/notebooklm-llm-wiki-flow/docs/plans/2026-06-09-objective-coverage-source-only-frontier-recheck-worklog.md",
+        );
+        let text = r#"# objective_coverage_source_only_frontier_recheck Worklog
+
+Slice: `objective_coverage_source_only_frontier_recheck`
+
+Status: completed as a source-only/report-only hardening slice.
+
+## Summary
+- Added a `source_only_frontier_recheck_contract` so source-only gating stays explicit.
+- Rechecked the frontier scan against the current project plan.
+
+## Verification
+- PASS: source-only scope check
+"#;
+
+        let items = project_progress_work_items_from_text_for_project(
+            &path,
+            text,
+            "notebooklm-llm-wiki-flow",
+        );
+
+        assert_eq!(items.len(), 1);
+        let item = &items[0];
+        assert_eq!(item.date, "2026-06-09");
+        assert_eq!(item.status, "completed");
+        assert_eq!(
+            item.title,
+            "objective coverage source only frontier recheck"
+        );
+        assert!(item.evidence.contains("Filename date: 2026-06-09"));
+        assert!(item.evidence.contains("source-only gating stays explicit"));
+        assert!(!item.evidence.contains("Slice:"));
+        assert!(detect_risks(&item.title).is_empty());
+        assert!(detect_risks(&item.evidence).is_empty());
     }
 
     #[test]

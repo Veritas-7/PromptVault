@@ -1,12 +1,103 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 21:11 KST
+Updated: 2026-06-09 21:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 AI normalization reject-label QA
+## Current Slice - 2026-06-09 filename-date worklog parser coverage
+
+Current Goal:
+
+- Close the remaining real project-local progress-log parser gap without
+  relying on provider extraction for safe filename-dated worklogs.
+- Make `docs/plans/2026-*-worklog.md` files with useful body sections count in
+  project/day work management when the filename supplies the date.
+
+Context:
+
+- Fresh `work-log-coverage --json` before this slice showed `843` progress-log
+  files seen, `837` parsed, and `5` unparsed.
+- All `5` unparsed files were real
+  `notebooklm-llm-wiki-flow/docs/plans/2026-06-09-*-worklog.md` files. Their
+  bodies had useful sections such as `Summary`, `Implemented`, `Goal`, and
+  `Verification`, but they did not have a parser-supported dated heading or
+  `Date:`/`Timestamp:` field.
+- The same files included long slice identifiers, so the fallback must not
+  blindly use `Slice:` metadata as evidence.
+
+Progress:
+
+- Added a failing Rust regression test proving that a filename-dated worklog
+  with `Status: completed` and a safe `Summary` section currently produced zero
+  project work items.
+- Added a filename-date fallback parser for already-discovered project progress
+  Markdown files.
+- The fallback validates the ISO date with `chrono::NaiveDate`, derives a safe
+  title from the filename, maps explicit completed markers to `completed`, and
+  extracts the first safe body line from `Summary`, `Implemented`, `Goal`,
+  `Verification`, or `Evidence`.
+- The fallback skips metadata lines such as `Slice:`, `Mode:`, `Status:`,
+  `Date:`, `Timestamp:`, and `Completed at:` and still runs risk detection on
+  the final title/evidence pair.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added `project_progress_work_item_from_filename_date_worklog`;
+  - added filename date/title/status/evidence helpers;
+  - inserted the fallback after explicit safe date fields and before inline
+    dated-line parsing;
+  - added `project_progress_work_items_extract_filename_date_worklog_fallbacks`.
+- `working.md`:
+  - recorded the current parser coverage slice.
+
+Tests:
+
+- Baseline RED:
+  - `cargo test project_progress_work_items_extract_filename_date_worklog_fallbacks`:
+    FAIL before implementation, `left: 0`, `right: 1`.
+- After implementation:
+  - `cargo test project_progress_work_items_extract_filename_date_worklog_fallbacks`:
+    PASS.
+  - `cargo test project_progress_log_coverage_reports_nested_and_unparsed_logs`:
+    PASS.
+  - `cargo test project_progress_log_extraction_candidates_include_only_unparsed_readable_logs`:
+    PASS.
+  - `cargo build --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`:
+    PASS.
+  - `src-tauri/target/debug/promptvault-cli work-log-coverage --json`: PASS,
+    showed `844` files seen, `843` parsed, `0` unparsed, `31` projects, and
+    `9,086` work items.
+  - Fresh direct recheck after this `working.md` update: PASS, `844` files
+    seen, `843` parsed, `0` unparsed, `31` projects, and `9,090` work items.
+  - `npm run check`: PASS.
+    - UI tests: `473` passed.
+    - Production build: passed.
+    - Rust lib tests: `196` passed.
+    - CLI tests: `31` passed.
+    - Doc-tests: passed.
+    - clippy `-D warnings`: passed.
+  - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+    Evidence from isolated browser result:
+    - status export showed `91` rows, `31` projects, `25` days, `9,088` work
+      items, `844` progress files, and `20,703` session evidence links from
+      `50` unique records;
+    - coverage showed `844` logs, `843` parsed, `0` unparsed, `31` projects,
+      and `9,088` work items;
+    - work-log candidates showed the backfill queue empty because there are no
+      unparsed logs: `pending 0`, `AI 전송가능 0`, `위험차단 0`, `parsed 제외
+      843`, `pointer 1`;
+    - work management overview kept `91` managed project/day rows and `0`
+      live-only rows after freeze;
+    - normalization review queue and rejected-AI fixture labels still passed.
+
+Next Steps:
+
+- Stage explicit touched files, run staged gitleaks, commit, and push.
+
+## Completed Slice - 2026-06-09 AI normalization reject-label QA
 
 Current Goal:
 
@@ -87,9 +178,10 @@ Issues:
   This is useful for traceability, while the proposal reject reason now has a
   readable operator label.
 
-Next Steps:
+Outcome:
 
-- Stage only the touched files, run staged gitleaks, commit, and push.
+- Staged explicit touched files, passed staged gitleaks, committed, and pushed
+  as `b6a22f0`.
 
 ## Completed Slice - 2026-06-09 AI normalization quality gate
 

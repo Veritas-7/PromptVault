@@ -35,6 +35,12 @@ const DEFAULT_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 80;
 const MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 1_000;
 const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT: usize = 200;
+const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_LIMIT: usize = 20;
+const MAX_PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_LIMIT: usize = 100;
+const PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_PROVIDER_CHUNK_MAX_CANDIDATES: usize = 8;
+const PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_PROVIDER_CHUNK_TARGET_CHARS: usize = 18_000;
+const PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_PROVIDER_PROMPT_MAX_CHARS: usize = 24_000;
+const PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_MIN_ACCEPTED_CONFIDENCE: f64 = 0.80;
 const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT: usize = 50;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT: usize = 200;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
@@ -94,6 +100,13 @@ struct ProjectWorkLogExtractionRuntime<'a> {
 }
 
 struct ProjectWorkLogNormalizationRuntime<'a> {
+    provider: &'a str,
+    provider_model: Option<String>,
+    provider_runtime: &'a str,
+    used_ai: bool,
+}
+
+struct ProjectWorkSessionEvidenceProposalRuntime<'a> {
     provider: &'a str,
     provider_model: Option<String>,
     provider_runtime: &'a str,
@@ -909,6 +922,61 @@ pub struct ProjectWorkSessionEvidenceCandidatesResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSessionEvidenceProposalsOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub session_limit: Option<usize>,
+    pub refresh_session_index: Option<bool>,
+    pub ai: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceProposal {
+    pub candidate_id: String,
+    pub project: String,
+    pub date: String,
+    pub source_path: String,
+    pub source_file: String,
+    pub source_role: String,
+    pub candidate_reason: String,
+    pub proposal_kind: String,
+    pub proposed_action: String,
+    pub source_trace: String,
+    pub confidence: f64,
+    pub accepted: bool,
+    pub rejection_reason: Option<String>,
+    pub work_item_count: usize,
+    pub session_evidence_audit: String,
+    pub needs_title_normalization: bool,
+    pub top_titles: Vec<String>,
+    pub sample_evidence: String,
+    pub risk_flags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceProposalsResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub provider: String,
+    pub provider_model: Option<String>,
+    pub provider_runtime: String,
+    pub used_ai: bool,
+    pub total_candidate_count: usize,
+    pub returned_proposal_count: usize,
+    pub accepted_count: usize,
+    pub rejected_count: usize,
+    pub report_total_rows: usize,
+    pub report_total_items: usize,
+    pub report_project_count: usize,
+    pub report_date_count: usize,
+    pub report_files_seen: usize,
+    pub report_session_evidence_index_count: usize,
+    pub report_session_evidence_index_total_count: usize,
+    pub proposals: Vec<ProjectWorkSessionEvidenceProposal>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkSessionEvidenceReviewQueueOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
@@ -1378,6 +1446,15 @@ fn project_work_session_evidence_candidates(
     options: Option<ProjectWorkSessionEvidenceCandidatesOptions>,
 ) -> Result<ProjectWorkSessionEvidenceCandidatesResult, String> {
     run_project_work_session_evidence_candidates(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+async fn project_work_session_evidence_proposals(
+    options: Option<ProjectWorkSessionEvidenceProposalsOptions>,
+) -> Result<ProjectWorkSessionEvidenceProposalsResult, String> {
+    run_project_work_session_evidence_proposals(options.unwrap_or_default())
+        .await
         .map_err(|err| err.to_string())
 }
 
@@ -2129,6 +2206,51 @@ pub fn run_project_work_session_evidence_candidates(
         candidates,
         warnings,
     })
+}
+
+pub async fn run_project_work_session_evidence_proposals(
+    options: ProjectWorkSessionEvidenceProposalsOptions,
+) -> Result<ProjectWorkSessionEvidenceProposalsResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-session-evidence-proposals limit requires a positive integer".into());
+    }
+    if matches!(options.session_limit, Some(0)) {
+        return Err(
+            "work-session-evidence-proposals session_limit requires a positive integer".into(),
+        );
+    }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err(
+            "work-session-evidence-proposals database path requires a non-empty value".into(),
+        );
+    }
+
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_LIMIT)
+        .min(MAX_PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_LIMIT);
+    let candidates = run_project_work_session_evidence_candidates(
+        ProjectWorkSessionEvidenceCandidatesOptions {
+            database_path: Some(database_path.display().to_string()),
+            limit: Some(limit),
+            session_limit: options.session_limit,
+            refresh_session_index: options.refresh_session_index,
+        },
+    )?;
+    let mut result = project_work_session_evidence_proposals_with_env(
+        candidates,
+        !options.ai.unwrap_or(false),
+        load_improve_env(),
+    )
+    .await?;
+    result.generated_at = Utc::now().to_rfc3339();
+    result.database_path = database_path.display().to_string();
+    Ok(result)
 }
 
 pub fn run_project_work_session_evidence_review_queue(
@@ -8106,6 +8228,828 @@ fn project_work_session_evidence_candidate_from_row(
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct AiProjectWorkSessionEvidenceProposalEnvelope {
+    proposals: Vec<AiProjectWorkSessionEvidenceProposal>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AiProjectWorkSessionEvidenceProposal {
+    candidate_id: String,
+    proposal_kind: String,
+    proposed_action: String,
+    source_trace: String,
+    confidence: f64,
+}
+
+async fn project_work_session_evidence_proposals_with_env(
+    candidates: ProjectWorkSessionEvidenceCandidatesResult,
+    force_local: bool,
+    env: HashMap<String, String>,
+) -> Result<ProjectWorkSessionEvidenceProposalsResult, Box<dyn std::error::Error>> {
+    if force_local || candidates.candidates.is_empty() {
+        return Ok(local_project_work_session_evidence_proposals(
+            candidates,
+            if force_local {
+                vec![
+                    "AI 세션근거 제안이 비활성화되어 로컬 review-only 제안만 반환했습니다."
+                        .to_string(),
+                ]
+            } else {
+                vec!["세션근거 후보가 0개라 OpenAI/GLM provider 호출을 생략했습니다.".to_string()]
+            },
+        ));
+    }
+
+    let mut warnings = candidates.warnings.clone();
+    let (blocked_candidates, safe_candidates): (Vec<_>, Vec<_>) = candidates
+        .candidates
+        .iter()
+        .cloned()
+        .partition(|candidate| {
+            !detect_risks(&project_work_session_evidence_candidate_source_material(
+                candidate,
+            ))
+            .is_empty()
+        });
+    if !blocked_candidates.is_empty() {
+        warnings.push(format!(
+            "위험 패턴이 감지된 세션근거 후보 {}개는 외부 AI provider로 보내지 않고 rejected로 남겼습니다.",
+            blocked_candidates.len()
+        ));
+    }
+    if safe_candidates.is_empty() {
+        return Ok(finish_project_work_session_evidence_proposals(
+            &candidates,
+            ProjectWorkSessionEvidenceProposalRuntime {
+                provider: "local-session-evidence-rules",
+                provider_model: None,
+                provider_runtime: "local-session-evidence-rules",
+                used_ai: false,
+            },
+            blocked_candidates
+                .iter()
+                .map(|candidate| {
+                    rejected_project_work_session_evidence_proposal(
+                        candidate,
+                        "candidate_has_risk_flags",
+                    )
+                })
+                .collect(),
+            warnings,
+        ));
+    }
+
+    if let Some(api_key) = openai_api_key_from_env(&env) {
+        match request_openai_project_work_session_evidence_proposals_chunked(
+            &candidates,
+            &safe_candidates,
+            &env,
+            &api_key,
+        )
+        .await
+        {
+            Ok(mut result) => {
+                result.warnings.extend(warnings);
+                append_blocked_work_session_evidence_proposals(
+                    &mut result,
+                    &blocked_candidates,
+                    &candidates,
+                );
+                return Ok(result);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    }
+    if let Some(api_key) = glm_api_key_from_env(&env) {
+        match request_glm_project_work_session_evidence_proposals_chunked(
+            &candidates,
+            &safe_candidates,
+            &env,
+            &api_key,
+        )
+        .await
+        {
+            Ok(mut result) => {
+                result.warnings.extend(warnings);
+                append_blocked_work_session_evidence_proposals(
+                    &mut result,
+                    &blocked_candidates,
+                    &candidates,
+                );
+                return Ok(result);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    }
+    if openai_api_key_from_env(&env).is_none() && glm_api_key_from_env(&env).is_none() {
+        warnings.push(
+            "OPENAI_API_KEY 및 GLM_API_KEY/GLM_API_KEY_2가 없어 로컬 session-evidence fallback을 사용했습니다."
+                .to_string(),
+        );
+    }
+    Ok(local_project_work_session_evidence_proposals(
+        candidates, warnings,
+    ))
+}
+
+async fn request_openai_project_work_session_evidence_proposals_chunked(
+    candidates_result: &ProjectWorkSessionEvidenceCandidatesResult,
+    candidates: &[ProjectWorkSessionEvidenceCandidate],
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkSessionEvidenceProposalsResult, String> {
+    let chunks = project_work_session_evidence_candidate_chunks(candidates);
+    if chunks.len() <= 1 {
+        return request_openai_project_work_session_evidence_proposals(
+            candidates_result,
+            candidates,
+            env,
+            api_key,
+        )
+        .await;
+    }
+
+    let model = openai_model_from_env(env);
+    let mut proposals = Vec::new();
+    let mut warnings = vec![format!(
+        "OpenAI session-evidence 후보 {}개를 {}개 chunk로 나누어 처리했습니다.",
+        candidates.len(),
+        chunks.len()
+    )];
+    let chunk_count = chunks.len();
+    for (index, chunk) in chunks.into_iter().enumerate() {
+        let mut chunk_result = request_openai_project_work_session_evidence_proposals(
+            candidates_result,
+            chunk,
+            env,
+            api_key,
+        )
+        .await
+        .map_err(|err| {
+            format!(
+                "OpenAI session-evidence chunk {}/{} 실패: {err}",
+                index + 1,
+                chunk_count
+            )
+        })?;
+        proposals.append(&mut chunk_result.proposals);
+        warnings.append(&mut chunk_result.warnings);
+    }
+
+    Ok(finish_project_work_session_evidence_proposals(
+        candidates_result,
+        ProjectWorkSessionEvidenceProposalRuntime {
+            provider: "openai",
+            provider_model: Some(model),
+            provider_runtime: "openai-responses",
+            used_ai: true,
+        },
+        proposals,
+        warnings,
+    ))
+}
+
+async fn request_openai_project_work_session_evidence_proposals(
+    candidates_result: &ProjectWorkSessionEvidenceCandidatesResult,
+    candidates: &[ProjectWorkSessionEvidenceCandidate],
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkSessionEvidenceProposalsResult, String> {
+    let endpoint = normalize_openai_responses_endpoint(
+        &env.get("OPENAI_RESPONSES_ENDPOINT")
+            .or_else(|| env.get("OPENAI_BASE_URL"))
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_OPENAI_RESPONSES_ENDPOINT.to_string()),
+    );
+    let model = openai_model_from_env(env);
+    let (system, user) = project_work_session_evidence_messages(candidates);
+    let body = serde_json::json!({
+        "model": model,
+        "input": [
+            {
+                "role": "developer",
+                "content": [
+                    { "type": "input_text", "text": system }
+                ]
+            },
+            {
+                "role": "user",
+                "content": [
+                    { "type": "input_text", "text": user }
+                ]
+            }
+        ],
+        "temperature": 0.0,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "project_work_session_evidence_proposals",
+                "strict": true,
+                "schema": project_work_session_evidence_json_schema()
+            }
+        }
+    });
+
+    let client = project_work_log_extraction_http_client("OpenAI")?;
+    let response = client
+        .post(endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|err| {
+            format!("OpenAI session-evidence proposal 요청 실패: {err}; 다음 provider 또는 로컬 fallback을 사용합니다.")
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "OpenAI session-evidence proposal이 HTTP {status}를 반환해 다음 provider 또는 로컬 fallback을 사용합니다."
+        ));
+    }
+    let value = response.json::<Value>().await.map_err(|err| {
+        format!(
+            "OpenAI session-evidence proposal 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용합니다."
+        )
+    })?;
+    let content = openai_response_content(&value).ok_or_else(|| {
+        "OpenAI session-evidence proposal 응답 content가 없어 다음 provider 또는 로컬 fallback을 사용합니다."
+            .to_string()
+    })?;
+    project_work_session_evidence_proposals_from_content(
+        candidates_result,
+        ProjectWorkSessionEvidenceProposalRuntime {
+            provider: "openai",
+            provider_model: Some(model),
+            provider_runtime: "openai-responses",
+            used_ai: true,
+        },
+        candidates,
+        &content,
+        Vec::new(),
+    )
+    .map_err(|err| {
+        format!("OpenAI session-evidence proposal 검증 실패: {err}; 로컬 fallback을 사용합니다.")
+    })
+}
+
+async fn request_glm_project_work_session_evidence_proposals_chunked(
+    candidates_result: &ProjectWorkSessionEvidenceCandidatesResult,
+    candidates: &[ProjectWorkSessionEvidenceCandidate],
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkSessionEvidenceProposalsResult, String> {
+    let chunks = project_work_session_evidence_candidate_chunks(candidates);
+    if chunks.len() <= 1 {
+        return request_glm_project_work_session_evidence_proposals(
+            candidates_result,
+            candidates,
+            env,
+            api_key,
+        )
+        .await;
+    }
+
+    let model = glm_model_from_env(env);
+    let mut proposals = Vec::new();
+    let mut warnings = vec![format!(
+        "GLM session-evidence 후보 {}개를 {}개 chunk로 나누어 처리했습니다.",
+        candidates.len(),
+        chunks.len()
+    )];
+    let chunk_count = chunks.len();
+    for (index, chunk) in chunks.into_iter().enumerate() {
+        let mut chunk_result = request_glm_project_work_session_evidence_proposals(
+            candidates_result,
+            chunk,
+            env,
+            api_key,
+        )
+        .await
+        .map_err(|err| {
+            format!(
+                "GLM session-evidence chunk {}/{} 실패: {err}",
+                index + 1,
+                chunk_count
+            )
+        })?;
+        proposals.append(&mut chunk_result.proposals);
+        warnings.append(&mut chunk_result.warnings);
+    }
+
+    Ok(finish_project_work_session_evidence_proposals(
+        candidates_result,
+        ProjectWorkSessionEvidenceProposalRuntime {
+            provider: "glm",
+            provider_model: Some(model),
+            provider_runtime: "glm-chat-completions",
+            used_ai: true,
+        },
+        proposals,
+        warnings,
+    ))
+}
+
+async fn request_glm_project_work_session_evidence_proposals(
+    candidates_result: &ProjectWorkSessionEvidenceCandidatesResult,
+    candidates: &[ProjectWorkSessionEvidenceCandidate],
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkSessionEvidenceProposalsResult, String> {
+    let endpoint = normalize_chat_endpoint(
+        &env.get("GLM_CODING_ENDPOINT")
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_GLM_CHAT_ENDPOINT.to_string()),
+    );
+    let model = glm_model_from_env(env);
+    let (system, user) = project_work_session_evidence_messages(candidates);
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [
+            { "role": "system", "content": system },
+            { "role": "user", "content": user }
+        ],
+        "temperature": 0.0,
+        "response_format": { "type": "json_object" }
+    });
+
+    let client = project_work_log_extraction_http_client("GLM")?;
+    let response = client
+        .post(endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|err| {
+            format!("GLM session-evidence proposal 요청 실패: {err}; 로컬 fallback을 사용했습니다.")
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "GLM session-evidence proposal이 HTTP {status}를 반환해 로컬 fallback을 사용했습니다."
+        ));
+    }
+    let value = response.json::<Value>().await.map_err(|err| {
+        format!(
+            "GLM session-evidence proposal 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용했습니다."
+        )
+    })?;
+    let content = value
+        .pointer("/choices/0/message/content")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            "GLM session-evidence proposal 응답 content가 없어 로컬 fallback을 사용했습니다."
+                .to_string()
+        })?;
+    project_work_session_evidence_proposals_from_content(
+        candidates_result,
+        ProjectWorkSessionEvidenceProposalRuntime {
+            provider: "glm",
+            provider_model: Some(model),
+            provider_runtime: "glm-chat-completions",
+            used_ai: true,
+        },
+        candidates,
+        content,
+        Vec::new(),
+    )
+    .map_err(|err| {
+        format!("GLM session-evidence proposal 검증 실패: {err}; 로컬 fallback을 사용했습니다.")
+    })
+}
+
+fn project_work_session_evidence_json_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "proposals": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "candidate_id": { "type": "string" },
+                        "proposal_kind": {
+                            "type": "string",
+                            "enum": [
+                                "source_log_trace",
+                                "manual_session_search",
+                                "title_normalization_first",
+                                "reject"
+                            ]
+                        },
+                        "proposed_action": { "type": "string" },
+                        "source_trace": { "type": "string" },
+                        "confidence": { "type": "number" }
+                    },
+                    "required": [
+                        "candidate_id",
+                        "proposal_kind",
+                        "proposed_action",
+                        "source_trace",
+                        "confidence"
+                    ]
+                }
+            }
+        },
+        "required": ["proposals"]
+    })
+}
+
+fn project_work_session_evidence_messages(
+    candidates: &[ProjectWorkSessionEvidenceCandidate],
+) -> (String, String) {
+    let system = format!(
+        "You triage project/date work-management rows that remain unresolved after the full stored session index. Use only supplied source traces from project-local work logs and titles. Do not invent sessions, session IDs, files, dates, projects, or evidence. Return JSON only with key proposals. proposal_kind must be one of source_log_trace, manual_session_search, title_normalization_first, reject. source_trace must be copied verbatim from the candidate Sample evidence or Titles. Use confidence at least {:.2} only when the source_trace fully supports the proposed action. Durable writes are not allowed here; every proposal still requires operator approval later.",
+        PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_MIN_ACCEPTED_CONFIDENCE
+    );
+    let mut user = String::new();
+    user.push_str("Candidates:\n");
+    for candidate in candidates {
+        user.push_str(&project_work_session_evidence_candidate_message(candidate));
+    }
+    user.push_str("Return JSON: {\"proposals\":[{\"candidate_id\":\"...\",\"proposal_kind\":\"manual_session_search\",\"proposed_action\":\"...\",\"source_trace\":\"verbatim source trace\",\"confidence\":0.0}]}.");
+    (
+        system,
+        truncate_chars(
+            &user,
+            PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_PROVIDER_PROMPT_MAX_CHARS,
+        ),
+    )
+}
+
+fn project_work_session_evidence_candidate_message(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+) -> String {
+    format!(
+        "Candidate ID: {}\nProject: {}\nDate: {}\nSource: {}\nSource role: {}\nReason: {}\nWork items: {}\nNeeds title normalization: {}\nTitles:\n{}\nSample evidence:\n{}\n\n",
+        candidate.candidate_id,
+        candidate.project,
+        candidate.date,
+        candidate.latest_source_path,
+        candidate.latest_source_role,
+        candidate.reason,
+        candidate.work_item_count,
+        candidate.needs_title_normalization,
+        candidate.top_titles.join("\n"),
+        candidate.sample_evidence
+    )
+}
+
+fn project_work_session_evidence_candidate_chunks(
+    candidates: &[ProjectWorkSessionEvidenceCandidate],
+) -> Vec<&[ProjectWorkSessionEvidenceCandidate]> {
+    let mut chunks = Vec::new();
+    let mut start = 0usize;
+    let mut current_chars = 0usize;
+    for (index, candidate) in candidates.iter().enumerate() {
+        let candidate_chars = project_work_session_evidence_candidate_message(candidate)
+            .chars()
+            .count();
+        let current_count = index.saturating_sub(start);
+        let over_count =
+            current_count >= PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_PROVIDER_CHUNK_MAX_CANDIDATES;
+        let over_chars = index > start
+            && current_chars + candidate_chars
+                > PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_PROVIDER_CHUNK_TARGET_CHARS;
+        if over_count || over_chars {
+            chunks.push(&candidates[start..index]);
+            start = index;
+            current_chars = 0;
+        }
+        current_chars += candidate_chars;
+    }
+    if start < candidates.len() {
+        chunks.push(&candidates[start..]);
+    }
+    chunks
+}
+
+fn project_work_session_evidence_proposals_from_content(
+    candidates_result: &ProjectWorkSessionEvidenceCandidatesResult,
+    runtime: ProjectWorkSessionEvidenceProposalRuntime<'_>,
+    candidates: &[ProjectWorkSessionEvidenceCandidate],
+    content: &str,
+    warnings: Vec<String>,
+) -> Result<ProjectWorkSessionEvidenceProposalsResult, Box<dyn std::error::Error>> {
+    let envelope: AiProjectWorkSessionEvidenceProposalEnvelope = serde_json::from_str(content)?;
+    let mut proposals_by_candidate =
+        BTreeMap::<String, AiProjectWorkSessionEvidenceProposal>::new();
+    let mut duplicate_candidate_ids = BTreeSet::<String>::new();
+    for proposal in envelope.proposals {
+        let candidate_id = proposal.candidate_id.clone();
+        if proposals_by_candidate
+            .insert(candidate_id.clone(), proposal)
+            .is_some()
+        {
+            duplicate_candidate_ids.insert(candidate_id);
+        }
+    }
+
+    let mut result_warnings = warnings;
+    if !duplicate_candidate_ids.is_empty() {
+        result_warnings.push(format!(
+            "{} provider returned duplicate session-evidence candidate IDs: {}",
+            runtime.provider,
+            duplicate_candidate_ids
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    let mut proposals = Vec::new();
+    for candidate in candidates {
+        if let Some(ai) = proposals_by_candidate.remove(&candidate.candidate_id) {
+            proposals.push(project_work_session_evidence_proposal_from_ai(
+                candidate, ai,
+            ));
+        } else {
+            proposals.push(rejected_project_work_session_evidence_proposal(
+                candidate,
+                "missing_ai_proposal",
+            ));
+        }
+    }
+    if !proposals_by_candidate.is_empty() {
+        result_warnings.push(format!(
+            "{} provider returned unknown session-evidence candidate IDs: {}",
+            runtime.provider,
+            proposals_by_candidate
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    Ok(finish_project_work_session_evidence_proposals(
+        candidates_result,
+        runtime,
+        proposals,
+        result_warnings,
+    ))
+}
+
+fn project_work_session_evidence_proposal_from_ai(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+    ai: AiProjectWorkSessionEvidenceProposal,
+) -> ProjectWorkSessionEvidenceProposal {
+    let proposal_kind = truncate_chars(ai.proposal_kind.trim(), 64);
+    let proposed_action = truncate_chars(ai.proposed_action.trim(), 260);
+    let source_trace = truncate_chars(ai.source_trace.trim(), 320);
+    let rejection_reason = validate_project_work_session_evidence_proposal(
+        candidate,
+        &proposal_kind,
+        &proposed_action,
+        &source_trace,
+        ai.confidence,
+    );
+    ProjectWorkSessionEvidenceProposal {
+        candidate_id: candidate.candidate_id.clone(),
+        project: candidate.project.clone(),
+        date: candidate.date.clone(),
+        source_path: candidate.latest_source_path.clone(),
+        source_file: candidate.latest_source_file.clone(),
+        source_role: candidate.latest_source_role.clone(),
+        candidate_reason: candidate.reason.clone(),
+        proposal_kind,
+        proposed_action,
+        source_trace,
+        confidence: ai.confidence,
+        accepted: rejection_reason.is_none(),
+        rejection_reason,
+        work_item_count: candidate.work_item_count,
+        session_evidence_audit: candidate.session_evidence_audit.clone(),
+        needs_title_normalization: candidate.needs_title_normalization,
+        top_titles: candidate.top_titles.clone(),
+        sample_evidence: candidate.sample_evidence.clone(),
+        risk_flags: detect_risks(&project_work_session_evidence_candidate_source_material(
+            candidate,
+        )),
+    }
+}
+
+fn validate_project_work_session_evidence_proposal(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+    proposal_kind: &str,
+    proposed_action: &str,
+    source_trace: &str,
+    confidence: f64,
+) -> Option<String> {
+    let candidate_risks = detect_risks(&project_work_session_evidence_candidate_source_material(
+        candidate,
+    ));
+    if !candidate_risks.is_empty() {
+        return Some("candidate_has_risk_flags".to_string());
+    }
+    if !matches!(
+        proposal_kind,
+        "source_log_trace" | "manual_session_search" | "title_normalization_first" | "reject"
+    ) {
+        return Some("invalid_proposal_kind".to_string());
+    }
+    if proposal_kind == "reject" {
+        return Some("ai_rejected_candidate".to_string());
+    }
+    if candidate.needs_title_normalization && proposal_kind != "title_normalization_first" {
+        return Some("title_normalization_required_first".to_string());
+    }
+    if proposed_action.trim().is_empty() {
+        return Some("empty_proposed_action".to_string());
+    }
+    if source_trace.trim().is_empty() {
+        return Some("empty_source_trace".to_string());
+    }
+    if !normalized_contains(
+        &project_work_session_evidence_candidate_source_material(candidate),
+        source_trace,
+    ) {
+        return Some("source_trace_not_in_candidate_evidence".to_string());
+    }
+    if !confidence.is_finite() || !(0.0..=1.0).contains(&confidence) {
+        return Some("invalid_confidence".to_string());
+    }
+    if confidence < PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_MIN_ACCEPTED_CONFIDENCE {
+        return Some("low_confidence".to_string());
+    }
+    if !detect_risks(&format!(
+        "{proposal_kind}\n{proposed_action}\n{source_trace}"
+    ))
+    .is_empty()
+    {
+        return Some("proposal_has_risk_flags".to_string());
+    }
+    None
+}
+
+fn local_project_work_session_evidence_proposals(
+    candidates: ProjectWorkSessionEvidenceCandidatesResult,
+    mut warnings: Vec<String>,
+) -> ProjectWorkSessionEvidenceProposalsResult {
+    warnings.extend(candidates.warnings.clone());
+    let proposals = candidates
+        .candidates
+        .iter()
+        .map(local_project_work_session_evidence_proposal)
+        .collect::<Vec<_>>();
+    finish_project_work_session_evidence_proposals(
+        &candidates,
+        ProjectWorkSessionEvidenceProposalRuntime {
+            provider: "local-session-evidence-rules",
+            provider_model: None,
+            provider_runtime: "local-session-evidence-rules",
+            used_ai: false,
+        },
+        proposals,
+        warnings,
+    )
+}
+
+fn local_project_work_session_evidence_proposal(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+) -> ProjectWorkSessionEvidenceProposal {
+    rejected_project_work_session_evidence_proposal(
+        candidate,
+        if candidate.needs_title_normalization {
+            "local_fallback_requires_title_normalization_review"
+        } else {
+            "local_fallback_requires_ai_review"
+        },
+    )
+}
+
+fn rejected_project_work_session_evidence_proposal(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+    reason: &str,
+) -> ProjectWorkSessionEvidenceProposal {
+    let source_trace = local_project_work_session_evidence_source_trace(candidate);
+    let proposal_kind = if candidate.needs_title_normalization {
+        "title_normalization_first"
+    } else {
+        "manual_session_search"
+    };
+    let proposed_action = if candidate.needs_title_normalization {
+        "Normalize the rough project/day title before attempting a durable session-evidence link."
+    } else {
+        "Review this source trace against the full session index before approving any durable session-evidence record."
+    };
+    ProjectWorkSessionEvidenceProposal {
+        candidate_id: candidate.candidate_id.clone(),
+        project: candidate.project.clone(),
+        date: candidate.date.clone(),
+        source_path: candidate.latest_source_path.clone(),
+        source_file: candidate.latest_source_file.clone(),
+        source_role: candidate.latest_source_role.clone(),
+        candidate_reason: candidate.reason.clone(),
+        proposal_kind: proposal_kind.to_string(),
+        proposed_action: proposed_action.to_string(),
+        source_trace,
+        confidence: 0.5,
+        accepted: false,
+        rejection_reason: Some(reason.to_string()),
+        work_item_count: candidate.work_item_count,
+        session_evidence_audit: candidate.session_evidence_audit.clone(),
+        needs_title_normalization: candidate.needs_title_normalization,
+        top_titles: candidate.top_titles.clone(),
+        sample_evidence: candidate.sample_evidence.clone(),
+        risk_flags: detect_risks(&project_work_session_evidence_candidate_source_material(
+            candidate,
+        )),
+    }
+}
+
+fn local_project_work_session_evidence_source_trace(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+) -> String {
+    if !candidate.sample_evidence.trim().is_empty() {
+        return truncate_chars(candidate.sample_evidence.trim(), 320);
+    }
+    candidate
+        .top_titles
+        .iter()
+        .find(|title| !title.trim().is_empty())
+        .map(|title| truncate_chars(title.trim(), 320))
+        .unwrap_or_else(|| {
+            truncate_chars(
+                &format!(
+                    "{} {} unresolved project/day row",
+                    candidate.project, candidate.date
+                ),
+                320,
+            )
+        })
+}
+
+fn project_work_session_evidence_candidate_source_material(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+) -> String {
+    let mut parts = Vec::new();
+    parts.extend(candidate.top_titles.iter().map(String::as_str));
+    if !candidate.sample_evidence.trim().is_empty() {
+        parts.push(candidate.sample_evidence.as_str());
+    }
+    parts.join("\n")
+}
+
+fn finish_project_work_session_evidence_proposals(
+    candidates: &ProjectWorkSessionEvidenceCandidatesResult,
+    runtime: ProjectWorkSessionEvidenceProposalRuntime<'_>,
+    proposals: Vec<ProjectWorkSessionEvidenceProposal>,
+    warnings: Vec<String>,
+) -> ProjectWorkSessionEvidenceProposalsResult {
+    let accepted_count = proposals
+        .iter()
+        .filter(|proposal| proposal.accepted)
+        .count();
+    let rejected_count = proposals.len().saturating_sub(accepted_count);
+    ProjectWorkSessionEvidenceProposalsResult {
+        generated_at: Utc::now().to_rfc3339(),
+        database_path: candidates.database_path.clone(),
+        provider: runtime.provider.to_string(),
+        provider_model: runtime.provider_model,
+        provider_runtime: runtime.provider_runtime.to_string(),
+        used_ai: runtime.used_ai,
+        total_candidate_count: candidates.total_candidate_count,
+        returned_proposal_count: proposals.len(),
+        accepted_count,
+        rejected_count,
+        report_total_rows: candidates.report_total_rows,
+        report_total_items: candidates.report_total_items,
+        report_project_count: candidates.report_project_count,
+        report_date_count: candidates.report_date_count,
+        report_files_seen: candidates.report_files_seen,
+        report_session_evidence_index_count: candidates.report_session_evidence_index_count,
+        report_session_evidence_index_total_count: candidates
+            .report_session_evidence_index_total_count,
+        proposals,
+        warnings,
+    }
+}
+
+fn append_blocked_work_session_evidence_proposals(
+    result: &mut ProjectWorkSessionEvidenceProposalsResult,
+    blocked_candidates: &[ProjectWorkSessionEvidenceCandidate],
+    candidates: &ProjectWorkSessionEvidenceCandidatesResult,
+) {
+    result
+        .proposals
+        .extend(blocked_candidates.iter().map(|candidate| {
+            rejected_project_work_session_evidence_proposal(candidate, "candidate_has_risk_flags")
+        }));
+    result.returned_proposal_count = result.proposals.len();
+    result.accepted_count = result
+        .proposals
+        .iter()
+        .filter(|proposal| proposal.accepted)
+        .count();
+    result.rejected_count = result
+        .returned_proposal_count
+        .saturating_sub(result.accepted_count);
+    result.total_candidate_count = candidates.total_candidate_count;
+}
+
 fn sync_project_work_session_evidence_review_queue(
     conn: &mut Connection,
     result: &ProjectWorkSessionEvidenceCandidatesResult,
@@ -13817,6 +14761,7 @@ pub fn run() {
             project_work_summary,
             project_work_status_export,
             project_work_session_evidence_candidates,
+            project_work_session_evidence_proposals,
             project_work_session_evidence_review_queue,
             project_work_session_evidence_review_queue_update,
             project_work_summary_snapshots,
@@ -16977,6 +17922,230 @@ Status: completed as a source-only/report-only hardening slice.
         );
         assert_eq!(candidates[0].work_item_count, 2);
         assert_eq!(candidates[0].latest_source_file, "working.md");
+    }
+
+    fn session_evidence_candidate_fixture(
+        candidate_id: &str,
+        project: &str,
+        sample_evidence: &str,
+        needs_title_normalization: bool,
+    ) -> ProjectWorkSessionEvidenceCandidate {
+        ProjectWorkSessionEvidenceCandidate {
+            candidate_id: candidate_id.to_string(),
+            date: "2026-06-09".to_string(),
+            project: project.to_string(),
+            operational_status: "progress-log-only".to_string(),
+            source_statuses: vec![FrequencyItem {
+                text: "current".to_string(),
+                count: 1,
+            }],
+            work_item_count: 2,
+            source_file_count: 2,
+            source_files: vec!["working.md".to_string(), "workingd.md".to_string()],
+            source_file_roles: vec![FrequencyItem {
+                text: "handoff-log".to_string(),
+                count: 2,
+            }],
+            top_titles: vec![format!("{project} source-traced session evidence")],
+            sample_evidence: sample_evidence.to_string(),
+            latest_source_path: format!("/Users/wj/Ai/System/10_Projects/{project}/workingd.md"),
+            latest_source_file: "workingd.md".to_string(),
+            latest_source_role: "handoff-log".to_string(),
+            reason: if needs_title_normalization {
+                "unresolved_after_full_index,no_session_evidence,needs_title_normalization"
+                    .to_string()
+            } else {
+                "unresolved_after_full_index,no_session_evidence".to_string()
+            },
+            session_evidence_audit: "unresolved-after-full-index".to_string(),
+            needs_title_normalization,
+        }
+    }
+
+    fn session_evidence_candidates_result_fixture(
+        candidates: Vec<ProjectWorkSessionEvidenceCandidate>,
+    ) -> ProjectWorkSessionEvidenceCandidatesResult {
+        ProjectWorkSessionEvidenceCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            database_path: "/tmp/promptvault-session-evidence.sqlite".to_string(),
+            requested_limit: 20,
+            session_limit_used: 10_867,
+            total_candidate_count: candidates.len(),
+            returned_candidate_count: candidates.len(),
+            report_total_rows: 9_309,
+            report_total_items: 9_309,
+            report_project_count: 31,
+            report_date_count: 26,
+            report_files_seen: 857,
+            report_session_scan_prompt_count: 10_867,
+            report_session_evidence_count: 0,
+            report_unique_session_evidence_count: 0,
+            report_session_evidence_index_used: true,
+            report_session_evidence_index_updated: false,
+            report_session_evidence_index_count: 10_867,
+            report_session_evidence_index_total_count: 10_867,
+            report_session_evidence_mode: "metadata-first-raw-fallback".to_string(),
+            bounded_session_limit_count: 0,
+            unresolved_after_full_index_count: candidates.len(),
+            needs_title_normalization_count: candidates
+                .iter()
+                .filter(|candidate| candidate.needs_title_normalization)
+                .count(),
+            candidates,
+            warnings: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn local_session_evidence_proposals_are_review_only_and_source_traced() {
+        let candidate = session_evidence_candidate_fixture(
+            "session-evidence-PromptVault-local",
+            "PromptVault",
+            "2026-06-09: PromptVault has a workingd.md handoff entry but no matched stored session.",
+            true,
+        );
+        let result = local_project_work_session_evidence_proposals(
+            session_evidence_candidates_result_fixture(vec![candidate]),
+            Vec::new(),
+        );
+
+        assert_eq!(result.provider, "local-session-evidence-rules");
+        assert!(!result.used_ai);
+        assert_eq!(result.accepted_count, 0);
+        assert_eq!(result.rejected_count, 1);
+        assert_eq!(result.report_session_evidence_index_count, 10_867);
+        assert_eq!(
+            result.proposals[0].rejection_reason.as_deref(),
+            Some("local_fallback_requires_title_normalization_review")
+        );
+        assert_eq!(result.proposals[0].source_file, "workingd.md");
+        assert_eq!(result.proposals[0].source_role, "handoff-log");
+        assert!(result.proposals[0]
+            .source_trace
+            .contains("PromptVault has a workingd.md handoff entry"));
+    }
+
+    #[test]
+    fn ai_session_evidence_proposals_require_copied_source_trace_and_ordered_title_cleanup() {
+        let accepted = session_evidence_candidate_fixture(
+            "session-evidence-PromptVault-accepted",
+            "PromptVault",
+            "2026-06-09: Source-backed session trace is ready for manual session search.",
+            false,
+        );
+        let needs_title = session_evidence_candidate_fixture(
+            "session-evidence-PromptVault-needs-title",
+            "PromptVault",
+            "2026-06-09: Rough title should be normalized before linking session evidence.",
+            true,
+        );
+        let low_confidence = session_evidence_candidate_fixture(
+            "session-evidence-PromptVault-low-confidence",
+            "PromptVault",
+            "2026-06-09: Low confidence source trace exists in the work log.",
+            false,
+        );
+        let invented = session_evidence_candidate_fixture(
+            "session-evidence-PromptVault-invented",
+            "PromptVault",
+            "2026-06-09: Real source trace must be copied verbatim.",
+            false,
+        );
+        let rejected = session_evidence_candidate_fixture(
+            "session-evidence-PromptVault-rejected",
+            "PromptVault",
+            "2026-06-09: Provider may explicitly reject unsupported rows.",
+            false,
+        );
+        let candidates = vec![accepted, needs_title, low_confidence, invented, rejected];
+        let candidates_result = session_evidence_candidates_result_fixture(candidates.clone());
+        let content = serde_json::json!({
+            "proposals": [
+                {
+                    "candidate_id": "session-evidence-PromptVault-accepted",
+                    "proposal_kind": "manual_session_search",
+                    "proposed_action": "Manually search stored sessions using the copied source trace before durable approval.",
+                    "source_trace": "2026-06-09: Source-backed session trace is ready for manual session search.",
+                    "confidence": 0.91
+                },
+                {
+                    "candidate_id": "session-evidence-PromptVault-needs-title",
+                    "proposal_kind": "manual_session_search",
+                    "proposed_action": "Search sessions immediately.",
+                    "source_trace": "2026-06-09: Rough title should be normalized before linking session evidence.",
+                    "confidence": 0.93
+                },
+                {
+                    "candidate_id": "session-evidence-PromptVault-low-confidence",
+                    "proposal_kind": "manual_session_search",
+                    "proposed_action": "Manual search with low confidence.",
+                    "source_trace": "2026-06-09: Low confidence source trace exists in the work log.",
+                    "confidence": PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_MIN_ACCEPTED_CONFIDENCE - 0.01
+                },
+                {
+                    "candidate_id": "session-evidence-PromptVault-invented",
+                    "proposal_kind": "manual_session_search",
+                    "proposed_action": "Use an invented trace.",
+                    "source_trace": "2026-06-09: Invented source trace.",
+                    "confidence": 0.95
+                },
+                {
+                    "candidate_id": "session-evidence-PromptVault-rejected",
+                    "proposal_kind": "reject",
+                    "proposed_action": "Reject unsupported row.",
+                    "source_trace": "2026-06-09: Provider may explicitly reject unsupported rows.",
+                    "confidence": 0.95
+                }
+            ]
+        })
+        .to_string();
+
+        let result = project_work_session_evidence_proposals_from_content(
+            &candidates_result,
+            ProjectWorkSessionEvidenceProposalRuntime {
+                provider: "glm",
+                provider_model: Some("glm-test-model".to_string()),
+                provider_runtime: "glm-chat-completions",
+                used_ai: true,
+            },
+            &candidates,
+            &content,
+            Vec::new(),
+        )
+        .expect("validated session evidence proposals");
+
+        assert_eq!(result.accepted_count, 1);
+        assert_eq!(result.rejected_count, 4);
+        let proposals_by_id = result
+            .proposals
+            .iter()
+            .map(|proposal| (proposal.candidate_id.as_str(), proposal))
+            .collect::<BTreeMap<_, _>>();
+        assert!(proposals_by_id["session-evidence-PromptVault-accepted"].accepted);
+        assert_eq!(
+            proposals_by_id["session-evidence-PromptVault-needs-title"]
+                .rejection_reason
+                .as_deref(),
+            Some("title_normalization_required_first")
+        );
+        assert_eq!(
+            proposals_by_id["session-evidence-PromptVault-low-confidence"]
+                .rejection_reason
+                .as_deref(),
+            Some("low_confidence")
+        );
+        assert_eq!(
+            proposals_by_id["session-evidence-PromptVault-invented"]
+                .rejection_reason
+                .as_deref(),
+            Some("source_trace_not_in_candidate_evidence")
+        );
+        assert_eq!(
+            proposals_by_id["session-evidence-PromptVault-rejected"]
+                .rejection_reason
+                .as_deref(),
+            Some("ai_rejected_candidate")
+        );
     }
 
     #[test]

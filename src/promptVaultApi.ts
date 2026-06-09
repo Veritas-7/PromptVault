@@ -24,6 +24,7 @@ import type {
   ProjectWorkLogReviewQueueResult,
   ProjectWorkReport,
   ProjectWorkSessionEvidenceCandidatesResult,
+  ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
   ProjectWorkStatusExportResult,
@@ -119,6 +120,14 @@ export interface ProjectWorkSessionEvidenceCandidatesOptions {
   limit?: number;
   session_limit?: number;
   refresh_session_index?: boolean;
+}
+
+export interface ProjectWorkSessionEvidenceProposalsOptions {
+  database_path?: string;
+  limit?: number;
+  session_limit?: number;
+  refresh_session_index?: boolean;
+  ai?: boolean;
 }
 
 export interface ProjectWorkSessionEvidenceReviewQueueOptions {
@@ -375,6 +384,22 @@ export async function loadProjectWorkSessionEvidenceCandidates(
     "/api/work-session-evidence-candidates",
     { options },
     parseProjectWorkSessionEvidenceCandidatesResult,
+  );
+}
+
+export async function loadProjectWorkSessionEvidenceProposals(
+  options: ProjectWorkSessionEvidenceProposalsOptions = {},
+): Promise<ProjectWorkSessionEvidenceProposalsResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkSessionEvidenceProposalsResult>(
+      "project_work_session_evidence_proposals",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkSessionEvidenceProposalsResult>(
+    "/api/work-session-evidence-proposals",
+    { options },
+    parseProjectWorkSessionEvidenceProposalsResult,
   );
 }
 
@@ -2371,6 +2396,78 @@ function parseProjectWorkSessionEvidenceCandidatesResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkSessionEvidenceCandidatesResult;
+}
+
+function isProjectWorkSessionEvidenceProposalKind(value: unknown): boolean {
+  return [
+    "source_log_trace",
+    "manual_session_search",
+    "title_normalization_first",
+    "reject",
+  ].includes(String(value));
+}
+
+function isProjectWorkSessionEvidenceProposal(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.candidate_id)
+    && isNonBlankString(value.project)
+    && isNonBlankString(value.date)
+    && isNonBlankString(value.source_path)
+    && isNonBlankString(value.source_file)
+    && isProjectWorkSourceFileRole(value.source_role)
+    && isNonBlankString(value.candidate_reason)
+    && isProjectWorkSessionEvidenceProposalKind(value.proposal_kind)
+    && isNonBlankString(value.proposed_action)
+    && isNonBlankString(value.source_trace)
+    && typeof value.confidence === "number"
+    && Number.isFinite(value.confidence)
+    && value.confidence >= 0
+    && value.confidence <= 1
+    && typeof value.accepted === "boolean"
+    && (value.rejection_reason === null || isNonBlankString(value.rejection_reason))
+    && isPositiveSafeInteger(value.work_item_count)
+    && value.session_evidence_audit === "unresolved-after-full-index"
+    && typeof value.needs_title_normalization === "boolean"
+    && Array.isArray(value.top_titles)
+    && isNonBlankStringArray(value.top_titles)
+    && typeof value.sample_evidence === "string"
+    && Array.isArray(value.risk_flags)
+    && isNonBlankStringArray(value.risk_flags)
+    && (!value.accepted || value.rejection_reason === null)
+    && (value.accepted || value.rejection_reason !== null);
+}
+
+function parseProjectWorkSessionEvidenceProposalsResult(
+  value: unknown,
+): ProjectWorkSessionEvidenceProposalsResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !isNonBlankString(value.provider)
+    || !(value.provider_model === null || isNonBlankString(value.provider_model))
+    || !isNonBlankString(value.provider_runtime)
+    || typeof value.used_ai !== "boolean"
+    || !isNonNegativeSafeInteger(value.total_candidate_count)
+    || !isNonNegativeSafeIntegerAtMost(value.returned_proposal_count, value.total_candidate_count)
+    || !isNonNegativeSafeIntegerAtMost(value.accepted_count, value.returned_proposal_count)
+    || !isNonNegativeSafeIntegerAtMost(value.rejected_count, value.returned_proposal_count)
+    || Number(value.accepted_count) + Number(value.rejected_count) !== value.returned_proposal_count
+    || !isNonNegativeSafeInteger(value.report_total_rows)
+    || !isNonNegativeSafeInteger(value.report_total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.report_project_count, value.report_total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.report_date_count, value.report_total_items)
+    || !isNonNegativeSafeInteger(value.report_files_seen)
+    || !isNonNegativeSafeInteger(value.report_session_evidence_index_count)
+    || !isNonNegativeSafeInteger(value.report_session_evidence_index_total_count)
+    || value.report_session_evidence_index_count > value.report_session_evidence_index_total_count
+    || !Array.isArray(value.proposals)
+    || value.proposals.length !== value.returned_proposal_count
+    || !value.proposals.every(isProjectWorkSessionEvidenceProposal)
+    || !recordStringFieldValuesAreUnique(value.proposals, "candidate_id")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkSessionEvidenceProposalsResult;
 }
 
 function isProjectWorkSessionEvidenceReviewQueueItem(value: unknown): boolean {

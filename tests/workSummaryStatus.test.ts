@@ -36,6 +36,10 @@ import {
   workLogNormalizationReviewQueueFailureText,
   workLogNormalizationReviewQueueItemStateText,
   workLogNormalizationReviewQueueMetaText,
+  workSessionEvidenceProposalStateText,
+  workSessionEvidenceProposalsActionLabel,
+  workSessionEvidenceProposalsFailureText,
+  workSessionEvidenceProposalsMetaText,
   workSessionEvidenceReviewQueueActionLabel,
   workSessionEvidenceReviewQueueFailureText,
   workSessionEvidenceReviewQueueItemStateText,
@@ -94,6 +98,7 @@ import {
   type WorkLogNormalizationApplyState,
   type WorkLogNormalizationProposalsState,
   type WorkLogNormalizationReviewQueueState,
+  type WorkSessionEvidenceProposalsState,
   type WorkSessionEvidenceReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
@@ -115,6 +120,8 @@ import type {
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueItem,
   ProjectWorkLogReviewQueueResult,
+  ProjectWorkSessionEvidenceProposal,
+  ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
   ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
@@ -622,6 +629,61 @@ function sessionEvidenceReviewQueueResult(
     rejected_count: 2,
     needs_title_normalization_count: 12,
     items: [sessionEvidenceReviewQueueItem()],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function sessionEvidenceProposal(
+  overrides: Partial<ProjectWorkSessionEvidenceProposal> = {},
+): ProjectWorkSessionEvidenceProposal {
+  const candidate = sessionEvidenceReviewQueueItem();
+  return {
+    candidate_id: candidate.candidate_id,
+    project: candidate.project,
+    date: candidate.date,
+    source_path: candidate.latest_source_path,
+    source_file: candidate.latest_source_file,
+    source_role: candidate.latest_source_role,
+    candidate_reason: candidate.candidate_reason,
+    proposal_kind: "title_normalization_first",
+    proposed_action: "Normalize the title before linking durable session evidence.",
+    source_trace: candidate.sample_evidence,
+    confidence: 0.91,
+    accepted: true,
+    rejection_reason: null,
+    work_item_count: candidate.work_item_count,
+    session_evidence_audit: candidate.session_evidence_audit,
+    needs_title_normalization: candidate.needs_title_normalization,
+    top_titles: candidate.top_titles,
+    sample_evidence: candidate.sample_evidence,
+    risk_flags: [],
+    ...overrides,
+  };
+}
+
+function sessionEvidenceProposalsResult(
+  overrides: Partial<ProjectWorkSessionEvidenceProposalsResult> = {},
+): ProjectWorkSessionEvidenceProposalsResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    provider: "glm",
+    provider_model: "glm-test-model",
+    provider_runtime: "glm-chat-completions",
+    used_ai: true,
+    total_candidate_count: 44,
+    returned_proposal_count: 5,
+    accepted_count: 2,
+    rejected_count: 3,
+    report_total_rows: 9309,
+    report_total_items: 9309,
+    report_project_count: 31,
+    report_date_count: 26,
+    report_files_seen: 857,
+    report_session_evidence_index_count: 10867,
+    report_session_evidence_index_total_count: 10867,
+    proposals: [sessionEvidenceProposal()],
     warnings: [],
     ...overrides,
   };
@@ -1660,6 +1722,63 @@ test("work log normalization review queue actions keep stale rows approval-safe"
   assert.equal(canRejectWorkLogNormalizationReviewQueueItem(approved), false);
   assert.equal(canApproveWorkLogNormalizationReviewQueueItem(rejected), false);
   assert.equal(canRejectWorkLogNormalizationReviewQueueItem(rejected), false);
+});
+
+test("work session evidence proposal labels describe read-only AI proposals", () => {
+  const failed: WorkSessionEvidenceProposalsState = "failed";
+  assert.equal(
+    workSessionEvidenceProposalsActionLabel("idle", false, lockState()),
+    "세션근거 제안 생성",
+  );
+  assert.equal(
+    workSessionEvidenceProposalsActionLabel("ready", true, lockState()),
+    "세션근거 제안 새로고침",
+  );
+  assert.equal(
+    workSessionEvidenceProposalsActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 세션근거 제안을 새로고침할 수 없습니다",
+  );
+  assert.equal(
+    workSessionEvidenceProposalsMetaText("idle", null),
+    "세션근거 제안 결과 없음",
+  );
+  assert.equal(
+    workSessionEvidenceProposalsMetaText("loading", sessionEvidenceProposalsResult()),
+    "세션근거 제안 생성 중",
+  );
+  assert.equal(
+    workSessionEvidenceProposalsMetaText("ready", sessionEvidenceProposalsResult()),
+    "AI glm/glm-test-model · glm-chat-completions · 후보 44개 · 표시 5개 · 검토가능 2개 · 보류 3개 · 세션인덱스 10,867/10,867",
+  );
+  assert.equal(
+    workSessionEvidenceProposalsMetaText(
+      "ready",
+      sessionEvidenceProposalsResult({ warnings: ["GLM fallback"] }),
+    ),
+    "AI glm/glm-test-model · glm-chat-completions · 후보 44개 · 표시 5개 · 검토가능 2개 · 보류 3개 · 세션인덱스 10,867/10,867 · 경고 1개",
+  );
+  assert.equal(
+    workSessionEvidenceProposalsMetaText(failed, null),
+    "세션근거 제안 결과를 사용할 수 없음",
+  );
+  assert.equal(
+    workSessionEvidenceProposalsFailureText(failed),
+    "세션근거 제안을 생성하지 못했습니다. 세션 인덱스, provider 설정, 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workSessionEvidenceProposalsFailureText("ready"), null);
+  assert.equal(
+    workSessionEvidenceProposalStateText(sessionEvidenceProposal()),
+    "승인 검토 가능 · 제목 정규화 우선 · confidence 0.91 · unresolved-after-full-index",
+  );
+  assert.equal(
+    workSessionEvidenceProposalStateText(sessionEvidenceProposal({
+      accepted: false,
+      rejection_reason: "source_trace_not_in_candidate_evidence",
+      proposal_kind: "manual_session_search",
+      confidence: 0.95,
+    })),
+    "source_trace_not_in_candidate_evidence · 수동 세션 검색 · confidence 0.95 · unresolved-after-full-index",
+  );
 });
 
 test("work session evidence review queue labels describe persisted review rows", () => {

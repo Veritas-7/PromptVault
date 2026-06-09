@@ -19,6 +19,7 @@ import {
   loadStoredPrompts,
   loadProjectWorkSummary,
   loadProjectWorkSessionEvidenceCandidates,
+  loadProjectWorkSessionEvidenceProposals,
   loadProjectWorkSessionEvidenceReviewQueue,
   loadProjectWorkStatusExport,
   runProjectWorkSessionIndex,
@@ -429,6 +430,52 @@ function projectWorkSessionEvidenceCandidatesPayload(overrides = {}) {
       reason: "unresolved_after_full_index,no_session_evidence,needs_title_normalization",
       session_evidence_audit: "unresolved-after-full-index",
       needs_title_normalization: true,
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function projectWorkSessionEvidenceProposalsPayload(overrides = {}) {
+  const candidate = projectWorkSessionEvidenceCandidatesPayload().candidates[0];
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    provider: "glm",
+    provider_model: "glm-test-model",
+    provider_runtime: "glm-chat-completions",
+    used_ai: true,
+    total_candidate_count: 1,
+    returned_proposal_count: 1,
+    accepted_count: 1,
+    rejected_count: 0,
+    report_total_rows: 2,
+    report_total_items: 3,
+    report_project_count: 1,
+    report_date_count: 1,
+    report_files_seen: 2,
+    report_session_evidence_index_count: 500,
+    report_session_evidence_index_total_count: 500,
+    proposals: [{
+      candidate_id: candidate.candidate_id,
+      project: candidate.project,
+      date: candidate.date,
+      source_path: candidate.latest_source_path,
+      source_file: candidate.latest_source_file,
+      source_role: candidate.latest_source_role,
+      candidate_reason: candidate.reason,
+      proposal_kind: "title_normalization_first",
+      proposed_action: "Normalize the rough project/day title before durable session evidence review.",
+      source_trace: candidate.sample_evidence,
+      confidence: 0.91,
+      accepted: true,
+      rejection_reason: null,
+      work_item_count: candidate.work_item_count,
+      session_evidence_audit: candidate.session_evidence_audit,
+      needs_title_normalization: candidate.needs_title_normalization,
+      top_titles: candidate.top_titles,
+      sample_evidence: candidate.sample_evidence,
+      risk_flags: [],
     }],
     warnings: [],
     ...overrides,
@@ -964,6 +1011,89 @@ test("browser bridge work session evidence candidates rejects inconsistent count
 
   await assert.rejects(
     () => loadProjectWorkSessionEvidenceCandidates(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /session-evidence-PromptVault|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work session evidence proposals posts options and validates source traces", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionEvidenceProposalsPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkSessionEvidenceProposals({
+    limit: 10,
+    session_limit: 500,
+    refresh_session_index: true,
+    ai: true,
+  });
+
+  assert.match(requestPath, /\/api\/work-session-evidence-proposals$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      limit: 10,
+      session_limit: 500,
+      refresh_session_index: true,
+      ai: true,
+    },
+  });
+  assert.equal(result.provider, "glm");
+  assert.equal(result.provider_model, "glm-test-model");
+  assert.equal(result.used_ai, true);
+  assert.equal(result.accepted_count, 1);
+  assert.equal(result.proposals[0].source_trace, "Added full-index evidence review candidate.");
+  assert.equal(result.proposals[0].source_role, "handoff-log");
+  assert.equal(result.proposals[0].rejection_reason, null);
+});
+
+test("browser bridge work session evidence proposals rejects inconsistent acceptance counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSessionEvidenceProposalsPayload({
+    accepted_count: 1,
+    rejected_count: 1,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkSessionEvidenceProposals(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /session-evidence-PromptVault|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work session evidence proposals reject accepted rows with rejection reasons", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSessionEvidenceProposalsPayload({
+    proposals: [{
+      ...projectWorkSessionEvidenceProposalsPayload().proposals[0],
+      accepted: true,
+      rejection_reason: "low_confidence",
+    }],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkSessionEvidenceProposals(),
     (error) => {
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);

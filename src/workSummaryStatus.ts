@@ -17,6 +17,8 @@ import type {
   ProjectWorkLogNormalizationReviewQueueItem,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
+  ProjectWorkSessionEvidenceProposal,
+  ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
   ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
@@ -41,6 +43,7 @@ export type WorkLogNormalizationCandidatesState = "idle" | "loading" | "ready" |
 export type WorkLogNormalizationProposalsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogNormalizationReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogNormalizationApplyState = "idle" | "loading" | "ready" | "failed";
+export type WorkSessionEvidenceProposalsState = "idle" | "loading" | "ready" | "failed";
 export type WorkSessionEvidenceReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementFreezeState = "idle" | "loading" | "ready" | "failed";
@@ -1050,6 +1053,77 @@ export function workLogNormalizationReviewQueueItemStateText(
     proposalText,
     providerText,
     `confidence ${item.confidence.toFixed(2)}`,
+  ].join(" · ");
+}
+
+export function workSessionEvidenceProposalsActionLabel(
+  state: WorkSessionEvidenceProposalsState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "세션근거 제안 생성 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 세션근거 제안을 ${hasResult ? "새로고침" : "생성"}할 수 없습니다`;
+  }
+  return hasResult ? "세션근거 제안 새로고침" : "세션근거 제안 생성";
+}
+
+export function workSessionEvidenceProposalsMetaText(
+  state: WorkSessionEvidenceProposalsState,
+  result: ProjectWorkSessionEvidenceProposalsResult | null,
+): string {
+  if (state === "loading") return "세션근거 제안 생성 중";
+  if (!result) {
+    return state === "failed"
+      ? "세션근거 제안 결과를 사용할 수 없음"
+      : "세션근거 제안 결과 없음";
+  }
+  const providerText = result.used_ai
+    ? `AI ${result.provider}${result.provider_model ? `/${result.provider_model}` : ""}`
+    : `로컬 ${result.provider}`;
+  const parts = [
+    providerText,
+    result.provider_runtime,
+    `후보 ${result.total_candidate_count.toLocaleString()}개`,
+    `표시 ${result.returned_proposal_count.toLocaleString()}개`,
+    `검토가능 ${result.accepted_count.toLocaleString()}개`,
+    `보류 ${result.rejected_count.toLocaleString()}개`,
+    `세션인덱스 ${result.report_session_evidence_index_count.toLocaleString()}/${result.report_session_evidence_index_total_count.toLocaleString()}`,
+  ];
+  if (result.warnings.length > 0) {
+    parts.push(`경고 ${result.warnings.length.toLocaleString()}개`);
+  }
+  return parts.join(" · ");
+}
+
+export function workSessionEvidenceProposalsFailureText(
+  state: WorkSessionEvidenceProposalsState,
+): string | null {
+  if (state !== "failed") return null;
+  return "세션근거 제안을 생성하지 못했습니다. 세션 인덱스, provider 설정, 브리지 상태를 확인하세요.";
+}
+
+export function workSessionEvidenceProposalKindText(
+  proposal: ProjectWorkSessionEvidenceProposal,
+): string {
+  if (proposal.proposal_kind === "source_log_trace") return "소스 로그 trace";
+  if (proposal.proposal_kind === "manual_session_search") return "수동 세션 검색";
+  if (proposal.proposal_kind === "title_normalization_first") return "제목 정규화 우선";
+  return "보류";
+}
+
+export function workSessionEvidenceProposalStateText(
+  proposal: ProjectWorkSessionEvidenceProposal,
+): string {
+  const stateText = proposal.accepted
+    ? "승인 검토 가능"
+    : proposal.rejection_reason ?? "보류";
+  return [
+    stateText,
+    workSessionEvidenceProposalKindText(proposal),
+    `confidence ${proposal.confidence.toFixed(2)}`,
+    proposal.session_evidence_audit,
   ].join(" · ");
 }
 

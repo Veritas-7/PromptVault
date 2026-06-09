@@ -304,6 +304,50 @@ export interface ProjectWorkSessionEvidenceCandidatesResult {
   warnings: string[];
 }
 
+export interface ProjectWorkSessionEvidenceProposal {
+  candidate_id: string;
+  project: string;
+  date: string;
+  source_path: string;
+  source_file: string;
+  source_role: string;
+  candidate_reason: string;
+  proposal_kind: string;
+  proposed_action: string;
+  source_trace: string;
+  confidence: number;
+  accepted: boolean;
+  rejection_reason: string | null;
+  work_item_count: number;
+  session_evidence_audit: string;
+  needs_title_normalization: boolean;
+  top_titles: string[];
+  sample_evidence: string;
+  risk_flags: string[];
+}
+
+export interface ProjectWorkSessionEvidenceProposalsResult {
+  generated_at: string;
+  database_path: string;
+  provider: string;
+  provider_model: string | null;
+  provider_runtime: string;
+  used_ai: boolean;
+  total_candidate_count: number;
+  returned_proposal_count: number;
+  accepted_count: number;
+  rejected_count: number;
+  report_total_rows: number;
+  report_total_items: number;
+  report_project_count: number;
+  report_date_count: number;
+  report_files_seen: number;
+  report_session_evidence_index_count: number;
+  report_session_evidence_index_total_count: number;
+  proposals: ProjectWorkSessionEvidenceProposal[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSessionEvidenceReviewQueueItem {
   candidate_id: string;
   first_seen_at: string;

@@ -1,10 +1,117 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 00:19 KST
+Updated: 2026-06-10 00:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 session evidence proposal contract
+
+Current Goal:
+
+- Add a read-only session-evidence proposal surface for project/day rows that
+  remain unresolved after the full stored session index.
+- Use explicit source trace copied from project-local work logs or row titles;
+  reject any proposal that invents source trace or session evidence.
+- Keep durable apply blocked in this slice. Operator approval and later apply
+  gates must remain separate from proposal generation.
+
+Context:
+
+- Live checks before the slice showed project/day work management already
+  parsed `857` progress artifacts, with `856` parsed files and `9309` work
+  items across `31` projects and `26` days.
+- After this slice, the default database reported `98` project/day rows,
+  `9336` work items, `858` progress artifacts, `31` projects, `26` days, and
+  stored session evidence index coverage `10867 / 10867`.
+- The current default database still has `44` unresolved full-index
+  session-evidence candidates. The new proposal surface returns read-only
+  review proposals for those rows instead of claiming durable resolution.
+- Existing work-log extraction/normalization lanes already use OpenAI/GLM with
+  local fallbacks. This slice reused that pattern for session-evidence proposal
+  generation with stricter source-trace validation.
+
+Progress:
+
+- Added a backend `work-session-evidence-proposals` contract.
+- Added OpenAI Responses, GLM chat-completions, and deterministic local fallback
+  provider routes.
+- Added validation that accepts only proposal kinds from a fixed enum, requires
+  `source_trace` to be copied from candidate titles/sample evidence, rejects
+  low-confidence or invented traces, and forces title normalization before
+  session-link proposals when the candidate title is rough.
+- Added CLI command and browser bridge endpoint:
+  `/api/work-session-evidence-proposals`.
+- Added TypeScript API parser, app state, action button, meta text, failure
+  notice, and read-only proposal rows.
+- Updated isolated browser bridge QA so it checks direct proposal endpoint
+  counters and the new UI button/list.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added proposal options/result structs, provider/fallback orchestration,
+    JSON-schema prompts, source-trace validation, and Rust tests.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added CLI command, bridge payload/route, help text, and bridge validation
+    tests.
+- `src/types.ts`, `src/promptVaultApi.ts`, and `src/workSummaryStatus.ts`:
+  - added strict TS result types, parsers, labels, meta text, and state text.
+- `src/App.tsx`:
+  - added `세션근거 제안` action, loading/error/meta state, and read-only row
+    rendering between normalization review queue and session-evidence review
+    queue.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`:
+  - added API parser and UI helper coverage for accepted/rejected proposal
+    semantics.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - validates direct bridge proposal calls and UI proposal rows.
+- `README.md` and `docs/CLI.md`:
+  - documented the read-only proposal command and bridge endpoint.
+
+Tests:
+
+- PASS: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_proposals -- --nocapture`
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli work_session_evidence_proposals -- --nocapture`
+- PASS: `npm run build`
+- PASS: `cargo check --manifest-path src-tauri/Cargo.toml`
+- PASS: `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-session-evidence-proposals --limit 5 --json`
+  - default DB result: provider `local-session-evidence-rules`, candidates
+    `44`, returned proposals `5`, accepted `0`, rejected `5`, rows `98`,
+    work items `9336`, files `858`, session index `10867 / 10867`.
+- PASS: `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-session-evidence-proposals --limit 2 --ai --json`
+  - GLM provider branch was attempted, returned a request failure warning, and
+    safely fell back to local review-only proposals.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml`
+  - Rust lib `205` tests, CLI `34` tests.
+- PASS: `npm run check`
+  - UI tests `485`, build, Rust tests, and clippy completed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - isolated DB result included session proposal bridge `5 / 65`, proposal UI
+    `40 / 65`, session index `349 / 349`, and no console/HTTP errors.
+
+Issues:
+
+- cmux-specific in-app browser testing remains excluded in this environment;
+  the checked-in browser bridge QA is the active substitute.
+- Live `--ai` proposal verification reached the GLM route but the configured
+  GLM endpoint request failed in this environment; fallback behavior was
+  verified and reported as a warning.
+
+Research:
+
+- No external research needed yet; reusing the existing provider/fallback
+  pattern.
+
+Next Steps:
+
+- Decide whether the next slice should persist accepted session-evidence
+  proposals into a review/apply queue, or first improve provider credentials and
+  prompt tuning so AI proposals can produce accepted rows in live verification.
 
 ## Completed Slice - 2026-06-10 source artifact role classification
 

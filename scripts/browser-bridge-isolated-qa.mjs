@@ -456,6 +456,10 @@ async function runBrowserQa() {
   let workStatusExportUnresolvedFixtureRowDetail = "";
   let workSessionEvidenceCandidatesMeta = "";
   let workSessionEvidenceCandidateRows = [];
+  let workSessionEvidenceProposalsMeta = "";
+  let workSessionEvidenceProposalRows = [];
+  let workSessionEvidenceProposalsUiMeta = "";
+  let workSessionEvidenceProposalsUiRows = [];
   let workSessionEvidenceReviewQueueMeta = "";
   let workSessionEvidenceReviewQueueRows = [];
   let workSessionEvidenceReviewQueueStateAfterApprove = "";
@@ -879,6 +883,53 @@ async function runBrowserQa() {
       .map((candidate) =>
         `${candidate.project} · ${candidate.date} · ${candidate.latest_source_file} · ${candidate.latest_source_role}`
       );
+    step("work session evidence proposals bridge");
+    const workSessionEvidenceProposals = await bridgeJson(
+      page,
+      "/api/work-session-evidence-proposals",
+      { options: { limit: 5, ai: false } },
+    );
+    if (workSessionEvidenceProposals.database_path !== DATABASE_PATH) {
+      throw new Error(
+        `Session evidence proposals did not use isolated DB: ${workSessionEvidenceProposals.database_path}`,
+      );
+    }
+    if (
+      workSessionEvidenceProposals.provider !== "local-session-evidence-rules"
+      || workSessionEvidenceProposals.used_ai !== false
+      || workSessionEvidenceProposals.returned_proposal_count
+        !== workSessionEvidenceProposals.proposals.length
+      || workSessionEvidenceProposals.returned_proposal_count
+        > workSessionEvidenceProposals.total_candidate_count
+      || workSessionEvidenceProposals.accepted_count !== 0
+      || workSessionEvidenceProposals.rejected_count
+        !== workSessionEvidenceProposals.returned_proposal_count
+      || workSessionEvidenceProposals.report_session_evidence_index_count
+        > workSessionEvidenceProposals.report_session_evidence_index_total_count
+    ) {
+      throw new Error(`Invalid session evidence proposal counters: ${JSON.stringify(workSessionEvidenceProposals)}`);
+    }
+    if (
+      workSessionEvidenceProposals.proposals.some((proposal) =>
+        proposal.accepted
+        || proposal.rejection_reason === null
+        || proposal.session_evidence_audit !== "unresolved-after-full-index"
+        || !proposal.source_trace.trim()
+      )
+    ) {
+      throw new Error(`Invalid local session evidence proposals: ${JSON.stringify(workSessionEvidenceProposals.proposals)}`);
+    }
+    workSessionEvidenceProposalsMeta = [
+      `${workSessionEvidenceProposals.provider_runtime}`,
+      `제안 ${workSessionEvidenceProposals.returned_proposal_count} / ${workSessionEvidenceProposals.total_candidate_count}`,
+      `검토가능 ${workSessionEvidenceProposals.accepted_count}`,
+      `보류 ${workSessionEvidenceProposals.rejected_count}`,
+      `세션 ${workSessionEvidenceProposals.report_session_evidence_index_count} / ${workSessionEvidenceProposals.report_session_evidence_index_total_count}`,
+    ].join(" · ");
+    workSessionEvidenceProposalRows = workSessionEvidenceProposals.proposals
+      .map((proposal) =>
+        `${proposal.project} · ${proposal.date} · ${proposal.proposal_kind} · ${proposal.rejection_reason} · ${proposal.source_role}`
+      );
     step("work session evidence review queue bridge");
     const workSessionEvidenceReviewQueue = await bridgeJson(
       page,
@@ -952,6 +1003,26 @@ async function runBrowserQa() {
     } else {
       workSessionEvidenceReviewQueueStateAfterApprove = "no session evidence review candidates";
     }
+    step("work session evidence proposals UI");
+    await waitForEnabled(page, '[data-load-work-session-evidence-proposals="true"]');
+    await page.locator('[data-load-work-session-evidence-proposals="true"]').click();
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-session-evidence-proposals-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-session-evidence-proposals="true"] article'));
+      return meta.includes("세션인덱스")
+        && meta.includes("후보")
+        && meta.includes("표시")
+        && rows.some((row) => {
+          const text = row.textContent ?? "";
+          return text.includes("unresolved-after-full-index")
+            && text.includes("provider")
+            && (text.includes("승인 검토 가능") || text.includes("local_fallback_requires"));
+        });
+    }, undefined, { timeout: 120000 });
+    workSessionEvidenceProposalsUiMeta =
+      (await page.locator('[data-work-session-evidence-proposals-meta="true"]').textContent())?.trim() ?? "";
+    workSessionEvidenceProposalsUiRows =
+      await page.locator('[data-work-session-evidence-proposals="true"] article').allTextContents();
     step("work session evidence review queue UI");
     await waitForEnabled(page, '[data-sync-work-session-evidence-review-queue="true"]');
     await page.locator('[data-sync-work-session-evidence-review-queue="true"]').click();
@@ -1421,6 +1492,10 @@ async function runBrowserQa() {
       workStatusExportUnresolvedFixtureRowDetail,
       workSessionEvidenceCandidatesMeta,
       workSessionEvidenceCandidateRows,
+      workSessionEvidenceProposalsMeta,
+      workSessionEvidenceProposalRows,
+      workSessionEvidenceProposalsUiMeta,
+      workSessionEvidenceProposalsUiRows,
       workSessionEvidenceReviewQueueMeta,
       workSessionEvidenceReviewQueueRows,
       workSessionEvidenceReviewQueueStateAfterApprove,

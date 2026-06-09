@@ -120,6 +120,7 @@ import {
   applyProjectWorkLogNormalizationQueue,
   listProjectWorkLogNormalizedItems,
   loadProjectWorkLogReviewQueue,
+  loadProjectWorkSessionEvidenceProposals,
   loadProjectWorkSessionEvidenceReviewQueue,
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
@@ -260,6 +261,7 @@ import type {
   ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
+  ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceReviewQueueResult,
   PromptRecord,
   ProjectWorkSessionIndexResult,
@@ -306,6 +308,10 @@ import {
   workLogNormalizationReviewQueueMetaText,
   canApproveWorkLogNormalizationReviewQueueItem,
   canRejectWorkLogNormalizationReviewQueueItem,
+  workSessionEvidenceProposalStateText,
+  workSessionEvidenceProposalsActionLabel,
+  workSessionEvidenceProposalsFailureText,
+  workSessionEvidenceProposalsMetaText,
   workSessionEvidenceReviewQueueActionLabel,
   workSessionEvidenceReviewQueueFailureText,
   workSessionEvidenceReviewQueueItemStateText,
@@ -364,6 +370,7 @@ import {
   type WorkLogNormalizationApplyState,
   type WorkLogNormalizationProposalsState,
   type WorkLogNormalizationReviewQueueState,
+  type WorkSessionEvidenceProposalsState,
   type WorkSessionEvidenceReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
@@ -410,6 +417,8 @@ const WORK_LOG_NORMALIZATION_PROPOSAL_DISPLAY_LIMIT = 5;
 const WORK_LOG_NORMALIZATION_PROPOSAL_MANAGEMENT_LIMIT = 40;
 const WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
 const WORK_LOG_NORMALIZATION_REVIEW_QUEUE_MANAGEMENT_LIMIT = 40;
+const WORK_SESSION_EVIDENCE_PROPOSAL_DISPLAY_LIMIT = 5;
+const WORK_SESSION_EVIDENCE_PROPOSAL_MANAGEMENT_LIMIT = 40;
 const WORK_SESSION_EVIDENCE_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
 const WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT = 40;
 const WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT = 5;
@@ -646,6 +655,8 @@ function App() {
     useState<WorkLogNormalizationReviewQueueState>("idle");
   const [workLogNormalizationApplyState, setWorkLogNormalizationApplyState] =
     useState<WorkLogNormalizationApplyState>("idle");
+  const [workSessionEvidenceProposalsState, setWorkSessionEvidenceProposalsState] =
+    useState<WorkSessionEvidenceProposalsState>("idle");
   const [workSessionEvidenceReviewQueueState, setWorkSessionEvidenceReviewQueueState] =
     useState<WorkSessionEvidenceReviewQueueState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
@@ -698,6 +709,8 @@ function App() {
     useState<ProjectWorkLogNormalizationReviewQueueResult | null>(null);
   const [workLogNormalizationApplyResult, setWorkLogNormalizationApplyResult] =
     useState<ProjectWorkLogNormalizationApplyResult | null>(null);
+  const [workSessionEvidenceProposalsResult, setWorkSessionEvidenceProposalsResult] =
+    useState<ProjectWorkSessionEvidenceProposalsResult | null>(null);
   const [workSessionEvidenceReviewQueueResult, setWorkSessionEvidenceReviewQueueResult] =
     useState<ProjectWorkSessionEvidenceReviewQueueResult | null>(null);
   const [workLogNormalizedItemsResult, setWorkLogNormalizedItemsResult] =
@@ -786,6 +799,7 @@ function App() {
     || workLogNormalizationProposalsState === "loading"
     || workLogNormalizationReviewQueueState === "loading"
     || workLogNormalizationApplyState === "loading"
+    || workSessionEvidenceProposalsState === "loading"
     || workSessionEvidenceReviewQueueState === "loading"
     || workManagementRefreshState === "loading"
     || workManagementFreezeState === "loading";
@@ -1049,6 +1063,12 @@ function App() {
     workLogNormalizationReviewQueueState,
     workLogNormalizationReviewQueueResult,
   );
+  const workSessionEvidenceProposalsFailureMessage =
+    workSessionEvidenceProposalsFailureText(workSessionEvidenceProposalsState);
+  const workSessionEvidenceProposalsMeta = workSessionEvidenceProposalsMetaText(
+    workSessionEvidenceProposalsState,
+    workSessionEvidenceProposalsResult,
+  );
   const workSessionEvidenceReviewQueueFailureMessage =
     workSessionEvidenceReviewQueueFailureText(workSessionEvidenceReviewQueueState);
   const workSessionEvidenceReviewQueueMeta = workSessionEvidenceReviewQueueMetaText(
@@ -1175,6 +1195,11 @@ function App() {
       0,
       WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT,
     ) ?? [];
+  const visibleWorkSessionEvidenceProposals =
+    workSessionEvidenceProposalsResult?.proposals.slice(
+      0,
+      WORK_SESSION_EVIDENCE_PROPOSAL_DISPLAY_LIMIT,
+    ) ?? [];
   const visibleWorkSessionEvidenceReviewQueueItems =
     workSessionEvidenceReviewQueueResult?.items.slice(
       0,
@@ -1210,6 +1235,11 @@ function App() {
     (workLogNormalizationReviewQueueResult?.items.length ?? 0)
       - WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT,
   );
+  const hiddenWorkSessionEvidenceProposalCount = Math.max(
+    0,
+    (workSessionEvidenceProposalsResult?.proposals.length ?? 0)
+      - WORK_SESSION_EVIDENCE_PROPOSAL_DISPLAY_LIMIT,
+  );
   const hiddenWorkSessionEvidenceReviewQueueItemCount = Math.max(
     0,
     (workSessionEvidenceReviewQueueResult?.items.length ?? 0)
@@ -1230,6 +1260,7 @@ function App() {
     || workLogNormalizationProposalsResult !== null
     || workLogNormalizationReviewQueueResult !== null
     || workLogNormalizationApplyResult !== null
+    || workSessionEvidenceProposalsResult !== null
     || workSessionEvidenceReviewQueueResult !== null
     || workLogNormalizedItemsResult !== null
     || workLogCoverageResult !== null;
@@ -1644,6 +1675,27 @@ function App() {
       setWorkLogNormalizationReviewQueueState("failed");
     } finally {
       setWorkLogNormalizationReviewQueueUpdatingCandidateId(null);
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function loadWorkSessionEvidenceProposals() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSessionEvidenceProposalsState("loading");
+    try {
+      const next = await loadProjectWorkSessionEvidenceProposals({
+        ai: true,
+        limit: WORK_SESSION_EVIDENCE_PROPOSAL_MANAGEMENT_LIMIT,
+      });
+      setWorkSessionEvidenceProposalsResult(next);
+      setWorkSessionEvidenceProposalsState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSessionEvidenceProposalsState("failed");
+    } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
@@ -3027,6 +3079,25 @@ function App() {
                 : "정규화 큐"}
             </button>
             <button
+              aria-label={workSessionEvidenceProposalsActionLabel(
+                workSessionEvidenceProposalsState,
+                workSessionEvidenceProposalsResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-session-evidence-proposals="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void loadWorkSessionEvidenceProposals()}
+              type="button"
+            >
+              <Sparkles size={15} />
+              {workSessionEvidenceProposalsState === "loading"
+                ? "세션근거 제안 중"
+                : workSessionEvidenceProposalsResult
+                  ? "세션근거 제안 새로고침"
+                  : "세션근거 제안"}
+            </button>
+            <button
               aria-label={workSessionEvidenceReviewQueueActionLabel(
                 workSessionEvidenceReviewQueueState,
                 workSessionEvidenceReviewQueueResult !== null,
@@ -3356,6 +3427,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workLogNormalizationReviewQueueFailureMessage}</span>
+          </div>
+        ) : null}
+        {workSessionEvidenceProposalsFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-session-evidence-proposals-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workSessionEvidenceProposalsFailureMessage}</span>
           </div>
         ) : null}
         {workSessionEvidenceReviewQueueFailureMessage ? (
@@ -4009,6 +4090,12 @@ function App() {
             <span>{workLogNormalizationReviewQueueMeta}</span>
           </div>
         ) : null}
+        {workSessionEvidenceProposalsResult || workSessionEvidenceProposalsState !== "idle" ? (
+          <div className="work-summary-index" data-work-session-evidence-proposals-meta="true">
+            <Sparkles size={15} />
+            <span>{workSessionEvidenceProposalsMeta}</span>
+          </div>
+        ) : null}
         {workSessionEvidenceReviewQueueResult || workSessionEvidenceReviewQueueState !== "idle" ? (
           <div className="work-summary-index" data-work-session-evidence-review-queue-meta="true">
             <ShieldCheck size={15} />
@@ -4647,6 +4734,53 @@ function App() {
           ) : (
             <div className="empty compact" data-empty-work-log-normalization-review-queue="true">
               저장된 정규화 검토 큐 없음
+            </div>
+          )
+        ) : null}
+        {workSessionEvidenceProposalsResult ? (
+          visibleWorkSessionEvidenceProposals.length ? (
+            <div className="work-summary-list" data-work-session-evidence-proposals="true">
+              {visibleWorkSessionEvidenceProposals.map((proposal) => (
+                <article
+                  className="work-summary-row work-log-proposal-row"
+                  key={proposal.candidate_id}
+                >
+                  <div>
+                    <strong>{proposal.project}</strong>
+                    <span>{proposal.date}</span>
+                  </div>
+                  <p>{proposal.proposed_action}</p>
+                  <p className="work-log-proposal-evidence">{proposal.source_trace}</p>
+                  <span data-work-session-evidence-proposal-state={proposal.candidate_id}>
+                    {workSessionEvidenceProposalStateText(proposal)}
+                  </span>
+                  <span>
+                    provider {workSessionEvidenceProposalsResult.provider_runtime}
+                    {workSessionEvidenceProposalsResult.provider_model
+                      ? ` · model ${workSessionEvidenceProposalsResult.provider_model}`
+                      : ""}
+                    {workSessionEvidenceProposalsResult.used_ai ? " · AI" : " · local"}
+                  </span>
+                  <span>
+                    작업 {proposal.work_item_count.toLocaleString()}개 ·{" "}
+                    {proposal.source_file} · {proposal.source_role} ·{" "}
+                    {proposal.candidate_reason}
+                  </span>
+                  {proposal.risk_flags.length ? (
+                    <span>위험표시 {proposal.risk_flags.map(riskFlagLabel).join(", ")}</span>
+                  ) : null}
+                  <span>{proposal.source_path}</span>
+                </article>
+              ))}
+              {hiddenWorkSessionEvidenceProposalCount ? (
+                <div className="work-summary-overflow">
+                  그 외 세션근거 제안 {hiddenWorkSessionEvidenceProposalCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-session-evidence-proposals="true">
+              생성된 세션근거 제안 없음
             </div>
           )
         ) : null}

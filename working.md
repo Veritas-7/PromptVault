@@ -1,10 +1,94 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 22:58 KST
+Updated: 2026-06-09 23:05 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-09 full-index unresolved filter QA fixture
+
+Current Goal:
+
+- Directly click-test the `전체 인덱스 미해결` status export filter branch
+  without making the default browser QA run a slow full-session export.
+- Keep the default QA bounded and fast while still proving the full-index
+  unresolved filter path renders the right row and detail text.
+
+Context:
+
+- The previous slice added UI filters for both `bounded-session-limit` and
+  `unresolved-session-evidence`.
+- The live bounded browser QA naturally produced only
+  `bounded-session-limit` rows, so the full-index unresolved branch had unit
+  coverage but not browser-click coverage.
+- For default operator QA, forcing a full `10,867 / 10,867` evidence export
+  inside the browser run would slow the whole suite. A controlled one-shot
+  bridge fixture is the better coverage point.
+
+Progress:
+
+- Added a mocked work-status-export fixture containing:
+  - one `unresolved-after-full-index` row with no session evidence;
+  - one `matched` session-supported row.
+- Added a `withMockedWorkStatusExport` one-shot Playwright route helper.
+- Extended browser-bridge QA to:
+  - reload status export from the mocked full-index fixture;
+  - select `unresolved-session-evidence`;
+  - assert meta text shows `전체미해결 1행`;
+  - open the row detail and assert
+    `매칭된 세션 근거 없음 · 전체 인덱스에서도 미해결`.
+
+Changes:
+
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added `unresolvedWorkStatusExportFixture`;
+  - added `withMockedWorkStatusExport`;
+  - added `work status export unresolved fixture` QA step and result fields.
+- `working.md`:
+  - recorded this fixture coverage slice and the remaining AI-review work.
+
+Tests:
+
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `npm run check`: PASS.
+  - UI tests: `474` passed.
+  - Production build: passed.
+  - Rust lib tests: `200` passed.
+  - CLI tests: `31` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  Evidence from isolated browser result:
+  - `workStatusExportUnresolvedFixtureMeta` showed
+    `필터 전체 인덱스 미해결 · 결과 1 / 2행 · 세션근거 필요 1행 · 근거limit 0행 · 전체미해결 1행 · 제목정규화 필요 1행`;
+  - `workStatusExportUnresolvedFixtureRows` contained the `QAFixture`
+    unresolved row only;
+  - `workStatusExportUnresolvedFixtureRowDetail` showed
+    `매칭된 세션 근거 없음 · 전체 인덱스에서도 미해결`;
+  - the rest of the browser QA completed through work management, freeze,
+    extraction, normalization, review queue, apply, run history, and saved
+    items.
+
+Issues:
+
+- This proves browser rendering/filter behavior for unresolved rows, not actual
+  resolution of the production `36 / 91` full-index unresolved rows.
+- The next functional gap remains an AI/manual evidence review queue that can
+  process those unresolved rows with source trace and approval gates.
+
+Research:
+
+- No external research was needed. This slice used the existing Playwright route
+  fixture pattern already used for normalization queue states.
+
+Next Steps:
+
+- Build an AI-assisted evidence review queue for
+  `unresolved-after-full-index` rows, keeping source trace, confidence, and
+  operator approval before durable writes.
+- Consider a UI affordance for loading a full-index status export explicitly
+  when an operator wants live full evidence counts instead of bounded counts.
 
 ## Completed Slice - 2026-06-09 session evidence audit filters
 
@@ -102,9 +186,6 @@ Research:
 
 Next Steps:
 
-- Add a dedicated full-index unresolved filter/browser QA path, likely via a
-  controlled fixture or a full-index CLI/UI mode, so the `전체 인덱스 미해결`
-  branch is click-tested without slowing the default bounded QA.
 - Build an AI-assisted evidence review queue for
   `unresolved-after-full-index` rows, keeping source trace and operator
   approval gates before durable writes.

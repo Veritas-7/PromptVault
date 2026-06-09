@@ -220,6 +220,75 @@ function rejectedAiNormalizationReviewQueueFixtureFromItem(item) {
   };
 }
 
+function unresolvedWorkStatusExportFixture() {
+  const now = new Date().toISOString();
+  return {
+    generated_at: now,
+    markdown: [
+      "# PromptVault Project/Day Work Status",
+      "",
+      "## Project/Day Rows",
+      "",
+      "- QAFixture · 2026-06-09 · full-index unresolved session evidence",
+    ].join("\n"),
+    total_row_count: 2,
+    row_offset: 0,
+    returned_row_count: 2,
+    next_row_offset: null,
+    rows_truncated: false,
+    report_total_items: 4,
+    report_project_count: 2,
+    report_date_count: 1,
+    report_files_seen: 2,
+    report_session_scan_prompt_count: 10867,
+    report_session_evidence_count: 12,
+    report_unique_session_evidence_count: 3,
+    report_session_evidence_index_used: true,
+    report_session_evidence_index_updated: false,
+    report_session_evidence_index_count: 10867,
+    report_session_evidence_index_total_count: 10867,
+    report_session_evidence_mode: "metadata-first-raw-fallback",
+    rows: [{
+      date: "2026-06-09",
+      project: "QAFixture",
+      operational_status: "progress-log-only",
+      source_statuses: [{ text: "logged", count: 2 }],
+      work_item_count: 2,
+      source_file_count: 1,
+      source_files: ["working.md"],
+      top_titles: ["Full index unresolved fixture"],
+      sample_evidence: "2026-06-09: Full index unresolved fixture evidence.",
+      latest_source_path: "/tmp/QAFixture/working.md",
+      latest_source_file: "working.md",
+      session_evidence_count: 0,
+      unique_session_evidence_count: 0,
+      session_sources: [],
+      needs_session_evidence: true,
+      session_evidence_audit: "unresolved-after-full-index",
+      needs_title_normalization: true,
+    }, {
+      date: "2026-06-09",
+      project: "QASupported",
+      operational_status: "session-supported",
+      source_statuses: [{ text: "done", count: 2 }],
+      work_item_count: 2,
+      source_file_count: 1,
+      source_files: ["working.md"],
+      top_titles: ["Session supported fixture"],
+      sample_evidence: "2026-06-09: Supported fixture evidence.",
+      latest_source_path: "/tmp/QASupported/working.md",
+      latest_source_file: "working.md",
+      session_evidence_count: 12,
+      unique_session_evidence_count: 3,
+      session_sources: [{ text: "Codex local sessions", count: 12 }],
+      needs_session_evidence: false,
+      session_evidence_audit: "matched",
+      needs_title_normalization: false,
+    }],
+    warnings: [],
+  };
+}
+
 function waitForHttp(url, timeoutMs) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
@@ -329,6 +398,28 @@ async function withMockedNormalizationReviewQueue(page, result, callback) {
   }
 }
 
+async function withMockedWorkStatusExport(page, result, callback) {
+  const url = `http://${HOST}:${BRIDGE_PORT}/api/work-status-export`;
+  let fulfilled = false;
+  await page.route(url, async (route) => {
+    if (route.request().method() !== "POST" || fulfilled) {
+      await route.continue();
+      return;
+    }
+    fulfilled = true;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(result),
+    });
+  });
+  try {
+    await callback();
+  } finally {
+    await page.unroute(url);
+  }
+}
+
 async function runBrowserQa() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -356,6 +447,9 @@ async function runBrowserQa() {
   let workStatusExportBoundedFilterMeta = "";
   let workStatusExportBoundedFilteredRows = [];
   let workStatusExportBoundedFilteredRowDetail = "";
+  let workStatusExportUnresolvedFixtureMeta = "";
+  let workStatusExportUnresolvedFixtureRows = [];
+  let workStatusExportUnresolvedFixtureRowDetail = "";
   let workStatusExportMarkdown = "";
   let workSummaryIndex = "";
   let workSessionIndexBackfill = null;
@@ -696,6 +790,37 @@ async function runBrowserQa() {
       (await page.locator('[data-work-status-export-row-detail="true"]').first().textContent())?.trim() ?? "";
     workStatusExportMarkdown =
       (await page.locator('[data-work-status-export-markdown="true"]').textContent())?.trim() ?? "";
+    step("work status export unresolved fixture");
+    await withMockedWorkStatusExport(page, unresolvedWorkStatusExportFixture(), async () => {
+      await page.locator('[data-load-work-status-export="true"]').click();
+      await page.waitForFunction(() => {
+        const meta = document.querySelector('[data-work-status-export-meta="true"]')?.textContent ?? "";
+        const markdown = document.querySelector('[data-work-status-export-markdown="true"]')?.textContent ?? "";
+        return meta.includes("표시 2행")
+          && meta.includes("2개 프로젝트")
+          && markdown.includes("full-index unresolved session evidence");
+      }, undefined, { timeout: 30000 });
+    });
+    await page.locator('[data-work-status-export-filter="true"]').selectOption("unresolved-session-evidence");
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-status-export-filter-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-status-export-row="true"]'));
+      return meta.includes("전체 인덱스 미해결")
+        && meta.includes("전체미해결 1행")
+        && rows.length === 1
+        && rows.every((row) => (row.textContent ?? "").includes("세션 근거 필요"));
+    }, undefined, { timeout: 30000 });
+    workStatusExportUnresolvedFixtureMeta =
+      (await page.locator('[data-work-status-export-filter-meta="true"]').textContent())?.trim() ?? "";
+    workStatusExportUnresolvedFixtureRows =
+      await page.locator('[data-work-status-export-row="true"]').allTextContents();
+    await page.locator('[data-work-status-export-row-toggle="true"]').first().click();
+    await page.waitForFunction(() => {
+      const detail = document.querySelector('[data-work-status-export-row-detail="true"]')?.textContent ?? "";
+      return detail.includes("매칭된 세션 근거 없음") && detail.includes("전체 인덱스에서도 미해결");
+    }, undefined, { timeout: 30000 });
+    workStatusExportUnresolvedFixtureRowDetail =
+      (await page.locator('[data-work-status-export-row-detail="true"]').first().textContent())?.trim() ?? "";
     await page.locator('[data-save-work-summary-snapshot="true"]').click();
     await page.waitForFunction((databasePath) => {
       const text = document.querySelector('[data-work-summary-persistence="true"]')?.textContent ?? "";
@@ -1100,6 +1225,9 @@ async function runBrowserQa() {
       workStatusExportBoundedFilterMeta,
       workStatusExportBoundedFilteredRows,
       workStatusExportBoundedFilteredRowDetail,
+      workStatusExportUnresolvedFixtureMeta,
+      workStatusExportUnresolvedFixtureRows,
+      workStatusExportUnresolvedFixtureRowDetail,
       workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,
       workManagementDurabilityWarning,

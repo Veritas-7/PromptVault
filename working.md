@@ -1,10 +1,96 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 03:22 KST
+Updated: 2026-06-10 03:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Codex opt-in session-evidence proposal provider
+
+Current Goal:
+
+- Continue closing the operator's AI-assisted project/day management gap by
+  letting Codex participate in review-gated session-evidence proposal
+  generation, not just work-log title normalization.
+- Keep Codex disabled by default and keep session-evidence durable writes out
+  of scope; proposals remain copied-source, schema-bound, and review-only.
+
+Context:
+
+- Session-evidence proposals already had the strict OpenAI/GLM/local contract:
+  copied `source_trace`, minimum confidence, no invented sessions/files/dates,
+  title-normalization-first ordering, and no durable session-evidence writes.
+- The previous slice added a Codex CLI process runner for
+  `work-log-normalization` only. This slice reused that boundary instead of
+  creating a separate unsafe provider path.
+- Live provider status still reports GLM as the normal configured provider.
+  Codex is detected locally but remains unusable unless
+  `PROMPTVAULT_CODEX_WORK_PROVIDER=1` is set.
+
+Progress:
+
+- Refactored the Codex process execution into a common schema-bound JSON runner.
+- Added opt-in Codex support for `session-evidence-proposals` after
+  OpenAI/GLM attempts and before local fallback.
+- The Codex runner still uses `codex exec --sandbox read-only --ephemeral
+  --output-schema --output-last-message`, stdin prompt delivery, the existing
+  timeout guard, and temp output cleanup.
+- Session-evidence Codex prompts explicitly forbid file reads, writes, command
+  execution, external context, and durable writes.
+- Provider status now exposes opt-in Codex capabilities as
+  `["work-log-normalization", "session-evidence-proposals"]`; default Codex
+  detection still reports `usable_for_work_management: false` and
+  `capabilities: []`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added Codex session-evidence proposal provider
+  functions, shared Codex JSON runner, provider status capability updates, and
+  a fake-Codex Rust test proving copied session-evidence proposals are accepted
+  through the existing validator.
+- `README.md`, `docs/CLI.md`: documented that Codex opt-in covers both
+  work-log normalization and session-evidence proposals while preserving
+  review gates and copied-evidence checks.
+
+Tests:
+
+- PASS: `cargo fmt --check`.
+- PASS: `cargo test project_work_ai_provider_status -- --nocapture`.
+- PASS: `cargo test project_work_session_evidence_with_env_uses_opt_in_codex_cli_provider -- --nocapture`.
+- PASS: `cargo test project_work_log_normalization_with_env_uses_opt_in_codex_cli_provider -- --nocapture`.
+- PASS: `cargo test project_work_session_evidence -- --nocapture`.
+- PASS: `cargo test project_work_log_normalization -- --nocapture`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work AI provider status"`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work AI provider status"`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `cargo run --quiet --bin promptvault-cli -- work-ai-provider-status --json`
+  - Default environment: GLM usable with four capabilities; Codex detected but
+    unusable and `capabilities: []`.
+- PASS: `PROMPTVAULT_CODEX_WORK_PROVIDER=1 cargo run --quiet --bin promptvault-cli -- work-ai-provider-status --json`
+  - Opt-in environment: Codex usable with `work-log-normalization` and
+    `session-evidence-proposals`.
+- PASS: `npm run check`
+  - UI tests `490`, Rust lib tests `212`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser QA ended with exit code `0`.
+  - Verified work status export, session-evidence candidates/proposals/review
+    queue, provider status, work-log coverage, normalization
+    candidates/proposals/review/apply, saved extraction rows, and run history.
+  - QA output showed `31` projects, `26` days, `99` project/day rows, `9,550`
+    work items, `867` progress logs, and the isolated session index growing to
+    `349` stored records in that run context.
+
+Remaining:
+
+- Codex is now connected for `work-log-normalization` and
+  `session-evidence-proposals`, but not for work summaries or work-log
+  extraction.
+- Durable session-evidence writes remain intentionally unavailable; current
+  session-evidence decisions are review-complete/rejected queue decisions only.
+- The operator-facing backlog is still to approve/reject normalization rows,
+  apply approved rows, then re-run session-evidence review on cleaned titles.
 
 ## Completed Slice - 2026-06-10 Codex opt-in work-log normalization provider
 

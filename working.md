@@ -1,12 +1,104 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 20:02 KST
+Updated: 2026-06-09 20:09 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 full-index status export optimization and dynamic QA
+## Current Slice - 2026-06-09 project-key session evidence index
+
+Current Goal:
+
+- Push full-index project/day status export closer to interactive speed without
+  changing session-evidence matching semantics.
+- Verify the optimized backend path through targeted Rust tests, full check, and
+  isolated browser-bridge QA.
+
+Context:
+
+- The previous slice reduced full-index `work-status-export --session-limit
+  11000` from `real 180.62s` to `real 28.05s` by bucketing session prompts by
+  KST work date.
+- The remaining bottleneck was still testing every same-date session prompt
+  against every project/day item.
+- Existing matching semantics must stay intact:
+  - exact project match through `cwd`;
+  - session file path/source path containment;
+  - text/source-path fallback for less structured records.
+
+Progress:
+
+- Added a project-key layer inside the date bucket:
+  - extracts project keys only from conservative `/10_Projects/<project>`
+    paths in `cwd`, session file path, or prompt text;
+  - stores unkeyed prompts in a same-date fallback bucket;
+  - still calls `prompt_matches_project` for every candidate before counting
+    evidence, so the existing fallback rules remain the final authority.
+- Re-measured full-index status export:
+  - project-key index: `real 11.80s`, `user 6.21s`, `sys 1.50s`;
+  - full index scope: `10,867 / 10,867`;
+  - output: `91` rows, `31` projects, `25` dates, `840` progress files,
+    `182,240` session evidence links, `1,311` unique session evidence records,
+    warnings `[]`.
+- Re-ran isolated browser-bridge QA after the backend optimization:
+  - status export loaded through the browser route;
+  - live coverage moved to `840개 로그 · parsed 837개 · unparsed 2개 · 31개
+    프로젝트 · 작업 9,027개`;
+  - candidate/review queues correctly showed `위험차단 2개`;
+  - risk-blocked candidates were not sent to an external AI provider.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - replaced date-only prompt buckets with
+    `ProjectWorkSessionDatePromptIndex`;
+  - added `project_work_prompt_project_keys` and
+    `project_key_from_10_projects_path`;
+  - kept unstructured prompts in a same-date fallback bucket;
+  - added unit coverage for KST date grouping, project-key buckets, and fallback
+    preservation.
+
+Tests:
+
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_session_prompt_index_groups_kst_days_and_project_keys --
+  --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_items_attach_session_evidence -- --nocapture`: PASS (`3`
+  tests).
+- `cargo test --manifest-path src-tauri/Cargo.toml work_status_export
+  -- --nocapture`: PASS (`3` lib tests plus `1` CLI bridge test).
+- `work-status-export --limit 25 --session-limit 11000 --json`: PASS,
+  `real 11.80s`, full index `10,867 / 10,867`, warnings `[]`.
+- `npm run check`: PASS, including UI tests (`472`), production build, Rust lib
+  tests (`194`), CLI tests (`31`), doc-tests, and clippy `-D warnings`.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Evidence included status export pagination/filter rows, work-log coverage,
+  freeze/persistence, normalization review/apply, approved review queue save,
+  and provider warning for risk-blocked local-only candidates.
+
+Issues:
+
+- Full-index export is now `11.80s`, much better than `28.05s`, but still not
+  instant. The UI should continue to use bounded `session-limit` defaults and
+  make full-index checks an explicit operator action.
+- Live corpus now has two unparsed/risk-blocked NotebookLM worklog candidates;
+  both are managed by review queue and blocked from external AI provider
+  submission.
+- Status export quality gaps remain visible in QA: filtered rows still include
+  session-evidence-needed and title-normalization-needed projects.
+
+Next Steps:
+
+- Add granular QA step logs inside `work log management` so long waits identify
+  the exact sub-step.
+- Continue AI-assisted normalization/review for rough titles and rows without
+  session evidence.
+- Consider caching status-export rows by session-index generation if full-index
+  operator checks still feel too slow.
+
+## Completed Slice - 2026-06-09 full-index status export optimization and dynamic QA
 
 Current Goal:
 

@@ -7139,36 +7139,88 @@ fn normalize_project_path_match(text: &str) -> Option<String> {
     Some(trimmed.to_string())
 }
 
-fn project_work_session_prompts_by_date(
+#[derive(Default)]
+struct ProjectWorkSessionDatePromptIndex<'a> {
+    by_project: HashMap<String, Vec<&'a PromptRecord>>,
+    fallback: Vec<&'a PromptRecord>,
+}
+
+fn project_work_session_prompt_index(
     prompts: &[PromptRecord],
-) -> HashMap<String, Vec<&PromptRecord>> {
-    let mut prompts_by_date: HashMap<String, Vec<&PromptRecord>> = HashMap::new();
+) -> HashMap<String, ProjectWorkSessionDatePromptIndex<'_>> {
+    let mut prompts_by_date: HashMap<String, ProjectWorkSessionDatePromptIndex<'_>> =
+        HashMap::new();
     for prompt in prompts {
-        prompts_by_date
-            .entry(prompt_date(prompt.timestamp.as_deref()))
-            .or_default()
-            .push(prompt);
+        let date = prompt_date(prompt.timestamp.as_deref());
+        let project_keys = project_work_prompt_project_keys(prompt);
+        let date_entry = prompts_by_date.entry(date).or_default();
+        if project_keys.is_empty() {
+            date_entry.fallback.push(prompt);
+            continue;
+        }
+        for project_key in project_keys {
+            date_entry
+                .by_project
+                .entry(project_key)
+                .or_default()
+                .push(prompt);
+        }
     }
     prompts_by_date
 }
 
+fn project_work_prompt_project_keys(prompt: &PromptRecord) -> BTreeSet<String> {
+    let mut keys = BTreeSet::new();
+    if let Some(cwd) = prompt.cwd.as_deref() {
+        if let Some(project) = project_key_from_10_projects_path(cwd) {
+            keys.insert(project);
+        }
+    }
+    if let Some(project) = project_key_from_10_projects_path(&prompt.path) {
+        keys.insert(project);
+    }
+    for path in project_paths_from_text(&prompt.text) {
+        if let Some(project) = project_key_from_10_projects_path(&path) {
+            keys.insert(project);
+        }
+    }
+    keys
+}
+
+fn project_key_from_10_projects_path(path: &str) -> Option<String> {
+    let (_, after_marker) = path.split_once("/10_Projects/")?;
+    let project = after_marker.split('/').next()?.trim();
+    if project.is_empty() {
+        return None;
+    }
+    Some(project.to_string())
+}
+
 fn attach_session_evidence(items: &mut [ProjectWorkItem], prompts: &[PromptRecord]) {
-    let prompts_by_date = project_work_session_prompts_by_date(prompts);
+    let prompt_index = project_work_session_prompt_index(prompts);
     for item in items {
         let mut source_counts = HashMap::new();
         let mut evidence_keys = BTreeSet::new();
-        let Some(same_date_prompts) = prompts_by_date.get(&item.date) else {
+        let Some(date_index) = prompt_index.get(&item.date) else {
             item.session_sources = Vec::new();
             item.session_evidence_count = 0;
             item.session_evidence_keys = Vec::new();
             continue;
         };
-        for prompt in same_date_prompts {
-            if !prompt_matches_project(prompt, item) {
-                continue;
+        for prompts in [
+            date_index.by_project.get(&item.project),
+            Some(&date_index.fallback),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            for prompt in prompts {
+                if !prompt_matches_project(prompt, item) {
+                    continue;
+                }
+                *source_counts.entry(prompt.source.clone()).or_default() += 1;
+                evidence_keys.insert(format!("{}\t{}", prompt.source, prompt.id));
             }
-            *source_counts.entry(prompt.source.clone()).or_default() += 1;
-            evidence_keys.insert(format!("{}\t{}", prompt.source, prompt.id));
         }
         item.session_sources = rank_counts(source_counts, usize::MAX);
         item.session_evidence_count = item.session_sources.iter().map(|entry| entry.count).sum();
@@ -14620,18 +14672,30 @@ Progress:
     }
 
     #[test]
-    fn project_work_session_prompts_by_date_groups_kst_work_days() {
-        let prompt_a = dated_record("session-a", "2026-06-08T15:13:32.844Z");
-        let prompt_b = dated_record("session-b", "2026-06-09T12:00:00Z");
-        let prompt_c = dated_record("session-c", "2026-06-07T23:00:00Z");
-        let prompts = vec![prompt_a, prompt_b, prompt_c];
+    fn project_work_session_prompt_index_groups_kst_days_and_project_keys() {
+        let mut project_a = dated_record("session-a", "2026-06-08T15:13:32.844Z");
+        project_a.cwd = Some("/Users/wj/Ai/System/10_Projects/ExampleProject".to_string());
+        let mut project_b = dated_record("session-b", "2026-06-09T12:00:00Z");
+        project_b.text =
+            "Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject.".to_string();
+        let mut fallback = dated_record("session-fallback", "2026-06-09T13:00:00Z");
+        fallback.cwd = Some("/tmp/ExampleProject".to_string());
+        let mut previous_day = dated_record("session-c", "2026-06-07T23:00:00Z");
+        previous_day.cwd = Some("/Users/wj/Ai/System/10_Projects/OtherProject".to_string());
+        let prompts = vec![project_a, project_b, fallback, previous_day];
 
-        let prompts_by_date = project_work_session_prompts_by_date(&prompts);
+        let prompt_index = project_work_session_prompt_index(&prompts);
 
-        assert_eq!(prompts_by_date["2026-06-09"].len(), 2);
-        assert_eq!(prompts_by_date["2026-06-08"].len(), 1);
-        assert_eq!(prompts_by_date["2026-06-09"][0].id, "session-a");
-        assert_eq!(prompts_by_date["2026-06-09"][1].id, "session-b");
+        let today = &prompt_index["2026-06-09"];
+        assert_eq!(today.by_project["ExampleProject"].len(), 2);
+        assert_eq!(today.by_project["ExampleProject"][0].id, "session-a");
+        assert_eq!(today.by_project["ExampleProject"][1].id, "session-b");
+        assert_eq!(today.fallback.len(), 1);
+        assert_eq!(today.fallback[0].id, "session-fallback");
+        assert_eq!(
+            prompt_index["2026-06-08"].by_project["OtherProject"][0].id,
+            "session-c"
+        );
     }
 
     #[test]

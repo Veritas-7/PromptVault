@@ -17,6 +17,8 @@ import type {
   ProjectWorkLogNormalizationReviewQueueItem,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
+  ProjectWorkSessionEvidenceReviewQueueItem,
+  ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
@@ -39,6 +41,7 @@ export type WorkLogNormalizationCandidatesState = "idle" | "loading" | "ready" |
 export type WorkLogNormalizationProposalsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogNormalizationReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogNormalizationApplyState = "idle" | "loading" | "ready" | "failed";
+export type WorkSessionEvidenceReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementFreezeState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunMode = "ai" | "local";
@@ -1019,6 +1022,84 @@ export function workLogNormalizationReviewQueueItemStateText(
     proposalText,
     providerText,
     `confidence ${item.confidence.toFixed(2)}`,
+  ].join(" · ");
+}
+
+export function workSessionEvidenceReviewQueueActionLabel(
+  state: WorkSessionEvidenceReviewQueueState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "세션 근거 검토 큐 동기화 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 세션 근거 검토 큐를 ${hasResult ? "새로고침" : "동기화"}할 수 없습니다`;
+  }
+  return hasResult ? "세션 근거 검토 큐 새로고침" : "세션 근거 검토 큐 동기화";
+}
+
+export function workSessionEvidenceReviewQueueMetaText(
+  state: WorkSessionEvidenceReviewQueueState,
+  result: ProjectWorkSessionEvidenceReviewQueueResult | null,
+): string {
+  if (state === "loading") return "세션 근거 검토 큐 동기화 중";
+  if (!result) {
+    return state === "failed"
+      ? "세션 근거 검토 큐를 사용할 수 없음"
+      : "아직 동기화한 세션 근거 검토 큐 없음";
+  }
+  const parts = [
+    `세션근거 큐 저장 ${result.total_items.toLocaleString()}개`,
+    `표시 ${result.returned_item_count.toLocaleString()}개`,
+    `동기화 ${result.synced_candidate_count.toLocaleString()}개`,
+    `stale 전환 ${result.stale_candidate_count.toLocaleString()}개`,
+    `검토 ${result.pending_review_count.toLocaleString()}개`,
+    `stale ${result.stale_count.toLocaleString()}개`,
+    `승인 ${result.approved_count.toLocaleString()}개`,
+    `거절 ${result.rejected_count.toLocaleString()}개`,
+    `제목정규화 ${result.needs_title_normalization_count.toLocaleString()}개`,
+  ];
+  if (result.warnings.length > 0) {
+    parts.push(`경고 ${result.warnings.length.toLocaleString()}개`);
+  }
+  return parts.join(" · ");
+}
+
+export function workSessionEvidenceReviewQueueFailureText(
+  state: WorkSessionEvidenceReviewQueueState,
+): string | null {
+  if (state !== "failed") return null;
+  return "세션 근거 검토 큐를 동기화하지 못했습니다. 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.";
+}
+
+export function canApproveWorkSessionEvidenceReviewQueueItem(
+  item: ProjectWorkSessionEvidenceReviewQueueItem,
+): boolean {
+  return item.review_state === "pending_review";
+}
+
+export function canRejectWorkSessionEvidenceReviewQueueItem(
+  item: ProjectWorkSessionEvidenceReviewQueueItem,
+): boolean {
+  return item.review_state === "pending_review" || item.review_state === "stale";
+}
+
+export function workSessionEvidenceReviewQueueItemStateText(
+  item: ProjectWorkSessionEvidenceReviewQueueItem,
+): string {
+  const stateText = item.review_state === "pending_review"
+    ? "검토 대기"
+    : item.review_state === "stale"
+      ? "stale"
+      : item.review_state === "approved"
+        ? "승인됨"
+        : "거절됨";
+  const titleText = item.needs_title_normalization ? "제목 정규화 필요" : "제목 확인됨";
+  return [
+    stateText,
+    item.review_reason,
+    item.session_evidence_audit,
+    titleText,
   ].join(" · ");
 }
 

@@ -1,10 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 23:45 KST
+Updated: 2026-06-10 00:04 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 session evidence review queue UI
+
+Current Goal:
+
+- Expose the persisted session-evidence review queue in the actual app UI, not
+  only through CLI/bridge routes.
+- Let the operator sync unresolved full-index session-evidence candidates and
+  approve/reject individual project/day rows from the work-management panel.
+- Keep the scope to review-state management. Do not invent session evidence and
+  do not add durable apply or AI repair proposal generation in this slice.
+
+Context:
+
+- The previous slice added SQLite-backed
+  `project_work_session_evidence_review_queue` storage and bridge routes.
+- The remaining product gap was visibility: unresolved project/day rows were
+  persisted, but the app screen had no button, meta line, row list, or
+  approve/reject controls for that queue.
+- Existing work-log normalization review UI already had safe pending/stale
+  handling. This slice mirrors that pattern for session-evidence candidates.
+
+Progress:
+
+- Added a `세션근거 큐` work-management action.
+- Added session-evidence review queue loading state, result state, update state,
+  failure notice, meta line, and row list in the app.
+- Pending rows can be approved or rejected from the UI.
+- Stale rows are approval-safe: no approve button, reject cleanup only.
+- Added reusable status helpers and tests for action labels, meta text, failure
+  text, item state text, and stale-row button eligibility.
+- Extended isolated browser-bridge QA to click the new UI button, approve one
+  session-evidence row, and verify persistence through the bridge.
+
+Changes:
+
+- `src/App.tsx`:
+  - wired `loadProjectWorkSessionEvidenceReviewQueue` and
+    `updateProjectWorkSessionEvidenceReviewQueue`;
+  - added the `세션근거 큐` button and review row list;
+  - added UI approval/rejection handling with explicit operator reasons.
+- `src/workSummaryStatus.ts`:
+  - added `WorkSessionEvidenceReviewQueueState`;
+  - added session-evidence review queue action/meta/failure/state helpers;
+  - added pending/stale approve/reject guard helpers.
+- `tests/workSummaryStatus.test.ts`:
+  - added fixture-backed tests for the new helper contract.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added real UI click coverage for session-evidence review queue sync and
+    approval persistence.
+- `README.md`:
+  - updated browser bridge endpoint documentation to include the review queue
+    update route.
+
+Tests:
+
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`:
+  PASS, `34` tests.
+- `npm run build`: PASS.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`:
+  PASS, `222` tests.
+- First `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  attempt failed at the new UI approval wait because the approved row could
+  leave the first displayed page after sorting/limit changes.
+- Updated the QA to wait for the `/api/work-session-evidence-review-queue/update`
+  response and then verify persistence through the bridge.
+- Final `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  - New UI evidence:
+    `세션근거 큐 저장 57개 · 표시 40개 · 동기화 57개 · stale 전환 0개 · 검토 56개 · stale 0개 · 승인 1개 · 거절 0개 · 제목정규화 25개`.
+  - UI approval persisted as:
+    `approved · operator_approved_session_evidence`.
+- `git diff --check`: PASS.
+- `npm run check`: PASS.
+  - UI tests: `481` passed.
+  - Production build: PASS.
+  - Rust lib tests: `202` passed.
+  - CLI tests: `33` passed.
+  - clippy with `-D warnings`: PASS.
+- `gitleaks dir . --no-banner --redact`: PASS, no leaks found.
+
+Issues:
+
+- The queue is now visible and reviewable in the UI, but it still does not
+  generate AI/Codex/GLM repair proposals for missing session evidence.
+- There is still no durable apply step that turns approved session-evidence
+  review rows into managed session-evidence records. That must remain gated by a
+  source-traced proposal contract.
+
+Research:
+
+- No external research was required. The slice reused existing local
+  normalization review UI and browser bridge patterns.
+
+Next Steps:
+
+- Add AI-assisted session-evidence proposal generation using the existing
+  OpenAI/GLM provider infrastructure, with confidence and source-trace fields.
+- Add a durable apply step only after approved proposal semantics are explicit
+  and tested.
 
 ## Completed Slice - 2026-06-09 session evidence review queue
 

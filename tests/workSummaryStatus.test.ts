@@ -4,6 +4,8 @@ import type { ActionLockState } from "../src/actionLocks.ts";
 import {
   canApproveWorkLogNormalizationReviewQueueItem,
   canRejectWorkLogNormalizationReviewQueueItem,
+  canApproveWorkSessionEvidenceReviewQueueItem,
+  canRejectWorkSessionEvidenceReviewQueueItem,
   workLogCandidatesActionLabel,
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
@@ -34,6 +36,10 @@ import {
   workLogNormalizationReviewQueueFailureText,
   workLogNormalizationReviewQueueItemStateText,
   workLogNormalizationReviewQueueMetaText,
+  workSessionEvidenceReviewQueueActionLabel,
+  workSessionEvidenceReviewQueueFailureText,
+  workSessionEvidenceReviewQueueItemStateText,
+  workSessionEvidenceReviewQueueMetaText,
   workLogExtractionMetaText,
   workLogExtractionApprovalText,
   workLogExtractionPersistenceText,
@@ -85,6 +91,7 @@ import {
   type WorkLogNormalizationApplyState,
   type WorkLogNormalizationProposalsState,
   type WorkLogNormalizationReviewQueueState,
+  type WorkSessionEvidenceReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
   type WorkStatusExportState,
@@ -105,6 +112,8 @@ import type {
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueItem,
   ProjectWorkLogReviewQueueResult,
+  ProjectWorkSessionEvidenceReviewQueueItem,
+  ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
@@ -556,6 +565,54 @@ function normalizationApplyResult(
       provider_runtime: "local-normalization-rules",
       used_ai: false,
     }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function sessionEvidenceReviewQueueItem(
+  overrides: Partial<ProjectWorkSessionEvidenceReviewQueueItem> = {},
+): ProjectWorkSessionEvidenceReviewQueueItem {
+  return {
+    candidate_id: "session-evidence-PromptVault-a1",
+    first_seen_at: "2026-06-09T00:00:00Z",
+    last_seen_at: "2026-06-09T00:01:00Z",
+    review_state: "pending_review",
+    review_reason: "unresolved_session_evidence",
+    project: "PromptVault",
+    date: "2026-06-09",
+    operational_status: "needs_session_evidence",
+    source_statuses: [{ label: "logged", count: 2 }],
+    work_item_count: 4,
+    source_file_count: 2,
+    source_files: ["working.md", "workingd.md"],
+    top_titles: ["PromptVault session evidence queue"],
+    sample_evidence: "- 2026-06-09: PromptVault session evidence queue",
+    latest_source_path: "/tmp/PromptVault/working.md",
+    latest_source_file: "working.md",
+    candidate_reason: "unresolved_after_full_index,needs_title_normalization",
+    session_evidence_audit: "unresolved-after-full-index",
+    needs_title_normalization: true,
+    ...overrides,
+  };
+}
+
+function sessionEvidenceReviewQueueResult(
+  overrides: Partial<ProjectWorkSessionEvidenceReviewQueueResult> = {},
+): ProjectWorkSessionEvidenceReviewQueueResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    synced_candidate_count: 36,
+    stale_candidate_count: 2,
+    total_items: 40,
+    returned_item_count: 5,
+    pending_review_count: 30,
+    stale_count: 2,
+    approved_count: 6,
+    rejected_count: 2,
+    needs_title_normalization_count: 12,
+    items: [sessionEvidenceReviewQueueItem()],
     warnings: [],
     ...overrides,
   };
@@ -1589,6 +1646,78 @@ test("work log normalization review queue actions keep stale rows approval-safe"
   assert.equal(canRejectWorkLogNormalizationReviewQueueItem(approved), false);
   assert.equal(canApproveWorkLogNormalizationReviewQueueItem(rejected), false);
   assert.equal(canRejectWorkLogNormalizationReviewQueueItem(rejected), false);
+});
+
+test("work session evidence review queue labels describe persisted review rows", () => {
+  const failed: WorkSessionEvidenceReviewQueueState = "failed";
+  assert.equal(
+    workSessionEvidenceReviewQueueActionLabel("idle", false, lockState()),
+    "세션 근거 검토 큐 동기화",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueActionLabel("ready", true, lockState()),
+    "세션 근거 검토 큐 새로고침",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 세션 근거 검토 큐를 새로고침할 수 없습니다",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueMetaText("idle", null),
+    "아직 동기화한 세션 근거 검토 큐 없음",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueMetaText("loading", sessionEvidenceReviewQueueResult()),
+    "세션 근거 검토 큐 동기화 중",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueMetaText("ready", sessionEvidenceReviewQueueResult()),
+    "세션근거 큐 저장 40개 · 표시 5개 · 동기화 36개 · stale 전환 2개 · 검토 30개 · stale 2개 · 승인 6개 · 거절 2개 · 제목정규화 12개",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueMetaText(
+      "ready",
+      sessionEvidenceReviewQueueResult({ warnings: ["capped sync"] }),
+    ),
+    "세션근거 큐 저장 40개 · 표시 5개 · 동기화 36개 · stale 전환 2개 · 검토 30개 · stale 2개 · 승인 6개 · 거절 2개 · 제목정규화 12개 · 경고 1개",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueMetaText(failed, null),
+    "세션 근거 검토 큐를 사용할 수 없음",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueFailureText(failed),
+    "세션 근거 검토 큐를 동기화하지 못했습니다. 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workSessionEvidenceReviewQueueFailureText("ready"), null);
+  assert.equal(
+    workSessionEvidenceReviewQueueItemStateText(sessionEvidenceReviewQueueItem()),
+    "검토 대기 · unresolved_session_evidence · unresolved-after-full-index · 제목 정규화 필요",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueItemStateText(sessionEvidenceReviewQueueItem({
+      review_state: "approved",
+      review_reason: "operator_approved_session_evidence",
+      needs_title_normalization: false,
+    })),
+    "승인됨 · operator_approved_session_evidence · unresolved-after-full-index · 제목 확인됨",
+  );
+});
+
+test("work session evidence review queue actions keep stale rows approval-safe", () => {
+  const pending = sessionEvidenceReviewQueueItem();
+  const stale = { ...pending, review_state: "stale" as const };
+  const approved = { ...pending, review_state: "approved" as const };
+  const rejected = { ...pending, review_state: "rejected" as const };
+
+  assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(pending), true);
+  assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(pending), true);
+  assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(stale), false);
+  assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(stale), true);
+  assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(approved), false);
+  assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(approved), false);
+  assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(rejected), false);
+  assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(rejected), false);
 });
 
 test("work log normalization apply labels describe durable approved rows", () => {

@@ -455,6 +455,9 @@ async function runBrowserQa() {
   let workSessionEvidenceReviewQueueMeta = "";
   let workSessionEvidenceReviewQueueRows = [];
   let workSessionEvidenceReviewQueueStateAfterApprove = "";
+  let workSessionEvidenceReviewQueueUiMeta = "";
+  let workSessionEvidenceReviewQueueUiRows = [];
+  let workSessionEvidenceReviewQueueUiStateAfterApprove = "";
   let workStatusExportMarkdown = "";
   let workSummaryIndex = "";
   let workSessionIndexBackfill = null;
@@ -937,6 +940,63 @@ async function runBrowserQa() {
     } else {
       workSessionEvidenceReviewQueueStateAfterApprove = "no session evidence review candidates";
     }
+    step("work session evidence review queue UI");
+    await waitForEnabled(page, '[data-sync-work-session-evidence-review-queue="true"]');
+    await page.locator('[data-sync-work-session-evidence-review-queue="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-session-evidence-review-queue-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-session-evidence-review-queue="true"] article'));
+      return text.includes("세션근거 큐 저장")
+        && text.includes("표시")
+        && text.includes("검토")
+        && rows.some((row) => (row.textContent ?? "").includes("unresolved-after-full-index"));
+    }, undefined, { timeout: 120000 });
+    workSessionEvidenceReviewQueueUiMeta =
+      (await page.locator('[data-work-session-evidence-review-queue-meta="true"]').textContent())?.trim() ?? "";
+    workSessionEvidenceReviewQueueUiRows =
+      await page.locator('[data-work-session-evidence-review-queue="true"] article').allTextContents();
+    const firstSessionEvidenceApprove = page
+      .locator('[data-approve-work-session-evidence-review-queue]')
+      .first();
+    await firstSessionEvidenceApprove.waitFor({ timeout: 90000 });
+    const firstSessionEvidenceCandidateId = await firstSessionEvidenceApprove.getAttribute(
+      "data-approve-work-session-evidence-review-queue",
+    );
+    if (!firstSessionEvidenceCandidateId) {
+      throw new Error("Session evidence review queue approve button did not expose candidate id");
+    }
+    const sessionEvidenceUpdateResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/work-session-evidence-review-queue/update")
+      && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await firstSessionEvidenceApprove.click();
+    await sessionEvidenceUpdateResponse;
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-session-evidence-review-queue-meta="true"]')?.textContent ?? "";
+      return text.includes("세션근거 큐 저장")
+        && text.includes("승인")
+        && !text.includes("동기화 중");
+    }, undefined, { timeout: 90000 });
+    const sessionEvidenceQueueAfterUiApprove = await bridgeJson(
+      page,
+      "/api/work-session-evidence-review-queue",
+      { options: { limit: 200 } },
+    );
+    const approvedSessionEvidenceRow = sessionEvidenceQueueAfterUiApprove.items.find(
+      (item) => item.candidate_id === firstSessionEvidenceCandidateId,
+    );
+    if (
+      !approvedSessionEvidenceRow
+      || approvedSessionEvidenceRow.review_state !== "approved"
+      || approvedSessionEvidenceRow.review_reason !== "operator_approved_session_evidence"
+    ) {
+      throw new Error(`Session evidence review queue UI approval did not persist: ${
+        JSON.stringify(approvedSessionEvidenceRow ?? null)
+      }`);
+    }
+    workSessionEvidenceReviewQueueUiStateAfterApprove =
+      `${approvedSessionEvidenceRow.review_state} · ${approvedSessionEvidenceRow.review_reason}`;
     await page.locator('[data-save-work-summary-snapshot="true"]').click();
     await page.waitForFunction((databasePath) => {
       const text = document.querySelector('[data-work-summary-persistence="true"]')?.textContent ?? "";
@@ -1349,6 +1409,9 @@ async function runBrowserQa() {
       workSessionEvidenceReviewQueueMeta,
       workSessionEvidenceReviewQueueRows,
       workSessionEvidenceReviewQueueStateAfterApprove,
+      workSessionEvidenceReviewQueueUiMeta,
+      workSessionEvidenceReviewQueueUiRows,
+      workSessionEvidenceReviewQueueUiStateAfterApprove,
       workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,
       workManagementDurabilityWarning,

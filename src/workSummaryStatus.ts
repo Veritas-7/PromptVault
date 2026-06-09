@@ -442,6 +442,56 @@ export function workManagementReviewDecisionText(
   return parts.join(" · ");
 }
 
+export function workManagementReviewBlockerText(
+  input: WorkManagementReadinessInput,
+): string | null {
+  const parts: string[] = [];
+  const workLog = input.workLogReviewQueue;
+  const normalization = input.normalizationReviewQueue;
+  const sessionEvidence = input.sessionEvidenceReviewQueue;
+
+  if (workLog) {
+    if (workLog.risk_blocked_count > 0) {
+      parts.push(`추출 위험차단 ${workLog.risk_blocked_count.toLocaleString()}개`);
+    }
+    if (workLog.pending_ai_review_count > 0) {
+      parts.push(`추출 AI검토 ${workLog.pending_ai_review_count.toLocaleString()}개`);
+    }
+    if (workLog.stale_count > 0) {
+      parts.push(`추출 stale ${workLog.stale_count.toLocaleString()}개`);
+    }
+  }
+  if (normalization) {
+    if (normalization.pending_review_count > 0) {
+      parts.push(`정규화 AI/운영검토 ${normalization.pending_review_count.toLocaleString()}개`);
+    }
+    if (normalization.stale_count > 0) {
+      parts.push(`정규화 stale ${normalization.stale_count.toLocaleString()}개`);
+    }
+  }
+  if (sessionEvidence) {
+    const titleNormalizationCount = Math.min(
+      sessionEvidence.pending_review_count,
+      sessionEvidence.needs_title_normalization_count,
+    );
+    const evidenceReviewCount = Math.max(
+      0,
+      sessionEvidence.pending_review_count - titleNormalizationCount,
+    );
+    if (titleNormalizationCount > 0) {
+      parts.push(`세션 제목정규화 ${titleNormalizationCount.toLocaleString()}개`);
+    }
+    if (evidenceReviewCount > 0) {
+      parts.push(`세션 근거검토 ${evidenceReviewCount.toLocaleString()}개`);
+    }
+    if (sessionEvidence.stale_count > 0) {
+      parts.push(`세션 stale ${sessionEvidence.stale_count.toLocaleString()}개`);
+    }
+  }
+
+  return parts.length ? `검토 차단 · ${parts.join(" · ")}` : null;
+}
+
 export function workManagementNextActionText(
   input: WorkManagementReadinessInput,
   effectiveBatchFiles: number | null | undefined,

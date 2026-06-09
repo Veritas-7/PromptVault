@@ -1,10 +1,74 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 07:10 KST
+Updated: 2026-06-10 07:21 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Review blocker summary
+
+Current Goal:
+
+- Make the work-management screen answer the unsafe part of "is everything
+  fully managed?" by showing the review blockers that still prevent blind
+  auto-approval/application.
+
+Context:
+
+- Persistent DB queue inspection was run against
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`, not only the isolated
+  browser QA database.
+- Current persistent review state is not "fully auto-managed":
+  - work-log review queue: `1` item, `1` risk-blocked item
+    (`risk_flags_require_local_review`, `missing_dated_heading`).
+  - normalization review queue: `94` items, `91` pending review, `3` stale;
+    sampled rows came from `local_fallback_requires_ai_review` at confidence
+    `0.5`.
+  - session-evidence review queue: `36` items, all pending; `12` require title
+    normalization before evidence approval.
+
+Progress:
+
+- Added `workManagementReviewBlockerText` so the readiness area summarizes
+  remaining extraction, normalization, and session-evidence review blockers.
+- Rendered a warning row under `검토 결정` when any review queue still requires
+  human/AI validation.
+- Extended isolated browser QA to require the blocker row and to export the
+  captured text in the QA JSON result.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds blocker-summary formatting.
+- `src/App.tsx`: displays the warning row from the three durable review queues.
+- `tests/workSummaryStatus.test.ts`: covers populated and no-blocker states.
+- `scripts/browser-bridge-isolated-qa.mjs`: validates blocker visibility in
+  the work-management flow.
+
+Tests:
+
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "review decision"`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`499` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge >
+  /tmp/promptvault-review-blocker-qa.log 2>&1`.
+
+QA Evidence:
+
+- Isolated QA captured:
+  `검토 차단 · 정규화 AI/운영검토 2개 · 세션 제목정규화 28개 · 세션 근거검토 39개`.
+- The same QA run also captured:
+  `검토 결정 · 저장 row 72개 · 대기 69개 · stale 0개 · 승인 3개 · 거절 0개 · 추출 0/1개 · 정규화 2/2개 · 세션 67/69개`.
+
+Remaining:
+
+- The system now scans real sessions and project-local progress logs into
+  project/day management views, but review queues still need controlled AI or
+  operator resolution before claiming full autonomous daily task management.
+- Next useful slice: wire a controlled provider-backed review runner for the
+  normalization/session queues, with evidence-preserving approvals only.
 
 ## Completed Slice - 2026-06-10 Status export DB scope
 

@@ -61,6 +61,7 @@ import {
   workManagementFreezeActionLabel,
   workManagementNextActionText,
   workManagementReadinessText,
+  workManagementReviewBlockerText,
   workManagementReviewDecisionText,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
@@ -1257,6 +1258,7 @@ test("work management readiness text summarizes coverage, session backfill, queu
 
 test("work management review decision text summarizes all durable review queues", () => {
   assert.equal(workManagementReviewDecisionText({}), null);
+  assert.equal(workManagementReviewBlockerText({}), null);
   assert.equal(
     workManagementReviewDecisionText({
       workLogReviewQueue: reviewQueueResult(),
@@ -1264,6 +1266,14 @@ test("work management review decision text summarizes all durable review queues"
       sessionEvidenceReviewQueue: sessionEvidenceReviewQueueResult(),
     }),
     "검토 결정 · 저장 row 67개 · 대기 46개 · stale 5개 · 승인 10개 · 거절 6개 · 추출 13/18개 · 정규화 3/9개 · 세션 30/40개",
+  );
+  assert.equal(
+    workManagementReviewBlockerText({
+      workLogReviewQueue: reviewQueueResult(),
+      normalizationReviewQueue: normalizationReviewQueueResult(),
+      sessionEvidenceReviewQueue: sessionEvidenceReviewQueueResult(),
+    }),
+    "검토 차단 · 추출 위험차단 3개 · 추출 AI검토 10개 · 추출 stale 2개 · 정규화 AI/운영검토 3개 · 정규화 stale 1개 · 세션 제목정규화 12개 · 세션 근거검토 18개 · 세션 stale 2개",
   );
   assert.equal(
     workManagementReviewDecisionText({
@@ -1284,6 +1294,26 @@ test("work management review decision text summarizes all durable review queues"
       }),
     }),
     "검토 결정 · 저장 row 2개 · 대기 0개 · stale 0개 · 승인 1개 · 거절 1개 · 추출 0/2개 · 정규화 0/0개 · 대기 없음",
+  );
+  assert.equal(
+    workManagementReviewBlockerText({
+      workLogReviewQueue: reviewQueueResult({
+        total_items: 2,
+        pending_ai_review_count: 0,
+        risk_blocked_count: 0,
+        stale_count: 0,
+        approved_count: 1,
+        rejected_count: 1,
+      }),
+      normalizationReviewQueue: normalizationReviewQueueResult({
+        total_items: 0,
+        pending_review_count: 0,
+        stale_count: 0,
+        approved_count: 0,
+        rejected_count: 0,
+      }),
+    }),
+    null,
   );
 });
 

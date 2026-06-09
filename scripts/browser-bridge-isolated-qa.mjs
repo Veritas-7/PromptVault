@@ -443,6 +443,7 @@ async function runBrowserQa() {
   let workManagementSessionBackfillWarning = "";
   let workManagementReadiness = "";
   let workManagementReviewDecisions = "";
+  let workManagementReviewBlockers = "";
   let workManagementNextAction = "";
   let workManagementMeta = "";
   let workStatusExportLimitMeta = "";
@@ -1330,6 +1331,7 @@ async function runBrowserQa() {
       (await page.locator('[data-work-ai-provider-status-meta="true"]').textContent())?.trim() ?? "";
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-review-decisions="true"]')?.textContent ?? "";
+      const blockers = document.querySelector('[data-work-management-review-blockers="true"]')?.textContent ?? "";
       return text.includes("검토 결정")
         && text.includes("저장 row")
         && text.includes("대기")
@@ -1340,10 +1342,14 @@ async function runBrowserQa() {
           text.includes("추출")
           || text.includes("정규화")
           || text.includes("세션")
-        );
+        )
+        && blockers.includes("검토 차단")
+        && (blockers.includes("정규화") || blockers.includes("세션"));
     }, undefined, { timeout: 120000 });
     workManagementReviewDecisions =
       (await page.locator('[data-work-management-review-decisions="true"]').textContent())?.trim() ?? "";
+    workManagementReviewBlockers =
+      (await page.locator('[data-work-management-review-blockers="true"]').textContent())?.trim() ?? "";
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-next-action="true"]')?.textContent ?? "";
       return text.includes("다음 조치")
@@ -1836,6 +1842,7 @@ async function runBrowserQa() {
     workLogItemRows = await page.locator('[data-work-log-items="true"] article').allTextContents();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-review-decisions="true"]')?.textContent ?? "";
+      const blockers = document.querySelector('[data-work-management-review-blockers="true"]')?.textContent ?? "";
       return text.includes("검토 결정")
         && text.includes("저장 row")
         && text.includes("대기")
@@ -1844,10 +1851,15 @@ async function runBrowserQa() {
         && text.includes("거절")
         && text.includes("추출")
         && text.includes("정규화")
-        && text.includes("세션");
+        && text.includes("세션")
+        && blockers.includes("검토 차단")
+        && blockers.includes("정규화")
+        && blockers.includes("세션");
     }, undefined, { timeout: 90000 });
     workManagementReviewDecisions =
       (await page.locator('[data-work-management-review-decisions="true"]').textContent())?.trim() ?? "";
+    workManagementReviewBlockers =
+      (await page.locator('[data-work-management-review-blockers="true"]').textContent())?.trim() ?? "";
 
     if (consoleErrors.length > 0) {
       throw new Error(`Browser console errors:\n${consoleErrors.join("\n")}`);
@@ -1902,6 +1914,7 @@ async function runBrowserQa() {
       workManagementMeta,
       workManagementReadiness,
       workManagementReviewDecisions,
+      workManagementReviewBlockers,
       workManagementNextAction,
       workManagementDurabilityWarning,
       workManagementSessionBackfillWarning,

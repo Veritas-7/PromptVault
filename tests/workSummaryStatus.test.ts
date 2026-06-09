@@ -612,6 +612,18 @@ test("work log extraction provider notice exposes fallback warnings", () => {
   );
   assert.equal(
     workLogExtractionProviderNoticeText(extractionResult({
+      provider: "local-extraction-rules",
+      used_ai: false,
+      candidate_count: 0,
+      accepted_count: 0,
+      rejected_count: 0,
+      proposals: [],
+      warnings: ["AI 추출 후보가 0개라 OpenAI/GLM provider 호출을 생략했습니다."],
+    })),
+    "로컬 fallback 사용 · 경고 1개",
+  );
+  assert.equal(
+    workLogExtractionProviderNoticeText(extractionResult({
       provider: "glm",
       used_ai: true,
       warnings: ["OpenAI work-log extraction 요청 실패: timeout; 다음 provider를 사용합니다."],

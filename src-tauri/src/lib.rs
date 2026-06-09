@@ -3739,7 +3739,7 @@ async fn project_work_log_extraction_proposals_with_env(
             if force_local {
                 vec!["AI 추출이 비활성화되어 로컬 검토 후보만 반환했습니다.".to_string()]
             } else {
-                Vec::new()
+                vec!["AI 추출 후보가 0개라 OpenAI/GLM provider 호출을 생략했습니다.".to_string()]
             },
         ));
     }
@@ -12591,6 +12591,42 @@ Progress:
         assert!(request.contains("authorization: Bearer glm-key"));
         assert!(request.contains("\"model\":\"glm-test-model\""));
         assert!(request.contains("work-log-Beta-a1b2c3d4e5"));
+    }
+
+    #[tokio::test]
+    async fn project_work_log_extraction_warns_when_ai_has_no_candidates() {
+        let mut env = HashMap::new();
+        env.insert("GLM_API_KEY".to_string(), "glm-key".to_string());
+        env.insert(
+            "GLM_CODING_ENDPOINT".to_string(),
+            "http://127.0.0.1:9/v4/chat/completions".to_string(),
+        );
+        let candidates = ProjectWorkLogExtractionCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/tmp".to_string(),
+            files_seen: 3,
+            skipped_parsed_file_count: 3,
+            skipped_unreadable_file_count: 0,
+            skipped_empty_file_count: 0,
+            skipped_pointer_file_count: 0,
+            candidate_count: 0,
+            candidates: Vec::new(),
+            warnings: Vec::new(),
+        };
+
+        let result = project_work_log_extraction_proposals_with_env(candidates, false, env)
+            .await
+            .expect("empty AI extraction proposals");
+
+        assert_eq!(result.provider, "local-extraction-rules");
+        assert!(!result.used_ai);
+        assert_eq!(result.candidate_count, 0);
+        assert_eq!(result.accepted_count, 0);
+        assert_eq!(result.rejected_count, 0);
+        assert!(result.proposals.is_empty());
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.warnings[0].contains("후보가 0개"));
+        assert!(result.warnings[0].contains("provider 호출을 생략"));
     }
 
     #[test]

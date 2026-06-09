@@ -1,10 +1,104 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 11:05 KST
+Updated: 2026-06-09 11:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 AI extraction zero-candidate diagnostics
+
+Current Goal:
+
+- Make the AI-assisted progress-log extraction lane operator-auditable when
+  the user presses `AI 제안` but all project progress logs are already parsed.
+- Clarify that OpenAI/GLM provider calls are skipped only because candidate
+  count is zero, not because SDK/provider support is missing.
+
+Context:
+
+- Project/day management is now backed by deterministic parsing of project
+  `working.md`, `workingd.md`, `worklog.md`, `progress.md`, and related
+  progress-log files plus recent Codex session evidence.
+- The remaining product gap is reviewed AI backfill for ambiguous/unparsed
+  logs. Current live coverage has no unparsed logs, so the AI extraction button
+  legitimately has zero candidates to send to OpenAI/GLM.
+- Before this slice, the zero-candidate AI path returned local fallback without
+  an explicit warning, making it unclear whether a provider was attempted.
+
+Progress:
+
+- Added an explicit warning for AI extraction requests with zero candidates:
+  `AI 추출 후보가 0개라 OpenAI/GLM provider 호출을 생략했습니다.`
+- Preserved existing local-only behavior and warning copy for the `로컬 제안`
+  button.
+- Extended browser QA to click the real `AI 제안` button and assert that the
+  provider warning appears in the DOM.
+- Revalidated live project/day coverage and recent session parsing.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - `project_work_log_extraction_proposals_with_env()` now returns an explicit
+    zero-candidate AI skip warning before falling back to local extraction
+    rules.
+  - Added `project_work_log_extraction_warns_when_ai_has_no_candidates()`,
+    proving GLM env presence does not trigger a network request when no
+    candidates exist.
+- `tests/workSummaryStatus.test.ts`:
+  - Added provider notice coverage for zero-candidate AI fallback.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - Browser QA now clicks `data-load-work-log-extraction="true"` and captures
+    `data-work-log-extraction-provider-warning="true"` in the final JSON.
+
+Tests:
+
+- `cargo test --manifest-path src-tauri/Cargo.toml project_work_log_extraction_warns_when_ai_has_no_candidates`: PASS.
+- `npm run test:ui -- tests/workSummaryStatus.test.ts`: PASS. The package
+  script ran the UI suite and reported `436` passing tests.
+- `npm run build`: PASS.
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-report --session-limit 200 --json`: PASS. Live summary at test time:
+  `31` projects, `25` dates, `8,562` parsed work items, `789` progress files,
+  `200` scanned session prompts, `68,982` session evidence matches, no
+  warnings.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS on
+  rerun. Final QA JSON included coverage `789개 로그 · parsed 788개 · unparsed
+  0개 · 31개 프로젝트 · 작업 8,564개` and provider warning `AI 추출 후보가
+  0개라 OpenAI/GLM provider 호출을 생략했습니다.`
+- `npm run check`: PASS. UI `436` tests, Vite build, Rust lib `166` tests,
+  CLI `24` tests, doc-tests, and clippy all passed.
+- Post-`working.md` update recheck,
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-report --session-limit 200 --json`: PASS.
+  Final live summary: `31` projects, `25` dates, `8,565` parsed work items,
+  `789` progress files, `200` scanned session prompts, `69,004` session
+  evidence matches, no warnings.
+
+Issues:
+
+- Current completion level: deterministic project/day parsing, durable freeze,
+  saved management rows, session evidence matching, and reviewed AI extraction
+  API/provider plumbing are working and tested against live data.
+- Not yet complete as a full autonomous AI backfill system: ambiguous or
+  newly unparsed logs still need an explicit reviewed queue with provider
+  metadata, model/runtime metadata, confidence, approval, and saved audit rows.
+- The first browser QA run in this slice hit a transient Playwright
+  `Target page, context or browser has been closed` while waiting after the AI
+  extraction click. Immediate rerun passed with the same code and captured the
+  provider warning.
+
+Research:
+
+- No external research needed. This was a runtime observability fix over the
+  existing OpenAI/GLM extraction path.
+
+Next Steps:
+
+- Commit and push this diagnostics slice.
+- Next product slice: build an explicit AI-assisted review/backfill queue for
+  ambiguous or unparsed progress logs. Persist provider/model/runtime metadata,
+  per-project/day confidence, approval state, and saved audit rows; use
+  OpenAI/GLM only for safe candidate excerpts and keep deterministic parsed
+  rows as the source of truth.
 
 ## Current Slice - 2026-06-09 all-date progress-log freeze
 

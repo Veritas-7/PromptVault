@@ -142,6 +142,7 @@ async function runBrowserQa() {
   let workManagementMeta = "";
   let workSummaryIndex = "";
   let coverageMeta = "";
+  let workLogExtractionProviderWarning = "";
 
   page.on("console", (message) => {
     if (["error", "warning"].includes(message.type())) {
@@ -342,11 +343,17 @@ async function runBrowserQa() {
       const text = document.querySelector('[data-work-log-candidates-meta="true"]')?.textContent ?? "";
       return text.includes("후보 0개") || text.includes("후보 없음");
     }, undefined, { timeout: 90000 });
-    await page.locator('[data-load-work-log-extraction-local="true"]').click();
+    await page.locator('[data-load-work-log-extraction="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-extraction-meta="true"]')?.textContent ?? "";
       return text.includes("후보 0개") || text.includes("제안 0개");
     }, undefined, { timeout: 90000 });
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-extraction-provider-warning="true"]')?.textContent ?? "";
+      return text.includes("후보가 0개") && text.includes("provider 호출을 생략");
+    }, undefined, { timeout: 90000 });
+    workLogExtractionProviderWarning =
+      (await page.locator('[data-work-log-extraction-provider-warning="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-load-work-log-items="true"]').click();
     await page.waitForFunction(() => {
       return Boolean(document.querySelector('[data-work-log-items-meta="true"]'));
@@ -376,6 +383,7 @@ async function runBrowserQa() {
       workManagementMissingConfidenceRows,
       workManagementPersistenceRows,
       coverageMeta,
+      workLogExtractionProviderWarning,
     };
     console.log(JSON.stringify(result, null, 2));
   } finally {

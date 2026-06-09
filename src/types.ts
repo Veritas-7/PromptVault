@@ -211,6 +211,45 @@ export interface ProjectWorkReport {
   warnings: string[];
 }
 
+export interface ProjectWorkStatusExportRow {
+  date: string;
+  project: string;
+  operational_status: string;
+  source_statuses: FrequencyItem[];
+  work_item_count: number;
+  source_file_count: number;
+  source_files: string[];
+  top_titles: string[];
+  sample_evidence: string;
+  latest_source_path: string;
+  latest_source_file: string;
+  session_evidence_count: number;
+  unique_session_evidence_count: number;
+  session_sources: FrequencyItem[];
+  needs_session_evidence: boolean;
+  needs_title_normalization: boolean;
+}
+
+export interface ProjectWorkStatusExportResult {
+  generated_at: string;
+  markdown: string;
+  returned_row_count: number;
+  rows_truncated: boolean;
+  report_total_items: number;
+  report_project_count: number;
+  report_date_count: number;
+  report_files_seen: number;
+  report_session_scan_prompt_count: number;
+  report_session_evidence_count: number;
+  report_unique_session_evidence_count: number;
+  report_session_evidence_index_used: boolean;
+  report_session_evidence_index_updated: boolean;
+  report_session_evidence_index_count: number;
+  report_session_evidence_mode: string;
+  rows: ProjectWorkStatusExportRow[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSessionIndexSourceState {
   source_id: string;
   source_label: string;

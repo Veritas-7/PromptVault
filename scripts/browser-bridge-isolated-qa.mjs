@@ -193,6 +193,10 @@ async function runBrowserQa() {
   let workManagementPersistenceRows = [];
   let workManagementDurabilityWarning = "";
   let workManagementMeta = "";
+  let workStatusExportMeta = "";
+  let workStatusExportIndex = "";
+  let workStatusExportRows = [];
+  let workStatusExportMarkdown = "";
   let workSummaryIndex = "";
   let workSessionIndexBackfill = null;
   let coverageMeta = "";
@@ -410,6 +414,24 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     workSummaryIndex =
       (await page.locator('[data-work-summary-index="true"]').textContent())?.trim() ?? "";
+    await page.locator('[data-load-work-status-export="true"]').click();
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-status-export-meta="true"]')?.textContent ?? "";
+      const index = document.querySelector('[data-work-status-export-index="true"]')?.textContent ?? "";
+      const markdown = document.querySelector('[data-work-status-export-markdown="true"]')?.textContent ?? "";
+      return meta.includes("프로젝트")
+        && meta.includes("세션 근거")
+        && index.includes("메타데이터 우선")
+        && markdown.includes("Project/Day Rows")
+        && document.querySelectorAll('[data-work-status-export-row="true"]').length > 0;
+    }, undefined, { timeout: 120000 });
+    workStatusExportMeta =
+      (await page.locator('[data-work-status-export-meta="true"]').textContent())?.trim() ?? "";
+    workStatusExportIndex =
+      (await page.locator('[data-work-status-export-index="true"]').textContent())?.trim() ?? "";
+    workStatusExportRows = await page.locator('[data-work-status-export-row="true"]').allTextContents();
+    workStatusExportMarkdown =
+      (await page.locator('[data-work-status-export-markdown="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-save-work-summary-snapshot="true"]').click();
     await page.waitForFunction((databasePath) => {
       const text = document.querySelector('[data-work-summary-persistence="true"]')?.textContent ?? "";
@@ -695,6 +717,10 @@ async function runBrowserQa() {
       workSessionLimit: WORK_SESSION_LIMIT,
       workSessionIndexBackfill,
       workSummaryIndex,
+      workStatusExportMeta,
+      workStatusExportIndex,
+      workStatusExportRows,
+      workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,
       workManagementDurabilityWarning,
       workManagementMetaAfterFreeze,

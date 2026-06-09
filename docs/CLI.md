@@ -54,7 +54,7 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `work-session-index` upserts sanitized Codex/Codex CX session records so progress-log work items can be linked to real session evidence without storing raw session bodies.
 - `work-session-index --batch-files` is capped at `1..500`; short backfills up to `--max-batches 2` need no confirmation.
 - `work-session-index --confirm-long-run` is required when the effective max batch count is above `2`, including `--until-complete` when no smaller `--max-batches` is supplied.
-- `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, and `/api/import-events` on the requested local address.
+- `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, `/api/import-events`, `/api/work-summary`, `/api/work-status-export`, `/api/work-summary-snapshots`, and `/api/work-session-index` on the requested local address.
 - `serve --database PATH` makes browser-bridge persistence use the supplied SQLite file by default, so full click QA can exercise save/import flows without touching the permanent vault. Per-request `database_path` payload fields still take precedence.
 
 ## Agent-Native Design Notes

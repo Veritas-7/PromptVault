@@ -20,9 +20,12 @@ import type {
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
   ProjectWorkSummarySnapshotsResult,
+  ProjectWorkStatusExportResult,
+  ProjectWorkStatusExportRow,
 } from "./types.ts";
 
 export type WorkSummaryState = "idle" | "loading" | "ready" | "failed";
+export type WorkStatusExportState = "idle" | "loading" | "ready" | "failed";
 export type WorkSummarySnapshotsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCoverageState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCandidatesState = "idle" | "loading" | "ready" | "failed";
@@ -51,6 +54,19 @@ export function workSummaryActionLabel(
     return `${lockReason}에는 작업 요약을 ${hasResult ? "새로고침" : "생성"}할 수 없습니다`;
   }
   return hasResult ? "작업 요약 새로고침" : "작업 요약 생성";
+}
+
+export function workStatusExportActionLabel(
+  state: WorkStatusExportState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "프로젝트/일별 상태 export 생성 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 프로젝트/일별 상태 export를 ${hasResult ? "새로고침" : "생성"}할 수 없습니다`;
+  }
+  return hasResult ? "상태 export 새로고침" : "상태 export 생성";
 }
 
 export function workManagementRefreshActionLabel(
@@ -85,6 +101,11 @@ export function workSummaryFailureText(state: WorkSummaryState): string | null {
   return "프로젝트 작업 요약을 불러오지 못했습니다. 브리지 상태나 진행 로그 스캔 범위를 확인하세요.";
 }
 
+export function workStatusExportFailureText(state: WorkStatusExportState): string | null {
+  if (state !== "failed") return null;
+  return "프로젝트/일별 상태 export를 불러오지 못했습니다. 진행 로그, 세션 인덱스, 브리지 상태를 확인하세요.";
+}
+
 export function workSummaryMetaText(
   state: WorkSummaryState,
   result: ProjectWorkSummaryResult | null,
@@ -103,6 +124,27 @@ export function workSummaryMetaText(
   return parts.join(" · ");
 }
 
+export function workStatusExportMetaText(
+  state: WorkStatusExportState,
+  result: ProjectWorkStatusExportResult | null,
+): string {
+  if (state === "loading") return "프로젝트/일별 상태 export 생성 중";
+  if (!result) {
+    return state === "failed" ? "상태 export를 사용할 수 없음" : "아직 생성된 상태 export 없음";
+  }
+  const parts = [
+    `표시 ${result.returned_row_count.toLocaleString()}행`,
+    `${result.report_project_count.toLocaleString()}개 프로젝트`,
+    `${result.report_date_count.toLocaleString()}일`,
+    `작업 ${result.report_total_items.toLocaleString()}개`,
+    `진행로그 ${result.report_files_seen.toLocaleString()}개`,
+    `세션 근거 ${result.report_session_evidence_count.toLocaleString()}건`,
+    `고유 ${result.report_unique_session_evidence_count.toLocaleString()}건`,
+  ];
+  if (result.rows_truncated) parts.push("표시 제한");
+  return parts.join(" · ");
+}
+
 export function workSummaryIndexStatusText(result: ProjectWorkSummaryResult): string {
   const indexState = result.report.session_evidence_index_updated
     ? "세션 인덱스 갱신"
@@ -116,6 +158,42 @@ export function workSummaryIndexStatusText(result: ProjectWorkSummaryResult): st
     `보관 ${result.report.session_evidence_index_count.toLocaleString()}개`,
     `매칭 ${result.report.session_evidence_count.toLocaleString()}건`,
     `고유 ${result.report.session_evidence_unique_count.toLocaleString()}건`,
+  ].join(" · ");
+}
+
+export function workStatusExportIndexStatusText(result: ProjectWorkStatusExportResult): string {
+  const indexState = result.report_session_evidence_index_updated
+    ? "세션 인덱스 갱신"
+    : result.report_session_evidence_index_used
+      ? "세션 인덱스 사용"
+      : "세션 직접 스캔";
+  return [
+    indexState,
+    workSummarySessionEvidenceModeLabel(result.report_session_evidence_mode),
+    `스캔 ${result.report_session_scan_prompt_count.toLocaleString()}개`,
+    `보관 ${result.report_session_evidence_index_count.toLocaleString()}개`,
+    `매칭 ${result.report_session_evidence_count.toLocaleString()}건`,
+    `고유 ${result.report_unique_session_evidence_count.toLocaleString()}건`,
+  ].join(" · ");
+}
+
+export function workStatusExportRowStatusText(row: ProjectWorkStatusExportRow): string {
+  const statusLabel: Record<string, string> = {
+    active: "현재 진행",
+    "session-supported": "세션 근거 있음",
+    "progress-log-only": "진행로그만 있음",
+  };
+  const flags = [
+    row.needs_session_evidence ? "세션 근거 필요" : null,
+    row.needs_title_normalization ? "제목 정규화 필요" : null,
+  ].filter((flag): flag is string => flag !== null);
+  return [
+    statusLabel[row.operational_status] ?? row.operational_status,
+    `작업 ${row.work_item_count.toLocaleString()}개`,
+    `파일 ${row.source_file_count.toLocaleString()}개`,
+    `세션 ${row.session_evidence_count.toLocaleString()}건`,
+    `고유 ${row.unique_session_evidence_count.toLocaleString()}건`,
+    ...flags,
   ].join(" · ");
 }
 

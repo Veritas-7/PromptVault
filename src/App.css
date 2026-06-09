@@ -321,6 +321,30 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.work-status-export-content {
+  gap: 10px;
+}
+
+.work-status-export-row {
+  grid-template-columns: minmax(130px, 0.25fr) minmax(260px, 1fr) minmax(210px, auto) minmax(190px, auto);
+}
+
+.work-status-export-row.status-progress-log-only {
+  background: #fffaf1;
+}
+
+.work-status-export-row.status-session-supported {
+  background: #f7fbf6;
+}
+
+.work-status-export-row.status-active {
+  background: #f3f8ff;
+}
+
+.work-status-export-row span {
+  overflow-wrap: anywhere;
+}
+
 .work-log-proposal-approval {
   align-items: center;
   color: #3f5748;

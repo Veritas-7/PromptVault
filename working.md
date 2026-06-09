@@ -1,12 +1,120 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 17:56 KST
+Updated: 2026-06-09 18:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 confirmation-gated long session backfill
+## Current Slice - 2026-06-09 app-visible project/day status export
+
+Current Goal:
+
+- Make the project/day work-status export visible inside the app and browser
+  bridge, not only through the CLI.
+- Let the operator answer "how complete is project/day management?" from one
+  UI surface that combines parsed progress logs, `working.md` / `workingd.md`
+  style project logs, and sanitized Codex/Codex CX session evidence.
+
+Context:
+
+- The backend `work-status-export` command already groups project-local
+  progress logs by project and day, then overlays sanitized session evidence
+  from the session index.
+- The prior state proved the management model existed, but it was still mostly
+  a CLI/backend proof. The app needed a compact browser-visible view with the
+  same counters and row statuses.
+- The session index is real but bounded: the latest isolated browser QA used
+  `session_limit=200`, so the UI correctly still shows some
+  `progress-log-only` rows until more long backfill work is intentionally run.
+
+Progress:
+
+- Added a Tauri command and browser bridge route for
+  `/api/work-status-export`.
+- Added typed frontend parsing and validation for the status export result.
+- Added a work-summary panel action `상태 Export` / `상태 새로고침`.
+- Added app-visible metadata for project/day scope, progress-log file count,
+  linked session evidence, unique session records, truncation, warnings, and
+  session-index mode.
+- Added row-level UI for `active`, `session-supported`, and
+  `progress-log-only` states, including flags for missing session evidence and
+  rough title normalization.
+- Extended the isolated browser bridge QA so it clicks the new status export
+  action and asserts the rendered meta, index summary, Markdown export, and
+  row list.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - exposed `project_work_status_export` as a Tauri command.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added `/api/work-status-export` to the local bridge and route validation.
+- `src/types.ts` and `src/promptVaultApi.ts`:
+  - added status export result/row types, bridge request options, and strict
+    response validation.
+- `src/workSummaryStatus.ts`:
+  - added labels and metadata text for status export action/state/rows.
+- `src/App.tsx` and `src/App.css`:
+  - added the visible status export action, error/warning/meta/index display,
+    row list, Markdown preview, and status-specific styling.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`:
+  - added coverage for bridge payloads, row validation, action labels, and
+    project/day evidence text.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added browser proof for the visible status export path.
+- `README.md`, `docs/CLI.md`, and `working.md`:
+  - documented the browser bridge endpoint and operator-facing contract.
+
+Tests:
+
+- `cargo fmt --manifest-path src-tauri/Cargo.toml`: PASS.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts --test-name-pattern "work status export"`:
+  PASS.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts --test-name-pattern "work status export"`:
+  PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli
+  bridge_routes_work_status_export_validation_errors -- --nocapture`: PASS.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Browser bridge evidence:
+  - status export meta: `표시 12행 · 31개 프로젝트 · 25일 · 작업 8,907개 ·
+    진행로그 832개 · 세션 근거 73,459건 · 고유 200건 · 표시 제한`;
+  - session index: `세션 인덱스 사용 · 근거 메타데이터 우선/raw fallback ·
+    스캔 200개 · 보관 200개 · 매칭 73,459건 · 고유 200건`;
+  - visible rows included CareVault and NuancedNarrator as
+    `session-supported`, PromptVault as `active`, QualityGate with title
+    normalization needed, and ResearchFlowAI as `progress-log-only`.
+- `npm run check`: PASS, including UI tests (`468`), production build, Rust lib
+  tests (`192`), CLI tests (`31`), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- The current level is "managed and verified for parsed progress logs plus a
+  bounded real session index", not "all historical sessions exhausted".
+- Some project/day rows remain `progress-log-only`; they need more confirmed
+  long session-index backfill before claiming full session support.
+- AI cleanup is available through existing OpenAI/GLM/local review flows, but
+  this slice keeps title normalization and extraction review operator-gated.
+
+Research:
+
+- No external research was needed. This reused the existing work-report,
+  session-index, browser bridge, and QA contracts.
+
+Next Steps:
+
+- Keep running confirmed long session-index backfills until high-value
+  `progress-log-only` rows become `session-supported`.
+- Use the existing extraction/normalization proposal flows to AI-clean rough
+  project/day titles and save only approved rows.
+- Add a focused drill-down from each status row into the underlying source log
+  and matching sanitized session evidence when the operator needs an audit
+  trail for a specific project/day.
+
+## Completed Slice - 2026-06-09 confirmation-gated long session backfill
 
 Current Goal:
 

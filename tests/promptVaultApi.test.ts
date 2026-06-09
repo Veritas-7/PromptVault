@@ -18,6 +18,7 @@ import {
   listProjectWorkLogExtractionRuns,
   loadStoredPrompts,
   loadProjectWorkSummary,
+  loadProjectWorkStatusExport,
   runProjectWorkSessionIndex,
   listProjectWorkSummarySnapshots,
   listImportEvents,
@@ -331,6 +332,46 @@ function projectWorkSummaryPayload(overrides = {}) {
     },
     extraction_merge: null,
     persistence: null,
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function projectWorkStatusExportPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    markdown: "# PromptVault Project/Day Work Status\n\n| Date | Project | Status |\n|---|---|---|\n| 2026-06-09 | PromptVault | active |",
+    returned_row_count: 1,
+    rows_truncated: false,
+    report_total_items: 3,
+    report_project_count: 1,
+    report_date_count: 1,
+    report_files_seen: 2,
+    report_session_scan_prompt_count: 20,
+    report_session_evidence_count: 7,
+    report_unique_session_evidence_count: 2,
+    report_session_evidence_index_used: true,
+    report_session_evidence_index_updated: false,
+    report_session_evidence_index_count: 200,
+    report_session_evidence_mode: "metadata-first-raw-fallback",
+    rows: [{
+      date: "2026-06-09",
+      project: "PromptVault",
+      operational_status: "active",
+      source_statuses: [{ text: "current", count: 3 }],
+      work_item_count: 3,
+      source_file_count: 2,
+      source_files: ["working.md", "workingd.md"],
+      top_titles: ["Status export UI"],
+      sample_evidence: "Added status export UI evidence.",
+      latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+      latest_source_file: "working.md",
+      session_evidence_count: 7,
+      unique_session_evidence_count: 2,
+      session_sources: [{ text: "Codex local sessions", count: 7 }],
+      needs_session_evidence: false,
+      needs_title_normalization: false,
+    }],
     warnings: [],
     ...overrides,
   };
@@ -727,6 +768,37 @@ test("browser bridge work summary posts options and validates citation payloads"
   assert.equal(result.provider, "local-citation-rules");
   assert.equal(result.summaries[0].citations[0].id, "2026-06-09-PromptVault-1");
   assert.equal(result.report.session_evidence_index_used, true);
+});
+
+test("browser bridge work status export posts options and validates rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkStatusExportPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkStatusExport({
+    limit: 12,
+    session_limit: 200,
+  });
+
+  assert.match(requestPath, /\/api\/work-status-export$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      limit: 12,
+      session_limit: 200,
+    },
+  });
+  assert.equal(result.returned_row_count, 1);
+  assert.equal(result.rows[0].project, "PromptVault");
+  assert.equal(result.rows[0].source_files[1], "workingd.md");
+  assert.equal(result.report_session_evidence_count, 7);
 });
 
 test("browser bridge work session index posts until-complete options and validates source states", async (t) => {

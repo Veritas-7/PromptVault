@@ -1236,6 +1236,13 @@ async fn project_work_summary(
 }
 
 #[tauri::command]
+fn project_work_status_export(
+    options: Option<ProjectWorkStatusExportOptions>,
+) -> Result<ProjectWorkStatusExportResult, String> {
+    run_project_work_status_export(options.unwrap_or_default()).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
 fn project_work_summary_snapshots(
     options: Option<ProjectWorkSummarySnapshotsOptions>,
 ) -> Result<ProjectWorkSummarySnapshotsResult, String> {
@@ -12512,6 +12519,7 @@ pub fn run() {
             load_stored_prompts,
             improve_prompt,
             project_work_summary,
+            project_work_status_export,
             project_work_summary_snapshots,
             project_work_log_coverage,
             project_work_log_candidates,

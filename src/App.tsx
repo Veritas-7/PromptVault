@@ -123,6 +123,7 @@ import {
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
   loadProjectWorkSummary,
+  loadProjectWorkStatusExport,
   PROJECT_WORK_SESSION_INDEX_MAX_BATCH_FILES,
   runProjectWorkSessionIndex,
   listProjectWorkSummarySnapshots,
@@ -253,6 +254,7 @@ import type {
   ProjectWorkLogReviewQueueResult,
   PromptRecord,
   ProjectWorkSessionIndexResult,
+  ProjectWorkStatusExportResult,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
   ScanPlan,
@@ -309,6 +311,11 @@ import {
   workSummaryIndexStatusText,
   workSummaryMetaText,
   workSummaryPersistenceText,
+  workStatusExportActionLabel,
+  workStatusExportFailureText,
+  workStatusExportIndexStatusText,
+  workStatusExportMetaText,
+  workStatusExportRowStatusText,
   workSummarySnapshotsActionLabel,
   workSummarySnapshotsFailureText,
   workSummarySnapshotsMetaText,
@@ -329,6 +336,7 @@ import {
   type WorkLogNormalizationReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
+  type WorkStatusExportState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "./workSummaryStatus";
@@ -341,6 +349,8 @@ type WorkSessionIndexBackfillMode = "reset" | "continue" | "long-continue";
 const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
+const WORK_STATUS_EXPORT_LIMIT = 12;
+const WORK_STATUS_EXPORT_DISPLAY_LIMIT = 6;
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_SESSION_INDEX_MAX_BATCHES = 2;
 const WORK_SESSION_INDEX_LONG_MAX_BATCHES = 10;
@@ -566,6 +576,7 @@ function App() {
   const [importEventsState, setImportEventsState] = useState<ImportEventsState>("idle");
   const [storedFacetsState, setStoredFacetsState] = useState<StoredFacetsState>("idle");
   const [workSummaryState, setWorkSummaryState] = useState<WorkSummaryState>("idle");
+  const [workStatusExportState, setWorkStatusExportState] = useState<WorkStatusExportState>("idle");
   const [workSessionIndexState, setWorkSessionIndexState] = useState<WorkSessionIndexState>("idle");
   const [workSessionIndexRunMode, setWorkSessionIndexRunMode] =
     useState<WorkSessionIndexBackfillMode | null>(null);
@@ -610,6 +621,8 @@ function App() {
   const [storedFacetsResult, setStoredFacetsResult] = useState<StoredPromptFacetsResult | null>(null);
   const [workSessionIndexResult, setWorkSessionIndexResult] =
     useState<ProjectWorkSessionIndexResult | null>(null);
+  const [workStatusExportResult, setWorkStatusExportResult] =
+    useState<ProjectWorkStatusExportResult | null>(null);
   const [workSummaryResult, setWorkSummaryResult] = useState<ProjectWorkSummaryResult | null>(null);
   const [workLogCoverageResult, setWorkLogCoverageResult] = useState<ProjectWorkLogCoverageResult | null>(null);
   const [workLogCandidatesResult, setWorkLogCandidatesResult] =
@@ -696,6 +709,7 @@ function App() {
   const isStoredLoadRunning = storedLoadState === "loading";
   const isWorkSummaryRunning =
     workSummaryState === "loading"
+    || workStatusExportState === "loading"
     || workSessionIndexState === "loading"
     || workSummarySnapshotsState === "loading"
     || workLogCoverageState === "loading"
@@ -895,6 +909,11 @@ function App() {
   }, [storedFacetsResult?.workspaces]);
   const storedFacetsFailureMessage = storedFacetsFailureText(storedFacetsState);
   const workSummaryFailureMessage = workSummaryFailureText(workSummaryState);
+  const workStatusExportFailureMessage = workStatusExportFailureText(workStatusExportState);
+  const workStatusExportMeta = workStatusExportMetaText(workStatusExportState, workStatusExportResult);
+  const workStatusExportIndexStatus = workStatusExportResult
+    ? workStatusExportIndexStatusText(workStatusExportResult)
+    : null;
   const workSummaryMeta = workSummaryMetaText(workSummaryState, workSummaryResult);
   const workSessionIndexMeta = workSessionIndexMetaText(
     workSessionIndexState,
@@ -991,6 +1010,12 @@ function App() {
     workLogExtractionResult?.proposals ?? [],
   );
   const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
+  const visibleWorkStatusExportRows =
+    workStatusExportResult?.rows.slice(0, WORK_STATUS_EXPORT_DISPLAY_LIMIT) ?? [];
+  const hiddenWorkStatusExportRowCount = Math.max(
+    0,
+    (workStatusExportResult?.rows.length ?? 0) - WORK_STATUS_EXPORT_DISPLAY_LIMIT,
+  );
   const hiddenWorkSummaryCount = Math.max(
     0,
     (workSummaryResult?.summaries.length ?? 0) - WORK_SUMMARY_DISPLAY_LIMIT,
@@ -1817,18 +1842,49 @@ function App() {
     }
   }
 
+  async function refreshWorkStatusExport({ refreshSessionIndex = false }: { refreshSessionIndex?: boolean } = {}) {
+    const sessionLimit = workSummarySessionLimit;
+    if (sessionLimit === null) {
+      const message = workSummarySessionLimitStatus;
+      setError(message);
+      setWorkStatusExportState("failed");
+      return;
+    }
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkStatusExportState("loading");
+    try {
+      const next = await loadProjectWorkStatusExport({
+        limit: WORK_STATUS_EXPORT_LIMIT,
+        session_limit: sessionLimit,
+        refresh_session_index: refreshSessionIndex,
+      });
+      setWorkStatusExportResult(next);
+      setWorkStatusExportState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkStatusExportState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
   async function refreshWorkManagementOverview() {
     const sessionLimit = workSummarySessionLimit;
     if (sessionLimit === null) {
       const message = workSummarySessionLimitStatus;
       setError(message);
       setWorkManagementRefreshState("failed");
+      setWorkStatusExportState("failed");
       setWorkSummaryState("failed");
       return;
     }
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkManagementRefreshState("loading");
+    setWorkStatusExportState("loading");
     setWorkSummaryState("loading");
     setWorkSummarySnapshotsState("loading");
     setWorkLogCoverageState("loading");
@@ -1837,6 +1893,13 @@ function App() {
     setWorkLogExtractionState("loading");
     setWorkLogExtractionItemsState("loading");
     try {
+      const nextStatusExport = await loadProjectWorkStatusExport({
+        limit: WORK_STATUS_EXPORT_LIMIT,
+        session_limit: sessionLimit,
+      });
+      setWorkStatusExportResult(nextStatusExport);
+      setWorkStatusExportState("ready");
+
       const nextSummary = await loadProjectWorkSummary({
         limit: WORK_SUMMARY_LIMIT,
         session_limit: sessionLimit,
@@ -1881,6 +1944,7 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkManagementRefreshState("failed");
+      setWorkStatusExportState((current) => (current === "loading" ? "failed" : current));
       setWorkSummaryState((current) => (current === "loading" ? "failed" : current));
       setWorkSummarySnapshotsState((current) => (current === "loading" ? "failed" : current));
       setWorkLogCoverageState((current) => (current === "loading" ? "failed" : current));
@@ -2486,6 +2550,25 @@ function App() {
                   : "전체 관리"}
             </button>
             <button
+              aria-label={workStatusExportActionLabel(
+                workStatusExportState,
+                workStatusExportResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-status-export="true"
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
+              onClick={() => void refreshWorkStatusExport()}
+              type="button"
+            >
+              <FileText size={15} />
+              {workStatusExportState === "loading"
+                ? "Export 중"
+                : workStatusExportResult
+                  ? "상태 새로고침"
+                  : "상태 Export"}
+            </button>
+            <button
               aria-label={workSummaryActionLabel(
                 workSummaryState,
                 workSummaryResult !== null,
@@ -2914,6 +2997,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workSummaryFailureMessage}</span>
+          </div>
+        ) : null}
+        {workStatusExportFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-status-export-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workStatusExportFailureMessage}</span>
           </div>
         ) : null}
         {workSummarySnapshotsFailureMessage ? (
@@ -3491,6 +3584,24 @@ function App() {
             <span>{workSummarySnapshotsMeta}</span>
           </div>
         ) : null}
+        {workStatusExportResult || workStatusExportState !== "idle" ? (
+          <div className="work-summary-index" data-work-status-export-meta="true">
+            <ClipboardList size={15} />
+            <span>{workStatusExportMeta}</span>
+          </div>
+        ) : null}
+        {workStatusExportIndexStatus ? (
+          <div className="work-summary-index" data-work-status-export-index="true">
+            <ShieldCheck size={15} />
+            <span>{workStatusExportIndexStatus}</span>
+          </div>
+        ) : null}
+        {workStatusExportResult?.warnings.length ? (
+          <div className="work-summary-index warning" data-work-status-export-warning="true">
+            <AlertTriangle size={15} />
+            <span>{workStatusExportResult.warnings.join(" · ")}</span>
+          </div>
+        ) : null}
         {workLogCoverageResult || workLogCoverageState !== "idle" ? (
           <div className="work-summary-index" data-work-log-coverage-meta="true">
             <FileText size={15} />
@@ -3628,6 +3739,33 @@ function App() {
                 : "로드된 프로젝트/일자 관리 근거 없음"}
             </div>
           )
+        ) : null}
+        {workStatusExportResult ? (
+          <div className="work-summary-content work-status-export-content" data-work-status-export="true">
+            <div className="work-summary-list compact">
+              {visibleWorkStatusExportRows.map((row) => (
+                <article
+                  className={`work-summary-row work-status-export-row status-${row.operational_status}`}
+                  data-work-status-export-row="true"
+                  key={`${row.date}-${row.project}`}
+                >
+                  <div>
+                    <strong>{row.project}</strong>
+                    <span>{row.date}</span>
+                  </div>
+                  <p>{(row.top_titles[0] ?? row.sample_evidence) || "제목 없는 프로젝트/일별 상태"}</p>
+                  <span>{workStatusExportRowStatusText(row)}</span>
+                  <span>{pathDisplayText(row.latest_source_path)}</span>
+                </article>
+              ))}
+              {hiddenWorkStatusExportRowCount ? (
+                <div className="work-summary-overflow" data-work-status-export-overflow="true">
+                  그 외 상태 row {hiddenWorkStatusExportRowCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+            <pre data-work-status-export-markdown="true">{workStatusExportResult.markdown}</pre>
+          </div>
         ) : null}
         {workSummaryResult ? (
           <div className="work-summary-content">

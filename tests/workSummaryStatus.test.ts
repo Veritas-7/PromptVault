@@ -50,6 +50,11 @@ import {
   workSummaryIndexStatusText,
   workSummaryMetaText,
   workSummaryPersistenceText,
+  workStatusExportActionLabel,
+  workStatusExportFailureText,
+  workStatusExportIndexStatusText,
+  workStatusExportMetaText,
+  workStatusExportRowStatusText,
   workSummarySnapshotsActionLabel,
   workSummarySnapshotsFailureText,
   workSummarySnapshotsMetaText,
@@ -70,6 +75,7 @@ import {
   type WorkLogNormalizationReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
+  type WorkStatusExportState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
 } from "../src/workSummaryStatus.ts";
@@ -91,6 +97,7 @@ import type {
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
   ProjectWorkSummarySnapshotsResult,
+  ProjectWorkStatusExportResult,
 } from "../src/types.ts";
 
 function lockState(overrides: Partial<ActionLockState> = {}): ActionLockState {
@@ -135,6 +142,63 @@ function summaryResult(overrides: Partial<ProjectWorkSummaryResult> = {}): Proje
       items: [],
       warnings: [],
     },
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = {}): ProjectWorkStatusExportResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    markdown: "# PromptVault Project/Day Work Status",
+    returned_row_count: 2,
+    rows_truncated: true,
+    report_total_items: 10,
+    report_project_count: 3,
+    report_date_count: 2,
+    report_files_seen: 4,
+    report_session_scan_prompt_count: 20,
+    report_session_evidence_count: 9,
+    report_unique_session_evidence_count: 3,
+    report_session_evidence_index_used: true,
+    report_session_evidence_index_updated: false,
+    report_session_evidence_index_count: 200,
+    report_session_evidence_mode: "metadata-first-raw-fallback",
+    rows: [{
+      date: "2026-06-09",
+      project: "PromptVault",
+      operational_status: "progress-log-only",
+      source_statuses: [{ text: "done", count: 2 }],
+      work_item_count: 2,
+      source_file_count: 1,
+      source_files: ["working.md"],
+      top_titles: ["Status export"],
+      sample_evidence: "Status export evidence",
+      latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+      latest_source_file: "working.md",
+      session_evidence_count: 0,
+      unique_session_evidence_count: 0,
+      session_sources: [],
+      needs_session_evidence: true,
+      needs_title_normalization: true,
+    }, {
+      date: "2026-06-08",
+      project: "CareVault",
+      operational_status: "session-supported",
+      source_statuses: [{ text: "done", count: 8 }],
+      work_item_count: 8,
+      source_file_count: 3,
+      source_files: ["working.md", "workingd.md", "WORKLOG.md"],
+      top_titles: ["CareVault session evidence"],
+      sample_evidence: "CareVault evidence",
+      latest_source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      latest_source_file: "workingd.md",
+      session_evidence_count: 9,
+      unique_session_evidence_count: 3,
+      session_sources: [{ text: "Codex local sessions", count: 9 }],
+      needs_session_evidence: false,
+      needs_title_normalization: false,
+    }],
     warnings: [],
     ...overrides,
   };
@@ -531,6 +595,26 @@ test("work summary action label explains ready, loading, and locked states", () 
   );
 });
 
+test("work status export action label explains ready, loading, and locked states", () => {
+  const loading: WorkStatusExportState = "loading";
+  assert.equal(
+    workStatusExportActionLabel("idle", false, lockState()),
+    "상태 export 생성",
+  );
+  assert.equal(
+    workStatusExportActionLabel("ready", true, lockState()),
+    "상태 export 새로고침",
+  );
+  assert.equal(
+    workStatusExportActionLabel(loading, true, lockState({ workSummaryRunning: true })),
+    "프로젝트/일별 상태 export 생성 중",
+  );
+  assert.equal(
+    workStatusExportActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 프로젝트/일별 상태 export를 새로고침할 수 없습니다",
+  );
+});
+
 test("work management refresh action label explains overview loading and locks", () => {
   const loading: WorkManagementRefreshState = "loading";
   assert.equal(
@@ -632,6 +716,29 @@ test("work summary status text uses report counts and index state", () => {
     })),
     "세션 직접 스캔 · 근거 메타데이터 우선/raw fallback · 스캔 20개 · 보관 0개 · 매칭 541건 · 고유 11건",
   );
+});
+
+test("work status export text exposes project day evidence coverage", () => {
+  const result = statusExportResult();
+  assert.equal(
+    workStatusExportMetaText("ready", result),
+    "표시 2행 · 3개 프로젝트 · 2일 · 작업 10개 · 진행로그 4개 · 세션 근거 9건 · 고유 3건 · 표시 제한",
+  );
+  assert.equal(
+    workStatusExportIndexStatusText(result),
+    "세션 인덱스 사용 · 근거 메타데이터 우선/raw fallback · 스캔 20개 · 보관 200개 · 매칭 9건 · 고유 3건",
+  );
+  assert.equal(
+    workStatusExportRowStatusText(result.rows[0]),
+    "진행로그만 있음 · 작업 2개 · 파일 1개 · 세션 0건 · 고유 0건 · 세션 근거 필요 · 제목 정규화 필요",
+  );
+  assert.equal(workStatusExportMetaText("loading", result), "프로젝트/일별 상태 export 생성 중");
+  assert.equal(workStatusExportMetaText("failed", null), "상태 export를 사용할 수 없음");
+  assert.equal(
+    workStatusExportFailureText("failed"),
+    "프로젝트/일별 상태 export를 불러오지 못했습니다. 진행 로그, 세션 인덱스, 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workStatusExportFailureText("ready"), null);
 });
 
 test("work summary persistence text is only shown after snapshot saves", () => {

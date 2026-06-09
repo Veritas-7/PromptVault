@@ -2150,6 +2150,11 @@ struct ProjectWorkSummaryBridgePayload {
 }
 
 #[derive(serde::Deserialize)]
+struct ProjectWorkStatusExportBridgePayload {
+    options: Option<ProjectWorkStatusExportOptions>,
+}
+
+#[derive(serde::Deserialize)]
 struct ProjectWorkLogCandidatesBridgePayload {
     options: Option<ProjectWorkLogExtractionCandidatesOptions>,
 }
@@ -2441,6 +2446,16 @@ fn handle_bridge_route(
             let result = runtime.block_on(run_project_work_summary(options))?;
             write_json_response(stream, 200, &result)
         }
+        ("POST", "/api/work-status-export") => {
+            let payload =
+                serde_json::from_str::<ProjectWorkStatusExportBridgePayload>(&request.body)?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_project_work_status_export(options)?;
+            write_json_response(stream, 200, &result)
+        }
         ("POST", "/api/work-summary-snapshots") => {
             let payload =
                 serde_json::from_str::<ProjectWorkSummarySnapshotsBridgePayload>(&request.body)?;
@@ -2620,6 +2635,7 @@ fn bridge_route_uses_database(method: &str, path: &str) -> bool {
             | ("POST", "/api/scan")
             | ("POST", "/api/improve")
             | ("POST", "/api/work-summary")
+            | ("POST", "/api/work-status-export")
             | ("POST", "/api/work-summary-snapshots")
             | ("POST", "/api/work-session-index")
             | ("POST", "/api/work-log-review-queue")
@@ -2870,6 +2886,15 @@ mod tests {
 
         assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
         assert!(response.contains("work-summary summary_limit requires a positive integer"));
+        assert!(response.contains("Access-Control-Allow-Origin: *"));
+    }
+
+    #[test]
+    fn bridge_routes_work_status_export_validation_errors() {
+        let response = bridge_response_for("/api/work-status-export", r#"{"options":{"limit":0}}"#);
+
+        assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(response.contains("work-status-export limit requires a positive integer"));
         assert!(response.contains("Access-Control-Allow-Origin: *"));
     }
 
@@ -3155,6 +3180,7 @@ mod tests {
             "/api/scan",
             "/api/improve",
             "/api/work-summary",
+            "/api/work-status-export",
             "/api/work-summary-snapshots",
             "/api/work-session-index",
             "/api/work-log-review-queue",

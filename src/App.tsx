@@ -415,6 +415,7 @@ const WORK_STATUS_EXPORT_ROW_FILTER_OPTIONS: WorkStatusExportRowFilter[] = [
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_SESSION_INDEX_MAX_BATCHES = 2;
 const WORK_SESSION_INDEX_LONG_MAX_BATCHES = 10;
+const WORK_SESSION_INDEX_MAX_LONG_BATCHES = 1_000;
 const WORK_SESSION_INDEX_LONG_CONFIRM_TEXT = "긴 백필";
 const WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES = Math.min(
   500,
@@ -466,6 +467,16 @@ function parseWorkSessionIndexBatchFiles(value: string): number | null {
   return parsed;
 }
 
+function parseWorkSessionIndexLongMaxBatches(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > WORK_SESSION_INDEX_MAX_LONG_BATCHES) {
+    return null;
+  }
+  return parsed;
+}
+
 function workSessionIndexBatchFilesStatusText(
   input: string,
   effectiveBatchFiles: number | null,
@@ -491,15 +502,32 @@ function workSessionIndexLongRunConfirmed(input: string): boolean {
 function workSessionIndexLongRunStatusText(
   input: string,
   effectiveBatchFiles: number | null,
+  longMaxBatches: number | null,
 ): string {
   if (effectiveBatchFiles === null) return "긴 백필 계산 대기";
-  const filesPerSourceRun = effectiveBatchFiles * WORK_SESSION_INDEX_LONG_MAX_BATCHES;
+  if (longMaxBatches === null) {
+    return `긴 백필 반복은 1-${WORK_SESSION_INDEX_MAX_LONG_BATCHES.toLocaleString()} 사이 숫자`;
+  }
+  const filesPerSourceRun = effectiveBatchFiles * longMaxBatches;
   if (workSessionIndexLongRunConfirmed(input)) {
-    return `긴 백필 확인됨 · source당 최대 ${filesPerSourceRun.toLocaleString()}개`;
+    return `긴 백필 확인됨 · 반복 ${longMaxBatches.toLocaleString()}배치 · source당 최대 ${filesPerSourceRun.toLocaleString()}개`;
   }
   return `긴 백필 잠김 · ${WORK_SESSION_INDEX_LONG_CONFIRM_TEXT} 입력 필요 · source당 최대 ${
     filesPerSourceRun.toLocaleString()
   }개`;
+}
+
+function calculateWorkSessionIndexCompletionMaxBatches(
+  result: ProjectWorkSessionIndexResult | null,
+  batchFiles: number,
+): number | null {
+  if (!result?.source_states.length || result.all_sources_completed) return null;
+  const maxRemainingFiles = Math.max(
+    ...result.source_states.map((source) => Math.max(0, source.total_files - source.processed_files)),
+  );
+  if (maxRemainingFiles <= 0) return null;
+  const requiredBatches = Math.ceil(maxRemainingFiles / batchFiles);
+  return Math.min(WORK_SESSION_INDEX_MAX_LONG_BATCHES, Math.max(1, requiredBatches));
 }
 
 function workSessionIndexMetaText(
@@ -694,6 +722,9 @@ function App() {
   const [workStatusExportOffset, setWorkStatusExportOffset] = useState(0);
   const [workSessionIndexBatchFilesInput, setWorkSessionIndexBatchFilesInput] = useState("");
   const [workSessionIndexLongConfirmInput, setWorkSessionIndexLongConfirmInput] = useState("");
+  const [workSessionIndexLongMaxBatchesInput, setWorkSessionIndexLongMaxBatchesInput] = useState(
+    String(WORK_SESSION_INDEX_LONG_MAX_BATCHES),
+  );
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -894,6 +925,13 @@ function App() {
   const workSessionIndexEffectiveBatchFiles = workSummarySessionLimit === null
     ? null
     : workSessionIndexBatchFilesOverride ?? workSessionIndexBatchFiles(workSummarySessionLimit);
+  const workSessionIndexEffectiveLongMaxBatches =
+    parseWorkSessionIndexLongMaxBatches(workSessionIndexLongMaxBatchesInput);
+  const workSessionIndexLongMaxBatchesInvalid = workSessionIndexEffectiveLongMaxBatches === null;
+  const workSessionIndexCompletionMaxBatches = calculateWorkSessionIndexCompletionMaxBatches(
+    workSessionIndexResult,
+    WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES,
+  );
   const workSessionIndexBatchFilesStatus = workSessionIndexBatchFilesStatusText(
     workSessionIndexBatchFilesInput,
     workSessionIndexEffectiveBatchFiles,
@@ -902,6 +940,7 @@ function App() {
   const workSessionIndexLongStatus = workSessionIndexLongRunStatusText(
     workSessionIndexLongConfirmInput,
     workSessionIndexEffectiveBatchFiles,
+    workSessionIndexEffectiveLongMaxBatches,
   );
   const hasPromptResult = result !== null;
   const previewModePendingMessage = pendingPreviewModeNotice(
@@ -1041,19 +1080,19 @@ function App() {
     workSessionIndexResult,
     workSessionIndexEffectiveBatchFiles,
     WORK_SESSION_INDEX_MAX_BATCHES,
-    WORK_SESSION_INDEX_LONG_MAX_BATCHES,
+    workSessionIndexEffectiveLongMaxBatches ?? 0,
   );
   const workSessionIndexCheckpointGuidance = workSessionIndexCheckpointGuidanceText(
     workSessionIndexResult,
     workSessionIndexEffectiveBatchFiles,
     WORK_SESSION_INDEX_MAX_BATCHES,
-    WORK_SESSION_INDEX_LONG_MAX_BATCHES,
+    workSessionIndexEffectiveLongMaxBatches ?? 0,
   );
   const workSessionIndexNextRunImpact = workSessionIndexNextRunImpactText(
     workSessionIndexResult,
     workSessionIndexEffectiveBatchFiles,
     WORK_SESSION_INDEX_MAX_BATCHES,
-    WORK_SESSION_INDEX_LONG_MAX_BATCHES,
+    workSessionIndexEffectiveLongMaxBatches ?? 0,
     workSessionIndexLongConfirmed,
   );
   const workSessionIndexPartialBackfillWarning =
@@ -1146,7 +1185,7 @@ function App() {
     },
     workSessionIndexEffectiveBatchFiles,
     WORK_SESSION_INDEX_MAX_BATCHES,
-    WORK_SESSION_INDEX_LONG_MAX_BATCHES,
+    workSessionIndexEffectiveLongMaxBatches ?? 0,
     WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES,
     workSessionIndexLongConfirmed,
   );
@@ -2088,13 +2127,18 @@ function App() {
       setWorkSessionIndexState("failed");
       return;
     }
+    if (isLongContinue && workSessionIndexEffectiveLongMaxBatches === null) {
+      setError(workSessionIndexLongStatus);
+      setWorkSessionIndexState("failed");
+      return;
+    }
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkSessionIndexRunMode(mode);
     setWorkSessionIndexState("loading");
     try {
       const maxBatches = isLongContinue
-        ? WORK_SESSION_INDEX_LONG_MAX_BATCHES
+        ? workSessionIndexEffectiveLongMaxBatches ?? WORK_SESSION_INDEX_LONG_MAX_BATCHES
         : WORK_SESSION_INDEX_MAX_BATCHES;
       const next = await runProjectWorkSessionIndex({
         batch_files: workSessionIndexEffectiveBatchFiles,
@@ -2906,6 +2950,20 @@ function App() {
                 onChange={(event) => setWorkSessionIndexLongConfirmInput(event.currentTarget.value)}
               />
             </label>
+            <label className="session-limit-control">
+              <span>긴 반복</span>
+              <input
+                aria-label={`긴 이어 백필 반복 배치 수. 1-${WORK_SESSION_INDEX_MAX_LONG_BATCHES.toLocaleString()} 사이 숫자`}
+                data-work-session-index-long-max-batches="true"
+                disabled={isTopLevelActionLocked}
+                min={1}
+                max={WORK_SESSION_INDEX_MAX_LONG_BATCHES}
+                step={10}
+                type="number"
+                value={workSessionIndexLongMaxBatchesInput}
+                onChange={(event) => setWorkSessionIndexLongMaxBatchesInput(event.currentTarget.value)}
+              />
+            </label>
             <button
               aria-label={`세션 백필 source당 ${WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES.toLocaleString()}개와 긴 백필 확인 문구 적용`}
               className="inline-action"
@@ -2914,11 +2972,32 @@ function App() {
               onClick={() => {
                 setWorkSessionIndexBatchFilesInput(String(WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES));
                 setWorkSessionIndexLongConfirmInput(WORK_SESSION_INDEX_LONG_CONFIRM_TEXT);
+                setWorkSessionIndexLongMaxBatchesInput(String(WORK_SESSION_INDEX_LONG_MAX_BATCHES));
               }}
               type="button"
             >
               <ShieldCheck size={15} />
               대용량 적용
+            </button>
+            <button
+              aria-label={
+                workSessionIndexCompletionMaxBatches
+                  ? `세션 백필 완료 계획 적용: source당 ${WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES.toLocaleString()}개, 긴 반복 ${workSessionIndexCompletionMaxBatches.toLocaleString()}배치`
+                  : "세션 백필 완료 계획은 백필 상태를 먼저 확인한 뒤 사용할 수 있습니다"
+              }
+              className="inline-action"
+              data-apply-work-session-index-completion-plan="true"
+              disabled={isTopLevelActionLocked || workSessionIndexCompletionMaxBatches === null}
+              onClick={() => {
+                if (workSessionIndexCompletionMaxBatches === null) return;
+                setWorkSessionIndexBatchFilesInput(String(WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES));
+                setWorkSessionIndexLongConfirmInput(WORK_SESSION_INDEX_LONG_CONFIRM_TEXT);
+                setWorkSessionIndexLongMaxBatchesInput(String(workSessionIndexCompletionMaxBatches));
+              }}
+              type="button"
+            >
+              <CheckCircle2 size={15} />
+              완료 계획
             </button>
             <button
               aria-label={workManagementRefreshActionLabel(
@@ -3016,13 +3095,16 @@ function App() {
                 : "이어 백필"}
             </button>
             <button
-              aria-label={`확인 문구 입력 후 저장된 세션 인덱스 커서부터 최대 ${WORK_SESSION_INDEX_LONG_MAX_BATCHES.toLocaleString()}배치 긴 이어 백필`}
+              aria-label={`확인 문구 입력 후 저장된 세션 인덱스 커서부터 최대 ${
+                (workSessionIndexEffectiveLongMaxBatches ?? WORK_SESSION_INDEX_LONG_MAX_BATCHES).toLocaleString()
+              }배치 긴 이어 백필`}
               className="inline-action"
               data-run-work-session-index-long-continue-backfill="true"
               disabled={
                 isTopLevelActionLocked
                 || workSummarySessionLimitInvalid
                 || workSessionIndexBatchFilesInvalid
+                || workSessionIndexLongMaxBatchesInvalid
                 || !workSessionIndexLongConfirmed
               }
               onClick={() => void runWorkSessionIndexBackfill("long-continue")}

@@ -673,6 +673,28 @@ async function runBrowserQa() {
       (await page.locator('[data-work-session-index-checkpoint-guidance="true"]').textContent())?.trim() ?? "";
     workSessionIndexBackfill.impactAfterBatch500 =
       (await page.locator('[data-work-session-index-next-run-impact="true"]').textContent())?.trim() ?? "";
+    await page.locator('[data-apply-work-session-index-completion-plan="true"]').click();
+    await page.waitForFunction(() => {
+      const batchInput = document.querySelector('[data-work-session-index-batch-files="true"]');
+      const maxBatchesInput = document.querySelector('[data-work-session-index-long-max-batches="true"]');
+      const batchValue = batchInput instanceof HTMLInputElement ? batchInput.value : "";
+      const maxBatchesValue = maxBatchesInput instanceof HTMLInputElement ? maxBatchesInput.value : "";
+      const maxBatches = Number.parseInt(maxBatchesValue, 10);
+      const longStatus = document.querySelector('[data-work-session-index-long-confirm-meta="true"]')?.textContent ?? "";
+      const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
+      const impact = document.querySelector('[data-work-session-index-next-run-impact="true"]')?.textContent ?? "";
+      return batchValue === "500"
+        && Number.isSafeInteger(maxBatches)
+        && maxBatches > 10
+        && longStatus.includes(`반복 ${maxBatches.toLocaleString()}배치`)
+        && planned.includes("긴 이어 백필 예상 1회")
+        && impact.includes("이번 클릭 후 완료 예상");
+    }, undefined, { timeout: 60000 });
+    workSessionIndexBackfill.completionPlanAfterBatch500 = {
+      longMaxBatches: (await page.locator('[data-work-session-index-long-max-batches="true"]').inputValue()).trim(),
+      planned: (await page.locator('[data-work-session-index-planned-remaining="true"]').textContent())?.trim() ?? "",
+      impact: (await page.locator('[data-work-session-index-next-run-impact="true"]').textContent())?.trim() ?? "",
+    };
     await page.locator('[data-browser-bridge-status="connected"]').waitFor({ timeout: 60000 });
     await page.locator('[data-work-summary-session-limit="true"]').fill(String(WORK_SESSION_LIMIT));
     await page.waitForFunction((expectedText) => {

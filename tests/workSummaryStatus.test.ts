@@ -1008,6 +1008,18 @@ test("work session index planned remaining text follows current batch controls",
     workSessionIndexNextRunImpactText(result, 500, 2, 10, true),
     "다음 실행 효과 · 긴 이어 백필 · 이번 클릭 source당 최대 5,000개 · 남은 파일 24,800→19,800개 · 이후 예상 4회",
   );
+  assert.equal(
+    workSessionIndexPlannedRemainingText(result, 500, 2, 50),
+    "현재 입력 기준 · 이어 백필 예상 25회 · 긴 이어 백필 예상 1회",
+  );
+  assert.equal(
+    workSessionIndexCheckpointGuidanceText(result, 500, 2, 50),
+    "체크포인트 계획 · 권장 다음 실행 긴 이어 백필 · source당 최대 25,000개 · 남은 파일 24,800개 · 예상 1회 · 각 실행 후 상태 Export/큐 재확인",
+  );
+  assert.equal(
+    workSessionIndexNextRunImpactText(result, 500, 2, 50, true),
+    "다음 실행 효과 · 긴 이어 백필 · 이번 클릭 source당 최대 25,000개 · 남은 파일 24,800→0개 · 이번 클릭 후 완료 예상",
+  );
   assert.equal(workSessionIndexPlannedRemainingText(result, null, 2, 10), null);
   assert.equal(workSessionIndexCheckpointGuidanceText(result, null, 2, 10), null);
   assert.equal(workSessionIndexNextRunImpactText(result, null, 2, 10, true), null);

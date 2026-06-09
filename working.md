@@ -1,10 +1,73 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 05:12 KST
+Updated: 2026-06-10 05:23 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Session backfill completion plan control
+
+Current Goal:
+
+- Turn the remaining full historical session backfill from repeated manual
+  clicks into an explicit operator-controlled completion plan.
+- Keep long-running completion gated: the app may calculate the plan, but the
+  operator must still click `긴 이어 백필` to run it.
+
+Context:
+
+- The backend already supports `until_complete` with a 1,000-batch safety cap
+  and requires `confirm_long_run` above the short-run threshold.
+- The UI previously exposed only a fixed 10-batch long continue action, which
+  left a large corpus requiring repeated clicks even after `대용량 적용`.
+
+Progress:
+
+- Added a `긴 반복` input for the long-continue max batch count.
+- Added a `완료 계획` button that calculates the needed long batch count from
+  the current remaining source files and applies:
+  - source batch size `500`;
+  - the `긴 백필` confirmation text;
+  - the minimum required long batch count, capped by the backend safety limit.
+- Updated status text, planning rows, and next-run impact rows to use the
+  operator-selected long batch count.
+
+Changes:
+
+- `src/App.tsx`: added long max-batch parsing, completion-plan calculation,
+  controls, and dynamic long-run execution options.
+- `tests/workSummaryStatus.test.ts`: covers the planned 50-batch completion
+  case where one long click completes the remaining source files.
+- `scripts/browser-bridge-isolated-qa.mjs`: clicks `완료 계획` and verifies the
+  UI reaches `긴 이어 백필 예상 1회` without actually starting the long full run.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work session index planned remaining|work management readiness"` (`37` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`491` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- Browser bridge QA clicked `완료 계획` after `대용량 적용` and verified the app
+  selected `긴 반복` value `50`.
+- The same state reported `현재 입력 기준 · 이어 백필 예상 25회 · 긴 이어
+  백필 예상 1회`.
+- The next-run impact row reported `남은 파일 24,848→0개` and `이번 클릭 후
+  완료 예상`.
+- The bounded session scan status export reported `31개 프로젝트`, `26일`,
+  `작업 9,727개`, `진행로그 872개`, `세션 근거 3,397건`, and `고유 50건`.
+
+Remaining:
+
+- Full historical session backfill is still not run automatically. The operator
+  must use the completion plan and then explicitly click `긴 이어 백필`.
+- Review queues still need operator triage before durable session-evidence and
+  title-normalization decisions are final.
 
 ## Completed Slice - 2026-06-10 Work-management backfill estimate accuracy
 

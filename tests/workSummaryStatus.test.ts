@@ -26,6 +26,7 @@ import {
   workLogNormalizationProposalsActionLabel,
   workLogNormalizationProposalsFailureText,
   workLogNormalizationProposalsMetaText,
+  workLogNormalizationProposalReviewLabel,
   workLogNormalizationApplyActionLabel,
   workLogNormalizationApplyFailureText,
   workLogNormalizationApplyMetaText,
@@ -1357,6 +1358,24 @@ test("work log normalization proposal labels describe AI cleanup proposals", () 
     "AI 정규화 제안을 생성하지 못했습니다. provider 키, 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogNormalizationProposalsFailureText("ready"), null);
+  assert.equal(
+    workLogNormalizationProposalReviewLabel(normalizationProposalsResult().proposals[0]),
+    "AI 검토 필요 · 로컬 확정 불가",
+  );
+  assert.equal(
+    workLogNormalizationProposalReviewLabel({
+      ...normalizationProposalsResult().proposals[0],
+      rejection_reason: "low_confidence",
+    }),
+    "검증 실패 · confidence 낮음",
+  );
+  assert.equal(
+    workLogNormalizationProposalReviewLabel({
+      ...normalizationProposalsResult().proposals[0],
+      rejection_reason: "evidence_not_in_candidate_evidence",
+    }),
+    "검증 실패 · 근거가 후보 원문에 없음",
+  );
 });
 
 test("work log normalization review queue labels describe persisted review rows", () => {
@@ -1396,7 +1415,33 @@ test("work log normalization review queue labels describe persisted review rows"
   assert.equal(workLogNormalizationReviewQueueFailureText("ready"), null);
   assert.equal(
     workLogNormalizationReviewQueueItemStateText(normalizationReviewQueueResult().items[0]),
-    "검토 대기 · local_fallback_requires_ai_review · review 필요 · local_fallback_requires_ai_review · local-normalization-rules · confidence 0.50",
+    "검토 대기 · local_fallback_requires_ai_review · AI 검토 필요 · 로컬 확정 불가 · local-normalization-rules · confidence 0.50",
+  );
+  assert.equal(
+    workLogNormalizationReviewQueueItemStateText({
+      ...normalizationReviewQueueResult().items[0],
+      review_reason: "low_confidence",
+      rejection_reason: "low_confidence",
+      provider: "glm",
+      provider_model: "glm-test-model",
+      provider_runtime: "glm-chat-completions",
+      used_ai: true,
+      confidence: 0.79,
+    }),
+    "검토 대기 · low_confidence · 검증 실패 · confidence 낮음 · glm/glm-test-model · confidence 0.79",
+  );
+  assert.equal(
+    workLogNormalizationReviewQueueItemStateText({
+      ...normalizationReviewQueueResult().items[0],
+      review_reason: "evidence_not_in_candidate_evidence",
+      rejection_reason: "evidence_not_in_candidate_evidence",
+      provider: "glm",
+      provider_model: "glm-test-model",
+      provider_runtime: "glm-chat-completions",
+      used_ai: true,
+      confidence: 0.95,
+    }),
+    "검토 대기 · evidence_not_in_candidate_evidence · 검증 실패 · 근거가 후보 원문에 없음 · glm/glm-test-model · confidence 0.95",
   );
   assert.equal(
     workLogNormalizationReviewQueueItemStateText({

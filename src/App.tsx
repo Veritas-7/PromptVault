@@ -293,6 +293,7 @@ import {
   workLogNormalizationProposalsActionLabel,
   workLogNormalizationProposalsFailureText,
   workLogNormalizationProposalsMetaText,
+  workLogNormalizationProposalReviewLabel,
   workLogNormalizationApplyActionLabel,
   workLogNormalizationApplyFailureText,
   workLogNormalizationApplyMetaText,
@@ -4390,10 +4391,8 @@ function App() {
                   <p>{proposal.normalized_title}</p>
                   <p className="work-log-proposal-evidence">{proposal.normalized_evidence}</p>
                   <span>
-                    {proposal.accepted
-                      ? "AI 정규화 accepted"
-                      : `AI 검토 필요 · ${proposal.rejection_reason ?? "rejected"}`}{" "}
-                    · confidence {proposal.confidence.toFixed(2)}
+                    {workLogNormalizationProposalReviewLabel(proposal)} · confidence{" "}
+                    {proposal.confidence.toFixed(2)}
                   </span>
                   <span>
                     provider {workLogNormalizationProposalsResult.provider_runtime} · 원본{" "}

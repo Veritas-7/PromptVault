@@ -153,6 +153,73 @@ function normalizationReviewQueueFixtureFromItem(item) {
   };
 }
 
+function rejectedAiNormalizationReviewQueueFixtureFromItem(item) {
+  const now = new Date().toISOString();
+  const base = {
+    ...item,
+    first_seen_at: now,
+    last_seen_at: now,
+    provider: "glm",
+    provider_model: "glm-test-model",
+    provider_runtime: "glm-chat-completions",
+    used_ai: true,
+    accepted: false,
+    original_status: "logged",
+    normalized_status: "current",
+    risk_flags: [],
+    project: "QAFixture",
+    date: "2026-06-09",
+    source_path: "/tmp/QAFixture/working.md",
+    source_file: "working.md",
+    reason: "no_ai_normalization,no_session_evidence,generic_title",
+    work_item_count: 2,
+    session_evidence_count: 1,
+    saved_extraction_count: 0,
+    ai_saved_extraction_count: 0,
+    best_ai_confidence: null,
+  };
+  const lowConfidence = {
+    ...base,
+    candidate_id: "work-normalize-QAFixture-low-confidence-a1",
+    review_state: "pending_review",
+    review_reason: "low_confidence",
+    rejection_reason: "low_confidence",
+    original_title: "QA fixture low confidence normalization row",
+    original_evidence: "2026-06-09: Low confidence AI normalization evidence.",
+    normalized_title: "Low confidence AI normalization evidence",
+    normalized_evidence: "2026-06-09: Low confidence AI normalization evidence.",
+    confidence: 0.79,
+  };
+  const evidenceMismatch = {
+    ...base,
+    candidate_id: "work-normalize-QAFixture-evidence-mismatch-a1",
+    review_state: "pending_review",
+    review_reason: "evidence_not_in_candidate_evidence",
+    rejection_reason: "evidence_not_in_candidate_evidence",
+    original_title: "QA fixture evidence mismatch normalization row",
+    original_evidence: "2026-06-09: Source-backed normalization evidence.",
+    normalized_title: "Invented AI normalization evidence",
+    normalized_evidence: "2026-06-09: Invented AI normalization evidence.",
+    confidence: 0.95,
+  };
+  return {
+    generated_at: now,
+    database_path: DATABASE_PATH,
+    synced_proposal_count: 2,
+    stale_proposal_count: 0,
+    total_items: 2,
+    returned_item_count: 2,
+    pending_review_count: 2,
+    stale_count: 0,
+    approved_count: 0,
+    rejected_count: 0,
+    accepted_proposal_count: 0,
+    rejected_proposal_count: 2,
+    items: [lowConfidence, evidenceMismatch],
+    warnings: [],
+  };
+}
+
 function waitForHttp(url, timeoutMs) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
@@ -301,6 +368,8 @@ async function runBrowserQa() {
   let workLogNormalizationStaleFixtureMeta = "";
   let workLogNormalizationStaleFixtureRows = [];
   let workLogNormalizationStaleFixtureActionState = {};
+  let workLogNormalizationRejectedAiFixtureMeta = "";
+  let workLogNormalizationRejectedAiFixtureRows = [];
   let workLogNormalizationApplyMeta = "";
   let workManagementMetaAfterNormalizationApply = "";
   let workLogNormalizedRows = [];
@@ -826,6 +895,32 @@ async function runBrowserQa() {
       approveButtonCount: staleApproveButtonCount,
       rejectButtonCount: staleRejectButtonCount,
     };
+    step("work log normalization rejected AI fixture labels");
+    const rejectedAiFixture = rejectedAiNormalizationReviewQueueFixtureFromItem(approvedNormalizationRow);
+    const lowConfidenceFixtureCandidateId = "work-normalize-QAFixture-low-confidence-a1";
+    const evidenceMismatchFixtureCandidateId = "work-normalize-QAFixture-evidence-mismatch-a1";
+    await withMockedNormalizationReviewQueue(page, rejectedAiFixture, async () => {
+      await waitForEnabled(page, '[data-sync-work-log-normalization-review-queue="true"]');
+      await page.locator('[data-sync-work-log-normalization-review-queue="true"]').click();
+      await page.waitForFunction(([lowConfidenceId, evidenceMismatchId]) => {
+        const lowRow = document
+          .querySelector(`[data-reject-work-log-normalization-review-queue="${lowConfidenceId}"]`)
+          ?.closest("article");
+        const evidenceRow = document
+          .querySelector(`[data-reject-work-log-normalization-review-queue="${evidenceMismatchId}"]`)
+          ?.closest("article");
+        const lowText = lowRow?.textContent ?? "";
+        const evidenceText = evidenceRow?.textContent ?? "";
+        return lowText.includes("검증 실패 · confidence 낮음")
+          && lowText.includes("glm-test-model")
+          && evidenceText.includes("검증 실패 · 근거가 후보 원문에 없음")
+          && evidenceText.includes("glm-test-model");
+      }, [lowConfidenceFixtureCandidateId, evidenceMismatchFixtureCandidateId], { timeout: 90000 });
+    });
+    workLogNormalizationRejectedAiFixtureMeta =
+      (await page.locator('[data-work-log-normalization-review-queue-meta="true"]').textContent())?.trim() ?? "";
+    workLogNormalizationRejectedAiFixtureRows =
+      await page.locator('[data-work-log-normalization-review-queue="true"] article').allTextContents();
     step("work log review queue");
     await page.locator('[data-sync-work-log-review-queue="true"]').click();
     await page.waitForFunction(() => {
@@ -960,6 +1055,8 @@ async function runBrowserQa() {
       workLogNormalizationStaleFixtureMeta,
       workLogNormalizationStaleFixtureRows,
       workLogNormalizationStaleFixtureActionState,
+      workLogNormalizationRejectedAiFixtureMeta,
+      workLogNormalizationRejectedAiFixtureRows,
       workLogNormalizationApplyMeta,
       workManagementMetaAfterNormalizationApply,
       workLogNormalizedRows,

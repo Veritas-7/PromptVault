@@ -1,10 +1,95 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 20:57 KST
+Updated: 2026-06-09 21:11 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 AI normalization reject-label QA
+
+Current Goal:
+
+- Make rejected AI work-log normalization proposals understandable in the UI
+  without exposing only raw backend reason codes.
+- Add deterministic isolated-browser proof for rejected AI normalization rows
+  caused by low confidence and evidence mismatch.
+
+Context:
+
+- PromptVault now finds project progress logs, including `workingd.md` and
+  `docs/plans/*worklog.md`, and links project/day rows to sanitized real Codex
+  session evidence.
+- The remaining operator UX gap is not data collection. It is that rejected AI
+  normalization proposals such as `low_confidence` and
+  `evidence_not_in_candidate_evidence` were shown as raw codes in proposal and
+  review queue rows.
+
+Progress:
+
+- Added a normalization reject-label helper that maps known backend reject
+  reasons to operator-readable Korean labels.
+- Reused the helper in both the AI normalization proposal list and the
+  normalization review queue state text.
+- Added unit coverage for local review, low-confidence, and evidence-mismatch
+  labels.
+- Added an isolated browser-bridge QA fixture that renders mocked GLM rejected
+  normalization rows and waits for the readable labels in the DOM.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - added `workLogNormalizationProposalReviewLabel`;
+  - added `workLogNormalizationRejectionReviewLabel`;
+  - changed normalization review queue state text to use the readable reject
+    label.
+- `src/App.tsx`:
+  - changed AI normalization proposal rows to use the shared readable label.
+- `tests/workSummaryStatus.test.ts`:
+  - added coverage for `local_fallback_requires_ai_review`, `low_confidence`,
+    and `evidence_not_in_candidate_evidence` labels.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added a mocked rejected-AI normalization fixture for low confidence and
+    source-evidence mismatch rows.
+
+Tests:
+
+- `node --test tests/workSummaryStatus.test.ts`: PASS, `31` tests passed.
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `npm run check`: PASS.
+  - UI tests: `473` passed.
+  - Production build: passed.
+  - Rust lib tests: `195` passed.
+  - CLI tests: `31` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  Evidence from isolated browser result:
+  - status export showed `91` rows, `31` projects, `25` days, `843` progress
+    files, and `20,540` session evidence links from `50` unique records;
+  - work-log coverage showed `843` logs, `837` parsed, `5` unparsed;
+  - providerless local normalization proposals stayed review-only:
+    `accepted 0`, `review 40`;
+  - normalization review queue synced `91` rows, approved one local row, applied
+    it to durable normalized items, and kept stale fixture approval blocked with
+    `approveButtonCount=0`, `rejectButtonCount=1`;
+  - rejected-AI fixture rows rendered readable labels:
+    `검증 실패 · confidence 낮음` for `low_confidence` and
+    `검증 실패 · 근거가 후보 원문에 없음` for
+    `evidence_not_in_candidate_evidence`.
+- `git diff --check`: PASS.
+- `gitleaks dir . --no-banner --redact`: PASS, no leaks found after scanning
+  about `528.52 MB`.
+
+Issues:
+
+- Review queue state text still includes the raw `review_reason` audit code.
+  This is useful for traceability, while the proposal reject reason now has a
+  readable operator label.
+
+Next Steps:
+
+- Stage only the touched files, run staged gitleaks, commit, and push.
 
 ## Completed Slice - 2026-06-09 AI normalization quality gate
 

@@ -11,6 +11,7 @@ import type {
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogReviewQueueItem,
+  ProjectWorkLogNormalizationProposal,
   ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogNormalizationApplyResult,
   ProjectWorkLogNormalizationReviewQueueItem,
@@ -857,6 +858,31 @@ export function workLogNormalizationProposalsFailureText(
   return "AI 정규화 제안을 생성하지 못했습니다. provider 키, 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.";
 }
 
+export function workLogNormalizationProposalReviewLabel(
+  proposal: Pick<ProjectWorkLogNormalizationProposal, "accepted" | "rejection_reason">,
+): string {
+  if (proposal.accepted) return "AI 정규화 accepted";
+  return workLogNormalizationRejectionReviewLabel(proposal.rejection_reason);
+}
+
+export function workLogNormalizationRejectionReviewLabel(reason: string | null): string {
+  if (!reason) return "검증 실패 · 거절 사유 없음";
+  const labels: Record<string, string> = {
+    candidate_has_risk_flags: "건너뜀 · 후보 위험 패턴 포함",
+    empty_normalized_evidence: "검증 실패 · 근거 없음",
+    empty_normalized_status: "검증 실패 · 상태 없음",
+    empty_normalized_title: "검증 실패 · 제목 없음",
+    evidence_not_in_candidate_evidence: "검증 실패 · 근거가 후보 원문에 없음",
+    invalid_confidence: "검증 실패 · confidence 형식 오류",
+    invalid_normalized_status: "검증 실패 · 상태 형식 오류",
+    local_fallback_requires_ai_review: "AI 검토 필요 · 로컬 확정 불가",
+    low_confidence: "검증 실패 · confidence 낮음",
+    missing_ai_proposal: "AI 검토 필요 · 제안 없음",
+    proposal_has_risk_flags: "건너뜀 · 제안 위험 패턴 포함",
+  };
+  return labels[reason] ?? `검증 실패 · ${reason}`;
+}
+
 export function workLogNormalizationReviewQueueActionLabel(
   state: WorkLogNormalizationReviewQueueState,
   hasResult: boolean,
@@ -925,7 +951,7 @@ export function workLogNormalizationReviewQueueItemStateText(
         : "거절됨";
   const proposalText = item.accepted
     ? "AI accepted"
-    : `review 필요 · ${item.rejection_reason ?? "rejected"}`;
+    : workLogNormalizationRejectionReviewLabel(item.rejection_reason);
   const providerText = item.used_ai
     ? `${item.provider}${item.provider_model ? `/${item.provider_model}` : ""}`
     : item.provider;

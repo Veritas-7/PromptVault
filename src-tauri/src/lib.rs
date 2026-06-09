@@ -1323,6 +1323,7 @@ pub struct ProjectWorkAiProviderStatusProvider {
     pub provider_runtime: String,
     pub configured: bool,
     pub usable_for_work_management: bool,
+    pub capabilities: Vec<String>,
     pub model: Option<String>,
     pub endpoint: Option<String>,
     pub notes: Vec<String>,
@@ -14797,7 +14798,7 @@ fn project_work_ai_provider_status_from_env(
     }
     if codex_configured {
         warnings.push(
-            "Codex CLI route가 감지되었지만 proposal 생성에는 아직 연결되지 않았습니다; OpenAI/GLM/local provider 순서는 그대로 유지됩니다."
+            "Codex CLI route가 감지되었지만 review-gated proposal 생성에는 아직 연결되지 않았습니다; OpenAI/GLM/local provider 순서는 그대로 유지됩니다."
                 .to_string(),
         );
     } else {
@@ -14817,6 +14818,7 @@ fn project_work_ai_provider_status_from_env(
                 provider_runtime: "openai-responses".to_string(),
                 configured: openai_configured,
                 usable_for_work_management: openai_configured,
+                capabilities: provider_work_management_capabilities(openai_configured),
                 model: Some(openai_model_from_env(&env)),
                 endpoint: Some(openai_endpoint),
                 notes: if openai_configured {
@@ -14830,6 +14832,7 @@ fn project_work_ai_provider_status_from_env(
                 provider_runtime: "glm-chat-completions".to_string(),
                 configured: glm_configured,
                 usable_for_work_management: glm_configured,
+                capabilities: provider_work_management_capabilities(glm_configured),
                 model: Some(glm_model_from_env(&env)),
                 endpoint: Some(glm_endpoint),
                 notes: if glm_configured {
@@ -14847,6 +14850,7 @@ fn project_work_ai_provider_status_from_env(
                 },
                 configured: codex_configured,
                 usable_for_work_management: false,
+                capabilities: Vec::new(),
                 model: non_empty_env_value(&env, "CODEX_MODEL"),
                 endpoint: codex_exec_path.clone(),
                 notes: if let Some(path) = codex_exec_path {
@@ -14868,6 +14872,22 @@ fn project_work_ai_provider_status_from_env(
             },
         ],
         warnings,
+    }
+}
+
+fn provider_work_management_capabilities(configured: bool) -> Vec<String> {
+    if configured {
+        [
+            "work-summary",
+            "work-log-extraction",
+            "work-log-normalization",
+            "session-evidence-proposals",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
+    } else {
+        Vec::new()
     }
 }
 
@@ -15307,6 +15327,15 @@ mod tests {
             .expect("openai row");
         assert!(openai.configured);
         assert!(openai.usable_for_work_management);
+        assert_eq!(
+            openai.capabilities,
+            vec![
+                "work-summary",
+                "work-log-extraction",
+                "work-log-normalization",
+                "session-evidence-proposals"
+            ]
+        );
         assert_eq!(openai.model.as_deref(), Some("gpt-test"));
         assert_eq!(
             openai.endpoint.as_deref(),
@@ -15319,6 +15348,15 @@ mod tests {
             .expect("glm row");
         assert!(glm.configured);
         assert!(glm.usable_for_work_management);
+        assert_eq!(
+            glm.capabilities,
+            vec![
+                "work-summary",
+                "work-log-extraction",
+                "work-log-normalization",
+                "session-evidence-proposals"
+            ]
+        );
         assert_eq!(glm.model.as_deref(), Some("glm-test"));
         assert_eq!(
             glm.endpoint.as_deref(),
@@ -15358,6 +15396,7 @@ mod tests {
 
         assert!(codex.configured);
         assert!(!codex.usable_for_work_management);
+        assert!(codex.capabilities.is_empty());
         assert_eq!(codex.provider_runtime, "codex-cli-exec");
         assert_eq!(codex.model.as_deref(), Some("gpt-5.3-codex"));
         let expected_path = codex_path.to_string_lossy().to_string();
@@ -15369,7 +15408,8 @@ mod tests {
         assert!(result
             .warnings
             .iter()
-            .any(|warning| warning.contains("감지되었지만 proposal 생성에는 아직 연결되지")));
+            .any(|warning| warning
+                .contains("감지되었지만 review-gated proposal 생성에는 아직 연결되지")));
     }
 
     #[test]
@@ -15392,6 +15432,7 @@ mod tests {
             .expect("codex row");
         assert!(!codex.configured);
         assert!(!codex.usable_for_work_management);
+        assert!(codex.capabilities.is_empty());
     }
 
     #[tokio::test]

@@ -868,6 +868,7 @@ export interface ProjectWorkAiProviderStatusProvider {
   provider_runtime: string;
   configured: boolean;
   usable_for_work_management: boolean;
+  capabilities: string[];
   model: string | null;
   endpoint: string | null;
   notes: string[];

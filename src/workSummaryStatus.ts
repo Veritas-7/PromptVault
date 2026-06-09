@@ -612,7 +612,20 @@ export function workAiProviderStatusProviderText(
   if (provider.endpoint) {
     parts.push(provider.endpoint);
   }
+  if (provider.capabilities.length > 0) {
+    parts.push(`capabilities ${provider.capabilities.map(workAiProviderCapabilityLabel).join(", ")}`);
+  }
   return parts.join(" · ");
+}
+
+function workAiProviderCapabilityLabel(capability: string): string {
+  const labels: Record<string, string> = {
+    "work-summary": "작업 요약",
+    "work-log-extraction": "진행로그 추출",
+    "work-log-normalization": "제목 정규화",
+    "session-evidence-proposals": "세션근거 제안",
+  };
+  return labels[capability] ?? capability;
 }
 
 function providerConfiguredLabel(

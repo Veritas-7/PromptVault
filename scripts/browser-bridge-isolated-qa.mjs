@@ -1279,13 +1279,22 @@ async function runBrowserQa() {
       const text = document.querySelector('[data-work-ai-provider-status-meta="true"]')?.textContent ?? "";
       const rows = Array.from(document.querySelectorAll('[data-work-ai-provider-status="true"] article'));
       const rowText = rows.map((row) => row.textContent ?? "").join("\n");
+      const usableProviderShowsCapabilities = !rowText.includes("work-management 사용 가능")
+        || (
+          rowText.includes("capabilities")
+          && rowText.includes("작업 요약")
+          && rowText.includes("진행로그 추출")
+          && rowText.includes("제목 정규화")
+          && rowText.includes("세션근거 제안")
+        );
       return text.includes("OpenAI")
         && text.includes("GLM")
         && text.includes("Codex")
         && text.includes("fallback")
         && rowText.includes("openai-responses")
         && rowText.includes("glm-chat-completions")
-        && (rowText.includes("codex-sdk") || rowText.includes("codex-cli-exec"));
+        && (rowText.includes("codex-sdk") || rowText.includes("codex-cli-exec"))
+        && usableProviderShowsCapabilities;
     }, undefined, { timeout: 90000 });
     workAiProviderStatusMeta =
       (await page.locator('[data-work-ai-provider-status-meta="true"]').textContent())?.trim() ?? "";

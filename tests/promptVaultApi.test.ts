@@ -681,6 +681,7 @@ function projectWorkAiProviderStatusPayload(overrides = {}) {
         provider_runtime: "openai-responses",
         configured: false,
         usable_for_work_management: false,
+        capabilities: [],
         model: "gpt-test",
         endpoint: "https://api.openai.com/v1/responses",
         notes: ["OPENAI_API_KEY is not configured."],
@@ -690,6 +691,7 @@ function projectWorkAiProviderStatusPayload(overrides = {}) {
         provider_runtime: "glm-chat-completions",
         configured: false,
         usable_for_work_management: false,
+        capabilities: [],
         model: "glm-test",
         endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
         notes: ["GLM_API_KEY/GLM_API_KEY_2 is not configured."],
@@ -699,6 +701,7 @@ function projectWorkAiProviderStatusPayload(overrides = {}) {
         provider_runtime: "codex-sdk",
         configured: false,
         usable_for_work_management: false,
+        capabilities: [],
         model: null,
         endpoint: null,
         notes: ["No Codex SDK work-management provider is wired yet."],
@@ -1815,12 +1818,40 @@ test("browser bridge work AI provider status validates configured providers", as
   assert.equal(result.providers[2].provider, "codex");
   assert.equal(result.providers[2].provider_runtime, "codex-sdk");
   assert.equal(result.providers[2].usable_for_work_management, false);
+  assert.deepEqual(result.providers[2].capabilities, []);
 });
 
 test("browser bridge work AI provider status rejects inconsistent availability", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify(projectWorkAiProviderStatusPayload({
     external_provider_available: true,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkAiProviderStatus(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /OPENAI_API_KEY|GLM_API_KEY|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work AI provider status rejects unusable capability rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkAiProviderStatusPayload({
+    providers: [
+      {
+        ...projectWorkAiProviderStatusPayload().providers[0],
+        capabilities: ["work-summary"],
+      },
+      projectWorkAiProviderStatusPayload().providers[1],
+      projectWorkAiProviderStatusPayload().providers[2],
+    ],
   })), { status: 200 });
   t.after(() => {
     globalThis.fetch = originalFetch;

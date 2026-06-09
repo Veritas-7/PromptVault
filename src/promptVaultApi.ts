@@ -1946,6 +1946,9 @@ function isProjectWorkAiProviderStatusProvider(value: unknown): boolean {
     && typeof value.configured === "boolean"
     && typeof value.usable_for_work_management === "boolean"
     && (!value.usable_for_work_management || value.configured)
+    && Array.isArray(value.capabilities)
+    && value.capabilities.every(isNonBlankString)
+    && (value.capabilities.length === 0 || value.usable_for_work_management === true)
     && isNullableNonBlankString(value.model)
     && isNullableNonBlankString(value.endpoint)
     && isNonBlankStringArray(value.notes);

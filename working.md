@@ -1,10 +1,89 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 02:54 KST
+Updated: 2026-06-10 03:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 AI provider capability visibility
+
+Current Goal:
+
+- Make AI provider status show not only whether a provider is configured, but
+  which work-management flows it can actually attempt.
+- Preserve the fail-closed Codex boundary: detected `codex exec` should remain
+  visible but must not imply source-traced proposal generation is wired.
+
+Context:
+
+- OpenAI and GLM are the currently wired external work-management providers.
+- Wired work-management AI flows are `work-summary`, `work-log-extraction`,
+  `work-log-normalization`, and `session-evidence-proposals`.
+- Local `codex exec` supports safe ingredients such as `--sandbox read-only`,
+  `--ephemeral`, and `--output-schema`, but PromptVault still needs a separate
+  source-traced, review-gated runner before using it for proposals.
+
+Progress:
+
+- Added a `capabilities` field to work AI provider status rows.
+- OpenAI/GLM now expose the four wired work-management capabilities only when
+  configured and usable.
+- Codex CLI detection now stays `configured: true` but keeps
+  `usable_for_work_management: false` and `capabilities: []`.
+- The browser UI now renders Korean capability labels for usable providers:
+  `작업 요약`, `진행로그 추출`, `제목 정규화`, `세션근거 제안`.
+- Browser bridge parsing now rejects malformed provider rows that claim
+  capabilities while `usable_for_work_management` is false.
+- Browser QA now verifies usable provider rows show capability labels.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added provider capabilities to the serialized status
+  model, OpenAI/GLM capability population, Codex empty-capability guard, and
+  Rust assertions.
+- `src/types.ts`, `src/promptVaultApi.ts`: added the TypeScript schema field
+  and bridge response validation.
+- `src/workSummaryStatus.ts`: added provider capability display labels.
+- `tests/workSummaryStatus.test.ts`, `tests/promptVaultApi.test.ts`: updated
+  fixtures and added rejection coverage for impossible capability rows.
+- `scripts/browser-bridge-isolated-qa.mjs`: verified capability labels in the
+  actual work AI provider status browser flow.
+- `README.md`, `docs/CLI.md`: documented provider capability visibility and the
+  Codex readiness-only boundary.
+
+Tests:
+
+- PASS: `cargo fmt --check`.
+- PASS: `cargo test project_work_ai_provider_status -- --nocapture`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work AI provider status"`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work AI provider status"`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `cargo run --quiet --bin promptvault-cli -- work-ai-provider-status --json`
+  - Current live environment reports GLM configured and usable with
+    `work-summary`, `work-log-extraction`, `work-log-normalization`, and
+    `session-evidence-proposals`.
+  - Codex CLI is detected at
+    `/Users/wj/.nvm/versions/node/v22.22.1/bin/codex`, but has empty
+    capabilities and remains not usable for work management.
+- PASS: `npm run check`
+  - UI tests `490`, Rust lib tests `209`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser QA ended with exit code `0`.
+  - Verified work AI provider status through the browser flow, including usable
+    provider capability labels.
+  - The same QA run still exercised work status export, session-evidence
+    candidates/proposals/review queues, work-log coverage, normalization,
+    review queues, approved queue save, and saved items.
+
+Remaining:
+
+- Codex CLI is still readiness-only. The next provider slice should design and
+  test a read-only, ephemeral, output-schema-bound Codex runner before any
+  source-traced proposals can be generated from it.
+- Durable session-evidence writes are still intentionally unavailable; current
+  session-evidence proposals remain review-only.
 
 ## Completed Slice - 2026-06-10 Codex CLI provider readiness detection
 

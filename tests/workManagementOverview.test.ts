@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildWorkManagementOverview,
+  workManagementOverviewDurabilityWarningText,
   workManagementOverviewMetaText,
   workManagementOverviewPersistenceText,
   workManagementOverviewSourceText,
@@ -364,4 +365,25 @@ test("work management overview status text exposes management coverage", () => {
     workManagementOverviewPersistenceText(buildWorkManagementOverview({ coverage: coverageResult() }).rows[0]),
     "라이브만 · 저장근거 없음",
   );
+});
+
+test("work management overview warns when live-only rows dominate", () => {
+  const liveOnly = buildWorkManagementOverview({
+    coverage: coverageResult(),
+  });
+
+  assert.equal(
+    workManagementOverviewDurabilityWarningText(liveOnly),
+    "라이브만 1개가 저장관리 0개보다 많습니다. 스냅샷 저장 또는 AI 추출 저장으로 관리 상태를 고정하세요.",
+  );
+
+  const persisted = buildWorkManagementOverview({
+    coverage: coverageResult(),
+    extractionItems: extractionItemsResult(),
+    extractionProposals: extractionProposalsResult(),
+    snapshots: snapshotsResult(),
+    summary: summaryResult(),
+  });
+  assert.equal(workManagementOverviewDurabilityWarningText(persisted), null);
+  assert.equal(workManagementOverviewDurabilityWarningText(buildWorkManagementOverview({})), null);
 });

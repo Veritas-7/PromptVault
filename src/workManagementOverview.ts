@@ -199,6 +199,19 @@ export function workManagementOverviewPersistenceText(row: WorkManagementOvervie
   return parts.join(" · ");
 }
 
+export function workManagementOverviewDurabilityWarningText(
+  overview: WorkManagementOverview,
+): string | null {
+  if (overview.row_count === 0 || overview.live_only_row_count <= overview.persisted_row_count) {
+    return null;
+  }
+  return [
+    `라이브만 ${overview.live_only_row_count.toLocaleString()}개가`,
+    `저장관리 ${overview.persisted_row_count.toLocaleString()}개보다 많습니다.`,
+    "스냅샷 저장 또는 AI 추출 저장으로 관리 상태를 고정하세요.",
+  ].join(" ");
+}
+
 function upsertRow(
   rowsByKey: Map<string, MutableWorkManagementOverviewRow>,
   date: string,

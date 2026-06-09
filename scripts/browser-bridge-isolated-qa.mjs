@@ -263,6 +263,10 @@ async function runBrowserQa() {
       return [...document.querySelectorAll('[data-work-management-row-persistence="true"]')]
         .some((element) => (element.textContent ?? "").includes("저장관리"));
     }, undefined, { timeout: 120000 });
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-management-durability-warning="true"]')?.textContent ?? "";
+      return text.includes("라이브만") && text.includes("저장관리");
+    }, undefined, { timeout: 120000 });
     await page.locator('[data-load-work-log-coverage="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-coverage-meta="true"]')?.textContent ?? "";
@@ -301,6 +305,8 @@ async function runBrowserQa() {
         (await page.locator('[data-work-summary-index="true"]').textContent())?.trim() ?? "",
       workManagementMeta:
         (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "",
+      workManagementDurabilityWarning:
+        (await page.locator('[data-work-management-durability-warning="true"]').textContent())?.trim() ?? "",
       workManagementPersistenceRows:
         await page.locator('[data-work-management-row-persistence="true"]').allTextContents(),
       coverageMeta:

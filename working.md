@@ -1,10 +1,75 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 09:46 KST
+Updated: 2026-06-09 09:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 live-only management warning
+
+Current Goal:
+
+- Add a compact operator warning when most project/date management rows are
+  still `live_only`, so the user does not mistake live parsed progress-log
+  coverage for durable saved management state.
+
+Context:
+
+- The previous slice exposed `저장관리`, `라이브만`, latest saved snapshot
+  time, and latest saved extraction time in the management overview.
+- Isolated browser QA showed `저장관리 1 · 라이브만 44`, which means the
+  dashboard can parse many project/day progress rows but most of them are not
+  yet durable saved management records.
+
+Progress:
+
+- Added `workManagementOverviewDurabilityWarningText` to return a Korean
+  warning only when `live_only_row_count` is greater than `persisted_row_count`.
+- Rendered the warning in the management dashboard using the existing
+  `.work-summary-index.warning` chip pattern.
+- Extended isolated browser QA to wait for the warning DOM and include the
+  warning text in the final QA JSON.
+
+Changes:
+
+- `src/workManagementOverview.ts`:
+  - adds the durable-state warning helper.
+- `src/App.tsx`:
+  - renders `data-work-management-durability-warning` when live-only rows
+    dominate.
+- `tests/workManagementOverview.test.ts`:
+  - covers live-only-dominant warning text, all-persisted no-warning, and
+    empty-overview no-warning.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - verifies the warning in the real DOM.
+
+Tests:
+
+- `npm run test:ui`: PASS, `432` tests.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: first
+  run failed before the new management-warning assertion because Playwright
+  closed the page/context during the save-snapshot button click.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS on
+  rerun. Final QA JSON included
+  `workManagementMeta="관리 45개 · 31개 프로젝트 · 19일 · 현재요약 1 · 스냅샷 1 · 추출제안 0 · 저장추출 0 · 진행로그 781 · 저장관리 1 · 라이브만 44 · 최신스냅샷 2026-06-09T00:55:07.773097+00:00 · 최신저장추출 없음"`
+  and
+  `workManagementDurabilityWarning="라이브만 44개가 저장관리 1개보다 많습니다. 스냅샷 저장 또는 AI 추출 저장으로 관리 상태를 고정하세요."`.
+- `npm run check`: PASS. UI `432` tests, Vite build, Rust lib `164`
+  tests, CLI `23` tests, doc-tests, and clippy all passed.
+
+Issues:
+
+- This warning makes freshness risk visible but does not yet persist the
+  live-only rows automatically.
+
+Next Steps:
+
+- Run diff/staged secret checks, then commit and push.
+- Next improvement slice: add an explicit save/freeze action for live-only
+  management rows so parsed project/day progress rows can become durable
+  records without requiring a separate extraction candidate.
 
 ## Current Slice - 2026-06-09 durable management coverage visibility
 

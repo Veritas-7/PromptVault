@@ -186,6 +186,7 @@ import {
 import { groupWorkLogExtractionItemsByProjectDate } from "./workLogExtractionItemGroups";
 import {
   buildWorkManagementOverview,
+  workManagementOverviewDurabilityWarningText,
   workManagementOverviewMetaText,
   workManagementOverviewPersistenceText,
   workManagementOverviewSourceText,
@@ -717,6 +718,9 @@ function App() {
     0,
     workManagementOverview.rows.length - WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT,
   );
+  const workManagementDurabilityWarning = workManagementOverviewLoaded
+    ? workManagementOverviewDurabilityWarningText(workManagementOverview)
+    : null;
   const storedFacetSummary = storedFacetSummaryText(
     storedFacetsState,
     storedFilterCount,
@@ -2312,6 +2316,12 @@ function App() {
           <div className="work-summary-index" data-work-management-overview-meta="true">
             <ClipboardList size={15} />
             <span>{workManagementOverviewMetaText(workManagementOverview)}</span>
+          </div>
+        ) : null}
+        {workManagementDurabilityWarning ? (
+          <div className="work-summary-index warning" data-work-management-durability-warning="true">
+            <AlertTriangle size={15} />
+            <span>{workManagementDurabilityWarning}</span>
           </div>
         ) : null}
         {workManagementOverviewLoaded ? (

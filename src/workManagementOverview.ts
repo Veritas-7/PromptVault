@@ -5,6 +5,7 @@ import type {
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogNormalizedItem,
   ProjectWorkLogNormalizedItemsResult,
+  ProjectWorkStatusExportResult,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
 } from "./types.ts";
@@ -15,6 +16,7 @@ export type WorkManagementOverviewSource =
   | "extraction_proposal"
   | "saved_extraction"
   | "normalized_row"
+  | "status_export"
   | "progress_log";
 export type WorkManagementOverviewPersistenceState = "persisted" | "live_only";
 export type WorkManagementOverviewSort =
@@ -38,6 +40,7 @@ export interface WorkManagementOverviewInput {
   extractionProposals?: ProjectWorkLogExtractionProposalsResult | null;
   extractionItems?: ProjectWorkLogExtractionItemsResult | null;
   normalizedItems?: ProjectWorkLogNormalizedItemsResult | ProjectWorkLogNormalizedItemsInput | null;
+  statusExport?: ProjectWorkStatusExportResult | null;
   coverage?: ProjectWorkLogCoverageResult | null;
 }
 
@@ -55,9 +58,13 @@ export interface WorkManagementOverviewRow {
   extraction_proposal_count: number;
   saved_extraction_count: number;
   normalized_row_count: number;
+  status_export_count: number;
   progress_log_count: number;
   work_item_count: number;
   session_evidence_count: number;
+  needs_session_evidence: boolean;
+  needs_title_normalization: boolean;
+  session_evidence_audit: string | null;
   confidence_count: number;
   min_confidence: number | null;
   max_confidence: number | null;
@@ -77,6 +84,11 @@ export interface WorkManagementOverview {
   extraction_proposal_count: number;
   saved_extraction_count: number;
   normalized_row_count: number;
+  status_export_row_count: number;
+  status_export_total_row_count: number;
+  session_matched_row_count: number;
+  session_unresolved_row_count: number;
+  title_normalization_row_count: number;
   progress_log_count: number;
   persisted_row_count: number;
   live_only_row_count: number;
@@ -114,6 +126,7 @@ const SOURCE_ORDER: WorkManagementOverviewSource[] = [
   "extraction_proposal",
   "saved_extraction",
   "normalized_row",
+  "status_export",
   "progress_log",
 ];
 
@@ -124,6 +137,7 @@ const SOURCE_LABELS: Record<WorkManagementOverviewSource, string> = {
   progress_log: "진행로그",
   saved_extraction: "저장추출",
   snapshot: "스냅샷",
+  status_export: "상태Export",
 };
 
 interface MutableWorkManagementOverviewRow extends WorkManagementOverviewRow {
@@ -194,6 +208,21 @@ export function buildWorkManagementOverview(
     row.sourceSet.add("normalized_row");
   }
 
+  for (const item of input.statusExport?.rows ?? []) {
+    const row = upsertRow(rowsByKey, item.date, item.project);
+    row.status_export_count += 1;
+    row.work_item_count = Math.max(row.work_item_count, item.work_item_count);
+    row.session_evidence_count = Math.max(
+      row.session_evidence_count,
+      item.session_evidence_count,
+    );
+    row.latest_title ??= item.top_titles[0] ?? item.sample_evidence;
+    row.needs_session_evidence = row.needs_session_evidence || item.needs_session_evidence;
+    row.needs_title_normalization = row.needs_title_normalization || item.needs_title_normalization;
+    row.session_evidence_audit ??= item.session_evidence_audit;
+    row.sourceSet.add("status_export");
+  }
+
   for (const file of input.coverage?.files ?? []) {
     if (file.status !== "parsed" || !file.latest_date) continue;
     const row = upsertRow(rowsByKey, file.latest_date, file.project);
@@ -219,6 +248,12 @@ export function buildWorkManagementOverview(
       return left.project.localeCompare(right.project);
     });
 
+  const statusExportRowCount = sumRows(rows, "status_export_count");
+  const statusExportTotalRowCount = Math.max(
+    statusExportRowCount,
+    input.statusExport?.total_row_count ?? 0,
+  );
+
   return {
     row_count: rows.length,
     project_count: new Set(rows.map((row) => row.project)).size,
@@ -228,6 +263,13 @@ export function buildWorkManagementOverview(
     extraction_proposal_count: sumRows(rows, "extraction_proposal_count"),
     saved_extraction_count: sumRows(rows, "saved_extraction_count"),
     normalized_row_count: sumRows(rows, "normalized_row_count"),
+    status_export_row_count: statusExportRowCount,
+    status_export_total_row_count: statusExportTotalRowCount,
+    session_matched_row_count: rows.filter((row) =>
+      row.status_export_count > 0 && !row.needs_session_evidence
+    ).length,
+    session_unresolved_row_count: rows.filter((row) => row.needs_session_evidence).length,
+    title_normalization_row_count: rows.filter((row) => row.needs_title_normalization).length,
     progress_log_count: sumRows(rows, "progress_log_count"),
     persisted_row_count: rows.filter((row) => row.persistence_state === "persisted").length,
     live_only_row_count: rows.filter((row) => row.persistence_state === "live_only").length,
@@ -248,6 +290,10 @@ export function workManagementOverviewMetaText(overview: WorkManagementOverview)
     `추출제안 ${overview.extraction_proposal_count.toLocaleString()}`,
     `저장추출 ${overview.saved_extraction_count.toLocaleString()}`,
     `정규화 ${overview.normalized_row_count.toLocaleString()}`,
+    `상태행 ${overview.status_export_row_count.toLocaleString()}/${overview.status_export_total_row_count.toLocaleString()}`,
+    `세션매칭 ${overview.session_matched_row_count.toLocaleString()}`,
+    `세션미해결 ${overview.session_unresolved_row_count.toLocaleString()}`,
+    `제목정규화 ${overview.title_normalization_row_count.toLocaleString()}`,
     `진행로그 ${overview.progress_log_count.toLocaleString()}`,
     `저장관리 ${overview.persisted_row_count.toLocaleString()}`,
     `라이브만 ${overview.live_only_row_count.toLocaleString()}`,
@@ -362,6 +408,25 @@ export function workManagementOverviewPersistenceText(row: WorkManagementOvervie
   return parts.join(" · ");
 }
 
+export function workManagementOverviewSessionText(row: WorkManagementOverviewRow): string {
+  const parts = [`세션 근거 ${row.session_evidence_count.toLocaleString()}건`];
+  if (row.status_export_count === 0) {
+    parts.push("상태 export 미확인");
+  } else if (row.needs_session_evidence) {
+    parts.push(
+      row.session_evidence_audit === "unresolved-after-full-index"
+        ? "전체 인덱스 미해결"
+        : "근거 limit 영향",
+    );
+  } else {
+    parts.push("세션 매칭");
+  }
+  if (row.needs_title_normalization) {
+    parts.push("제목 정규화 필요");
+  }
+  return parts.join(" · ");
+}
+
 export function workManagementOverviewDurabilityWarningText(
   overview: WorkManagementOverview,
 ): string | null {
@@ -395,9 +460,13 @@ function upsertRow(
     extraction_proposal_count: 0,
     saved_extraction_count: 0,
     normalized_row_count: 0,
+    status_export_count: 0,
     progress_log_count: 0,
     work_item_count: 0,
     session_evidence_count: 0,
+    needs_session_evidence: false,
+    needs_title_normalization: false,
+    session_evidence_audit: null,
     confidence_count: 0,
     min_confidence: null,
     max_confidence: null,
@@ -458,6 +527,7 @@ function sumRows(
     | "extraction_proposal_count"
     | "saved_extraction_count"
     | "normalized_row_count"
+    | "status_export_count"
     | "progress_log_count",
 ): number {
   return rows.reduce((total, row) => total + row[field], 0);

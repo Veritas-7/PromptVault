@@ -435,6 +435,7 @@ async function runBrowserQa() {
   let workManagementFilteredRows = [];
   let workManagementMissingConfidenceRows = [];
   let workManagementPersistenceRows = [];
+  let workManagementSessionRows = [];
   let workManagementDurabilityWarning = "";
   let workManagementMeta = "";
   let workStatusExportLimitMeta = "";
@@ -1113,10 +1114,26 @@ async function runBrowserQa() {
     await page.locator('[data-work-management-overview-meta="true"]').waitFor({ timeout: 120000 });
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-overview-meta="true"]')?.textContent ?? "";
-      return text.includes("저장관리") && text.includes("라이브만");
+      return text.includes("저장관리")
+        && text.includes("라이브만")
+        && text.includes("상태행")
+        && text.includes("세션매칭")
+        && text.includes("세션미해결")
+        && text.includes("제목정규화");
     }, undefined, { timeout: 120000 });
     workManagementMeta =
       (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
+    await page.waitForFunction(() => {
+      return [...document.querySelectorAll('[data-work-management-row-session="true"]')]
+        .some((element) => {
+          const text = element.textContent ?? "";
+          return text.includes("세션 매칭")
+            || text.includes("전체 인덱스 미해결")
+            || text.includes("근거 limit 영향");
+        });
+    }, undefined, { timeout: 120000 });
+    workManagementSessionRows =
+      await page.locator('[data-work-management-row-session="true"]').allTextContents();
     await page.waitForFunction(() => {
       return [...document.querySelectorAll('[data-work-management-row-persistence="true"]')]
         .some((element) => (element.textContent ?? "").includes("저장관리"));
@@ -1520,6 +1537,7 @@ async function runBrowserQa() {
       workManagementFilteredRows,
       workManagementMissingConfidenceRows,
       workManagementPersistenceRows,
+      workManagementSessionRows,
       coverageMeta,
       workLogCandidatesMeta,
       workLogCandidateRows,

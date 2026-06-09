@@ -13,6 +13,7 @@ import {
   workManagementOverviewMetaText,
   workManagementOverviewPersistenceText,
   workManagementOverviewProjectSuggestions,
+  workManagementOverviewSessionText,
   workManagementOverviewSourceText,
 } from "../src/workManagementOverview.ts";
 import type {
@@ -20,6 +21,7 @@ import type {
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogNormalizedItemsResult,
+  ProjectWorkStatusExportResult,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
   ProjectWorkSummarySnapshotsResult,
@@ -298,6 +300,75 @@ function coverageResult(): ProjectWorkLogCoverageResult {
   };
 }
 
+function statusExportResult(): ProjectWorkStatusExportResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    markdown: "# status",
+    total_row_count: 4,
+    row_offset: 0,
+    returned_row_count: 2,
+    next_row_offset: 2,
+    rows_truncated: true,
+    report_total_items: 6,
+    report_project_count: 3,
+    report_date_count: 3,
+    report_files_seen: 2,
+    report_session_scan_prompt_count: 100,
+    report_session_evidence_count: 2,
+    report_unique_session_evidence_count: 1,
+    report_session_evidence_index_used: true,
+    report_session_evidence_index_updated: false,
+    report_session_evidence_index_count: 100,
+    report_session_evidence_index_total_count: 100,
+    report_session_evidence_mode: "metadata-first-raw-fallback",
+    rows: [
+      {
+        date: "2026-06-09",
+        project: "PromptVault",
+        operational_status: "session-supported",
+        source_statuses: [{ text: "logged", count: 5 }],
+        work_item_count: 5,
+        source_file_count: 1,
+        source_files: ["working.md"],
+        source_file_roles: [{ text: "handoff-log", count: 1 }],
+        top_titles: ["PromptVault session supported row"],
+        sample_evidence: "PromptVault has session evidence.",
+        latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+        latest_source_file: "working.md",
+        latest_source_role: "handoff-log",
+        session_evidence_count: 2,
+        unique_session_evidence_count: 1,
+        session_sources: [{ text: "Codex", count: 2 }],
+        needs_session_evidence: false,
+        session_evidence_audit: "matched",
+        needs_title_normalization: false,
+      },
+      {
+        date: "2026-06-08",
+        project: "CareVault",
+        operational_status: "progress-log-only",
+        source_statuses: [{ text: "logged", count: 1 }],
+        work_item_count: 1,
+        source_file_count: 1,
+        source_files: ["workingd.md"],
+        source_file_roles: [{ text: "handoff-log", count: 1 }],
+        top_titles: ["CareVault rough progress row"],
+        sample_evidence: "CareVault needs session evidence.",
+        latest_source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+        latest_source_file: "workingd.md",
+        latest_source_role: "handoff-log",
+        session_evidence_count: 0,
+        unique_session_evidence_count: 0,
+        session_sources: [],
+        needs_session_evidence: true,
+        session_evidence_audit: "unresolved-after-full-index",
+        needs_title_normalization: true,
+      },
+    ],
+    warnings: [],
+  };
+}
+
 test("work management overview merges source evidence by project and date", () => {
   const overview = buildWorkManagementOverview({
     coverage: coverageResult(),
@@ -360,6 +431,40 @@ test("work management overview merges source evidence by project and date", () =
   assert.equal(repoTutorStudio.latest_snapshot_created_at, null);
   assert.equal(repoTutorStudio.latest_saved_extraction_at, "2026-06-09T01:31:00Z");
   assert.equal(repoTutorStudio.latest_normalized_at, null);
+});
+
+test("work management overview exposes status export session coverage", () => {
+  const overview = buildWorkManagementOverview({
+    coverage: coverageResult(),
+    statusExport: statusExportResult(),
+  });
+
+  assert.equal(overview.status_export_row_count, 2);
+  assert.equal(overview.status_export_total_row_count, 4);
+  assert.equal(overview.session_matched_row_count, 1);
+  assert.equal(overview.session_unresolved_row_count, 1);
+  assert.equal(overview.title_normalization_row_count, 1);
+
+  const promptVault = overview.rows.find((row) => row.key === "2026-06-09::PromptVault");
+  assert.ok(promptVault);
+  assert.deepEqual(promptVault.sources, ["status_export", "progress_log"]);
+  assert.equal(promptVault.status_export_count, 1);
+  assert.equal(promptVault.needs_session_evidence, false);
+  assert.equal(promptVault.needs_title_normalization, false);
+  assert.equal(promptVault.session_evidence_audit, "matched");
+  assert.equal(workManagementOverviewSessionText(promptVault), "세션 근거 2건 · 세션 매칭");
+
+  const careVault = overview.rows.find((row) => row.key === "2026-06-08::CareVault");
+  assert.ok(careVault);
+  assert.deepEqual(careVault.sources, ["status_export"]);
+  assert.equal(careVault.status_export_count, 1);
+  assert.equal(careVault.needs_session_evidence, true);
+  assert.equal(careVault.needs_title_normalization, true);
+  assert.equal(careVault.session_evidence_audit, "unresolved-after-full-index");
+  assert.equal(
+    workManagementOverviewSessionText(careVault),
+    "세션 근거 0건 · 전체 인덱스 미해결 · 제목 정규화 필요",
+  );
 });
 
 test("work management overview does not double count saved extraction proposals", () => {
@@ -448,7 +553,7 @@ test("work management overview status text exposes management coverage", () => {
 
   assert.equal(
     workManagementOverviewMetaText(overview),
-    "관리 3개 · 3개 프로젝트 · 3일 · 현재요약 1 · 스냅샷 2 · 추출제안 1 · 저장추출 2 · 정규화 1 · 진행로그 1 · 저장관리 3 · 라이브만 0 · 최신스냅샷 2026-06-09T01:00:00Z · 최신저장추출 2026-06-09T01:31:00Z · 최신정규화 2026-06-09T01:45:00Z",
+    "관리 3개 · 3개 프로젝트 · 3일 · 현재요약 1 · 스냅샷 2 · 추출제안 1 · 저장추출 2 · 정규화 1 · 상태행 0/0 · 세션매칭 0 · 세션미해결 0 · 제목정규화 0 · 진행로그 1 · 저장관리 3 · 라이브만 0 · 최신스냅샷 2026-06-09T01:00:00Z · 최신저장추출 2026-06-09T01:31:00Z · 최신정규화 2026-06-09T01:45:00Z",
   );
   assert.equal(
     workManagementOverviewSourceText(overview.rows[0]),

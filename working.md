@@ -1,10 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 01:03 KST
+Updated: 2026-06-10 01:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 management overview session coverage status
+
+Current Goal:
+
+- Make the work-management overview directly show how complete the project/day
+  ledger is against the status export and session evidence state.
+- Surface status-export row coverage, session matched rows, unresolved rows, and
+  title-normalization rows in the existing overview instead of requiring the
+  operator to cross-check separate panels.
+
+Context:
+
+- The prior slice proved the system can parse real project-local work logs and
+  real session evidence, but durable AI-managed rows are still incomplete.
+- The existing management overview already merges current summaries, snapshots,
+  extraction proposals, saved extraction rows, normalized rows, and parsed
+  progress logs, but it does not include the status-export session audit fields.
+- This slice will reuse the existing overview and add a status-export dimension
+  rather than creating a separate dashboard.
+
+Progress:
+
+- Confirmed goal identity for PromptVault and clean `main...origin/main` at
+  `7b9a3ac`.
+- Inspected `src/workManagementOverview.ts`, `tests/workManagementOverview.test.ts`,
+  `src/App.tsx`, and browser bridge QA around the overview flow.
+- Added status-export coverage to the work-management overview so the operator
+  can see returned/total status rows, matched session rows, unresolved session
+  rows, and title-normalization rows in one place.
+- Added row-level session status text so each project/day row says whether it
+  has session evidence, remains unresolved after the full index, is affected by
+  the evidence limit, or still needs title normalization.
+
+Changes:
+
+- `src/workManagementOverview.ts`:
+  - Added `status_export` as an overview source.
+  - Merged `work-status-export` rows into the project/day overview.
+  - Added aggregate counters for status rows, session matched rows, session
+    unresolved rows, and title-normalization rows.
+  - Added `workManagementOverviewSessionText`.
+- `src/App.tsx`:
+  - Added the `상태Export` source filter.
+  - Included `workStatusExportResult` in the overview input and loaded state.
+  - Displayed row-level session evidence status separately from other counts.
+- `tests/workManagementOverview.test.ts`:
+  - Added a status-export fixture proving matched and unresolved rows are
+    counted and rendered correctly.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - Extended the isolated browser QA to require the new overview meta counters
+    and at least one row-level session status string.
+- `working.md`:
+  - Recorded this slice and verification evidence.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts`
+  - `9` tests passed.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check`
+  - UI tests `486`, Rust lib tests `205`, CLI tests `34`, and doc tests
+    passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser QA ended with exit code `0`.
+  - Management overview meta included `상태행 25/99`, `세션매칭 13`,
+    `세션미해결 12`, and `제목정규화 6`.
+  - The same QA parsed real session-index state in its fixture run, including
+    Codex session evidence backfill over `/Users/wj/.codex/sessions` and
+    project-local logs such as `working.md`, `workingd.md`, `WORKING.md`,
+    `PROGRESS_LOG.md`, and `PROJECT_STATUS.md`.
+
+Issues:
+
+- cmux-specific browser testing remains excluded; browser bridge QA remains the
+  active in-session verification path.
+- This is still not a fully closed AI-managed work ledger. The app can inventory
+  and group project/day work logs, parse real session evidence, expose missing
+  session evidence, and queue AI-review candidates, but accepted durable AI rows
+  are still incomplete.
+- GLM/OpenAI provider guard still falls back locally in this QA environment when
+  API credentials are absent or when no AI candidates are available. Codex SDK is
+  not yet implemented as a provider route for work-log/session-evidence
+  reconciliation.
+
+Research:
+
+- No external research needed; this is a local product/QA slice.
+
+Next Steps:
+
+- Implement a real AI provider path for the pending queues: either fix the live
+  GLM/OpenAI proposal path in this environment or add a Codex SDK provider route.
+- Persist accepted AI/provider rows into the durable ledger so management status
+  can distinguish parsed inventory, frozen extraction rows, normalized rows,
+  session-matched rows, unresolved rows, and provider-pending rows without
+  relying on transient QA fixtures.
 
 ## Completed Slice - 2026-06-10 session evidence title-normalization approval guard
 

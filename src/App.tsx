@@ -221,6 +221,7 @@ import {
   workManagementOverviewMetaText,
   workManagementOverviewPersistenceText,
   workManagementOverviewProjectSuggestions,
+  workManagementOverviewSessionText,
   workManagementOverviewSourceText,
   type WorkManagementOverviewFilters,
   type WorkManagementOverviewPersistenceState,
@@ -571,6 +572,7 @@ const WORK_MANAGEMENT_SOURCE_OPTIONS: Array<{
   { label: "추출제안", value: "extraction_proposal" },
   { label: "저장추출", value: "saved_extraction" },
   { label: "정규화", value: "normalized_row" },
+  { label: "상태Export", value: "status_export" },
   { label: "진행로그", value: "progress_log" },
 ];
 
@@ -1251,7 +1253,8 @@ function App() {
       - WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT,
   );
   const workManagementOverviewLoaded =
-    workSummaryResult !== null
+    workStatusExportResult !== null
+    || workSummaryResult !== null
     || workSummarySnapshotsResult !== null
     || workLogExtractionResult !== null
     || workLogExtractionItemsResult !== null
@@ -1270,6 +1273,7 @@ function App() {
     extractionProposals: workLogExtractionResult,
     normalizedItems: workLogNormalizedItemsResult ?? workLogNormalizationApplyResult,
     snapshots: workSummarySnapshotsResult,
+    statusExport: workStatusExportResult,
     summary: workSummaryResult,
   }), [
     workLogCoverageResult,
@@ -1277,6 +1281,7 @@ function App() {
     workLogExtractionItemsResult,
     workLogNormalizationApplyResult,
     workLogNormalizedItemsResult,
+    workStatusExportResult,
     workSummaryResult,
     workSummarySnapshotsResult,
   ]);
@@ -4132,10 +4137,12 @@ function App() {
                   <p>{row.latest_title ?? "제목 없는 작업 관리 row"}</p>
                   <span>
                     {workManagementOverviewSourceText(row)} · 작업 {row.work_item_count.toLocaleString()}개 ·
-                    세션 근거 {row.session_evidence_count.toLocaleString()}건 · 추출제안{" "}
-                    {row.extraction_proposal_count.toLocaleString()}개 · 저장추출{" "}
+                    추출제안 {row.extraction_proposal_count.toLocaleString()}개 · 저장추출{" "}
                     {row.saved_extraction_count.toLocaleString()}개 · 정규화{" "}
                     {row.normalized_row_count.toLocaleString()}개 · {workManagementOverviewConfidenceText(row)}
+                  </span>
+                  <span data-work-management-row-session="true">
+                    {workManagementOverviewSessionText(row)}
                   </span>
                   <span data-work-management-row-persistence="true">
                     {workManagementOverviewPersistenceText(row)}

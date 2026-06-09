@@ -1,12 +1,71 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 20:09 KST
+Updated: 2026-06-09 20:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 project-key session evidence index
+## Current Slice - 2026-06-09 browser QA work-log step logging
+
+Current Goal:
+
+- Make the long isolated browser QA `work log management` phase diagnosable by
+  logging each sub-step before its wait.
+- Preserve the existing browser QA behavior and isolated database safety.
+
+Context:
+
+- The previous browser QA runs passed, but a long no-output gap inside
+  `work log management` made stale expectations or slow backend waits hard to
+  localize.
+- The QA script already has a `step()` helper and top-level phase logs.
+
+Progress:
+
+- Added granular step logs for:
+  - work management overview refresh;
+  - missing-confidence sort;
+  - freeze live rows;
+  - saved-extraction filter;
+  - work-log coverage;
+  - candidates;
+  - normalization candidates/proposals/review/apply;
+  - review queue save;
+  - extraction run history;
+  - local provider guard;
+  - saved items.
+- Verified the new logs appear in order during isolated browser QA.
+
+Changes:
+
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added `step(...)` calls only; no assertions, route calls, selectors, or
+    persistence behavior changed.
+
+Tests:
+
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  Observed new step output from `work management overview` through
+  `work log saved items`, plus the final JSON result.
+
+Issues:
+
+- The preceding `work summary and snapshot` phase can still take time before
+  `work log management` starts, but the work-log phase itself is now
+  diagnosable.
+- Live corpus remains dynamic; latest QA saw `840` progress logs and two
+  risk-blocked unparsed NotebookLM worklog candidates.
+
+Next Steps:
+
+- Continue AI-assisted normalization/review for rough titles and rows without
+  session evidence.
+- Consider cached/full-index status export snapshots if operator full-index
+  checks still feel too slow after the project-key optimization.
+
+## Completed Slice - 2026-06-09 project-key session evidence index
 
 Current Goal:
 

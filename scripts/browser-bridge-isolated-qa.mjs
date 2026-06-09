@@ -501,6 +501,7 @@ async function runBrowserQa() {
     }
 
     step("work log management");
+    step("work management overview");
     await page.locator('[data-refresh-work-management-overview="true"]').click();
     await page.locator('[data-work-management-overview-meta="true"]').waitFor({ timeout: 120000 });
     await page.waitForFunction(() => {
@@ -519,6 +520,7 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     workManagementDurabilityWarning =
       (await page.locator('[data-work-management-durability-warning="true"]').textContent())?.trim() ?? "";
+    step("work management missing confidence sort");
     await waitForEnabled(page, '[data-work-management-sort="true"]');
     await page.locator('[data-work-management-sort="true"]').selectOption("missing_confidence_first");
     await page.waitForFunction(() => {
@@ -527,6 +529,7 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     workManagementMissingConfidenceRows =
       await page.locator('[data-work-management-overview="true"] article').allTextContents();
+    step("work management freeze live rows");
     await waitForEnabled(page, '[data-freeze-work-management-live-rows="true"]');
     await page.locator('[data-freeze-work-management-live-rows="true"]').click();
     await page.waitForFunction(() => {
@@ -545,6 +548,7 @@ async function runBrowserQa() {
       (await page.locator('[data-work-log-extraction-persistence="true"]').textContent())?.trim() ?? "";
     workManagementMetaAfterFreeze =
       (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
+    step("work management saved extraction filter");
     await waitForEnabled(page, '[data-work-management-project-filter="true"]');
     await page.locator('[data-work-management-project-filter="true"]').fill("notebooklm-llm-wiki-flow");
     await waitForEnabled(page, '[data-work-management-source-filter="true"]');
@@ -571,6 +575,7 @@ async function runBrowserQa() {
       (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
     workManagementPersistenceRows =
       await page.locator('[data-work-management-row-persistence="true"]').allTextContents();
+    step("work log coverage");
     await page.locator('[data-load-work-log-coverage="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-coverage-meta="true"]')?.textContent ?? "";
@@ -581,6 +586,7 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     coverageMeta =
       (await page.locator('[data-work-log-coverage-meta="true"]').textContent())?.trim() ?? "";
+    step("work log candidates");
     await page.locator('[data-load-work-log-candidates="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-candidates-meta="true"]')?.textContent ?? "";
@@ -600,6 +606,7 @@ async function runBrowserQa() {
       (await page.locator('[data-work-log-candidates-meta="true"]').textContent())?.trim() ?? "";
     workLogCandidateRows =
       await page.locator('[data-work-log-candidates="true"] article').allTextContents();
+    step("work log normalization candidates");
     await waitForEnabled(page, '[data-load-work-log-normalization-candidates="true"]');
     await page.locator('[data-load-work-log-normalization-candidates="true"]').click();
     await page.waitForFunction(() => {
@@ -613,6 +620,7 @@ async function runBrowserQa() {
       (await page.locator('[data-work-log-normalization-candidates-meta="true"]').textContent())?.trim() ?? "";
     workLogNormalizationCandidateRows =
       await page.locator('[data-work-log-normalization-candidates="true"] article').allTextContents();
+    step("work log normalization proposals");
     await waitForEnabled(page, '[data-load-work-log-normalization-proposals="true"]');
     await page.locator('[data-load-work-log-normalization-proposals="true"]').click();
     await page.waitForFunction(() => {
@@ -626,6 +634,7 @@ async function runBrowserQa() {
       (await page.locator('[data-work-log-normalization-proposals-meta="true"]').textContent())?.trim() ?? "";
     workLogNormalizationProposalRows =
       await page.locator('[data-work-log-normalization-proposals="true"] article').allTextContents();
+    step("work log normalization review queue");
     await waitForEnabled(page, '[data-sync-work-log-normalization-review-queue="true"]');
     await page.locator('[data-sync-work-log-normalization-review-queue="true"]').click();
     await page.waitForFunction(() => {
@@ -673,6 +682,7 @@ async function runBrowserQa() {
     }
     workLogNormalizationReviewQueueStateAfterApprove =
       `${approvedNormalizationRow.review_state} · ${approvedNormalizationRow.review_reason}`;
+    step("work log normalization apply");
     await waitForEnabled(page, '[data-apply-work-log-normalization-review-queue="true"]');
     await page.locator('[data-apply-work-log-normalization-review-queue="true"]').click();
     await page.waitForFunction((candidateId) => {
@@ -692,6 +702,7 @@ async function runBrowserQa() {
       (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
     workLogNormalizedRows =
       await page.locator('[data-work-log-normalized-items="true"] article').allTextContents();
+    step("work log review queue");
     await page.locator('[data-sync-work-log-review-queue="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-review-queue-meta="true"]')?.textContent ?? "";
@@ -709,6 +720,7 @@ async function runBrowserQa() {
     if (!approvedReviewQueueSaveDisabledWhenEmpty) {
       throw new Error("Approved review queue save button should be disabled when approved queue count is zero");
     }
+    step("work log approved review queue save");
     insertSyntheticApprovedReviewQueueRow();
     await waitForEnabled(page, '[data-sync-work-log-review-queue="true"]');
     await page.locator('[data-sync-work-log-review-queue="true"]').click();
@@ -735,6 +747,7 @@ async function runBrowserQa() {
     workLogRunsMeta =
       (await page.locator('[data-work-log-runs-meta="true"]').textContent())?.trim() ?? "";
     await waitForEnabled(page, '[data-load-work-log-runs="true"]');
+    step("work log extraction run history");
     await page.locator('[data-load-work-log-runs="true"]').click();
     await page.waitForFunction(() => {
       const rows = Array.from(document.querySelectorAll('[data-work-log-runs="true"] article'));
@@ -746,6 +759,7 @@ async function runBrowserQa() {
       });
     }, undefined, { timeout: 90000 });
     workLogRunRows = await page.locator('[data-work-log-runs="true"] article').allTextContents();
+    step("work log extraction local provider guard");
     await page.locator('[data-load-work-log-extraction="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-extraction-meta="true"]')?.textContent ?? "";
@@ -763,6 +777,7 @@ async function runBrowserQa() {
     }, undefined, { timeout: 90000 });
     workLogExtractionProviderWarning =
       (await page.locator('[data-work-log-extraction-provider-warning="true"]').textContent())?.trim() ?? "";
+    step("work log saved items");
     await page.locator('[data-load-work-log-items="true"]').click();
     await page.waitForFunction(() => {
       return Boolean(document.querySelector('[data-work-log-items-meta="true"]'));

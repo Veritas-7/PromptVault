@@ -257,6 +257,7 @@ function summaryResult(overrides: Partial<ProjectWorkSummaryResult> = {}): Proje
 function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = {}): ProjectWorkStatusExportResult {
   return {
     generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
     markdown: "# PromptVault Project/Day Work Status",
     total_row_count: 4,
     row_offset: 1,
@@ -1290,7 +1291,7 @@ test("work status export text exposes project day evidence coverage", () => {
   const result = statusExportResult();
   assert.equal(
     workStatusExportMetaText("ready", result),
-    "표시 2행 · 3개 프로젝트 · 2일 · 작업 10개 · 진행로그 4개 · 세션 근거 9건 · 고유 3건 · 표시 제한",
+    "표시 2행 · 3개 프로젝트 · 2일 · 작업 10개 · 진행로그 4개 · 세션 근거 9건 · 고유 3건 · DB /tmp/promptvault.sqlite · 표시 제한",
   );
   assert.equal(
     workStatusExportPageStatusText(result),

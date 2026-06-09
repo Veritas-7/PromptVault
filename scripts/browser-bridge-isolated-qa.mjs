@@ -224,6 +224,7 @@ function unresolvedWorkStatusExportFixture() {
   const now = new Date().toISOString();
   return {
     generated_at: now,
+    database_path: DATABASE_PATH,
     markdown: [
       "# PromptVault Project/Day Work Status",
       "",
@@ -801,6 +802,8 @@ async function runBrowserQa() {
       return meta.includes("표시 25행")
         && meta.includes("프로젝트")
         && meta.includes("세션 근거")
+        && meta.includes("DB")
+        && meta.includes("promptvault-browser-qa")
         && index.includes("메타데이터 우선")
         && index.includes("보관")
         && markdown.includes("Project/Day Rows")

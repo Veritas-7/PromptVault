@@ -1,10 +1,90 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 06:56 KST
+Updated: 2026-06-10 07:10 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Status export DB scope
+
+Current Goal:
+
+- Make project/day management evidence clearly identify which SQLite database
+  it describes, so isolated browser QA counters are not confused with the
+  persistent PromptVault vault.
+
+Context:
+
+- The isolated browser QA database intentionally starts from a temporary
+  SQLite file and only partially backfills sessions during the test flow.
+- The persistent default database is
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- Live persistent DB verification now shows the Codex session cursor complete:
+  `codex 25,204/25,204`, `codex-cx 11/11`, `all_sources_completed true`,
+  `stored_prompt_count 10,867`, and no warnings.
+
+Progress:
+
+- Added `database_path` to `ProjectWorkStatusExportResult` so API/CLI/browser
+  status export responses carry the same DB-scope evidence as the other
+  work-management routes.
+- Updated the status export meta row to display `DB <path>` in the UI.
+- Tightened the browser bridge parser so status export responses without a
+  non-blank DB path are rejected as malformed.
+- Updated isolated browser QA to require the status export meta to show the
+  temporary QA database path.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: includes `database_path` in work-status-export JSON.
+- `src/types.ts` and `src/promptVaultApi.ts`: extend and validate the frontend
+  contract.
+- `src/workSummaryStatus.ts`: appends the displayed DB path to the status export
+  meta text.
+- `tests/*`: updates status export fixtures and expected meta text.
+- `scripts/browser-bridge-isolated-qa.mjs`: updates mocked status export
+  fixtures and QA assertions for DB-scope visibility.
+- `working.md`: records actual persistent DB session completion separately from
+  isolated QA partial-backfill evidence.
+
+Tests:
+
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work status export"`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work status export text"`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts --test-name-pattern "status Export|상태 Export|next action|readiness|work management"`.
+- PASS: `cargo test project_work_status_export --lib`.
+- PASS: `cargo run --bin promptvault-cli -- work-status-export --limit 5 --session-limit 200 --json`.
+- PASS: `cargo run --bin promptvault-cli -- work-session-index --batch-files 500 --max-batches 1 --until-complete --json`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`499` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge >
+  /tmp/promptvault-status-export-db-scope-qa.log 2>&1`.
+
+QA Evidence:
+
+- Isolated QA status export meta now includes DB scope:
+  `DB /var/.../promptvault-browser-qa-.../qa.sqlite`.
+- Isolated QA still correctly reports its own partial session backfill:
+  `세션 백필 미완료 361/25,216개 · 남음 24,855개`.
+- Persistent DB status export now reports:
+  `database_path /Users/wj/Documents/PromptVault/promptvault.sqlite`,
+  `31` projects, `9,888` work items, `10,867` stored session evidence rows, and
+  no warnings.
+- Persistent DB session index confirmation reports:
+  `codex 25,204/25,204`, `codex-cx 11/11`, and `all_sources_completed true`.
+
+Remaining:
+
+- Do not treat isolated QA partial-backfill counts as persistent production
+  completion state. Use the displayed `DB` path first.
+- Persistent session backfill is complete at the current filesystem snapshot,
+  but review decisions and AI provider setup remain separate gates.
+- Next useful slice: reduce the remaining review queue decisions or connect an
+  explicit GLM/OpenAI/Codex provider for controlled AI-assisted
+  extraction/normalization.
 
 ## Completed Slice - 2026-06-10 Provider status in work management
 

@@ -345,6 +345,7 @@ function projectWorkSummaryPayload(overrides = {}) {
 function projectWorkStatusExportPayload(overrides = {}) {
   return {
     generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
     markdown: "# PromptVault Project/Day Work Status\n\n| Date | Project | Status |\n|---|---|---|\n| 2026-06-09 | PromptVault | active |",
     total_row_count: 2,
     row_offset: 1,
@@ -983,6 +984,7 @@ test("browser bridge work status export posts options and validates rows", async
   assert.equal(result.report_session_evidence_count, 7);
   assert.equal(result.report_session_evidence_index_count, 200);
   assert.equal(result.report_session_evidence_index_total_count, 500);
+  assert.equal(result.database_path, "/tmp/promptvault.sqlite");
 });
 
 test("browser bridge work status export rejects impossible index counters", async (t) => {

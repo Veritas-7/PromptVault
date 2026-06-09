@@ -849,6 +849,7 @@ pub struct ProjectWorkStatusExportRow {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkStatusExportResult {
     pub generated_at: String,
+    pub database_path: String,
     pub markdown: String,
     pub total_row_count: usize,
     pub row_offset: usize,
@@ -2109,6 +2110,7 @@ pub fn run_project_work_status_export(
 
     Ok(ProjectWorkStatusExportResult {
         generated_at: report.generated_at.clone(),
+        database_path: database_path.display().to_string(),
         markdown,
         total_row_count,
         row_offset,

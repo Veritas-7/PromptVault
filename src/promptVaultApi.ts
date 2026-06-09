@@ -2356,6 +2356,7 @@ function projectWorkStatusExportRowsWithinResult(value: unknown): boolean {
 function parseProjectWorkStatusExportResult(value: unknown): ProjectWorkStatusExportResult {
   if (!isRecord(value)
     || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
     || typeof value.markdown !== "string"
     || !isNonNegativeSafeInteger(value.total_row_count)
     || !isNonNegativeSafeInteger(value.row_offset)

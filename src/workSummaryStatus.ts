@@ -170,6 +170,7 @@ export function workStatusExportMetaText(
     `진행로그 ${result.report_files_seen.toLocaleString()}개`,
     `세션 근거 ${result.report_session_evidence_count.toLocaleString()}건`,
     `고유 ${result.report_unique_session_evidence_count.toLocaleString()}건`,
+    `DB ${pathDisplayText(result.database_path)}`,
   ];
   if (result.rows_truncated) parts.push("표시 제한");
   return parts.join(" · ");

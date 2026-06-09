@@ -235,6 +235,7 @@ export interface ProjectWorkStatusExportRow {
 
 export interface ProjectWorkStatusExportResult {
   generated_at: string;
+  database_path: string;
   markdown: string;
   total_row_count: number;
   row_offset: number;

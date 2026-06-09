@@ -304,6 +304,7 @@ function coverageResult(): ProjectWorkLogCoverageResult {
 function statusExportResult(): ProjectWorkStatusExportResult {
   return {
     generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
     markdown: "# status",
     total_row_count: 4,
     row_offset: 0,

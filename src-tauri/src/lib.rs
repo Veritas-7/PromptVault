@@ -55,6 +55,9 @@ const DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_CANDIDATE_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_NORMALIZATION_CANDIDATE_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_PROPOSAL_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_NORMALIZATION_PROPOSAL_LIMIT: usize = 100;
+const PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_CHUNK_MAX_CANDIDATES: usize = 8;
+const PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_CHUNK_TARGET_CHARS: usize = 18_000;
+const PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_PROMPT_MAX_CHARS: usize = 24_000;
 const DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_REVIEW_QUEUE_LIMIT: usize = 50;
 const MAX_PROJECT_WORK_LOG_NORMALIZATION_REVIEW_QUEUE_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_NORMALIZED_ITEM_LIMIT: usize = 20;
@@ -9659,7 +9662,7 @@ async fn project_work_log_normalization_proposals_with_env(
     }
 
     if let Some(api_key) = openai_api_key_from_env(&env) {
-        match request_openai_project_work_log_normalization(
+        match request_openai_project_work_log_normalization_chunked(
             &candidates,
             &safe_candidates,
             &env,
@@ -9680,7 +9683,7 @@ async fn project_work_log_normalization_proposals_with_env(
         }
     }
     if let Some(api_key) = glm_api_key_from_env(&env) {
-        match request_glm_project_work_log_normalization(
+        match request_glm_project_work_log_normalization_chunked(
             &candidates,
             &safe_candidates,
             &env,
@@ -9708,6 +9711,59 @@ async fn project_work_log_normalization_proposals_with_env(
     }
     Ok(local_project_work_log_normalization_proposals(
         candidates, warnings,
+    ))
+}
+
+async fn request_openai_project_work_log_normalization_chunked(
+    candidates_result: &ProjectWorkLogNormalizationCandidatesResult,
+    candidates: &[ProjectWorkLogNormalizationCandidate],
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkLogNormalizationProposalsResult, String> {
+    let chunks = project_work_log_normalization_candidate_chunks(candidates);
+    if chunks.len() <= 1 {
+        return request_openai_project_work_log_normalization(
+            candidates_result,
+            candidates,
+            env,
+            api_key,
+        )
+        .await;
+    }
+
+    let model = openai_model_from_env(env);
+    let mut proposals = Vec::new();
+    let mut warnings = vec![format!(
+        "OpenAI work-log normalization 후보 {}개를 {}개 chunk로 나누어 처리했습니다.",
+        candidates.len(),
+        chunks.len()
+    )];
+    let chunk_count = chunks.len();
+    for (index, chunk) in chunks.into_iter().enumerate() {
+        let mut chunk_result =
+            request_openai_project_work_log_normalization(candidates_result, chunk, env, api_key)
+                .await
+                .map_err(|err| {
+                    format!(
+                        "OpenAI work-log normalization chunk {}/{} 실패: {err}",
+                        index + 1,
+                        chunk_count
+                    )
+                })?;
+        proposals.append(&mut chunk_result.proposals);
+        warnings.append(&mut chunk_result.warnings);
+    }
+
+    Ok(finish_project_work_log_normalization_proposals(
+        candidates_result,
+        ProjectWorkLogNormalizationRuntime {
+            provider: "openai",
+            provider_model: Some(model),
+            provider_runtime: "openai-responses",
+            used_ai: true,
+        },
+        proposals,
+        warnings,
     ))
 }
 
@@ -9792,6 +9848,59 @@ async fn request_openai_project_work_log_normalization(
     .map_err(|err| {
         format!("OpenAI work-log normalization 검증 실패: {err}; 로컬 fallback을 사용합니다.")
     })
+}
+
+async fn request_glm_project_work_log_normalization_chunked(
+    candidates_result: &ProjectWorkLogNormalizationCandidatesResult,
+    candidates: &[ProjectWorkLogNormalizationCandidate],
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkLogNormalizationProposalsResult, String> {
+    let chunks = project_work_log_normalization_candidate_chunks(candidates);
+    if chunks.len() <= 1 {
+        return request_glm_project_work_log_normalization(
+            candidates_result,
+            candidates,
+            env,
+            api_key,
+        )
+        .await;
+    }
+
+    let model = glm_model_from_env(env);
+    let mut proposals = Vec::new();
+    let mut warnings = vec![format!(
+        "GLM work-log normalization 후보 {}개를 {}개 chunk로 나누어 처리했습니다.",
+        candidates.len(),
+        chunks.len()
+    )];
+    let chunk_count = chunks.len();
+    for (index, chunk) in chunks.into_iter().enumerate() {
+        let mut chunk_result =
+            request_glm_project_work_log_normalization(candidates_result, chunk, env, api_key)
+                .await
+                .map_err(|err| {
+                    format!(
+                        "GLM work-log normalization chunk {}/{} 실패: {err}",
+                        index + 1,
+                        chunk_count
+                    )
+                })?;
+        proposals.append(&mut chunk_result.proposals);
+        warnings.append(&mut chunk_result.warnings);
+    }
+
+    Ok(finish_project_work_log_normalization_proposals(
+        candidates_result,
+        ProjectWorkLogNormalizationRuntime {
+            provider: "glm",
+            provider_model: Some(model),
+            provider_runtime: "glm-chat-completions",
+            used_ai: true,
+        },
+        proposals,
+        warnings,
+    ))
 }
 
 async fn request_glm_project_work_log_normalization(
@@ -9900,24 +10009,65 @@ fn project_work_log_normalization_messages(
     let mut user = String::new();
     user.push_str("Candidates:\n");
     for candidate in candidates {
-        user.push_str(&format!(
-            "Candidate ID: {}\nProject: {}\nDate: {}\nSource: {}\nReason: {}\nOriginal title: {}\nOriginal status: {}\nWork items: {}\nSession evidence count: {}\nSaved extractions: {}\nAI saved extractions: {}\nEvidence:\n{}\n\n",
-            candidate.candidate_id,
-            candidate.project,
-            candidate.date,
-            candidate.source_path,
-            candidate.reason,
-            candidate.title,
-            candidate.status,
-            candidate.work_item_count,
-            candidate.session_evidence_count,
-            candidate.saved_extraction_count,
-            candidate.ai_saved_extraction_count,
-            candidate.evidence
-        ));
+        user.push_str(&project_work_log_normalization_candidate_message(candidate));
     }
     user.push_str("Return JSON: {\"proposals\":[{\"candidate_id\":\"...\",\"normalized_title\":\"...\",\"normalized_status\":\"proposed\",\"normalized_evidence\":\"verbatim evidence\",\"confidence\":0.0}]}.");
-    (system, truncate_chars(&user, 24_000))
+    (
+        system,
+        truncate_chars(
+            &user,
+            PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_PROMPT_MAX_CHARS,
+        ),
+    )
+}
+
+fn project_work_log_normalization_candidate_message(
+    candidate: &ProjectWorkLogNormalizationCandidate,
+) -> String {
+    format!(
+        "Candidate ID: {}\nProject: {}\nDate: {}\nSource: {}\nReason: {}\nOriginal title: {}\nOriginal status: {}\nWork items: {}\nSession evidence count: {}\nSaved extractions: {}\nAI saved extractions: {}\nEvidence:\n{}\n\n",
+        candidate.candidate_id,
+        candidate.project,
+        candidate.date,
+        candidate.source_path,
+        candidate.reason,
+        candidate.title,
+        candidate.status,
+        candidate.work_item_count,
+        candidate.session_evidence_count,
+        candidate.saved_extraction_count,
+        candidate.ai_saved_extraction_count,
+        candidate.evidence
+    )
+}
+
+fn project_work_log_normalization_candidate_chunks(
+    candidates: &[ProjectWorkLogNormalizationCandidate],
+) -> Vec<&[ProjectWorkLogNormalizationCandidate]> {
+    let mut chunks = Vec::new();
+    let mut start = 0usize;
+    let mut current_chars = 0usize;
+    for (index, candidate) in candidates.iter().enumerate() {
+        let candidate_chars = project_work_log_normalization_candidate_message(candidate)
+            .chars()
+            .count();
+        let current_count = index.saturating_sub(start);
+        let over_count =
+            current_count >= PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_CHUNK_MAX_CANDIDATES;
+        let over_chars = index > start
+            && current_chars + candidate_chars
+                > PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_CHUNK_TARGET_CHARS;
+        if over_count || over_chars {
+            chunks.push(&candidates[start..index]);
+            start = index;
+            current_chars = 0;
+        }
+        current_chars += candidate_chars;
+    }
+    if start < candidates.len() {
+        chunks.push(&candidates[start..]);
+    }
+    chunks
 }
 
 fn project_work_log_normalization_proposals_from_content(
@@ -11684,6 +11834,12 @@ mod tests {
     }
 
     fn spawn_json_server(status: u16, body: Value) -> (String, std::sync::mpsc::Receiver<String>) {
+        spawn_json_sequence_server(vec![(status, body)])
+    }
+
+    fn spawn_json_sequence_server(
+        responses: Vec<(u16, Value)>,
+    ) -> (String, std::sync::mpsc::Receiver<String>) {
         use std::io::{Read, Write};
         use std::net::TcpListener;
         use std::sync::mpsc;
@@ -11692,44 +11848,46 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
         let addr = listener.local_addr().expect("test server addr");
         let (tx, rx) = mpsc::channel();
-        let response_body = body.to_string();
 
         std::thread::spawn(move || {
-            let (mut stream, _) = listener.accept().expect("accept one test request");
-            let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
-            let mut bytes = Vec::new();
-            let mut buffer = [0_u8; 4096];
+            for (status, body) in responses {
+                let response_body = body.to_string();
+                let (mut stream, _) = listener.accept().expect("accept test request");
+                let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+                let mut bytes = Vec::new();
+                let mut buffer = [0_u8; 4096];
 
-            loop {
-                match stream.read(&mut buffer) {
-                    Ok(0) => break,
-                    Ok(count) => {
-                        bytes.extend_from_slice(&buffer[..count]);
-                        if let Some(header_end) = find_subslice(&bytes, b"\r\n\r\n") {
-                            let headers = String::from_utf8_lossy(&bytes[..header_end]);
-                            let body_len = captured_content_length(&headers).unwrap_or(0);
-                            if bytes.len() >= header_end + 4 + body_len {
-                                break;
+                loop {
+                    match stream.read(&mut buffer) {
+                        Ok(0) => break,
+                        Ok(count) => {
+                            bytes.extend_from_slice(&buffer[..count]);
+                            if let Some(header_end) = find_subslice(&bytes, b"\r\n\r\n") {
+                                let headers = String::from_utf8_lossy(&bytes[..header_end]);
+                                let body_len = captured_content_length(&headers).unwrap_or(0);
+                                if bytes.len() >= header_end + 4 + body_len {
+                                    break;
+                                }
                             }
                         }
+                        Err(_) => break,
                     }
-                    Err(_) => break,
                 }
-            }
 
-            let request = String::from_utf8_lossy(&bytes).to_string();
-            let _ = tx.send(request);
-            let status_text = if status == 200 {
-                "200 OK"
-            } else {
-                "500 Internal Server Error"
-            };
-            let response = format!(
-                "HTTP/1.1 {status_text}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                response_body.len(),
-                response_body
-            );
-            let _ = stream.write_all(response.as_bytes());
+                let request = String::from_utf8_lossy(&bytes).to_string();
+                let _ = tx.send(request);
+                let status_text = if status == 200 {
+                    "200 OK"
+                } else {
+                    "500 Internal Server Error"
+                };
+                let response = format!(
+                    "HTTP/1.1 {status_text}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    response_body.len(),
+                    response_body
+                );
+                let _ = stream.write_all(response.as_bytes());
+            }
         });
 
         (format!("http://{addr}"), rx)
@@ -14953,6 +15111,183 @@ Progress:
             proposal.rejection_reason.as_deref(),
             Some("local_fallback_requires_ai_review")
         );
+    }
+
+    fn normalization_candidate_for_test(
+        candidate_id: String,
+        evidence: String,
+    ) -> ProjectWorkLogNormalizationCandidate {
+        ProjectWorkLogNormalizationCandidate {
+            candidate_id,
+            project: "PromptVault".to_string(),
+            date: "2026-06-09".to_string(),
+            title: "Progress log updated (+1 more parsed work items)".to_string(),
+            status: "current".to_string(),
+            source_path: "/tmp/PromptVault/workingd.md".to_string(),
+            source_file: "workingd.md".to_string(),
+            reason: "no_ai_normalization,no_session_evidence,generic_title".to_string(),
+            evidence,
+            work_item_count: 2,
+            session_evidence_count: 0,
+            saved_extraction_count: 1,
+            ai_saved_extraction_count: 0,
+            best_ai_confidence: None,
+            risk_flags: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn normalization_candidate_chunks_split_large_batches_by_count() {
+        let candidates = (0..17)
+            .map(|index| {
+                normalization_candidate_for_test(
+                    format!("work-normalize-PromptVault-{index:012}"),
+                    format!("2026-06-09: Normalization candidate {index}."),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let chunks = project_work_log_normalization_candidate_chunks(&candidates);
+
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(
+            chunks.iter().map(|chunk| chunk.len()).collect::<Vec<_>>(),
+            vec![8, 8, 1]
+        );
+        assert_eq!(
+            chunks[0][0].candidate_id,
+            "work-normalize-PromptVault-000000000000"
+        );
+        assert_eq!(
+            chunks[2][0].candidate_id,
+            "work-normalize-PromptVault-000000000016"
+        );
+    }
+
+    #[test]
+    fn normalization_candidate_chunks_split_large_batches_by_prompt_budget() {
+        let evidence = "2026-06-09: Long project/day work evidence.\n".repeat(350);
+        let candidates = vec![
+            normalization_candidate_for_test(
+                "work-normalize-PromptVault-large-a".to_string(),
+                evidence.clone(),
+            ),
+            normalization_candidate_for_test(
+                "work-normalize-PromptVault-large-b".to_string(),
+                evidence,
+            ),
+        ];
+
+        let chunks = project_work_log_normalization_candidate_chunks(&candidates);
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(
+            chunks.iter().map(|chunk| chunk.len()).collect::<Vec<_>>(),
+            vec![1, 1]
+        );
+    }
+
+    #[test]
+    fn normalization_messages_keep_candidate_ids_and_prompt_contract() {
+        let candidates = vec![normalization_candidate_for_test(
+            "work-normalize-PromptVault-contract-a".to_string(),
+            "2026-06-09: Added chunked normalization provider prompts.".to_string(),
+        )];
+
+        let (_system, user) = project_work_log_normalization_messages(&candidates);
+
+        assert!(user.contains("Candidate ID: work-normalize-PromptVault-contract-a"));
+        assert!(user.contains("Project: PromptVault"));
+        assert!(user.contains("Return JSON:"));
+        assert!(user.chars().count() <= PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_PROMPT_MAX_CHARS);
+    }
+
+    fn glm_normalization_response_for(
+        candidates: &[ProjectWorkLogNormalizationCandidate],
+    ) -> (u16, Value) {
+        let proposals = candidates
+            .iter()
+            .map(|candidate| {
+                serde_json::json!({
+                    "candidate_id": candidate.candidate_id,
+                    "normalized_title": format!("{} {} normalized", candidate.project, candidate.date),
+                    "normalized_status": "current",
+                    "normalized_evidence": candidate.evidence,
+                    "confidence": 0.91
+                })
+            })
+            .collect::<Vec<_>>();
+        let content = serde_json::json!({ "proposals": proposals }).to_string();
+        (
+            200,
+            serde_json::json!({
+                "choices": [
+                    {
+                        "message": {
+                            "content": content
+                        }
+                    }
+                ]
+            }),
+        )
+    }
+
+    #[tokio::test]
+    async fn project_work_log_normalization_with_env_chunks_glm_requests() {
+        let candidates = (0..9)
+            .map(|index| {
+                normalization_candidate_for_test(
+                    format!("work-normalize-PromptVault-{index:012}"),
+                    format!("2026-06-09: Normalization candidate {index}."),
+                )
+            })
+            .collect::<Vec<_>>();
+        let candidates_result = ProjectWorkLogNormalizationCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            database_path: "/tmp/promptvault.sqlite".to_string(),
+            total_candidate_count: candidates.len(),
+            returned_candidate_count: candidates.len(),
+            report_total_items: 9,
+            report_project_count: 1,
+            report_date_count: 1,
+            candidates: candidates.clone(),
+            warnings: vec!["candidate warning".to_string()],
+        };
+        let (endpoint, request_rx) = spawn_json_sequence_server(vec![
+            glm_normalization_response_for(&candidates[..8]),
+            glm_normalization_response_for(&candidates[8..]),
+        ]);
+        let mut env = HashMap::new();
+        env.insert("GLM_API_KEY".to_string(), "glm-key".to_string());
+        env.insert("GLM_CODING_MODEL".to_string(), "glm-test-model".to_string());
+        env.insert("GLM_CODING_ENDPOINT".to_string(), endpoint);
+
+        let result =
+            project_work_log_normalization_proposals_with_env(candidates_result, false, env)
+                .await
+                .expect("chunked GLM normalization proposals");
+        let first_request = request_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("capture first GLM normalization request");
+        let second_request = request_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("capture second GLM normalization request");
+
+        assert_eq!(result.provider, "glm");
+        assert_eq!(result.provider_model.as_deref(), Some("glm-test-model"));
+        assert_eq!(result.returned_proposal_count, 9);
+        assert_eq!(result.accepted_count, 9);
+        assert_eq!(result.rejected_count, 0);
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("9개를 2개 chunk")));
+        assert!(result.warnings.contains(&"candidate warning".to_string()));
+        assert!(first_request.contains("work-normalize-PromptVault-000000000000"));
+        assert!(first_request.contains("work-normalize-PromptVault-000000000007"));
+        assert!(!first_request.contains("work-normalize-PromptVault-000000000008"));
+        assert!(second_request.contains("work-normalize-PromptVault-000000000008"));
+        assert!(!second_request.contains("work-normalize-PromptVault-000000000000"));
     }
 
     #[test]

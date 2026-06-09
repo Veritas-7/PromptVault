@@ -1,12 +1,102 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 15:33 KST
+Updated: 2026-06-09 15:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 normalized rows in work management overview
+## Current Slice - 2026-06-09 chunked provider normalization
+
+Current Goal:
+
+- Split OpenAI/GLM work-log normalization provider requests into bounded
+  candidate chunks before sending large project/day groups.
+- Preserve the existing single-request behavior for small batches, but avoid
+  losing later candidate IDs to prompt truncation when the backlog has many
+  safe normalization candidates.
+
+Context:
+
+- Real work-log normalization currently sees `91` parsed project/day candidates
+  on the bounded `session_limit=200` verification path.
+- Some candidates represent very large project/day groups, for example
+  RepoTutorStudio rows with hundreds of parsed work items.
+- The previous provider path sent all safe candidates in one OpenAI/GLM request
+  and then truncated the user prompt to `24_000` chars. That kept prompts
+  bounded but could silently drop later candidate IDs and inflate
+  `missing_ai_proposal` rejections.
+- Deterministic browser QA still runs providerless to avoid external network
+  and API-credit dependence, so this slice uses localhost GLM mock tests for
+  provider request coverage.
+
+Progress:
+
+- Added provider chunk constants: `8` candidates per chunk, `18_000` target
+  prompt chars per chunk, and a `24_000` hard prompt cap.
+- Split normalization prompt construction into a reusable candidate-message
+  helper and chunk helper.
+- OpenAI and GLM normalization now call chunked wrappers. Small candidate sets
+  still use the existing one-request path; larger sets send each chunk and
+  merge proposals/warnings back into one result.
+- Extended the existing localhost JSON test server helper so tests can serve a
+  sequence of provider responses.
+- Added a GLM mock test proving that `9` safe candidates become two provider
+  requests (`8 + 1`) and that proposals/counts/warnings are merged correctly.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added normalization provider chunking constants;
+  - added `request_openai_project_work_log_normalization_chunked`;
+  - added `request_glm_project_work_log_normalization_chunked`;
+  - added candidate-message and candidate-chunk helpers;
+  - extended test JSON server support for sequential mock responses;
+  - added chunk boundary, prompt contract, and chunked GLM provider tests.
+
+Tests:
+
+- `cargo fmt --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml normalization_candidate_chunks -- --nocapture`: PASS, `2` tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml normalization -- --nocapture`: PASS, `7` lib normalization tests and `3` CLI normalization-route tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml normalization_messages_keep_candidate_ids_and_prompt_contract -- --nocapture`: PASS.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS.
+- `git diff --check`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml project_work_log_normalization -- --nocapture`: PASS, `2` tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml project_work_log_normalization_with_env_chunks_glm_requests -- --nocapture`: PASS.
+- `npm run check`: PASS, including `test:ui` (`460` tests), `build`, full
+  Rust tests (`178` lib tests and `29` CLI tests), doc-tests, and clippy
+  `-D warnings`.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON included:
+  - `coverageMeta`: `821개 로그 · parsed 820개 · unparsed 0개 · 31개 프로젝트 · 작업 8,843개`;
+  - `workLogNormalizationCandidatesMeta`: `정규화 후보 91개 · 표시 91개 · 원본 작업 8,843개 · 31개 프로젝트 · 25일 · 위험표시 0개`;
+  - `workLogNormalizationProposalsMeta`: `정규화 제안 40개 · accepted 0개 · review 40개 · 후보 91개 · local-normalization-rules · 31개 프로젝트 · 25일`;
+  - `workLogNormalizationReviewQueueMeta`: `정규화 큐 저장 91개 · 표시 40개 · 동기화 91개 · stale 전환 0개 · 검토 91개 · stale 0개 · 승인 0개 · 거절 0개 · AI accepted 0개 · review 91개`;
+  - `workLogNormalizationApplyMeta`: `승인 큐 1개 · 처리 1개 · 적용 1개 · 중복 0개 · 저장 총 1개 · 표시 1개`;
+  - `workManagementMetaAfterNormalizationApply`: `... 정규화 1 ... 최신정규화 2026-06-09T06:42:47.760497+00:00`.
+
+Issues:
+
+- This slice proves provider chunking with a localhost GLM mock, not a live
+  external GLM/OpenAI account. Live provider QA remains gated by available
+  credentials and network/API-cost policy.
+- Full all-history session backfill remains bounded by the active
+  `session_limit=200` QA path.
+
+Research:
+
+- No external research was needed. The implementation follows the existing
+  OpenAI/GLM provider, strict parser, and localhost provider mock test patterns.
+
+Next Steps:
+
+- Add resumable all-history session backfill/checkpointing beyond the
+  `session_limit=200` verification path.
+- Evaluate a Codex SDK session-ingest adapter if it provides cleaner structured
+  session metadata than the current local JSONL/metadata-first index.
+
+## Previous Slice - 2026-06-09 normalized rows in work management overview
 
 Current Goal:
 

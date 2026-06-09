@@ -400,6 +400,8 @@ export function workManagementNextActionText(
   effectiveBatchFiles: number | null | undefined,
   standardMaxBatches: number,
   longMaxBatches: number,
+  recommendedLargeBatchFiles?: number,
+  longRunConfirmed = false,
 ): string | null {
   if (!hasWorkManagementReadinessInput(input)) return null;
   const actions: string[] = [];
@@ -429,6 +431,8 @@ export function workManagementNextActionText(
       effectiveBatchFiles,
       standardMaxBatches,
       longMaxBatches,
+      recommendedLargeBatchFiles,
+      longRunConfirmed,
     ));
   } else if (!input.sessionIndex && input.statusExport
     && input.statusExport.report_session_evidence_index_total_count
@@ -566,21 +570,60 @@ function workManagementSessionBackfillNextAction(
   effectiveBatchFiles: number | null | undefined,
   standardMaxBatches: number,
   longMaxBatches: number,
+  recommendedLargeBatchFiles: number | undefined,
+  longRunConfirmed: boolean,
 ): string {
-  const parts = [
-    "대용량 적용 후 긴 이어 백필",
-    `남은 파일 ${backfill.remainingFiles.toLocaleString()}개`,
-  ];
-  if (effectiveBatchFiles && effectiveBatchFiles > 0 && longMaxBatches > 0) {
-    const filesPerSourceRun = effectiveBatchFiles * longMaxBatches;
-    const estimatedRuns = Math.max(
-      ...backfill.remainingBySource.map((remaining) => Math.ceil(remaining / filesPerSourceRun)),
-    );
-    parts.push(`예상 ${estimatedRuns.toLocaleString()}회`);
-  } else if (standardMaxBatches > 0) {
-    parts.push("batch 크기 확인");
+  const remainingText = `남은 파일 ${backfill.remainingFiles.toLocaleString()}개`;
+  if (!effectiveBatchFiles || effectiveBatchFiles <= 0 || standardMaxBatches <= 0 || longMaxBatches <= 0) {
+    return ["세션 백필 batch 크기 확인", remainingText].join(" · ");
   }
-  return parts.join(" · ");
+  const currentPlan = workManagementSessionBackfillRunPlan(
+    backfill.remainingBySource,
+    effectiveBatchFiles,
+    standardMaxBatches,
+    longMaxBatches,
+  );
+  const recommendedPlan = recommendedLargeBatchFiles && recommendedLargeBatchFiles > effectiveBatchFiles
+    ? workManagementSessionBackfillRunPlan(
+      backfill.remainingBySource,
+      recommendedLargeBatchFiles,
+      standardMaxBatches,
+      longMaxBatches,
+    )
+    : null;
+  if (recommendedPlan && recommendedPlan.runs < currentPlan.runs) {
+    return [
+      `대용량 적용 후 ${recommendedPlan.mode}`,
+      remainingText,
+      `예상 ${recommendedPlan.runs.toLocaleString()}회`,
+      `현재 입력 ${currentPlan.runs.toLocaleString()}회`,
+    ].join(" · ");
+  }
+  const prefix = currentPlan.mode === "긴 이어 백필" && !longRunConfirmed
+    ? "긴 백필 확인 후 긴 이어 백필"
+    : currentPlan.mode;
+  return [
+    prefix,
+    remainingText,
+    `예상 ${currentPlan.runs.toLocaleString()}회`,
+  ].join(" · ");
+}
+
+function workManagementSessionBackfillRunPlan(
+  remainingBySource: number[],
+  batchFiles: number,
+  standardMaxBatches: number,
+  longMaxBatches: number,
+): { mode: "이어 백필" | "긴 이어 백필"; runs: number } {
+  const estimatedRuns = (maxBatches: number): number => {
+    const filesPerSourceRun = batchFiles * maxBatches;
+    return Math.max(...remainingBySource.map((remaining) => Math.ceil(remaining / filesPerSourceRun)));
+  };
+  const standardRuns = estimatedRuns(standardMaxBatches);
+  const longRuns = estimatedRuns(longMaxBatches);
+  return longRuns < standardRuns
+    ? { mode: "긴 이어 백필", runs: longRuns }
+    : { mode: "이어 백필", runs: standardRuns };
 }
 
 function workManagementProviderNextAction(

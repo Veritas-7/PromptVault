@@ -1238,6 +1238,9 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-next-action="true"]')?.textContent ?? "";
       return text.includes("다음 조치")
+        && text.includes("긴 이어 백필")
+        && text.includes("예상")
+        && !text.includes("대용량 적용 후")
         && (
           text.includes("백필큐")
           || text.includes("긴 이어 백필")

@@ -1147,6 +1147,8 @@ function App() {
     workSessionIndexEffectiveBatchFiles,
     WORK_SESSION_INDEX_MAX_BATCHES,
     WORK_SESSION_INDEX_LONG_MAX_BATCHES,
+    WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES,
+    workSessionIndexLongConfirmed,
   );
   const hasApprovedWorkLogNormalizationRows =
     (workLogNormalizationReviewQueueResult?.approved_count ?? 0) > 0;

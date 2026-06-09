@@ -1135,8 +1135,40 @@ test("work management readiness text summarizes coverage, session backfill, queu
       workLogReviewQueue: reviewQueueResult(),
       normalizationReviewQueue: normalizationReviewQueueResult(),
       sessionEvidenceReviewQueue: sessionEvidenceReviewQueueResult(),
-    }, 25, 2, 10),
-    "다음 조치 · 백필큐 추출 검토 15개 · 제목 정규화 큐 검토 4개 · 대용량 적용 후 긴 이어 백필 · 남은 파일 90개 · 예상 1회",
+    }, 25, 2, 10, 500, false),
+    "다음 조치 · 백필큐 추출 검토 15개 · 제목 정규화 큐 검토 4개 · 긴 백필 확인 후 긴 이어 백필 · 남은 파일 90개 · 예상 1회",
+  );
+  assert.equal(
+    workManagementNextActionText({
+      coverage: coverageResult({ files_seen: 32, parsed_file_count: 32, unparsed_file_count: 0 }),
+      aiProviderStatus: providerStatus,
+      sessionIndex: {
+        ...sessionIndex,
+        source_states: sessionIndex.source_states.map((source) => ({
+          ...source,
+          total_files: 25_150,
+          processed_files: 350,
+          next_file_index: 350,
+        })),
+      },
+    }, 25, 2, 10, 500, false),
+    "다음 조치 · 대용량 적용 후 긴 이어 백필 · 남은 파일 24,800개 · 예상 5회 · 현재 입력 100회",
+  );
+  assert.equal(
+    workManagementNextActionText({
+      coverage: coverageResult({ files_seen: 32, parsed_file_count: 32, unparsed_file_count: 0 }),
+      aiProviderStatus: providerStatus,
+      sessionIndex: {
+        ...sessionIndex,
+        source_states: sessionIndex.source_states.map((source) => ({
+          ...source,
+          total_files: 25_150,
+          processed_files: 350,
+          next_file_index: 350,
+        })),
+      },
+    }, 500, 2, 10, 500, true),
+    "다음 조치 · 긴 이어 백필 · 남은 파일 24,800개 · 예상 5회",
   );
   assert.equal(
     workManagementReadinessText({
@@ -1195,7 +1227,7 @@ test("work management readiness text summarizes coverage, session backfill, queu
         pending_review_count: 0,
         stale_count: 0,
       }),
-    }, 25, 2, 10),
+    }, 25, 2, 10, 500, true),
     "다음 조치 · 작업관리 주요 게이트 통과 · 상태 Export/요약 새로고침으로 최신화",
   );
   assert.equal(

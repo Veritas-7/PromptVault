@@ -1,10 +1,83 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 05:00 KST
+Updated: 2026-06-10 05:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Work-management backfill estimate accuracy
+
+Current Goal:
+
+- Make the work-management `다음 조치` row estimate session-backfill runs from
+  the action it actually recommends.
+- Avoid telling the operator "대용량 적용 후" while showing the smaller current
+  batch estimate.
+
+Context:
+
+- The session index UI already has bounded checkpoint backfill, long-run
+  confirmation, large-batch preset, checkpoint guidance, and next-run impact.
+- `workManagementNextActionText` still accepted only the current effective
+  batch size, so a large remaining corpus could display a "대용량 적용 후" action
+  while calculating the run count from the pre-large-batch input.
+
+Progress:
+
+- Added recommended-large-batch and long-confirmation inputs to the
+  work-management next-action calculation.
+- The row now distinguishes:
+  - `대용량 적용 후 긴 이어 백필` with the recommended large-batch estimate and
+    current-input comparison when large batch materially reduces runs;
+  - `긴 백필 확인 후 긴 이어 백필` when the current batch is already good enough
+    but long-run confirmation is still missing;
+  - `긴 이어 백필` after the large-batch/long-confirm controls are already set.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: corrected session-backfill next-action run
+  planning and factored the current/recommended run-plan calculation.
+- `src/App.tsx`: passes the large-batch preset and long-confirmation state into
+  `workManagementNextActionText`.
+- `tests/workSummaryStatus.test.ts`: covers large-corpus current-vs-large-batch
+  estimates and post-large-batch long-run wording.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies the real management
+  next-action row after applying large batch no longer asks for large batch
+  again.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work management readiness|work session index planned remaining"` (`37` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`491` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- Browser bridge QA verified the management next-action row after `대용량 적용`
+  includes `긴 이어 백필` and `예상`, and no longer includes `대용량 적용 후`.
+- The same QA run reported `31개 프로젝트`, `26일`, `작업 9,712개`,
+  `진행로그 871개`, `세션 근거 3,277건`, and `고유 50건` under the bounded
+  session limit.
+- The latest large-batch state showed `남은 파일 24,847개`, `긴 이어 백필 예상
+  5회`, and next click impact `24,847→19,847개`.
+
+Issue Fixed During Build:
+
+- The first `npm run build` after the patch failed because the new arguments
+  were accidentally added to a session-index helper call instead of
+  `workManagementNextActionText`.
+- The call sites were corrected and the build/check/QA gates were rerun.
+
+Remaining:
+
+- Full historical session backfill still needs repeated checkpoint runs or a
+  run-until-complete operator flow.
+- Review queues still need operator triage before durable session-evidence and
+  title-normalization decisions are final.
 
 ## Completed Slice - 2026-06-10 Session backfill next-run impact row
 

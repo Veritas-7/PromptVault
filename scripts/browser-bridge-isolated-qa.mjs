@@ -635,8 +635,12 @@ async function runBrowserQa() {
       guidance: (await page.locator('[data-work-session-index-checkpoint-guidance="true"]').textContent())?.trim() ?? "",
       sourceStates: await page.locator('[data-work-session-index-source-state="true"]').allTextContents(),
     };
-    await page.locator('[data-work-session-index-batch-files="true"]').fill("500");
+    await page.locator('[data-apply-work-session-index-large-batch="true"]').click();
     await page.waitForFunction(() => {
+      const batchInput = document.querySelector('[data-work-session-index-batch-files="true"]');
+      const confirmInput = document.querySelector('[data-work-session-index-long-confirm="true"]');
+      const batchValue = batchInput instanceof HTMLInputElement ? batchInput.value : "";
+      const confirmValue = confirmInput instanceof HTMLInputElement ? confirmInput.value : "";
       const longStatus = document.querySelector('[data-work-session-index-long-confirm-meta="true"]')?.textContent ?? "";
       const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
       const guidance = document.querySelector('[data-work-session-index-checkpoint-guidance="true"]')?.textContent ?? "";
@@ -644,7 +648,10 @@ async function runBrowserQa() {
       const longMatch = planned.match(/긴 이어 백필 예상\s+([\d,]+)회/);
       const standardRuns = standardMatch ? Number.parseInt(standardMatch[1].replaceAll(",", ""), 10) : 0;
       const longRuns = longMatch ? Number.parseInt(longMatch[1].replaceAll(",", ""), 10) : 0;
-      return longStatus.includes("source당 최대 5,000개")
+      return batchValue === "500"
+        && confirmValue === "긴 백필"
+        && longStatus.includes("긴 백필 확인됨")
+        && longStatus.includes("source당 최대 5,000개")
         && standardRuns > 0
         && standardRuns <= 26
         && longRuns > 0

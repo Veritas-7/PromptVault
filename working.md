@@ -1,10 +1,69 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 04:15 KST
+Updated: 2026-06-10 04:23 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Large backfill preset control
+
+Current Goal:
+
+- Reduce operator error and repeated manual input during the remaining
+  historical session backfill.
+- Keep the backfill flow explicit and safety-gated while making the recommended
+  large checkpoint settings easier to apply.
+
+Context:
+
+- The previous slices exposed checkpoint guidance and partial-backfill warnings.
+- The efficient next run in the bounded QA context is a large continue path with
+  `source당 500개` and the explicit `긴 백필` confirmation.
+- Before this slice, operators had to manually type both the batch value and the
+  confirmation phrase.
+
+Progress:
+
+- Added a `대용량 적용` button beside the session backfill controls.
+- The button sets the source batch input to the recommended safe value
+  `500` and fills the long-backfill confirmation phrase `긴 백필`.
+- The existing long-backfill button remains locked by the same confirmation
+  state; this change only reduces typing, not the backend safety checks.
+- Browser bridge QA now clicks this button and verifies the input value, confirm
+  phrase, long-run status, planned run counts, and checkpoint guidance update.
+
+Changes:
+
+- `src/App.tsx`: added `WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES` and
+  the `data-apply-work-session-index-large-batch` action.
+- `scripts/browser-bridge-isolated-qa.mjs`: changed the large-batch planning
+  check from manual input fill to clicking the new action and asserting both
+  controlled inputs.
+
+Tests:
+
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check`
+  - UI tests `490`, Rust lib tests `214`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated bridge QA ended with exit code `0`.
+  - Verified the new `대용량 적용` action sets batch `500` and confirm text
+    `긴 백필`, then updates long-run status to `source당 최대 5,000개`.
+  - QA output showed `31` projects, `26` days, `100` project/day rows, `9,621`
+    work items, `869` progress logs, `3,001` matched session-evidence rows, and
+    `/tmp/QAProject/workingd.md` saved through the approved extraction path.
+  - The same run still showed checkpointed backfill: `25,202` total session
+    files, `349` stored session records in the bounded QA context, and about
+    `24,841` files remaining after the long continue step.
+
+Remaining:
+
+- Full historical session backfill still needs repeated checkpoint runs.
+- Review queues still need operator triage before durable session-evidence or
+  title-normalization decisions are treated as final.
 
 ## Completed Slice - 2026-06-10 Work-management partial backfill warning
 

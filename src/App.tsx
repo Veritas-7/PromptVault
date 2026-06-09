@@ -413,6 +413,10 @@ const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_SESSION_INDEX_MAX_BATCHES = 2;
 const WORK_SESSION_INDEX_LONG_MAX_BATCHES = 10;
 const WORK_SESSION_INDEX_LONG_CONFIRM_TEXT = "긴 백필";
+const WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES = Math.min(
+  500,
+  PROJECT_WORK_SESSION_INDEX_MAX_BATCH_FILES,
+);
 const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
 const WORK_LOG_CANDIDATE_DISPLAY_LIMIT = 5;
 const WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
@@ -2867,6 +2871,20 @@ function App() {
                 onChange={(event) => setWorkSessionIndexLongConfirmInput(event.currentTarget.value)}
               />
             </label>
+            <button
+              aria-label={`세션 백필 source당 ${WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES.toLocaleString()}개와 긴 백필 확인 문구 적용`}
+              className="inline-action"
+              data-apply-work-session-index-large-batch="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => {
+                setWorkSessionIndexBatchFilesInput(String(WORK_SESSION_INDEX_RECOMMENDED_LARGE_BATCH_FILES));
+                setWorkSessionIndexLongConfirmInput(WORK_SESSION_INDEX_LONG_CONFIRM_TEXT);
+              }}
+              type="button"
+            >
+              <ShieldCheck size={15} />
+              대용량 적용
+            </button>
             <button
               aria-label={workManagementRefreshActionLabel(
                 workManagementRefreshState,

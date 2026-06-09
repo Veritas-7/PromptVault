@@ -360,6 +360,7 @@ import {
   workManagementRefreshActionLabel,
   workManagementNextActionText,
   workManagementReadinessText,
+  workManagementReviewDecisionText,
   filterWorkStatusExportRows,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
@@ -1237,6 +1238,11 @@ function App() {
     sessionIndex: workSessionIndexResult,
     statusExport: workStatusExportResult,
     aiProviderStatus: workAiProviderStatusResult,
+    workLogReviewQueue: workLogReviewQueueResult,
+    normalizationReviewQueue: workLogNormalizationReviewQueueResult,
+    sessionEvidenceReviewQueue: workSessionEvidenceReviewQueueResult,
+  });
+  const workManagementReviewDecisions = workManagementReviewDecisionText({
     workLogReviewQueue: workLogReviewQueueResult,
     normalizationReviewQueue: workLogNormalizationReviewQueueResult,
     sessionEvidenceReviewQueue: workSessionEvidenceReviewQueueResult,
@@ -4971,6 +4977,12 @@ function App() {
           >
             <Search size={15} />
             <span>{workSessionEvidenceReviewQueueFilterMeta}</span>
+          </div>
+        ) : null}
+        {workManagementReviewDecisions ? (
+          <div className="work-summary-index" data-work-management-review-decisions="true">
+            <ShieldCheck size={15} />
+            <span>{workManagementReviewDecisions}</span>
           </div>
         ) : null}
         {workManagementOverviewLoaded ? (

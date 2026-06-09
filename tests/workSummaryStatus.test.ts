@@ -61,6 +61,7 @@ import {
   workManagementFreezeActionLabel,
   workManagementNextActionText,
   workManagementReadinessText,
+  workManagementReviewDecisionText,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
@@ -1251,6 +1252,38 @@ test("work management readiness text summarizes coverage, session backfill, queu
     "다음 조치 · 진행로그 coverage 확인 · 세션 인덱스 전체 적용 또는 export limit 확대 · 사용 200/500개 · AI provider 상태 확인",
   );
   assert.equal(workManagementNextActionText({}, 25, 2, 10), null);
+});
+
+test("work management review decision text summarizes all durable review queues", () => {
+  assert.equal(workManagementReviewDecisionText({}), null);
+  assert.equal(
+    workManagementReviewDecisionText({
+      workLogReviewQueue: reviewQueueResult(),
+      normalizationReviewQueue: normalizationReviewQueueResult(),
+      sessionEvidenceReviewQueue: sessionEvidenceReviewQueueResult(),
+    }),
+    "검토 결정 · 저장 row 67개 · 대기 46개 · stale 5개 · 승인 10개 · 거절 6개 · 추출 13/18개 · 정규화 3/9개 · 세션 30/40개",
+  );
+  assert.equal(
+    workManagementReviewDecisionText({
+      workLogReviewQueue: reviewQueueResult({
+        total_items: 2,
+        pending_ai_review_count: 0,
+        risk_blocked_count: 0,
+        stale_count: 0,
+        approved_count: 1,
+        rejected_count: 1,
+      }),
+      normalizationReviewQueue: normalizationReviewQueueResult({
+        total_items: 0,
+        pending_review_count: 0,
+        stale_count: 0,
+        approved_count: 0,
+        rejected_count: 0,
+      }),
+    }),
+    "검토 결정 · 저장 row 2개 · 대기 0개 · stale 0개 · 승인 1개 · 거절 1개 · 추출 0/2개 · 정규화 0/0개 · 대기 없음",
+  );
 });
 
 test("work status export text exposes project day evidence coverage", () => {

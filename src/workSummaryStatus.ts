@@ -399,6 +399,48 @@ export function workManagementReadinessText(
   return parts.join(" · ");
 }
 
+export function workManagementReviewDecisionText(
+  input: WorkManagementReadinessInput,
+): string | null {
+  const workLog = input.workLogReviewQueue;
+  const normalization = input.normalizationReviewQueue;
+  const sessionEvidence = input.sessionEvidenceReviewQueue;
+  if (!workLog && !normalization && !sessionEvidence) return null;
+  const workLogPending = (workLog?.pending_ai_review_count ?? 0) + (workLog?.risk_blocked_count ?? 0);
+  const normalizationPending = normalization?.pending_review_count ?? 0;
+  const sessionPending = sessionEvidence?.pending_review_count ?? 0;
+  const totalItems =
+    (workLog?.total_items ?? 0) + (normalization?.total_items ?? 0) + (sessionEvidence?.total_items ?? 0);
+  const pendingItems = workLogPending + normalizationPending + sessionPending;
+  const staleItems =
+    (workLog?.stale_count ?? 0) + (normalization?.stale_count ?? 0) + (sessionEvidence?.stale_count ?? 0);
+  const approvedItems =
+    (workLog?.approved_count ?? 0) + (normalization?.approved_count ?? 0) + (sessionEvidence?.approved_count ?? 0);
+  const rejectedItems =
+    (workLog?.rejected_count ?? 0) + (normalization?.rejected_count ?? 0) + (sessionEvidence?.rejected_count ?? 0);
+  const parts = [
+    "검토 결정",
+    `저장 row ${totalItems.toLocaleString()}개`,
+    `대기 ${pendingItems.toLocaleString()}개`,
+    `stale ${staleItems.toLocaleString()}개`,
+    `승인 ${approvedItems.toLocaleString()}개`,
+    `거절 ${rejectedItems.toLocaleString()}개`,
+  ];
+  if (workLog) {
+    parts.push(`추출 ${workLogPending.toLocaleString()}/${workLog.total_items.toLocaleString()}개`);
+  }
+  if (normalization) {
+    parts.push(`정규화 ${normalizationPending.toLocaleString()}/${normalization.total_items.toLocaleString()}개`);
+  }
+  if (sessionEvidence) {
+    parts.push(`세션 ${sessionPending.toLocaleString()}/${sessionEvidence.total_items.toLocaleString()}개`);
+  }
+  if (pendingItems === 0 && staleItems === 0) {
+    parts.push("대기 없음");
+  }
+  return parts.join(" · ");
+}
+
 export function workManagementNextActionText(
   input: WorkManagementReadinessInput,
   effectiveBatchFiles: number | null | undefined,

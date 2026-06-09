@@ -1,10 +1,79 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 06:31 KST
+Updated: 2026-06-10 06:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Review decision summary
+
+Current Goal:
+
+- Make the work-management dashboard show the durable review-decision backlog
+  across all review queues in one place, instead of requiring operators to add
+  백필큐, 정규화 큐, and 세션근거 큐 counts manually.
+
+Context:
+
+- Progress-log coverage is now filterable and shows no current unparsed or
+  unreadable gap; the remaining non-parsed progress log is a pointer.
+- Full historical session backfill remains incomplete, and the other live
+  blocker is review decisions across persisted queues.
+- Individual queue meta rows already existed, but there was no consolidated
+  decision ledger for pending/stale/approved/rejected rows.
+
+Progress:
+
+- Added a pure review-decision summary helper that totals stored review rows,
+  pending rows, stale rows, approvals, and rejections across the three durable
+  review queues.
+- Added per-queue ratios to the same summary (`추출`, `정규화`, `세션`) so the
+  remaining decision work is visible by queue type.
+- Rendered the summary in the work-management status strip with
+  `data-work-management-review-decisions`.
+- Extended isolated browser QA to verify the row first appears during management
+  review, and then re-checks it after all three queues have been loaded.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds `workManagementReviewDecisionText`.
+- `tests/workSummaryStatus.test.ts`: covers all-queue and no-pending summaries.
+- `src/App.tsx`: displays the consolidated review-decision row.
+- `scripts/browser-bridge-isolated-qa.mjs`: captures final review-decision QA evidence.
+- `working.md`: records this slice and remaining gaps.
+
+Tests:
+
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "review decision|readiness"`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`499` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge >
+  /tmp/promptvault-review-decision-summary-qa.log 2>&1`.
+
+QA Evidence:
+
+- Final consolidated review-decision row:
+  `검토 결정 · 저장 row 72개 · 대기 69개 · stale 0개 · 승인 3개 · 거절 0개 · 추출 0/1개 · 정규화 2/2개 · 세션 67/69개`.
+- Readiness still shows the remaining system blockers:
+  `세션 백필 미완료 361/25,214개 · 남음 24,853개`,
+  `세션 67개`, and `AI provider 미확인`.
+- Coverage remains source-log complete except for the pointer:
+  `876개 로그 · parsed 875개 · unparsed 0개 · pointer 1개 · 31개 프로젝트 · 작업 9,864개`.
+- Approved review-queue save still worked in the same QA run:
+  `accepted 제안 1개 저장 · 총 101개`.
+
+Remaining:
+
+- Full historical session backfill is still incomplete: `361/25,214개`, with
+  `24,853개` remaining.
+- Final queue decisions are not complete: the latest QA evidence still shows
+  `대기 69개`.
+- AI provider status should be loaded in the management flow before calling the
+  work-management state complete; provider routes exist for OpenAI/GLM and
+  opt-in Codex CLI, but durable writes still remain review-gated.
 
 ## Completed Slice - 2026-06-10 Work-log coverage filters
 

@@ -123,6 +123,7 @@ import {
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
   loadProjectWorkSummary,
+  runProjectWorkSessionIndex,
   listProjectWorkSummarySnapshots,
   listImportEvents,
   listImportStates,
@@ -250,6 +251,7 @@ import type {
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
   PromptRecord,
+  ProjectWorkSessionIndexResult,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
   ScanPlan,
@@ -333,10 +335,12 @@ import {
 type ScanState = ScanRunState;
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
+type WorkSessionIndexState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
+const WORK_SESSION_INDEX_MAX_BATCHES = 2;
 const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
 const WORK_LOG_CANDIDATE_DISPLAY_LIMIT = 5;
 const WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
@@ -363,6 +367,47 @@ function acceptedWorkLogExtractionIds(result: ProjectWorkLogExtractionProposalsR
   return result.proposals
     .filter((proposal) => proposal.accepted && proposal.date?.trim())
     .map((proposal) => proposal.candidate_id);
+}
+
+function workSessionIndexBatchFiles(sessionLimit: number): number {
+  return Math.max(1, Math.ceil(sessionLimit / WORK_SESSION_INDEX_MAX_BATCHES));
+}
+
+function workSessionIndexMetaText(
+  state: WorkSessionIndexState,
+  result: ProjectWorkSessionIndexResult | null,
+): string | null {
+  if (state === "loading") return "세션 백필 실행 중";
+  if (state === "failed") return "세션 백필 실패";
+  if (!result) return null;
+  const processedFiles = result.source_states.reduce((sum, source) => sum + source.processed_files, 0);
+  const totalFiles = result.source_states.reduce((sum, source) => sum + source.total_files, 0);
+  const matchedPrompts = result.source_states.reduce((sum, source) => sum + source.matched_prompt_count, 0);
+  const maxBatches = result.max_batches === null ? "제한 없음" : `${result.max_batches.toLocaleString()}배치`;
+  const completion = result.all_sources_completed ? "완료" : "진행 중";
+  return [
+    result.until_complete ? "until-complete" : "bounded",
+    `배치 ${result.batches_run.toLocaleString()} / ${maxBatches}`,
+    `파일 ${processedFiles.toLocaleString()} / ${totalFiles.toLocaleString()}`,
+    `근거 ${matchedPrompts.toLocaleString()}개`,
+    `보관 ${result.stored_prompt_count.toLocaleString()}개`,
+    completion,
+  ].join(" · ");
+}
+
+function workSessionIndexWarningText(result: ProjectWorkSessionIndexResult | null): string | null {
+  if (!result || result.warnings.length === 0) return null;
+  return result.warnings.join(" · ");
+}
+
+function workSessionIndexSourceStateText(source: ProjectWorkSessionIndexResult["source_states"][number]): string {
+  return [
+    source.source_label,
+    `파일 ${source.processed_files.toLocaleString()} / ${source.total_files.toLocaleString()}`,
+    `근거 ${source.matched_prompt_count.toLocaleString()}개`,
+    `next ${source.next_file_index.toLocaleString()}`,
+    source.completed ? "완료" : "진행 중",
+  ].join(" · ");
 }
 const FREQUENCY_DISPLAY_LIMIT = 12;
 const PROMPT_LIST_DISPLAY_LIMIT = 200;
@@ -434,6 +479,7 @@ function App() {
   const [importEventsState, setImportEventsState] = useState<ImportEventsState>("idle");
   const [storedFacetsState, setStoredFacetsState] = useState<StoredFacetsState>("idle");
   const [workSummaryState, setWorkSummaryState] = useState<WorkSummaryState>("idle");
+  const [workSessionIndexState, setWorkSessionIndexState] = useState<WorkSessionIndexState>("idle");
   const [workSummarySnapshotsState, setWorkSummarySnapshotsState] = useState<WorkSummarySnapshotsState>("idle");
   const [workLogCoverageState, setWorkLogCoverageState] = useState<WorkLogCoverageState>("idle");
   const [workLogCandidatesState, setWorkLogCandidatesState] = useState<WorkLogCandidatesState>("idle");
@@ -471,6 +517,8 @@ function App() {
   const [importStatesResult, setImportStatesResult] = useState<ImportStatesResult | null>(null);
   const [importEventsResult, setImportEventsResult] = useState<ImportEventsResult | null>(null);
   const [storedFacetsResult, setStoredFacetsResult] = useState<StoredPromptFacetsResult | null>(null);
+  const [workSessionIndexResult, setWorkSessionIndexResult] =
+    useState<ProjectWorkSessionIndexResult | null>(null);
   const [workSummaryResult, setWorkSummaryResult] = useState<ProjectWorkSummaryResult | null>(null);
   const [workLogCoverageResult, setWorkLogCoverageResult] = useState<ProjectWorkLogCoverageResult | null>(null);
   const [workLogCandidatesResult, setWorkLogCandidatesResult] =
@@ -557,6 +605,7 @@ function App() {
   const isStoredLoadRunning = storedLoadState === "loading";
   const isWorkSummaryRunning =
     workSummaryState === "loading"
+    || workSessionIndexState === "loading"
     || workSummarySnapshotsState === "loading"
     || workLogCoverageState === "loading"
     || workLogCandidatesState === "loading"
@@ -739,6 +788,8 @@ function App() {
   const storedFacetsFailureMessage = storedFacetsFailureText(storedFacetsState);
   const workSummaryFailureMessage = workSummaryFailureText(workSummaryState);
   const workSummaryMeta = workSummaryMetaText(workSummaryState, workSummaryResult);
+  const workSessionIndexMeta = workSessionIndexMetaText(workSessionIndexState, workSessionIndexResult);
+  const workSessionIndexWarning = workSessionIndexWarningText(workSessionIndexResult);
   const workSummaryIndexStatus = workSummaryResult ? workSummaryIndexStatusText(workSummaryResult) : null;
   const workSummaryPersistenceStatus = workSummaryResult ? workSummaryPersistenceText(workSummaryResult) : null;
   const workLogCoverageFailureMessage = workLogCoverageFailureText(workLogCoverageState);
@@ -1559,6 +1610,36 @@ function App() {
     }
   }
 
+  async function runWorkSessionIndexBackfill() {
+    const sessionLimit = workSummarySessionLimit;
+    if (sessionLimit === null) {
+      const message = workSummarySessionLimitStatus;
+      setError(message);
+      setWorkSessionIndexState("failed");
+      return;
+    }
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSessionIndexState("loading");
+    try {
+      const next = await runProjectWorkSessionIndex({
+        batch_files: workSessionIndexBatchFiles(sessionLimit),
+        max_batches: WORK_SESSION_INDEX_MAX_BATCHES,
+        until_complete: true,
+        reset: true,
+      });
+      setWorkSessionIndexResult(next);
+      setWorkSessionIndexState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSessionIndexState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
   async function refreshWorkSummary({
     refreshSessionIndex = false,
     saveSnapshot = false,
@@ -2273,6 +2354,17 @@ function App() {
             >
               <RefreshCw size={15} />
               세션 재스캔
+            </button>
+            <button
+              aria-label="실제 Codex 세션 인덱스를 until-complete 의도로 제한된 배치만큼 백필"
+              className="inline-action"
+              data-run-work-session-index-backfill="true"
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
+              onClick={() => void runWorkSessionIndexBackfill()}
+              type="button"
+            >
+              <Database size={15} />
+              {workSessionIndexState === "loading" ? "백필 중" : "세션 백필"}
             </button>
             <button
               aria-label="현재 프로젝트 작업 요약을 SQLite 스냅샷으로 저장"
@@ -3137,6 +3229,36 @@ function App() {
           <Brain size={15} />
           <span>{workSummarySessionLimitStatus}</span>
         </div>
+        {workSessionIndexMeta ? (
+          <div className="work-summary-index" data-work-session-index-meta="true">
+            <Database size={15} />
+            <span>{workSessionIndexMeta}</span>
+          </div>
+        ) : null}
+        {workSessionIndexWarning ? (
+          <div className="work-summary-index warning" data-work-session-index-warning="true">
+            <AlertTriangle size={15} />
+            <span>{workSessionIndexWarning}</span>
+          </div>
+        ) : null}
+        {workSessionIndexResult?.source_states.length ? (
+          <div className="work-summary-list compact" data-work-session-index-source-states="true">
+            {workSessionIndexResult.source_states.map((source) => (
+              <article
+                className="work-summary-row work-management-overview-row"
+                data-work-session-index-source-state="true"
+                key={source.source_id}
+              >
+                <div>
+                  <strong>{source.source_label}</strong>
+                  <span>{source.completed ? "완료" : "진행 중"}</span>
+                </div>
+                <p>{workSessionIndexSourceStateText(source)}</p>
+                <span>{pathDisplayText(source.root_path)}</span>
+              </article>
+            ))}
+          </div>
+        ) : null}
         {workSummaryIndexStatus ? (
           <div className="work-summary-index" data-work-summary-index="true">
             <ShieldCheck size={15} />

@@ -1,12 +1,92 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 16:40 KST
+Updated: 2026-06-09 16:58 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 explicit until-complete session index contract
+## Current Slice - 2026-06-09 session index backfill UI progress
+
+Current Goal:
+
+- Expose the real Codex/Codex CX session-index backfill from the app UI instead
+  of leaving the bounded `until_complete` contract as a CLI/API-only capability.
+- Make the current completion state visible to the operator: source label,
+  processed/total files, matched evidence count, next cursor, cap warning, and
+  completed vs in-progress status.
+- Keep this action bounded in browser QA with `max_batches=2`, so the app proves
+  the route against real session files without accidentally running a full
+  all-history scan.
+
+Progress:
+
+- Added a typed `ProjectWorkSessionIndexResult` and source-state shape to the
+  frontend contract.
+- Added `runProjectWorkSessionIndex` for Tauri invoke and browser-bridge POST
+  paths, including strict bridge response validation.
+- Added a "세션 백필" action beside "세션 재스캔" in the work summary toolbar.
+- Added UI status rows for `until-complete`, batch count, processed/total files,
+  matched evidence, stored count, source-level state, and cap warnings.
+- Updated isolated browser QA to click the app UI button and verify the rendered
+  progress/warning/source-state text.
+
+Changes:
+
+- `src/types.ts`:
+  - added `ProjectWorkSessionIndexResult` and
+    `ProjectWorkSessionIndexSourceState`.
+- `src/promptVaultApi.ts`:
+  - added `runProjectWorkSessionIndex`;
+  - added validation for nullable positive counters, unique source IDs,
+    source-state consistency, `until_complete`/batch invariants, and completion
+    consistency.
+- `src/App.tsx`:
+  - added bounded session backfill state/action;
+  - added visible source progress and warning UI.
+- `tests/promptVaultApi.test.ts`:
+  - added bridge parser success coverage for `until_complete` source states;
+  - added rejection coverage for inconsistent completion state.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - verifies the real UI action instead of directly calling the bridge route.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`:
+  PASS, `178` tests.
+- `npm run build`: PASS.
+- `npm run check`: PASS, including UI tests (`462`), production build, Rust lib
+  tests (`186`), CLI tests (`30`), doc-tests, and clippy `-D warnings`.
+- Direct temp-DB approved-review-queue save smoke:
+  `cargo run --quiet --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-extract --database "$db" --save --ai --approved-review-queue --json`:
+  PASS. Saved `1` accepted proposal through local fallback.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS on
+  retry. Final JSON included:
+  - `workSessionIndexBackfill.meta`: `until-complete`, `배치 2 / 2배치`,
+    `파일 31 / 25,156`, `근거 20개`, `보관 20개`, `진행 중`;
+  - warning: `work-session-index until_complete stopped at max_batches before
+    all sources completed`;
+  - source states: Codex `20 / 25,145` files, Codex CX `11 / 11` files;
+  - work summary index: metadata-first/raw fallback, `20` stored evidence
+    records and `80` matches;
+  - coverage: `828` progress logs, `827` parsed, `0` unparsed, `31` projects,
+    `8,895` work items;
+  - work management: `91` managed rows, `31` projects, `25` days,
+    `저장관리 91`, `라이브만 0`;
+  - approved review queue save and normalization apply flows both saved one row.
+
+Issues:
+
+- This still proves bounded UI-controlled backfill, not a completed all-history
+  session ingestion. The Codex source still has `25,145` files, with only `20`
+  processed by the UI QA proof.
+- The app now shows progress and cap warnings, but it does not yet offer a
+  dedicated "continue from cursor" long-running operator workflow.
+- Live OpenAI/GLM extraction remains intentionally outside isolated browser QA.
+  The QA path verifies fallback and review-queue persistence; live SDK/provider
+  use still needs a separate credentialed smoke when requested.
+
+## Completed Slice - 2026-06-09 explicit until-complete session index contract
 
 Current Goal:
 

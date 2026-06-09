@@ -211,6 +211,35 @@ export interface ProjectWorkReport {
   warnings: string[];
 }
 
+export interface ProjectWorkSessionIndexSourceState {
+  source_id: string;
+  source_label: string;
+  root_path: string;
+  total_files: number;
+  next_file_index: number;
+  processed_files: number;
+  matched_prompt_count: number;
+  completed: boolean;
+  updated_at: string;
+}
+
+export interface ProjectWorkSessionIndexResult {
+  generated_at: string;
+  database_path: string;
+  requested_limit: number;
+  batch_files: number | null;
+  max_batches: number | null;
+  until_complete: boolean;
+  batches_run: number;
+  scanned_prompt_count: number;
+  sanitized_prompt_count: number;
+  stored_prompt_count: number;
+  reset: boolean;
+  all_sources_completed: boolean;
+  source_states: ProjectWorkSessionIndexSourceState[];
+  warnings: string[];
+}
+
 export interface ProjectWorkLogCoverageFile {
   project: string;
   source_path: string;

@@ -18,6 +18,7 @@ import {
   listProjectWorkLogExtractionRuns,
   loadStoredPrompts,
   loadProjectWorkSummary,
+  runProjectWorkSessionIndex,
   listProjectWorkSummarySnapshots,
   listImportEvents,
   listImportStates,
@@ -224,6 +225,48 @@ function improveResult(overrides = {}) {
     },
     warnings: [],
     persistence: null,
+    ...overrides,
+  };
+}
+
+function projectWorkSessionIndexPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    requested_limit: 200,
+    batch_files: 100,
+    max_batches: 2,
+    until_complete: true,
+    batches_run: 2,
+    scanned_prompt_count: 199,
+    sanitized_prompt_count: 199,
+    stored_prompt_count: 199,
+    reset: true,
+    all_sources_completed: false,
+    source_states: [{
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/Users/wj/.codex/sessions",
+      total_files: 25145,
+      next_file_index: 200,
+      processed_files: 200,
+      matched_prompt_count: 199,
+      completed: false,
+      updated_at: "2026-06-09T00:00:00Z",
+    }, {
+      source_id: "codex-cx",
+      source_label: "Codex CX",
+      root_path: "/Users/wj/.codex-cx/sessions",
+      total_files: 11,
+      next_file_index: 11,
+      processed_files: 11,
+      matched_prompt_count: 0,
+      completed: true,
+      updated_at: "2026-06-09T00:00:00Z",
+    }],
+    warnings: [
+      "work-session-index until_complete stopped at max_batches before all sources completed",
+    ],
     ...overrides,
   };
 }
@@ -684,6 +727,40 @@ test("browser bridge work summary posts options and validates citation payloads"
   assert.equal(result.provider, "local-citation-rules");
   assert.equal(result.summaries[0].citations[0].id, "2026-06-09-PromptVault-1");
   assert.equal(result.report.session_evidence_index_used, true);
+});
+
+test("browser bridge work session index posts until-complete options and validates source states", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionIndexPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await runProjectWorkSessionIndex({
+    batch_files: 100,
+    max_batches: 2,
+    until_complete: true,
+    reset: true,
+  });
+
+  assert.match(requestPath, /\/api\/work-session-index$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      batch_files: 100,
+      max_batches: 2,
+      until_complete: true,
+      reset: true,
+    },
+  });
+  assert.equal(result.until_complete, true);
+  assert.equal(result.source_states[0].processed_files, 200);
+  assert.equal(result.warnings.length, 1);
 });
 
 test("browser bridge work summary posts extraction merge options and validates merge metadata", async (t) => {
@@ -1762,6 +1839,37 @@ test("browser bridge work summary rejects impossible session evidence counts", a
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /malformed bridge summary|Malformed bridge summary|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work session index rejects inconsistent source completion", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSessionIndexPayload({
+    all_sources_completed: true,
+    source_states: [{
+      source_id: "codex",
+      source_label: "Codex",
+      root_path: "/Users/wj/.codex/sessions",
+      total_files: 25145,
+      next_file_index: 200,
+      processed_files: 200,
+      matched_prompt_count: 199,
+      completed: true,
+      updated_at: "2026-06-09T00:00:00Z",
+    }],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => runProjectWorkSessionIndex({ batch_files: 100, max_batches: 2, until_complete: true }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /25145|Codex|undefined|TypeError/);
       return true;
     },
   );

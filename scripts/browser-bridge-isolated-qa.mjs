@@ -12,11 +12,6 @@ const WORK_SESSION_LIMIT = Number.parseInt(
   process.env.PROMPTVAULT_QA_WORK_SESSION_LIMIT ?? "50",
   10,
 );
-const WORK_SESSION_INDEX_MAX_BATCHES = 2;
-const WORK_SESSION_INDEX_BATCH_FILES = Math.max(
-  1,
-  Math.ceil(WORK_SESSION_LIMIT / WORK_SESSION_INDEX_MAX_BATCHES),
-);
 const DATABASE_PATH = process.env.PROMPTVAULT_QA_DATABASE
   ?? join(mkdtempSync(join(tmpdir(), "promptvault-browser-qa-")), "qa.sqlite");
 const SECRET_ENV_DIR = mkdtempSync(join(tmpdir(), "promptvault-browser-qa-env-"));
@@ -243,32 +238,22 @@ async function runBrowserQa() {
       throw new Error(`Expected bridge database ${DATABASE_PATH}, got ${health.database_path}`);
     }
     step("work session index");
-    workSessionIndexBackfill = await bridgeJson(page, "/api/work-session-index", {
-      options: {
-        batch_files: WORK_SESSION_INDEX_BATCH_FILES,
-        max_batches: WORK_SESSION_INDEX_MAX_BATCHES,
-        until_complete: true,
-        reset: true,
-      },
-    });
-    if (
-      workSessionIndexBackfill.database_path !== DATABASE_PATH
-      || workSessionIndexBackfill.batch_files !== WORK_SESSION_INDEX_BATCH_FILES
-      || workSessionIndexBackfill.max_batches !== WORK_SESSION_INDEX_MAX_BATCHES
-      || workSessionIndexBackfill.until_complete !== true
-      || workSessionIndexBackfill.batches_run < 1
-      || workSessionIndexBackfill.batches_run > WORK_SESSION_INDEX_MAX_BATCHES
-      || workSessionIndexBackfill.requested_limit < 1
-      || workSessionIndexBackfill.stored_prompt_count > workSessionIndexBackfill.scanned_prompt_count
-      || workSessionIndexBackfill.reset !== true
-      || typeof workSessionIndexBackfill.all_sources_completed !== "boolean"
-      || !Array.isArray(workSessionIndexBackfill.source_states)
-      || !workSessionIndexBackfill.source_states.some((state) => state.processed_files > 0)
-    ) {
-      throw new Error(
-        `Work session index bridge route returned invalid counters: ${JSON.stringify(workSessionIndexBackfill)}`,
-      );
-    }
+    await page.locator('[data-run-work-session-index-backfill="true"]').click();
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-session-index-meta="true"]')?.textContent ?? "";
+      const warning = document.querySelector('[data-work-session-index-warning="true"]')?.textContent ?? "";
+      const sourceStates = document.querySelector('[data-work-session-index-source-states="true"]')?.textContent ?? "";
+      return meta.includes("until-complete")
+        && meta.includes("배치 2 / 2배치")
+        && warning.includes("max_batches")
+        && sourceStates.includes("Codex")
+        && sourceStates.includes("파일");
+    }, undefined, { timeout: 120000 });
+    workSessionIndexBackfill = {
+      meta: (await page.locator('[data-work-session-index-meta="true"]').textContent())?.trim() ?? "",
+      warning: (await page.locator('[data-work-session-index-warning="true"]').textContent())?.trim() ?? "",
+      sourceStates: await page.locator('[data-work-session-index-source-state="true"]').allTextContents(),
+    };
     await page.locator('[data-browser-bridge-status="connected"]').waitFor({ timeout: 60000 });
     await page.locator('[data-work-summary-session-limit="true"]').fill(String(WORK_SESSION_LIMIT));
     await page.waitForFunction((expectedText) => {

@@ -23,6 +23,7 @@ import type {
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkReport,
+  ProjectWorkSessionIndexResult,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshotsResult,
   PromptQuality,
@@ -100,6 +101,15 @@ export interface ProjectWorkSummaryOptions {
   extraction_limit?: number;
   extraction_ai?: boolean;
   ai?: boolean;
+}
+
+export interface ProjectWorkSessionIndexOptions {
+  database_path?: string;
+  limit?: number;
+  batch_files?: number;
+  max_batches?: number;
+  until_complete?: boolean;
+  reset?: boolean;
 }
 
 export interface ProjectWorkSummarySnapshotsOptions {
@@ -302,6 +312,19 @@ export async function loadProjectWorkSummary(
     });
   }
   return postBridge<ProjectWorkSummaryResult>("/api/work-summary", { options }, parseProjectWorkSummaryResult);
+}
+
+export async function runProjectWorkSessionIndex(
+  options: ProjectWorkSessionIndexOptions = {},
+): Promise<ProjectWorkSessionIndexResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkSessionIndexResult>("project_work_session_index", { options });
+  }
+  return postBridge<ProjectWorkSessionIndexResult>(
+    "/api/work-session-index",
+    { options },
+    parseProjectWorkSessionIndexResult,
+  );
 }
 
 export async function loadProjectWorkLogCoverage(): Promise<ProjectWorkLogCoverageResult> {
@@ -591,6 +614,10 @@ function isPositiveSafeInteger(value: unknown): value is number {
   return isSafeInteger(value) && value > 0;
 }
 
+function isNullablePositiveSafeInteger(value: unknown): boolean {
+  return value === null || isPositiveSafeInteger(value);
+}
+
 function isNonNegativeSafeIntegerAtMost(value: unknown, max: unknown): boolean {
   return isNonNegativeSafeInteger(value) && isNonNegativeSafeInteger(max) && value <= max;
 }
@@ -731,6 +758,10 @@ function importStateSourceIdsAreUnique(states: unknown): boolean {
   return recordStringFieldValuesAreUnique(states, "source_id");
 }
 
+function projectWorkSessionIndexSourceIdsAreUnique(states: unknown): boolean {
+  return recordStringFieldValuesAreUnique(states, "source_id");
+}
+
 function importEventIdsAreUnique(events: unknown): boolean {
   return recordNumberFieldValuesAreUnique(events, "id");
 }
@@ -831,6 +862,25 @@ function isImportState(value: unknown): boolean {
     || value.next_file_index > value.total_files
     || value.processed_files > value.total_files
     || !isNonNegativeSafeInteger(value.imported_prompt_count)
+    || typeof value.completed !== "boolean"
+    || !isTimestampString(value.updated_at)) {
+    return false;
+  }
+  return value.next_file_index === value.processed_files
+    && value.completed === (value.processed_files >= value.total_files);
+}
+
+function isProjectWorkSessionIndexSourceState(value: unknown): boolean {
+  if (!isRecord(value)
+    || !isNonBlankString(value.source_id)
+    || !isNonBlankString(value.source_label)
+    || !isNonBlankString(value.root_path)
+    || !isNonNegativeSafeInteger(value.total_files)
+    || !isNonNegativeSafeInteger(value.next_file_index)
+    || !isNonNegativeSafeInteger(value.processed_files)
+    || !isNonNegativeSafeInteger(value.matched_prompt_count)
+    || value.next_file_index > value.total_files
+    || value.processed_files > value.total_files
     || typeof value.completed !== "boolean"
     || !isTimestampString(value.updated_at)) {
     return false;
@@ -2105,6 +2155,47 @@ function parseProjectWorkSummaryResult(value: unknown): ProjectWorkSummaryResult
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkSummaryResult;
+}
+
+function isProjectWorkSessionIndexResult(value: unknown): boolean {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !isPositiveSafeInteger(value.requested_limit)
+    || !isNullablePositiveSafeInteger(value.batch_files)
+    || !isNullablePositiveSafeInteger(value.max_batches)
+    || typeof value.until_complete !== "boolean"
+    || !isNonNegativeSafeInteger(value.batches_run)
+    || !isNonNegativeSafeInteger(value.scanned_prompt_count)
+    || !isNonNegativeSafeIntegerAtMost(value.sanitized_prompt_count, value.scanned_prompt_count)
+    || !isNonNegativeSafeInteger(value.stored_prompt_count)
+    || typeof value.reset !== "boolean"
+    || typeof value.all_sources_completed !== "boolean"
+    || !Array.isArray(value.source_states)
+    || !value.source_states.every(isProjectWorkSessionIndexSourceState)
+    || !projectWorkSessionIndexSourceIdsAreUnique(value.source_states)
+    || !isNonBlankStringArray(value.warnings)) {
+    return false;
+  }
+  if (value.until_complete && value.batch_files === null) return false;
+  if (value.until_complete && value.max_batches === null) return false;
+  if (value.batch_files === null && (value.source_states.length !== 0 || value.batches_run !== 0)) {
+    return false;
+  }
+  if (value.batch_files !== null && value.batches_run < 1) return false;
+  const maxBatches = value.max_batches;
+  if (isPositiveSafeInteger(maxBatches) && value.batches_run > maxBatches) return false;
+  return value.all_sources_completed === (
+    value.source_states.length > 0
+    && value.source_states.every((state) => isRecord(state) && state.completed === true)
+  );
+}
+
+function parseProjectWorkSessionIndexResult(value: unknown): ProjectWorkSessionIndexResult {
+  if (!isProjectWorkSessionIndexResult(value)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkSessionIndexResult;
 }
 
 function projectWorkSummarySnapshotIdsAreUnique(snapshots: unknown): boolean {

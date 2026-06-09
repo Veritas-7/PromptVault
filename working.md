@@ -1,12 +1,125 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 14:01 KST
+Updated: 2026-06-09 14:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 AI normalization proposal route
+## Current Slice - 2026-06-09 normalization proposal review queue
+
+Current Goal:
+
+- Persist normalization proposals into an auditable approve/reject queue.
+- Preserve operator decisions across re-syncs and mark disappeared proposals
+  stale.
+- Keep this slice safe: approved queue rows are recorded, but approved
+  normalized project/day rows are not durably written yet.
+
+Context:
+
+- The previous slices proved real project/day management from parsed
+  `working.md`, `workingd.md`, `WORKLOG.md`, `PROGRESS_LOG.md`,
+  `PROJECT_STATUS.md`, and related logs, then added AI-capable normalization
+  proposals.
+- The missing step was durable review state for normalization proposals. Without
+  a queue, proposals were visible only as transient CLI/UI output.
+- The implementation mirrors the extraction review queue pattern: sync current
+  proposals, preserve approved/rejected rows, stale only pending/stale rows, and
+  expose CLI, bridge, Tauri, TypeScript, UI, and browser QA coverage.
+
+Progress:
+
+- Added `work-log-normalization-review-queue` and
+  `work-log-normalization-review-queue-update`.
+- Added SQLite table `project_work_log_normalization_review_queue` with
+  proposal payload, provider/runtime metadata, proposal accepted/rejected state,
+  operator review state, timestamps, and risk flags.
+- Queue sync now persists current normalization proposals and marks vanished
+  pending/stale proposals as `stale/proposal_no_longer_live`.
+- Operator `approved` and `rejected` states are preserved on subsequent syncs.
+- UI now has a `정규화 큐` button, queue meta row, rendered queue rows, and row
+  approve/reject buttons.
+- Browser QA now clicks `정규화 큐`, verifies 91 persisted queue rows in an
+  isolated DB, approves the first row, and confirms the persisted API state is
+  `approved · operator_approved_normalization`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added normalization review queue options/update options/items/result;
+  - added queue table/indexes, sync/read/update helpers, and Tauri commands;
+  - added Rust test proving sync, stale marking, and operator state preservation.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added `work-log-normalization-review-queue`;
+  - added `work-log-normalization-review-queue-update`;
+  - added browser bridge routes, DB-lock routing, validation, and help coverage.
+- `src/types.ts`, `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`,
+  `src/App.tsx`:
+  - added frontend contracts, strict bridge parser, status/meta labels, toolbar
+    button, failure notice, queue list, and approve/reject actions.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`:
+  - added parser/status tests for normalization review queue payloads and
+    impossible counter rejection.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added click proof for queue sync and API-backed approval persistence check.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`: PASS, `199` tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml normalization_review_queue`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml bridge_serializes_database_backed_routes_only`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules`: PASS.
+- `npm run test:ui`: PASS, `454` tests.
+- `npm run build`: PASS.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo check --manifest-path src-tauri/Cargo.toml`: PASS.
+- Live CLI smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-normalization-review-queue --limit 5 --session-limit 200 --sync-proposals --json`:
+  PASS, `total_items=91`, `returned_item_count=5`,
+  `synced_proposal_count=91`, `stale_proposal_count=0`,
+  `pending_review_count=91`, `approved_count=0`, `rejected_count=0`,
+  `accepted_proposal_count=0`, `rejected_proposal_count=91`, warning
+  `AI 정규화가 비활성화되어 로컬 review-only 제안만 반환했습니다.`
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS
+  after tightening the approval check to API-backed persistence. Final JSON
+  included:
+  - `workLogNormalizationReviewQueueMeta`: `정규화 큐 저장 91개 · 표시 40개 · 동기화 91개 · stale 전환 0개 · 검토 91개 · stale 0개 · 승인 0개 · 거절 0개 · AI accepted 0개 · review 91개`;
+  - `workLogNormalizationReviewQueueStateAfterApprove`: `approved · operator_approved_normalization`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS.
+- `git diff --check`: PASS.
+- `npm run check`: PASS, including `test:ui`, `build`, full Rust tests
+  (`173` lib tests, `29` CLI tests), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- This slice intentionally does not write approved normalization rows into a
+  durable normalized project/day table yet. It only persists review decisions.
+- UI queue sync uses local review-only proposals (`ai: false`) for deterministic
+  QA. The separate `정규화 제안` button still exercises the AI-capable proposal
+  route when provider credentials are available.
+- Large project/day groups still need chunked provider normalization before AI
+  accepted rows should be trusted broadly.
+
+Research:
+
+- No external research was needed. The implementation follows existing
+  PromptVault extraction review queue, browser bridge, and strict parser
+  patterns.
+
+Next Steps:
+
+- Add a durable write path/table for operator-approved normalized project/day
+  rows.
+- Add a UI action to apply approved normalization queue rows into that durable
+  table, with explicit review/audit counts.
+- Add chunked provider normalization for large project/day candidate groups.
+- Add resumable all-history session backfill/checkpointing beyond the
+  `session_limit=200` verification path.
+- Evaluate a Codex SDK session-ingest adapter if it provides cleaner structured
+  session metadata than the current local JSONL/metadata-first index.
+
+## Previous Slice - 2026-06-09 AI normalization proposal route
 
 Current Goal:
 

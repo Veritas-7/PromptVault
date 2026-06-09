@@ -18,6 +18,7 @@ import type {
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
   ProjectWorkLogNormalizationProposalsResult,
+  ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkReport,
   ProjectWorkSummaryResult,
@@ -163,6 +164,23 @@ export interface ProjectWorkLogNormalizationProposalsOptions {
   session_limit?: number;
   refresh_session_index?: boolean;
   ai?: boolean;
+}
+
+export interface ProjectWorkLogNormalizationReviewQueueOptions {
+  database_path?: string;
+  limit?: number;
+  sync_proposals?: boolean;
+  session_limit?: number;
+  refresh_session_index?: boolean;
+  ai?: boolean;
+}
+
+export interface ProjectWorkLogNormalizationReviewQueueUpdateOptions {
+  database_path?: string;
+  limit?: number;
+  candidate_id: string;
+  review_state: "approved" | "rejected";
+  review_reason?: string;
 }
 
 export interface ImprovePromptRequest {
@@ -399,6 +417,38 @@ export async function loadProjectWorkLogNormalizationProposals(
     "/api/work-log-normalization-proposals",
     { options },
     parseProjectWorkLogNormalizationProposalsResult,
+  );
+}
+
+export async function loadProjectWorkLogNormalizationReviewQueue(
+  options: ProjectWorkLogNormalizationReviewQueueOptions = {},
+): Promise<ProjectWorkLogNormalizationReviewQueueResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogNormalizationReviewQueueResult>(
+      "project_work_log_normalization_review_queue",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkLogNormalizationReviewQueueResult>(
+    "/api/work-log-normalization-review-queue",
+    { options },
+    parseProjectWorkLogNormalizationReviewQueueResult,
+  );
+}
+
+export async function updateProjectWorkLogNormalizationReviewQueueItem(
+  options: ProjectWorkLogNormalizationReviewQueueUpdateOptions,
+): Promise<ProjectWorkLogNormalizationReviewQueueResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogNormalizationReviewQueueResult>(
+      "project_work_log_normalization_review_queue_update",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkLogNormalizationReviewQueueResult>(
+    "/api/work-log-normalization-review-queue/update",
+    { options },
+    parseProjectWorkLogNormalizationReviewQueueResult,
   );
 }
 
@@ -1770,6 +1820,63 @@ function normalizationProposalCountsAreConsistent(value: Record<string, unknown>
     return false;
   }
   return value.accepted_count + value.rejected_count === value.returned_proposal_count;
+}
+
+function isProjectWorkLogNormalizationReviewQueueItem(value: unknown): boolean {
+  return isProjectWorkLogNormalizationProposal(value)
+    && isRecord(value)
+    && isTimestampString(value.first_seen_at)
+    && isTimestampString(value.last_seen_at)
+    && ["pending_review", "stale", "approved", "rejected"].includes(String(value.review_state))
+    && isNonBlankString(value.review_reason)
+    && isNonBlankString(value.provider)
+    && isNullableNonBlankString(value.provider_model)
+    && isNonBlankString(value.provider_runtime)
+    && typeof value.used_ai === "boolean";
+}
+
+function projectWorkLogNormalizationReviewQueueWithinResult(value: unknown): boolean {
+  if (!isRecord(value)
+    || !Array.isArray(value.items)
+    || !isNonNegativeSafeInteger(value.synced_proposal_count)
+    || !isNonNegativeSafeInteger(value.stale_proposal_count)
+    || !isNonNegativeSafeInteger(value.total_items)
+    || !isNonNegativeSafeInteger(value.returned_item_count)
+    || !isNonNegativeSafeInteger(value.pending_review_count)
+    || !isNonNegativeSafeInteger(value.stale_count)
+    || !isNonNegativeSafeInteger(value.approved_count)
+    || !isNonNegativeSafeInteger(value.rejected_count)
+    || !isNonNegativeSafeInteger(value.accepted_proposal_count)
+    || !isNonNegativeSafeInteger(value.rejected_proposal_count)) {
+    return false;
+  }
+  const stateCount = value.pending_review_count
+    + value.stale_count
+    + value.approved_count
+    + value.rejected_count;
+  return Number.isSafeInteger(stateCount)
+    && stateCount <= value.total_items
+    && value.items.length === value.returned_item_count
+    && value.returned_item_count <= value.total_items
+    && value.accepted_proposal_count + value.rejected_proposal_count === value.total_items
+    && value.stale_proposal_count <= value.total_items
+    && value.synced_proposal_count <= value.total_items + value.stale_proposal_count;
+}
+
+function parseProjectWorkLogNormalizationReviewQueueResult(
+  value: unknown,
+): ProjectWorkLogNormalizationReviewQueueResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !Array.isArray(value.items)
+    || !value.items.every(isProjectWorkLogNormalizationReviewQueueItem)
+    || !recordStringFieldValuesAreUnique(value.items, "candidate_id")
+    || !projectWorkLogNormalizationReviewQueueWithinResult(value)
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkLogNormalizationReviewQueueResult;
 }
 
 function isProjectWorkLogExtractionMergeResult(value: unknown): boolean {

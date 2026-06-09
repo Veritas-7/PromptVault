@@ -6,17 +6,19 @@ use promptvault_lib::{
     run_load_stored_prompts, run_project_work_log_coverage,
     run_project_work_log_extraction_candidates, run_project_work_log_extraction_proposals,
     run_project_work_log_freeze, run_project_work_log_normalization_candidates,
-    run_project_work_log_normalization_proposals, run_project_work_log_review_queue,
+    run_project_work_log_normalization_proposals, run_project_work_log_normalization_review_queue,
+    run_project_work_log_normalization_review_queue_update, run_project_work_log_review_queue,
     run_project_work_log_review_queue_update, run_project_work_report, run_project_work_summary,
     run_scan, source_specs, CancelScanOptions, ImportBatchOptions, ImportEventsOptions,
     ImportStatesOptions, ImproveRequest, ProjectWorkLogExtractionCandidatesOptions,
     ProjectWorkLogExtractionItemsOptions, ProjectWorkLogExtractionProposalsOptions,
     ProjectWorkLogExtractionRunsOptions, ProjectWorkLogFreezeOptions,
     ProjectWorkLogNormalizationCandidatesOptions, ProjectWorkLogNormalizationProposalsOptions,
-    ProjectWorkLogReviewQueueOptions, ProjectWorkLogReviewQueueUpdateOptions,
-    ProjectWorkReportOptions, ProjectWorkSummaryOptions, ProjectWorkSummarySnapshotsOptions,
-    PromptRecord, ScanOptions, ScanPlanOptions, ScanProgressOptions, StoredPromptFacetsOptions,
-    StoredPromptsOptions,
+    ProjectWorkLogNormalizationReviewQueueOptions,
+    ProjectWorkLogNormalizationReviewQueueUpdateOptions, ProjectWorkLogReviewQueueOptions,
+    ProjectWorkLogReviewQueueUpdateOptions, ProjectWorkReportOptions, ProjectWorkSummaryOptions,
+    ProjectWorkSummarySnapshotsOptions, PromptRecord, ScanOptions, ScanPlanOptions,
+    ScanProgressOptions, StoredPromptFacetsOptions, StoredPromptsOptions,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -1026,6 +1028,150 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 println!("\nwarnings: {}", result.warnings.join("; "));
             }
         }
+        "work-log-normalization-review-queue" => {
+            let json = take_flag(&mut args, "--json");
+            let sync_proposals = take_flag(&mut args, "--sync-proposals");
+            let ai = take_flag(&mut args, "--ai");
+            let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
+            let mut limit = None;
+            let mut session_limit = None;
+            let mut database_path = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--session-limit" => {
+                        session_limit =
+                            Some(parse_positive_usize_arg(iter.next(), "--session-limit")?);
+                    }
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?);
+                    }
+                    other => {
+                        return Err(format!(
+                            "unknown work-log-normalization-review-queue argument: {other}"
+                        )
+                        .into())
+                    }
+                }
+            }
+            let result = run_project_work_log_normalization_review_queue(
+                ProjectWorkLogNormalizationReviewQueueOptions {
+                    database_path,
+                    limit,
+                    sync_proposals: Some(sync_proposals),
+                    session_limit,
+                    refresh_session_index: Some(refresh_session_index),
+                    ai: Some(ai),
+                },
+            )
+            .await?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+
+            println!("PromptVault work log normalization review queue");
+            println!("database: {}", result.database_path);
+            println!("total_items: {}", result.total_items);
+            println!("returned_items: {}", result.returned_item_count);
+            println!("synced_proposals: {}", result.synced_proposal_count);
+            println!("stale_proposals: {}", result.stale_proposal_count);
+            println!("pending_review: {}", result.pending_review_count);
+            println!("stale: {}", result.stale_count);
+            println!("approved: {}", result.approved_count);
+            println!("rejected: {}", result.rejected_count);
+            println!("accepted_proposals: {}", result.accepted_proposal_count);
+            println!("review_proposals: {}", result.rejected_proposal_count);
+            for item in &result.items {
+                println!(
+                    "\n{} · {} · {} · {} · {}",
+                    item.candidate_id, item.date, item.project, item.review_state, item.provider
+                );
+                println!("- review_reason: {}", item.review_reason);
+                println!(
+                    "- proposal: {}{} · confidence {:.2}",
+                    if item.accepted { "accepted" } else { "review" },
+                    item.rejection_reason
+                        .as_ref()
+                        .map(|reason| format!(" · rejection {reason}"))
+                        .unwrap_or_default(),
+                    item.confidence
+                );
+                println!("- normalized_title: {}", item.normalized_title);
+                println!("- normalized_status: {}", item.normalized_status);
+                println!("- normalized_evidence: {}", item.normalized_evidence);
+                println!("  {}", item.source_path);
+            }
+            if !result.warnings.is_empty() {
+                println!("\nwarnings: {}", result.warnings.join("; "));
+            }
+        }
+        "work-log-normalization-review-queue-update" => {
+            let json = take_flag(&mut args, "--json");
+            let mut limit = None;
+            let mut database_path = None;
+            let mut candidate_id = None;
+            let mut review_state = None;
+            let mut review_reason = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?);
+                    }
+                    "--candidate-id" => {
+                        candidate_id = Some(parse_required_arg(iter.next(), "--candidate-id")?);
+                    }
+                    "--state" => {
+                        review_state = Some(parse_required_arg(iter.next(), "--state")?);
+                    }
+                    "--reason" => {
+                        review_reason = Some(parse_required_arg(iter.next(), "--reason")?);
+                    }
+                    other => {
+                        return Err(format!(
+                            "unknown work-log-normalization-review-queue-update argument: {other}"
+                        )
+                        .into())
+                    }
+                }
+            }
+            let result = run_project_work_log_normalization_review_queue_update(
+                ProjectWorkLogNormalizationReviewQueueUpdateOptions {
+                    database_path,
+                    limit,
+                    candidate_id: candidate_id.ok_or(
+                        "work-log-normalization-review-queue-update requires --candidate-id",
+                    )?,
+                    review_state: review_state
+                        .ok_or("work-log-normalization-review-queue-update requires --state")?,
+                    review_reason,
+                },
+            )?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+
+            println!("PromptVault work log normalization review queue update");
+            println!("database: {}", result.database_path);
+            println!("pending_review: {}", result.pending_review_count);
+            println!("stale: {}", result.stale_count);
+            println!("approved: {}", result.approved_count);
+            println!("rejected: {}", result.rejected_count);
+            for item in &result.items {
+                println!(
+                    "\n{} · {} · {} · {}",
+                    item.candidate_id, item.project, item.review_state, item.review_reason
+                );
+            }
+        }
         "work-summary" => {
             let json = take_flag(&mut args, "--json");
             let ai = take_flag(&mut args, "--ai");
@@ -1613,15 +1759,63 @@ fn print_help() {
 }
 
 fn help_text() -> String {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-log-coverage [--json]\n  work-log-candidates [--limit N>0] [--json]\n  work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]\n  work-log-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n  work-log-extract [--limit N>0] [--database PATH] [--save] [--ai] [--approved-review-queue] [--json]\n  work-log-freeze [--limit N>0] [--database PATH] [--json]\n  work-log-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  work-log-runs [--limit N>0] [--database PATH] [--json]\n  work-log-normalization-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-log-normalization-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--ai] [--json]\n  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]\n  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174] [--database PATH]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-log-coverage lists parsed and unparsed project progress logs by project.\n  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n  work-log-review-queue persists current extraction candidates into a review queue and marks disappeared candidates stale.\n  work-log-review-queue-update marks one persisted candidate approved or rejected with an audit reason.\n  work-log-extract validates AI extraction proposals before they can become dated work items; --save persists accepted dated proposals to SQLite; --ai uses configured OpenAI/GLM providers with local fallback; --approved-review-queue reads only operator-approved review queue rows.\n  work-log-freeze saves live-only parsed project/date progress-log rows to SQLite without running AI extraction.\n  work-log-items lists saved accepted AI extraction rows by project and date without reading raw progress logs.\n  work-log-runs lists approved queue extraction attempt history with provider/runtime, candidate IDs, saved counts, warnings, and errors.\n  work-log-normalization-candidates lists parsed project/date rows that still need AI semantic cleanup.\n  work-log-normalization-proposals asks OpenAI/GLM to normalize parsed project/date rows and falls back to local review-only proposals.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  work-summary builds project/date summaries with citation IDs; --include-extractions merges accepted AI work-log proposals into the summary preview; --include-saved-extractions merges stored accepted AI extraction rows without rereading raw progress logs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity.\n  serve --database PATH isolates browser-bridge persistence for full click QA without touching the permanent vault."
-        .replace(
-            "work-log-extract [--limit N>0] [--database PATH] [--save] [--ai] [--json]",
-            "work-log-extract [--limit N>0] [--database PATH] [--save] [--ai] [--approved-review-queue] [--json]",
-        )
-        .replace(
-            "work-log-extract validates AI extraction proposals before they can become dated work items; --save persists accepted dated proposals to SQLite; --ai uses configured OpenAI/GLM providers with local fallback.",
-            "work-log-extract validates AI extraction proposals before they can become dated work items; --save persists accepted dated proposals to SQLite; --ai uses configured OpenAI/GLM providers with local fallback; --approved-review-queue reads only operator-approved persisted queue rows.",
-        )
+    concat!(
+        "PromptVault CLI\n\n",
+        "Commands:\n",
+        "  sources [--json]\n",
+        "  plan [--source ID[,ID...]] [--json]\n",
+        "  import-batch --source ID [--files N>0] [--reset] [--json]\n",
+        "  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n",
+        "  improve [--json] [--local] --prompt TEXT\n",
+        "  improve [--json] [--local] < prompt.txt\n",
+        "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
+        "  work-log-coverage [--json]\n",
+        "  work-log-candidates [--limit N>0] [--json]\n",
+        "  work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]\n",
+        "  work-log-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n",
+        "  work-log-extract [--limit N>0] [--database PATH] [--save] [--ai] [--approved-review-queue] [--json]\n",
+        "  work-log-freeze [--limit N>0] [--database PATH] [--json]\n",
+        "  work-log-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n",
+        "  work-log-runs [--limit N>0] [--database PATH] [--json]\n",
+        "  work-log-normalization-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
+        "  work-log-normalization-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--ai] [--json]\n",
+        "  work-log-normalization-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-proposals] [--refresh-session-index] [--ai] [--json]\n",
+        "  work-log-normalization-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n",
+        "  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]\n",
+        "  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n",
+        "  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n",
+        "  serve [--addr 127.0.0.1:5174] [--database PATH]\n\n",
+        "Rules:\n",
+        "  plan inventories matching source files without reading prompt bodies.\n",
+        "  import-batch persists one resumable source slice and updates its DB cursor.\n",
+        "  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n",
+        "  --no-persist keeps scan results out of the PromptVault database.\n",
+        "  work-report reads project progress logs and groups slice work by date and project.\n",
+        "  work-log-coverage lists parsed and unparsed project progress logs by project.\n",
+        "  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n",
+        "  work-log-review-queue persists current extraction candidates into a review queue and marks disappeared candidates stale.\n",
+        "  work-log-review-queue-update marks one persisted candidate approved or rejected with an audit reason.\n",
+        "  work-log-extract validates AI extraction proposals before they can become dated work items; --save persists accepted dated proposals to SQLite; --ai uses configured OpenAI/GLM providers with local fallback; --approved-review-queue reads only operator-approved review queue rows.\n",
+        "  work-log-freeze saves live-only parsed project/date progress-log rows to SQLite without running AI extraction.\n",
+        "  work-log-items lists saved accepted AI extraction rows by project and date without reading raw progress logs.\n",
+        "  work-log-runs lists approved queue extraction attempt history with provider/runtime, candidate IDs, saved counts, warnings, and errors.\n",
+        "  work-log-normalization-candidates lists parsed project/date rows that still need AI semantic cleanup.\n",
+        "  work-log-normalization-proposals asks OpenAI/GLM to normalize parsed project/date rows and falls back to local review-only proposals.\n",
+        "  work-log-normalization-review-queue persists current normalization proposals for operator review and marks disappeared proposals stale.\n",
+        "  work-log-normalization-review-queue-update marks one persisted normalization proposal approved or rejected without writing normalized project/day rows.\n",
+        "  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n",
+        "  work-report session evidence is bounded by --session-limit.\n",
+        "  work-summary builds project/date summaries with citation IDs; --include-extractions merges accepted AI work-log proposals into the summary preview; --include-saved-extractions merges stored accepted AI extraction rows without rereading raw progress logs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n",
+        "  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n",
+        "  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n",
+        "  --output cannot be combined with --no-export.\n",
+        "  Use only one preview sort selector: --preview-sort or --weakest-first.\n",
+        "  repair --count is capped at 10.\n",
+        "  repair scans are side-effect-free and do not update the PromptVault database.\n",
+        "  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity.\n",
+        "  serve --database PATH isolates browser-bridge persistence for full click QA without touching the permanent vault.",
+    )
+    .to_string()
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1752,6 +1946,16 @@ struct ProjectWorkLogNormalizationCandidatesBridgePayload {
 #[derive(serde::Deserialize)]
 struct ProjectWorkLogNormalizationProposalsBridgePayload {
     options: Option<ProjectWorkLogNormalizationProposalsOptions>,
+}
+
+#[derive(serde::Deserialize)]
+struct ProjectWorkLogNormalizationReviewQueueBridgePayload {
+    options: Option<ProjectWorkLogNormalizationReviewQueueOptions>,
+}
+
+#[derive(serde::Deserialize)]
+struct ProjectWorkLogNormalizationReviewQueueUpdateBridgePayload {
+    options: ProjectWorkLogNormalizationReviewQueueUpdateOptions,
 }
 
 #[derive(serde::Deserialize, Default)]
@@ -2083,6 +2287,32 @@ fn handle_bridge_route(
             let result = runtime.block_on(run_project_work_log_normalization_proposals(options))?;
             write_json_response(stream, 200, &result)
         }
+        ("POST", "/api/work-log-normalization-review-queue") => {
+            let payload = serde_json::from_str::<
+                ProjectWorkLogNormalizationReviewQueueBridgePayload,
+            >(&request.body)?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            let result =
+                runtime.block_on(run_project_work_log_normalization_review_queue(options))?;
+            write_json_response(stream, 200, &result)
+        }
+        ("POST", "/api/work-log-normalization-review-queue/update") => {
+            let payload = serde_json::from_str::<
+                ProjectWorkLogNormalizationReviewQueueUpdateBridgePayload,
+            >(&request.body)?;
+            let mut options = payload.options;
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_project_work_log_normalization_review_queue_update(options)?;
+            write_json_response(stream, 200, &result)
+        }
         _ => write_response(stream, 404, "text/plain", "Not found"),
     }
 }
@@ -2107,6 +2337,8 @@ fn bridge_route_uses_database(method: &str, path: &str) -> bool {
             | ("POST", "/api/work-log-runs")
             | ("POST", "/api/work-log-normalization-candidates")
             | ("POST", "/api/work-log-normalization-proposals")
+            | ("POST", "/api/work-log-normalization-review-queue")
+            | ("POST", "/api/work-log-normalization-review-queue/update")
     )
 }
 
@@ -2440,6 +2672,39 @@ mod tests {
     }
 
     #[test]
+    fn bridge_routes_work_log_normalization_review_queue_validation_errors() {
+        let response = bridge_response_for(
+            "/api/work-log-normalization-review-queue",
+            r#"{"options":{"limit":0}}"#,
+        );
+
+        assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(response
+            .contains("work-log normalization review queue limit requires a positive integer"));
+        assert!(response.contains("Access-Control-Allow-Origin: *"));
+
+        let session_response = bridge_response_for(
+            "/api/work-log-normalization-review-queue",
+            r#"{"options":{"session_limit":0}}"#,
+        );
+
+        assert!(session_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(session_response.contains(
+            "work-log normalization review queue session_limit requires a positive integer"
+        ));
+
+        let update_response = bridge_response_for(
+            "/api/work-log-normalization-review-queue/update",
+            r#"{"options":{"candidate_id":"work-normalize-Test-a1","review_state":"pending_review"}}"#,
+        );
+
+        assert!(update_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(update_response
+            .contains("work-log normalization review queue state must be approved or rejected"));
+        assert!(update_response.contains("Access-Control-Allow-Origin: *"));
+    }
+
+    #[test]
     fn bridge_routes_work_log_freeze_validation_errors() {
         let response = bridge_response_for("/api/work-log-freeze", r#"{"options":{"limit":0}}"#);
 
@@ -2513,6 +2778,8 @@ mod tests {
             "/api/work-log-runs",
             "/api/work-log-normalization-candidates",
             "/api/work-log-normalization-proposals",
+            "/api/work-log-normalization-review-queue",
+            "/api/work-log-normalization-review-queue/update",
         ] {
             assert!(
                 bridge_route_uses_database("POST", path),
@@ -2616,6 +2883,11 @@ mod tests {
         assert!(
             help.contains("work-log-normalization-proposals [--limit N>0] [--session-limit N>0]")
         );
+        assert!(help
+            .contains("work-log-normalization-review-queue [--limit N>0] [--session-limit N>0]"));
+        assert!(help.contains(
+            "work-log-normalization-review-queue-update --candidate-id ID --state approved|rejected"
+        ));
         assert!(help.contains(
             "work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]"
         ));
@@ -2635,6 +2907,8 @@ mod tests {
         assert!(help.contains("work-log-runs lists approved queue extraction attempt history"));
         assert!(help.contains("work-log-normalization-candidates lists parsed project/date rows"));
         assert!(help.contains("work-log-normalization-proposals asks OpenAI/GLM"));
+        assert!(help.contains("work-log-normalization-review-queue persists current normalization"));
+        assert!(help.contains("without writing normalized project/day rows"));
         assert!(help.contains("work-report stores only sanitized session evidence"));
         assert!(help.contains("--refresh-session-index to rescan raw sessions"));
         assert!(help.contains("work-summary builds project/date summaries with citation IDs"));

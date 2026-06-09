@@ -466,6 +466,35 @@ export interface ProjectWorkLogNormalizationProposalsResult {
   warnings: string[];
 }
 
+export interface ProjectWorkLogNormalizationReviewQueueItem
+  extends ProjectWorkLogNormalizationProposal {
+  first_seen_at: string;
+  last_seen_at: string;
+  review_state: "pending_review" | "stale" | "approved" | "rejected";
+  review_reason: string;
+  provider: string;
+  provider_model: string | null;
+  provider_runtime: string;
+  used_ai: boolean;
+}
+
+export interface ProjectWorkLogNormalizationReviewQueueResult {
+  generated_at: string;
+  database_path: string;
+  synced_proposal_count: number;
+  stale_proposal_count: number;
+  total_items: number;
+  returned_item_count: number;
+  pending_review_count: number;
+  stale_count: number;
+  approved_count: number;
+  rejected_count: number;
+  accepted_proposal_count: number;
+  rejected_proposal_count: number;
+  items: ProjectWorkLogNormalizationReviewQueueItem[];
+  warnings: string[];
+}
+
 export interface ProjectWorkLogExtractionMergeResult {
   provider: string;
   used_ai: boolean;

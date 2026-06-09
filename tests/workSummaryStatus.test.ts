@@ -24,6 +24,10 @@ import {
   workLogNormalizationProposalsActionLabel,
   workLogNormalizationProposalsFailureText,
   workLogNormalizationProposalsMetaText,
+  workLogNormalizationReviewQueueActionLabel,
+  workLogNormalizationReviewQueueFailureText,
+  workLogNormalizationReviewQueueItemStateText,
+  workLogNormalizationReviewQueueMetaText,
   workLogExtractionMetaText,
   workLogExtractionApprovalText,
   workLogExtractionPersistenceText,
@@ -59,6 +63,7 @@ import {
   type WorkLogExtractionRunsState,
   type WorkLogNormalizationCandidatesState,
   type WorkLogNormalizationProposalsState,
+  type WorkLogNormalizationReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
@@ -74,6 +79,7 @@ import type {
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
   ProjectWorkLogNormalizationProposalsResult,
+  ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueItem,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSummary,
@@ -402,6 +408,38 @@ function normalizationProposalsResult(
       ai_saved_extraction_count: 0,
       best_ai_confidence: null,
       risk_flags: [],
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function normalizationReviewQueueResult(
+  overrides: Partial<ProjectWorkLogNormalizationReviewQueueResult> = {},
+): ProjectWorkLogNormalizationReviewQueueResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    synced_proposal_count: 5,
+    stale_proposal_count: 1,
+    total_items: 9,
+    returned_item_count: 5,
+    pending_review_count: 3,
+    stale_count: 1,
+    approved_count: 2,
+    rejected_count: 3,
+    accepted_proposal_count: 1,
+    rejected_proposal_count: 8,
+    items: [{
+      ...normalizationProposalsResult().proposals[0],
+      first_seen_at: "2026-06-09T00:00:00Z",
+      last_seen_at: "2026-06-09T00:00:00Z",
+      review_state: "pending_review",
+      review_reason: "local_fallback_requires_ai_review",
+      provider: "local-normalization-rules",
+      provider_model: null,
+      provider_runtime: "local-normalization-rules",
+      used_ai: false,
     }],
     warnings: [],
     ...overrides,
@@ -1127,6 +1165,61 @@ test("work log normalization proposal labels describe AI cleanup proposals", () 
     "AI 정규화 제안을 생성하지 못했습니다. provider 키, 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogNormalizationProposalsFailureText("ready"), null);
+});
+
+test("work log normalization review queue labels describe persisted review rows", () => {
+  const failed: WorkLogNormalizationReviewQueueState = "failed";
+  assert.equal(
+    workLogNormalizationReviewQueueActionLabel("idle", false, lockState()),
+    "정규화 검토 큐 동기화",
+  );
+  assert.equal(
+    workLogNormalizationReviewQueueActionLabel("ready", true, lockState()),
+    "정규화 검토 큐 새로고침",
+  );
+  assert.equal(
+    workLogNormalizationReviewQueueActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 정규화 검토 큐를 새로고침할 수 없습니다",
+  );
+  assert.equal(
+    workLogNormalizationReviewQueueMetaText("idle", null),
+    "아직 동기화한 정규화 검토 큐 없음",
+  );
+  assert.equal(
+    workLogNormalizationReviewQueueMetaText("loading", normalizationReviewQueueResult()),
+    "정규화 검토 큐 동기화 중",
+  );
+  assert.equal(
+    workLogNormalizationReviewQueueMetaText("ready", normalizationReviewQueueResult()),
+    "정규화 큐 저장 9개 · 표시 5개 · 동기화 5개 · stale 전환 1개 · 검토 3개 · stale 1개 · 승인 2개 · 거절 3개 · AI accepted 1개 · review 8개",
+  );
+  assert.equal(
+    workLogNormalizationReviewQueueMetaText(failed, null),
+    "정규화 검토 큐를 사용할 수 없음",
+  );
+  assert.equal(
+    workLogNormalizationReviewQueueFailureText(failed),
+    "정규화 검토 큐를 동기화하지 못했습니다. 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workLogNormalizationReviewQueueFailureText("ready"), null);
+  assert.equal(
+    workLogNormalizationReviewQueueItemStateText(normalizationReviewQueueResult().items[0]),
+    "검토 대기 · local_fallback_requires_ai_review · review 필요 · local_fallback_requires_ai_review · local-normalization-rules · confidence 0.50",
+  );
+  assert.equal(
+    workLogNormalizationReviewQueueItemStateText({
+      ...normalizationReviewQueueResult().items[0],
+      review_state: "approved",
+      review_reason: "operator_approved_normalization",
+      accepted: true,
+      rejection_reason: null,
+      provider: "glm",
+      provider_model: "glm-test-model",
+      provider_runtime: "glm-chat-completions",
+      used_ai: true,
+    }),
+    "승인됨 · operator_approved_normalization · AI accepted · glm/glm-test-model · confidence 0.50",
+  );
 });
 
 test("work log extraction save state excludes already managed rows", () => {

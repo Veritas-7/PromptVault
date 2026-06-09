@@ -10,6 +10,7 @@ import {
   loadProjectWorkLogExtractionProposals,
   loadProjectWorkLogNormalizationCandidates,
   loadProjectWorkLogNormalizationProposals,
+  loadProjectWorkLogNormalizationReviewQueue,
   loadProjectWorkLogReviewQueue,
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
@@ -22,6 +23,7 @@ import {
   planScan,
   scanProgress,
   scanPrompts,
+  updateProjectWorkLogNormalizationReviewQueueItem,
   updateProjectWorkLogReviewQueueItem,
 } from "../src/promptVaultApi.ts";
 
@@ -581,6 +583,36 @@ function projectWorkLogNormalizationProposalsPayload(overrides = {}) {
       risk_flags: ["long_base64_like_token"],
     }],
     warnings: ["OPENAI_API_KEY 및 GLM_API_KEY/GLM_API_KEY_2가 없어 로컬 normalization fallback을 사용했습니다."],
+    ...overrides,
+  };
+}
+
+function projectWorkLogNormalizationReviewQueuePayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    synced_proposal_count: 1,
+    stale_proposal_count: 0,
+    total_items: 1,
+    returned_item_count: 1,
+    pending_review_count: 1,
+    stale_count: 0,
+    approved_count: 0,
+    rejected_count: 0,
+    accepted_proposal_count: 0,
+    rejected_proposal_count: 1,
+    items: [{
+      ...projectWorkLogNormalizationProposalsPayload().proposals[0],
+      first_seen_at: "2026-06-09T00:00:00Z",
+      last_seen_at: "2026-06-09T00:00:00Z",
+      review_state: "pending_review",
+      review_reason: "local_fallback_requires_ai_review",
+      provider: "local-normalization-rules",
+      provider_model: null,
+      provider_runtime: "local-normalization-rules",
+      used_ai: false,
+    }],
+    warnings: [],
     ...overrides,
   };
 }
@@ -1383,6 +1415,102 @@ test("browser bridge work log normalization proposals reject impossible counters
 
   await assert.rejects(
     () => loadProjectWorkLogNormalizationProposals({ limit: 5 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /local_fallback_requires_ai_review|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work log normalization review queue posts options and validates rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogNormalizationReviewQueuePayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkLogNormalizationReviewQueue({
+    ai: false,
+    limit: 5,
+    session_limit: 200,
+    sync_proposals: true,
+  });
+
+  assert.match(requestPath, /\/api\/work-log-normalization-review-queue$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: { ai: false, limit: 5, session_limit: 200, sync_proposals: true },
+  });
+  assert.equal(result.returned_item_count, 1);
+  assert.equal(result.pending_review_count, 1);
+  assert.equal(result.accepted_proposal_count, 0);
+  assert.equal(result.rejected_proposal_count, 1);
+  assert.equal(result.items[0].review_state, "pending_review");
+  assert.equal(result.items[0].provider_runtime, "local-normalization-rules");
+  assert.equal(result.items[0].accepted, false);
+});
+
+test("browser bridge work log normalization review queue update posts options and validates rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogNormalizationReviewQueuePayload({
+      pending_review_count: 0,
+      approved_count: 1,
+      items: [{
+        ...projectWorkLogNormalizationReviewQueuePayload().items[0],
+        review_state: "approved",
+        review_reason: "operator_approved_normalization",
+      }],
+    })), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await updateProjectWorkLogNormalizationReviewQueueItem({
+    candidate_id: "work-normalize-CareVault-a1b2c3d4e5f6",
+    limit: 5,
+    review_state: "approved",
+    review_reason: "operator_approved_normalization",
+  });
+
+  assert.match(requestPath, /\/api\/work-log-normalization-review-queue\/update$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      candidate_id: "work-normalize-CareVault-a1b2c3d4e5f6",
+      limit: 5,
+      review_state: "approved",
+      review_reason: "operator_approved_normalization",
+    },
+  });
+  assert.equal(result.approved_count, 1);
+  assert.equal(result.pending_review_count, 0);
+  assert.equal(result.items[0].review_state, "approved");
+});
+
+test("browser bridge work log normalization review queue rejects impossible counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkLogNormalizationReviewQueuePayload({
+    accepted_proposal_count: 1,
+    rejected_proposal_count: 1,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkLogNormalizationReviewQueue({ limit: 5 }),
     (error) => {
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);

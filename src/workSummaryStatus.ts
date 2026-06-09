@@ -12,6 +12,8 @@ import type {
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogReviewQueueItem,
   ProjectWorkLogNormalizationProposalsResult,
+  ProjectWorkLogNormalizationReviewQueueItem,
+  ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
@@ -29,6 +31,7 @@ export type WorkLogExtractionItemsState = "idle" | "loading" | "ready" | "failed
 export type WorkLogExtractionRunsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogNormalizationCandidatesState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogNormalizationProposalsState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogNormalizationReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementFreezeState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunMode = "ai" | "local";
@@ -664,6 +667,75 @@ export function workLogNormalizationProposalsFailureText(
 ): string | null {
   if (state !== "failed") return null;
   return "AI 정규화 제안을 생성하지 못했습니다. provider 키, 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.";
+}
+
+export function workLogNormalizationReviewQueueActionLabel(
+  state: WorkLogNormalizationReviewQueueState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "정규화 검토 큐 동기화 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 정규화 검토 큐를 ${hasResult ? "새로고침" : "동기화"}할 수 없습니다`;
+  }
+  return hasResult ? "정규화 검토 큐 새로고침" : "정규화 검토 큐 동기화";
+}
+
+export function workLogNormalizationReviewQueueMetaText(
+  state: WorkLogNormalizationReviewQueueState,
+  result: ProjectWorkLogNormalizationReviewQueueResult | null,
+): string {
+  if (state === "loading") return "정규화 검토 큐 동기화 중";
+  if (!result) {
+    return state === "failed"
+      ? "정규화 검토 큐를 사용할 수 없음"
+      : "아직 동기화한 정규화 검토 큐 없음";
+  }
+  return [
+    `정규화 큐 저장 ${result.total_items.toLocaleString()}개`,
+    `표시 ${result.returned_item_count.toLocaleString()}개`,
+    `동기화 ${result.synced_proposal_count.toLocaleString()}개`,
+    `stale 전환 ${result.stale_proposal_count.toLocaleString()}개`,
+    `검토 ${result.pending_review_count.toLocaleString()}개`,
+    `stale ${result.stale_count.toLocaleString()}개`,
+    `승인 ${result.approved_count.toLocaleString()}개`,
+    `거절 ${result.rejected_count.toLocaleString()}개`,
+    `AI accepted ${result.accepted_proposal_count.toLocaleString()}개`,
+    `review ${result.rejected_proposal_count.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+export function workLogNormalizationReviewQueueFailureText(
+  state: WorkLogNormalizationReviewQueueState,
+): string | null {
+  if (state !== "failed") return null;
+  return "정규화 검토 큐를 동기화하지 못했습니다. 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.";
+}
+
+export function workLogNormalizationReviewQueueItemStateText(
+  item: ProjectWorkLogNormalizationReviewQueueItem,
+): string {
+  const stateText = item.review_state === "pending_review"
+    ? "검토 대기"
+    : item.review_state === "stale"
+      ? "stale"
+      : item.review_state === "approved"
+        ? "승인됨"
+        : "거절됨";
+  const proposalText = item.accepted
+    ? "AI accepted"
+    : `review 필요 · ${item.rejection_reason ?? "rejected"}`;
+  const providerText = item.used_ai
+    ? `${item.provider}${item.provider_model ? `/${item.provider_model}` : ""}`
+    : item.provider;
+  return [
+    stateText,
+    item.review_reason,
+    proposalText,
+    providerText,
+    `confidence ${item.confidence.toFixed(2)}`,
+  ].join(" · ");
 }
 
 export function workSummarySnapshotVisibleSummaries(

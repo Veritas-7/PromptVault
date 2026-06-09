@@ -194,6 +194,9 @@ async function runBrowserQa() {
   let workLogNormalizationCandidateRows = [];
   let workLogNormalizationProposalsMeta = "";
   let workLogNormalizationProposalRows = [];
+  let workLogNormalizationReviewQueueMeta = "";
+  let workLogNormalizationReviewQueueRows = [];
+  let workLogNormalizationReviewQueueStateAfterApprove = "";
   let workLogReviewQueueMeta = "";
   let approvedReviewQueueSaveDisabledWhenEmpty = null;
   let workLogReviewQueueMetaAfterSynthetic = "";
@@ -438,6 +441,53 @@ async function runBrowserQa() {
       (await page.locator('[data-work-log-normalization-proposals-meta="true"]').textContent())?.trim() ?? "";
     workLogNormalizationProposalRows =
       await page.locator('[data-work-log-normalization-proposals="true"] article').allTextContents();
+    await waitForEnabled(page, '[data-sync-work-log-normalization-review-queue="true"]');
+    await page.locator('[data-sync-work-log-normalization-review-queue="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-normalization-review-queue-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-log-normalization-review-queue="true"] article'));
+      return text.includes("정규화 큐 저장")
+        && text.includes("표시")
+        && rows.some((row) => (row.textContent ?? "").includes("confidence"));
+    }, undefined, { timeout: 120000 });
+    workLogNormalizationReviewQueueMeta =
+      (await page.locator('[data-work-log-normalization-review-queue-meta="true"]').textContent())?.trim() ?? "";
+    workLogNormalizationReviewQueueRows =
+      await page.locator('[data-work-log-normalization-review-queue="true"] article').allTextContents();
+    const firstNormalizationApprove = page
+      .locator('[data-approve-work-log-normalization-review-queue]')
+      .first();
+    await firstNormalizationApprove.waitFor({ timeout: 90000 });
+    const firstNormalizationCandidateId = await firstNormalizationApprove.getAttribute(
+      "data-approve-work-log-normalization-review-queue",
+    );
+    if (!firstNormalizationCandidateId) {
+      throw new Error("Normalization review queue approve button did not expose candidate id");
+    }
+    await firstNormalizationApprove.click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-normalization-review-queue-meta="true"]')?.textContent ?? "";
+      return text.includes("승인 1개");
+    }, undefined, { timeout: 90000 });
+    const normalizationQueueAfterApprove = await bridgeJson(
+      page,
+      "/api/work-log-normalization-review-queue",
+      { options: { limit: 200 } },
+    );
+    const approvedNormalizationRow = normalizationQueueAfterApprove.items.find(
+      (item) => item.candidate_id === firstNormalizationCandidateId,
+    );
+    if (
+      !approvedNormalizationRow
+      || approvedNormalizationRow.review_state !== "approved"
+      || approvedNormalizationRow.review_reason !== "operator_approved_normalization"
+    ) {
+      throw new Error(`Normalization review queue approval did not persist: ${
+        JSON.stringify(approvedNormalizationRow ?? null)
+      }`);
+    }
+    workLogNormalizationReviewQueueStateAfterApprove =
+      `${approvedNormalizationRow.review_state} · ${approvedNormalizationRow.review_reason}`;
     await page.locator('[data-sync-work-log-review-queue="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-review-queue-meta="true"]')?.textContent ?? "";
@@ -541,6 +591,9 @@ async function runBrowserQa() {
       workLogNormalizationCandidateRows,
       workLogNormalizationProposalsMeta,
       workLogNormalizationProposalRows,
+      workLogNormalizationReviewQueueMeta,
+      workLogNormalizationReviewQueueRows,
+      workLogNormalizationReviewQueueStateAfterApprove,
       workLogReviewQueueMeta,
       approvedReviewQueueSaveDisabledWhenEmpty,
       workLogReviewQueueMetaAfterSynthetic,

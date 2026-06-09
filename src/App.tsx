@@ -116,6 +116,7 @@ import {
   loadProjectWorkLogExtractionProposals,
   loadProjectWorkLogNormalizationCandidates,
   loadProjectWorkLogNormalizationProposals,
+  loadProjectWorkLogNormalizationReviewQueue,
   loadProjectWorkLogReviewQueue,
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
@@ -130,6 +131,7 @@ import {
   scanPrompts,
   type ProjectWorkLogExtractionItemsOptions,
   type ProjectWorkSummarySnapshotsOptions,
+  updateProjectWorkLogNormalizationReviewQueueItem,
   updateProjectWorkLogReviewQueueItem,
 } from "./promptVaultApi";
 import {
@@ -240,6 +242,7 @@ import type {
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
   ProjectWorkLogNormalizationProposalsResult,
+  ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
   PromptRecord,
   ProjectWorkSummaryResult,
@@ -273,6 +276,10 @@ import {
   workLogNormalizationProposalsActionLabel,
   workLogNormalizationProposalsFailureText,
   workLogNormalizationProposalsMetaText,
+  workLogNormalizationReviewQueueActionLabel,
+  workLogNormalizationReviewQueueFailureText,
+  workLogNormalizationReviewQueueItemStateText,
+  workLogNormalizationReviewQueueMetaText,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
   workLogExtractionProviderNoticeText,
@@ -307,6 +314,7 @@ import {
   type WorkLogExtractionRunsState,
   type WorkLogNormalizationCandidatesState,
   type WorkLogNormalizationProposalsState,
+  type WorkLogNormalizationReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
@@ -332,6 +340,8 @@ const WORK_LOG_NORMALIZATION_CANDIDATE_DISPLAY_LIMIT = 5;
 const WORK_LOG_NORMALIZATION_CANDIDATE_MANAGEMENT_LIMIT = 100;
 const WORK_LOG_NORMALIZATION_PROPOSAL_DISPLAY_LIMIT = 5;
 const WORK_LOG_NORMALIZATION_PROPOSAL_MANAGEMENT_LIMIT = 40;
+const WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
+const WORK_LOG_NORMALIZATION_REVIEW_QUEUE_MANAGEMENT_LIMIT = 40;
 const WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT = 6;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
@@ -427,6 +437,8 @@ function App() {
     useState<WorkLogNormalizationCandidatesState>("idle");
   const [workLogNormalizationProposalsState, setWorkLogNormalizationProposalsState] =
     useState<WorkLogNormalizationProposalsState>("idle");
+  const [workLogNormalizationReviewQueueState, setWorkLogNormalizationReviewQueueState] =
+    useState<WorkLogNormalizationReviewQueueState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
   const [workManagementFreezeState, setWorkManagementFreezeState] =
@@ -463,6 +475,12 @@ function App() {
     useState<ProjectWorkLogNormalizationCandidatesResult | null>(null);
   const [workLogNormalizationProposalsResult, setWorkLogNormalizationProposalsResult] =
     useState<ProjectWorkLogNormalizationProposalsResult | null>(null);
+  const [workLogNormalizationReviewQueueResult, setWorkLogNormalizationReviewQueueResult] =
+    useState<ProjectWorkLogNormalizationReviewQueueResult | null>(null);
+  const [
+    workLogNormalizationReviewQueueUpdatingCandidateId,
+    setWorkLogNormalizationReviewQueueUpdatingCandidateId,
+  ] = useState<string | null>(null);
   const [approvedWorkLogExtractionCandidateIds, setApprovedWorkLogExtractionCandidateIds] =
     useState<Set<string>>(() => new Set());
   const [workSummarySnapshotsResult, setWorkSummarySnapshotsResult] =
@@ -530,6 +548,7 @@ function App() {
     || workLogExtractionRunsState === "loading"
     || workLogNormalizationCandidatesState === "loading"
     || workLogNormalizationProposalsState === "loading"
+    || workLogNormalizationReviewQueueState === "loading"
     || workManagementRefreshState === "loading"
     || workManagementFreezeState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
@@ -744,6 +763,12 @@ function App() {
     workLogNormalizationProposalsState,
     workLogNormalizationProposalsResult,
   );
+  const workLogNormalizationReviewQueueFailureMessage =
+    workLogNormalizationReviewQueueFailureText(workLogNormalizationReviewQueueState);
+  const workLogNormalizationReviewQueueMeta = workLogNormalizationReviewQueueMetaText(
+    workLogNormalizationReviewQueueState,
+    workLogNormalizationReviewQueueResult,
+  );
   const workSummarySnapshotsFailureMessage = workSummarySnapshotsFailureText(workSummarySnapshotsState);
   const workSummarySnapshotsMeta = workSummarySnapshotsMetaText(
     workSummarySnapshotsState,
@@ -835,6 +860,11 @@ function App() {
       0,
       WORK_LOG_NORMALIZATION_PROPOSAL_DISPLAY_LIMIT,
     ) ?? [];
+  const visibleWorkLogNormalizationReviewQueueItems =
+    workLogNormalizationReviewQueueResult?.items.slice(
+      0,
+      WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT,
+    ) ?? [];
   const visibleWorkLogExtractionItemGroups =
     groupWorkLogExtractionItemsByProjectDate(visibleWorkLogExtractionItems);
   const hiddenWorkLogExtractionItemCount = Math.max(
@@ -855,6 +885,11 @@ function App() {
     (workLogNormalizationProposalsResult?.proposals.length ?? 0)
       - WORK_LOG_NORMALIZATION_PROPOSAL_DISPLAY_LIMIT,
   );
+  const hiddenWorkLogNormalizationReviewQueueItemCount = Math.max(
+    0,
+    (workLogNormalizationReviewQueueResult?.items.length ?? 0)
+      - WORK_LOG_NORMALIZATION_REVIEW_QUEUE_DISPLAY_LIMIT,
+  );
   const workManagementOverviewLoaded =
     workSummaryResult !== null
     || workSummarySnapshotsResult !== null
@@ -863,6 +898,7 @@ function App() {
     || workLogExtractionRunsResult !== null
     || workLogNormalizationCandidatesResult !== null
     || workLogNormalizationProposalsResult !== null
+    || workLogNormalizationReviewQueueResult !== null
     || workLogCoverageResult !== null;
   const workManagementOverview = useMemo(() => buildWorkManagementOverview({
     coverage: workLogCoverageResult,
@@ -1204,6 +1240,68 @@ function App() {
       setError(message);
       setWorkLogNormalizationProposalsState("failed");
     } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function syncWorkLogNormalizationReviewQueue() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    const sessionLimit = workSummarySessionLimit;
+    if (sessionLimit === null) {
+      const message = workSummarySessionLimitStatus;
+      setError(message);
+      setWorkLogNormalizationReviewQueueState("failed");
+      releaseExclusiveAction(topLevelActionClaimRef);
+      return;
+    }
+    setError(null);
+    setWorkLogNormalizationReviewQueueState("loading");
+    try {
+      const nextQueue = await loadProjectWorkLogNormalizationReviewQueue({
+        ai: false,
+        limit: WORK_LOG_NORMALIZATION_REVIEW_QUEUE_MANAGEMENT_LIMIT,
+        session_limit: sessionLimit,
+        sync_proposals: true,
+      });
+      setWorkLogNormalizationReviewQueueResult(nextQueue);
+      setWorkLogNormalizationReviewQueueState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogNormalizationReviewQueueState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function updateWorkLogNormalizationReviewQueueItem(
+    candidateId: string,
+    reviewState: "approved" | "rejected",
+  ) {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    const reviewReason = reviewState === "approved"
+      ? "operator_approved_normalization"
+      : "operator_rejected_normalization";
+    setError(null);
+    setWorkLogNormalizationReviewQueueState("loading");
+    setWorkLogNormalizationReviewQueueUpdatingCandidateId(candidateId);
+    try {
+      const nextQueue = await updateProjectWorkLogNormalizationReviewQueueItem({
+        candidate_id: candidateId,
+        limit: WORK_LOG_NORMALIZATION_REVIEW_QUEUE_MANAGEMENT_LIMIT,
+        review_state: reviewState,
+        review_reason: reviewReason,
+      });
+      setWorkLogNormalizationReviewQueueResult(nextQueue);
+      setWorkLogNormalizationReviewQueueState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogNormalizationReviewQueueState("failed");
+    } finally {
+      setWorkLogNormalizationReviewQueueUpdatingCandidateId(null);
       releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
@@ -2255,6 +2353,25 @@ function App() {
                   : "정규화 제안"}
             </button>
             <button
+              aria-label={workLogNormalizationReviewQueueActionLabel(
+                workLogNormalizationReviewQueueState,
+                workLogNormalizationReviewQueueResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-sync-work-log-normalization-review-queue="true"
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
+              onClick={() => void syncWorkLogNormalizationReviewQueue()}
+              type="button"
+            >
+              <Database size={15} />
+              {workLogNormalizationReviewQueueState === "loading"
+                ? "정규화 큐 동기화 중"
+                : workLogNormalizationReviewQueueResult
+                  ? "정규화 큐 새로고침"
+                  : "정규화 큐"}
+            </button>
+            <button
               aria-label={workLogReviewQueueActionLabel(
                 workLogReviewQueueState,
                 workLogReviewQueueResult !== null,
@@ -2526,6 +2643,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workLogNormalizationProposalsFailureMessage}</span>
+          </div>
+        ) : null}
+        {workLogNormalizationReviewQueueFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-log-normalization-review-queue-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workLogNormalizationReviewQueueFailureMessage}</span>
           </div>
         ) : null}
         <form
@@ -3000,6 +3127,12 @@ function App() {
           <div className="work-summary-index" data-work-log-normalization-proposals-meta="true">
             <Sparkles size={15} />
             <span>{workLogNormalizationProposalsMeta}</span>
+          </div>
+        ) : null}
+        {workLogNormalizationReviewQueueResult || workLogNormalizationReviewQueueState !== "idle" ? (
+          <div className="work-summary-index" data-work-log-normalization-review-queue-meta="true">
+            <Database size={15} />
+            <span>{workLogNormalizationReviewQueueMeta}</span>
           </div>
         ) : null}
         {workManagementOverviewLoaded ? (
@@ -3494,6 +3627,90 @@ function App() {
           ) : (
             <div className="empty compact" data-empty-work-log-normalization-proposals="true">
               생성된 AI 정규화 제안 없음
+            </div>
+          )
+        ) : null}
+        {workLogNormalizationReviewQueueResult ? (
+          visibleWorkLogNormalizationReviewQueueItems.length ? (
+            <div className="work-summary-list" data-work-log-normalization-review-queue="true">
+              {visibleWorkLogNormalizationReviewQueueItems.map((item) => (
+                <article
+                  className="work-summary-row work-log-proposal-row"
+                  key={item.candidate_id}
+                >
+                  <div>
+                    <strong>{item.project}</strong>
+                    <span>{item.date}</span>
+                    {item.review_state === "approved" || item.review_state === "rejected" ? null : (
+                      <>
+                        <button
+                          aria-label={`${item.project} ${item.date} 정규화 제안 승인`}
+                          className="inline-action compact-action"
+                          data-approve-work-log-normalization-review-queue={item.candidate_id}
+                          disabled={isTopLevelActionLocked}
+                          onClick={() =>
+                            void updateWorkLogNormalizationReviewQueueItem(
+                              item.candidate_id,
+                              "approved",
+                            )}
+                          type="button"
+                        >
+                          <CheckCircle2 size={14} />
+                          {workLogNormalizationReviewQueueUpdatingCandidateId === item.candidate_id
+                            ? "처리 중"
+                            : "승인"}
+                        </button>
+                        <button
+                          aria-label={`${item.project} ${item.date} 정규화 제안 거절`}
+                          className="inline-action compact-action"
+                          data-reject-work-log-normalization-review-queue={item.candidate_id}
+                          disabled={isTopLevelActionLocked}
+                          onClick={() =>
+                            void updateWorkLogNormalizationReviewQueueItem(
+                              item.candidate_id,
+                              "rejected",
+                            )}
+                          type="button"
+                        >
+                          <XCircle size={14} />
+                          거절
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <p>{item.normalized_title}</p>
+                  <p className="work-log-proposal-evidence">{item.normalized_evidence}</p>
+                  <span data-work-log-normalization-review-queue-state={item.candidate_id}>
+                    {workLogNormalizationReviewQueueItemStateText(item)}
+                  </span>
+                  <span>
+                    provider {item.provider_runtime}
+                    {item.provider_model ? ` · model ${item.provider_model}` : ""}
+                    {item.used_ai ? " · AI" : " · local"} · 원본 {item.original_title} · status{" "}
+                    {item.original_status} → {item.normalized_status}
+                  </span>
+                  <span>
+                    작업 {item.work_item_count.toLocaleString()}개 · 세션근거{" "}
+                    {item.session_evidence_count.toLocaleString()}건 · 저장추출{" "}
+                    {item.saved_extraction_count.toLocaleString()}개 · AI 저장{" "}
+                    {item.ai_saved_extraction_count.toLocaleString()}개
+                  </span>
+                  {item.risk_flags.length ? (
+                    <span>위험표시 {item.risk_flags.map(riskFlagLabel).join(", ")}</span>
+                  ) : null}
+                  <span>{item.source_file} · seen {item.first_seen_at} / {item.last_seen_at}</span>
+                  <span>{item.source_path}</span>
+                </article>
+              ))}
+              {hiddenWorkLogNormalizationReviewQueueItemCount ? (
+                <div className="work-summary-overflow">
+                  그 외 정규화 큐 row {hiddenWorkLogNormalizationReviewQueueItemCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-log-normalization-review-queue="true">
+              저장된 정규화 검토 큐 없음
             </div>
           )
         ) : null}

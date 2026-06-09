@@ -1,12 +1,99 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 21:17 KST
+Updated: 2026-06-09 21:30 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 filename-date worklog parser coverage
+## Current Slice - 2026-06-09 session backfill planned-run visibility
+
+Current Goal:
+
+- Make large real-session backfill progress easier to operate from the app by
+  showing the estimated remaining continue runs for the current batch input,
+  not only the throughput from the last completed run.
+- Keep the long backfill safety confirmation intact while making the effect of
+  higher batch values visible before the next run.
+
+Context:
+
+- Browser-bridge QA proves the work-session index is using real local Codex and
+  Codex CX session files, but bounded runs still leave many session files for
+  later continuation.
+- Before this slice, the remaining-backfill text was based only on the last
+  completed run's `batch_files * max_batches`. If the operator changed the batch
+  input from `25` to `500`, the UI did not show the new expected run count until
+  after running another backfill.
+
+Progress:
+
+- Added a tested helper that calculates planned remaining runs from the current
+  batch input for both normal continue and long continue.
+- Rendered a separate `현재 입력 기준` status row below the last-run remaining
+  row.
+- Extended isolated browser QA so it waits for the new planned row after normal
+  and long backfill, then changes the batch input to `500` and verifies the long
+  backfill estimate drops to a small number of runs.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - added `workSessionIndexPlannedRemainingText`.
+- `src/App.tsx`:
+  - renders `data-work-session-index-planned-remaining` next to the existing
+    remaining-backfill status.
+- `tests/workSummaryStatus.test.ts`:
+  - added planned remaining-run helper coverage.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added DOM checks for the planned remaining-run row and current-input
+    recalculation after changing the batch size.
+- `working.md`:
+  - recorded the current slice.
+
+Tests:
+
+- Baseline RED:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`:
+    FAIL before implementation because `workSessionIndexPlannedRemainingText`
+    was not exported.
+- After implementation:
+  - `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`:
+    PASS, `32` tests passed.
+  - `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+  - `npm run build`: PASS.
+  - `npm run check`: PASS.
+    - UI tests: `474` passed.
+    - Production build: passed.
+    - Rust lib tests: `196` passed.
+    - CLI tests: `31` passed.
+    - Doc-tests: passed.
+    - clippy `-D warnings`: passed.
+  - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+    Evidence from isolated browser result:
+    - normal continue still showed last-run throughput:
+      `남은 파일 25,050개`, `클릭당 소스별 최대 50개`, `이어 백필 예상 501회`;
+    - the new current-input planned row showed
+      `현재 입력 기준 · 이어 백필 예상 501회 · 긴 이어 백필 예상 101회`;
+    - long continue showed last-run throughput:
+      `남은 파일 24,800개`, `클릭당 소스별 최대 250개`, `이어 백필 예상 100회`;
+    - the new planned row showed
+      `현재 입력 기준 · 이어 백필 예상 496회 · 긴 이어 백필 예상 100회`;
+    - after changing the batch input to `500`, the planned row immediately
+      recalculated to `현재 입력 기준 · 이어 백필 예상 25회 · 긴 이어 백필 예상 5회`;
+    - status export still showed `91` rows, `31` projects, `25` days, `9,102`
+      work items, `845` progress files, and `20,780` session evidence links
+      from `50` unique records;
+    - coverage still showed `845` logs, `844` parsed, `0` unparsed;
+    - work management overview stayed at `91` managed rows and `0` live-only
+      rows after freeze.
+
+Next Steps:
+
+- Run diff and secret checks, then stage explicit files, commit, and push if
+  clean.
+
+## Completed Slice - 2026-06-09 filename-date worklog parser coverage
 
 Current Goal:
 
@@ -93,9 +180,10 @@ Tests:
       live-only rows after freeze;
     - normalization review queue and rejected-AI fixture labels still passed.
 
-Next Steps:
+Outcome:
 
-- Stage explicit touched files, run staged gitleaks, commit, and push.
+- Staged explicit touched files, passed staged gitleaks, committed, and pushed
+  as `de3b987`.
 
 ## Completed Slice - 2026-06-09 AI normalization reject-label QA
 

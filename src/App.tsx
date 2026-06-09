@@ -320,6 +320,7 @@ import {
   workSummaryActionLabel,
   workSummaryFailureText,
   workSummaryIndexStatusText,
+  workSessionIndexPlannedRemainingText,
   workSummaryMetaText,
   workSummaryPersistenceText,
   workStatusExportActionLabel,
@@ -968,6 +969,12 @@ function App() {
   );
   const workSessionIndexWarning = workSessionIndexWarningText(workSessionIndexResult);
   const workSessionIndexRemaining = workSessionIndexRemainingText(workSessionIndexResult);
+  const workSessionIndexPlannedRemaining = workSessionIndexPlannedRemainingText(
+    workSessionIndexResult,
+    workSessionIndexEffectiveBatchFiles,
+    WORK_SESSION_INDEX_MAX_BATCHES,
+    WORK_SESSION_INDEX_LONG_MAX_BATCHES,
+  );
   const workSummaryIndexStatus = workSummaryResult ? workSummaryIndexStatusText(workSummaryResult) : null;
   const workSummaryPersistenceStatus = workSummaryResult ? workSummaryPersistenceText(workSummaryResult) : null;
   const workLogCoverageFailureMessage = workLogCoverageFailureText(workLogCoverageState);
@@ -3663,6 +3670,12 @@ function App() {
           <div className="work-summary-index" data-work-session-index-remaining="true">
             <History size={15} />
             <span>{workSessionIndexRemaining}</span>
+          </div>
+        ) : null}
+        {workSessionIndexPlannedRemaining ? (
+          <div className="work-summary-index" data-work-session-index-planned-remaining="true">
+            <History size={15} />
+            <span>{workSessionIndexPlannedRemaining}</span>
           </div>
         ) : null}
         {workSessionIndexResult?.source_states.length ? (

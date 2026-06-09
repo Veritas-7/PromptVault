@@ -52,6 +52,7 @@ import {
   workSummaryActionLabel,
   workSummaryFailureText,
   workSummaryIndexStatusText,
+  workSessionIndexPlannedRemainingText,
   workSummaryMetaText,
   workSummaryPersistenceText,
   workStatusExportActionLabel,
@@ -104,6 +105,7 @@ import type {
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueItem,
   ProjectWorkLogReviewQueueResult,
+  ProjectWorkSessionIndexResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
@@ -730,6 +732,71 @@ test("work summary status text uses report counts and index state", () => {
       },
     })),
     "세션 직접 스캔 · 근거 메타데이터 우선/raw fallback · 스캔 20개 · 보관 0개 · 매칭 541건 · 고유 11건",
+  );
+});
+
+test("work session index planned remaining text follows current batch controls", () => {
+  const result: ProjectWorkSessionIndexResult = {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    requested_limit: 50,
+    batch_files: 25,
+    max_batches: 10,
+    until_complete: true,
+    batches_run: 10,
+    scanned_prompt_count: 349,
+    sanitized_prompt_count: 349,
+    stored_prompt_count: 349,
+    reset: false,
+    all_sources_completed: false,
+    source_states: [
+      {
+        source_id: "codex",
+        source_label: "Codex",
+        root_path: "/Users/wj/.codex/sessions",
+        total_files: 25150,
+        next_file_index: 350,
+        processed_files: 350,
+        matched_prompt_count: 349,
+        completed: false,
+        updated_at: "2026-06-09T00:00:00Z",
+      },
+      {
+        source_id: "codex-cx",
+        source_label: "Codex CX",
+        root_path: "/Users/wj/.codex-cx/sessions",
+        total_files: 11,
+        next_file_index: 11,
+        processed_files: 11,
+        matched_prompt_count: 0,
+        completed: true,
+        updated_at: "2026-06-09T00:00:00Z",
+      },
+    ],
+    warnings: ["work-session-index until_complete stopped at max_batches before all sources completed"],
+  };
+
+  assert.equal(
+    workSessionIndexPlannedRemainingText(result, 25, 2, 10),
+    "현재 입력 기준 · 이어 백필 예상 496회 · 긴 이어 백필 예상 100회",
+  );
+  assert.equal(
+    workSessionIndexPlannedRemainingText(result, 500, 2, 10),
+    "현재 입력 기준 · 이어 백필 예상 25회 · 긴 이어 백필 예상 5회",
+  );
+  assert.equal(workSessionIndexPlannedRemainingText(result, null, 2, 10), null);
+  assert.equal(
+    workSessionIndexPlannedRemainingText({
+      ...result,
+      all_sources_completed: true,
+      source_states: result.source_states.map((source) => ({
+        ...source,
+        processed_files: source.total_files,
+        next_file_index: source.total_files,
+        completed: true,
+      })),
+    }, 25, 2, 10),
+    null,
   );
 });
 

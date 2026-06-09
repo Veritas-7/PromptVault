@@ -17,6 +17,7 @@ import type {
   ProjectWorkLogNormalizationReviewQueueItem,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
+  ProjectWorkSessionIndexResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
   ProjectWorkSummarySnapshot,
@@ -221,6 +222,30 @@ export function workSummaryIndexStatusText(result: ProjectWorkSummaryResult): st
     `보관 ${result.report.session_evidence_index_count.toLocaleString()}개`,
     `매칭 ${result.report.session_evidence_count.toLocaleString()}건`,
     `고유 ${result.report.session_evidence_unique_count.toLocaleString()}건`,
+  ].join(" · ");
+}
+
+export function workSessionIndexPlannedRemainingText(
+  result: ProjectWorkSessionIndexResult | null,
+  effectiveBatchFiles: number | null,
+  standardMaxBatches: number,
+  longMaxBatches: number,
+): string | null {
+  if (!result?.source_states.length || effectiveBatchFiles === null) return null;
+  if (effectiveBatchFiles <= 0 || standardMaxBatches <= 0 || longMaxBatches <= 0) return null;
+  const remainingBySource = result.source_states.map((source) =>
+    Math.max(0, source.total_files - source.processed_files)
+  );
+  const remainingFiles = remainingBySource.reduce((sum, remaining) => sum + remaining, 0);
+  if (remainingFiles === 0) return null;
+  const estimatedRuns = (maxBatches: number): number => {
+    const filesPerSourceRun = effectiveBatchFiles * maxBatches;
+    return Math.max(...remainingBySource.map((remaining) => Math.ceil(remaining / filesPerSourceRun)));
+  };
+  return [
+    "현재 입력 기준",
+    `이어 백필 예상 ${estimatedRuns(standardMaxBatches).toLocaleString()}회`,
+    `긴 이어 백필 예상 ${estimatedRuns(longMaxBatches).toLocaleString()}회`,
   ].join(" · ");
 }
 

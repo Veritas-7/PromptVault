@@ -901,6 +901,18 @@ export function workLogNormalizationReviewQueueFailureText(
   return "정규화 검토 큐를 동기화하지 못했습니다. 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.";
 }
 
+export function canApproveWorkLogNormalizationReviewQueueItem(
+  item: ProjectWorkLogNormalizationReviewQueueItem,
+): boolean {
+  return item.review_state === "pending_review";
+}
+
+export function canRejectWorkLogNormalizationReviewQueueItem(
+  item: ProjectWorkLogNormalizationReviewQueueItem,
+): boolean {
+  return item.review_state === "pending_review" || item.review_state === "stale";
+}
+
 export function workLogNormalizationReviewQueueItemStateText(
   item: ProjectWorkLogNormalizationReviewQueueItem,
 ): string {

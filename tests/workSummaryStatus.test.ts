@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ActionLockState } from "../src/actionLocks.ts";
 import {
+  canApproveWorkLogNormalizationReviewQueueItem,
+  canRejectWorkLogNormalizationReviewQueueItem,
   workLogCandidatesActionLabel,
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
@@ -1410,6 +1412,22 @@ test("work log normalization review queue labels describe persisted review rows"
     }),
     "승인됨 · operator_approved_normalization · AI accepted · glm/glm-test-model · confidence 0.50",
   );
+});
+
+test("work log normalization review queue actions keep stale rows approval-safe", () => {
+  const pending = normalizationReviewQueueResult().items[0];
+  const stale = { ...pending, review_state: "stale" as const };
+  const approved = { ...pending, review_state: "approved" as const };
+  const rejected = { ...pending, review_state: "rejected" as const };
+
+  assert.equal(canApproveWorkLogNormalizationReviewQueueItem(pending), true);
+  assert.equal(canRejectWorkLogNormalizationReviewQueueItem(pending), true);
+  assert.equal(canApproveWorkLogNormalizationReviewQueueItem(stale), false);
+  assert.equal(canRejectWorkLogNormalizationReviewQueueItem(stale), true);
+  assert.equal(canApproveWorkLogNormalizationReviewQueueItem(approved), false);
+  assert.equal(canRejectWorkLogNormalizationReviewQueueItem(approved), false);
+  assert.equal(canApproveWorkLogNormalizationReviewQueueItem(rejected), false);
+  assert.equal(canRejectWorkLogNormalizationReviewQueueItem(rejected), false);
 });
 
 test("work log normalization apply labels describe durable approved rows", () => {

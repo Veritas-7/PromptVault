@@ -1,12 +1,111 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 20:22 KST
+Updated: 2026-06-09 20:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 browser QA work-log step logging
+## Current Slice - 2026-06-09 stale normalization review guard
+
+Current Goal:
+
+- Prevent stale work-log normalization review queue rows from being approved
+  after they are no longer live candidates.
+- Keep stale rows rejectable so operators can clear outdated queue entries.
+
+Context:
+
+- PromptVault now scans actual Codex/Codex CX session evidence and project-local
+  progress logs into project/day management views.
+- The latest isolated browser QA confirmed real progress-log coverage from
+  `working.md`, `workingd.md`, `WORKING.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`-style files.
+- Permanent normalization review queue inspection showed stale rows can exist
+  after proposal sync. A stale row is no longer a live candidate and must not be
+  approved into durable normalized work items.
+
+Progress:
+
+- Added a backend guard to reject approval of stale normalization queue rows.
+- Kept stale rejection allowed for operator cleanup.
+- Added UI helper functions for normalization queue action visibility:
+  - pending rows: approve + reject;
+  - stale rows: reject only;
+  - approved/rejected rows: no queue action buttons.
+- Updated the normalization review queue UI to use those helpers, so stale rows
+  no longer expose an approval button.
+- Added helper tests and extended the Rust queue persistence test to assert that
+  stale approval fails and leaves the stale row unchanged.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - `update_project_work_log_normalization_review_queue_state` now reads the
+    current row state before updating and rejects `stale -> approved`.
+  - normalization review queue test now covers stale approval rejection and
+    stale rejection cleanup.
+- `src/workSummaryStatus.ts`:
+  - added `canApproveWorkLogNormalizationReviewQueueItem` and
+    `canRejectWorkLogNormalizationReviewQueueItem`.
+- `src/App.tsx`:
+  - normalization review queue action buttons now follow the helper policy.
+- `tests/workSummaryStatus.test.ts`:
+  - added state coverage for pending/stale/approved/rejected action visibility.
+
+Tests:
+
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_log_normalization_review_queue_syncs_and_preserves_operator_state
+  -- --nocapture`: PASS.
+- `node --test tests/workSummaryStatus.test.ts`: PASS (`31` tests).
+- `npm run test:ui -- --run tests/workSummaryStatus.test.ts`: PASS (`473`
+  tests; command still runs the full UI test suite under the current script).
+- `npm run check`: PASS.
+  - UI tests: `473` passed.
+  - Production build: passed.
+  - Rust lib tests: `194` passed.
+  - CLI tests: `31` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  Evidence from the isolated browser result:
+  - session index used real Codex/Codex CX session files with limit `50`;
+  - status export showed `91` project/day rows, `31` projects, `25` days,
+    `841` progress files, `9,044` work items, and `20,409` session evidence
+    links from `50` unique records;
+  - coverage showed `841` logs, `837` parsed, `3` unparsed;
+  - work-log candidates showed `pending 3`, `risk-blocked 3`, and external AI
+    provider was not used for risk-blocked files;
+  - normalization candidates showed `91` rows across `31` projects and `25`
+    days;
+  - normalization review queue synced `91` rows, approved one pending row, and
+    applied it into durable normalized items;
+  - saved extraction/management rows were populated from real project progress
+    logs including `working.md`, `workingd.md`, `WORKING.md`,
+    `PROGRESS_LOG.md`, and `PROJECT_STATUS.md`.
+
+Issues:
+
+- Normalization is still conservative: local fallback proposals remain review
+  only, so `91` normalization rows were still pending before the isolated QA
+  approved one. This is intentional until AI-backed proposal quality is proven.
+- Full-index work status export is usable after the date/project index
+  optimization, but the UI should keep bounded session limits as the default.
+- Live corpus is dynamic. Latest isolated QA saw `3` risk-blocked NotebookLM
+  worklog candidates; they are handled as local/manual review only.
+
+Next Steps:
+
+- Continue AI-assisted normalization/review for rough titles and rows without
+  session evidence.
+- Add a dedicated stale-row browser fixture if stale action visibility needs
+  direct DOM proof beyond helper tests and backend guard coverage.
+- Consider cached/full-index status export snapshots if operator full-index
+  checks still feel slow after the project-key optimization.
+
+## Completed Slice - 2026-06-09 browser QA work-log step logging
 
 Current Goal:
 
@@ -55,7 +154,7 @@ Issues:
 - The preceding `work summary and snapshot` phase can still take time before
   `work log management` starts, but the work-log phase itself is now
   diagnosable.
-- Live corpus remains dynamic; latest QA saw `840` progress logs and two
+- Live corpus remained dynamic; that QA saw `840` progress logs and two
   risk-blocked unparsed NotebookLM worklog candidates.
 
 Next Steps:
@@ -63,7 +162,7 @@ Next Steps:
 - Continue AI-assisted normalization/review for rough titles and rows without
   session evidence.
 - Consider cached/full-index status export snapshots if operator full-index
-  checks still feel too slow after the project-key optimization.
+  checks still feel slow after the project-key optimization.
 
 ## Completed Slice - 2026-06-09 project-key session evidence index
 

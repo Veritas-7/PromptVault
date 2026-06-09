@@ -9541,6 +9541,24 @@ fn update_project_work_log_normalization_review_queue_state(
     review_reason: &str,
     updated_at: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let current_review_state = conn
+        .query_row(
+            "SELECT review_state
+             FROM project_work_log_normalization_review_queue
+             WHERE candidate_id=?1",
+            params![candidate_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    let Some(current_review_state) = current_review_state else {
+        return Err("work-log normalization review queue candidate not found".into());
+    };
+    if current_review_state == "stale" && review_state == "approved" {
+        return Err(
+            "stale work-log normalization review queue candidates cannot be approved; sync proposals first"
+                .into(),
+        );
+    }
     let changed = conn.execute(
         "UPDATE project_work_log_normalization_review_queue
          SET review_state=?2, review_reason=?3, last_seen_at=?4
@@ -17477,6 +17495,26 @@ Progress:
                 && item.review_state == "approved"
                 && item.review_reason == "operator_approved_normalization"
         }));
+        assert!(rows.items.iter().any(|item| {
+            item.candidate_id == "work-normalize-RiskyProject-b1b2c3d4e5f6"
+                && item.review_state == "stale"
+                && item.review_reason == "proposal_no_longer_live"
+        }));
+
+        let stale_approval_error = update_project_work_log_normalization_review_queue_state(
+            &conn,
+            "work-normalize-RiskyProject-b1b2c3d4e5f6",
+            "approved",
+            "operator_approved_normalization",
+            "2026-06-09T01:15:00Z",
+        )
+        .expect_err("stale normalization row cannot be approved");
+        assert_eq!(
+            stale_approval_error.to_string(),
+            "stale work-log normalization review queue candidates cannot be approved; sync proposals first",
+        );
+        let rows =
+            read_project_work_log_normalization_review_queue(&conn, 10).expect("read stale again");
         assert!(rows.items.iter().any(|item| {
             item.candidate_id == "work-normalize-RiskyProject-b1b2c3d4e5f6"
                 && item.review_state == "stale"

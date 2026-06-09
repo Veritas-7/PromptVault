@@ -300,6 +300,8 @@ import {
   workLogNormalizationReviewQueueFailureText,
   workLogNormalizationReviewQueueItemStateText,
   workLogNormalizationReviewQueueMetaText,
+  canApproveWorkLogNormalizationReviewQueueItem,
+  canRejectWorkLogNormalizationReviewQueueItem,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
   workLogExtractionProviderNoticeText,
@@ -4433,42 +4435,42 @@ function App() {
                   <div>
                     <strong>{item.project}</strong>
                     <span>{item.date}</span>
-                    {item.review_state === "approved" || item.review_state === "rejected" ? null : (
-                      <>
-                        <button
-                          aria-label={`${item.project} ${item.date} 정규화 제안 승인`}
-                          className="inline-action compact-action"
-                          data-approve-work-log-normalization-review-queue={item.candidate_id}
-                          disabled={isTopLevelActionLocked}
-                          onClick={() =>
-                            void updateWorkLogNormalizationReviewQueueItem(
-                              item.candidate_id,
-                              "approved",
-                            )}
-                          type="button"
-                        >
-                          <CheckCircle2 size={14} />
-                          {workLogNormalizationReviewQueueUpdatingCandidateId === item.candidate_id
-                            ? "처리 중"
-                            : "승인"}
-                        </button>
-                        <button
-                          aria-label={`${item.project} ${item.date} 정규화 제안 거절`}
-                          className="inline-action compact-action"
-                          data-reject-work-log-normalization-review-queue={item.candidate_id}
-                          disabled={isTopLevelActionLocked}
-                          onClick={() =>
-                            void updateWorkLogNormalizationReviewQueueItem(
-                              item.candidate_id,
-                              "rejected",
-                            )}
-                          type="button"
-                        >
-                          <XCircle size={14} />
-                          거절
-                        </button>
-                      </>
-                    )}
+                    {canApproveWorkLogNormalizationReviewQueueItem(item) ? (
+                      <button
+                        aria-label={`${item.project} ${item.date} 정규화 제안 승인`}
+                        className="inline-action compact-action"
+                        data-approve-work-log-normalization-review-queue={item.candidate_id}
+                        disabled={isTopLevelActionLocked}
+                        onClick={() =>
+                          void updateWorkLogNormalizationReviewQueueItem(
+                            item.candidate_id,
+                            "approved",
+                          )}
+                        type="button"
+                      >
+                        <CheckCircle2 size={14} />
+                        {workLogNormalizationReviewQueueUpdatingCandidateId === item.candidate_id
+                          ? "처리 중"
+                          : "승인"}
+                      </button>
+                    ) : null}
+                    {canRejectWorkLogNormalizationReviewQueueItem(item) ? (
+                      <button
+                        aria-label={`${item.project} ${item.date} 정규화 제안 거절`}
+                        className="inline-action compact-action"
+                        data-reject-work-log-normalization-review-queue={item.candidate_id}
+                        disabled={isTopLevelActionLocked}
+                        onClick={() =>
+                          void updateWorkLogNormalizationReviewQueueItem(
+                            item.candidate_id,
+                            "rejected",
+                          )}
+                        type="button"
+                      >
+                        <XCircle size={14} />
+                        거절
+                      </button>
+                    ) : null}
                   </div>
                   <p>{item.normalized_title}</p>
                   <p className="work-log-proposal-evidence">{item.normalized_evidence}</p>

@@ -1,10 +1,94 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 10:54 KST
+Updated: 2026-06-09 11:05 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 all-date progress-log freeze
+
+Current Goal:
+
+- Make `work-log-freeze` persist all parsed project/date rows from project
+  progress logs instead of only each file's latest parsed date.
+- Close the gap behind the operator question: project-level `working.md`,
+  `workingd.md`, `worklog.md`, and related progress files must be managed by
+  project and day, not just counted in coverage.
+
+Context:
+
+- `work-report` already parsed project progress logs into individual
+  `ProjectWorkItem` rows and attached real session evidence.
+- The freeze path still used `work-log-coverage` file summaries and
+  `latest_date`, so historical dated entries in one progress file could be
+  visible in report counts but absent from durable management rows.
+- AI extraction remains useful for ambiguous/unparsed logs, but deterministic
+  dated parser output should be persisted first so clear dated work is not sent
+  through an unnecessary model pass.
+
+Progress:
+
+- Changed `run_project_work_log_freeze()` to build the full parsed
+  progress-log work report without a report item limit.
+- Replaced coverage/latest-date freeze grouping with grouping over every parsed
+  `ProjectWorkItem` by `(project, date)`.
+- Kept persisted-pair skipping across saved extraction rows and summary
+  snapshots, so freeze stores only live-only project/date rows.
+- Evidence now reports parsed work item counts for each project/date group and
+  counts unique source progress files.
+- Updated the freeze unit test to use real temp project progress files with:
+  - `PromptVault/working.md` containing both `2026-06-09` and `2026-06-07`.
+  - `PromptVault/progress.md` adding another `2026-06-09` item.
+  - `CareVault/workingd.md` as an already-persisted project/date pair.
+  - an unparsed `Draft/working.md`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - `run_project_work_log_freeze()` now calls
+    `build_project_progress_work_report(&source, None)`.
+  - Added `project_work_log_freeze_proposals_from_report()`.
+  - Freeze groups now track unique source paths and per-day work item counts.
+  - The freeze regression test now proves multi-date parsed logs create
+    multiple durable project/date proposals.
+
+Tests:
+
+- `cargo test --manifest-path src-tauri/Cargo.toml project_work_log_freeze_groups_live_only_parsed_rows`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml project_progress_work_report_summarizes_dates_and_projects`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml project_progress_log_coverage_reports_nested_and_unparsed_logs`: PASS.
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-report --session-limit 200 --json`: PASS. Real data summary: `31` projects, `25` dates, `8,549` parsed work items, `788` progress files, `200` scanned session prompts, `68,955` session evidence matches, no warnings.
+- Temp DB freeze verification: PASS. Real progress logs produced `90`
+  project/date freeze candidates, `90` accepted, `90` saved.
+- `npm run test:ui -- tests/workManagementOverview.test.ts`: PASS. The package
+  script ran the UI suite and reported `436` passing tests.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final QA JSON included `accepted 제안 89개 저장 · 총 89개`, `관리 90개`,
+  `31개 프로젝트`, `25일`, `저장관리 90`, and `라이브만 0`.
+- `npm run check`: PASS. UI `436` tests, Vite build, Rust lib `165` tests,
+  CLI `24` tests, doc-tests, and clippy all passed.
+
+Issues:
+
+- The deterministic all-date freeze path is now fixed.
+- Remaining gap: ambiguous progress logs without parseable dates still need
+  AI-assisted extraction/review. The existing OpenAI/GLM extraction lane can be
+  used for those candidates, but it should remain a reviewed extraction path
+  rather than inventing dates automatically.
+
+Research:
+
+- No external research needed. The work followed the current local
+  progress-log parser, saved extraction, and management overview architecture.
+
+Next Steps:
+
+- Commit and push this all-date freeze slice.
+- Next product slice: add an explicit AI-assisted review/backfill queue for
+  unparsed or ambiguous project progress logs, with provider/runtime metadata
+  and per-project/day confidence in the management table.
 
 ## Current Slice - 2026-06-09 management audit sorting
 

@@ -1400,13 +1400,21 @@ pub fn run_project_work_log_freeze(
         .limit
         .unwrap_or(DEFAULT_PROJECT_WORK_LOG_FREEZE_LIMIT)
         .min(MAX_PROJECT_WORK_LOG_FREEZE_LIMIT);
-    let coverage = run_project_work_log_coverage()?;
+    let source = source_specs()
+        .into_iter()
+        .find(|source| source.id == "project-progress-logs")
+        .ok_or("project progress log source is unavailable")?;
+    let report = build_project_progress_work_report(&source, None)?;
     let persisted_pairs = {
         let conn = open_promptvault_database(&database_path)?;
         read_project_work_persisted_pairs(&conn)?
     };
-    let mut result =
-        project_work_log_freeze_proposals_from_coverage(&coverage, &persisted_pairs, limit);
+    let mut result = project_work_log_freeze_proposals_from_report(
+        &report,
+        &source.root,
+        &persisted_pairs,
+        limit,
+    );
     result.persistence = Some(persist_project_work_log_extraction_proposals(
         &database_path,
         &result,
@@ -3447,55 +3455,51 @@ struct ProjectWorkLogFreezeGroup {
     title: String,
     source_path: String,
     source_file: String,
-    file_count: usize,
+    source_paths: BTreeSet<String>,
     work_item_count: usize,
 }
 
-fn project_work_log_freeze_proposals_from_coverage(
-    coverage: &ProjectWorkLogCoverageResult,
+fn project_work_log_freeze_proposals_from_report(
+    report: &ProjectWorkReport,
+    root_path: &Path,
     persisted_pairs: &HashSet<(String, String)>,
     limit: usize,
 ) -> ProjectWorkLogExtractionProposalsResult {
     let mut groups = BTreeMap::<(String, String), ProjectWorkLogFreezeGroup>::new();
-    for file in &coverage.files {
-        if file.status != "parsed" {
+    for item in &report.items {
+        let date = item.date.trim();
+        let project = item.project.trim();
+        if date.is_empty() || project.is_empty() {
             continue;
         }
-        let Some(date) = file
-            .latest_date
-            .as_deref()
-            .map(str::trim)
-            .filter(|date| !date.is_empty())
-        else {
-            continue;
-        };
-        if persisted_pairs.contains(&(file.project.clone(), date.to_string())) {
+        if persisted_pairs.contains(&(project.to_string(), date.to_string())) {
             continue;
         }
-        let key = (file.project.clone(), date.to_string());
+        let key = (project.to_string(), date.to_string());
         let entry = groups
             .entry(key)
             .or_insert_with(|| ProjectWorkLogFreezeGroup {
-                project: file.project.clone(),
+                project: project.to_string(),
                 date: date.to_string(),
-                title: file
-                    .latest_title
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|title| !title.is_empty())
-                    .unwrap_or("Parsed progress log")
-                    .to_string(),
-                source_path: file.source_path.clone(),
-                source_file: file.source_file.clone(),
-                file_count: 0,
+                title: {
+                    let title = item.title.trim();
+                    if title.is_empty() {
+                        "Parsed progress log".to_string()
+                    } else {
+                        title.to_string()
+                    }
+                },
+                source_path: item.source_path.clone(),
+                source_file: item.source_file.clone(),
+                source_paths: BTreeSet::new(),
                 work_item_count: 0,
             });
-        entry.file_count += 1;
-        entry.work_item_count += file.work_item_count;
+        entry.source_paths.insert(item.source_path.clone());
+        entry.work_item_count += 1;
     }
 
     let candidate_count = groups.len();
-    let mut warnings = coverage.warnings.clone();
+    let mut warnings = report.warnings.clone();
     let mut groups = groups.into_values().collect::<Vec<_>>();
     groups.sort_by(|left, right| {
         right
@@ -3522,7 +3526,7 @@ fn project_work_log_freeze_proposals_from_coverage(
 
     ProjectWorkLogExtractionProposalsResult {
         generated_at: Utc::now().to_rfc3339(),
-        root_path: coverage.root_path.clone(),
+        root_path: root_path.display().to_string(),
         provider: "progress-log-freeze".to_string(),
         used_ai: false,
         candidate_count,
@@ -3539,15 +3543,16 @@ fn project_work_log_freeze_group_to_proposal(
 ) -> ProjectWorkLogExtractionProposal {
     let hash = hash_text(&format!("{}:{}", group.project, group.date));
     let hash_segment = hash.chars().take(10).collect::<String>();
-    let evidence = if group.file_count == 1 {
+    let file_count = group.source_paths.len().max(1);
+    let evidence = if file_count == 1 {
         format!(
-            "Frozen parsed progress log row from {}; {} parsed work items in this file.",
+            "Frozen parsed project/date row from {}; {} parsed work items for this project/date.",
             group.source_file, group.work_item_count
         )
     } else {
         format!(
             "Frozen parsed progress log row from {} parsed logs; {} parsed work items total. Representative: {}.",
-            group.file_count, group.work_item_count, group.source_file
+            file_count, group.work_item_count, group.source_file
         )
     };
     ProjectWorkLogExtractionProposal {
@@ -12359,78 +12364,82 @@ Progress:
 
     #[test]
     fn project_work_log_freeze_groups_live_only_parsed_rows() {
-        let coverage = ProjectWorkLogCoverageResult {
-            generated_at: "2026-06-09T00:00:00Z".to_string(),
-            root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
-            files_seen: 4,
-            parsed_file_count: 3,
-            unparsed_file_count: 1,
-            project_count: 3,
-            work_item_count: 8,
-            files: vec![
-                ProjectWorkLogCoverageFile {
-                    project: "PromptVault".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md"
-                        .to_string(),
-                    source_file: "working.md".to_string(),
-                    status: "parsed".to_string(),
-                    work_item_count: 5,
-                    latest_date: Some("2026-06-09".to_string()),
-                    latest_title: Some("Live management row".to_string()),
-                    modified_at: Some("2026-06-09T00:00:00Z".to_string()),
-                },
-                ProjectWorkLogCoverageFile {
-                    project: "PromptVault".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/progress.md"
-                        .to_string(),
-                    source_file: "progress.md".to_string(),
-                    status: "parsed".to_string(),
-                    work_item_count: 2,
-                    latest_date: Some("2026-06-09".to_string()),
-                    latest_title: Some("Progress detail".to_string()),
-                    modified_at: Some("2026-06-09T01:00:00Z".to_string()),
-                },
-                ProjectWorkLogCoverageFile {
-                    project: "CareVault".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md"
-                        .to_string(),
-                    source_file: "workingd.md".to_string(),
-                    status: "parsed".to_string(),
-                    work_item_count: 1,
-                    latest_date: Some("2026-06-08".to_string()),
-                    latest_title: Some("Already saved".to_string()),
-                    modified_at: Some("2026-06-08T00:00:00Z".to_string()),
-                },
-                ProjectWorkLogCoverageFile {
-                    project: "Draft".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/Draft/working.md".to_string(),
-                    source_file: "working.md".to_string(),
-                    status: "unparsed".to_string(),
-                    work_item_count: 0,
-                    latest_date: None,
-                    latest_title: None,
-                    modified_at: None,
-                },
-            ],
-            warnings: Vec::new(),
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-project-work-freeze-{}-{suffix}",
+            std::process::id()
+        ));
+        let prompt_dir = root.join("PromptVault");
+        let care_dir = root.join("CareVault");
+        let draft_dir = root.join("Draft");
+        std::fs::create_dir_all(&prompt_dir).expect("create prompt dir");
+        std::fs::create_dir_all(&care_dir).expect("create care dir");
+        std::fs::create_dir_all(&draft_dir).expect("create draft dir");
+        std::fs::write(
+            prompt_dir.join("working.md"),
+            "## Current Slice - 2026-06-09 Live management row\n\n- Verified management row.\n\n## Previous Slice - 2026-06-07 Historical row\n\n- Replayed historical row.\n",
+        )
+        .expect("write prompt working");
+        std::fs::write(
+            prompt_dir.join("progress.md"),
+            "## Current Slice - 2026-06-09 Progress detail\n\n- Added progress detail.\n",
+        )
+        .expect("write prompt progress");
+        std::fs::write(
+            care_dir.join("workingd.md"),
+            "## Current Slice - 2026-06-08 Already saved\n\n- Persisted earlier.\n",
+        )
+        .expect("write care workingd");
+        std::fs::write(
+            draft_dir.join("working.md"),
+            "# Worklog\n\nNo dated heading yet.\n",
+        )
+        .expect("write draft working");
+        let source = SourceSpec {
+            id: "project-progress-logs",
+            label: "Project progress logs",
+            root: root.clone(),
+            kind: SourceKind::ProjectProgressMarkdown,
         };
+        let report = build_project_progress_work_report(&source, None).expect("build work report");
         let persisted_pairs = HashSet::from([("CareVault".to_string(), "2026-06-08".to_string())]);
 
         let result =
-            project_work_log_freeze_proposals_from_coverage(&coverage, &persisted_pairs, 10);
+            project_work_log_freeze_proposals_from_report(&report, &root, &persisted_pairs, 10);
 
         assert_eq!(result.provider, "progress-log-freeze");
         assert!(!result.used_ai);
-        assert_eq!(result.candidate_count, 1);
-        assert_eq!(result.accepted_count, 1);
+        assert_eq!(result.candidate_count, 2);
+        assert_eq!(result.accepted_count, 2);
         assert_eq!(result.rejected_count, 0);
-        let proposal = &result.proposals[0];
-        assert_eq!(proposal.project, "PromptVault");
-        assert_eq!(proposal.date.as_deref(), Some("2026-06-09"));
-        assert_eq!(proposal.status, "managed");
-        assert_eq!(proposal.confidence, 1.0);
-        assert!(proposal.evidence.contains("2 parsed logs"));
-        assert!(proposal.evidence.contains("7 parsed work items total"));
+        assert!(result
+            .proposals
+            .iter()
+            .any(|proposal| proposal.project == "PromptVault"
+                && proposal.date.as_deref() == Some("2026-06-07")));
+        let current = result
+            .proposals
+            .iter()
+            .find(|proposal| proposal.date.as_deref() == Some("2026-06-09"))
+            .expect("current date proposal");
+        assert_eq!(current.project, "PromptVault");
+        assert_eq!(current.status, "managed");
+        assert_eq!(current.confidence, 1.0);
+        assert!(current.evidence.contains("2 parsed logs"));
+        assert!(current.evidence.contains("2 parsed work items total"));
+        let historical = result
+            .proposals
+            .iter()
+            .find(|proposal| proposal.date.as_deref() == Some("2026-06-07"))
+            .expect("historical date proposal");
+        assert!(historical
+            .evidence
+            .contains("1 parsed work items for this project/date"));
+
+        std::fs::remove_dir_all(root).expect("remove freeze fixture");
     }
 
     #[test]

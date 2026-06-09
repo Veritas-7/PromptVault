@@ -66,6 +66,7 @@ import {
   workSummaryActionLabel,
   workSummaryFailureText,
   workSummaryIndexStatusText,
+  workSessionIndexCheckpointGuidanceText,
   workSessionIndexPlannedRemainingText,
   workSummaryMetaText,
   workSummaryPersistenceText,
@@ -980,10 +981,19 @@ test("work session index planned remaining text follows current batch controls",
     "현재 입력 기준 · 이어 백필 예상 496회 · 긴 이어 백필 예상 100회",
   );
   assert.equal(
+    workSessionIndexCheckpointGuidanceText(result, 25, 2, 10),
+    "체크포인트 계획 · 권장 다음 실행 긴 이어 백필 · source당 최대 250개 · 남은 파일 24,800개 · 예상 100회 · 각 실행 후 상태 Export/큐 재확인",
+  );
+  assert.equal(
     workSessionIndexPlannedRemainingText(result, 500, 2, 10),
     "현재 입력 기준 · 이어 백필 예상 25회 · 긴 이어 백필 예상 5회",
   );
+  assert.equal(
+    workSessionIndexCheckpointGuidanceText(result, 500, 2, 10),
+    "체크포인트 계획 · 권장 다음 실행 긴 이어 백필 · source당 최대 5,000개 · 남은 파일 24,800개 · 예상 5회 · 각 실행 후 상태 Export/큐 재확인",
+  );
   assert.equal(workSessionIndexPlannedRemainingText(result, null, 2, 10), null);
+  assert.equal(workSessionIndexCheckpointGuidanceText(result, null, 2, 10), null);
   assert.equal(
     workSessionIndexPlannedRemainingText({
       ...result,
@@ -996,6 +1006,19 @@ test("work session index planned remaining text follows current batch controls",
       })),
     }, 25, 2, 10),
     null,
+  );
+  assert.equal(
+    workSessionIndexCheckpointGuidanceText({
+      ...result,
+      all_sources_completed: true,
+      source_states: result.source_states.map((source) => ({
+        ...source,
+        processed_files: source.total_files,
+        next_file_index: source.total_files,
+        completed: true,
+      })),
+    }, 25, 2, 10),
+    "체크포인트 계획 · 세션 백필 완료 · 상태 Export와 요약을 새로고침하세요",
   );
 });
 

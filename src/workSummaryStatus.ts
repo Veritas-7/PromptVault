@@ -272,6 +272,41 @@ export function workSessionIndexPlannedRemainingText(
   ].join(" · ");
 }
 
+export function workSessionIndexCheckpointGuidanceText(
+  result: ProjectWorkSessionIndexResult | null,
+  effectiveBatchFiles: number | null,
+  standardMaxBatches: number,
+  longMaxBatches: number,
+): string | null {
+  if (!result?.source_states.length || effectiveBatchFiles === null) return null;
+  if (effectiveBatchFiles <= 0 || standardMaxBatches <= 0 || longMaxBatches <= 0) return null;
+  const remainingBySource = result.source_states.map((source) =>
+    Math.max(0, source.total_files - source.processed_files)
+  );
+  const remainingFiles = remainingBySource.reduce((sum, remaining) => sum + remaining, 0);
+  if (remainingFiles === 0) {
+    return "체크포인트 계획 · 세션 백필 완료 · 상태 Export와 요약을 새로고침하세요";
+  }
+  const estimatedRuns = (maxBatches: number): number => {
+    const filesPerSourceRun = effectiveBatchFiles * maxBatches;
+    return Math.max(...remainingBySource.map((remaining) => Math.ceil(remaining / filesPerSourceRun)));
+  };
+  const standardRuns = estimatedRuns(standardMaxBatches);
+  const longRuns = estimatedRuns(longMaxBatches);
+  const useLongRun = longRuns < standardRuns;
+  const recommendedMode = useLongRun ? "긴 이어 백필" : "이어 백필";
+  const recommendedRuns = useLongRun ? longRuns : standardRuns;
+  const filesPerSourceRun = effectiveBatchFiles * (useLongRun ? longMaxBatches : standardMaxBatches);
+  return [
+    "체크포인트 계획",
+    `권장 다음 실행 ${recommendedMode}`,
+    `source당 최대 ${filesPerSourceRun.toLocaleString()}개`,
+    `남은 파일 ${remainingFiles.toLocaleString()}개`,
+    `예상 ${recommendedRuns.toLocaleString()}회`,
+    "각 실행 후 상태 Export/큐 재확인",
+  ].join(" · ");
+}
+
 export function workStatusExportIndexStatusText(result: ProjectWorkStatusExportResult): string {
   const indexState = result.report_session_evidence_index_updated
     ? "세션 인덱스 갱신"

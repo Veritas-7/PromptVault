@@ -1,10 +1,89 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 03:56 KST
+Updated: 2026-06-10 04:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Session backfill checkpoint guidance
+
+Current Goal:
+
+- Make the current completion level operator-visible instead of leaving it as a
+  raw "remaining files" count.
+- Keep the project/day work-management answer grounded in real session parsing,
+  real project progress logs, and review-gated AI/operator queues.
+
+Context:
+
+- PromptVault already parses project-local progress logs such as `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, `progress.md`,
+  `PROJECT_STATUS.md`, and generated worklog files into project/day rows.
+- Real bounded QA runs also parse actual Codex session files from the local
+  session corpus, but historical backfill is not fully complete yet because the
+  corpus is large and the app intentionally uses checkpointed batches.
+- AI/Codex/GLM-assisted extraction and normalization remain review-gated:
+  proposals can be queued and approved, but the app should not silently invent
+  dates, titles, or session-evidence links.
+
+Progress:
+
+- Added a session backfill checkpoint guidance row to the work-management UI.
+- The guidance now recommends the next action (`이어 백필` or `긴 이어 백필`),
+  shows the per-source file cap for that click, the remaining file count, the
+  estimated number of remaining runs, and the required follow-up:
+  `상태 Export/큐 재확인`.
+- Guidance reacts to the operator's batch-size input, so increasing the source
+  batch size immediately updates the standard and long-run estimates.
+- The browser bridge QA now asserts the checkpoint guidance in the same
+  isolated end-to-end path that exercises session indexing, status export,
+  work-summary snapshots, progress-log extraction, normalization, and review
+  queues.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: added
+  `workSessionIndexCheckpointGuidanceText`.
+- `src/App.tsx`: renders the checkpoint guidance under the existing session
+  index progress and planned remaining rows.
+- `tests/workSummaryStatus.test.ts`: covers null input, active remaining
+  batches, long-run recommendation, batch-size changes, and completed backfill
+  text.
+- `scripts/browser-bridge-isolated-qa.mjs`: asserts guidance text during
+  continued backfill, long continued backfill, and larger batch-size planning.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work session index planned remaining"` (`36` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check`
+  - UI tests `490`, Rust lib tests `214`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated bridge QA ended with exit code `0`.
+  - Verified session index reset/continue/long-continue, scan/import, work
+    summary snapshot, status export pagination/filtering, session-evidence
+    candidates/proposals/review queue, work-log coverage/candidates/extraction,
+    saved work-log items, normalization proposals/review/apply,
+    stale/rejected-AI fixtures, and approved queue save.
+  - QA output showed `31` projects, `26` days, `99` project/day rows, `9,592`
+    work items, `868` progress logs, `3,125` matched session-evidence rows, and
+    `/tmp/QAProject/workingd.md` saved through the approved extraction path.
+  - The same run proved this is still checkpointed, not fully backfilled:
+    `25,200` total session files, `349` stored session records in the bounded QA
+    context, and about `24,839` files remaining after the long continue step.
+
+Remaining:
+
+- The system is substantially complete for audited project/day work management:
+  it manages project-local progress logs, session evidence, AI extraction,
+  normalization, summaries, status export, and review queues.
+- It is not yet a fully completed historical archive because the full Codex
+  session corpus still needs an operator-run checkpoint backfill to completion.
+- Durable session-evidence and title-normalization decisions remain
+  intentionally operator/review-queue gated.
 
 ## Completed Slice - 2026-06-10 Codex opt-in work-summary provider
 

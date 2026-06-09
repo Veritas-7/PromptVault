@@ -561,6 +561,7 @@ async function runBrowserQa() {
       const warning = document.querySelector('[data-work-session-index-warning="true"]')?.textContent ?? "";
       const remaining = document.querySelector('[data-work-session-index-remaining="true"]')?.textContent ?? "";
       const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
+      const guidance = document.querySelector('[data-work-session-index-checkpoint-guidance="true"]')?.textContent ?? "";
       const sourceStates = Array.from(document.querySelectorAll('[data-work-session-index-source-state="true"]'))
         .map((row) => row.textContent ?? "");
       const codexRow = sourceStates.find((row) => row.includes("Codex")) ?? "";
@@ -576,6 +577,9 @@ async function runBrowserQa() {
         && planned.includes("현재 입력 기준")
         && planned.includes("이어 백필 예상")
         && planned.includes("긴 이어 백필 예상")
+        && guidance.includes("체크포인트 계획")
+        && guidance.includes("권장 다음 실행 긴 이어 백필")
+        && guidance.includes("각 실행 후 상태 Export/큐 재확인")
         && processedFiles > previousCodexProcessedFiles;
     }, resetCodexProcessedFiles, { timeout: 120000 });
     workSessionIndexBackfill = {
@@ -585,6 +589,7 @@ async function runBrowserQa() {
         warning: (await page.locator('[data-work-session-index-warning="true"]').textContent())?.trim() ?? "",
         remaining: (await page.locator('[data-work-session-index-remaining="true"]').textContent())?.trim() ?? "",
         planned: (await page.locator('[data-work-session-index-planned-remaining="true"]').textContent())?.trim() ?? "",
+        guidance: (await page.locator('[data-work-session-index-checkpoint-guidance="true"]').textContent())?.trim() ?? "",
         sourceStates: await page.locator('[data-work-session-index-source-state="true"]').allTextContents(),
       },
     };
@@ -603,6 +608,7 @@ async function runBrowserQa() {
       const warning = document.querySelector('[data-work-session-index-warning="true"]')?.textContent ?? "";
       const remaining = document.querySelector('[data-work-session-index-remaining="true"]')?.textContent ?? "";
       const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
+      const guidance = document.querySelector('[data-work-session-index-checkpoint-guidance="true"]')?.textContent ?? "";
       const sourceStates = Array.from(document.querySelectorAll('[data-work-session-index-source-state="true"]'))
         .map((row) => row.textContent ?? "");
       const codexRow = sourceStates.find((row) => row.includes("Codex")) ?? "";
@@ -616,6 +622,8 @@ async function runBrowserQa() {
         && remaining.includes("클릭당 소스별 최대 250개")
         && planned.includes("현재 입력 기준")
         && planned.includes("긴 이어 백필 예상")
+        && guidance.includes("체크포인트 계획")
+        && guidance.includes("source당 최대 250개")
         && processedFiles > previousCodexProcessedFiles;
     }, continuedCodexProcessedFiles, { timeout: 180000 });
     workSessionIndexBackfill.longContinued = {
@@ -623,12 +631,14 @@ async function runBrowserQa() {
       warning: (await page.locator('[data-work-session-index-warning="true"]').textContent())?.trim() ?? "",
       remaining: (await page.locator('[data-work-session-index-remaining="true"]').textContent())?.trim() ?? "",
       planned: (await page.locator('[data-work-session-index-planned-remaining="true"]').textContent())?.trim() ?? "",
+      guidance: (await page.locator('[data-work-session-index-checkpoint-guidance="true"]').textContent())?.trim() ?? "",
       sourceStates: await page.locator('[data-work-session-index-source-state="true"]').allTextContents(),
     };
     await page.locator('[data-work-session-index-batch-files="true"]').fill("500");
     await page.waitForFunction(() => {
       const longStatus = document.querySelector('[data-work-session-index-long-confirm-meta="true"]')?.textContent ?? "";
       const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
+      const guidance = document.querySelector('[data-work-session-index-checkpoint-guidance="true"]')?.textContent ?? "";
       const standardMatch = planned.match(/이어 백필 예상\s+([\d,]+)회/);
       const longMatch = planned.match(/긴 이어 백필 예상\s+([\d,]+)회/);
       const standardRuns = standardMatch ? Number.parseInt(standardMatch[1].replaceAll(",", ""), 10) : 0;
@@ -637,10 +647,14 @@ async function runBrowserQa() {
         && standardRuns > 0
         && standardRuns <= 26
         && longRuns > 0
-        && longRuns <= 6;
+        && longRuns <= 6
+        && guidance.includes("source당 최대 5,000개")
+        && guidance.includes("예상");
     }, undefined, { timeout: 60000 });
     workSessionIndexBackfill.plannedAfterBatch500 =
       (await page.locator('[data-work-session-index-planned-remaining="true"]').textContent())?.trim() ?? "";
+    workSessionIndexBackfill.guidanceAfterBatch500 =
+      (await page.locator('[data-work-session-index-checkpoint-guidance="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-browser-bridge-status="connected"]').waitFor({ timeout: 60000 });
     await page.locator('[data-work-summary-session-limit="true"]').fill(String(WORK_SESSION_LIMIT));
     await page.waitForFunction((expectedText) => {

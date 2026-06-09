@@ -343,6 +343,7 @@ import {
   workSummaryActionLabel,
   workSummaryFailureText,
   workSummaryIndexStatusText,
+  workSessionIndexCheckpointGuidanceText,
   workSessionIndexPlannedRemainingText,
   workSummaryMetaText,
   workSummaryPersistenceText,
@@ -1029,6 +1030,12 @@ function App() {
   const workSessionIndexWarning = workSessionIndexWarningText(workSessionIndexResult);
   const workSessionIndexRemaining = workSessionIndexRemainingText(workSessionIndexResult);
   const workSessionIndexPlannedRemaining = workSessionIndexPlannedRemainingText(
+    workSessionIndexResult,
+    workSessionIndexEffectiveBatchFiles,
+    WORK_SESSION_INDEX_MAX_BATCHES,
+    WORK_SESSION_INDEX_LONG_MAX_BATCHES,
+  );
+  const workSessionIndexCheckpointGuidance = workSessionIndexCheckpointGuidanceText(
     workSessionIndexResult,
     workSessionIndexEffectiveBatchFiles,
     WORK_SESSION_INDEX_MAX_BATCHES,
@@ -4004,6 +4011,12 @@ function App() {
           <div className="work-summary-index" data-work-session-index-planned-remaining="true">
             <History size={15} />
             <span>{workSessionIndexPlannedRemaining}</span>
+          </div>
+        ) : null}
+        {workSessionIndexCheckpointGuidance ? (
+          <div className="work-summary-index" data-work-session-index-checkpoint-guidance="true">
+            <CheckCircle2 size={15} />
+            <span>{workSessionIndexCheckpointGuidance}</span>
           </div>
         ) : null}
         {workSessionIndexResult?.source_states.length ? (

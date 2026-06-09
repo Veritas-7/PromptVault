@@ -8,6 +8,10 @@ const PROJECT_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const HOST = "127.0.0.1";
 const BRIDGE_PORT = Number.parseInt(process.env.PROMPTVAULT_QA_BRIDGE_PORT ?? "5174", 10);
 const APP_PORT = Number.parseInt(process.env.PROMPTVAULT_QA_APP_PORT ?? "5177", 10);
+const WORK_SESSION_LIMIT = Number.parseInt(
+  process.env.PROMPTVAULT_QA_WORK_SESSION_LIMIT ?? "50",
+  10,
+);
 const DATABASE_PATH = process.env.PROMPTVAULT_QA_DATABASE
   ?? join(mkdtempSync(join(tmpdir(), "promptvault-browser-qa-")), "qa.sqlite");
 const START_TIMEOUT_MS = Number.parseInt(process.env.PROMPTVAULT_QA_START_TIMEOUT_MS ?? "90000", 10);
@@ -24,6 +28,11 @@ function validatePort(value, name) {
 
 validatePort(BRIDGE_PORT, "PROMPTVAULT_QA_BRIDGE_PORT");
 validatePort(APP_PORT, "PROMPTVAULT_QA_APP_PORT");
+if (!Number.isInteger(WORK_SESSION_LIMIT) || WORK_SESSION_LIMIT < 1 || WORK_SESSION_LIMIT > 1000) {
+  throw new Error(
+    `PROMPTVAULT_QA_WORK_SESSION_LIMIT must be an integer from 1 to 1000, got ${WORK_SESSION_LIMIT}`,
+  );
+}
 
 function spawnServer(label, command, args, options = {}) {
   const child = spawn(command, args, {
@@ -152,6 +161,11 @@ async function runBrowserQa() {
       throw new Error(`Expected bridge database ${DATABASE_PATH}, got ${health.database_path}`);
     }
     await page.locator('[data-browser-bridge-status="connected"]').waitFor({ timeout: 60000 });
+    await page.locator('[data-work-summary-session-limit="true"]').fill(String(WORK_SESSION_LIMIT));
+    await page.waitForFunction((expectedText) => {
+      const text = document.querySelector('[data-work-summary-session-limit-meta="true"]')?.textContent ?? "";
+      return text.includes(expectedText);
+    }, `세션 스캔 ${new Intl.NumberFormat("ko-KR").format(WORK_SESSION_LIMIT)}개 기준`);
 
     step("scan");
     await page.locator('[data-scan-limit="true"]').fill("20");
@@ -270,6 +284,7 @@ async function runBrowserQa() {
       importProcessedFiles: importStates.processed_files,
       importEvents: importEvents.total_events,
       snapshots: snapshots.total_snapshots,
+      workSessionLimit: WORK_SESSION_LIMIT,
       workManagementMeta:
         (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "",
       coverageMeta:

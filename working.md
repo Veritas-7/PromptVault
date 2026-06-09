@@ -1,10 +1,93 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 09:00 KST
+Updated: 2026-06-09 09:13 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 work-summary session-depth control
+
+Current Goal:
+
+- Let the operator choose how many actual Codex/session prompts the work
+  summary scans, instead of hiding a fixed UI default.
+- Keep the checked-in browser QA deterministic by using a bounded interactive
+  default while preserving an environment-variable path for deeper scans.
+
+Context:
+
+- The work-management backbone is already parsing project-local progress logs
+  and grouping them by project/date. That includes project-local files such as
+  `working.md`, `workingd.md`, `WORKING_LOG.md`, `PROJECT_STATUS.md`, and
+  dated plan/worklog files.
+- Actual session evidence is also parsed, but the browser UI previously used a
+  hard-coded `session_limit=20` while CLI verification had been run with
+  `--session-limit 200`.
+- A fresh isolated CLI run with `--session-limit 200` took `real 154.14s` and
+  produced `session_scan_prompt_count=399`, because raw session prompts and
+  Codex metadata prompts are both collected. That is a real performance issue
+  for first-time deep indexing, not just a Playwright timeout.
+
+Progress:
+
+- Added a work-summary "세션" numeric control in the management panel.
+- The selected value is shown in the panel metadata as
+  `세션 스캔 N개 기준`.
+- Invalid values outside `1-1000` fail closed: management actions are disabled
+  and the warning text names the accepted range.
+- The reusable browser QA now fills this control and reports the active
+  `workSessionLimit`. Its default is `50`, configurable with
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT` for deliberate deeper runs.
+
+Changes:
+
+- `src/workSummarySessionLimit.ts`:
+  - centralizes bounded parsing and display text for work-summary session
+    depth.
+- `tests/workSummarySessionLimit.test.ts`:
+  - covers accepted values, rejected ambiguous values, and status text.
+- `src/App.tsx` and `src/App.css`:
+  - add the session-depth input, warning state, and disabled action handling.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - verifies the UI session-depth control in the real browser flow;
+  - exposes `PROMPTVAULT_QA_WORK_SESSION_LIMIT`;
+  - prints `workSessionLimit` in the final QA JSON.
+
+Tests:
+
+- RED:
+  - `npm run qa:browser-bridge` with the QA script forced to `200` sessions
+    timed out waiting for `[data-work-summary-narrative="true"]`.
+  - Matching fresh CLI measurement with `--session-limit 200` took
+    `real 154.14s`, confirming the first deep session index path is too slow
+    for the current browser QA timeout.
+- GREEN:
+  - `npm run test:ui`: PASS, `430` tests.
+  - `npm run build`: PASS.
+  - `npm run qa:browser-bridge`: PASS with `workSessionLimit=50`,
+    `prompts=20`, `importProcessedFiles=5`, `importEvents=1`,
+    `snapshots=1`, management meta `31개 프로젝트`, and coverage meta
+    `779개 로그 · parsed 778개 · unparsed 0개 · 31개 프로젝트 · 작업 8,463개`.
+  - `npm run check`: PASS. UI `430` tests, Vite build, Rust lib `161`
+    tests, CLI `23` tests, doc-tests, and clippy all passed.
+
+Issues:
+
+- Deep first-time session evidence indexing remains slow. `session_limit=200`
+  currently means up to roughly raw scan 200 + Codex metadata 200 prompts, and
+  the raw scan still has to walk large session directories before it can
+  process enough recent files.
+- The current UI makes the scan depth explicit and user-controlled, but the
+  backend still needs a separate optimization slice for fast 200+ first-index
+  runs.
+
+Next Steps:
+
+- Run final diff/secret checks, then commit and push this UI/QA slice.
+- Next improvement slice: make session evidence collection treat the configured
+  limit as a total bounded work budget, then optimize recent session file
+  discovery so `session_limit=200` is viable in browser QA.
 
 ## Current Slice - 2026-06-09 reusable browser QA and work-management status
 

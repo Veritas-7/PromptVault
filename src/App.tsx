@@ -143,6 +143,12 @@ import {
 } from "./scanStatus";
 import { selectedPromptForView } from "./selection";
 import {
+  parseWorkSummarySessionLimit,
+  WORK_SUMMARY_DEFAULT_SESSION_LIMIT,
+  WORK_SUMMARY_MAX_SESSION_LIMIT,
+  workSummarySessionLimitStatusText,
+} from "./workSummarySessionLimit";
+import {
   isSourceStatusOk,
   planSourceActionLabel,
   planSourceSelectionLabel,
@@ -268,7 +274,6 @@ type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
-const WORK_SUMMARY_SESSION_LIMIT = 20;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
@@ -333,6 +338,9 @@ function App() {
     useState<WorkLogExtractionItemsState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
+  const [workSummarySessionLimitInput, setWorkSummarySessionLimitInput] = useState(
+    String(WORK_SUMMARY_DEFAULT_SESSION_LIMIT),
+  );
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -464,6 +472,9 @@ function App() {
   const selectedPrompt = useMemo(() => {
     return selectedPromptForView(filteredPrompts, selectedId);
   }, [filteredPrompts, selectedId]);
+  const workSummarySessionLimit = parseWorkSummarySessionLimit(workSummarySessionLimitInput);
+  const workSummarySessionLimitInvalid = workSummarySessionLimit === null;
+  const workSummarySessionLimitStatus = workSummarySessionLimitStatusText(workSummarySessionLimitInput);
   const hasPromptResult = result !== null;
   const previewModePendingMessage = pendingPreviewModeNotice(
     result?.preview_sort,
@@ -1051,13 +1062,20 @@ function App() {
     includeExtractions?: boolean;
     includeSavedExtractions?: boolean;
   } = {}) {
+    const sessionLimit = workSummarySessionLimit;
+    if (sessionLimit === null) {
+      const message = workSummarySessionLimitStatus;
+      setError(message);
+      setWorkSummaryState("failed");
+      return;
+    }
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkSummaryState("loading");
     try {
       const next = await loadProjectWorkSummary({
         limit: WORK_SUMMARY_LIMIT,
-        session_limit: WORK_SUMMARY_SESSION_LIMIT,
+        session_limit: sessionLimit,
         summary_limit: WORK_SUMMARY_DISPLAY_LIMIT,
         refresh_session_index: refreshSessionIndex,
         save_snapshot: saveSnapshot,
@@ -1081,6 +1099,14 @@ function App() {
   }
 
   async function refreshWorkManagementOverview() {
+    const sessionLimit = workSummarySessionLimit;
+    if (sessionLimit === null) {
+      const message = workSummarySessionLimitStatus;
+      setError(message);
+      setWorkManagementRefreshState("failed");
+      setWorkSummaryState("failed");
+      return;
+    }
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkManagementRefreshState("loading");
@@ -1094,7 +1120,7 @@ function App() {
     try {
       const nextSummary = await loadProjectWorkSummary({
         limit: WORK_SUMMARY_LIMIT,
-        session_limit: WORK_SUMMARY_SESSION_LIMIT,
+        session_limit: sessionLimit,
         summary_limit: WORK_SUMMARY_DISPLAY_LIMIT,
         include_saved_extractions: true,
       });
@@ -1646,6 +1672,20 @@ function App() {
             <span data-work-summary-meta="true">{workSummaryMeta}</span>
           </div>
           <div className="panel-heading-actions">
+            <label className="session-limit-control">
+              <span>세션</span>
+              <input
+                aria-label="작업 요약에 사용할 실제 세션 스캔 개수"
+                data-work-summary-session-limit="true"
+                disabled={isTopLevelActionLocked}
+                min={1}
+                max={WORK_SUMMARY_MAX_SESSION_LIMIT}
+                step={10}
+                type="number"
+                value={workSummarySessionLimitInput}
+                onChange={(event) => setWorkSummarySessionLimitInput(event.currentTarget.value)}
+              />
+            </label>
             <button
               aria-label={workManagementRefreshActionLabel(
                 workManagementRefreshState,
@@ -1654,7 +1694,7 @@ function App() {
               )}
               className="inline-action"
               data-refresh-work-management-overview="true"
-              disabled={isTopLevelActionLocked}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
               onClick={() => void refreshWorkManagementOverview()}
               type="button"
             >
@@ -1673,7 +1713,7 @@ function App() {
               )}
               className="inline-action"
               data-load-work-summary="true"
-              disabled={isTopLevelActionLocked}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
               onClick={() => refreshWorkSummary()}
               type="button"
             >
@@ -1688,7 +1728,7 @@ function App() {
               aria-label="실제 Codex 세션을 다시 파싱해 작업 요약 세션 인덱스 갱신"
               className="inline-action"
               data-refresh-work-summary-session-index="true"
-              disabled={isTopLevelActionLocked}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
               onClick={() => refreshWorkSummary({ refreshSessionIndex: true })}
               type="button"
             >
@@ -1699,7 +1739,7 @@ function App() {
               aria-label="현재 프로젝트 작업 요약을 SQLite 스냅샷으로 저장"
               className="inline-action"
               data-save-work-summary-snapshot="true"
-              disabled={isTopLevelActionLocked}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
               onClick={() => refreshWorkSummary({ saveSnapshot: true })}
               type="button"
             >
@@ -1710,7 +1750,7 @@ function App() {
               aria-label="accepted AI 진행로그 제안을 프로젝트별 일별 작업 요약 preview에 병합"
               className="inline-action"
               data-load-work-summary-with-extractions="true"
-              disabled={isTopLevelActionLocked}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
               onClick={() => refreshWorkSummary({ includeExtractions: true })}
               type="button"
             >
@@ -1721,7 +1761,7 @@ function App() {
               aria-label="accepted AI 진행로그 제안을 병합한 프로젝트 작업 요약을 SQLite 스냅샷으로 저장"
               className="inline-action"
               data-save-work-summary-with-extractions-snapshot="true"
-              disabled={isTopLevelActionLocked}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
               onClick={() => refreshWorkSummary({ includeExtractions: true, saveSnapshot: true })}
               type="button"
             >
@@ -1732,7 +1772,7 @@ function App() {
               aria-label="저장된 accepted AI 추출 작업을 프로젝트별 일별 작업 요약 preview에 병합"
               className="inline-action"
               data-load-work-summary-with-saved-extractions="true"
-              disabled={isTopLevelActionLocked}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
               onClick={() => refreshWorkSummary({ includeSavedExtractions: true })}
               type="button"
             >
@@ -1743,7 +1783,7 @@ function App() {
               aria-label="저장된 accepted AI 추출 작업을 병합한 프로젝트 작업 요약을 SQLite 스냅샷으로 저장"
               className="inline-action"
               data-save-work-summary-with-saved-extractions-snapshot="true"
-              disabled={isTopLevelActionLocked}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
               onClick={() => refreshWorkSummary({
                 includeSavedExtractions: true,
                 saveSnapshot: true,
@@ -2188,6 +2228,13 @@ function App() {
             <option key={project} value={project} />
           ))}
         </datalist>
+        <div
+          className={`work-summary-index ${workSummarySessionLimitInvalid ? "warning" : ""}`}
+          data-work-summary-session-limit-meta="true"
+        >
+          <Brain size={15} />
+          <span>{workSummarySessionLimitStatus}</span>
+        </div>
         {workSummaryIndexStatus ? (
           <div className="work-summary-index" data-work-summary-index="true">
             <ShieldCheck size={15} />

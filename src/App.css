@@ -208,6 +208,12 @@ h3 {
   padding: 8px 10px;
 }
 
+.work-summary-index.warning {
+  background: #fff4e8;
+  border-color: #e4c7a6;
+  color: #74451f;
+}
+
 .work-summary-filter-row {
   align-items: end;
   display: grid;
@@ -853,6 +859,30 @@ h3 {
   min-height: 32px;
   padding: 0 10px;
   white-space: nowrap;
+}
+
+.session-limit-control {
+  align-items: center;
+  background: #f7faf5;
+  border: 1px solid #d7e2d4;
+  border-radius: 8px;
+  color: #4f5f54;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 720;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 9px;
+}
+
+.session-limit-control input {
+  background: #fff;
+  border: 1px solid #c9d3cb;
+  border-radius: 7px;
+  color: #1f3025;
+  min-height: 24px;
+  padding: 0 6px;
+  width: 72px;
 }
 
 .import-panel {

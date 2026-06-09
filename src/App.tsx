@@ -406,6 +406,34 @@ function workSessionIndexWarningText(result: ProjectWorkSessionIndexResult | nul
   return result.warnings.join(" · ");
 }
 
+function workSessionIndexRemainingText(result: ProjectWorkSessionIndexResult | null): string | null {
+  if (!result?.source_states.length) return null;
+  const remainingBySource = result.source_states.map((source) =>
+    Math.max(0, source.total_files - source.processed_files)
+  );
+  const remainingFiles = remainingBySource.reduce((sum, remaining) => sum + remaining, 0);
+  if (remainingFiles === 0) {
+    return "모든 세션 source 완료 · 이어 백필 필요 없음";
+  }
+  const activeSources = remainingBySource.filter((remaining) => remaining > 0).length;
+  const filesPerSourceRun = result.batch_files && result.max_batches
+    ? result.batch_files * result.max_batches
+    : null;
+  const estimatedContinueRuns = filesPerSourceRun
+    ? Math.max(...remainingBySource.map((remaining) => Math.ceil(remaining / filesPerSourceRun)))
+    : null;
+  return [
+    `남은 파일 ${remainingFiles.toLocaleString()}개`,
+    `활성 소스 ${activeSources.toLocaleString()}개`,
+    filesPerSourceRun
+      ? `클릭당 소스별 최대 ${filesPerSourceRun.toLocaleString()}개`
+      : "클릭당 처리량 알 수 없음",
+    estimatedContinueRuns
+      ? `이어 백필 예상 ${estimatedContinueRuns.toLocaleString()}회`
+      : "이어 백필 예상 불가",
+  ].join(" · ");
+}
+
 function workSessionIndexSourceStateText(source: ProjectWorkSessionIndexResult["source_states"][number]): string {
   return [
     source.source_label,
@@ -802,6 +830,7 @@ function App() {
     workSessionIndexRunMode,
   );
   const workSessionIndexWarning = workSessionIndexWarningText(workSessionIndexResult);
+  const workSessionIndexRemaining = workSessionIndexRemainingText(workSessionIndexResult);
   const workSummaryIndexStatus = workSummaryResult ? workSummaryIndexStatusText(workSummaryResult) : null;
   const workSummaryPersistenceStatus = workSummaryResult ? workSummaryPersistenceText(workSummaryResult) : null;
   const workLogCoverageFailureMessage = workLogCoverageFailureText(workLogCoverageState);
@@ -3269,6 +3298,12 @@ function App() {
           <div className="work-summary-index warning" data-work-session-index-warning="true">
             <AlertTriangle size={15} />
             <span>{workSessionIndexWarning}</span>
+          </div>
+        ) : null}
+        {workSessionIndexRemaining ? (
+          <div className="work-summary-index" data-work-session-index-remaining="true">
+            <History size={15} />
+            <span>{workSessionIndexRemaining}</span>
           </div>
         ) : null}
         {workSessionIndexResult?.source_states.length ? (

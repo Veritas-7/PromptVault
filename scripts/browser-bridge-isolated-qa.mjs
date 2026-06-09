@@ -269,6 +269,7 @@ async function runBrowserQa() {
     await page.waitForFunction((previousCodexProcessedFiles) => {
       const meta = document.querySelector('[data-work-session-index-meta="true"]')?.textContent ?? "";
       const warning = document.querySelector('[data-work-session-index-warning="true"]')?.textContent ?? "";
+      const remaining = document.querySelector('[data-work-session-index-remaining="true"]')?.textContent ?? "";
       const sourceStates = Array.from(document.querySelectorAll('[data-work-session-index-source-state="true"]'))
         .map((row) => row.textContent ?? "");
       const codexRow = sourceStates.find((row) => row.includes("Codex")) ?? "";
@@ -278,6 +279,9 @@ async function runBrowserQa() {
         && meta.includes("이어가기")
         && meta.includes("배치 2 / 2배치")
         && warning.includes("max_batches")
+        && remaining.includes("남은 파일")
+        && remaining.includes("클릭당 소스별 최대")
+        && remaining.includes("이어 백필 예상")
         && processedFiles > previousCodexProcessedFiles;
     }, resetCodexProcessedFiles, { timeout: 120000 });
     workSessionIndexBackfill = {
@@ -285,6 +289,7 @@ async function runBrowserQa() {
       continued: {
         meta: (await page.locator('[data-work-session-index-meta="true"]').textContent())?.trim() ?? "",
         warning: (await page.locator('[data-work-session-index-warning="true"]').textContent())?.trim() ?? "",
+        remaining: (await page.locator('[data-work-session-index-remaining="true"]').textContent())?.trim() ?? "",
         sourceStates: await page.locator('[data-work-session-index-source-state="true"]').allTextContents(),
       },
     };

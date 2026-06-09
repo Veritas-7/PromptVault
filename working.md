@@ -1,12 +1,92 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 17:05 KST
+Updated: 2026-06-09 17:10 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 continue-from-cursor session backfill UI
+## Current Slice - 2026-06-09 session backfill remaining estimate helper
+
+Current Goal:
+
+- Make the bounded session backfill progress operationally understandable after
+  each reset/continue run.
+- Show how many files remain, how many sources are still active, how many files
+  one bounded click can process per source, and an estimated number of
+  additional "이어 백필" clicks needed to finish.
+
+Context:
+
+- The previous slice split session index backfill into "처음부터 백필" and
+  "이어 백필" and proved that Codex cursor progress advances from `20` to `40`
+  files in isolated browser QA.
+- The operator still had to infer remaining work manually from source rows.
+- This helper is frontend-only and derives from the backend source states
+  already returned by `project_work_session_index`.
+
+Progress:
+
+- Added a remaining-work helper row below session-index warnings.
+- The helper reports:
+  - total remaining files;
+  - active source count;
+  - per-source bounded click capacity;
+  - estimated additional continue clicks.
+- Extended isolated browser QA to assert the helper text appears after a
+  continue run.
+
+Changes:
+
+- `src/App.tsx`:
+  - added `workSessionIndexRemainingText`;
+  - renders `data-work-session-index-remaining`.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - asserts `남은 파일`, `클릭당 소스별 최대`, and `이어 백필 예상` after
+    continue-from-cursor.
+- `working.md`:
+  - recorded the helper and verification results.
+
+Tests:
+
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON included:
+  - reset source state: Codex `20 / 25,145`, Codex CX `11 / 11`;
+  - continue source state: Codex `40 / 25,145`, Codex CX `11 / 11`;
+  - remaining helper: `남은 파일 25,105개 · 활성 소스 1개 · 클릭당 소스별
+    최대 20개 · 이어 백필 예상 1,256회`;
+  - work summary index used `39` stored session evidence records and `80`
+    matches;
+  - coverage: `829` progress logs, `828` parsed, `0` unparsed, `31` projects,
+    `8,906` work items;
+  - work management: `91` managed rows, `31` projects, `25` days,
+    `저장관리 91`, `라이브만 0`;
+  - approved review queue save and normalization apply flows both saved one row.
+- `npm run check`: PASS, including UI tests (`463`), production build, Rust lib
+  tests (`186`), CLI tests (`30`), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- The estimate reflects the current fixed UI policy. In the QA default before
+  changing the session limit input, one click processes up to `20` Codex files,
+  making the full source completion estimate large.
+- The app still lacks an explicit operator control for larger confirmed batch
+  windows.
+
+Research:
+
+- No external research was needed. The helper is a direct calculation over
+  existing source cursor state.
+
+Next Steps:
+
+- Add an operator-adjustable but bounded batch-size control, with clear warning
+  copy before allowing larger runs.
+- Consider surfacing the same estimate before the first run by reading persisted
+  cursor state without scanning.
+
+## Completed Slice - 2026-06-09 continue-from-cursor session backfill UI
 
 Current Goal:
 

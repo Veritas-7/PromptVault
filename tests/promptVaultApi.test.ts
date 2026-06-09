@@ -341,7 +341,10 @@ function projectWorkStatusExportPayload(overrides = {}) {
   return {
     generated_at: "2026-06-09T00:00:00Z",
     markdown: "# PromptVault Project/Day Work Status\n\n| Date | Project | Status |\n|---|---|---|\n| 2026-06-09 | PromptVault | active |",
+    total_row_count: 2,
+    row_offset: 1,
     returned_row_count: 1,
+    next_row_offset: null,
     rows_truncated: false,
     report_total_items: 3,
     report_project_count: 1,
@@ -785,6 +788,7 @@ test("browser bridge work status export posts options and validates rows", async
 
   const result = await loadProjectWorkStatusExport({
     limit: 12,
+    offset: 12,
     session_limit: 200,
   });
 
@@ -792,10 +796,13 @@ test("browser bridge work status export posts options and validates rows", async
   assert.deepEqual(JSON.parse(requestBody), {
     options: {
       limit: 12,
+      offset: 12,
       session_limit: 200,
     },
   });
   assert.equal(result.returned_row_count, 1);
+  assert.equal(result.total_row_count, 2);
+  assert.equal(result.row_offset, 1);
   assert.equal(result.rows[0].project, "PromptVault");
   assert.equal(result.rows[0].source_files[1], "workingd.md");
   assert.equal(result.report_session_evidence_count, 7);

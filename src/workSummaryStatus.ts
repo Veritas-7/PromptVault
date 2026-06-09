@@ -152,6 +152,22 @@ export function workStatusExportMetaText(
   return parts.join(" · ");
 }
 
+export function workStatusExportPageStatusText(result: ProjectWorkStatusExportResult | null): string | null {
+  if (!result) return null;
+  if (result.returned_row_count === 0) {
+    return `상태 row 없음 · 전체 ${result.total_row_count.toLocaleString()}행`;
+  }
+  const firstRow = result.row_offset + 1;
+  const lastRow = result.row_offset + result.returned_row_count;
+  const parts = [
+    `상태 row ${firstRow.toLocaleString()}-${lastRow.toLocaleString()} / ${result.total_row_count.toLocaleString()}행`,
+  ];
+  if (result.next_row_offset !== null) {
+    parts.push(`다음 ${(result.next_row_offset + 1).toLocaleString()}행부터`);
+  }
+  return parts.join(" · ");
+}
+
 export function filterWorkStatusExportRows(
   rows: ProjectWorkStatusExportRow[],
   filter: WorkStatusExportRowFilter,

@@ -791,6 +791,7 @@ pub struct ProjectWorkReportOptions {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkStatusExportOptions {
     pub limit: Option<usize>,
+    pub offset: Option<usize>,
     pub session_limit: Option<usize>,
     pub database_path: Option<String>,
     pub refresh_session_index: Option<bool>,
@@ -820,7 +821,10 @@ pub struct ProjectWorkStatusExportRow {
 pub struct ProjectWorkStatusExportResult {
     pub generated_at: String,
     pub markdown: String,
+    pub total_row_count: usize,
+    pub row_offset: usize,
     pub returned_row_count: usize,
+    pub next_row_offset: Option<usize>,
     pub rows_truncated: bool,
     pub report_total_items: usize,
     pub report_project_count: usize,
@@ -1822,14 +1826,23 @@ pub fn run_project_work_status_export(
     }
 
     let all_rows = build_project_work_status_export_rows(&report);
-    let rows_truncated = all_rows.len() > limit;
-    let rows = all_rows.into_iter().take(limit).collect::<Vec<_>>();
-    let markdown = render_project_work_status_export_markdown(&report, &rows, &warnings);
+    let (rows, total_row_count, row_offset, rows_truncated, next_row_offset) =
+        paginate_project_work_status_export_rows(all_rows, limit, options.offset.unwrap_or(0));
+    let markdown = render_project_work_status_export_markdown(
+        &report,
+        &rows,
+        &warnings,
+        row_offset,
+        total_row_count,
+    );
 
     Ok(ProjectWorkStatusExportResult {
         generated_at: report.generated_at.clone(),
         markdown,
+        total_row_count,
+        row_offset,
         returned_row_count: rows.len(),
+        next_row_offset,
         rows_truncated,
         report_total_items: report.total_items,
         report_project_count: report.project_count,
@@ -7253,10 +7266,45 @@ fn build_project_work_status_export_rows(
     rows
 }
 
+fn paginate_project_work_status_export_rows(
+    all_rows: Vec<ProjectWorkStatusExportRow>,
+    limit: usize,
+    requested_offset: usize,
+) -> (
+    Vec<ProjectWorkStatusExportRow>,
+    usize,
+    usize,
+    bool,
+    Option<usize>,
+) {
+    let total_row_count = all_rows.len();
+    let row_offset = requested_offset.min(total_row_count);
+    let rows = all_rows
+        .into_iter()
+        .skip(row_offset)
+        .take(limit)
+        .collect::<Vec<_>>();
+    let next_row_offset = if row_offset + rows.len() < total_row_count {
+        Some(row_offset + rows.len())
+    } else {
+        None
+    };
+    let rows_truncated = next_row_offset.is_some();
+    (
+        rows,
+        total_row_count,
+        row_offset,
+        rows_truncated,
+        next_row_offset,
+    )
+}
+
 fn render_project_work_status_export_markdown(
     report: &ProjectWorkReport,
     rows: &[ProjectWorkStatusExportRow],
     warnings: &[String],
+    row_offset: usize,
+    total_row_count: usize,
 ) -> String {
     let mut out = String::new();
     out.push_str("# PromptVault Project/Day Work Status\n\n");
@@ -7264,6 +7312,12 @@ fn render_project_work_status_export_markdown(
     out.push_str(&format!(
         "- Report scope: {} work items · {} projects · {} days · {} progress files\n",
         report.total_items, report.project_count, report.date_count, report.files_seen
+    ));
+    out.push_str(&format!(
+        "- Row page: offset {} · returned {} / {} rows\n",
+        row_offset,
+        rows.len(),
+        total_row_count
     ));
     out.push_str(&format!(
         "- Session evidence: {} linked item matches · {} unique session records · {} scanned prompts · index used={} updated={} records={}\n",
@@ -15304,7 +15358,8 @@ Progress:
         refresh_project_work_session_summary(&mut report);
 
         let rows = build_project_work_status_export_rows(&report);
-        let markdown = render_project_work_status_export_markdown(&report, &rows, &[]);
+        let markdown =
+            render_project_work_status_export_markdown(&report, &rows, &[], 0, rows.len());
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].date, "2026-06-09");
@@ -15319,8 +15374,56 @@ Progress:
             .iter()
             .any(|title| title.contains("Parser repair | CLI export")));
         assert!(markdown.contains("# PromptVault Project/Day Work Status"));
+        assert!(markdown.contains("Row page: offset 0 · returned 1 / 1 rows"));
         assert!(markdown.contains("Parser repair \\| CLI export"));
         assert!(markdown.contains("Codex session metadata 2"));
+    }
+
+    #[test]
+    fn project_work_status_export_paginates_rows() {
+        let row = |project: &str| ProjectWorkStatusExportRow {
+            date: "2026-06-09".to_string(),
+            project: project.to_string(),
+            operational_status: "session-supported".to_string(),
+            source_statuses: vec![FrequencyItem {
+                text: "done".to_string(),
+                count: 1,
+            }],
+            work_item_count: 1,
+            source_file_count: 1,
+            source_files: vec!["working.md".to_string()],
+            top_titles: vec!["Work".to_string()],
+            sample_evidence: "Evidence".to_string(),
+            latest_source_path: format!("/tmp/{project}/working.md"),
+            latest_source_file: "working.md".to_string(),
+            session_evidence_count: 1,
+            unique_session_evidence_count: 1,
+            session_sources: vec![FrequencyItem {
+                text: "Codex session metadata".to_string(),
+                count: 1,
+            }],
+            needs_session_evidence: false,
+            needs_title_normalization: false,
+        };
+
+        let (page, total, offset, truncated, next) =
+            paginate_project_work_status_export_rows(vec![row("A"), row("B"), row("C")], 1, 1);
+
+        assert_eq!(total, 3);
+        assert_eq!(offset, 1);
+        assert!(truncated);
+        assert_eq!(next, Some(2));
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].project, "B");
+
+        let (page, total, offset, truncated, next) =
+            paginate_project_work_status_export_rows(vec![row("A"), row("B")], 10, 99);
+
+        assert_eq!(total, 2);
+        assert_eq!(offset, 2);
+        assert!(!truncated);
+        assert_eq!(next, None);
+        assert!(page.is_empty());
     }
 
     #[test]

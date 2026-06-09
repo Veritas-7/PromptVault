@@ -1,12 +1,121 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 18:48 KST
+Updated: 2026-06-09 19:04 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 status export scope control
+## Current Slice - 2026-06-09 status export pagination
+
+Current Goal:
+
+- Let the operator page through project/day status export rows beyond the first
+  bounded view, without rendering an unbounded all-history export in the app.
+- Keep CLI, bridge API, UI state, markdown, and browser QA aligned around an
+  explicit `limit + offset` contract.
+
+Context:
+
+- The previous slice let the app widen the visible status export scope up to
+  `100` rows, but rows beyond the first page were still inaccessible from the
+  UI.
+- The operator question behind this lane is whether project/day work state is
+  managed from both real session evidence and project-local progress logs such
+  as `working.md`, `workingd.md`, and related worklog files.
+- This slice keeps the bounded safety model while making later rows reachable
+  through previous/next controls.
+
+Progress:
+
+- Added `offset` support to the backend, CLI, bridge API, app state, and docs.
+- Status export results now report total row count, current row offset, returned
+  row count, and the next row offset.
+- The UI now shows a compact page status such as
+  `상태 row 1-25 / 91행 · 다음 26행부터` with previous/next controls.
+- Browser bridge QA now verifies first-page export, next-page navigation, and
+  return-to-previous-page behavior on real app data.
+- Live CLI verification against the current default database saw `91`
+  project/day rows across `31` projects and `25` dates.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added status export row pagination, markdown page metadata, result fields,
+    and Rust coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added `work-status-export --offset N>=0` parsing and help text coverage.
+- `src/types.ts`, `src/promptVaultApi.ts`, and `src/workSummaryStatus.ts`:
+  - added API/result schema validation and page-status text.
+- `src/App.tsx` and `src/App.css`:
+  - added status export offset state plus compact previous/next controls.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`, and
+  `scripts/browser-bridge-isolated-qa.mjs`:
+  - added offset request/response and browser navigation coverage.
+- `README.md` and `docs/CLI.md`:
+  - documented `--offset` usage.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts
+  tests/workStatusExportLimit.test.ts --test-name-pattern "work status export"`:
+  PASS (`215` tests).
+- `cargo test --manifest-path src-tauri/Cargo.toml work_status_export
+  -- --nocapture`: PASS (`3` lib tests plus CLI bridge validation coverage).
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli
+  help_text_documents_cli_validation_rules -- --nocapture`: PASS.
+- `npm run build`: PASS.
+- Live CLI smoke,
+  `cargo run --quiet --manifest-path src-tauri/Cargo.toml --bin
+  promptvault-cli -- work-status-export --limit 3 --offset 3
+  --session-limit 200 --json | jq ...`: PASS. Output showed
+  `total_row_count=91`, `row_offset=3`, `returned_row_count=3`,
+  `next_row_offset=6`, and projects
+  `QualityGate`, `RepoTutorStudio`, `ResearchFlowAI`.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Browser evidence:
+  - first page: `상태 row 1-25 / 91행 · 다음 26행부터`;
+  - next page: `상태 row 26-50 / 91행 · 다음 51행부터`;
+  - markdown preview: `Row page: offset 0 · returned 25 / 91 rows`;
+  - filter meta: `필터 세션 근거 필요 · 결과 12 / 25행 · 세션근거 필요
+    12행 · 제목정규화 필요 8행`.
+- `npm run check`: PASS, including UI tests (`471`), production build, Rust lib
+  tests (`193`), CLI tests (`31`), doc-tests, and clippy `-D warnings`.
+- Live current-data status export,
+  `work-status-export --limit 12 --session-limit 200 --json`: PASS. Output
+  showed `91` project/day rows, `31` projects, `25` dates, `8,962` work items,
+  `837` progress logs, `73,337` session evidence links, and `200` unique indexed
+  session evidence records.
+
+Issues:
+
+- The app is now project/day paged, but the session evidence side is still
+  bounded by `session_limit=200` unless the operator runs a longer confirmed
+  session-index backfill.
+- AI/provider-backed cleanup is still review-gated. No live Codex SDK, OpenAI,
+  or GLM provider call was adopted as an automatic final approver in this
+  slice.
+- Progress-log parsing covers known `working.md`-style formats, but unusual
+  project-local logs still need the existing AI extraction review queue before
+  being accepted into managed rows.
+
+Research:
+
+- No external research was needed. Verification used the local CLI, Rust tests,
+  browser bridge QA, and the current PromptVault database.
+
+Next Steps:
+
+- Add a longer confirmed session-index backfill path from the UI so more rows
+  move from `세션 근거 필요` to `session-supported`.
+- Wire the project-local progress-log AI extraction review queue into the same
+  management surface so odd `working.md` / `workingd.md` variants become daily
+  managed rows after operator approval.
+- Add an export/download path for all paged status rows if the operator needs a
+  full offline report.
+
+## Completed Slice - 2026-06-09 status export scope control
 
 Current Goal:
 

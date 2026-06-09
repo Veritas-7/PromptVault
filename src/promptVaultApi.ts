@@ -107,6 +107,7 @@ export interface ProjectWorkSummaryOptions {
 export interface ProjectWorkStatusExportOptions {
   database_path?: string;
   limit?: number;
+  offset?: number;
   session_limit?: number;
   refresh_session_index?: boolean;
 }
@@ -2138,8 +2139,23 @@ function projectWorkStatusExportRowsWithinResult(value: unknown): boolean {
     || !Array.isArray(value.rows)
     || !isNonNegativeSafeInteger(value.report_total_items)
     || !isNonNegativeSafeInteger(value.report_session_evidence_count)
+    || !isNonNegativeSafeInteger(value.total_row_count)
+    || !isNonNegativeSafeIntegerAtMost(value.row_offset, value.total_row_count)
     || !isNonNegativeSafeInteger(value.returned_row_count)) {
     return false;
+  }
+  const totalRowCount = Number(value.total_row_count);
+  const rowOffset = Number(value.row_offset);
+  const returnedRowCount = Number(value.returned_row_count);
+  if (rowOffset + returnedRowCount > totalRowCount) {
+    return false;
+  }
+  if (value.next_row_offset !== null) {
+    const nextRowOffset = Number(value.next_row_offset);
+    if (!isNonNegativeSafeIntegerAtMost(value.next_row_offset, totalRowCount)
+      || nextRowOffset <= rowOffset) {
+      return false;
+    }
   }
   let workItemCount = 0;
   let sessionEvidenceCount = 0;
@@ -2165,7 +2181,10 @@ function parseProjectWorkStatusExportResult(value: unknown): ProjectWorkStatusEx
   if (!isRecord(value)
     || !isTimestampString(value.generated_at)
     || typeof value.markdown !== "string"
+    || !isNonNegativeSafeInteger(value.total_row_count)
+    || !isNonNegativeSafeInteger(value.row_offset)
     || !isNonNegativeSafeInteger(value.returned_row_count)
+    || !(value.next_row_offset === null || isNonNegativeSafeInteger(value.next_row_offset))
     || typeof value.rows_truncated !== "boolean"
     || !isNonNegativeSafeInteger(value.report_total_items)
     || !isNonNegativeSafeIntegerAtMost(value.report_project_count, value.report_total_items)

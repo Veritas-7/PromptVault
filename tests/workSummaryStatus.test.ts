@@ -56,6 +56,7 @@ import {
   workStatusExportFailureText,
   workStatusExportIndexStatusText,
   workStatusExportMetaText,
+  workStatusExportPageStatusText,
   workStatusExportRowAuditToggleText,
   workStatusExportRowFilterLabel,
   workStatusExportRowSessionSourcesText,
@@ -158,7 +159,10 @@ function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = 
   return {
     generated_at: "2026-06-09T00:00:00Z",
     markdown: "# PromptVault Project/Day Work Status",
+    total_row_count: 4,
+    row_offset: 1,
     returned_row_count: 2,
+    next_row_offset: 3,
     rows_truncated: true,
     report_total_items: 10,
     report_project_count: 3,
@@ -730,6 +734,10 @@ test("work status export text exposes project day evidence coverage", () => {
   assert.equal(
     workStatusExportMetaText("ready", result),
     "표시 2행 · 3개 프로젝트 · 2일 · 작업 10개 · 진행로그 4개 · 세션 근거 9건 · 고유 3건 · 표시 제한",
+  );
+  assert.equal(
+    workStatusExportPageStatusText(result),
+    "상태 row 2-3 / 4행 · 다음 4행부터",
   );
   assert.equal(
     workStatusExportIndexStatusText(result),

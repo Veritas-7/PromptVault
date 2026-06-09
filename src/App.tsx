@@ -324,6 +324,7 @@ import {
   workStatusExportFailureText,
   workStatusExportIndexStatusText,
   workStatusExportMetaText,
+  workStatusExportPageStatusText,
   workStatusExportRowAuditToggleText,
   workStatusExportRowFilterLabel,
   workStatusExportRowSessionSourcesText,
@@ -635,6 +636,7 @@ function App() {
   const [workStatusExportLimitInput, setWorkStatusExportLimitInput] = useState(
     String(WORK_STATUS_EXPORT_DEFAULT_LIMIT),
   );
+  const [workStatusExportOffset, setWorkStatusExportOffset] = useState(0);
   const [workSessionIndexBatchFilesInput, setWorkSessionIndexBatchFilesInput] = useState("");
   const [workSessionIndexLongConfirmInput, setWorkSessionIndexLongConfirmInput] = useState("");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
@@ -948,6 +950,10 @@ function App() {
   const workSummaryFailureMessage = workSummaryFailureText(workSummaryState);
   const workStatusExportFailureMessage = workStatusExportFailureText(workStatusExportState);
   const workStatusExportMeta = workStatusExportMetaText(workStatusExportState, workStatusExportResult);
+  const workStatusExportPageStatus = workStatusExportPageStatusText(workStatusExportResult);
+  const workStatusExportPreviousOffset = workStatusExportResult && workStatusExportLimit !== null
+    ? Math.max(0, workStatusExportResult.row_offset - workStatusExportLimit)
+    : 0;
   const workStatusExportIndexStatus = workStatusExportResult
     ? workStatusExportIndexStatusText(workStatusExportResult)
     : null;
@@ -1901,7 +1907,10 @@ function App() {
     }
   }
 
-  async function refreshWorkStatusExport({ refreshSessionIndex = false }: { refreshSessionIndex?: boolean } = {}) {
+  async function refreshWorkStatusExport({
+    refreshSessionIndex = false,
+    offset = workStatusExportOffset,
+  }: { refreshSessionIndex?: boolean; offset?: number } = {}) {
     const sessionLimit = workSummarySessionLimit;
     const statusExportLimit = workStatusExportLimit;
     if (sessionLimit === null) {
@@ -1922,10 +1931,12 @@ function App() {
     try {
       const next = await loadProjectWorkStatusExport({
         limit: statusExportLimit,
+        offset,
         session_limit: sessionLimit,
         refresh_session_index: refreshSessionIndex,
       });
       setWorkStatusExportResult(next);
+      setWorkStatusExportOffset(next.row_offset);
       setExpandedWorkStatusExportRowKeys(new Set());
       setWorkStatusExportState("ready");
     } catch (err) {
@@ -1970,9 +1981,11 @@ function App() {
     try {
       const nextStatusExport = await loadProjectWorkStatusExport({
         limit: statusExportLimit,
+        offset: 0,
         session_limit: sessionLimit,
       });
       setWorkStatusExportResult(nextStatusExport);
+      setWorkStatusExportOffset(nextStatusExport.row_offset);
       setExpandedWorkStatusExportRowKeys(new Set());
       setWorkStatusExportState("ready");
 
@@ -2589,6 +2602,7 @@ function App() {
                 value={workStatusExportLimitInput}
                 onChange={(event) => {
                   setWorkStatusExportLimitInput(event.currentTarget.value);
+                  setWorkStatusExportOffset(0);
                   setExpandedWorkStatusExportRowKeys(new Set());
                 }}
               />
@@ -3688,6 +3702,44 @@ function App() {
           <div className="work-summary-index" data-work-status-export-meta="true">
             <ClipboardList size={15} />
             <span>{workStatusExportMeta}</span>
+          </div>
+        ) : null}
+        {workStatusExportPageStatus ? (
+          <div className="work-summary-index work-status-export-page-controls" data-work-status-export-page-meta="true">
+            <FileText size={15} />
+            <span>{workStatusExportPageStatus}</span>
+            <button
+              aria-label="이전 상태 export 페이지"
+              className="inline-action"
+              data-work-status-export-page-prev="true"
+              disabled={
+                isTopLevelActionLocked
+                || workStatusExportLimitInvalid
+                || workStatusExportState === "loading"
+                || workStatusExportResult?.row_offset === 0
+              }
+              onClick={() => void refreshWorkStatusExport({ offset: workStatusExportPreviousOffset })}
+              type="button"
+            >
+              <ChevronUp size={14} />
+              이전
+            </button>
+            <button
+              aria-label="다음 상태 export 페이지"
+              className="inline-action"
+              data-work-status-export-page-next="true"
+              disabled={
+                isTopLevelActionLocked
+                || workStatusExportLimitInvalid
+                || workStatusExportState === "loading"
+                || workStatusExportResult?.next_row_offset === null
+              }
+              onClick={() => void refreshWorkStatusExport({ offset: workStatusExportResult?.next_row_offset ?? 0 })}
+              type="button"
+            >
+              <ChevronDown size={14} />
+              다음
+            </button>
           </div>
         ) : null}
         {workStatusExportIndexStatus ? (

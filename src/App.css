@@ -238,6 +238,15 @@ h3 {
   grid-template-columns: minmax(170px, 260px) minmax(260px, 1fr);
 }
 
+.work-status-export-page-controls {
+  flex-wrap: wrap;
+}
+
+.work-status-export-page-controls .inline-action {
+  min-height: 26px;
+  padding: 0 8px;
+}
+
 .work-summary-filter-row label {
   display: grid;
   gap: 5px;

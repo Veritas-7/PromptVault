@@ -365,6 +365,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let json = take_flag(&mut args, "--json");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
             let mut limit = None;
+            let mut offset = None;
             let mut session_limit = None;
             let mut database_path = None;
             let mut iter = args.into_iter();
@@ -372,6 +373,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 match arg.as_str() {
                     "--limit" => {
                         limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--offset" => {
+                        offset = Some(parse_usize_arg(iter.next(), "--offset")?);
                     }
                     "--session-limit" => {
                         session_limit =
@@ -388,6 +392,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             let result = run_project_work_status_export(ProjectWorkStatusExportOptions {
                 limit,
+                offset,
                 session_limit,
                 database_path,
                 refresh_session_index: Some(refresh_session_index),
@@ -2007,7 +2012,7 @@ fn help_text() -> String {
         "  improve [--json] [--local] --prompt TEXT\n",
         "  improve [--json] [--local] < prompt.txt\n",
         "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
-        "  work-status-export [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
+        "  work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
         "  work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
@@ -3278,7 +3283,7 @@ mod tests {
             "work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
         ));
         assert!(help.contains(
-            "work-status-export [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
+            "work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
         ));
         assert!(
             help.contains(

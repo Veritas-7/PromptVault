@@ -195,6 +195,9 @@ async function runBrowserQa() {
   let workManagementMeta = "";
   let workStatusExportLimitMeta = "";
   let workStatusExportMeta = "";
+  let workStatusExportPageMeta = "";
+  let workStatusExportNextPageMeta = "";
+  let workStatusExportNextPageRows = [];
   let workStatusExportIndex = "";
   let workStatusExportRows = [];
   let workStatusExportRowDetail = "";
@@ -439,9 +442,24 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     workStatusExportMeta =
       (await page.locator('[data-work-status-export-meta="true"]').textContent())?.trim() ?? "";
+    workStatusExportPageMeta =
+      (await page.locator('[data-work-status-export-page-meta="true"]').textContent())?.trim() ?? "";
     workStatusExportIndex =
       (await page.locator('[data-work-status-export-index="true"]').textContent())?.trim() ?? "";
     workStatusExportRows = await page.locator('[data-work-status-export-row="true"]').allTextContents();
+    await page.locator('[data-work-status-export-page-next="true"]').click();
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-status-export-page-meta="true"]')?.textContent ?? "";
+      return meta.includes("상태 row 26-");
+    }, undefined, { timeout: 120000 });
+    workStatusExportNextPageMeta =
+      (await page.locator('[data-work-status-export-page-meta="true"]').textContent())?.trim() ?? "";
+    workStatusExportNextPageRows = await page.locator('[data-work-status-export-row="true"]').allTextContents();
+    await page.locator('[data-work-status-export-page-prev="true"]').click();
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-status-export-page-meta="true"]')?.textContent ?? "";
+      return meta.includes("상태 row 1-25");
+    }, undefined, { timeout: 120000 });
     await page.locator('[data-work-status-export-row-toggle="true"]').first().click();
     await page.waitForFunction(() => {
       const detail = document.querySelector('[data-work-status-export-row-detail="true"]')?.textContent ?? "";
@@ -752,6 +770,9 @@ async function runBrowserQa() {
       workSummaryIndex,
       workStatusExportLimitMeta,
       workStatusExportMeta,
+      workStatusExportPageMeta,
+      workStatusExportNextPageMeta,
+      workStatusExportNextPageRows,
       workStatusExportIndex,
       workStatusExportRows,
       workStatusExportRowDetail,

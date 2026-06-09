@@ -233,7 +233,10 @@ export interface ProjectWorkStatusExportRow {
 export interface ProjectWorkStatusExportResult {
   generated_at: string;
   markdown: string;
+  total_row_count: number;
+  row_offset: number;
   returned_row_count: number;
+  next_row_offset: number | null;
   rows_truncated: boolean;
   report_total_items: number;
   report_project_count: number;

@@ -1,12 +1,99 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 17:29 KST
+Updated: 2026-06-09 17:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 backend session backfill batch safety cap
+## Current Slice - 2026-06-09 rough-title normalization candidate priority
+
+Current Goal:
+
+- Make AI/local normalization candidates surface rough project-log titles first,
+  so rows like `)`, time-only headings, and generic "Untitled work" style
+  entries are easier to clean up.
+- Avoid letting high-volume but readable parsed rows bury low-quality titles in
+  the review queue.
+
+Context:
+
+- The work-management layer already parses project-local progress logs and
+  exposes normalization candidates for AI/GLM/OpenAI or local review-only
+  cleanup.
+- Live QA showed rough titles in management rows, including date/time fragments
+  and punctuation-only titles.
+- The previous sort favored no-AI/no-session rows and then `work_item_count`,
+  which could push rough one-item rows behind large but understandable groups.
+
+Progress:
+
+- Added rough-title detection for:
+  - known generic titles such as `progress log updated`, `project status
+    snapshot updated`, `untitled work`, and `work log updated`;
+  - punctuation-only headings;
+  - time-only headings such as `13:41 KST`.
+- Normalization candidate titles for rough groups now fall back to
+  `<project> <date> parsed work rows`.
+- Candidate sorting now prioritizes `generic_title` rows before large clean
+  groups, while still preserving no-AI/no-session priority above that.
+- Added a regression test proving rough title rows beat a larger clean group.
+- Verified live candidate ordering now starts with rough/generic title rows.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added `project_work_log_title_is_generic_or_rough`;
+  - updated `project_work_log_titles_are_generic`;
+  - changed normalization candidate title fallback for generic/rough groups;
+  - added `generic_title` priority to candidate sorting;
+  - added `normalization_candidates_prioritize_rough_titles_for_ai_cleanup`.
+- `working.md`:
+  - recorded current slice, test results, and command caveats.
+
+Tests:
+
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  normalization_candidates_prioritize_rough_titles_for_ai_cleanup --
+  --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  normalization_candidates_find_parsed_rows_without_ai_cleanup -- --nocapture`:
+  PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  local_normalization_proposals_stay_review_only -- --nocapture`: PASS.
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli --
+  work-log-normalization-candidates --limit 8 --session-limit 200 --json |
+  jq -r '.candidates[] | [.project,.date,.title,.reason,.work_item_count] |
+  @tsv'`: PASS. Top live candidates were rough/generic-title rows including:
+  - `enterprise_diagnosis_flutter 2026-06-08 parsed work rows`;
+  - `notebooklm-llm-wiki-flow 2026-06-03 parsed work rows`;
+  - `novel-source-collector 2026-06-09 parsed work rows`.
+- `npm run check`: PASS, including UI tests, production build, Rust lib tests
+  (`188`), CLI tests (`30`), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- One attempted command with two Cargo test filters failed because Cargo
+  accepts a single test-name filter. The intended tests were rerun separately
+  and passed.
+- This improves candidate ordering and titles, but it does not itself call
+  OpenAI/GLM. Provider-backed cleanup remains review/operator-triggered through
+  the existing normalization flow.
+
+Research:
+
+- No external research was needed. The change is based on live QA output and
+  existing normalization architecture.
+
+Next Steps:
+
+- Add a compact project/day status export for review outside the app.
+- Add a confirmation-gated long-continue session-index mode that still honors
+  backend caps.
+- Consider exposing a visible "rough title" filter in the management UI if the
+  prioritized ordering is not enough.
+
+## Completed Slice - 2026-06-09 backend session backfill batch safety cap
 
 Current Goal:
 

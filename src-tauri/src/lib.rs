@@ -9863,6 +9863,11 @@ fn build_project_work_log_normalization_candidates_from_report(
                 let b_no_session = b.session_evidence_count == 0;
                 b_no_session.cmp(&a_no_session)
             })
+            .then_with(|| {
+                let a_generic_title = a.reason.split(',').any(|reason| reason == "generic_title");
+                let b_generic_title = b.reason.split(',').any(|reason| reason == "generic_title");
+                b_generic_title.cmp(&a_generic_title)
+            })
             .then_with(|| b.work_item_count.cmp(&a.work_item_count))
             .then_with(|| b.date.cmp(&a.date))
             .then_with(|| a.project.cmp(&b.project))
@@ -9945,19 +9950,46 @@ fn project_work_log_titles_are_generic(titles: &[String]) -> bool {
     if titles.is_empty() {
         return true;
     }
-    titles.iter().all(|title| {
-        let normalized = title.trim().to_ascii_lowercase();
-        matches!(
-            normalized.as_str(),
-            "progress log updated"
-                | "project status snapshot updated"
-                | "untitled work"
-                | "work log updated"
-        )
-    })
+    titles
+        .iter()
+        .all(|title| project_work_log_title_is_generic_or_rough(title))
+}
+
+fn project_work_log_title_is_generic_or_rough(title: &str) -> bool {
+    let trimmed = title.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    let normalized = trimmed.to_ascii_lowercase();
+    if matches!(
+        normalized.as_str(),
+        "progress log updated"
+            | "project status snapshot updated"
+            | "untitled work"
+            | "work log updated"
+    ) {
+        return true;
+    }
+    let semantic_remainder = normalized
+        .replace("kst", "")
+        .replace("utc", "")
+        .replace("am", "")
+        .replace("pm", "")
+        .replace("오전", "")
+        .replace("오후", "")
+        .chars()
+        .filter(|ch| ch.is_alphabetic())
+        .collect::<String>();
+    semantic_remainder.is_empty()
 }
 
 fn project_work_log_normalization_title(group: &ProjectWorkLogNormalizationGroup) -> String {
+    if project_work_log_titles_are_generic(&group.titles) {
+        return truncate_chars(
+            &format!("{} {} parsed work rows", group.project, group.date),
+            180,
+        );
+    }
     let first_title = group
         .titles
         .iter()
@@ -15744,6 +15776,94 @@ Progress:
         assert!(candidate.reason.contains("no_session_evidence"));
         assert!(candidate.evidence.contains("[REDACTED_POSSIBLE_API_KEY]"));
         assert!(!candidate.evidence.contains("should-redact"));
+    }
+
+    #[test]
+    fn normalization_candidates_prioritize_rough_titles_for_ai_cleanup() {
+        let mut items = Vec::new();
+        for index in 0..20 {
+            items.push(ProjectWorkItem {
+                date: "2026-06-09".to_string(),
+                project: "LargeCleanProject".to_string(),
+                title: format!("Implemented stable slice {index}"),
+                status: "current".to_string(),
+                source_path: "/tmp/LargeCleanProject/working.md".to_string(),
+                source_file: "working.md".to_string(),
+                evidence: format!("Implemented stable slice {index}."),
+                session_evidence_count: 0,
+                session_sources: Vec::new(),
+                session_evidence_keys: Vec::new(),
+            });
+        }
+        items.push(ProjectWorkItem {
+            date: "2026-06-09".to_string(),
+            project: "RoughTitleProject".to_string(),
+            title: ")".to_string(),
+            status: "logged".to_string(),
+            source_path: "/tmp/RoughTitleProject/PROJECT_STATUS.md".to_string(),
+            source_file: "PROJECT_STATUS.md".to_string(),
+            evidence: "last_updated: 2026-06-09\nRoughTitleProject status updated.".to_string(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_keys: Vec::new(),
+        });
+        items.push(ProjectWorkItem {
+            date: "2026-06-09".to_string(),
+            project: "TimeOnlyProject".to_string(),
+            title: "13:41 KST".to_string(),
+            status: "logged".to_string(),
+            source_path: "/tmp/TimeOnlyProject/working.md".to_string(),
+            source_file: "working.md".to_string(),
+            evidence: "13:41 KST\nUpdated work status.".to_string(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_keys: Vec::new(),
+        });
+        let report = ProjectWorkReport {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            total_items: items.len(),
+            project_count: 3,
+            date_count: 1,
+            files_seen: 3,
+            items_by_date: vec![FrequencyItem {
+                text: "2026-06-09".to_string(),
+                count: items.len(),
+            }],
+            items_by_project: Vec::new(),
+            session_scan_prompt_count: 0,
+            session_scan_sources: Vec::new(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_unique_count: 0,
+            session_evidence_unique_sources: Vec::new(),
+            session_evidence_index_used: false,
+            session_evidence_index_updated: false,
+            session_evidence_index_count: 0,
+            session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
+            items,
+            warnings: Vec::new(),
+        };
+
+        let result = build_project_work_log_normalization_candidates_from_report(
+            &report,
+            &HashMap::new(),
+            3,
+        );
+
+        assert_eq!(result.total_candidate_count, 3);
+        assert_eq!(result.candidates[0].project, "RoughTitleProject");
+        assert_eq!(
+            result.candidates[0].title,
+            "RoughTitleProject 2026-06-09 parsed work rows"
+        );
+        assert!(result.candidates[0].reason.contains("generic_title"));
+        assert_eq!(result.candidates[1].project, "TimeOnlyProject");
+        assert_eq!(
+            result.candidates[1].title,
+            "TimeOnlyProject 2026-06-09 parsed work rows"
+        );
+        assert!(result.candidates[1].reason.contains("generic_title"));
+        assert_eq!(result.candidates[2].project, "LargeCleanProject");
     }
 
     #[test]

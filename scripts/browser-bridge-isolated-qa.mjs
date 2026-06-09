@@ -192,6 +192,8 @@ async function runBrowserQa() {
   let workLogCandidatesMeta = "";
   let workLogNormalizationCandidatesMeta = "";
   let workLogNormalizationCandidateRows = [];
+  let workLogNormalizationProposalsMeta = "";
+  let workLogNormalizationProposalRows = [];
   let workLogReviewQueueMeta = "";
   let approvedReviewQueueSaveDisabledWhenEmpty = null;
   let workLogReviewQueueMetaAfterSynthetic = "";
@@ -423,6 +425,19 @@ async function runBrowserQa() {
       (await page.locator('[data-work-log-normalization-candidates-meta="true"]').textContent())?.trim() ?? "";
     workLogNormalizationCandidateRows =
       await page.locator('[data-work-log-normalization-candidates="true"] article').allTextContents();
+    await waitForEnabled(page, '[data-load-work-log-normalization-proposals="true"]');
+    await page.locator('[data-load-work-log-normalization-proposals="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-normalization-proposals-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-log-normalization-proposals="true"] article'));
+      return text.includes("정규화 제안")
+        && text.includes("review")
+        && rows.some((row) => (row.textContent ?? "").includes("AI 검토 필요"));
+    }, undefined, { timeout: 120000 });
+    workLogNormalizationProposalsMeta =
+      (await page.locator('[data-work-log-normalization-proposals-meta="true"]').textContent())?.trim() ?? "";
+    workLogNormalizationProposalRows =
+      await page.locator('[data-work-log-normalization-proposals="true"] article').allTextContents();
     await page.locator('[data-sync-work-log-review-queue="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-review-queue-meta="true"]')?.textContent ?? "";
@@ -524,6 +539,8 @@ async function runBrowserQa() {
       workLogCandidatesMeta,
       workLogNormalizationCandidatesMeta,
       workLogNormalizationCandidateRows,
+      workLogNormalizationProposalsMeta,
+      workLogNormalizationProposalRows,
       workLogReviewQueueMeta,
       approvedReviewQueueSaveDisabledWhenEmpty,
       workLogReviewQueueMetaAfterSynthetic,

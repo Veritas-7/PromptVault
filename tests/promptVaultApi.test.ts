@@ -9,6 +9,7 @@ import {
   loadProjectWorkLogCoverage,
   loadProjectWorkLogExtractionProposals,
   loadProjectWorkLogNormalizationCandidates,
+  loadProjectWorkLogNormalizationProposals,
   loadProjectWorkLogReviewQueue,
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
@@ -537,6 +538,49 @@ function projectWorkLogNormalizationCandidatesPayload(overrides = {}) {
       risk_flags: ["long_base64_like_token"],
     }],
     warnings: [],
+    ...overrides,
+  };
+}
+
+function projectWorkLogNormalizationProposalsPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    provider: "local-normalization-rules",
+    provider_model: null,
+    provider_runtime: "local-normalization-rules",
+    used_ai: false,
+    total_candidate_count: 1,
+    returned_proposal_count: 1,
+    accepted_count: 0,
+    rejected_count: 1,
+    report_total_items: 120,
+    report_project_count: 12,
+    report_date_count: 9,
+    proposals: [{
+      candidate_id: "work-normalize-CareVault-a1b2c3d4e5f6",
+      project: "CareVault",
+      date: "2026-06-09",
+      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      source_file: "workingd.md",
+      reason: "no_ai_normalization,no_session_evidence",
+      original_title: "Backfilled workingd notes",
+      original_status: "current",
+      original_evidence: "2026-06-09: Backfilled workingd notes",
+      normalized_title: "Backfilled workingd notes",
+      normalized_status: "current",
+      normalized_evidence: "2026-06-09: Backfilled workingd notes",
+      confidence: 0.5,
+      accepted: false,
+      rejection_reason: "local_fallback_requires_ai_review",
+      work_item_count: 3,
+      session_evidence_count: 0,
+      saved_extraction_count: 1,
+      ai_saved_extraction_count: 0,
+      best_ai_confidence: null,
+      risk_flags: ["long_base64_like_token"],
+    }],
+    warnings: ["OPENAI_API_KEY 및 GLM_API_KEY/GLM_API_KEY_2가 없어 로컬 normalization fallback을 사용했습니다."],
     ...overrides,
   };
 }
@@ -1288,6 +1332,61 @@ test("browser bridge work log normalization candidates reject impossible counter
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /ai_saved_extraction_count|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work log normalization proposals posts options and validates rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogNormalizationProposalsPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkLogNormalizationProposals({
+    ai: true,
+    limit: 5,
+    session_limit: 200,
+  });
+
+  assert.match(requestPath, /\/api\/work-log-normalization-proposals$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: { ai: true, limit: 5, session_limit: 200 },
+  });
+  assert.equal(result.provider, "local-normalization-rules");
+  assert.equal(result.returned_proposal_count, 1);
+  assert.equal(result.accepted_count, 0);
+  assert.equal(result.rejected_count, 1);
+  assert.equal(result.proposals[0].project, "CareVault");
+  assert.equal(result.proposals[0].source_file, "workingd.md");
+  assert.equal(result.proposals[0].accepted, false);
+  assert.equal(result.proposals[0].rejection_reason, "local_fallback_requires_ai_review");
+  assert.deepEqual(result.proposals[0].risk_flags, ["long_base64_like_token"]);
+});
+
+test("browser bridge work log normalization proposals reject impossible counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkLogNormalizationProposalsPayload({
+    accepted_count: 1,
+    rejected_count: 1,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkLogNormalizationProposals({ limit: 5 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /local_fallback_requires_ai_review|workingd\.md|undefined/);
       return true;
     },
   );

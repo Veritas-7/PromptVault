@@ -21,6 +21,9 @@ import {
   workLogNormalizationCandidatesActionLabel,
   workLogNormalizationCandidatesFailureText,
   workLogNormalizationCandidatesMetaText,
+  workLogNormalizationProposalsActionLabel,
+  workLogNormalizationProposalsFailureText,
+  workLogNormalizationProposalsMetaText,
   workLogExtractionMetaText,
   workLogExtractionApprovalText,
   workLogExtractionPersistenceText,
@@ -55,6 +58,7 @@ import {
   type WorkLogExtractionItemsState,
   type WorkLogExtractionRunsState,
   type WorkLogNormalizationCandidatesState,
+  type WorkLogNormalizationProposalsState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
@@ -69,6 +73,7 @@ import type {
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
+  ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogReviewQueueItem,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSummary,
@@ -352,6 +357,51 @@ function normalizationCandidatesResult(
       ai_saved_extraction_count: 0,
       best_ai_confidence: null,
       risk_flags: ["long_base64_like_token"],
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function normalizationProposalsResult(
+  overrides: Partial<ProjectWorkLogNormalizationProposalsResult> = {},
+): ProjectWorkLogNormalizationProposalsResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    provider: "local-normalization-rules",
+    provider_model: null,
+    provider_runtime: "local-normalization-rules",
+    used_ai: false,
+    total_candidate_count: 18,
+    returned_proposal_count: 5,
+    accepted_count: 1,
+    rejected_count: 4,
+    report_total_items: 120,
+    report_project_count: 12,
+    report_date_count: 9,
+    proposals: [{
+      candidate_id: "work-normalize-CareVault-a1",
+      project: "CareVault",
+      date: "2026-06-09",
+      source_path: "/tmp/CareVault/workingd.md",
+      source_file: "workingd.md",
+      reason: "no_ai_normalization,no_session_evidence",
+      original_title: "Backfilled workingd notes",
+      original_status: "current",
+      original_evidence: "Backfilled workingd notes",
+      normalized_title: "Backfilled workingd notes",
+      normalized_status: "current",
+      normalized_evidence: "Backfilled workingd notes",
+      confidence: 0.5,
+      accepted: false,
+      rejection_reason: "local_fallback_requires_ai_review",
+      work_item_count: 3,
+      session_evidence_count: 0,
+      saved_extraction_count: 1,
+      ai_saved_extraction_count: 0,
+      best_ai_confidence: null,
+      risk_flags: [],
     }],
     warnings: [],
     ...overrides,
@@ -1040,6 +1090,43 @@ test("work log normalization candidate labels describe parsed rows needing AI cl
     "AI 정규화 후보를 불러오지 못했습니다. 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogNormalizationCandidatesFailureText("ready"), null);
+});
+
+test("work log normalization proposal labels describe AI cleanup proposals", () => {
+  const failed: WorkLogNormalizationProposalsState = "failed";
+  assert.equal(
+    workLogNormalizationProposalsActionLabel("idle", false, lockState()),
+    "AI 정규화 제안 생성",
+  );
+  assert.equal(
+    workLogNormalizationProposalsActionLabel("ready", true, lockState()),
+    "AI 정규화 제안 새로고침",
+  );
+  assert.equal(
+    workLogNormalizationProposalsActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 AI 정규화 제안을 새로고침할 수 없습니다",
+  );
+  assert.equal(
+    workLogNormalizationProposalsMetaText("idle", null),
+    "아직 생성한 AI 정규화 제안 없음",
+  );
+  assert.equal(
+    workLogNormalizationProposalsMetaText("loading", normalizationProposalsResult()),
+    "AI 정규화 제안 생성 중",
+  );
+  assert.equal(
+    workLogNormalizationProposalsMetaText("ready", normalizationProposalsResult()),
+    "정규화 제안 5개 · accepted 1개 · review 4개 · 후보 18개 · local-normalization-rules · 12개 프로젝트 · 9일",
+  );
+  assert.equal(
+    workLogNormalizationProposalsMetaText(failed, null),
+    "AI 정규화 제안을 사용할 수 없음",
+  );
+  assert.equal(
+    workLogNormalizationProposalsFailureText(failed),
+    "AI 정규화 제안을 생성하지 못했습니다. provider 키, 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workLogNormalizationProposalsFailureText("ready"), null);
 });
 
 test("work log extraction save state excludes already managed rows", () => {

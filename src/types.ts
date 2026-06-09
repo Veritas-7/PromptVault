@@ -424,6 +424,48 @@ export interface ProjectWorkLogNormalizationCandidatesResult {
   warnings: string[];
 }
 
+export interface ProjectWorkLogNormalizationProposal {
+  candidate_id: string;
+  project: string;
+  date: string;
+  source_path: string;
+  source_file: string;
+  reason: string;
+  original_title: string;
+  original_status: string;
+  original_evidence: string;
+  normalized_title: string;
+  normalized_status: string;
+  normalized_evidence: string;
+  confidence: number;
+  accepted: boolean;
+  rejection_reason: string | null;
+  work_item_count: number;
+  session_evidence_count: number;
+  saved_extraction_count: number;
+  ai_saved_extraction_count: number;
+  best_ai_confidence: number | null;
+  risk_flags: string[];
+}
+
+export interface ProjectWorkLogNormalizationProposalsResult {
+  generated_at: string;
+  database_path: string;
+  provider: string;
+  provider_model: string | null;
+  provider_runtime: string;
+  used_ai: boolean;
+  total_candidate_count: number;
+  returned_proposal_count: number;
+  accepted_count: number;
+  rejected_count: number;
+  report_total_items: number;
+  report_project_count: number;
+  report_date_count: number;
+  proposals: ProjectWorkLogNormalizationProposal[];
+  warnings: string[];
+}
+
 export interface ProjectWorkLogExtractionMergeResult {
   provider: string;
   used_ai: boolean;

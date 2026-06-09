@@ -53,6 +53,8 @@ const DEFAULT_PROJECT_WORK_LOG_EXTRACTION_RUN_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_EXTRACTION_RUN_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_CANDIDATE_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_NORMALIZATION_CANDIDATE_LIMIT: usize = 200;
+const DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_PROPOSAL_LIMIT: usize = 20;
+const MAX_PROJECT_WORK_LOG_NORMALIZATION_PROPOSAL_LIMIT: usize = 100;
 const DEFAULT_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 200;
 const MAX_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 1_000;
 const PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS: u64 = 12;
@@ -67,6 +69,13 @@ const SCAN_CANCELED_NOT_PERSISTED_WARNING: &str = "취소된 스캔은 저장소
 type ScanCancelFlag = Arc<AtomicBool>;
 
 struct ProjectWorkLogExtractionRuntime<'a> {
+    provider: &'a str,
+    provider_model: Option<String>,
+    provider_runtime: &'a str,
+    used_ai: bool,
+}
+
+struct ProjectWorkLogNormalizationRuntime<'a> {
     provider: &'a str,
     provider_model: Option<String>,
     provider_runtime: &'a str,
@@ -428,6 +437,15 @@ pub struct ProjectWorkLogNormalizationCandidatesOptions {
     pub refresh_session_index: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkLogNormalizationProposalsOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub session_limit: Option<usize>,
+    pub refresh_session_index: Option<bool>,
+    pub ai: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkLogNormalizationCandidate {
     pub candidate_id: String,
@@ -457,6 +475,50 @@ pub struct ProjectWorkLogNormalizationCandidatesResult {
     pub report_project_count: usize,
     pub report_date_count: usize,
     pub candidates: Vec<ProjectWorkLogNormalizationCandidate>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogNormalizationProposal {
+    pub candidate_id: String,
+    pub project: String,
+    pub date: String,
+    pub source_path: String,
+    pub source_file: String,
+    pub reason: String,
+    pub original_title: String,
+    pub original_status: String,
+    pub original_evidence: String,
+    pub normalized_title: String,
+    pub normalized_status: String,
+    pub normalized_evidence: String,
+    pub confidence: f64,
+    pub accepted: bool,
+    pub rejection_reason: Option<String>,
+    pub work_item_count: usize,
+    pub session_evidence_count: usize,
+    pub saved_extraction_count: usize,
+    pub ai_saved_extraction_count: usize,
+    pub best_ai_confidence: Option<f64>,
+    pub risk_flags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogNormalizationProposalsResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub provider: String,
+    pub provider_model: Option<String>,
+    pub provider_runtime: String,
+    pub used_ai: bool,
+    pub total_candidate_count: usize,
+    pub returned_proposal_count: usize,
+    pub accepted_count: usize,
+    pub rejected_count: usize,
+    pub report_total_items: usize,
+    pub report_project_count: usize,
+    pub report_date_count: usize,
+    pub proposals: Vec<ProjectWorkLogNormalizationProposal>,
     pub warnings: Vec<String>,
 }
 
@@ -1000,6 +1062,15 @@ fn project_work_log_normalization_candidates(
     options: Option<ProjectWorkLogNormalizationCandidatesOptions>,
 ) -> Result<ProjectWorkLogNormalizationCandidatesResult, String> {
     run_project_work_log_normalization_candidates(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+async fn project_work_log_normalization_proposals(
+    options: Option<ProjectWorkLogNormalizationProposalsOptions>,
+) -> Result<ProjectWorkLogNormalizationProposalsResult, String> {
+    run_project_work_log_normalization_proposals(options.unwrap_or_default())
+        .await
         .map_err(|err| err.to_string())
 }
 
@@ -1905,6 +1976,49 @@ pub fn run_project_work_log_normalization_candidates(
     let mut result =
         build_project_work_log_normalization_candidates_from_report(&report, &saved_counts, limit);
     result.generated_at = generated_at;
+    result.database_path = database_path.display().to_string();
+    Ok(result)
+}
+
+pub async fn run_project_work_log_normalization_proposals(
+    options: ProjectWorkLogNormalizationProposalsOptions,
+) -> Result<ProjectWorkLogNormalizationProposalsResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-log normalization proposal limit requires a positive integer".into());
+    }
+    if matches!(options.session_limit, Some(0)) {
+        return Err(
+            "work-log normalization proposal session_limit requires a positive integer".into(),
+        );
+    }
+
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_PROPOSAL_LIMIT)
+        .min(MAX_PROJECT_WORK_LOG_NORMALIZATION_PROPOSAL_LIMIT);
+    let candidates = run_project_work_log_normalization_candidates(
+        ProjectWorkLogNormalizationCandidatesOptions {
+            database_path: Some(database_path.display().to_string()),
+            limit: Some(limit),
+            session_limit: options.session_limit,
+            refresh_session_index: options.refresh_session_index,
+        },
+    )?;
+    let mut result = project_work_log_normalization_proposals_with_env(
+        candidates,
+        !options.ai.unwrap_or(false),
+        load_improve_env(),
+    )
+    .await?;
+    result.generated_at = Utc::now().to_rfc3339();
     result.database_path = database_path.display().to_string();
     Ok(result)
 }
@@ -8530,6 +8644,632 @@ fn project_work_log_normalization_evidence(group: &ProjectWorkLogNormalizationGr
     truncate_chars(&redact_sensitive_text(&joined), 700)
 }
 
+#[derive(Debug, Deserialize)]
+struct AiProjectWorkLogNormalizationEnvelope {
+    proposals: Vec<AiProjectWorkLogNormalizationProposal>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AiProjectWorkLogNormalizationProposal {
+    candidate_id: String,
+    normalized_title: String,
+    normalized_status: String,
+    normalized_evidence: String,
+    confidence: f64,
+}
+
+async fn project_work_log_normalization_proposals_with_env(
+    candidates: ProjectWorkLogNormalizationCandidatesResult,
+    force_local: bool,
+    env: HashMap<String, String>,
+) -> Result<ProjectWorkLogNormalizationProposalsResult, Box<dyn std::error::Error>> {
+    if force_local || candidates.candidates.is_empty() {
+        return Ok(local_project_work_log_normalization_proposals(
+            candidates,
+            if force_local {
+                vec!["AI 정규화가 비활성화되어 로컬 review-only 제안만 반환했습니다.".to_string()]
+            } else {
+                vec!["AI 정규화 후보가 0개라 OpenAI/GLM provider 호출을 생략했습니다.".to_string()]
+            },
+        ));
+    }
+
+    let mut warnings = candidates.warnings.clone();
+    let (blocked_candidates, safe_candidates): (Vec<_>, Vec<_>) = candidates
+        .candidates
+        .iter()
+        .cloned()
+        .partition(|candidate| !candidate.risk_flags.is_empty());
+    if !blocked_candidates.is_empty() {
+        warnings.push(format!(
+            "위험 패턴이 감지된 정규화 후보 {}개는 외부 AI provider로 보내지 않고 rejected로 남겼습니다.",
+            blocked_candidates.len()
+        ));
+    }
+    if safe_candidates.is_empty() {
+        return Ok(finish_project_work_log_normalization_proposals(
+            &candidates,
+            ProjectWorkLogNormalizationRuntime {
+                provider: "local-normalization-rules",
+                provider_model: None,
+                provider_runtime: "local-normalization-rules",
+                used_ai: false,
+            },
+            blocked_candidates
+                .iter()
+                .map(|candidate| {
+                    rejected_project_work_log_normalization_proposal(
+                        candidate,
+                        "candidate_has_risk_flags",
+                    )
+                })
+                .collect(),
+            warnings,
+        ));
+    }
+
+    if let Some(api_key) = openai_api_key_from_env(&env) {
+        match request_openai_project_work_log_normalization(
+            &candidates,
+            &safe_candidates,
+            &env,
+            &api_key,
+        )
+        .await
+        {
+            Ok(mut result) => {
+                result.warnings.extend(warnings);
+                append_blocked_work_log_normalization_proposals(
+                    &mut result,
+                    &blocked_candidates,
+                    &candidates,
+                );
+                return Ok(result);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    }
+    if let Some(api_key) = glm_api_key_from_env(&env) {
+        match request_glm_project_work_log_normalization(
+            &candidates,
+            &safe_candidates,
+            &env,
+            &api_key,
+        )
+        .await
+        {
+            Ok(mut result) => {
+                result.warnings.extend(warnings);
+                append_blocked_work_log_normalization_proposals(
+                    &mut result,
+                    &blocked_candidates,
+                    &candidates,
+                );
+                return Ok(result);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    }
+    if openai_api_key_from_env(&env).is_none() && glm_api_key_from_env(&env).is_none() {
+        warnings.push(
+            "OPENAI_API_KEY 및 GLM_API_KEY/GLM_API_KEY_2가 없어 로컬 normalization fallback을 사용했습니다."
+                .to_string(),
+        );
+    }
+    Ok(local_project_work_log_normalization_proposals(
+        candidates, warnings,
+    ))
+}
+
+async fn request_openai_project_work_log_normalization(
+    candidates_result: &ProjectWorkLogNormalizationCandidatesResult,
+    candidates: &[ProjectWorkLogNormalizationCandidate],
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkLogNormalizationProposalsResult, String> {
+    let endpoint = normalize_openai_responses_endpoint(
+        &env.get("OPENAI_RESPONSES_ENDPOINT")
+            .or_else(|| env.get("OPENAI_BASE_URL"))
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_OPENAI_RESPONSES_ENDPOINT.to_string()),
+    );
+    let model = openai_model_from_env(env);
+    let (system, user) = project_work_log_normalization_messages(candidates);
+    let body = serde_json::json!({
+        "model": model,
+        "input": [
+            {
+                "role": "developer",
+                "content": [
+                    { "type": "input_text", "text": system }
+                ]
+            },
+            {
+                "role": "user",
+                "content": [
+                    { "type": "input_text", "text": user }
+                ]
+            }
+        ],
+        "temperature": 0.0,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "project_work_log_normalization",
+                "strict": true,
+                "schema": project_work_log_normalization_json_schema()
+            }
+        }
+    });
+
+    let client = project_work_log_extraction_http_client("OpenAI")?;
+    let response = client
+        .post(endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|err| {
+            format!("OpenAI work-log normalization 요청 실패: {err}; 다음 provider 또는 로컬 fallback을 사용합니다.")
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "OpenAI work-log normalization이 HTTP {status}를 반환해 다음 provider 또는 로컬 fallback을 사용합니다."
+        ));
+    }
+    let value = response.json::<Value>().await.map_err(|err| {
+        format!(
+            "OpenAI work-log normalization 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용합니다."
+        )
+    })?;
+    let content = openai_response_content(&value).ok_or_else(|| {
+        "OpenAI work-log normalization 응답 content가 없어 다음 provider 또는 로컬 fallback을 사용합니다."
+            .to_string()
+    })?;
+    project_work_log_normalization_proposals_from_content(
+        candidates_result,
+        ProjectWorkLogNormalizationRuntime {
+            provider: "openai",
+            provider_model: Some(model),
+            provider_runtime: "openai-responses",
+            used_ai: true,
+        },
+        candidates,
+        &content,
+        Vec::new(),
+    )
+    .map_err(|err| {
+        format!("OpenAI work-log normalization 검증 실패: {err}; 로컬 fallback을 사용합니다.")
+    })
+}
+
+async fn request_glm_project_work_log_normalization(
+    candidates_result: &ProjectWorkLogNormalizationCandidatesResult,
+    candidates: &[ProjectWorkLogNormalizationCandidate],
+    env: &HashMap<String, String>,
+    api_key: &str,
+) -> Result<ProjectWorkLogNormalizationProposalsResult, String> {
+    let endpoint = normalize_chat_endpoint(
+        &env.get("GLM_CODING_ENDPOINT")
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_GLM_CHAT_ENDPOINT.to_string()),
+    );
+    let model = glm_model_from_env(env);
+    let (system, user) = project_work_log_normalization_messages(candidates);
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [
+            { "role": "system", "content": system },
+            { "role": "user", "content": user }
+        ],
+        "temperature": 0.0,
+        "response_format": { "type": "json_object" }
+    });
+
+    let client = project_work_log_extraction_http_client("GLM")?;
+    let response = client
+        .post(endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|err| {
+            format!("GLM work-log normalization 요청 실패: {err}; 로컬 fallback을 사용했습니다.")
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "GLM work-log normalization이 HTTP {status}를 반환해 로컬 fallback을 사용했습니다."
+        ));
+    }
+    let value = response.json::<Value>().await.map_err(|err| {
+        format!(
+            "GLM work-log normalization 응답 JSON 파싱 실패: {err}; 로컬 fallback을 사용했습니다."
+        )
+    })?;
+    let content = value
+        .pointer("/choices/0/message/content")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            "GLM work-log normalization 응답 content가 없어 로컬 fallback을 사용했습니다."
+                .to_string()
+        })?;
+    project_work_log_normalization_proposals_from_content(
+        candidates_result,
+        ProjectWorkLogNormalizationRuntime {
+            provider: "glm",
+            provider_model: Some(model),
+            provider_runtime: "glm-chat-completions",
+            used_ai: true,
+        },
+        candidates,
+        content,
+        Vec::new(),
+    )
+    .map_err(|err| {
+        format!("GLM work-log normalization 검증 실패: {err}; 로컬 fallback을 사용했습니다.")
+    })
+}
+
+fn project_work_log_normalization_json_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "proposals": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "candidate_id": { "type": "string" },
+                        "normalized_title": { "type": "string" },
+                        "normalized_status": { "type": "string" },
+                        "normalized_evidence": { "type": "string" },
+                        "confidence": { "type": "number" }
+                    },
+                    "required": [
+                        "candidate_id",
+                        "normalized_title",
+                        "normalized_status",
+                        "normalized_evidence",
+                        "confidence"
+                    ]
+                }
+            }
+        },
+        "required": ["proposals"]
+    })
+}
+
+fn project_work_log_normalization_messages(
+    candidates: &[ProjectWorkLogNormalizationCandidate],
+) -> (&'static str, String) {
+    let system = "You normalize project/date work-management rows for an engineering operator. Use only supplied candidate evidence. Do not invent projects, dates, tasks, sessions, or evidence. Return JSON only with key proposals. Each accepted proposal must use a candidate_id exactly as supplied, a concise normalized_title, normalized_status from proposed/current/done/blocked/mixed/unknown, normalized_evidence copied verbatim from the candidate evidence, and confidence from 0 to 1.";
+    let mut user = String::new();
+    user.push_str("Candidates:\n");
+    for candidate in candidates {
+        user.push_str(&format!(
+            "Candidate ID: {}\nProject: {}\nDate: {}\nSource: {}\nReason: {}\nOriginal title: {}\nOriginal status: {}\nWork items: {}\nSession evidence count: {}\nSaved extractions: {}\nAI saved extractions: {}\nEvidence:\n{}\n\n",
+            candidate.candidate_id,
+            candidate.project,
+            candidate.date,
+            candidate.source_path,
+            candidate.reason,
+            candidate.title,
+            candidate.status,
+            candidate.work_item_count,
+            candidate.session_evidence_count,
+            candidate.saved_extraction_count,
+            candidate.ai_saved_extraction_count,
+            candidate.evidence
+        ));
+    }
+    user.push_str("Return JSON: {\"proposals\":[{\"candidate_id\":\"...\",\"normalized_title\":\"...\",\"normalized_status\":\"proposed\",\"normalized_evidence\":\"verbatim evidence\",\"confidence\":0.0}]}.");
+    (system, truncate_chars(&user, 24_000))
+}
+
+fn project_work_log_normalization_proposals_from_content(
+    candidates_result: &ProjectWorkLogNormalizationCandidatesResult,
+    runtime: ProjectWorkLogNormalizationRuntime<'_>,
+    candidates: &[ProjectWorkLogNormalizationCandidate],
+    content: &str,
+    warnings: Vec<String>,
+) -> Result<ProjectWorkLogNormalizationProposalsResult, Box<dyn std::error::Error>> {
+    let envelope: AiProjectWorkLogNormalizationEnvelope = serde_json::from_str(content)?;
+    let mut proposals_by_candidate =
+        BTreeMap::<String, AiProjectWorkLogNormalizationProposal>::new();
+    let mut duplicate_candidate_ids = BTreeSet::<String>::new();
+    for proposal in envelope.proposals {
+        let candidate_id = proposal.candidate_id.clone();
+        if proposals_by_candidate
+            .insert(candidate_id.clone(), proposal)
+            .is_some()
+        {
+            duplicate_candidate_ids.insert(candidate_id);
+        }
+    }
+
+    let mut result_warnings = warnings;
+    if !duplicate_candidate_ids.is_empty() {
+        result_warnings.push(format!(
+            "{} provider returned duplicate normalization candidate IDs: {}",
+            runtime.provider,
+            duplicate_candidate_ids
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    let mut proposals = Vec::new();
+    for candidate in candidates {
+        if let Some(ai) = proposals_by_candidate.remove(&candidate.candidate_id) {
+            proposals.push(project_work_log_normalization_proposal_from_ai(
+                candidate, ai,
+            ));
+        } else {
+            proposals.push(rejected_project_work_log_normalization_proposal(
+                candidate,
+                "missing_ai_proposal",
+            ));
+        }
+    }
+    if !proposals_by_candidate.is_empty() {
+        result_warnings.push(format!(
+            "{} provider returned unknown normalization candidate IDs: {}",
+            runtime.provider,
+            proposals_by_candidate
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    Ok(finish_project_work_log_normalization_proposals(
+        candidates_result,
+        runtime,
+        proposals,
+        result_warnings,
+    ))
+}
+
+fn project_work_log_normalization_proposal_from_ai(
+    candidate: &ProjectWorkLogNormalizationCandidate,
+    ai: AiProjectWorkLogNormalizationProposal,
+) -> ProjectWorkLogNormalizationProposal {
+    let normalized_title = truncate_chars(ai.normalized_title.trim(), 180);
+    let normalized_status_lower = ai.normalized_status.trim().to_ascii_lowercase();
+    let normalized_status = truncate_chars(&normalized_status_lower, 64);
+    let normalized_evidence = truncate_chars(ai.normalized_evidence.trim(), 320);
+    let rejection_reason = validate_project_work_log_normalization_proposal(
+        candidate,
+        &normalized_title,
+        &normalized_status,
+        &normalized_evidence,
+        ai.confidence,
+    );
+    ProjectWorkLogNormalizationProposal {
+        candidate_id: candidate.candidate_id.clone(),
+        project: candidate.project.clone(),
+        date: candidate.date.clone(),
+        source_path: candidate.source_path.clone(),
+        source_file: candidate.source_file.clone(),
+        reason: candidate.reason.clone(),
+        original_title: candidate.title.clone(),
+        original_status: candidate.status.clone(),
+        original_evidence: candidate.evidence.clone(),
+        normalized_title,
+        normalized_status,
+        normalized_evidence,
+        confidence: ai.confidence,
+        accepted: rejection_reason.is_none(),
+        rejection_reason,
+        work_item_count: candidate.work_item_count,
+        session_evidence_count: candidate.session_evidence_count,
+        saved_extraction_count: candidate.saved_extraction_count,
+        ai_saved_extraction_count: candidate.ai_saved_extraction_count,
+        best_ai_confidence: candidate.best_ai_confidence,
+        risk_flags: candidate.risk_flags.clone(),
+    }
+}
+
+fn validate_project_work_log_normalization_proposal(
+    candidate: &ProjectWorkLogNormalizationCandidate,
+    normalized_title: &str,
+    normalized_status: &str,
+    normalized_evidence: &str,
+    confidence: f64,
+) -> Option<String> {
+    if !candidate.risk_flags.is_empty() {
+        return Some("candidate_has_risk_flags".to_string());
+    }
+    if normalized_title.trim().is_empty() {
+        return Some("empty_normalized_title".to_string());
+    }
+    if normalized_status.trim().is_empty() {
+        return Some("empty_normalized_status".to_string());
+    }
+    if !matches!(
+        normalized_status,
+        "proposed" | "current" | "done" | "blocked" | "mixed" | "unknown"
+    ) {
+        return Some("invalid_normalized_status".to_string());
+    }
+    if normalized_evidence.trim().is_empty() {
+        return Some("empty_normalized_evidence".to_string());
+    }
+    if !normalized_contains(&candidate.evidence, normalized_evidence) {
+        return Some("evidence_not_in_candidate_evidence".to_string());
+    }
+    if !confidence.is_finite() || !(0.0..=1.0).contains(&confidence) {
+        return Some("invalid_confidence".to_string());
+    }
+    if confidence < 0.65 {
+        return Some("low_confidence".to_string());
+    }
+    if !detect_risks(&format!(
+        "{normalized_title}\n{normalized_status}\n{normalized_evidence}"
+    ))
+    .is_empty()
+    {
+        return Some("proposal_has_risk_flags".to_string());
+    }
+    None
+}
+
+fn local_project_work_log_normalization_proposals(
+    candidates: ProjectWorkLogNormalizationCandidatesResult,
+    mut warnings: Vec<String>,
+) -> ProjectWorkLogNormalizationProposalsResult {
+    warnings.extend(candidates.warnings.clone());
+    let proposals = candidates
+        .candidates
+        .iter()
+        .map(local_project_work_log_normalization_proposal)
+        .collect::<Vec<_>>();
+    finish_project_work_log_normalization_proposals(
+        &candidates,
+        ProjectWorkLogNormalizationRuntime {
+            provider: "local-normalization-rules",
+            provider_model: None,
+            provider_runtime: "local-normalization-rules",
+            used_ai: false,
+        },
+        proposals,
+        warnings,
+    )
+}
+
+fn local_project_work_log_normalization_proposal(
+    candidate: &ProjectWorkLogNormalizationCandidate,
+) -> ProjectWorkLogNormalizationProposal {
+    rejected_project_work_log_normalization_proposal(
+        candidate,
+        if candidate.risk_flags.is_empty() {
+            "local_fallback_requires_ai_review"
+        } else {
+            "candidate_has_risk_flags"
+        },
+    )
+}
+
+fn rejected_project_work_log_normalization_proposal(
+    candidate: &ProjectWorkLogNormalizationCandidate,
+    reason: &str,
+) -> ProjectWorkLogNormalizationProposal {
+    let normalized_title = local_project_work_log_normalization_title(candidate);
+    let normalized_status = local_project_work_log_normalization_status(candidate);
+    let normalized_evidence = truncate_chars(&candidate.evidence, 320);
+    ProjectWorkLogNormalizationProposal {
+        candidate_id: candidate.candidate_id.clone(),
+        project: candidate.project.clone(),
+        date: candidate.date.clone(),
+        source_path: candidate.source_path.clone(),
+        source_file: candidate.source_file.clone(),
+        reason: candidate.reason.clone(),
+        original_title: candidate.title.clone(),
+        original_status: candidate.status.clone(),
+        original_evidence: candidate.evidence.clone(),
+        normalized_title,
+        normalized_status,
+        normalized_evidence,
+        confidence: 0.5,
+        accepted: false,
+        rejection_reason: Some(reason.to_string()),
+        work_item_count: candidate.work_item_count,
+        session_evidence_count: candidate.session_evidence_count,
+        saved_extraction_count: candidate.saved_extraction_count,
+        ai_saved_extraction_count: candidate.ai_saved_extraction_count,
+        best_ai_confidence: candidate.best_ai_confidence,
+        risk_flags: candidate.risk_flags.clone(),
+    }
+}
+
+fn local_project_work_log_normalization_title(
+    candidate: &ProjectWorkLogNormalizationCandidate,
+) -> String {
+    let title = candidate
+        .title
+        .split(" (+")
+        .next()
+        .unwrap_or(candidate.title.as_str())
+        .trim();
+    if project_work_log_titles_are_generic(&[title.to_string()]) {
+        format!("{} {} parsed work rows", candidate.project, candidate.date)
+    } else {
+        truncate_chars(title, 180)
+    }
+}
+
+fn local_project_work_log_normalization_status(
+    candidate: &ProjectWorkLogNormalizationCandidate,
+) -> String {
+    match candidate.status.trim().to_ascii_lowercase().as_str() {
+        "proposed" | "current" | "done" | "blocked" | "mixed" | "unknown" => {
+            candidate.status.trim().to_ascii_lowercase()
+        }
+        _ => "unknown".to_string(),
+    }
+}
+
+fn finish_project_work_log_normalization_proposals(
+    candidates: &ProjectWorkLogNormalizationCandidatesResult,
+    runtime: ProjectWorkLogNormalizationRuntime<'_>,
+    proposals: Vec<ProjectWorkLogNormalizationProposal>,
+    warnings: Vec<String>,
+) -> ProjectWorkLogNormalizationProposalsResult {
+    let accepted_count = proposals
+        .iter()
+        .filter(|proposal| proposal.accepted)
+        .count();
+    let rejected_count = proposals.len().saturating_sub(accepted_count);
+    ProjectWorkLogNormalizationProposalsResult {
+        generated_at: String::new(),
+        database_path: candidates.database_path.clone(),
+        provider: runtime.provider.to_string(),
+        provider_model: runtime.provider_model,
+        provider_runtime: runtime.provider_runtime.to_string(),
+        used_ai: runtime.used_ai,
+        total_candidate_count: candidates.total_candidate_count,
+        returned_proposal_count: proposals.len(),
+        accepted_count,
+        rejected_count,
+        report_total_items: candidates.report_total_items,
+        report_project_count: candidates.report_project_count,
+        report_date_count: candidates.report_date_count,
+        proposals,
+        warnings,
+    }
+}
+
+fn append_blocked_work_log_normalization_proposals(
+    result: &mut ProjectWorkLogNormalizationProposalsResult,
+    blocked_candidates: &[ProjectWorkLogNormalizationCandidate],
+    candidates_result: &ProjectWorkLogNormalizationCandidatesResult,
+) {
+    if blocked_candidates.is_empty() {
+        return;
+    }
+    result
+        .proposals
+        .extend(blocked_candidates.iter().map(|candidate| {
+            rejected_project_work_log_normalization_proposal(candidate, "candidate_has_risk_flags")
+        }));
+    result.returned_proposal_count = result.proposals.len();
+    result.accepted_count = result
+        .proposals
+        .iter()
+        .filter(|proposal| proposal.accepted)
+        .count();
+    result.rejected_count = result
+        .returned_proposal_count
+        .saturating_sub(result.accepted_count);
+    result.total_candidate_count = candidates_result.total_candidate_count;
+}
+
 fn read_project_work_persisted_pairs(
     conn: &Connection,
 ) -> Result<HashSet<(String, String)>, Box<dyn std::error::Error>> {
@@ -9944,7 +10684,8 @@ pub fn run() {
             project_work_log_freeze,
             project_work_log_items,
             project_work_log_runs,
-            project_work_log_normalization_candidates
+            project_work_log_normalization_candidates,
+            project_work_log_normalization_proposals
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -13201,6 +13942,63 @@ Progress:
         assert!(candidate.reason.contains("no_session_evidence"));
         assert!(candidate.evidence.contains("[REDACTED_POSSIBLE_API_KEY]"));
         assert!(!candidate.evidence.contains("should-redact"));
+    }
+
+    #[test]
+    fn local_normalization_proposals_stay_review_only() {
+        let candidates = ProjectWorkLogNormalizationCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            database_path: "/tmp/promptvault.sqlite".to_string(),
+            total_candidate_count: 1,
+            returned_candidate_count: 1,
+            report_total_items: 3,
+            report_project_count: 1,
+            report_date_count: 1,
+            candidates: vec![ProjectWorkLogNormalizationCandidate {
+                candidate_id: "work-normalize-PromptVault-a1b2c3d4e5f6".to_string(),
+                project: "PromptVault".to_string(),
+                date: "2026-06-09".to_string(),
+                title: "Progress log updated (+1 more parsed work items)".to_string(),
+                status: "current".to_string(),
+                source_path: "/tmp/PromptVault/workingd.md".to_string(),
+                source_file: "workingd.md".to_string(),
+                reason: "no_ai_normalization,no_session_evidence,generic_title".to_string(),
+                evidence: "2026-06-09: Added normalization proposal route.".to_string(),
+                work_item_count: 2,
+                session_evidence_count: 0,
+                saved_extraction_count: 1,
+                ai_saved_extraction_count: 0,
+                best_ai_confidence: None,
+                risk_flags: Vec::new(),
+            }],
+            warnings: vec!["session warning".to_string()],
+        };
+
+        let result = local_project_work_log_normalization_proposals(
+            candidates,
+            vec!["fallback".to_string()],
+        );
+
+        assert_eq!(result.provider, "local-normalization-rules");
+        assert!(!result.used_ai);
+        assert_eq!(result.returned_proposal_count, 1);
+        assert_eq!(result.accepted_count, 0);
+        assert_eq!(result.rejected_count, 1);
+        assert!(result.warnings.contains(&"fallback".to_string()));
+        assert!(result.warnings.contains(&"session warning".to_string()));
+        let proposal = &result.proposals[0];
+        assert_eq!(proposal.project, "PromptVault");
+        assert_eq!(
+            proposal.normalized_title,
+            "PromptVault 2026-06-09 parsed work rows"
+        );
+        assert_eq!(proposal.normalized_status, "current");
+        assert_eq!(proposal.confidence, 0.5);
+        assert!(!proposal.accepted);
+        assert_eq!(
+            proposal.rejection_reason.as_deref(),
+            Some("local_fallback_requires_ai_review")
+        );
     }
 
     #[test]

@@ -115,6 +115,7 @@ import {
   loadProjectWorkLogCoverage,
   loadProjectWorkLogExtractionProposals,
   loadProjectWorkLogNormalizationCandidates,
+  loadProjectWorkLogNormalizationProposals,
   loadProjectWorkLogReviewQueue,
   listProjectWorkLogExtractionItems,
   listProjectWorkLogExtractionRuns,
@@ -238,6 +239,7 @@ import type {
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
+  ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogReviewQueueResult,
   PromptRecord,
   ProjectWorkSummaryResult,
@@ -268,6 +270,9 @@ import {
   workLogNormalizationCandidatesActionLabel,
   workLogNormalizationCandidatesFailureText,
   workLogNormalizationCandidatesMetaText,
+  workLogNormalizationProposalsActionLabel,
+  workLogNormalizationProposalsFailureText,
+  workLogNormalizationProposalsMetaText,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
   workLogExtractionProviderNoticeText,
@@ -301,6 +306,7 @@ import {
   type WorkLogExtractionItemsState,
   type WorkLogExtractionRunsState,
   type WorkLogNormalizationCandidatesState,
+  type WorkLogNormalizationProposalsState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
@@ -324,6 +330,8 @@ const WORK_LOG_EXTRACTION_RUN_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_RUN_MANAGEMENT_LIMIT = 100;
 const WORK_LOG_NORMALIZATION_CANDIDATE_DISPLAY_LIMIT = 5;
 const WORK_LOG_NORMALIZATION_CANDIDATE_MANAGEMENT_LIMIT = 100;
+const WORK_LOG_NORMALIZATION_PROPOSAL_DISPLAY_LIMIT = 5;
+const WORK_LOG_NORMALIZATION_PROPOSAL_MANAGEMENT_LIMIT = 40;
 const WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT = 6;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
@@ -417,6 +425,8 @@ function App() {
     useState<WorkLogExtractionRunsState>("idle");
   const [workLogNormalizationCandidatesState, setWorkLogNormalizationCandidatesState] =
     useState<WorkLogNormalizationCandidatesState>("idle");
+  const [workLogNormalizationProposalsState, setWorkLogNormalizationProposalsState] =
+    useState<WorkLogNormalizationProposalsState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
   const [workManagementFreezeState, setWorkManagementFreezeState] =
@@ -451,6 +461,8 @@ function App() {
     useState<ProjectWorkLogExtractionRunsResult | null>(null);
   const [workLogNormalizationCandidatesResult, setWorkLogNormalizationCandidatesResult] =
     useState<ProjectWorkLogNormalizationCandidatesResult | null>(null);
+  const [workLogNormalizationProposalsResult, setWorkLogNormalizationProposalsResult] =
+    useState<ProjectWorkLogNormalizationProposalsResult | null>(null);
   const [approvedWorkLogExtractionCandidateIds, setApprovedWorkLogExtractionCandidateIds] =
     useState<Set<string>>(() => new Set());
   const [workSummarySnapshotsResult, setWorkSummarySnapshotsResult] =
@@ -517,6 +529,7 @@ function App() {
     || workLogExtractionItemsState === "loading"
     || workLogExtractionRunsState === "loading"
     || workLogNormalizationCandidatesState === "loading"
+    || workLogNormalizationProposalsState === "loading"
     || workManagementRefreshState === "loading"
     || workManagementFreezeState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
@@ -725,6 +738,12 @@ function App() {
     workLogNormalizationCandidatesState,
     workLogNormalizationCandidatesResult,
   );
+  const workLogNormalizationProposalsFailureMessage =
+    workLogNormalizationProposalsFailureText(workLogNormalizationProposalsState);
+  const workLogNormalizationProposalsMeta = workLogNormalizationProposalsMetaText(
+    workLogNormalizationProposalsState,
+    workLogNormalizationProposalsResult,
+  );
   const workSummarySnapshotsFailureMessage = workSummarySnapshotsFailureText(workSummarySnapshotsState);
   const workSummarySnapshotsMeta = workSummarySnapshotsMetaText(
     workSummarySnapshotsState,
@@ -811,6 +830,11 @@ function App() {
       0,
       WORK_LOG_NORMALIZATION_CANDIDATE_DISPLAY_LIMIT,
     ) ?? [];
+  const visibleWorkLogNormalizationProposals =
+    workLogNormalizationProposalsResult?.proposals.slice(
+      0,
+      WORK_LOG_NORMALIZATION_PROPOSAL_DISPLAY_LIMIT,
+    ) ?? [];
   const visibleWorkLogExtractionItemGroups =
     groupWorkLogExtractionItemsByProjectDate(visibleWorkLogExtractionItems);
   const hiddenWorkLogExtractionItemCount = Math.max(
@@ -826,6 +850,11 @@ function App() {
     (workLogNormalizationCandidatesResult?.candidates.length ?? 0)
       - WORK_LOG_NORMALIZATION_CANDIDATE_DISPLAY_LIMIT,
   );
+  const hiddenWorkLogNormalizationProposalCount = Math.max(
+    0,
+    (workLogNormalizationProposalsResult?.proposals.length ?? 0)
+      - WORK_LOG_NORMALIZATION_PROPOSAL_DISPLAY_LIMIT,
+  );
   const workManagementOverviewLoaded =
     workSummaryResult !== null
     || workSummarySnapshotsResult !== null
@@ -833,6 +862,7 @@ function App() {
     || workLogExtractionItemsResult !== null
     || workLogExtractionRunsResult !== null
     || workLogNormalizationCandidatesResult !== null
+    || workLogNormalizationProposalsResult !== null
     || workLogCoverageResult !== null;
   const workManagementOverview = useMemo(() => buildWorkManagementOverview({
     coverage: workLogCoverageResult,
@@ -1143,6 +1173,36 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkLogNormalizationCandidatesState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function refreshWorkLogNormalizationProposals() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    const sessionLimit = workSummarySessionLimit;
+    if (sessionLimit === null) {
+      const message = workSummarySessionLimitStatus;
+      setError(message);
+      setWorkLogNormalizationProposalsState("failed");
+      releaseExclusiveAction(topLevelActionClaimRef);
+      return;
+    }
+    setError(null);
+    setWorkLogNormalizationProposalsState("loading");
+    try {
+      const next = await loadProjectWorkLogNormalizationProposals({
+        ai: true,
+        limit: WORK_LOG_NORMALIZATION_PROPOSAL_MANAGEMENT_LIMIT,
+        session_limit: sessionLimit,
+      });
+      setWorkLogNormalizationProposalsResult(next);
+      setWorkLogNormalizationProposalsState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogNormalizationProposalsState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -2176,6 +2236,25 @@ function App() {
                   : "정규화 후보"}
             </button>
             <button
+              aria-label={workLogNormalizationProposalsActionLabel(
+                workLogNormalizationProposalsState,
+                workLogNormalizationProposalsResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-log-normalization-proposals="true"
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
+              onClick={() => void refreshWorkLogNormalizationProposals()}
+              type="button"
+            >
+              <Sparkles size={15} />
+              {workLogNormalizationProposalsState === "loading"
+                ? "제안 생성 중"
+                : workLogNormalizationProposalsResult
+                  ? "정규화 제안 새로고침"
+                  : "정규화 제안"}
+            </button>
+            <button
               aria-label={workLogReviewQueueActionLabel(
                 workLogReviewQueueState,
                 workLogReviewQueueResult !== null,
@@ -2437,6 +2516,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workLogNormalizationCandidatesFailureMessage}</span>
+          </div>
+        ) : null}
+        {workLogNormalizationProposalsFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-log-normalization-proposals-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workLogNormalizationProposalsFailureMessage}</span>
           </div>
         ) : null}
         <form
@@ -2907,6 +2996,12 @@ function App() {
             <span>{workLogNormalizationCandidatesMeta}</span>
           </div>
         ) : null}
+        {workLogNormalizationProposalsResult || workLogNormalizationProposalsState !== "idle" ? (
+          <div className="work-summary-index" data-work-log-normalization-proposals-meta="true">
+            <Sparkles size={15} />
+            <span>{workLogNormalizationProposalsMeta}</span>
+          </div>
+        ) : null}
         {workManagementOverviewLoaded ? (
           <div className="work-summary-index" data-work-management-overview-meta="true">
             <ClipboardList size={15} />
@@ -3350,6 +3445,55 @@ function App() {
           ) : (
             <div className="empty compact" data-empty-work-log-normalization-candidates="true">
               AI 정규화가 필요한 프로젝트/일자 후보 없음
+            </div>
+          )
+        ) : null}
+        {workLogNormalizationProposalsResult ? (
+          visibleWorkLogNormalizationProposals.length ? (
+            <div className="work-summary-list" data-work-log-normalization-proposals="true">
+              {visibleWorkLogNormalizationProposals.map((proposal) => (
+                <article
+                  className="work-summary-row work-log-proposal-row"
+                  key={proposal.candidate_id}
+                >
+                  <div>
+                    <strong>{proposal.project}</strong>
+                    <span>{proposal.date}</span>
+                  </div>
+                  <p>{proposal.normalized_title}</p>
+                  <p className="work-log-proposal-evidence">{proposal.normalized_evidence}</p>
+                  <span>
+                    {proposal.accepted
+                      ? "AI 정규화 accepted"
+                      : `AI 검토 필요 · ${proposal.rejection_reason ?? "rejected"}`}{" "}
+                    · confidence {proposal.confidence.toFixed(2)}
+                  </span>
+                  <span>
+                    provider {workLogNormalizationProposalsResult.provider_runtime} · 원본{" "}
+                    {proposal.original_title} · status {proposal.original_status} →{" "}
+                    {proposal.normalized_status}
+                  </span>
+                  <span>
+                    작업 {proposal.work_item_count.toLocaleString()}개 · 세션근거{" "}
+                    {proposal.session_evidence_count.toLocaleString()}건 · 저장추출{" "}
+                    {proposal.saved_extraction_count.toLocaleString()}개 · AI 저장{" "}
+                    {proposal.ai_saved_extraction_count.toLocaleString()}개
+                  </span>
+                  {proposal.risk_flags.length ? (
+                    <span>위험표시 {proposal.risk_flags.map(riskFlagLabel).join(", ")}</span>
+                  ) : null}
+                  <span>{proposal.source_file} · {proposal.source_path}</span>
+                </article>
+              ))}
+              {hiddenWorkLogNormalizationProposalCount ? (
+                <div className="work-summary-overflow">
+                  그 외 AI 정규화 제안 {hiddenWorkLogNormalizationProposalCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-log-normalization-proposals="true">
+              생성된 AI 정규화 제안 없음
             </div>
           )
         ) : null}

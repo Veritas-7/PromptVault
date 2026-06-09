@@ -17,6 +17,7 @@ import type {
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
+  ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkReport,
   ProjectWorkSummaryResult,
@@ -154,6 +155,14 @@ export interface ProjectWorkLogNormalizationCandidatesOptions {
   limit?: number;
   session_limit?: number;
   refresh_session_index?: boolean;
+}
+
+export interface ProjectWorkLogNormalizationProposalsOptions {
+  database_path?: string;
+  limit?: number;
+  session_limit?: number;
+  refresh_session_index?: boolean;
+  ai?: boolean;
 }
 
 export interface ImprovePromptRequest {
@@ -374,6 +383,22 @@ export async function loadProjectWorkLogNormalizationCandidates(
     "/api/work-log-normalization-candidates",
     { options },
     parseProjectWorkLogNormalizationCandidatesResult,
+  );
+}
+
+export async function loadProjectWorkLogNormalizationProposals(
+  options: ProjectWorkLogNormalizationProposalsOptions = {},
+): Promise<ProjectWorkLogNormalizationProposalsResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogNormalizationProposalsResult>(
+      "project_work_log_normalization_proposals",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkLogNormalizationProposalsResult>(
+    "/api/work-log-normalization-proposals",
+    { options },
+    parseProjectWorkLogNormalizationProposalsResult,
   );
 }
 
@@ -1671,6 +1696,80 @@ function parseProjectWorkLogNormalizationCandidatesResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkLogNormalizationCandidatesResult;
+}
+
+function isProjectWorkLogNormalizationProposal(value: unknown): boolean {
+  if (!isRecord(value)
+    || !isNonBlankString(value.candidate_id)
+    || !isNonBlankString(value.project)
+    || !isNonBlankString(value.date)
+    || !isNonBlankString(value.source_path)
+    || !isNonBlankString(value.source_file)
+    || !isNonBlankString(value.reason)
+    || !isNonBlankString(value.original_title)
+    || !isNonBlankString(value.original_status)
+    || !isNonBlankString(value.original_evidence)
+    || !isNonBlankString(value.normalized_title)
+    || !isNonBlankString(value.normalized_status)
+    || !isNonBlankString(value.normalized_evidence)
+    || !isFiniteNumber(value.confidence)
+    || value.confidence < 0
+    || value.confidence > 1
+    || typeof value.accepted !== "boolean"
+    || !isNullableNonBlankString(value.rejection_reason)
+    || !isPositiveSafeInteger(value.work_item_count)
+    || !isNonNegativeSafeInteger(value.session_evidence_count)
+    || !isNonNegativeSafeInteger(value.saved_extraction_count)
+    || !isNonNegativeSafeInteger(value.ai_saved_extraction_count)
+    || value.ai_saved_extraction_count > value.saved_extraction_count
+    || !(value.best_ai_confidence === null
+      || (isFiniteNumber(value.best_ai_confidence)
+        && value.best_ai_confidence >= 0
+        && value.best_ai_confidence <= 1))
+    || !isNonBlankStringArray(value.risk_flags)) {
+    return false;
+  }
+  return value.accepted ? value.rejection_reason === null : value.rejection_reason !== null;
+}
+
+function parseProjectWorkLogNormalizationProposalsResult(
+  value: unknown,
+): ProjectWorkLogNormalizationProposalsResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !isNonBlankString(value.provider)
+    || !isNullableNonBlankString(value.provider_model)
+    || !isNonBlankString(value.provider_runtime)
+    || typeof value.used_ai !== "boolean"
+    || !isNonNegativeSafeInteger(value.total_candidate_count)
+    || !isNonNegativeSafeIntegerAtMost(
+      value.returned_proposal_count,
+      value.total_candidate_count,
+    )
+    || !isNonNegativeSafeIntegerAtMost(value.accepted_count, value.returned_proposal_count)
+    || !isNonNegativeSafeIntegerAtMost(value.rejected_count, value.returned_proposal_count)
+    || !normalizationProposalCountsAreConsistent(value)
+    || !isNonNegativeSafeInteger(value.report_total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.report_project_count, value.report_total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.report_date_count, value.report_total_items)
+    || !Array.isArray(value.proposals)
+    || value.proposals.length !== value.returned_proposal_count
+    || !value.proposals.every(isProjectWorkLogNormalizationProposal)
+    || !recordStringFieldValuesAreUnique(value.proposals, "candidate_id")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkLogNormalizationProposalsResult;
+}
+
+function normalizationProposalCountsAreConsistent(value: Record<string, unknown>): boolean {
+  if (!isNonNegativeSafeInteger(value.accepted_count)
+    || !isNonNegativeSafeInteger(value.rejected_count)
+    || !isNonNegativeSafeInteger(value.returned_proposal_count)) {
+    return false;
+  }
+  return value.accepted_count + value.rejected_count === value.returned_proposal_count;
 }
 
 function isProjectWorkLogExtractionMergeResult(value: unknown): boolean {

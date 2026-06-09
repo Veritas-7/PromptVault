@@ -1,10 +1,119 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 13:39 KST
+Updated: 2026-06-09 14:01 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 AI normalization proposal route
+
+Current Goal:
+
+- Convert already parsed project/date normalization candidates into auditable
+  normalization proposals.
+- Keep the slice safe: no durable write of normalized rows yet; provider output
+  must pass source-faithful validation and local fallback remains review-only.
+
+Context:
+
+- The previous slice proved real project/day management coverage and surfaced
+  `work-log-normalization-candidates`.
+- The operator gap is now the next layer: candidates need an AI-backed proposal
+  surface before any approve/reject queue or durable normalized row write.
+- Existing OpenAI/GLM work-log extraction plumbing already has provider
+  fallback, secret env loading, risk blocking, and strict response validation;
+  this slice mirrors that pattern for normalization.
+
+Progress:
+
+- Added `work-log-normalization-proposals` across backend, CLI, browser bridge,
+  Tauri, TypeScript API, status labels, UI button, meta row, and rendered list.
+- `--ai` now attempts OpenAI first, then GLM, using redacted/truncated candidate
+  evidence only. Candidates with risk flags are never sent to an external
+  provider.
+- Provider proposals are accepted only if:
+  - candidate id matches;
+  - normalized status is one of `proposed/current/done/blocked/mixed/unknown`;
+  - normalized evidence is copied from the candidate evidence;
+  - confidence is finite and at least `0.65`;
+  - proposal text has no detected risk flags.
+- If no provider succeeds, local fallback returns review-only proposals with
+  `accepted=false` and `rejection_reason=local_fallback_requires_ai_review`.
+- Browser QA now clicks the new `정규화 제안` button and verifies visible
+  review-only rows.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added normalization proposal options/result/proposal structs;
+  - added provider-backed OpenAI/GLM normalization request/parse/validation;
+  - added local review-only fallback and Tauri command;
+  - added Rust test proving local fallback is not accepted automatically.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added `work-log-normalization-proposals`;
+  - added bridge route `POST /api/work-log-normalization-proposals`;
+  - added route locking, validation, and help coverage.
+- `src/types.ts`, `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`,
+  `src/App.tsx`:
+  - added frontend contract, strict parser, status labels, button, meta, and
+    proposal list rendering.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`:
+  - added API/parser/status tests for normalization proposals.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added click proof and final JSON capture for proposal meta and rows.
+
+Tests:
+
+- `cargo fmt --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo check --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml normalization -- --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml bridge_routes_work_log_normalization -- --nocapture`: PASS.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`: PASS, `195` tests.
+- `npm run test:ui`: PASS, `450` tests.
+- `npm run build`: PASS.
+- Live CLI smoke:
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-normalization-proposals --limit 5 --session-limit 200 --ai --json`:
+  PASS, `total_candidate_count=91`, `returned_proposal_count=5`,
+  `accepted_count=0`, `rejected_count=5`, `report_total_items=8,734`,
+  `provider=local-normalization-rules`.
+  The run attempted GLM and then used local fallback after a GLM request
+  failure.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON included:
+  - `workLogNormalizationCandidatesMeta`: `정규화 후보 91개 · 표시 91개 · 원본 작업 8,739개 · 31개 프로젝트 · 25일 · 위험표시 0개`;
+  - `workLogNormalizationProposalsMeta`: `정규화 제안 40개 · accepted 0개 · review 40개 · 후보 91개 · local-normalization-rules · 31개 프로젝트 · 25일`;
+  - rendered proposal rows included `AI 검토 필요 · local_fallback_requires_ai_review`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS.
+- `git diff --check`: PASS.
+- `npm run check`: PASS, including `test:ui`, `build`, full Rust tests
+  (`172` lib tests, `28` CLI tests), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- This adds AI-capable proposal generation, but does not yet persist
+  normalization proposals into a review queue or write approved normalized
+  project/day rows.
+- The live CLI smoke attempted GLM and fell back locally because the GLM
+  request failed. Provider success should be rechecked with a working provider
+  environment before trusting AI accepted proposals in production.
+- Large project/day rows still need chunked summarization before provider
+  normalization can produce high-quality accepted rows.
+
+Research:
+
+- No external research was needed. The implementation follows existing
+  PromptVault OpenAI/GLM extraction and summary provider patterns.
+
+Next Steps:
+
+- Persist normalization proposals into a review queue with approve/reject state.
+- Add a durable write path for approved AI-normalized project/day rows.
+- Add chunking for large project/day candidate groups before provider calls.
+- Add resumable all-history session backfill/checkpointing beyond the
+  `session_limit=200` verification path.
+- Evaluate a Codex SDK session-ingest adapter if it provides cleaner structured
+  session metadata than the current local JSONL/metadata-first index.
 
 ## Current Slice - 2026-06-09 parsed row AI normalization candidates
 

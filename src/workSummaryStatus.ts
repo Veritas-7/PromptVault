@@ -11,6 +11,7 @@ import type {
   ProjectWorkLogExtractionProposalsResult,
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogReviewQueueItem,
+  ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSummary,
   ProjectWorkSummaryResult,
@@ -27,6 +28,7 @@ export type WorkLogExtractionState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionItemsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogNormalizationCandidatesState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogNormalizationProposalsState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementFreezeState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunMode = "ai" | "local";
@@ -618,6 +620,50 @@ export function workLogNormalizationCandidatesFailureText(
 ): string | null {
   if (state !== "failed") return null;
   return "AI 정규화 후보를 불러오지 못했습니다. 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.";
+}
+
+export function workLogNormalizationProposalsActionLabel(
+  state: WorkLogNormalizationProposalsState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "AI 정규화 제안 생성 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 AI 정규화 제안을 ${hasResult ? "새로고침" : "생성"}할 수 없습니다`;
+  }
+  return hasResult ? "AI 정규화 제안 새로고침" : "AI 정규화 제안 생성";
+}
+
+export function workLogNormalizationProposalsMetaText(
+  state: WorkLogNormalizationProposalsState,
+  result: ProjectWorkLogNormalizationProposalsResult | null,
+): string {
+  if (state === "loading") return "AI 정규화 제안 생성 중";
+  if (!result) {
+    return state === "failed"
+      ? "AI 정규화 제안을 사용할 수 없음"
+      : "아직 생성한 AI 정규화 제안 없음";
+  }
+  const providerText = result.used_ai
+    ? `${result.provider}${result.provider_model ? `/${result.provider_model}` : ""}`
+    : result.provider;
+  return [
+    `정규화 제안 ${result.returned_proposal_count.toLocaleString()}개`,
+    `accepted ${result.accepted_count.toLocaleString()}개`,
+    `review ${result.rejected_count.toLocaleString()}개`,
+    `후보 ${result.total_candidate_count.toLocaleString()}개`,
+    providerText,
+    `${result.report_project_count.toLocaleString()}개 프로젝트`,
+    `${result.report_date_count.toLocaleString()}일`,
+  ].join(" · ");
+}
+
+export function workLogNormalizationProposalsFailureText(
+  state: WorkLogNormalizationProposalsState,
+): string | null {
+  if (state !== "failed") return null;
+  return "AI 정규화 제안을 생성하지 못했습니다. provider 키, 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.";
 }
 
 export function workSummarySnapshotVisibleSummaries(

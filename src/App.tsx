@@ -303,6 +303,7 @@ import {
   workLogExtractionUnsavedAcceptedIds,
   workManagementFreezeActionLabel,
   workManagementRefreshActionLabel,
+  filterWorkStatusExportRows,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
   workLogCoverageMetaText,
@@ -313,10 +314,12 @@ import {
   workSummaryMetaText,
   workSummaryPersistenceText,
   workStatusExportActionLabel,
+  workStatusExportFilterMetaText,
   workStatusExportFailureText,
   workStatusExportIndexStatusText,
   workStatusExportMetaText,
   workStatusExportRowAuditToggleText,
+  workStatusExportRowFilterLabel,
   workStatusExportRowSessionSourcesText,
   workStatusExportRowSourceFilesText,
   workStatusExportRowSourceStatusesText,
@@ -341,6 +344,7 @@ import {
   type WorkLogNormalizationReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
+  type WorkStatusExportRowFilter,
   type WorkStatusExportState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
@@ -356,6 +360,14 @@ const WORK_SUMMARY_LIMIT = 80;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
 const WORK_STATUS_EXPORT_LIMIT = 12;
 const WORK_STATUS_EXPORT_DISPLAY_LIMIT = 6;
+const WORK_STATUS_EXPORT_ROW_FILTER_OPTIONS: WorkStatusExportRowFilter[] = [
+  "all",
+  "needs-session-evidence",
+  "needs-title-normalization",
+  "active",
+  "session-supported",
+  "progress-log-only",
+];
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_SESSION_INDEX_MAX_BATCHES = 2;
 const WORK_SESSION_INDEX_LONG_MAX_BATCHES = 10;
@@ -681,6 +693,8 @@ function App() {
   const [expandedWorkStatusExportRowKeys, setExpandedWorkStatusExportRowKeys] = useState<Set<string>>(
     () => new Set(),
   );
+  const [workStatusExportRowFilter, setWorkStatusExportRowFilter] =
+    useState<WorkStatusExportRowFilter>("all");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [resultOrigin, setResultOrigin] = useState<PromptResultOrigin | null>(null);
   const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
@@ -1022,11 +1036,21 @@ function App() {
     workLogExtractionResult?.proposals ?? [],
   );
   const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
+  const filteredWorkStatusExportRows = useMemo(() => {
+    return filterWorkStatusExportRows(workStatusExportResult?.rows ?? [], workStatusExportRowFilter);
+  }, [workStatusExportResult?.rows, workStatusExportRowFilter]);
+  const workStatusExportFilterMeta = workStatusExportResult
+    ? workStatusExportFilterMetaText(
+        workStatusExportRowFilter,
+        workStatusExportResult.rows,
+        filteredWorkStatusExportRows,
+      )
+    : null;
   const visibleWorkStatusExportRows =
-    workStatusExportResult?.rows.slice(0, WORK_STATUS_EXPORT_DISPLAY_LIMIT) ?? [];
+    filteredWorkStatusExportRows.slice(0, WORK_STATUS_EXPORT_DISPLAY_LIMIT);
   const hiddenWorkStatusExportRowCount = Math.max(
     0,
-    (workStatusExportResult?.rows.length ?? 0) - WORK_STATUS_EXPORT_DISPLAY_LIMIT,
+    filteredWorkStatusExportRows.length - WORK_STATUS_EXPORT_DISPLAY_LIMIT,
   );
   const hiddenWorkSummaryCount = Math.max(
     0,
@@ -3628,6 +3652,38 @@ function App() {
             <span>{workStatusExportResult.warnings.join(" · ")}</span>
           </div>
         ) : null}
+        {workStatusExportResult ? (
+          <div
+            className="work-summary-filter-row work-status-export-filter-row"
+            data-work-status-export-filters="true"
+          >
+            <label>
+              <span>상태 row</span>
+              <select
+                aria-label="프로젝트 일별 상태 export row 필터"
+                data-work-status-export-filter="true"
+                disabled={isTopLevelActionLocked}
+                onChange={(event) => {
+                  setWorkStatusExportRowFilter(event.target.value as WorkStatusExportRowFilter);
+                  setExpandedWorkStatusExportRowKeys(new Set());
+                }}
+                value={workStatusExportRowFilter}
+              >
+                {WORK_STATUS_EXPORT_ROW_FILTER_OPTIONS.map((filter) => (
+                  <option key={filter} value={filter}>
+                    {workStatusExportRowFilterLabel(filter)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {workStatusExportFilterMeta ? (
+              <div className="work-summary-index" data-work-status-export-filter-meta="true">
+                <Search size={15} />
+                <span>{workStatusExportFilterMeta}</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {workLogCoverageResult || workLogCoverageState !== "idle" ? (
           <div className="work-summary-index" data-work-log-coverage-meta="true">
             <FileText size={15} />
@@ -3768,51 +3824,57 @@ function App() {
         ) : null}
         {workStatusExportResult ? (
           <div className="work-summary-content work-status-export-content" data-work-status-export="true">
-            <div className="work-summary-list compact">
-              {visibleWorkStatusExportRows.map((row) => {
-                const rowKey = workStatusExportRowKey(row);
-                const detailsExpanded = expandedWorkStatusExportRowKeys.has(rowKey);
-                return (
-                  <article
-                    className={`work-summary-row work-status-export-row status-${row.operational_status}`}
-                    data-work-status-export-row="true"
-                    key={rowKey}
-                  >
-                    <div className="work-status-export-row-heading">
-                      <strong>{row.project}</strong>
-                      <span>{row.date}</span>
-                      <button
-                        aria-expanded={detailsExpanded}
-                        aria-label={workStatusExportRowAuditToggleText(row, detailsExpanded)}
-                        className="inline-action work-status-export-detail-toggle"
-                        data-work-status-export-row-toggle="true"
-                        onClick={() => toggleWorkStatusExportRowDetails(rowKey)}
-                        type="button"
-                      >
-                        {detailsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                    </div>
-                    <p>{(row.top_titles[0] ?? row.sample_evidence) || "제목 없는 프로젝트/일별 상태"}</p>
-                    <span>{workStatusExportRowStatusText(row)}</span>
-                    <span>{pathDisplayText(row.latest_source_path)}</span>
-                    {detailsExpanded ? (
-                      <div className="work-status-export-row-detail" data-work-status-export-row-detail="true">
-                        <span>{workStatusExportRowSourceFilesText(row)}</span>
-                        <span>{workStatusExportRowSourceStatusesText(row)}</span>
-                        <span>{workStatusExportRowSessionSourcesText(row)}</span>
-                        <span>최근 근거 파일 · {pathDisplayText(row.latest_source_path)}</span>
-                        <p>{row.sample_evidence || "샘플 근거 없음"}</p>
+            {visibleWorkStatusExportRows.length ? (
+              <div className="work-summary-list compact">
+                {visibleWorkStatusExportRows.map((row) => {
+                  const rowKey = workStatusExportRowKey(row);
+                  const detailsExpanded = expandedWorkStatusExportRowKeys.has(rowKey);
+                  return (
+                    <article
+                      className={`work-summary-row work-status-export-row status-${row.operational_status}`}
+                      data-work-status-export-row="true"
+                      key={rowKey}
+                    >
+                      <div className="work-status-export-row-heading">
+                        <strong>{row.project}</strong>
+                        <span>{row.date}</span>
+                        <button
+                          aria-expanded={detailsExpanded}
+                          aria-label={workStatusExportRowAuditToggleText(row, detailsExpanded)}
+                          className="inline-action work-status-export-detail-toggle"
+                          data-work-status-export-row-toggle="true"
+                          onClick={() => toggleWorkStatusExportRowDetails(rowKey)}
+                          type="button"
+                        >
+                          {detailsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
                       </div>
-                    ) : null}
-                  </article>
-                );
-              })}
-              {hiddenWorkStatusExportRowCount ? (
-                <div className="work-summary-overflow" data-work-status-export-overflow="true">
-                  그 외 상태 row {hiddenWorkStatusExportRowCount.toLocaleString()}개
-                </div>
-              ) : null}
-            </div>
+                      <p>{(row.top_titles[0] ?? row.sample_evidence) || "제목 없는 프로젝트/일별 상태"}</p>
+                      <span>{workStatusExportRowStatusText(row)}</span>
+                      <span>{pathDisplayText(row.latest_source_path)}</span>
+                      {detailsExpanded ? (
+                        <div className="work-status-export-row-detail" data-work-status-export-row-detail="true">
+                          <span>{workStatusExportRowSourceFilesText(row)}</span>
+                          <span>{workStatusExportRowSourceStatusesText(row)}</span>
+                          <span>{workStatusExportRowSessionSourcesText(row)}</span>
+                          <span>최근 근거 파일 · {pathDisplayText(row.latest_source_path)}</span>
+                          <p>{row.sample_evidence || "샘플 근거 없음"}</p>
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+                {hiddenWorkStatusExportRowCount ? (
+                  <div className="work-summary-overflow" data-work-status-export-overflow="true">
+                    그 외 상태 row {hiddenWorkStatusExportRowCount.toLocaleString()}개
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="empty compact" data-empty-work-status-export-filter="true">
+                필터에 맞는 프로젝트/일별 상태 row 없음
+              </div>
+            )}
             <pre data-work-status-export-markdown="true">{workStatusExportResult.markdown}</pre>
           </div>
         ) : null}

@@ -197,6 +197,8 @@ async function runBrowserQa() {
   let workStatusExportIndex = "";
   let workStatusExportRows = [];
   let workStatusExportRowDetail = "";
+  let workStatusExportFilterMeta = "";
+  let workStatusExportFilteredRows = [];
   let workStatusExportMarkdown = "";
   let workSummaryIndex = "";
   let workSessionIndexBackfill = null;
@@ -439,6 +441,18 @@ async function runBrowserQa() {
     }, undefined, { timeout: 30000 });
     workStatusExportRowDetail =
       (await page.locator('[data-work-status-export-row-detail="true"]').first().textContent())?.trim() ?? "";
+    await page.locator('[data-work-status-export-filter="true"]').selectOption("needs-session-evidence");
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-status-export-filter-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-status-export-row="true"]'));
+      return meta.includes("세션 근거 필요")
+        && meta.includes("결과")
+        && rows.length > 0
+        && rows.every((row) => (row.textContent ?? "").includes("세션 근거 필요"));
+    }, undefined, { timeout: 30000 });
+    workStatusExportFilterMeta =
+      (await page.locator('[data-work-status-export-filter-meta="true"]').textContent())?.trim() ?? "";
+    workStatusExportFilteredRows = await page.locator('[data-work-status-export-row="true"]').allTextContents();
     workStatusExportMarkdown =
       (await page.locator('[data-work-status-export-markdown="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-save-work-summary-snapshot="true"]').click();
@@ -730,6 +744,8 @@ async function runBrowserQa() {
       workStatusExportIndex,
       workStatusExportRows,
       workStatusExportRowDetail,
+      workStatusExportFilterMeta,
+      workStatusExportFilteredRows,
       workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,
       workManagementDurabilityWarning,

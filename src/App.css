@@ -233,6 +233,11 @@ h3 {
     auto;
 }
 
+.work-summary-filter-row.work-status-export-filter-row {
+  align-items: center;
+  grid-template-columns: minmax(170px, 260px) minmax(260px, 1fr);
+}
+
 .work-summary-filter-row label {
   display: grid;
   gap: 5px;

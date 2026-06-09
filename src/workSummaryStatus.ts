@@ -40,6 +40,13 @@ export type WorkLogNormalizationApplyState = "idle" | "loading" | "ready" | "fai
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementFreezeState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunMode = "ai" | "local";
+export type WorkStatusExportRowFilter =
+  | "all"
+  | "needs-session-evidence"
+  | "needs-title-normalization"
+  | "active"
+  | "session-supported"
+  | "progress-log-only";
 
 export const WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT = 3;
 
@@ -143,6 +150,45 @@ export function workStatusExportMetaText(
   ];
   if (result.rows_truncated) parts.push("표시 제한");
   return parts.join(" · ");
+}
+
+export function filterWorkStatusExportRows(
+  rows: ProjectWorkStatusExportRow[],
+  filter: WorkStatusExportRowFilter,
+): ProjectWorkStatusExportRow[] {
+  if (filter === "all") return rows;
+  return rows.filter((row) => {
+    if (filter === "needs-session-evidence") return row.needs_session_evidence;
+    if (filter === "needs-title-normalization") return row.needs_title_normalization;
+    return row.operational_status === filter;
+  });
+}
+
+export function workStatusExportRowFilterLabel(filter: WorkStatusExportRowFilter): string {
+  const labels: Record<WorkStatusExportRowFilter, string> = {
+    all: "전체",
+    "needs-session-evidence": "세션 근거 필요",
+    "needs-title-normalization": "제목 정규화 필요",
+    active: "현재 진행",
+    "session-supported": "세션 근거 있음",
+    "progress-log-only": "진행로그만 있음",
+  };
+  return labels[filter];
+}
+
+export function workStatusExportFilterMetaText(
+  filter: WorkStatusExportRowFilter,
+  rows: ProjectWorkStatusExportRow[],
+  filteredRows: ProjectWorkStatusExportRow[],
+): string {
+  const needsSessionEvidenceCount = rows.filter((row) => row.needs_session_evidence).length;
+  const needsTitleNormalizationCount = rows.filter((row) => row.needs_title_normalization).length;
+  return [
+    `필터 ${workStatusExportRowFilterLabel(filter)}`,
+    `결과 ${filteredRows.length.toLocaleString()} / ${rows.length.toLocaleString()}행`,
+    `세션근거 필요 ${needsSessionEvidenceCount.toLocaleString()}행`,
+    `제목정규화 필요 ${needsTitleNormalizationCount.toLocaleString()}행`,
+  ].join(" · ");
 }
 
 export function workSummaryIndexStatusText(result: ProjectWorkSummaryResult): string {

@@ -1,12 +1,106 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 18:26 KST
+Updated: 2026-06-09 18:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 status export row audit drill-down
+## Current Slice - 2026-06-09 status export gap filters
+
+Current Goal:
+
+- Make status export gaps actionable from the app, not just visible in the row
+  text.
+- Let the operator filter the current project/day export to rows needing session
+  evidence, title normalization, or a specific operational status.
+
+Context:
+
+- The status export now shows project/day rows and row-level audit detail.
+- The next usability gap was triage: the operator could see
+  `progress-log-only` and `세션 근거 필요`, but had to scan the first 12 rows
+  manually to find the exact backfill or normalization targets.
+- This slice stays frontend-only because the current export payload already
+  carries `operational_status`, `needs_session_evidence`, and
+  `needs_title_normalization` flags.
+
+Progress:
+
+- Added a status export row filter with options:
+  - 전체;
+  - 세션 근거 필요;
+  - 제목 정규화 필요;
+  - 현재 진행;
+  - 세션 근거 있음;
+  - 진행로그만 있음.
+- Added filter meta that reports result count, total displayed export rows,
+  rows needing session evidence, and rows needing title normalization.
+- The filter resets expanded row details when changed, preventing stale open
+  details after the visible row set changes.
+- Added an explicit empty state when a filter has no matching status rows.
+- Extended browser bridge QA to select `세션 근거 필요` and assert that every
+  visible status row includes that gap flag.
+
+Changes:
+
+- `src/workSummaryStatus.ts`:
+  - added `WorkStatusExportRowFilter`, filter helper, label helper, and filter
+    meta helper.
+- `src/App.tsx`:
+  - added status export filter state, derived filtered rows, filter UI, filter
+    meta, and filtered empty state.
+- `src/App.css`:
+  - added compact two-column layout for the status export filter row.
+- `tests/workSummaryStatus.test.ts`:
+  - added assertions for filtering, labels, and meta text.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added real browser select-option coverage for the session-evidence gap
+    filter.
+- `working.md`:
+  - recorded the gap-filter slice and verification evidence.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts --test-name-pattern "work status export"`:
+  PASS.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Browser bridge evidence:
+  - status export meta: `표시 12행 · 31개 프로젝트 · 25일 · 작업 8,931개 ·
+    진행로그 834개 · 세션 근거 73,456건 · 고유 200건 · 표시 제한`;
+  - filter meta after selecting session-evidence gaps:
+    `필터 세션 근거 필요 · 결과 4 / 12행 · 세션근거 필요 4행 ·
+    제목정규화 필요 4행`;
+  - filtered visible rows included ResearchFlowAI, enterprise_diagnosis_flutter,
+    novel-source-collector, and oss-favorites; all showed `세션 근거 필요`.
+- `npm run check`: PASS, including UI tests (`468`), production build, Rust lib
+  tests (`192`), CLI tests (`31`), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- The filter operates on the currently returned status export rows
+  (`WORK_STATUS_EXPORT_LIMIT=12`). It does not yet request all historical rows
+  or page through the full export.
+- The filter makes backfill/normalization targets easier to find, but it does
+  not itself run the confirmed long session-index backfill.
+
+Research:
+
+- No external research was needed. This reused the existing status export row
+  flags and browser bridge QA.
+
+Next Steps:
+
+- Add pagination or a larger explicit export scope if the operator needs to
+  triage beyond the current 12-row compact export.
+- Continue confirmed long session-index backfills against the rows exposed by
+  the `세션 근거 필요` filter.
+- Use the normalization review queue to approve cleanup for rows exposed by
+  the `제목 정규화 필요` filter.
+
+## Completed Slice - 2026-06-09 status export row audit drill-down
 
 Current Goal:
 

@@ -39,6 +39,7 @@ import {
   workLogExtractionReviewLabel,
   workLogExtractionSavedCandidateIds,
   workLogExtractionUnsavedAcceptedIds,
+  filterWorkStatusExportRows,
   workLogProposalSaveStateText,
   workManagementFreezeActionLabel,
   workManagementRefreshActionLabel,
@@ -51,10 +52,12 @@ import {
   workSummaryMetaText,
   workSummaryPersistenceText,
   workStatusExportActionLabel,
+  workStatusExportFilterMetaText,
   workStatusExportFailureText,
   workStatusExportIndexStatusText,
   workStatusExportMetaText,
   workStatusExportRowAuditToggleText,
+  workStatusExportRowFilterLabel,
   workStatusExportRowSessionSourcesText,
   workStatusExportRowSourceFilesText,
   workStatusExportRowSourceStatusesText,
@@ -753,6 +756,23 @@ test("work status export text exposes project day evidence coverage", () => {
   assert.equal(
     workStatusExportRowSessionSourcesText(result.rows[1]),
     "세션 소스 · Codex local sessions 9건 · 고유 3건",
+  );
+  assert.equal(workStatusExportRowFilterLabel("needs-session-evidence"), "세션 근거 필요");
+  assert.deepEqual(
+    filterWorkStatusExportRows(result.rows, "needs-session-evidence").map((row) => row.project),
+    ["PromptVault"],
+  );
+  assert.deepEqual(
+    filterWorkStatusExportRows(result.rows, "session-supported").map((row) => row.project),
+    ["CareVault"],
+  );
+  assert.equal(
+    workStatusExportFilterMetaText(
+      "needs-session-evidence",
+      result.rows,
+      filterWorkStatusExportRows(result.rows, "needs-session-evidence"),
+    ),
+    "필터 세션 근거 필요 · 결과 1 / 2행 · 세션근거 필요 1행 · 제목정규화 필요 1행",
   );
   assert.equal(workStatusExportMetaText("loading", result), "프로젝트/일별 상태 export 생성 중");
   assert.equal(workStatusExportMetaText("failed", null), "상태 export를 사용할 수 없음");

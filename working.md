@@ -1,12 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 18:34 KST
+Updated: 2026-06-09 18:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 status export gap filters
+## Current Slice - 2026-06-09 status export scope control
+
+Current Goal:
+
+- Let the operator widen the app-visible project/day status export beyond the
+  previous fixed 12-row compact scope.
+- Keep the scope bounded and validated so status export triage can expand to
+  25/50/100 rows without accidentally rendering an unbounded all-history export.
+
+Context:
+
+- The status export now has row drill-down and gap filters, but the filters
+  were limited to the fixed `12` returned rows.
+- Backend/CLI already accepts a positive `limit` for `work-status-export`; this
+  slice wires that existing contract into the app rather than adding a new
+  backend path.
+- The UI stays in the existing operator dashboard style: compact numeric input,
+  explicit status meta, and disabled actions when input is invalid.
+
+Progress:
+
+- Added a dedicated status export row-limit parser and status text with a safe
+  UI range of `1-100`.
+- Added a `상태행` number input next to the existing `세션`, `백필`, and
+  `긴 백필` controls.
+- `상태 Export` and `전체 관리` now pass the parsed status export limit into
+  `loadProjectWorkStatusExport`.
+- Invalid status export row limits disable the status export and overall
+  management actions and show a warning meta row.
+- Browser bridge QA now fills `상태행=25`, clicks status export, and verifies
+  the returned export and filter meta use the widened 25-row scope.
+
+Changes:
+
+- `src/workStatusExportLimit.ts`:
+  - added default/max constants, parser, and operator-facing status text.
+- `src/App.tsx`:
+  - added status export row-limit state, UI input, validation meta, disabled
+    action states, and `loadProjectWorkStatusExport` limit wiring.
+- `tests/workStatusExportLimit.test.ts`:
+  - added parser/status text coverage for valid, invalid, default, and max
+    limits.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added real browser input coverage for `상태행=25`, `표시 25행`, and
+    `/ 25행` filter meta.
+- `working.md`:
+  - recorded this scope-control slice and verification evidence.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workStatusExportLimit.test.ts tests/workSummaryStatus.test.ts
+  --test-name-pattern "work status export"`: PASS (`33` tests).
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Browser bridge evidence:
+  - limit meta: `상태 export 표시 25행 기준`;
+  - status export meta: `표시 25행 · 31개 프로젝트 · 25일 · 작업 8,945개 ·
+    진행로그 835개 · 세션 근거 73,576건 · 고유 200건 · 표시 제한`;
+  - filter meta after selecting session-evidence gaps:
+    `필터 세션 근거 필요 · 결과 12 / 25행 · 세션근거 필요 12행 ·
+    제목정규화 필요 8행`.
+- `npm run check`: PASS, including UI tests (`471`), production build, Rust lib
+  tests (`192`), CLI tests (`31`), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- The app can now widen the current export scope up to `100` rows, but it still
+  does not page through every historical project/day row.
+- This slice improves triage breadth; it does not complete the long
+  all-session backfill. The QA still uses bounded `session_limit=200`.
+- AI/provider-backed normalization remains review/operator-gated. This slice
+  did not run live OpenAI/GLM/Codex SDK provider calls.
+
+Research:
+
+- No external research was needed. This reused the existing
+  `work-status-export --limit` backend contract and browser bridge QA path.
+
+Next Steps:
+
+- Add pagination or an explicit all-export download path for status rows beyond
+  the `100`-row UI cap.
+- Continue confirmed long session-index backfills so rows currently exposed by
+  `세션 근거 필요` can become `session-supported`.
+- Use the normalization review queue or provider-backed normalization lane for
+  rows exposed by `제목 정규화 필요`.
+
+## Completed Slice - 2026-06-09 status export gap filters
 
 Current Goal:
 

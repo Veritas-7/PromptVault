@@ -164,6 +164,12 @@ import {
   workSummarySessionLimitStatusText,
 } from "./workSummarySessionLimit";
 import {
+  parseWorkStatusExportLimit,
+  WORK_STATUS_EXPORT_DEFAULT_LIMIT,
+  WORK_STATUS_EXPORT_MAX_LIMIT,
+  workStatusExportLimitStatusText,
+} from "./workStatusExportLimit";
+import {
   isSourceStatusOk,
   planSourceActionLabel,
   planSourceSelectionLabel,
@@ -358,7 +364,6 @@ type WorkSessionIndexBackfillMode = "reset" | "continue" | "long-continue";
 const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
-const WORK_STATUS_EXPORT_LIMIT = 12;
 const WORK_STATUS_EXPORT_DISPLAY_LIMIT = 6;
 const WORK_STATUS_EXPORT_ROW_FILTER_OPTIONS: WorkStatusExportRowFilter[] = [
   "all",
@@ -627,6 +632,9 @@ function App() {
   const [workSummarySessionLimitInput, setWorkSummarySessionLimitInput] = useState(
     String(WORK_SUMMARY_DEFAULT_SESSION_LIMIT),
   );
+  const [workStatusExportLimitInput, setWorkStatusExportLimitInput] = useState(
+    String(WORK_STATUS_EXPORT_DEFAULT_LIMIT),
+  );
   const [workSessionIndexBatchFilesInput, setWorkSessionIndexBatchFilesInput] = useState("");
   const [workSessionIndexLongConfirmInput, setWorkSessionIndexLongConfirmInput] = useState("");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
@@ -805,6 +813,9 @@ function App() {
   const workSummarySessionLimit = parseWorkSummarySessionLimit(workSummarySessionLimitInput);
   const workSummarySessionLimitInvalid = workSummarySessionLimit === null;
   const workSummarySessionLimitStatus = workSummarySessionLimitStatusText(workSummarySessionLimitInput);
+  const workStatusExportLimit = parseWorkStatusExportLimit(workStatusExportLimitInput);
+  const workStatusExportLimitInvalid = workStatusExportLimit === null;
+  const workStatusExportLimitStatus = workStatusExportLimitStatusText(workStatusExportLimitInput);
   const workSessionIndexBatchFilesOverride = workSessionIndexBatchFilesInput.trim() === ""
     ? null
     : parseWorkSessionIndexBatchFiles(workSessionIndexBatchFilesInput);
@@ -1892,8 +1903,15 @@ function App() {
 
   async function refreshWorkStatusExport({ refreshSessionIndex = false }: { refreshSessionIndex?: boolean } = {}) {
     const sessionLimit = workSummarySessionLimit;
+    const statusExportLimit = workStatusExportLimit;
     if (sessionLimit === null) {
       const message = workSummarySessionLimitStatus;
+      setError(message);
+      setWorkStatusExportState("failed");
+      return;
+    }
+    if (statusExportLimit === null) {
+      const message = workStatusExportLimitStatus;
       setError(message);
       setWorkStatusExportState("failed");
       return;
@@ -1903,7 +1921,7 @@ function App() {
     setWorkStatusExportState("loading");
     try {
       const next = await loadProjectWorkStatusExport({
-        limit: WORK_STATUS_EXPORT_LIMIT,
+        limit: statusExportLimit,
         session_limit: sessionLimit,
         refresh_session_index: refreshSessionIndex,
       });
@@ -1922,12 +1940,20 @@ function App() {
 
   async function refreshWorkManagementOverview() {
     const sessionLimit = workSummarySessionLimit;
+    const statusExportLimit = workStatusExportLimit;
     if (sessionLimit === null) {
       const message = workSummarySessionLimitStatus;
       setError(message);
       setWorkManagementRefreshState("failed");
       setWorkStatusExportState("failed");
       setWorkSummaryState("failed");
+      return;
+    }
+    if (statusExportLimit === null) {
+      const message = workStatusExportLimitStatus;
+      setError(message);
+      setWorkManagementRefreshState("failed");
+      setWorkStatusExportState("failed");
       return;
     }
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
@@ -1943,7 +1969,7 @@ function App() {
     setWorkLogExtractionItemsState("loading");
     try {
       const nextStatusExport = await loadProjectWorkStatusExport({
-        limit: WORK_STATUS_EXPORT_LIMIT,
+        limit: statusExportLimit,
         session_limit: sessionLimit,
       });
       setWorkStatusExportResult(nextStatusExport);
@@ -2551,6 +2577,23 @@ function App() {
               />
             </label>
             <label className="session-limit-control">
+              <span>상태행</span>
+              <input
+                aria-label="프로젝트 일별 상태 export에 표시할 최대 row 수"
+                data-work-status-export-limit-input="true"
+                disabled={isTopLevelActionLocked}
+                min={1}
+                max={WORK_STATUS_EXPORT_MAX_LIMIT}
+                step={5}
+                type="number"
+                value={workStatusExportLimitInput}
+                onChange={(event) => {
+                  setWorkStatusExportLimitInput(event.currentTarget.value);
+                  setExpandedWorkStatusExportRowKeys(new Set());
+                }}
+              />
+            </label>
+            <label className="session-limit-control">
               <span>백필</span>
               <input
                 aria-label="세션 백필 source당 파일 배치 수. 비우면 세션 기준 기본값을 사용합니다"
@@ -2588,7 +2631,7 @@ function App() {
               )}
               className="inline-action"
               data-refresh-work-management-overview="true"
-              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid || workStatusExportLimitInvalid}
               onClick={() => void refreshWorkManagementOverview()}
               type="button"
             >
@@ -2607,7 +2650,7 @@ function App() {
               )}
               className="inline-action"
               data-load-work-status-export="true"
-              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid || workStatusExportLimitInvalid}
               onClick={() => void refreshWorkStatusExport()}
               type="button"
             >
@@ -3565,6 +3608,13 @@ function App() {
         >
           <Brain size={15} />
           <span>{workSummarySessionLimitStatus}</span>
+        </div>
+        <div
+          className={`work-summary-index ${workStatusExportLimitInvalid ? "warning" : ""}`}
+          data-work-status-export-limit-meta="true"
+        >
+          <FileText size={15} />
+          <span>{workStatusExportLimitStatus}</span>
         </div>
         <div
           className={`work-summary-index ${workSessionIndexBatchFilesInvalid ? "warning" : ""}`}

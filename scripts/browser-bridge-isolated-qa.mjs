@@ -193,6 +193,7 @@ async function runBrowserQa() {
   let workManagementPersistenceRows = [];
   let workManagementDurabilityWarning = "";
   let workManagementMeta = "";
+  let workStatusExportLimitMeta = "";
   let workStatusExportMeta = "";
   let workStatusExportIndex = "";
   let workStatusExportRows = [];
@@ -417,12 +418,20 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     workSummaryIndex =
       (await page.locator('[data-work-summary-index="true"]').textContent())?.trim() ?? "";
+    await page.locator('[data-work-status-export-limit-input="true"]').fill("25");
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-status-export-limit-meta="true"]')?.textContent ?? "";
+      return text.includes("상태 export 표시 25행 기준");
+    }, undefined, { timeout: 30000 });
+    workStatusExportLimitMeta =
+      (await page.locator('[data-work-status-export-limit-meta="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-load-work-status-export="true"]').click();
     await page.waitForFunction(() => {
       const meta = document.querySelector('[data-work-status-export-meta="true"]')?.textContent ?? "";
       const index = document.querySelector('[data-work-status-export-index="true"]')?.textContent ?? "";
       const markdown = document.querySelector('[data-work-status-export-markdown="true"]')?.textContent ?? "";
-      return meta.includes("프로젝트")
+      return meta.includes("표시 25행")
+        && meta.includes("프로젝트")
         && meta.includes("세션 근거")
         && index.includes("메타데이터 우선")
         && markdown.includes("Project/Day Rows")
@@ -447,6 +456,7 @@ async function runBrowserQa() {
       const rows = Array.from(document.querySelectorAll('[data-work-status-export-row="true"]'));
       return meta.includes("세션 근거 필요")
         && meta.includes("결과")
+        && meta.includes("/ 25행")
         && rows.length > 0
         && rows.every((row) => (row.textContent ?? "").includes("세션 근거 필요"));
     }, undefined, { timeout: 30000 });
@@ -740,6 +750,7 @@ async function runBrowserQa() {
       workSessionLimit: WORK_SESSION_LIMIT,
       workSessionIndexBackfill,
       workSummaryIndex,
+      workStatusExportLimitMeta,
       workStatusExportMeta,
       workStatusExportIndex,
       workStatusExportRows,

@@ -187,6 +187,7 @@ import { groupWorkLogExtractionItemsByProjectDate } from "./workLogExtractionIte
 import {
   buildWorkManagementOverview,
   workManagementOverviewMetaText,
+  workManagementOverviewPersistenceText,
   workManagementOverviewSourceText,
 } from "./workManagementOverview";
 import {
@@ -2328,6 +2329,9 @@ function App() {
                     세션 근거 {row.session_evidence_count.toLocaleString()}건 · 추출제안{" "}
                     {row.extraction_proposal_count.toLocaleString()}개 · 저장추출{" "}
                     {row.saved_extraction_count.toLocaleString()}개
+                  </span>
+                  <span data-work-management-row-persistence="true">
+                    {workManagementOverviewPersistenceText(row)}
                   </span>
                 </article>
               ))}

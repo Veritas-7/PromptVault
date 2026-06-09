@@ -12,6 +12,7 @@ export type WorkManagementOverviewSource =
   | "extraction_proposal"
   | "saved_extraction"
   | "progress_log";
+export type WorkManagementOverviewPersistenceState = "persisted" | "live_only";
 
 export interface WorkManagementOverviewInput {
   summary?: ProjectWorkSummaryResult | null;
@@ -33,6 +34,9 @@ export interface WorkManagementOverviewRow {
   progress_log_count: number;
   work_item_count: number;
   session_evidence_count: number;
+  persistence_state: WorkManagementOverviewPersistenceState;
+  latest_snapshot_created_at: string | null;
+  latest_saved_extraction_at: string | null;
   latest_title: string | null;
 }
 
@@ -45,6 +49,10 @@ export interface WorkManagementOverview {
   extraction_proposal_count: number;
   saved_extraction_count: number;
   progress_log_count: number;
+  persisted_row_count: number;
+  live_only_row_count: number;
+  latest_snapshot_created_at: string | null;
+  latest_saved_extraction_at: string | null;
   rows: WorkManagementOverviewRow[];
 }
 
@@ -89,6 +97,7 @@ export function buildWorkManagementOverview(
       row.work_item_count = Math.max(row.work_item_count, summary.work_item_count);
       row.session_evidence_count = Math.max(row.session_evidence_count, summary.session_evidence_count);
       row.latest_title ??= summary.headline;
+      row.latest_snapshot_created_at = latestTimestamp(row.latest_snapshot_created_at, snapshot.created_at);
       row.sourceSet.add("snapshot");
     }
   }
@@ -98,6 +107,7 @@ export function buildWorkManagementOverview(
     row.saved_extraction_count += 1;
     row.work_item_count = Math.max(row.work_item_count, row.saved_extraction_count);
     row.latest_title ??= item.title;
+    row.latest_saved_extraction_at = latestTimestamp(row.latest_saved_extraction_at, item.saved_at);
     row.sourceSet.add("saved_extraction");
   }
 
@@ -126,6 +136,9 @@ export function buildWorkManagementOverview(
   const rows = [...rowsByKey.values()]
     .map(({ sourceSet, ...row }) => ({
       ...row,
+      persistence_state: row.snapshot_count > 0 || row.saved_extraction_count > 0
+        ? "persisted" as const
+        : "live_only" as const,
       sources: SOURCE_ORDER.filter((source) => sourceSet.has(source)),
     }))
     .sort((left, right) => {
@@ -143,6 +156,10 @@ export function buildWorkManagementOverview(
     extraction_proposal_count: sumRows(rows, "extraction_proposal_count"),
     saved_extraction_count: sumRows(rows, "saved_extraction_count"),
     progress_log_count: sumRows(rows, "progress_log_count"),
+    persisted_row_count: rows.filter((row) => row.persistence_state === "persisted").length,
+    live_only_row_count: rows.filter((row) => row.persistence_state === "live_only").length,
+    latest_snapshot_created_at: latestTimestampFromRows(rows, "latest_snapshot_created_at"),
+    latest_saved_extraction_at: latestTimestampFromRows(rows, "latest_saved_extraction_at"),
     rows,
   };
 }
@@ -157,11 +174,29 @@ export function workManagementOverviewMetaText(overview: WorkManagementOverview)
     `추출제안 ${overview.extraction_proposal_count.toLocaleString()}`,
     `저장추출 ${overview.saved_extraction_count.toLocaleString()}`,
     `진행로그 ${overview.progress_log_count.toLocaleString()}`,
+    `저장관리 ${overview.persisted_row_count.toLocaleString()}`,
+    `라이브만 ${overview.live_only_row_count.toLocaleString()}`,
+    `최신스냅샷 ${overview.latest_snapshot_created_at ?? "없음"}`,
+    `최신저장추출 ${overview.latest_saved_extraction_at ?? "없음"}`,
   ].join(" · ");
 }
 
 export function workManagementOverviewSourceText(row: WorkManagementOverviewRow): string {
   return row.sources.map((source) => SOURCE_LABELS[source]).join(" · ");
+}
+
+export function workManagementOverviewPersistenceText(row: WorkManagementOverviewRow): string {
+  if (row.persistence_state === "live_only") {
+    return "라이브만 · 저장근거 없음";
+  }
+  const parts = ["저장관리"];
+  if (row.latest_snapshot_created_at) {
+    parts.push(`최신 스냅샷 ${row.latest_snapshot_created_at}`);
+  }
+  if (row.latest_saved_extraction_at) {
+    parts.push(`최신 저장추출 ${row.latest_saved_extraction_at}`);
+  }
+  return parts.join(" · ");
 }
 
 function upsertRow(
@@ -186,6 +221,9 @@ function upsertRow(
     progress_log_count: 0,
     work_item_count: 0,
     session_evidence_count: 0,
+    persistence_state: "live_only",
+    latest_snapshot_created_at: null,
+    latest_saved_extraction_at: null,
     latest_title: null,
   };
   rowsByKey.set(key, row);
@@ -202,4 +240,17 @@ function sumRows(
     | "progress_log_count",
 ): number {
   return rows.reduce((total, row) => total + row[field], 0);
+}
+
+function latestTimestamp(current: string | null, candidate: string | null): string | null {
+  if (!candidate) return current;
+  if (!current) return candidate;
+  return candidate > current ? candidate : current;
+}
+
+function latestTimestampFromRows(
+  rows: WorkManagementOverviewRow[],
+  field: "latest_snapshot_created_at" | "latest_saved_extraction_at",
+): string | null {
+  return rows.reduce<string | null>((latest, row) => latestTimestamp(latest, row[field]), null);
 }

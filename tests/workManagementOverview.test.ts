@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildWorkManagementOverview,
   workManagementOverviewMetaText,
+  workManagementOverviewPersistenceText,
   workManagementOverviewSourceText,
 } from "../src/workManagementOverview.ts";
 import type {
@@ -269,12 +270,23 @@ test("work management overview merges source evidence by project and date", () =
   assert.equal(promptVault.progress_log_count, 1);
   assert.equal(promptVault.work_item_count, 5);
   assert.equal(promptVault.session_evidence_count, 2);
+  assert.equal(promptVault.persistence_state, "persisted");
+  assert.equal(promptVault.latest_snapshot_created_at, "2026-06-09T01:00:00Z");
+  assert.equal(promptVault.latest_saved_extraction_at, "2026-06-09T01:30:00Z");
   assert.equal(promptVault.latest_title, "PromptVault management slice");
 
   const careVault = overview.rows[1];
   assert.deepEqual(careVault.sources, ["snapshot", "extraction_proposal"]);
   assert.equal(careVault.extraction_proposal_count, 1);
+  assert.equal(careVault.persistence_state, "persisted");
+  assert.equal(careVault.latest_snapshot_created_at, "2026-06-09T01:00:00Z");
+  assert.equal(careVault.latest_saved_extraction_at, null);
   assert.equal(careVault.latest_title, "CareVault snapshot");
+
+  const repoTutorStudio = overview.rows[2];
+  assert.equal(repoTutorStudio.persistence_state, "persisted");
+  assert.equal(repoTutorStudio.latest_snapshot_created_at, null);
+  assert.equal(repoTutorStudio.latest_saved_extraction_at, "2026-06-09T01:31:00Z");
 });
 
 test("work management overview does not double count saved extraction proposals", () => {
@@ -338,10 +350,18 @@ test("work management overview status text exposes management coverage", () => {
 
   assert.equal(
     workManagementOverviewMetaText(overview),
-    "관리 3개 · 3개 프로젝트 · 3일 · 현재요약 1 · 스냅샷 2 · 추출제안 1 · 저장추출 2 · 진행로그 1",
+    "관리 3개 · 3개 프로젝트 · 3일 · 현재요약 1 · 스냅샷 2 · 추출제안 1 · 저장추출 2 · 진행로그 1 · 저장관리 3 · 라이브만 0 · 최신스냅샷 2026-06-09T01:00:00Z · 최신저장추출 2026-06-09T01:31:00Z",
   );
   assert.equal(
     workManagementOverviewSourceText(overview.rows[0]),
     "현재요약 · 스냅샷 · 저장추출 · 진행로그",
+  );
+  assert.equal(
+    workManagementOverviewPersistenceText(overview.rows[0]),
+    "저장관리 · 최신 스냅샷 2026-06-09T01:00:00Z · 최신 저장추출 2026-06-09T01:30:00Z",
+  );
+  assert.equal(
+    workManagementOverviewPersistenceText(buildWorkManagementOverview({ coverage: coverageResult() }).rows[0]),
+    "라이브만 · 저장근거 없음",
   );
 });

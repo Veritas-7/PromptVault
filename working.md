@@ -1,10 +1,89 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 09:40 KST
+Updated: 2026-06-09 09:46 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 durable management coverage visibility
+
+Current Goal:
+
+- Make the work-management dashboard distinguish durable saved management
+  evidence from live-only parsed evidence by project/date.
+- Surface saved snapshot freshness and saved AI-extraction coverage directly
+  in the management overview instead of requiring the operator to infer it
+  from separate panels.
+
+Context:
+
+- The management overview already merges current summary rows, saved summary
+  snapshots, live AI extraction proposals, saved AI extraction rows, and parsed
+  progress logs into project/date rows.
+- Before this slice, the overview showed source counts but did not state which
+  rows had durable saved evidence versus only live parsed evidence.
+- Existing backend payloads already include snapshot `created_at` and saved
+  extraction `saved_at`, so this can be implemented in the frontend overview
+  aggregator without a new backend endpoint.
+
+Progress:
+
+- Added row-level persistence state:
+  - `persisted` when a project/date row has a saved snapshot summary or saved
+    AI extraction row.
+  - `live_only` when it is represented only by current summary, live proposal,
+    or progress-log parsing.
+- Added latest saved snapshot timestamp and latest saved extraction timestamp
+  to rows and overview meta.
+- Added operator text:
+  - overview meta now includes `저장관리`, `라이브만`, `최신스냅샷`,
+    and `최신저장추출`.
+  - each management row now includes either durable saved evidence details or
+    `라이브만 · 저장근거 없음`.
+- Browser QA now asserts both overview meta and row persistence text in the
+  real DOM.
+
+Changes:
+
+- `src/workManagementOverview.ts`:
+  - computes persisted/live-only row counts and latest saved timestamps;
+  - adds `workManagementOverviewPersistenceText`.
+- `src/App.tsx`:
+  - renders row-level persistence text in the management overview.
+- `tests/workManagementOverview.test.ts`:
+  - covers persisted rows via snapshots and saved extractions, live-only rows,
+    overview meta text, and row persistence text.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - waits for `저장관리`/`라이브만` management meta and row persistence DOM.
+
+Tests:
+
+- `npm run test:ui`: PASS, `431` tests.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final QA JSON included
+  `workManagementMeta="관리 45개 · 31개 프로젝트 · 19일 · 현재요약 1 · 스냅샷 1 · 추출제안 0 · 저장추출 0 · 진행로그 780 · 저장관리 1 · 라이브만 44 · 최신스냅샷 2026-06-09T00:45:58.782727+00:00 · 최신저장추출 없음"`
+  and row persistence entries beginning with
+  `저장관리 · 최신 스냅샷 2026-06-09T00:45:58.782727+00:00`.
+- `npm run check`: PASS. UI `431` tests, Vite build, Rust lib `164`
+  tests, CLI `23` tests, doc-tests, and clippy all passed.
+
+Issues:
+
+- The dashboard now makes durable-vs-live coverage visible, but saved AI
+  extraction coverage is still `0` in the isolated QA because the current live
+  corpus has no unparsed candidate to save.
+- The next backend/product step is to persist management overview snapshots or
+  add an explicit "save accepted extraction rows during management refresh"
+  flow when accepted candidates exist.
+
+Next Steps:
+
+- Run diff/staged secret checks, then commit and push.
+- Next improvement slice: add a compact freshness warning when
+  `live_only_row_count` dominates, so the operator sees when most management
+  state is still live-only rather than durable.
 
 ## Current Slice - 2026-06-09 evidence-mode transparency
 

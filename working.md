@@ -1,10 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 03:35 KST
+Updated: 2026-06-10 03:46 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Codex opt-in work-log extraction provider
+
+Current Goal:
+
+- Close the operator's explicit gap around project-local progress logs:
+  `working.md`, `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`,
+  `progress.md`, `PROJECT_STATUS.md`, and generated worklog files should feed
+  project/day management instead of relying only on chat/session history.
+- Add Codex as an opt-in AI provider for work-log extraction while keeping
+  copied evidence validation, schema output, and review-gated durable writes.
+
+Context:
+
+- Existing live checks already proved the app can build project/day status rows
+  from progress logs plus sanitized session evidence, but Codex was not wired
+  into `work-log-extraction`.
+- GLM remains the normal configured provider for work summaries,
+  work-log extraction, normalization, and session-evidence proposals.
+- Codex remains disabled by default. It is usable only when
+  `PROMPTVAULT_CODEX_WORK_PROVIDER=1` is set.
+- Current completion level is high for audited, review-gated project/day
+  management, but not a fully autonomous finished system: full session
+  backfill still has remaining files, session-evidence durable writes remain
+  review-only, and operators still need to approve/reject/apply queued rows.
+
+Progress:
+
+- Added the opt-in Codex CLI provider path for `work-log-extraction` after GLM
+  and before local fallback.
+- The extraction runner reuses the shared Codex JSON boundary:
+  `codex exec --sandbox read-only --ephemeral --output-schema
+  --output-last-message`, stdin prompt delivery, timeout guard, and temp output
+  cleanup.
+- Codex extraction prompts explicitly forbid file reads, writes, command
+  execution, and external context. Returned rows must pass the existing copied
+  evidence/date validator before they can be saved through the review queue.
+- Provider status now reports opt-in Codex capabilities as
+  `["work-log-extraction", "work-log-normalization",
+  "session-evidence-proposals"]`; default Codex detection still reports
+  `usable_for_work_management: false` and no capabilities.
+- `workingd.md` coverage was verified in the isolated QA saved-item fixture:
+  `/tmp/QAProject/workingd.md` produced a saved extraction row after an approved
+  review-queue path.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added Codex work-log extraction provider, status
+  capability updates, default disabled warnings, and a fake-Codex Rust test
+  proving a copied dated `workingd.md` excerpt is accepted.
+- `README.md`, `docs/CLI.md`: documented that Codex opt-in now covers
+  work-log extraction, work-log normalization, and session-evidence proposals.
+
+Tests:
+
+- PASS: `cargo fmt --check`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work AI provider status"` (`36` tests).
+- PASS: `cargo test project_work_ai_provider_status -- --nocapture` (`4` tests).
+- PASS: `cargo test project_work_log_extraction_with_env_uses_opt_in_codex_cli_provider -- --nocapture`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work AI provider status"` (`194` tests).
+- PASS: `cargo test project_work_log_extraction -- --nocapture` (`11` tests).
+- PASS: `cargo run --quiet --bin promptvault-cli -- work-ai-provider-status --json`
+  - Default environment: GLM usable; Codex detected but unusable and
+    `capabilities: []`.
+- PASS: `PROMPTVAULT_CODEX_WORK_PROVIDER=1 cargo run --quiet --bin promptvault-cli -- work-ai-provider-status --json`
+  - Opt-in environment: Codex usable with `work-log-extraction`,
+    `work-log-normalization`, and `session-evidence-proposals`.
+- PASS: `npm run check`
+  - UI tests `490`, Rust lib tests `213`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser bridge QA ended with exit code `0`.
+  - Verified work status export, session index continuation, work summary and
+    snapshot, session-evidence candidates/proposals/review queue, provider
+    status, work-log coverage, candidates, extraction run history, saved
+    extraction items, normalization proposals/review/apply, and stale/rejected
+    AI fixtures.
+  - QA output showed real project/day management rows around `31` projects,
+    `26` days, `99` project/day rows, `9,564` work items, `867` progress logs,
+    `3,262` matched session-evidence rows, and `/tmp/QAProject/workingd.md`
+    saved through the approved extraction path.
+  - The same run showed bounded session indexing, not full completion:
+    `25,198` total session files, `349` stored records in that QA context, and
+    remaining backfill estimates still visible.
+
+Remaining:
+
+- The app now manages project/day work from progress logs and bounded session
+  evidence with audited queues, but the entire historical session corpus has
+  not been fully backfilled in this QA run.
+- Work summaries still use OpenAI/GLM/local provider routes; Codex is not yet
+  wired for `work-summary`.
+- Durable session-evidence creation is still intentionally unavailable; the app
+  records review-complete/rejected decisions and keeps extracted/normalized
+  work rows review-gated.
+- Next useful slice: add a guided "run until complete with review checkpoints"
+  workflow for remaining session index backfill and operator queue triage.
 
 ## Completed Slice - 2026-06-10 Codex opt-in session-evidence proposal provider
 

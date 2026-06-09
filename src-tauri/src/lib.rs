@@ -5693,7 +5693,10 @@ async fn project_work_log_extraction_proposals_with_env(
             if force_local {
                 vec!["AI 추출이 비활성화되어 로컬 검토 후보만 반환했습니다.".to_string()]
             } else {
-                vec!["AI 추출 후보가 0개라 OpenAI/GLM provider 호출을 생략했습니다.".to_string()]
+                vec![
+                    "AI 추출 후보가 0개라 OpenAI/GLM/Codex provider 호출을 생략했습니다."
+                        .to_string(),
+                ]
             },
         ));
     }
@@ -5774,6 +5777,31 @@ async fn project_work_log_extraction_proposals_with_env(
             }
             Err(warning) => warnings.push(warning),
         }
+    }
+    if codex_work_provider_enabled(&env) {
+        match request_codex_project_work_log_extraction(
+            &candidates.root_path,
+            &safe_candidates,
+            &env,
+        )
+        .await
+        {
+            Ok(mut result) => {
+                result.warnings.extend(warnings);
+                append_blocked_work_log_extraction_proposals(
+                    &mut result,
+                    &blocked_candidates,
+                    candidates.candidate_count,
+                );
+                return Ok(result);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    } else if codex_exec_path_from_env(&env).is_some() {
+        warnings.push(
+            "Codex CLI는 감지됐지만 PROMPTVAULT_CODEX_WORK_PROVIDER=1이 아니어서 work-log extraction provider로 사용하지 않았습니다."
+                .to_string(),
+        );
     }
     if openai_api_key_from_env(&env).is_none() && glm_api_key_from_env(&env).is_none() {
         warnings.push(
@@ -5931,6 +5959,43 @@ async fn request_glm_project_work_log_extraction(
     )
     .map_err(|err| {
         format!("GLM work-log extraction 검증 실패: {err}; 로컬 fallback을 사용했습니다.")
+    })
+}
+
+async fn request_codex_project_work_log_extraction(
+    root_path: &str,
+    candidates: &[ProjectWorkLogExtractionCandidate],
+    env: &HashMap<String, String>,
+) -> Result<ProjectWorkLogExtractionProposalsResult, String> {
+    let (system, user) = project_work_log_extraction_messages(candidates);
+    let prompt = format!(
+        "{system}\n\n{user}\n\nSafety constraints: do not read files, do not write files, do not run commands, and do not use external context. Return only JSON that satisfies the provided output schema."
+    );
+    let content = request_codex_schema_bound_json(
+        env,
+        "Codex work-log extraction",
+        "work-log-extraction",
+        project_work_log_extraction_json_schema(),
+        prompt,
+    )
+    .await?;
+    project_work_log_extraction_proposals_from_content(
+        ProjectWorkLogExtractionRuntime {
+            provider: "codex",
+            provider_model: non_empty_env_value(env, "CODEX_MODEL"),
+            provider_runtime: "codex-cli-exec",
+            used_ai: true,
+        },
+        root_path,
+        candidates,
+        &content,
+        vec![
+            "Codex work-log extraction은 read-only sandbox, ephemeral state, output-schema 검증으로 실행됐습니다."
+                .to_string(),
+        ],
+    )
+    .map_err(|err| {
+        format!("Codex work-log extraction 검증 실패: {err}; 로컬 fallback을 사용합니다.")
     })
 }
 
@@ -15155,7 +15220,7 @@ fn project_work_ai_provider_status_from_env(
     }
     if codex_usable {
         warnings.push(
-            "Codex CLI work-log normalization/session-evidence proposal provider가 opt-in으로 활성화되어 있습니다; durable 저장은 review queue 승인 후에만 가능합니다."
+            "Codex CLI work-log extraction/normalization/session-evidence proposal provider가 opt-in으로 활성화되어 있습니다; durable 저장은 review queue 승인 후에만 가능합니다."
                 .to_string(),
         );
     } else if codex_configured {
@@ -15165,7 +15230,7 @@ fn project_work_ai_provider_status_from_env(
         );
     } else {
         warnings.push(
-            "Codex SDK/CLI provider route는 아직 사용할 수 없어 work-log/session-evidence reconciliation에 사용할 수 없습니다."
+            "Codex SDK/CLI provider route는 아직 사용할 수 없어 work-management proposal 생성에 사용할 수 없습니다."
                 .to_string(),
         );
     }
@@ -15218,11 +15283,11 @@ fn project_work_ai_provider_status_from_env(
                 notes: if let Some(path) = codex_exec_path {
                     let mut notes = if codex_usable {
                         vec![format!(
-                            "codex exec is opt-in enabled at {path}; work-log normalization and session-evidence proposals run with read-only sandbox, ephemeral state, and output-schema validation."
+                            "codex exec is opt-in enabled at {path}; work-log extraction, normalization, and session-evidence proposals run with read-only sandbox, ephemeral state, and output-schema validation."
                         )]
                     } else {
                         vec![format!(
-                            "codex exec was detected at {path}; set PROMPTVAULT_CODEX_WORK_PROVIDER=1 to enable review-gated work-log normalization and session-evidence proposals."
+                            "codex exec was detected at {path}; set PROMPTVAULT_CODEX_WORK_PROVIDER=1 to enable review-gated work-log extraction, normalization, and session-evidence proposals."
                         )]
                     };
                     if let Some(profile) = non_empty_env_value(&env, "CODEX_PROFILE") {
@@ -15262,6 +15327,7 @@ fn provider_work_management_capabilities(configured: bool) -> Vec<String> {
 fn codex_work_management_capabilities(usable: bool) -> Vec<String> {
     if usable {
         vec![
+            "work-log-extraction".to_string(),
             "work-log-normalization".to_string(),
             "session-evidence-proposals".to_string(),
         ]
@@ -15837,7 +15903,11 @@ mod tests {
         assert!(codex.usable_for_work_management);
         assert_eq!(
             codex.capabilities,
-            vec!["work-log-normalization", "session-evidence-proposals"]
+            vec![
+                "work-log-extraction",
+                "work-log-normalization",
+                "session-evidence-proposals"
+            ]
         );
         assert_eq!(codex.provider_runtime, "codex-cli-exec");
         assert!(codex
@@ -22203,6 +22273,112 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(request.contains("authorization: Bearer glm-key"));
         assert!(request.contains("\"model\":\"glm-test-model\""));
         assert!(request.contains("work-log-Beta-a1b2c3d4e5"));
+    }
+
+    #[tokio::test]
+    async fn project_work_log_extraction_with_env_uses_opt_in_codex_cli_provider() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-codex-extraction-provider-{}",
+            std::process::id()
+        ));
+        let bin_dir = root.join("bin");
+        std::fs::create_dir_all(&bin_dir).expect("create codex bin fixture");
+        let codex_path = bin_dir.join("codex");
+        let prompt_capture_path = root.join("captured-prompt.txt");
+        let response = serde_json::json!({
+            "proposals": [
+                {
+                    "candidate_id": "work-log-Beta-a1b2c3d4e5",
+                    "date": "2026-06-04",
+                    "title": "Created project root",
+                    "status": "proposed",
+                    "evidence": "2026-06-04: Created project root and initialized a new git repository.",
+                    "confidence": 0.92
+                }
+            ]
+        })
+        .to_string();
+        let script = format!(
+            "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"--output-last-message\" ]; then\n    shift\n    out=\"$1\"\n  fi\n  shift\ndone\ncat > \"{}\"\ncat > \"$out\" <<'JSON'\n{}\nJSON\n",
+            prompt_capture_path.to_string_lossy(),
+            response
+        );
+        std::fs::write(&codex_path, script).expect("write fake codex");
+        let mut permissions = std::fs::metadata(&codex_path)
+            .expect("codex metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&codex_path, permissions).expect("make fake codex executable");
+
+        let candidate = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-Beta-a1b2c3d4e5".to_string(),
+            project: "Beta".to_string(),
+            source_path: "/tmp/Beta/workingd.md".to_string(),
+            source_file: "workingd.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt: "Current State\n- 2026-06-04: Created project root and initialized a new git repository.".to_string(),
+            line_count: 2,
+            char_count: 90,
+            risk_flags: Vec::new(),
+            modified_at: None,
+        };
+        let candidates = ProjectWorkLogExtractionCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/tmp".to_string(),
+            files_seen: 1,
+            skipped_parsed_file_count: 0,
+            skipped_unreadable_file_count: 0,
+            skipped_empty_file_count: 0,
+            skipped_pointer_file_count: 0,
+            review_queue_state: "needs_review".to_string(),
+            review_queue_reason: "safe_ai_candidates_ready".to_string(),
+            pending_review_count: 1,
+            safe_ai_candidate_count: 1,
+            risk_blocked_candidate_count: 0,
+            candidate_count: 1,
+            candidates: vec![candidate],
+            warnings: Vec::new(),
+        };
+        let mut env = HashMap::new();
+        env.insert(
+            "PROMPTVAULT_CODEX_EXEC_PATH".to_string(),
+            codex_path.to_string_lossy().to_string(),
+        );
+        env.insert(
+            "PROMPTVAULT_CODEX_WORK_PROVIDER".to_string(),
+            "1".to_string(),
+        );
+        env.insert("CODEX_MODEL".to_string(), "gpt-5.3-codex".to_string());
+        env.insert("CODEX_PROFILE".to_string(), "promptvault".to_string());
+
+        let result = project_work_log_extraction_proposals_with_env(candidates, false, env)
+            .await
+            .expect("Codex extraction proposals");
+        let captured_prompt =
+            std::fs::read_to_string(&prompt_capture_path).expect("read captured prompt");
+
+        assert_eq!(result.provider, "codex");
+        assert_eq!(result.provider_model.as_deref(), Some("gpt-5.3-codex"));
+        assert_eq!(result.provider_runtime, "codex-cli-exec");
+        assert!(result.used_ai);
+        assert_eq!(result.candidate_count, 1);
+        assert_eq!(result.accepted_count, 1);
+        assert_eq!(result.rejected_count, 0);
+        assert!(result.proposals[0].accepted);
+        assert_eq!(result.proposals[0].date.as_deref(), Some("2026-06-04"));
+        assert_eq!(result.proposals[0].title, "Created project root");
+        assert_eq!(result.proposals[0].rejection_reason, None);
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("read-only sandbox")));
+        assert!(captured_prompt.contains("work-log-Beta-a1b2c3d4e5"));
+        assert!(captured_prompt.contains("Do not invent dates"));
+        assert!(captured_prompt.contains("do not read files"));
+
+        std::fs::remove_dir_all(root).expect("remove codex extraction fixture");
     }
 
     #[tokio::test]

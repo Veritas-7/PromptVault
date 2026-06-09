@@ -10,6 +10,7 @@ import {
   loadProjectWorkLogExtractionProposals,
   loadProjectWorkLogReviewQueue,
   listProjectWorkLogExtractionItems,
+  listProjectWorkLogExtractionRuns,
   loadStoredPrompts,
   loadProjectWorkSummary,
   listProjectWorkSummarySnapshots,
@@ -472,6 +473,36 @@ function projectWorkLogExtractionItemsPayload(overrides = {}) {
       evidence: "2026-06-04: Backfilled workingd notes",
       confidence: 0.91,
       warnings: ["provider warning"],
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function projectWorkLogExtractionRunsPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_runs: 1,
+    returned_run_count: 1,
+    runs: [{
+      id: 7,
+      started_at: "2026-06-09T01:00:00Z",
+      finished_at: "2026-06-09T01:00:02Z",
+      trigger: "approved_review_queue",
+      status: "completed",
+      provider: "glm",
+      provider_model: "glm-test-model",
+      provider_runtime: "glm-chat-completions",
+      used_ai: true,
+      candidate_count: 1,
+      accepted_count: 1,
+      rejected_count: 0,
+      saved_item_count: 1,
+      total_saved_item_count: 4,
+      candidate_ids: ["work-log-CareVault-a1b2c3d4e5"],
+      warnings: ["provider warning"],
+      error_message: null,
     }],
     warnings: [],
     ...overrides,
@@ -1120,6 +1151,57 @@ test("browser bridge work log extraction items reject impossible counters", asyn
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /returned_item_count|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work log extraction runs posts options and validates history", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogExtractionRunsPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await listProjectWorkLogExtractionRuns({ limit: 5 });
+
+  assert.match(requestPath, /\/api\/work-log-runs$/);
+  assert.deepEqual(JSON.parse(requestBody), { options: { limit: 5 } });
+  assert.equal(result.returned_run_count, 1);
+  assert.equal(result.runs[0].trigger, "approved_review_queue");
+  assert.equal(result.runs[0].status, "completed");
+  assert.equal(result.runs[0].provider_model, "glm-test-model");
+  assert.equal(result.runs[0].provider_runtime, "glm-chat-completions");
+  assert.equal(result.runs[0].saved_item_count, 1);
+  assert.deepEqual(result.runs[0].candidate_ids, ["work-log-CareVault-a1b2c3d4e5"]);
+  assert.deepEqual(result.runs[0].warnings, ["provider warning"]);
+  assert.equal(result.runs[0].error_message, null);
+});
+
+test("browser bridge work log extraction runs reject impossible counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkLogExtractionRunsPayload({
+    runs: [{
+      ...projectWorkLogExtractionRunsPayload().runs[0],
+      accepted_count: 2,
+    }],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listProjectWorkLogExtractionRuns({ limit: 5 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /accepted_count|approved_review_queue|undefined/);
       return true;
     },
   );

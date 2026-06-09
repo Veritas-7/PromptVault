@@ -1,10 +1,129 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 12:44 KST
+Updated: 2026-06-09 13:15 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 approved queue extraction run audit
+
+Current Goal:
+
+- Make approved work-log queue extraction attempts auditable, not just durable
+  as saved extraction rows.
+- Answer the operator status question precisely: project/day/session/log
+  management is working and verified on real data, but full AI-normalized
+  all-history work management is not complete yet.
+
+Context:
+
+- Live project progress coverage now scans project-local `Working.md`,
+  `working.md`, `workingd.md`, `WORKLOG.md`, `PROGRESS_LOG.md`,
+  `PROJECT_STATUS.md`, and dated plan/worklog files under
+  `/Users/wj/Ai/System/10_Projects`.
+- Fresh real-data verification at 13:02 KST:
+  - `work-log-coverage --json`: `files_seen=801`,
+    `parsed_file_count=800`, `unparsed_file_count=0`,
+    `project_count=31`, `work_item_count=8,664`.
+  - `work-report --session-limit 200 --json`: `project_count=31`,
+    `date_count=25`, `total_items=8,664`,
+    `session_scan_prompt_count=200`,
+    `session_evidence_count=69,574`,
+    `session_evidence_unique_count=198`,
+    `session_evidence_index_used=true`,
+    `session_evidence_mode=metadata-first-raw-fallback`.
+  - `work-log-candidates --json`: `candidate_count=0`, warnings `[]`.
+- Completion level:
+  - Done: deterministic project/day/task extraction, saved management rows,
+    bounded real Codex session evidence, project-local progress log coverage,
+    review queue, approve/reject, approved-queue save, and provider/local
+    extraction plumbing.
+  - Not done: unrestricted all-session historical backfill, AI-normalized
+    semantic cleanup for already parsed low-quality rows, and live non-empty
+    OpenAI/GLM provider calls on the current production corpus. Current live
+    corpus has no unparsed candidate rows to send.
+
+Progress:
+
+- Added durable `project_work_log_extraction_runs` SQLite audit table.
+- Approved queue extraction now records completed and failed attempts with:
+  trigger, started/finished timestamps, status, provider/model/runtime,
+  `used_ai`, candidate/accepted/rejected counts, saved/total saved counts,
+  candidate IDs, warnings, and failure reason.
+- Added CLI command `work-log-runs`, browser bridge route
+  `POST /api/work-log-runs`, Tauri command `project_work_log_runs`, frontend
+  API parser, UI button `실행 이력`, and run-history list rendering.
+- Browser QA now verifies the non-empty synthetic approved queue route:
+  insert approved `work-log-QA-approved-browser-a1`, click `승인 큐 저장`,
+  observe `실행 1개 ... saved 1개`, and load the visible run row.
+- Fixed a QA expectation bug where the script looked for an outdated synthetic
+  candidate substring.
+- Fixed clippy by replacing a many-argument failure helper with a structured
+  `ProjectWorkLogExtractionFailureRun`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added run history schema, persistence, list reader, Tauri command, and
+    Rust tests for completed and failed attempts.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added `work-log-runs`, bridge route, validation, and help coverage.
+- `src/types.ts`, `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`,
+  `src/App.tsx`:
+  - added run-history types, bridge parser, status labels, refresh handling,
+    and UI rendering.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`:
+  - added API/status validation for extraction run history.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added end-to-end browser proof for approved queue save plus run history.
+
+Tests:
+
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS.
+- `cargo check --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml project_work_log -- --nocapture`: PASS, `12` tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli bridge_routes_work_log_run_validation_errors -- --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli bridge_serializes_database_backed_routes_only -- --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli help_text_documents_cli_validation_rules -- --nocapture`: PASS.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`: PASS, `189` tests.
+- `npm run test:ui`: PASS, `444` tests.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON showed:
+  - `coverageMeta`: `802개 로그 · parsed 801개 · unparsed 0개 · 31개 프로젝트 · 작업 8,672개`;
+  - `workLogRunsMeta`: `실행 1개 · 표시 1개 · 최근 approved_review_queue · completed · saved 1개`;
+  - run row contained `approved_review_queue`, `completed`,
+    `work-log-QA-approved-browser-a1`;
+  - saved QA row: `QAProject 2026-06-09 Verified approved queue browser save`.
+- `npm run check`: PASS, including `test:ui`, `build`, full Rust tests
+  (`170` lib tests, `26` CLI tests), and clippy `-D warnings`.
+
+Issues:
+
+- The system is not yet a fully AI-normalized historical work operating
+  system. It currently combines deterministic parsing, bounded real session
+  evidence, saved snapshots, saved extraction items, and reviewed AI/local
+  extraction.
+- Actual live OpenAI/GLM provider calls are only exercised by controlled tests
+  because the current real corpus has `candidate_count=0`; the current
+  browser QA intentionally forces providerless local fallback to avoid network
+  and API-credit dependence.
+- Full project/date management should eventually include an AI-assisted
+  normalization/backfill pass for noisy but parsed rows, not only unparsed
+  logs.
+
+Next Steps:
+
+- Add an AI normalization/backfill lane for already parsed but low-quality or
+  low-confidence project/day rows, using the existing OpenAI/GLM provider layer
+  with safe excerpts and durable review state.
+- Add a deeper/all-history session backfill mode with resumable checkpoints,
+  progress UI, and run audit records instead of relying only on the bounded
+  `session_limit=200` verification path.
+- Consider a Codex SDK session-ingest adapter if direct SDK access provides
+  cleaner structured session metadata than current local JSONL/metadata
+  parsing.
 
 ## Current Slice - 2026-06-09 non-empty approved queue browser QA
 

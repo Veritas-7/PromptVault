@@ -15,6 +15,7 @@ import type {
   ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
+  ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkReport,
   ProjectWorkSummaryResult,
@@ -140,6 +141,11 @@ export interface ProjectWorkLogExtractionItemsOptions {
   limit?: number;
   date?: string;
   project?: string;
+}
+
+export interface ProjectWorkLogExtractionRunsOptions {
+  database_path?: string;
+  limit?: number;
 }
 
 export interface ImprovePromptRequest {
@@ -334,6 +340,19 @@ export async function listProjectWorkLogExtractionItems(
   );
 }
 
+export async function listProjectWorkLogExtractionRuns(
+  options: ProjectWorkLogExtractionRunsOptions = {},
+): Promise<ProjectWorkLogExtractionRunsResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogExtractionRunsResult>("project_work_log_runs", { options });
+  }
+  return postBridge<ProjectWorkLogExtractionRunsResult>(
+    "/api/work-log-runs",
+    { options },
+    parseProjectWorkLogExtractionRunsResult,
+  );
+}
+
 export async function listProjectWorkSummarySnapshots(
   options: ProjectWorkSummarySnapshotsOptions = {},
 ): Promise<ProjectWorkSummarySnapshotsResult> {
@@ -398,7 +417,7 @@ function isNonBlankStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(isNonBlankString);
 }
 
-function isUniqueNonBlankStringArray(value: unknown): boolean {
+function isUniqueNonBlankStringArray(value: unknown): value is string[] {
   return isNonBlankStringArray(value)
     && new Set(value).size === value.length;
 }
@@ -1537,6 +1556,50 @@ function parseProjectWorkLogExtractionItemsResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkLogExtractionItemsResult;
+}
+
+function isProjectWorkLogExtractionRun(value: unknown): boolean {
+  if (!isRecord(value)
+    || !isPositiveSafeInteger(value.id)
+    || !isTimestampString(value.started_at)
+    || !isTimestampString(value.finished_at)
+    || !isNonBlankString(value.trigger)
+    || !isNonBlankString(value.status)
+    || !isNonBlankString(value.provider)
+    || !isNullableNonBlankString(value.provider_model)
+    || !isNonBlankString(value.provider_runtime)
+    || typeof value.used_ai !== "boolean"
+    || !isNonNegativeSafeInteger(value.candidate_count)
+    || !isNonNegativeSafeInteger(value.accepted_count)
+    || !isNonNegativeSafeInteger(value.rejected_count)
+    || value.accepted_count + value.rejected_count !== value.candidate_count
+    || !isNonNegativeSafeInteger(value.saved_item_count)
+    || !isNonNegativeSafeInteger(value.total_saved_item_count)
+    || value.saved_item_count > value.total_saved_item_count
+    || !isUniqueNonBlankStringArray(value.candidate_ids)
+    || !isNonBlankStringArray(value.warnings)
+    || !isNullableNonBlankString(value.error_message)) {
+    return false;
+  }
+  return value.candidate_ids.length <= value.candidate_count;
+}
+
+function parseProjectWorkLogExtractionRunsResult(
+  value: unknown,
+): ProjectWorkLogExtractionRunsResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !isNonNegativeSafeInteger(value.total_runs)
+    || !isNonNegativeSafeIntegerAtMost(value.returned_run_count, value.total_runs)
+    || !Array.isArray(value.runs)
+    || value.runs.length !== value.returned_run_count
+    || !value.runs.every(isProjectWorkLogExtractionRun)
+    || !recordNumberFieldValuesAreUnique(value.runs, "id")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkLogExtractionRunsResult;
 }
 
 function isProjectWorkLogExtractionMergeResult(value: unknown): boolean {

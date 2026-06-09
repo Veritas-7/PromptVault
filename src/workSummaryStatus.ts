@@ -8,6 +8,7 @@ import type {
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposal,
   ProjectWorkLogExtractionProposalsResult,
+  ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogReviewQueueItem,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSummary,
@@ -23,6 +24,7 @@ export type WorkLogCandidatesState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionItemsState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogExtractionRunsState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementFreezeState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunMode = "ai" | "local";
@@ -536,6 +538,43 @@ export function workLogExtractionItemsFailureText(
 ): string | null {
   if (state !== "failed") return null;
   return "저장된 AI 작업 추출 항목을 불러오지 못했습니다. 데이터베이스 경로나 브리지 상태를 확인하세요.";
+}
+
+export function workLogExtractionRunsActionLabel(
+  state: WorkLogExtractionRunsState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "작업 추출 실행 이력 불러오는 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 작업 추출 실행 이력을 ${hasResult ? "새로고침" : "불러오기"}할 수 없습니다`;
+  }
+  return hasResult ? "작업 추출 실행 이력 새로고침" : "실행 이력";
+}
+
+export function workLogExtractionRunsMetaText(
+  state: WorkLogExtractionRunsState,
+  result: ProjectWorkLogExtractionRunsResult | null,
+): string {
+  if (state === "loading") return "작업 추출 실행 이력 불러오는 중";
+  if (!result) return state === "failed" ? "작업 추출 실행 이력을 사용할 수 없음" : "아직 불러온 작업 추출 실행 이력 없음";
+  const latest = result.runs[0];
+  const latestText = latest
+    ? `최근 ${latest.trigger} · ${latest.status} · saved ${latest.saved_item_count.toLocaleString()}개`
+    : "최근 실행 없음";
+  return [
+    `실행 ${result.total_runs.toLocaleString()}개`,
+    `표시 ${result.returned_run_count.toLocaleString()}개`,
+    latestText,
+  ].join(" · ");
+}
+
+export function workLogExtractionRunsFailureText(
+  state: WorkLogExtractionRunsState,
+): string | null {
+  if (state !== "failed") return null;
+  return "작업 추출 실행 이력을 불러오지 못했습니다. 데이터베이스 경로나 브리지 상태를 확인하세요.";
 }
 
 export function workSummarySnapshotVisibleSummaries(

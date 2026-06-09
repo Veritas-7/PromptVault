@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Database,
   FileText,
+  History,
   Play,
   RefreshCw,
   Search,
@@ -115,6 +116,7 @@ import {
   loadProjectWorkLogExtractionProposals,
   loadProjectWorkLogReviewQueue,
   listProjectWorkLogExtractionItems,
+  listProjectWorkLogExtractionRuns,
   loadProjectWorkSummary,
   listProjectWorkSummarySnapshots,
   listImportEvents,
@@ -233,6 +235,7 @@ import type {
   ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
+  ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogReviewQueueResult,
   PromptRecord,
   ProjectWorkSummaryResult,
@@ -257,6 +260,9 @@ import {
   workLogExtractionItemsActionLabel,
   workLogExtractionItemsFailureText,
   workLogExtractionItemsMetaText,
+  workLogExtractionRunsActionLabel,
+  workLogExtractionRunsFailureText,
+  workLogExtractionRunsMetaText,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
   workLogExtractionProviderNoticeText,
@@ -288,6 +294,7 @@ import {
   type WorkLogExtractionRunMode,
   type WorkLogExtractionState,
   type WorkLogExtractionItemsState,
+  type WorkLogExtractionRunsState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
@@ -307,6 +314,8 @@ const WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_ITEM_MANAGEMENT_LIMIT = 1_000;
+const WORK_LOG_EXTRACTION_RUN_DISPLAY_LIMIT = 5;
+const WORK_LOG_EXTRACTION_RUN_MANAGEMENT_LIMIT = 100;
 const WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT = 6;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
@@ -396,6 +405,8 @@ function App() {
     useState<WorkLogExtractionRunMode>("ai");
   const [workLogExtractionItemsState, setWorkLogExtractionItemsState] =
     useState<WorkLogExtractionItemsState>("idle");
+  const [workLogExtractionRunsState, setWorkLogExtractionRunsState] =
+    useState<WorkLogExtractionRunsState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
   const [workManagementFreezeState, setWorkManagementFreezeState] =
@@ -426,6 +437,8 @@ function App() {
     useState<ProjectWorkLogExtractionProposalsResult | null>(null);
   const [workLogExtractionItemsResult, setWorkLogExtractionItemsResult] =
     useState<ProjectWorkLogExtractionItemsResult | null>(null);
+  const [workLogExtractionRunsResult, setWorkLogExtractionRunsResult] =
+    useState<ProjectWorkLogExtractionRunsResult | null>(null);
   const [approvedWorkLogExtractionCandidateIds, setApprovedWorkLogExtractionCandidateIds] =
     useState<Set<string>>(() => new Set());
   const [workSummarySnapshotsResult, setWorkSummarySnapshotsResult] =
@@ -490,6 +503,7 @@ function App() {
     || workLogReviewQueueState === "loading"
     || workLogExtractionState === "loading"
     || workLogExtractionItemsState === "loading"
+    || workLogExtractionRunsState === "loading"
     || workManagementRefreshState === "loading"
     || workManagementFreezeState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
@@ -687,6 +701,11 @@ function App() {
     workLogExtractionItemsState,
     workLogExtractionItemsResult,
   );
+  const workLogExtractionRunsFailureMessage = workLogExtractionRunsFailureText(workLogExtractionRunsState);
+  const workLogExtractionRunsMeta = workLogExtractionRunsMetaText(
+    workLogExtractionRunsState,
+    workLogExtractionRunsResult,
+  );
   const workSummarySnapshotsFailureMessage = workSummarySnapshotsFailureText(workSummarySnapshotsState);
   const workSummarySnapshotsMeta = workSummarySnapshotsMetaText(
     workSummarySnapshotsState,
@@ -766,17 +785,24 @@ function App() {
   );
   const visibleWorkLogExtractionItems =
     workLogExtractionItemsResult?.items.slice(0, WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT) ?? [];
+  const visibleWorkLogExtractionRuns =
+    workLogExtractionRunsResult?.runs.slice(0, WORK_LOG_EXTRACTION_RUN_DISPLAY_LIMIT) ?? [];
   const visibleWorkLogExtractionItemGroups =
     groupWorkLogExtractionItemsByProjectDate(visibleWorkLogExtractionItems);
   const hiddenWorkLogExtractionItemCount = Math.max(
     0,
     (workLogExtractionItemsResult?.items.length ?? 0) - WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT,
   );
+  const hiddenWorkLogExtractionRunCount = Math.max(
+    0,
+    (workLogExtractionRunsResult?.runs.length ?? 0) - WORK_LOG_EXTRACTION_RUN_DISPLAY_LIMIT,
+  );
   const workManagementOverviewLoaded =
     workSummaryResult !== null
     || workSummarySnapshotsResult !== null
     || workLogExtractionResult !== null
     || workLogExtractionItemsResult !== null
+    || workLogExtractionRunsResult !== null
     || workLogCoverageResult !== null;
   const workManagementOverview = useMemo(() => buildWorkManagementOverview({
     coverage: workLogCoverageResult,
@@ -1037,6 +1063,32 @@ function App() {
     }
   }
 
+  async function refreshWorkLogExtractionRuns() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    try {
+      await refreshWorkLogExtractionRunsAfterSave();
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function refreshWorkLogExtractionRunsAfterSave() {
+    setError(null);
+    setWorkLogExtractionRunsState("loading");
+    try {
+      const next = await listProjectWorkLogExtractionRuns({
+        limit: WORK_LOG_EXTRACTION_RUN_MANAGEMENT_LIMIT,
+      });
+      setWorkLogExtractionRunsResult(next);
+      setWorkLogExtractionRunsState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogExtractionRunsState("failed");
+    }
+  }
+
   async function refreshWorkSummarySnapshotsAfterSave() {
     setWorkSummarySnapshotsState("loading");
     try {
@@ -1205,6 +1257,7 @@ function App() {
           )),
         );
         setWorkLogExtractionItemsState("ready");
+        await refreshWorkLogExtractionRunsAfterSave();
       }
     } catch (err) {
       const message = displayErrorText(err);
@@ -2178,6 +2231,25 @@ function App() {
                   ? "저장 목록 새로고침"
                   : "저장 목록"}
             </button>
+            <button
+              aria-label={workLogExtractionRunsActionLabel(
+                workLogExtractionRunsState,
+                workLogExtractionRunsResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-log-runs="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void refreshWorkLogExtractionRuns()}
+              type="button"
+            >
+              <History size={15} />
+              {workLogExtractionRunsState === "loading"
+                ? "이력 불러오는 중"
+                : workLogExtractionRunsResult
+                  ? "이력 새로고침"
+                  : "실행 이력"}
+            </button>
           </div>
         </div>
         {workSummaryFailureMessage ? (
@@ -2267,6 +2339,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workLogExtractionItemsFailureMessage}</span>
+          </div>
+        ) : null}
+        {workLogExtractionRunsFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-log-runs-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workLogExtractionRunsFailureMessage}</span>
           </div>
         ) : null}
         <form
@@ -2725,6 +2807,12 @@ function App() {
             <span>{workLogExtractionItemsMeta}</span>
           </div>
         ) : null}
+        {workLogExtractionRunsResult || workLogExtractionRunsState !== "idle" ? (
+          <div className="work-summary-index" data-work-log-runs-meta="true">
+            <History size={15} />
+            <span>{workLogExtractionRunsMeta}</span>
+          </div>
+        ) : null}
         {workManagementOverviewLoaded ? (
           <div className="work-summary-index" data-work-management-overview-meta="true">
             <ClipboardList size={15} />
@@ -3074,6 +3162,55 @@ function App() {
           ) : (
             <div className="empty compact" data-empty-work-log-items="true">
               저장된 AI 작업 추출 항목 없음
+            </div>
+          )
+        ) : null}
+        {workLogExtractionRunsResult ? (
+          visibleWorkLogExtractionRuns.length ? (
+            <div className="work-summary-list" data-work-log-runs="true">
+              {visibleWorkLogExtractionRuns.map((run) => (
+                <article
+                  className="work-summary-row work-log-proposal-row"
+                  key={run.id}
+                >
+                  <div>
+                    <strong>{run.trigger}</strong>
+                    <span>{run.finished_at}</span>
+                  </div>
+                  <p>
+                    {run.status} · {run.provider}
+                    {" · "}
+                    {run.provider_runtime}
+                    {run.provider_model ? ` · model ${run.provider_model}` : ""}
+                    {run.used_ai ? " · AI" : " · local"}
+                  </p>
+                  <span>
+                    후보 {run.candidate_count.toLocaleString()}개 · accepted{" "}
+                    {run.accepted_count.toLocaleString()}개 · rejected{" "}
+                    {run.rejected_count.toLocaleString()}개 · saved{" "}
+                    {run.saved_item_count.toLocaleString()}개 / total{" "}
+                    {run.total_saved_item_count.toLocaleString()}개
+                  </span>
+                  {run.candidate_ids.length ? (
+                    <span>candidate IDs {run.candidate_ids.join(", ")}</span>
+                  ) : null}
+                  {run.warnings.length ? (
+                    <span>warnings {run.warnings.map(redactSensitiveDisplayText).join("; ")}</span>
+                  ) : null}
+                  {run.error_message ? (
+                    <span>error {redactSensitiveDisplayText(run.error_message)}</span>
+                  ) : null}
+                </article>
+              ))}
+              {hiddenWorkLogExtractionRunCount ? (
+                <div className="work-summary-overflow">
+                  그 외 실행 이력 {hiddenWorkLogExtractionRunCount.toLocaleString()}개
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty compact" data-empty-work-log-runs="true">
+              저장된 작업 추출 실행 이력 없음
             </div>
           )
         ) : null}

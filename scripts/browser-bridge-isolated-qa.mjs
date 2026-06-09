@@ -194,6 +194,8 @@ async function runBrowserQa() {
   let approvedReviewQueueSaveDisabledWhenEmpty = null;
   let workLogReviewQueueMetaAfterSynthetic = "";
   let approvedReviewQueuePersistence = "";
+  let workLogRunsMeta = "";
+  let workLogRunRows = [];
   let workLogExtractionProviderWarning = "";
   let workLogItemRows = [];
 
@@ -439,6 +441,26 @@ async function runBrowserQa() {
     }, undefined, { timeout: 90000 });
     approvedReviewQueuePersistence =
       (await page.locator('[data-work-log-extraction-persistence="true"]').textContent())?.trim() ?? "";
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-runs-meta="true"]')?.textContent ?? "";
+      return text.includes("실행 1개")
+        && text.includes("approved_review_queue")
+        && text.includes("saved 1개");
+    }, undefined, { timeout: 90000 });
+    workLogRunsMeta =
+      (await page.locator('[data-work-log-runs-meta="true"]').textContent())?.trim() ?? "";
+    await waitForEnabled(page, '[data-load-work-log-runs="true"]');
+    await page.locator('[data-load-work-log-runs="true"]').click();
+    await page.waitForFunction(() => {
+      const rows = Array.from(document.querySelectorAll('[data-work-log-runs="true"] article'));
+      return rows.some((row) => {
+        const text = row.textContent ?? "";
+        return text.includes("approved_review_queue")
+          && text.includes("completed")
+          && text.includes("work-log-QA-approved-browser-a1");
+      });
+    }, undefined, { timeout: 90000 });
+    workLogRunRows = await page.locator('[data-work-log-runs="true"] article').allTextContents();
     await page.locator('[data-load-work-log-extraction="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-extraction-meta="true"]')?.textContent ?? "";
@@ -489,6 +511,8 @@ async function runBrowserQa() {
       approvedReviewQueueSaveDisabledWhenEmpty,
       workLogReviewQueueMetaAfterSynthetic,
       approvedReviewQueuePersistence,
+      workLogRunsMeta,
+      workLogRunRows,
       workLogExtractionProviderWarning,
       workLogItemRows,
     };

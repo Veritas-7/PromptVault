@@ -365,6 +365,35 @@ export interface ProjectWorkLogExtractionItemsResult {
   warnings: string[];
 }
 
+export interface ProjectWorkLogExtractionRun {
+  id: number;
+  started_at: string;
+  finished_at: string;
+  trigger: string;
+  status: string;
+  provider: string;
+  provider_model: string | null;
+  provider_runtime: string;
+  used_ai: boolean;
+  candidate_count: number;
+  accepted_count: number;
+  rejected_count: number;
+  saved_item_count: number;
+  total_saved_item_count: number;
+  candidate_ids: string[];
+  warnings: string[];
+  error_message: string | null;
+}
+
+export interface ProjectWorkLogExtractionRunsResult {
+  generated_at: string;
+  database_path: string;
+  total_runs: number;
+  returned_run_count: number;
+  runs: ProjectWorkLogExtractionRun[];
+  warnings: string[];
+}
+
 export interface ProjectWorkLogExtractionMergeResult {
   provider: string;
   used_ai: boolean;

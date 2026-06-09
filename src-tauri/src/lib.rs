@@ -49,6 +49,8 @@ const DEFAULT_PROJECT_WORK_LOG_REVIEW_QUEUE_LIMIT: usize = 50;
 const MAX_PROJECT_WORK_LOG_REVIEW_QUEUE_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT: usize = 200;
+const DEFAULT_PROJECT_WORK_LOG_EXTRACTION_RUN_LIMIT: usize = 20;
+const MAX_PROJECT_WORK_LOG_EXTRACTION_RUN_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 200;
 const MAX_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 1_000;
 const PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS: u64 = 12;
@@ -376,6 +378,43 @@ pub struct ProjectWorkLogExtractionItemsResult {
     pub available_dates: Vec<String>,
     pub available_projects: Vec<String>,
     pub items: Vec<ProjectWorkLogExtractionItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogExtractionRun {
+    pub id: i64,
+    pub started_at: String,
+    pub finished_at: String,
+    pub trigger: String,
+    pub status: String,
+    pub provider: String,
+    pub provider_model: Option<String>,
+    pub provider_runtime: String,
+    pub used_ai: bool,
+    pub candidate_count: usize,
+    pub accepted_count: usize,
+    pub rejected_count: usize,
+    pub saved_item_count: usize,
+    pub total_saved_item_count: usize,
+    pub candidate_ids: Vec<String>,
+    pub warnings: Vec<String>,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkLogExtractionRunsOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkLogExtractionRunsResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub total_runs: usize,
+    pub returned_run_count: usize,
+    pub runs: Vec<ProjectWorkLogExtractionRun>,
     pub warnings: Vec<String>,
 }
 
@@ -903,6 +942,14 @@ fn project_work_log_items(
     options: Option<ProjectWorkLogExtractionItemsOptions>,
 ) -> Result<ProjectWorkLogExtractionItemsResult, String> {
     run_list_project_work_log_extraction_items(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_log_runs(
+    options: Option<ProjectWorkLogExtractionRunsOptions>,
+) -> Result<ProjectWorkLogExtractionRunsResult, String> {
+    run_list_project_work_log_extraction_runs(options.unwrap_or_default())
         .map_err(|err| err.to_string())
 }
 
@@ -1492,16 +1539,49 @@ pub async fn run_project_work_log_extraction_proposals(
         .unwrap_or(DEFAULT_PROJECT_WORK_LOG_CANDIDATE_LIMIT)
         .min(MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT);
     let approved_review_queue_only = options.approved_review_queue_only.unwrap_or(false);
+    let run_started_at = if approved_review_queue_only {
+        Some(Utc::now().to_rfc3339())
+    } else {
+        None
+    };
     let candidates = if approved_review_queue_only {
-        run_project_work_log_extraction_candidates_from_approved_review_queue(
+        match run_project_work_log_extraction_candidates_from_approved_review_queue(
             &database_path,
             limit,
-        )?
+        ) {
+            Ok(candidates) => candidates,
+            Err(err) => {
+                if let Some(started_at) = run_started_at.as_deref() {
+                    let error_message = err.to_string();
+                    let _ = persist_project_work_log_extraction_failure_run(
+                        &database_path,
+                        ProjectWorkLogExtractionFailureRun {
+                            trigger: "approved_review_queue",
+                            started_at,
+                            provider: "candidate_loader",
+                            provider_model: None,
+                            provider_runtime: "candidate_loader",
+                            used_ai: options.ai.unwrap_or(false),
+                            candidate_count: 0,
+                            candidate_ids: Vec::new(),
+                            warnings: Vec::new(),
+                            error_message: &error_message,
+                        },
+                    );
+                }
+                return Err(err);
+            }
+        }
     } else {
         run_project_work_log_extraction_candidates(ProjectWorkLogExtractionCandidatesOptions {
             limit: Some(limit),
         })?
     };
+    let failure_candidate_ids = candidates
+        .candidates
+        .iter()
+        .map(|candidate| candidate.candidate_id.clone())
+        .collect::<Vec<_>>();
     let approved_review_queue_candidate_ids = if approved_review_queue_only {
         Some(
             candidates
@@ -1513,21 +1593,82 @@ pub async fn run_project_work_log_extraction_proposals(
     } else {
         None
     };
-    let mut result = project_work_log_extraction_proposals_with_env(
+    let mut result = match project_work_log_extraction_proposals_with_env(
         candidates,
         !options.ai.unwrap_or(false),
         load_improve_env(),
     )
-    .await?;
+    .await
+    {
+        Ok(result) => result,
+        Err(err) => {
+            if let Some(started_at) = run_started_at.as_deref() {
+                let error_message = err.to_string();
+                let _ = persist_project_work_log_extraction_failure_run(
+                    &database_path,
+                    ProjectWorkLogExtractionFailureRun {
+                        trigger: "approved_review_queue",
+                        started_at,
+                        provider: "provider",
+                        provider_model: None,
+                        provider_runtime: "provider",
+                        used_ai: options.ai.unwrap_or(false),
+                        candidate_count: failure_candidate_ids.len(),
+                        candidate_ids: failure_candidate_ids,
+                        warnings: Vec::new(),
+                        error_message: &error_message,
+                    },
+                );
+            }
+            return Err(err);
+        }
+    };
     if save {
         let persistence_approved_candidate_ids = approved_review_queue_candidate_ids
             .as_ref()
             .or(approved_candidate_ids.as_ref());
-        result.persistence = Some(persist_project_work_log_extraction_proposals(
+        result.persistence = match persist_project_work_log_extraction_proposals(
             &database_path,
             &result,
             persistence_approved_candidate_ids,
-        )?);
+        ) {
+            Ok(persistence) => Some(persistence),
+            Err(err) => {
+                if let Some(started_at) = run_started_at.as_deref() {
+                    let error_message = err.to_string();
+                    let _ = persist_project_work_log_extraction_failure_run(
+                        &database_path,
+                        ProjectWorkLogExtractionFailureRun {
+                            trigger: "approved_review_queue",
+                            started_at,
+                            provider: &result.provider,
+                            provider_model: result.provider_model.as_deref(),
+                            provider_runtime: &result.provider_runtime,
+                            used_ai: result.used_ai,
+                            candidate_count: result.candidate_count,
+                            candidate_ids: result
+                                .proposals
+                                .iter()
+                                .map(|proposal| proposal.candidate_id.clone())
+                                .collect(),
+                            warnings: result.warnings.clone(),
+                            error_message: &error_message,
+                        },
+                    );
+                }
+                return Err(err);
+            }
+        };
+    }
+    if let Some(started_at) = run_started_at {
+        persist_project_work_log_extraction_run(
+            &database_path,
+            "approved_review_queue",
+            &started_at,
+            "completed",
+            &result,
+            None,
+        )?;
     }
     Ok(result)
 }
@@ -1643,6 +1784,37 @@ pub fn run_list_project_work_log_extraction_items(
         available_dates: item_rows.available_dates,
         available_projects: item_rows.available_projects,
         items: item_rows.items,
+        warnings: Vec::new(),
+    })
+}
+
+pub fn run_list_project_work_log_extraction_runs(
+    options: ProjectWorkLogExtractionRunsOptions,
+) -> Result<ProjectWorkLogExtractionRunsResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-log run limit requires a positive integer".into());
+    }
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_LOG_EXTRACTION_RUN_LIMIT)
+        .min(MAX_PROJECT_WORK_LOG_EXTRACTION_RUN_LIMIT);
+    let conn = open_promptvault_database(&database_path)?;
+    let run_rows = read_project_work_log_extraction_runs(&conn, limit)?;
+    Ok(ProjectWorkLogExtractionRunsResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        total_runs: run_rows.total_runs,
+        returned_run_count: run_rows.runs.len(),
+        runs: run_rows.runs,
         warnings: Vec::new(),
     })
 }
@@ -7366,6 +7538,27 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
         );
         CREATE INDEX IF NOT EXISTS idx_project_work_log_extraction_items_project_date
             ON project_work_log_extraction_items(project, proposal_date);
+        CREATE TABLE IF NOT EXISTS project_work_log_extraction_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            trigger TEXT NOT NULL,
+            status TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            provider_model TEXT,
+            provider_runtime TEXT NOT NULL,
+            used_ai INTEGER NOT NULL,
+            candidate_count INTEGER NOT NULL,
+            accepted_count INTEGER NOT NULL,
+            rejected_count INTEGER NOT NULL,
+            saved_item_count INTEGER NOT NULL,
+            total_saved_item_count INTEGER NOT NULL,
+            candidate_ids_json TEXT NOT NULL,
+            warnings_json TEXT NOT NULL,
+            error_message TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_work_log_extraction_runs_finished_at
+            ON project_work_log_extraction_runs(finished_at DESC);
         CREATE TABLE IF NOT EXISTS project_work_summary_snapshots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             created_at TEXT NOT NULL,
@@ -7747,6 +7940,118 @@ fn persist_project_work_log_extraction_proposals(
     })
 }
 
+fn persist_project_work_log_extraction_run(
+    database_path: &Path,
+    trigger: &str,
+    started_at: &str,
+    status: &str,
+    result: &ProjectWorkLogExtractionProposalsResult,
+    error_message: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let conn = open_promptvault_database(database_path)?;
+    let finished_at = Utc::now().to_rfc3339();
+    let candidate_ids = result
+        .proposals
+        .iter()
+        .map(|proposal| proposal.candidate_id.clone())
+        .collect::<Vec<_>>();
+    let candidate_ids_json = serde_json::to_string(&candidate_ids)?;
+    let warnings_json = serde_json::to_string(&result.warnings)?;
+    let saved_item_count = result
+        .persistence
+        .as_ref()
+        .map(|persistence| persistence.saved_item_count)
+        .unwrap_or(0);
+    let total_saved_item_count = if let Some(persistence) = &result.persistence {
+        persistence.total_saved_item_count
+    } else {
+        let total: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM project_work_log_extraction_items",
+            [],
+            |row| row.get(0),
+        )?;
+        total as usize
+    };
+    conn.execute(
+        "INSERT INTO project_work_log_extraction_runs (
+            started_at, finished_at, trigger, status, provider, provider_model,
+            provider_runtime, used_ai, candidate_count, accepted_count, rejected_count,
+            saved_item_count, total_saved_item_count, candidate_ids_json, warnings_json,
+            error_message
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+        params![
+            started_at,
+            &finished_at,
+            trigger,
+            status,
+            &result.provider,
+            result.provider_model.as_deref(),
+            &result.provider_runtime,
+            result.used_ai as i64,
+            result.candidate_count as i64,
+            result.accepted_count as i64,
+            result.rejected_count as i64,
+            saved_item_count as i64,
+            total_saved_item_count as i64,
+            &candidate_ids_json,
+            &warnings_json,
+            error_message,
+        ],
+    )?;
+    Ok(())
+}
+
+struct ProjectWorkLogExtractionFailureRun<'a> {
+    trigger: &'a str,
+    started_at: &'a str,
+    provider: &'a str,
+    provider_model: Option<&'a str>,
+    provider_runtime: &'a str,
+    used_ai: bool,
+    candidate_count: usize,
+    candidate_ids: Vec<String>,
+    warnings: Vec<String>,
+    error_message: &'a str,
+}
+
+fn persist_project_work_log_extraction_failure_run(
+    database_path: &Path,
+    run: ProjectWorkLogExtractionFailureRun<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let conn = open_promptvault_database(database_path)?;
+    let finished_at = Utc::now().to_rfc3339();
+    let candidate_ids_json = serde_json::to_string(&run.candidate_ids)?;
+    let warnings_json = serde_json::to_string(&run.warnings)?;
+    let total_saved_item_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM project_work_log_extraction_items",
+        [],
+        |row| row.get(0),
+    )?;
+    conn.execute(
+        "INSERT INTO project_work_log_extraction_runs (
+            started_at, finished_at, trigger, status, provider, provider_model,
+            provider_runtime, used_ai, candidate_count, accepted_count, rejected_count,
+            saved_item_count, total_saved_item_count, candidate_ids_json, warnings_json,
+            error_message
+        ) VALUES (?1, ?2, ?3, 'failed', ?4, ?5, ?6, ?7, ?8, 0, 0, 0, ?9, ?10, ?11, ?12)",
+        params![
+            run.started_at,
+            &finished_at,
+            run.trigger,
+            run.provider,
+            run.provider_model,
+            run.provider_runtime,
+            run.used_ai as i64,
+            run.candidate_count as i64,
+            total_saved_item_count,
+            &candidate_ids_json,
+            &warnings_json,
+            run.error_message,
+        ],
+    )?;
+    Ok(())
+}
+
 struct ProjectWorkLogExtractionItemRows {
     total_items: usize,
     items: Vec<ProjectWorkLogExtractionItem>,
@@ -7827,6 +8132,73 @@ fn project_work_log_extraction_item_matches_filters(
 ) -> bool {
     date_filter.is_none_or(|filter| date == filter)
         && project_filter.is_none_or(|filter| project == filter)
+}
+
+struct ProjectWorkLogExtractionRunRows {
+    total_runs: usize,
+    runs: Vec<ProjectWorkLogExtractionRun>,
+}
+
+fn read_project_work_log_extraction_runs(
+    conn: &Connection,
+    limit: usize,
+) -> Result<ProjectWorkLogExtractionRunRows, Box<dyn std::error::Error>> {
+    let total_runs: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM project_work_log_extraction_runs",
+        [],
+        |row| row.get(0),
+    )?;
+    let mut stmt = conn.prepare(
+        "SELECT id, started_at, finished_at, trigger, status, provider, provider_model,
+            provider_runtime, used_ai, candidate_count, accepted_count, rejected_count,
+            saved_item_count, total_saved_item_count, candidate_ids_json, warnings_json,
+            error_message
+         FROM project_work_log_extraction_runs
+         ORDER BY finished_at DESC, id DESC
+         LIMIT ?1",
+    )?;
+    let rows = stmt.query_map(params![limit as i64], |row| {
+        let candidate_ids_json: String = row.get(14)?;
+        let candidate_ids = serde_json::from_str(&candidate_ids_json).map_err(|err| {
+            rusqlite::Error::FromSqlConversionFailure(
+                14,
+                rusqlite::types::Type::Text,
+                Box::new(err),
+            )
+        })?;
+        let warnings_json: String = row.get(15)?;
+        let warnings = serde_json::from_str(&warnings_json).map_err(|err| {
+            rusqlite::Error::FromSqlConversionFailure(
+                15,
+                rusqlite::types::Type::Text,
+                Box::new(err),
+            )
+        })?;
+        Ok(ProjectWorkLogExtractionRun {
+            id: row.get(0)?,
+            started_at: row.get(1)?,
+            finished_at: row.get(2)?,
+            trigger: row.get(3)?,
+            status: row.get(4)?,
+            provider: row.get(5)?,
+            provider_model: row.get(6)?,
+            provider_runtime: row.get(7)?,
+            used_ai: row.get::<_, i64>(8)? != 0,
+            candidate_count: row.get::<_, i64>(9)? as usize,
+            accepted_count: row.get::<_, i64>(10)? as usize,
+            rejected_count: row.get::<_, i64>(11)? as usize,
+            saved_item_count: row.get::<_, i64>(12)? as usize,
+            total_saved_item_count: row.get::<_, i64>(13)? as usize,
+            candidate_ids,
+            warnings,
+            error_message: row.get(16)?,
+        })
+    })?;
+    let runs = rows.collect::<Result<Vec<_>, _>>()?;
+    Ok(ProjectWorkLogExtractionRunRows {
+        total_runs: total_runs as usize,
+        runs,
+    })
 }
 
 fn read_project_work_persisted_pairs(
@@ -9241,7 +9613,8 @@ pub fn run() {
             project_work_log_review_queue_update,
             project_work_log_extract,
             project_work_log_freeze,
-            project_work_log_items
+            project_work_log_items,
+            project_work_log_runs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -13242,7 +13615,86 @@ Progress:
         assert_eq!(stored.0, approved.candidate_id);
         assert_eq!(stored.1, "CareVault");
 
+        let runs = run_list_project_work_log_extraction_runs(ProjectWorkLogExtractionRunsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(5),
+        })
+        .expect("list approved queue extraction runs");
+        assert_eq!(runs.total_runs, 1);
+        assert_eq!(runs.returned_run_count, 1);
+        let run = &runs.runs[0];
+        assert_eq!(run.trigger, "approved_review_queue");
+        assert_eq!(run.status, "completed");
+        assert_eq!(run.provider, "local-extraction-rules");
+        assert_eq!(run.provider_model, None);
+        assert_eq!(run.provider_runtime, "local-extraction-rules");
+        assert!(!run.used_ai);
+        assert_eq!(run.candidate_count, 1);
+        assert_eq!(run.accepted_count, 1);
+        assert_eq!(run.rejected_count, 0);
+        assert_eq!(run.saved_item_count, 1);
+        assert_eq!(run.total_saved_item_count, 1);
+        assert_eq!(run.candidate_ids, vec![approved.candidate_id]);
+        assert!(run
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("AI 추출이 비활성화")));
+        assert_eq!(run.error_message, None);
+
         std::fs::remove_file(db_path).expect("remove approved queue extraction db");
+    }
+
+    #[test]
+    fn project_work_log_extraction_runs_list_failed_attempt_reason() {
+        let suffix = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-approved-review-queue-run-failure-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let _conn = open_promptvault_database(&db_path).expect("open run history db");
+
+        persist_project_work_log_extraction_failure_run(
+            &db_path,
+            ProjectWorkLogExtractionFailureRun {
+                trigger: "approved_review_queue",
+                started_at: "2026-06-09T00:00:00Z",
+                provider: "glm",
+                provider_model: Some("glm-test-model"),
+                provider_runtime: "glm-chat-completions",
+                used_ai: true,
+                candidate_count: 1,
+                candidate_ids: vec!["work-log-CareVault-a1".to_string()],
+                warnings: vec!["provider warning".to_string()],
+                error_message: "provider timeout",
+            },
+        )
+        .expect("persist failed extraction run");
+
+        let result =
+            run_list_project_work_log_extraction_runs(ProjectWorkLogExtractionRunsOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(5),
+            })
+            .expect("list failed extraction run");
+
+        assert_eq!(result.total_runs, 1);
+        assert_eq!(result.returned_run_count, 1);
+        let run = &result.runs[0];
+        assert_eq!(run.trigger, "approved_review_queue");
+        assert_eq!(run.status, "failed");
+        assert_eq!(run.provider, "glm");
+        assert_eq!(run.provider_model.as_deref(), Some("glm-test-model"));
+        assert_eq!(run.provider_runtime, "glm-chat-completions");
+        assert_eq!(run.candidate_count, 1);
+        assert_eq!(run.saved_item_count, 0);
+        assert_eq!(run.total_saved_item_count, 0);
+        assert_eq!(run.candidate_ids, vec!["work-log-CareVault-a1"]);
+        assert_eq!(run.warnings, vec!["provider warning"]);
+        assert_eq!(run.error_message.as_deref(), Some("provider timeout"));
+
+        drop(_conn);
+        std::fs::remove_file(db_path).expect("remove failed run history db");
     }
 
     #[test]

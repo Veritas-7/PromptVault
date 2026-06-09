@@ -15,6 +15,9 @@ import {
   workLogExtractionItemsActionLabel,
   workLogExtractionItemsFailureText,
   workLogExtractionItemsMetaText,
+  workLogExtractionRunsActionLabel,
+  workLogExtractionRunsFailureText,
+  workLogExtractionRunsMetaText,
   workLogExtractionMetaText,
   workLogExtractionApprovalText,
   workLogExtractionPersistenceText,
@@ -47,6 +50,7 @@ import {
   type WorkLogReviewQueueState,
   type WorkLogExtractionState,
   type WorkLogExtractionItemsState,
+  type WorkLogExtractionRunsState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
@@ -59,6 +63,7 @@ import type {
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposal,
   ProjectWorkLogExtractionProposalsResult,
+  ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogReviewQueueItem,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSummary,
@@ -278,6 +283,38 @@ function extractionItemsResult(
     available_dates: ["2026-06-04", "2026-06-09"],
     available_projects: ["CareVault", "PromptVault"],
     items: [],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function extractionRunsResult(
+  overrides: Partial<ProjectWorkLogExtractionRunsResult> = {},
+): ProjectWorkLogExtractionRunsResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_runs: 3,
+    returned_run_count: 1,
+    runs: [{
+      id: 7,
+      started_at: "2026-06-09T01:00:00Z",
+      finished_at: "2026-06-09T01:00:02Z",
+      trigger: "approved_review_queue",
+      status: "completed",
+      provider: "glm",
+      provider_model: "glm-test-model",
+      provider_runtime: "glm-chat-completions",
+      used_ai: true,
+      candidate_count: 2,
+      accepted_count: 1,
+      rejected_count: 1,
+      saved_item_count: 1,
+      total_saved_item_count: 12,
+      candidate_ids: ["work-log-CareVault-a1"],
+      warnings: [],
+      error_message: null,
+    }],
     warnings: [],
     ...overrides,
   };
@@ -900,6 +937,34 @@ test("saved work log extraction item labels describe managed extraction rows", (
     "저장된 AI 작업 추출 항목을 불러오지 못했습니다. 데이터베이스 경로나 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogExtractionItemsFailureText("ready"), null);
+});
+
+test("work log extraction run labels describe approved queue audit history", () => {
+  const failed: WorkLogExtractionRunsState = "failed";
+  assert.equal(workLogExtractionRunsActionLabel("idle", false, lockState()), "실행 이력");
+  assert.equal(
+    workLogExtractionRunsActionLabel("ready", true, lockState()),
+    "작업 추출 실행 이력 새로고침",
+  );
+  assert.equal(
+    workLogExtractionRunsActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 작업 추출 실행 이력을 새로고침할 수 없습니다",
+  );
+  assert.equal(workLogExtractionRunsMetaText("idle", null), "아직 불러온 작업 추출 실행 이력 없음");
+  assert.equal(
+    workLogExtractionRunsMetaText("loading", extractionRunsResult()),
+    "작업 추출 실행 이력 불러오는 중",
+  );
+  assert.equal(
+    workLogExtractionRunsMetaText("ready", extractionRunsResult()),
+    "실행 3개 · 표시 1개 · 최근 approved_review_queue · completed · saved 1개",
+  );
+  assert.equal(workLogExtractionRunsMetaText(failed, null), "작업 추출 실행 이력을 사용할 수 없음");
+  assert.equal(
+    workLogExtractionRunsFailureText(failed),
+    "작업 추출 실행 이력을 불러오지 못했습니다. 데이터베이스 경로나 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workLogExtractionRunsFailureText("ready"), null);
 });
 
 test("work log extraction save state excludes already managed rows", () => {

@@ -1,10 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 09:31 KST
+Updated: 2026-06-09 09:40 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 evidence-mode transparency
+
+Current Goal:
+
+- Make the work-management report and UI explicit about how actual session
+  evidence is collected.
+- Answer the operator's status question with live counters instead of stale
+  assumptions: project/day management, actual session parsing, and
+  `working.md`/`workingd.md` style progress-log coverage.
+
+Context:
+
+- The work-management backbone is functional: it scans project progress logs
+  under `/Users/wj/Ai/System/10_Projects`, groups work by project/date, and
+  can merge accepted AI extraction rows.
+- Actual Codex/Codex-CX session evidence is parsed and indexed. The fast path
+  is metadata-first, with raw session prompt scanning retained as fallback
+  when metadata cannot fill the requested session budget.
+- AI-backed work-log extraction is already wired through OpenAI/GLM provider
+  code with local fallback, but the current live corpus has no unparsed
+  progress-log candidate, so this snapshot does not exercise a live AI
+  normalization save.
+
+Progress:
+
+- Added `session_evidence_mode` to `ProjectWorkReport` with
+  `metadata-first-raw-fallback`.
+- The CLI JSON/non-JSON report now exposes the mode.
+- The browser UI work-summary index chip now states
+  `근거 메타데이터 우선/raw fallback`.
+- Browser QA now waits for that mode text in the real DOM, so future changes
+  cannot silently hide the evidence source mix.
+- Live coverage verification before this edit:
+  `780` progress-log files, `779` parsed files, `0` unparsed files,
+  `31` projects, `8,482` work items, warnings `[]`; sample included
+  `CareVault/workingd.md` as a pointer log rather than a duplicate work log.
+- Live work-report verification before this edit with `--session-limit 20`:
+  `31` projects, `25` dates, `8,482` work items, `5,116` session evidence
+  matches, `20` unique session evidence records, session index used,
+  warnings `[]`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - adds the report mode field and fills it from a single evidence-mode
+    constant.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - prints `session_evidence_mode` in human-readable report output.
+- `src/types.ts` and `src/promptVaultApi.ts`:
+  - make the new mode field part of the frontend bridge contract and reject
+    responses that omit it.
+- `src/workSummaryStatus.ts`:
+  - displays the mode as a Korean operator-facing status phrase.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`,
+  `tests/workManagementOverview.test.ts`, and
+  `scripts/browser-bridge-isolated-qa.mjs`:
+  - add fixture coverage and real-browser DOM verification for the mode.
+
+Tests:
+
+- `npm run test:ui`: PASS, `431` tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml`: PASS, Rust lib `164`
+  tests, CLI `23` tests, doc-tests.
+- CLI verification:
+  `work-report --session-limit 20 --json` returned
+  `session_evidence_mode=metadata-first-raw-fallback`,
+  `session_scan_prompt_count=20`, `session_evidence_index_used=true`,
+  warnings `[]`.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final QA JSON included
+  `workSummaryIndex="세션 인덱스 사용 · 근거 메타데이터 우선/raw fallback · 스캔 200개 · 보관 200개 · 매칭 80건 · 고유 1건"`,
+  `workManagementMeta="관리 45개 · 31개 프로젝트 · 19일 · 현재요약 1 · 스냅샷 1 · 추출제안 0 · 저장추출 0 · 진행로그 780"`,
+  and coverage meta
+  `781개 로그 · parsed 780개 · unparsed 0개 · 31개 프로젝트 · 작업 8,488개`.
+- `npm run check`: PASS. UI `431` tests, Vite build, Rust lib `164`
+  tests, CLI `23` tests, doc-tests, and clippy all passed.
+- `git diff --check`: PASS.
+
+Issues:
+
+- This is now explicit and verified, but AI extraction is still an
+  operator-controlled path: unparsed candidates can be proposed through
+  OpenAI/GLM/local fallback and saved after validation, while the current
+  corpus has no unparsed candidate to normalize live.
+- The next product-level improvement should be a scheduled/one-click
+  management refresh that persists daily snapshots and accepted saved
+  extraction rows as the durable management view, rather than relying on the
+  operator to run the merge path manually.
+
+Next Steps:
+
+- Run staged secret checks, then commit and push this evidence-mode
+  transparency slice.
+- Next improvement slice: make the management dashboard summarize saved
+  snapshot freshness and saved AI-extraction coverage by project/date, so the
+  app answers “what is fully managed versus only parsed live” directly.
 
 ## Current Slice - 2026-06-09 fast 200-session evidence indexing
 

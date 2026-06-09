@@ -47,6 +47,7 @@ function summaryResult(): ProjectWorkSummaryResult {
       session_evidence_index_used: true,
       session_evidence_index_updated: false,
       session_evidence_index_count: 4,
+      session_evidence_mode: "metadata-first-raw-fallback",
       items: [],
       warnings: [],
     },

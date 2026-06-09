@@ -206,6 +206,7 @@ export interface ProjectWorkReport {
   session_evidence_index_used: boolean;
   session_evidence_index_updated: boolean;
   session_evidence_index_count: number;
+  session_evidence_mode: string;
   items: ProjectWorkItem[];
   warnings: string[];
 }

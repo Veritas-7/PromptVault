@@ -1173,6 +1173,7 @@ function isProjectWorkReport(value: unknown): value is ProjectWorkReport {
     || typeof value.session_evidence_index_used !== "boolean"
     || typeof value.session_evidence_index_updated !== "boolean"
     || !isNonNegativeSafeInteger(value.session_evidence_index_count)
+    || !isNonBlankString(value.session_evidence_mode)
     || !Array.isArray(value.items)
     || !value.items.every(isProjectWorkItem)
     || value.items.length !== value.total_items

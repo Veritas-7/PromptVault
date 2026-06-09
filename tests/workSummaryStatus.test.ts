@@ -96,6 +96,7 @@ function summaryResult(overrides: Partial<ProjectWorkSummaryResult> = {}): Proje
       session_evidence_index_used: true,
       session_evidence_index_updated: false,
       session_evidence_index_count: 20,
+      session_evidence_mode: "metadata-first-raw-fallback",
       items: [],
       warnings: [],
     },
@@ -333,7 +334,7 @@ test("work summary status text uses report counts and index state", () => {
   assert.equal(workSummaryMetaText("failed", null), "작업 요약을 사용할 수 없음");
   assert.equal(
     workSummaryIndexStatusText(result),
-    "세션 인덱스 사용 · 스캔 20개 · 보관 20개 · 매칭 541건 · 고유 11건",
+    "세션 인덱스 사용 · 근거 메타데이터 우선/raw fallback · 스캔 20개 · 보관 20개 · 매칭 541건 · 고유 11건",
   );
   assert.equal(
     workSummaryIndexStatusText(summaryResult({
@@ -343,7 +344,7 @@ test("work summary status text uses report counts and index state", () => {
         session_evidence_index_updated: true,
       },
     })),
-    "세션 인덱스 갱신 · 스캔 20개 · 보관 20개 · 매칭 541건 · 고유 11건",
+    "세션 인덱스 갱신 · 근거 메타데이터 우선/raw fallback · 스캔 20개 · 보관 20개 · 매칭 541건 · 고유 11건",
   );
   assert.equal(
     workSummaryIndexStatusText(summaryResult({
@@ -354,7 +355,7 @@ test("work summary status text uses report counts and index state", () => {
         session_evidence_index_updated: false,
       },
     })),
-    "세션 직접 스캔 · 스캔 20개 · 보관 0개 · 매칭 541건 · 고유 11건",
+    "세션 직접 스캔 · 근거 메타데이터 우선/raw fallback · 스캔 20개 · 보관 0개 · 매칭 541건 · 고유 11건",
   );
 });
 

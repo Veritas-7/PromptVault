@@ -233,6 +233,10 @@ async function runBrowserQa() {
     step("work summary and snapshot");
     await page.locator('[data-load-work-summary="true"]').click();
     await page.locator('[data-work-summary-narrative="true"]').waitFor({ timeout: 120000 });
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-summary-index="true"]')?.textContent ?? "";
+      return text.includes("메타데이터 우선") && text.includes("raw fallback");
+    }, undefined, { timeout: 120000 });
     await page.locator('[data-save-work-summary-snapshot="true"]').click();
     await page.waitForFunction((databasePath) => {
       const text = document.querySelector('[data-work-summary-persistence="true"]')?.textContent ?? "";
@@ -285,6 +289,8 @@ async function runBrowserQa() {
       importEvents: importEvents.total_events,
       snapshots: snapshots.total_snapshots,
       workSessionLimit: WORK_SESSION_LIMIT,
+      workSummaryIndex:
+        (await page.locator('[data-work-summary-index="true"]').textContent())?.trim() ?? "",
       workManagementMeta:
         (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "",
       coverageMeta:

@@ -38,6 +38,7 @@ const PROJECT_WORK_SESSION_SOURCE_IDS: &[&str] = &[
     "antigravity-cli-history",
 ];
 const PROJECT_WORK_CODEX_METADATA_SOURCE_IDS: &[&str] = &["codex", "codex-cx"];
+const PROJECT_WORK_SESSION_EVIDENCE_MODE: &str = "metadata-first-raw-fallback";
 const DEFAULT_IMPORT_EVENT_LIMIT: usize = 20;
 const MAX_IMPORT_EVENT_LIMIT: usize = 100;
 const DEFAULT_PROJECT_WORK_SUMMARY_SNAPSHOT_LIMIT: usize = 10;
@@ -152,6 +153,7 @@ pub struct ProjectWorkReport {
     pub session_evidence_index_used: bool,
     pub session_evidence_index_updated: bool,
     pub session_evidence_index_count: usize,
+    pub session_evidence_mode: String,
     pub items: Vec<ProjectWorkItem>,
     pub warnings: Vec<String>,
 }
@@ -3282,6 +3284,7 @@ fn build_project_progress_work_report(
         session_evidence_index_used: false,
         session_evidence_index_updated: false,
         session_evidence_index_count: 0,
+        session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
         items,
         warnings,
     })
@@ -10644,6 +10647,7 @@ Progress:
             session_evidence_index_used: false,
             session_evidence_index_updated: false,
             session_evidence_index_count: 0,
+            session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
             items,
             warnings: Vec::new(),
         };
@@ -10769,6 +10773,7 @@ Progress:
             session_evidence_index_used: true,
             session_evidence_index_updated: false,
             session_evidence_index_count: 1,
+            session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
             items,
             warnings: Vec::new(),
         };
@@ -10921,6 +10926,7 @@ Progress:
                 session_evidence_index_used: true,
                 session_evidence_index_updated: false,
                 session_evidence_index_count: 1,
+                session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
                 items: Vec::new(),
                 warnings: Vec::new(),
             },
@@ -11842,6 +11848,7 @@ Progress:
             session_evidence_index_used: false,
             session_evidence_index_updated: false,
             session_evidence_index_count: 0,
+            session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
             items: vec![ProjectWorkItem {
                 date: "2026-06-09".to_string(),
                 project: "PromptVault".to_string(),
@@ -11921,6 +11928,7 @@ Progress:
             session_evidence_index_used: false,
             session_evidence_index_updated: false,
             session_evidence_index_count: 0,
+            session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
             items: vec![ProjectWorkItem {
                 date: "2026-06-09".to_string(),
                 project: "PromptVault".to_string(),

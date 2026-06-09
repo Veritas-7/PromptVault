@@ -82,11 +82,19 @@ export function workSummaryIndexStatusText(result: ProjectWorkSummaryResult): st
       : "세션 직접 스캔";
   return [
     indexState,
+    workSummarySessionEvidenceModeLabel(result.report.session_evidence_mode),
     `스캔 ${result.report.session_scan_prompt_count.toLocaleString()}개`,
     `보관 ${result.report.session_evidence_index_count.toLocaleString()}개`,
     `매칭 ${result.report.session_evidence_count.toLocaleString()}건`,
     `고유 ${result.report.session_evidence_unique_count.toLocaleString()}건`,
   ].join(" · ");
+}
+
+function workSummarySessionEvidenceModeLabel(mode: string): string {
+  if (mode === "metadata-first-raw-fallback") {
+    return "근거 메타데이터 우선/raw fallback";
+  }
+  return `근거 ${mode}`;
 }
 
 export function workSummaryPersistenceText(result: ProjectWorkSummaryResult): string | null {

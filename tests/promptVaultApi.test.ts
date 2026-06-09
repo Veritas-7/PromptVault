@@ -262,6 +262,7 @@ function projectWorkSummaryPayload(overrides = {}) {
       session_evidence_index_used: true,
       session_evidence_index_updated: false,
       session_evidence_index_count: 20,
+      session_evidence_mode: "metadata-first-raw-fallback",
       items: [{
         date: "2026-06-09",
         project: "PromptVault",
@@ -993,6 +994,28 @@ test("browser bridge work summary rejects impossible session evidence counts", a
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /malformed bridge summary|Malformed bridge summary|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work summary rejects missing session evidence mode", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    const payload = projectWorkSummaryPayload();
+    delete (payload.report as Record<string, unknown>).session_evidence_mode;
+    return new Response(JSON.stringify(payload), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkSummary({ limit: 80 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /metadata-first|raw fallback|undefined/);
       return true;
     },
   );

@@ -311,6 +311,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 "session_index_records: {}",
                 report.session_evidence_index_count
             );
+            println!("session_evidence_mode: {}", report.session_evidence_mode);
             if !report.warnings.is_empty() {
                 println!("warnings:");
                 for warning in &report.warnings {

@@ -1,10 +1,95 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 03:46 KST
+Updated: 2026-06-10 03:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Codex opt-in work-summary provider
+
+Current Goal:
+
+- Close the remaining Codex work-management provider capability gap by letting
+  Codex generate project/day `work-summary` narratives from the existing
+  redacted evidence digest.
+- Keep Codex disabled by default and keep the summary path schema-bound,
+  read-only, ephemeral, and fallback-safe.
+
+Context:
+
+- Before this slice, Codex opt-in covered `work-log-extraction`,
+  `work-log-normalization`, and `session-evidence-proposals`; `work-summary`
+  still used only OpenAI, GLM, or local citation rules.
+- `work-summary` is narrative-only. It does not create durable
+  session-evidence rows, but it still uses the redacted digest, risk detection,
+  and provider fallback contract.
+- GLM remains the normal configured provider. Codex remains opt-in through
+  `PROMPTVAULT_CODEX_WORK_PROVIDER=1`.
+
+Progress:
+
+- Added Codex as the fallback provider after OpenAI/GLM for work-summary
+  narrative generation.
+- Reused the shared Codex process boundary:
+  `codex exec --sandbox read-only --ephemeral --output-schema
+  --output-last-message`, stdin prompt delivery, timeout guard, and temp output
+  cleanup.
+- Added a strict summary JSON schema requiring `summary_markdown`.
+- Codex summary prompts explicitly forbid file reads, writes, command
+  execution, and external context.
+- Provider status now reports opt-in Codex capabilities as
+  `["work-summary", "work-log-extraction", "work-log-normalization",
+  "session-evidence-proposals"]`; default Codex detection remains disabled with
+  `capabilities: []`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added Codex work-summary provider, summary JSON
+  schema helper, provider status capability updates, and a fake-Codex Rust test
+  proving citation-preserving summary output is accepted.
+- `README.md`, `docs/CLI.md`: documented Codex opt-in support for
+  `work-summary` alongside extraction, normalization, and session-evidence
+  proposals.
+
+Tests:
+
+- PASS: `cargo fmt --check`.
+- PASS: `cargo test project_work_summary_with_env_uses_opt_in_codex_cli_provider -- --nocapture`.
+- PASS: `cargo test project_work_ai_provider_status -- --nocapture` (`4` tests).
+- PASS: `cargo test project_work_summary_with_env_uses_glm_provider -- --nocapture`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work AI provider status"` (`36` tests).
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work AI provider status"` (`194` tests).
+- PASS: `PROMPTVAULT_CODEX_WORK_PROVIDER=1 cargo run --quiet --bin promptvault-cli -- work-ai-provider-status --json`
+  - Opt-in environment: Codex usable with `work-summary`,
+    `work-log-extraction`, `work-log-normalization`, and
+    `session-evidence-proposals`.
+- PASS: `cargo run --quiet --bin promptvault-cli -- work-ai-provider-status --json`
+  - Default environment: Codex detected but unusable and `capabilities: []`.
+- PASS: `cargo test project_work_summary -- --nocapture` (`5` tests).
+- PASS: `npm run check`
+  - UI tests `490`, Rust lib tests `214`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser bridge QA ended with exit code `0`.
+  - Verified work summary and snapshot, provider status, work status export,
+    work session index continuation, session-evidence candidates/proposals/review
+    queue, work-log coverage/candidates/extraction/saved items, normalization
+    proposals/review/apply, stale/rejected AI fixtures, and approved queue save.
+  - QA output showed `31` projects, `26` days, `99` project/day rows, `9,578`
+    work items, `868` progress logs, `3,211` matched session-evidence rows, and
+    `/tmp/QAProject/workingd.md` saved through the approved extraction path.
+  - The same run still showed bounded session indexing, not full completion:
+    `25,199` total session files and `349` stored records in that QA context.
+
+Remaining:
+
+- Codex opt-in now covers all current work-management AI capability labels.
+- Full historical session backfill is still incomplete in bounded QA runs and
+  should be handled by a guided run-until-complete/checkpoint workflow.
+- Durable session-evidence creation remains intentionally review-only; the app
+  still needs operator queue triage for normalization and session-evidence
+  decisions.
 
 ## Completed Slice - 2026-06-10 Codex opt-in work-log extraction provider
 

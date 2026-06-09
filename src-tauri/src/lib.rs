@@ -9806,6 +9806,20 @@ async fn project_work_summary_narrative_with_env(
             Err(warning) => warnings.push(warning),
         }
     }
+    if codex_work_provider_enabled(&env) {
+        match request_codex_project_work_summary(&digest, &env).await {
+            Ok(mut narrative) => {
+                narrative.warnings.extend(warnings);
+                return Ok(narrative);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    } else if codex_exec_path_from_env(&env).is_some() {
+        warnings.push(
+            "Codex CLI는 감지됐지만 PROMPTVAULT_CODEX_WORK_PROVIDER=1이 아니어서 work-summary provider로 사용하지 않았습니다."
+                .to_string(),
+        );
+    }
     if openai_api_key_from_env(&env).is_none() && glm_api_key_from_env(&env).is_none() {
         warnings.push(
             "OPENAI_API_KEY 및 GLM_API_KEY/GLM_API_KEY_2가 없어 로컬 fallback을 사용했습니다."
@@ -9943,6 +9957,33 @@ async fn request_glm_project_work_summary(
     })
 }
 
+async fn request_codex_project_work_summary(
+    digest: &str,
+    env: &HashMap<String, String>,
+) -> Result<ProjectWorkSummaryNarrative, String> {
+    let (system, user) = project_work_summary_messages(digest);
+    let prompt = format!(
+        "{system}\n\n{user}\n\nSafety constraints: do not read files, do not write files, do not run commands, and do not use external context. Return only JSON that satisfies the provided output schema."
+    );
+    let content = request_codex_schema_bound_json(
+        env,
+        "Codex work-summary",
+        "work-summary",
+        project_work_summary_json_schema(),
+        prompt,
+    )
+    .await?;
+    let mut narrative = project_work_summary_from_content("codex", &content).ok_or_else(|| {
+        "Codex work-summary 응답에 비어 있지 않은 summary_markdown이 없어 로컬 fallback을 사용합니다."
+            .to_string()
+    })?;
+    narrative.warnings.push(
+        "Codex work-summary는 read-only sandbox, ephemeral state, output-schema 검증으로 실행됐습니다."
+            .to_string(),
+    );
+    Ok(narrative)
+}
+
 fn project_work_summary_messages(digest: &str) -> (&'static str, String) {
     let system = "You summarize project work evidence for an engineering operator. Use Korean. Use only the supplied evidence. Preserve citation IDs exactly. Do not invent dates, projects, tasks, sessions, or next actions. Return JSON with key summary_markdown.";
     let mut user = String::new();
@@ -9950,6 +9991,17 @@ fn project_work_summary_messages(digest: &str) -> (&'static str, String) {
     user.push_str(digest.trim());
     user.push_str("\n\nReturn JSON: {\"summary_markdown\":\"...\"}.");
     (system, user)
+}
+
+fn project_work_summary_json_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "summary_markdown": { "type": "string" }
+        },
+        "required": ["summary_markdown"]
+    })
 }
 
 fn project_work_summary_from_content(
@@ -15220,7 +15272,7 @@ fn project_work_ai_provider_status_from_env(
     }
     if codex_usable {
         warnings.push(
-            "Codex CLI work-log extraction/normalization/session-evidence proposal provider가 opt-in으로 활성화되어 있습니다; durable 저장은 review queue 승인 후에만 가능합니다."
+            "Codex CLI work-summary/work-log extraction/normalization/session-evidence proposal provider가 opt-in으로 활성화되어 있습니다; durable 저장은 review queue 승인 후에만 가능합니다."
                 .to_string(),
         );
     } else if codex_configured {
@@ -15283,11 +15335,11 @@ fn project_work_ai_provider_status_from_env(
                 notes: if let Some(path) = codex_exec_path {
                     let mut notes = if codex_usable {
                         vec![format!(
-                            "codex exec is opt-in enabled at {path}; work-log extraction, normalization, and session-evidence proposals run with read-only sandbox, ephemeral state, and output-schema validation."
+                            "codex exec is opt-in enabled at {path}; work summaries, work-log extraction, normalization, and session-evidence proposals run with read-only sandbox, ephemeral state, and output-schema validation."
                         )]
                     } else {
                         vec![format!(
-                            "codex exec was detected at {path}; set PROMPTVAULT_CODEX_WORK_PROVIDER=1 to enable review-gated work-log extraction, normalization, and session-evidence proposals."
+                            "codex exec was detected at {path}; set PROMPTVAULT_CODEX_WORK_PROVIDER=1 to enable review-gated work summaries, work-log extraction, normalization, and session-evidence proposals."
                         )]
                     };
                     if let Some(profile) = non_empty_env_value(&env, "CODEX_PROFILE") {
@@ -15327,6 +15379,7 @@ fn provider_work_management_capabilities(configured: bool) -> Vec<String> {
 fn codex_work_management_capabilities(usable: bool) -> Vec<String> {
     if usable {
         vec![
+            "work-summary".to_string(),
             "work-log-extraction".to_string(),
             "work-log-normalization".to_string(),
             "session-evidence-proposals".to_string(),
@@ -15904,6 +15957,7 @@ mod tests {
         assert_eq!(
             codex.capabilities,
             vec![
+                "work-summary",
                 "work-log-extraction",
                 "work-log-normalization",
                 "session-evidence-proposals"
@@ -19097,6 +19151,92 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(request.starts_with("POST /chat/completions HTTP/1.1"));
         assert!(request.contains("authorization: Bearer mock-glm-key"));
         assert!(request.contains("\"json_object\""));
+    }
+
+    #[tokio::test]
+    async fn project_work_summary_with_env_uses_opt_in_codex_cli_provider() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-codex-summary-provider-{}",
+            std::process::id()
+        ));
+        let bin_dir = root.join("bin");
+        std::fs::create_dir_all(&bin_dir).expect("create codex bin fixture");
+        let codex_path = bin_dir.join("codex");
+        let prompt_capture_path = root.join("captured-prompt.txt");
+        let response = serde_json::json!({
+            "summary_markdown": "- ExampleProject: Codex-backed summary\n- Citation: 2026-06-09-ExampleProject-1"
+        })
+        .to_string();
+        let script = format!(
+            "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"--output-last-message\" ]; then\n    shift\n    out=\"$1\"\n  fi\n  shift\ndone\ncat > \"{}\"\ncat > \"$out\" <<'JSON'\n{}\nJSON\n",
+            prompt_capture_path.to_string_lossy(),
+            response
+        );
+        std::fs::write(&codex_path, script).expect("write fake codex");
+        let mut permissions = std::fs::metadata(&codex_path)
+            .expect("codex metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&codex_path, permissions).expect("make fake codex executable");
+
+        let summary = ProjectWorkSummary {
+            date: "2026-06-09".to_string(),
+            project: "ExampleProject".to_string(),
+            headline: "ExampleProject: Parser repair, Browser QA".to_string(),
+            work_item_count: 2,
+            session_evidence_count: 2,
+            unique_session_evidence_count: 1,
+            citations: vec![ProjectWorkSummaryCitation {
+                id: "2026-06-09-ExampleProject-1".to_string(),
+                date: "2026-06-09".to_string(),
+                project: "ExampleProject".to_string(),
+                title: "Parser repair".to_string(),
+                status: "current".to_string(),
+                source_path: "/Users/wj/Ai/System/10_Projects/ExampleProject/working.md"
+                    .to_string(),
+                source_file: "working.md".to_string(),
+                evidence: "Fixed parser state mismatch.".to_string(),
+                session_evidence_count: 1,
+                session_sources: vec![FrequencyItem {
+                    text: "Codex session metadata".to_string(),
+                    count: 1,
+                }],
+            }],
+            next_actions: Vec::new(),
+        };
+        let mut env = HashMap::new();
+        env.insert(
+            "PROMPTVAULT_CODEX_EXEC_PATH".to_string(),
+            codex_path.to_string_lossy().to_string(),
+        );
+        env.insert(
+            "PROMPTVAULT_CODEX_WORK_PROVIDER".to_string(),
+            "1".to_string(),
+        );
+        env.insert("CODEX_MODEL".to_string(), "gpt-5.3-codex".to_string());
+        env.insert("CODEX_PROFILE".to_string(), "promptvault".to_string());
+
+        let narrative = project_work_summary_narrative_with_env(&[summary], false, env)
+            .await
+            .expect("Codex summary narrative");
+        let captured_prompt =
+            std::fs::read_to_string(&prompt_capture_path).expect("read captured prompt");
+
+        assert_eq!(narrative.provider, "codex");
+        assert!(narrative.used_ai);
+        assert!(narrative.markdown.contains("ExampleProject"));
+        assert!(narrative.markdown.contains("2026-06-09-ExampleProject-1"));
+        assert!(narrative
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("read-only sandbox")));
+        assert!(captured_prompt.contains("Preserve citation IDs exactly"));
+        assert!(captured_prompt.contains("Do not invent dates"));
+        assert!(captured_prompt.contains("do not read files"));
+
+        std::fs::remove_dir_all(root).expect("remove codex summary fixture");
     }
 
     #[test]

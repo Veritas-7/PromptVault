@@ -63,6 +63,7 @@ import {
   workManagementReadinessText,
   workManagementReviewBlockerText,
   workManagementReviewDecisionText,
+  workManagementReviewResolutionText,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
@@ -1257,8 +1258,29 @@ test("work management readiness text summarizes coverage, session backfill, queu
 });
 
 test("work management review decision text summarizes all durable review queues", () => {
+  const reviewProviderStatus = aiProviderStatusResult({
+    external_provider_available: true,
+    fallback_provider: "local-fallback-rules",
+    providers: [
+      aiProviderStatusResult().providers[0],
+      {
+        provider: "glm",
+        provider_runtime: "glm-chat-completions",
+        configured: true,
+        usable_for_work_management: true,
+        capabilities: ["work-log-normalization", "session-evidence-proposals"],
+        model: "glm-test",
+        endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        notes: ["GLM can be attempted."],
+      },
+      codexDetectedProviderStatusResult().providers[2],
+    ],
+    warnings: [],
+  });
+
   assert.equal(workManagementReviewDecisionText({}), null);
   assert.equal(workManagementReviewBlockerText({}), null);
+  assert.equal(workManagementReviewResolutionText({}), null);
   assert.equal(
     workManagementReviewDecisionText({
       workLogReviewQueue: reviewQueueResult(),
@@ -1274,6 +1296,22 @@ test("work management review decision text summarizes all durable review queues"
       sessionEvidenceReviewQueue: sessionEvidenceReviewQueueResult(),
     }),
     "검토 차단 · 추출 위험차단 3개 · 추출 AI검토 10개 · 추출 stale 2개 · 정규화 AI/운영검토 3개 · 정규화 stale 1개 · 세션 제목정규화 12개 · 세션 근거검토 18개 · 세션 stale 2개",
+  );
+  assert.equal(
+    workManagementReviewResolutionText({
+      aiProviderStatus: reviewProviderStatus,
+      normalizationReviewQueue: normalizationReviewQueueResult(),
+      sessionEvidenceReviewQueue: sessionEvidenceReviewQueueResult(),
+    }),
+    "검토 해소 경로 · 정규화 AI 재동기화 시도 가능 · GLM · local fallback 표시 1/3개 · 세션 제목정규화 우선 12개 · 세션근거 AI 제안 시도 가능 · GLM · 18개",
+  );
+  assert.equal(
+    workManagementReviewResolutionText({
+      aiProviderStatus: aiProviderStatusResult(),
+      normalizationReviewQueue: normalizationReviewQueueResult(),
+      sessionEvidenceReviewQueue: sessionEvidenceReviewQueueResult(),
+    }),
+    "검토 해소 경로 · 정규화 provider 설정 필요 · local fallback 표시 1/3개 · 세션 제목정규화 우선 12개 · 세션근거 provider 설정 필요 18개",
   );
   assert.equal(
     workManagementReviewDecisionText({
@@ -1311,6 +1349,20 @@ test("work management review decision text summarizes all durable review queues"
         stale_count: 0,
         approved_count: 0,
         rejected_count: 0,
+      }),
+    }),
+    null,
+  );
+  assert.equal(
+    workManagementReviewResolutionText({
+      normalizationReviewQueue: normalizationReviewQueueResult({
+        total_items: 0,
+        returned_item_count: 0,
+        pending_review_count: 0,
+        stale_count: 0,
+        approved_count: 0,
+        rejected_count: 0,
+        items: [],
       }),
     }),
     null,

@@ -362,6 +362,7 @@ import {
   workManagementReadinessText,
   workManagementReviewBlockerText,
   workManagementReviewDecisionText,
+  workManagementReviewResolutionText,
   filterWorkStatusExportRows,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
@@ -1250,6 +1251,11 @@ function App() {
   });
   const workManagementReviewBlockers = workManagementReviewBlockerText({
     workLogReviewQueue: workLogReviewQueueResult,
+    normalizationReviewQueue: workLogNormalizationReviewQueueResult,
+    sessionEvidenceReviewQueue: workSessionEvidenceReviewQueueResult,
+  });
+  const workManagementReviewResolution = workManagementReviewResolutionText({
+    aiProviderStatus: workAiProviderStatusResult,
     normalizationReviewQueue: workLogNormalizationReviewQueueResult,
     sessionEvidenceReviewQueue: workSessionEvidenceReviewQueueResult,
   });
@@ -5001,6 +5007,12 @@ function App() {
           <div className="work-summary-index warning" data-work-management-review-blockers="true">
             <AlertTriangle size={15} />
             <span>{workManagementReviewBlockers}</span>
+          </div>
+        ) : null}
+        {workManagementReviewResolution ? (
+          <div className="work-summary-index" data-work-management-review-resolution="true">
+            <Sparkles size={15} />
+            <span>{workManagementReviewResolution}</span>
           </div>
         ) : null}
         {workManagementOverviewLoaded ? (

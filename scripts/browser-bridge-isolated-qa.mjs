@@ -444,6 +444,7 @@ async function runBrowserQa() {
   let workManagementReadiness = "";
   let workManagementReviewDecisions = "";
   let workManagementReviewBlockers = "";
+  let workManagementReviewResolution = "";
   let workManagementNextAction = "";
   let workManagementMeta = "";
   let workStatusExportLimitMeta = "";
@@ -1332,6 +1333,7 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-review-decisions="true"]')?.textContent ?? "";
       const blockers = document.querySelector('[data-work-management-review-blockers="true"]')?.textContent ?? "";
+      const resolution = document.querySelector('[data-work-management-review-resolution="true"]')?.textContent ?? "";
       return text.includes("검토 결정")
         && text.includes("저장 row")
         && text.includes("대기")
@@ -1344,12 +1346,16 @@ async function runBrowserQa() {
           || text.includes("세션")
         )
         && blockers.includes("검토 차단")
-        && (blockers.includes("정규화") || blockers.includes("세션"));
+        && (blockers.includes("정규화") || blockers.includes("세션"))
+        && resolution.includes("검토 해소 경로")
+        && (resolution.includes("정규화") || resolution.includes("세션"));
     }, undefined, { timeout: 120000 });
     workManagementReviewDecisions =
       (await page.locator('[data-work-management-review-decisions="true"]').textContent())?.trim() ?? "";
     workManagementReviewBlockers =
       (await page.locator('[data-work-management-review-blockers="true"]').textContent())?.trim() ?? "";
+    workManagementReviewResolution =
+      (await page.locator('[data-work-management-review-resolution="true"]').textContent())?.trim() ?? "";
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-next-action="true"]')?.textContent ?? "";
       return text.includes("다음 조치")
@@ -1843,6 +1849,7 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-review-decisions="true"]')?.textContent ?? "";
       const blockers = document.querySelector('[data-work-management-review-blockers="true"]')?.textContent ?? "";
+      const resolution = document.querySelector('[data-work-management-review-resolution="true"]')?.textContent ?? "";
       return text.includes("검토 결정")
         && text.includes("저장 row")
         && text.includes("대기")
@@ -1854,12 +1861,17 @@ async function runBrowserQa() {
         && text.includes("세션")
         && blockers.includes("검토 차단")
         && blockers.includes("정규화")
-        && blockers.includes("세션");
+        && blockers.includes("세션")
+        && resolution.includes("검토 해소 경로")
+        && resolution.includes("정규화")
+        && resolution.includes("세션");
     }, undefined, { timeout: 90000 });
     workManagementReviewDecisions =
       (await page.locator('[data-work-management-review-decisions="true"]').textContent())?.trim() ?? "";
     workManagementReviewBlockers =
       (await page.locator('[data-work-management-review-blockers="true"]').textContent())?.trim() ?? "";
+    workManagementReviewResolution =
+      (await page.locator('[data-work-management-review-resolution="true"]').textContent())?.trim() ?? "";
 
     if (consoleErrors.length > 0) {
       throw new Error(`Browser console errors:\n${consoleErrors.join("\n")}`);
@@ -1915,6 +1927,7 @@ async function runBrowserQa() {
       workManagementReadiness,
       workManagementReviewDecisions,
       workManagementReviewBlockers,
+      workManagementReviewResolution,
       workManagementNextAction,
       workManagementDurabilityWarning,
       workManagementSessionBackfillWarning,

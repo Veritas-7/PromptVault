@@ -492,6 +492,66 @@ export function workManagementReviewBlockerText(
   return parts.length ? `검토 차단 · ${parts.join(" · ")}` : null;
 }
 
+export function workManagementReviewResolutionText(
+  input: WorkManagementReadinessInput,
+): string | null {
+  const parts: string[] = [];
+  const normalization = input.normalizationReviewQueue;
+  const sessionEvidence = input.sessionEvidenceReviewQueue;
+  const normalizationProviderNames = workManagementProviderNamesForCapability(
+    input.aiProviderStatus ?? null,
+    "work-log-normalization",
+  );
+  const sessionEvidenceProviderNames = workManagementProviderNamesForCapability(
+    input.aiProviderStatus ?? null,
+    "session-evidence-proposals",
+  );
+
+  if (normalization && normalization.pending_review_count > 0) {
+    const displayedLocalFallbackCount = normalization.items.filter((item) =>
+      item.review_state === "pending_review" && !item.used_ai
+    ).length;
+    if (displayedLocalFallbackCount > 0 && normalizationProviderNames.length > 0) {
+      parts.push([
+        "정규화 AI 재동기화 시도 가능",
+        workManagementProviderNamesText(normalizationProviderNames),
+        `local fallback 표시 ${displayedLocalFallbackCount.toLocaleString()}/${normalization.pending_review_count.toLocaleString()}개`,
+      ].join(" · "));
+    } else if (displayedLocalFallbackCount > 0) {
+      parts.push(
+        `정규화 provider 설정 필요 · local fallback 표시 ${displayedLocalFallbackCount.toLocaleString()}/${normalization.pending_review_count.toLocaleString()}개`,
+      );
+    } else {
+      parts.push(`정규화 승인검토 ${normalization.pending_review_count.toLocaleString()}개`);
+    }
+  }
+
+  if (sessionEvidence && sessionEvidence.pending_review_count > 0) {
+    const titleNormalizationCount = Math.min(
+      sessionEvidence.pending_review_count,
+      sessionEvidence.needs_title_normalization_count,
+    );
+    const evidenceReviewCount = Math.max(
+      0,
+      sessionEvidence.pending_review_count - titleNormalizationCount,
+    );
+    if (titleNormalizationCount > 0) {
+      parts.push(`세션 제목정규화 우선 ${titleNormalizationCount.toLocaleString()}개`);
+    }
+    if (evidenceReviewCount > 0 && sessionEvidenceProviderNames.length > 0) {
+      parts.push([
+        "세션근거 AI 제안 시도 가능",
+        workManagementProviderNamesText(sessionEvidenceProviderNames),
+        `${evidenceReviewCount.toLocaleString()}개`,
+      ].join(" · "));
+    } else if (evidenceReviewCount > 0) {
+      parts.push(`세션근거 provider 설정 필요 ${evidenceReviewCount.toLocaleString()}개`);
+    }
+  }
+
+  return parts.length ? `검토 해소 경로 · ${parts.join(" · ")}` : null;
+}
+
 export function workManagementNextActionText(
   input: WorkManagementReadinessInput,
   effectiveBatchFiles: number | null | undefined,
@@ -629,6 +689,22 @@ function workManagementReadinessProviderText(
     parts.push("Codex opt-in 필요");
   }
   return parts.join(" · ");
+}
+
+function workManagementProviderNamesForCapability(
+  result: ProjectWorkAiProviderStatusResult | null,
+  capability: string,
+): string[] {
+  if (!result) return [];
+  return result.providers
+    .filter((provider) =>
+      provider.usable_for_work_management && provider.capabilities.includes(capability)
+    )
+    .map(workAiProviderDisplayName);
+}
+
+function workManagementProviderNamesText(names: string[]): string {
+  return names.join("/");
 }
 
 function workManagementWorkLogReviewPendingCount(

@@ -1,10 +1,78 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 07:21 KST
+Updated: 2026-06-10 07:38 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Review resolution guidance
+
+Current Goal:
+
+- Connect the visible review blockers to the next safe action, especially when
+  local-fallback review rows can be retried through GLM/OpenAI/Codex-backed
+  proposal routes without auto-approving them.
+
+Context:
+
+- The normalization and session-evidence review queues remain review-gated.
+  Durable writes still require explicit approval/apply actions.
+- Persistent provider status now confirms GLM is configured for
+  `work-log-normalization` and `session-evidence-proposals`, while Codex CLI is
+  detected but disabled until `PROMPTVAULT_CODEX_WORK_PROVIDER=1`.
+- A read-only persistent GLM normalization proposal probe still fell back to
+  local rules because the configured GLM endpoint request failed:
+  `error sending request for url (https://api.z.ai/api/coding/paas/v4/chat/completions)`.
+
+Progress:
+
+- Added `workManagementReviewResolutionText` so the management meta area
+  explains whether pending review rows should be AI-resynced, manually
+  approved/rejected, title-normalized first, or blocked on provider setup.
+- Rendered the new `검토 해소 경로` row below `검토 차단`.
+- Kept wording conservative: provider-configured paths say `시도 가능` instead
+  of promising success, because the live GLM probe can still fail and fall back.
+- Extended isolated browser QA to require and capture the resolution row.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds provider/capability-aware review-resolution
+  guidance.
+- `src/App.tsx`: displays the resolution row in the work-management summary
+  stack.
+- `tests/workSummaryStatus.test.ts`: covers GLM-backed retry guidance,
+  provider-missing guidance, and no-op empty queue state.
+- `scripts/browser-bridge-isolated-qa.mjs`: validates
+  `data-work-management-review-resolution`.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "review decision"`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`499` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge >
+  /tmp/promptvault-review-resolution-final-qa.log 2>&1`.
+- PASS/OBSERVED: read-only persistent provider check shows GLM configured and
+  Codex opt-in disabled.
+- OBSERVED: read-only persistent `work-log-normalization-proposals --ai` probe
+  returned local fallback warnings after the GLM request failed.
+
+QA Evidence:
+
+- Isolated QA captured:
+  `검토 해소 경로 · 정규화 승인검토 2개 · 세션 제목정규화 우선 28개 · 세션근거 provider 설정 필요 39개`.
+- Isolated QA still shows the blocker row separately:
+  `검토 차단 · 정규화 AI/운영검토 2개 · 세션 제목정규화 28개 · 세션 근거검토 39개`.
+
+Remaining:
+
+- Diagnose or fix the live GLM endpoint failure before expecting provider-backed
+  queue reduction in the persistent vault.
+- After provider health is reliable, run a controlled queue sync and review
+  only evidence-preserving AI proposals; do not auto-approve review rows.
 
 ## Completed Slice - 2026-06-10 Review blocker summary
 

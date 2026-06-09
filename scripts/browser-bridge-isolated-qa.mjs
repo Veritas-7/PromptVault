@@ -1281,11 +1281,11 @@ async function runBrowserQa() {
       const rowText = rows.map((row) => row.textContent ?? "").join("\n");
       return text.includes("OpenAI")
         && text.includes("GLM")
-        && text.includes("Codex SDK")
+        && text.includes("Codex")
         && text.includes("fallback")
         && rowText.includes("openai-responses")
         && rowText.includes("glm-chat-completions")
-        && rowText.includes("codex-sdk");
+        && (rowText.includes("codex-sdk") || rowText.includes("codex-cli-exec"));
     }, undefined, { timeout: 90000 });
     workAiProviderStatusMeta =
       (await page.locator('[data-work-ai-provider-status-meta="true"]').textContent())?.trim() ?? "";

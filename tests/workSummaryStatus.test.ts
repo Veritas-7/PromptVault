@@ -191,6 +191,24 @@ function aiProviderStatusResult(
   };
 }
 
+function codexDetectedProviderStatusResult(): ProjectWorkAiProviderStatusResult {
+  return aiProviderStatusResult({
+    providers: [
+      aiProviderStatusResult().providers[0],
+      aiProviderStatusResult().providers[1],
+      {
+        provider: "codex",
+        provider_runtime: "codex-cli-exec",
+        configured: true,
+        usable_for_work_management: false,
+        model: "gpt-5.3-codex",
+        endpoint: "/usr/local/bin/codex",
+        notes: ["codex exec was detected, but proposal generation is not wired yet."],
+      },
+    ],
+  });
+}
+
 function summaryResult(overrides: Partial<ProjectWorkSummaryResult> = {}): ProjectWorkSummaryResult {
   return {
     generated_at: "2026-06-09T00:00:00Z",
@@ -1623,11 +1641,15 @@ test("work AI provider status labels expose external readiness and codex gap", (
   );
   assert.equal(
     workAiProviderStatusMetaText("ready", aiProviderStatusResult()),
-    "외부 AI 미설정 · OpenAI 미설정 · GLM 미설정 · Codex SDK 미구현 · fallback local-fallback-rules · 경고 1개",
+    "외부 AI 미설정 · OpenAI 미설정 · GLM 미설정 · Codex 미구현 · fallback local-fallback-rules · 경고 1개",
   );
   assert.equal(
     workAiProviderStatusMetaText("ready", configured),
-    "외부 AI 사용 가능 · OpenAI configured · GLM 미설정 · Codex SDK 미구현 · fallback local-fallback-rules",
+    "외부 AI 사용 가능 · OpenAI configured · GLM 미설정 · Codex 미구현 · fallback local-fallback-rules",
+  );
+  assert.equal(
+    workAiProviderStatusMetaText("ready", codexDetectedProviderStatusResult()),
+    "외부 AI 미설정 · OpenAI 미설정 · GLM 미설정 · Codex CLI 감지/미연결 · fallback local-fallback-rules · 경고 1개",
   );
   assert.equal(
     workAiProviderStatusMetaText(failed, null),
@@ -1644,7 +1666,11 @@ test("work AI provider status labels expose external readiness and codex gap", (
   );
   assert.equal(
     workAiProviderStatusProviderText(aiProviderStatusResult().providers[2]),
-    "Codex SDK · 미설정 · 사용 불가 · codex-sdk",
+    "Codex · 미설정 · 사용 불가 · codex-sdk",
+  );
+  assert.equal(
+    workAiProviderStatusProviderText(codexDetectedProviderStatusResult().providers[2]),
+    "Codex · configured · 사용 불가 · codex-cli-exec · model gpt-5.3-codex · /usr/local/bin/codex",
   );
 });
 

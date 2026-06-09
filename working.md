@@ -1,10 +1,93 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 02:43 KST
+Updated: 2026-06-10 02:54 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Codex CLI provider readiness detection
+
+Current Goal:
+
+- Make the work-management AI provider status expose a detected local Codex CLI
+  route without claiming that Codex-backed work proposals are already wired.
+- Answer the operator concern about whether real sessions and project progress
+  logs, including `workingd.md`, are actually being parsed and managed.
+
+Context:
+
+- Live progress-log coverage scans project-local work artifacts under
+  `/Users/wj/Ai/System/10_Projects`.
+- The current coverage run saw `865` progress-log files, parsed `864`, had
+  `0` unparsed readable logs, and confirmed `workingd.md` is covered as a known
+  progress-log role.
+- The local Codex CLI exists at
+  `/Users/wj/.nvm/versions/node/v22.22.1/bin/codex` and reports
+  `codex-cli 0.130.0`.
+
+Progress:
+
+- Expanded AI provider status environment loading so Codex-related runtime
+  variables and `PATH` can be inspected safely.
+- Added local `codex` executable detection through
+  `PROMPTVAULT_CODEX_EXEC_PATH`, `CODEX_EXEC_PATH`, or `PATH`.
+- Changed the Codex provider status from a flat unavailable SDK placeholder to
+  a readiness state:
+  - `configured: true` when `codex exec` is detected.
+  - `provider_runtime: codex-cli-exec` when detected.
+  - `usable_for_work_management: false` until a source-traced proposal runner is
+    implemented behind review gates.
+- Updated the browser status copy so the UI distinguishes `Codex CLI 감지/미연결`
+  from unavailable Codex.
+- Kept OpenAI/GLM/local provider order unchanged; Codex detection is
+  informational readiness only.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added Codex CLI path detection, environment handling,
+  provider-status notes/warnings, and Rust coverage.
+- `src/workSummaryStatus.ts`: added Codex detected-but-unwired status labels.
+- `tests/workSummaryStatus.test.ts`: covered the detected Codex CLI display
+  state.
+- `scripts/browser-bridge-isolated-qa.mjs`: allowed browser QA to accept either
+  `codex-sdk` or `codex-cli-exec` runtime rows.
+- `README.md`, `docs/CLI.md`: documented Codex CLI detection as readiness-only
+  until the review-gated proposal runner exists.
+
+Tests:
+
+- PASS: `command -v codex && codex --version && codex exec --help`.
+- PASS: `cargo run --quiet --bin promptvault-cli -- work-log-coverage --json`
+  - `files_seen: 865`, `parsed: 864`, `unparsed: 0`, `workingd: true`.
+- PASS: `cargo test project_work_ai_provider_status -- --nocapture`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work AI provider status"`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work AI provider status"`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `cargo fmt --check`.
+- PASS: `cargo run --quiet --bin promptvault-cli -- work-ai-provider-status --json`
+  - Reported Codex as configured through `codex-cli-exec`, endpoint
+    `/Users/wj/.nvm/versions/node/v22.22.1/bin/codex`, and still
+    `usable_for_work_management: false`.
+- PASS: `npm run check`
+  - UI tests `489`, Rust lib tests `209`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser QA ended with exit code `0`.
+  - Verified work status export, work-log coverage, work-log candidates, work
+    AI provider status, normalization/review queues, and saved items through
+    the browser bridge.
+
+Remaining:
+
+- Codex CLI is detected but not yet used to generate source-traced project/day
+  proposals. The provider remains intentionally unusable for work management
+  until a review-gated runner is implemented.
+- Durable session-evidence writes remain unavailable; current session-evidence
+  proposals are review-only.
+- The system manages project/day rows from real progress logs and session
+  evidence, but title normalization and unresolved session-evidence rows still
+  require operator review or future AI-assisted backfill.
 
 ## Completed Slice - 2026-06-10 title-only work-log normalization candidates
 

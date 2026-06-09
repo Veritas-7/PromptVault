@@ -581,7 +581,7 @@ export function workAiProviderStatusMetaText(
     result.external_provider_available ? "외부 AI 사용 가능" : "외부 AI 미설정",
     `OpenAI ${providerConfiguredLabel(openai)}`,
     `GLM ${providerConfiguredLabel(glm)}`,
-    `Codex SDK ${codex?.usable_for_work_management ? "사용 가능" : "미구현"}`,
+    `Codex ${codexProviderStatusLabel(codex)}`,
     `fallback ${result.fallback_provider}`,
   ];
   if (result.warnings.length > 0) {
@@ -621,10 +621,19 @@ function providerConfiguredLabel(
   return provider?.configured ? "configured" : "미설정";
 }
 
+function codexProviderStatusLabel(
+  provider: ProjectWorkAiProviderStatusProvider | undefined,
+): string {
+  if (!provider) return "미설정";
+  if (provider.usable_for_work_management) return "사용 가능";
+  if (provider.configured) return "CLI 감지/미연결";
+  return "미구현";
+}
+
 function workAiProviderDisplayName(provider: ProjectWorkAiProviderStatusProvider): string {
   if (provider.provider === "openai") return "OpenAI";
   if (provider.provider === "glm") return "GLM";
-  if (provider.provider === "codex") return "Codex SDK";
+  if (provider.provider === "codex") return "Codex";
   return provider.provider;
 }
 

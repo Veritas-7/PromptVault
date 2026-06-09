@@ -14749,6 +14749,12 @@ fn load_improve_env() -> HashMap<String, String> {
         "GLM_API_KEY_2",
         "GLM_CODING_ENDPOINT",
         "GLM_CODING_MODEL",
+        "PATH",
+        "CODEX_EXEC_PATH",
+        "PROMPTVAULT_CODEX_EXEC_PATH",
+        "CODEX_HOME",
+        "CODEX_MODEL",
+        "CODEX_PROFILE",
     ] {
         if let Ok(value) = std::env::var(key) {
             if !value.trim().is_empty() {
@@ -14768,6 +14774,8 @@ fn project_work_ai_provider_status_from_env(
 ) -> ProjectWorkAiProviderStatusResult {
     let openai_configured = openai_api_key_from_env(&env).is_some();
     let glm_configured = glm_api_key_from_env(&env).is_some();
+    let codex_exec_path = codex_exec_path_from_env(&env);
+    let codex_configured = codex_exec_path.is_some();
     let openai_endpoint = normalize_openai_responses_endpoint(
         &env.get("OPENAI_RESPONSES_ENDPOINT")
             .or_else(|| env.get("OPENAI_BASE_URL"))
@@ -14787,10 +14795,17 @@ fn project_work_ai_provider_status_from_env(
                 .to_string(),
         );
     }
-    warnings.push(
-        "Codex SDK provider route는 아직 구현되지 않아 work-log/session-evidence reconciliation에 사용할 수 없습니다."
-            .to_string(),
-    );
+    if codex_configured {
+        warnings.push(
+            "Codex CLI route가 감지되었지만 proposal 생성에는 아직 연결되지 않았습니다; OpenAI/GLM/local provider 순서는 그대로 유지됩니다."
+                .to_string(),
+        );
+    } else {
+        warnings.push(
+            "Codex SDK/CLI provider route는 아직 사용할 수 없어 work-log/session-evidence reconciliation에 사용할 수 없습니다."
+                .to_string(),
+        );
+    }
 
     ProjectWorkAiProviderStatusResult {
         generated_at: Utc::now().to_rfc3339(),
@@ -14825,18 +14840,54 @@ fn project_work_ai_provider_status_from_env(
             },
             ProjectWorkAiProviderStatusProvider {
                 provider: "codex".to_string(),
-                provider_runtime: "codex-sdk".to_string(),
-                configured: false,
+                provider_runtime: if codex_configured {
+                    "codex-cli-exec".to_string()
+                } else {
+                    "codex-sdk".to_string()
+                },
+                configured: codex_configured,
                 usable_for_work_management: false,
                 model: non_empty_env_value(&env, "CODEX_MODEL"),
-                endpoint: non_empty_env_value(&env, "CODEX_SDK_ENDPOINT"),
-                notes: vec![
-                    "No Codex SDK work-management provider is wired yet; this row tracks that remaining implementation gap.".to_string(),
-                ],
+                endpoint: codex_exec_path.clone(),
+                notes: if let Some(path) = codex_exec_path {
+                    let mut notes = vec![format!(
+                        "codex exec was detected at {path}; proposal generation remains disabled until a source-traced runner is wired behind review gates."
+                    )];
+                    if let Some(profile) = non_empty_env_value(&env, "CODEX_PROFILE") {
+                        notes.push(format!("CODEX_PROFILE is set to {profile}."));
+                    }
+                    if let Some(home) = non_empty_env_value(&env, "CODEX_HOME") {
+                        notes.push(format!("CODEX_HOME is configured at {home}."));
+                    }
+                    notes
+                } else {
+                    vec![
+                        "No Codex SDK/CLI work-management provider is available. Set CODEX_EXEC_PATH or put codex on PATH before wiring proposal generation.".to_string(),
+                    ]
+                },
             },
         ],
         warnings,
     }
+}
+
+fn codex_exec_path_from_env(env: &HashMap<String, String>) -> Option<String> {
+    for key in ["PROMPTVAULT_CODEX_EXEC_PATH", "CODEX_EXEC_PATH"] {
+        if let Some(value) = non_empty_env_value(env, key) {
+            let path = PathBuf::from(&value);
+            if path.is_file() {
+                return Some(path.to_string_lossy().to_string());
+            }
+        }
+    }
+    non_empty_env_value(env, "PATH").and_then(|path| find_executable_in_path("codex", &path))
+}
+
+fn find_executable_in_path(name: &str, path_env: &str) -> Option<String> {
+    std::env::split_paths(path_env)
+        .map(|dir| dir.join(name))
+        .find(|path| path.is_file())
+        .map(|path| path.to_string_lossy().to_string())
 }
 
 fn non_empty_env_value(env: &HashMap<String, String>, key: &str) -> Option<String> {
@@ -15277,6 +15328,48 @@ mod tests {
         assert!(!serialized.contains("openai-secret"));
         assert!(!serialized.contains("glm-secret"));
         assert!(serialized.contains("codex-sdk"));
+    }
+
+    #[test]
+    fn project_work_ai_provider_status_detects_codex_cli_without_claiming_wired_use() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-codex-provider-status-{}",
+            std::process::id()
+        ));
+        let bin_dir = root.join("bin");
+        std::fs::create_dir_all(&bin_dir).expect("create codex bin fixture");
+        let codex_path = bin_dir.join("codex");
+        std::fs::write(&codex_path, "#!/bin/sh\n").expect("write fake codex");
+        let mut env = HashMap::new();
+        env.insert("PATH".to_string(), bin_dir.to_string_lossy().to_string());
+        env.insert("CODEX_MODEL".to_string(), "gpt-5.3-codex".to_string());
+        env.insert("CODEX_PROFILE".to_string(), "promptvault".to_string());
+        env.insert(
+            "CODEX_HOME".to_string(),
+            root.join("codex-home").to_string_lossy().to_string(),
+        );
+
+        let result = project_work_ai_provider_status_from_env(env);
+        let codex = result
+            .providers
+            .iter()
+            .find(|provider| provider.provider == "codex")
+            .expect("codex row");
+
+        assert!(codex.configured);
+        assert!(!codex.usable_for_work_management);
+        assert_eq!(codex.provider_runtime, "codex-cli-exec");
+        assert_eq!(codex.model.as_deref(), Some("gpt-5.3-codex"));
+        let expected_path = codex_path.to_string_lossy().to_string();
+        assert_eq!(codex.endpoint.as_deref(), Some(expected_path.as_str()));
+        assert!(codex
+            .notes
+            .iter()
+            .any(|note| note.contains("codex exec was detected")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("감지되었지만 proposal 생성에는 아직 연결되지")));
     }
 
     #[test]

@@ -784,6 +784,25 @@ pub struct ProjectWorkReportOptions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSessionIndexOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub reset: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionIndexResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub requested_limit: usize,
+    pub scanned_prompt_count: usize,
+    pub sanitized_prompt_count: usize,
+    pub stored_prompt_count: usize,
+    pub reset: bool,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkSummaryOptions {
     pub report: ProjectWorkReportOptions,
     pub summary_limit: Option<usize>,
@@ -1255,6 +1274,13 @@ fn project_work_log_normalized_items(
         .map_err(|err| err.to_string())
 }
 
+#[tauri::command]
+fn project_work_session_index(
+    options: Option<ProjectWorkSessionIndexOptions>,
+) -> Result<ProjectWorkSessionIndexResult, String> {
+    run_project_work_session_index(options.unwrap_or_default()).map_err(|err| err.to_string())
+}
+
 fn scan_cancel_flags() -> &'static Mutex<HashMap<String, ScanCancelFlag>> {
     SCAN_CANCEL_FLAGS.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -1679,6 +1705,40 @@ pub fn run_project_work_report(
         );
     }
     Ok(report)
+}
+
+pub fn run_project_work_session_index(
+    options: ProjectWorkSessionIndexOptions,
+) -> Result<ProjectWorkSessionIndexResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-session-index limit requires a positive integer".into());
+    }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("work-session-index database path requires a non-empty value".into());
+    }
+
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let requested_limit = options.limit.unwrap_or(DEFAULT_PROJECT_WORK_SESSION_LIMIT);
+    let reset = options.reset.unwrap_or(false);
+    let mut warnings = Vec::new();
+    let prompts = project_work_session_prompts(requested_limit, &mut warnings)?;
+    let persistence = upsert_project_work_session_index(&database_path, &prompts, reset)?;
+
+    Ok(ProjectWorkSessionIndexResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        requested_limit,
+        scanned_prompt_count: prompts.len(),
+        sanitized_prompt_count: persistence.sanitized_prompt_count,
+        stored_prompt_count: persistence.stored_prompt_count,
+        reset,
+        warnings,
+    })
 }
 
 pub fn run_project_work_log_coverage(
@@ -6244,6 +6304,11 @@ struct ProjectWorkSessionEvidence {
     index_count: usize,
 }
 
+struct ProjectWorkSessionIndexPersistence {
+    sanitized_prompt_count: usize,
+    stored_prompt_count: usize,
+}
+
 fn project_work_session_evidence(
     database_path: &Path,
     limit: usize,
@@ -6376,6 +6441,14 @@ fn persist_project_work_session_index(
     database_path: &Path,
     prompts: &[PromptRecord],
 ) -> Result<usize, Box<dyn std::error::Error>> {
+    Ok(upsert_project_work_session_index(database_path, prompts, true)?.stored_prompt_count)
+}
+
+fn upsert_project_work_session_index(
+    database_path: &Path,
+    prompts: &[PromptRecord],
+    reset: bool,
+) -> Result<ProjectWorkSessionIndexPersistence, Box<dyn std::error::Error>> {
     let mut conn = open_promptvault_database(database_path)?;
     let indexed_at = Utc::now().to_rfc3339();
     let records = prompts
@@ -6383,10 +6456,12 @@ fn persist_project_work_session_index(
         .filter_map(sanitized_project_work_session_prompt)
         .collect::<Vec<_>>();
     let tx = conn.transaction()?;
-    tx.execute("DELETE FROM project_work_session_evidence", [])?;
+    if reset {
+        tx.execute("DELETE FROM project_work_session_evidence", [])?;
+    }
     for prompt in &records {
         tx.execute(
-            "INSERT INTO project_work_session_evidence (
+            "INSERT OR REPLACE INTO project_work_session_evidence (
                 id, hash, source, session_id, source_path, timestamp, prompt_date, cwd,
                 text, word_count, char_count, risk_flags_json, quality_json,
                 quality_score, quality_band, indexed_at
@@ -6412,7 +6487,15 @@ fn persist_project_work_session_index(
         )?;
     }
     tx.commit()?;
-    Ok(records.len())
+    let stored_prompt_count = conn.query_row(
+        "SELECT COUNT(*) FROM project_work_session_evidence",
+        [],
+        |row| row.get::<_, i64>(0),
+    )? as usize;
+    Ok(ProjectWorkSessionIndexPersistence {
+        sanitized_prompt_count: records.len(),
+        stored_prompt_count,
+    })
 }
 
 fn sanitized_project_work_session_prompt(prompt: &PromptRecord) -> Option<PromptRecord> {
@@ -11789,7 +11872,8 @@ pub fn run() {
             project_work_log_normalization_review_queue,
             project_work_log_normalization_review_queue_update,
             project_work_log_normalization_apply,
-            project_work_log_normalized_items
+            project_work_log_normalized_items,
+            project_work_session_index
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -14116,6 +14200,70 @@ Progress:
         assert!(warnings.is_empty());
 
         let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn project_work_session_index_upserts_without_reset_and_resets_on_request() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-session-index-upsert-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let first = project_path_session_record(
+            "session-index-first",
+            "FirstProject",
+            "2026-06-08T15:30:00Z",
+        );
+        let second = project_path_session_record(
+            "session-index-second",
+            "SecondProject",
+            "2026-06-09T15:30:00Z",
+        );
+
+        let first_persistence =
+            upsert_project_work_session_index(&db_path, &[first], true).expect("initial reset");
+        assert_eq!(first_persistence.sanitized_prompt_count, 1);
+        assert_eq!(first_persistence.stored_prompt_count, 1);
+
+        let second_persistence =
+            upsert_project_work_session_index(&db_path, std::slice::from_ref(&second), false)
+                .expect("incremental upsert");
+        assert_eq!(second_persistence.sanitized_prompt_count, 1);
+        assert_eq!(second_persistence.stored_prompt_count, 2);
+
+        let indexed =
+            project_work_session_prompts_from_index(&db_path, 10).expect("read upserted index");
+        assert_eq!(indexed.len(), 2);
+        assert!(indexed
+            .iter()
+            .any(|prompt| prompt.text.contains("/FirstProject")));
+        assert!(indexed
+            .iter()
+            .any(|prompt| prompt.text.contains("/SecondProject")));
+
+        let reset_persistence =
+            upsert_project_work_session_index(&db_path, &[second], true).expect("explicit reset");
+        assert_eq!(reset_persistence.sanitized_prompt_count, 1);
+        assert_eq!(reset_persistence.stored_prompt_count, 1);
+        let indexed =
+            project_work_session_prompts_from_index(&db_path, 10).expect("read reset index");
+        assert_eq!(indexed.len(), 1);
+        assert!(indexed[0].text.contains("/SecondProject"));
+        assert!(!indexed[0].text.contains("/FirstProject"));
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn run_project_work_session_index_rejects_zero_limit() {
+        let err = run_project_work_session_index(ProjectWorkSessionIndexOptions {
+            limit: Some(0),
+            ..Default::default()
+        })
+        .expect_err("zero limit should fail")
+        .to_string();
+
+        assert!(err.contains("work-session-index limit requires a positive integer"));
     }
 
     #[test]
@@ -18436,6 +18584,21 @@ Progress:
         );
         record.word_count = count_words(&record.text);
         record.char_count = record.text.chars().count();
+        record.quality = assess_prompt_quality(&record.text, &[]);
+        record
+    }
+
+    fn project_path_session_record(id: &str, project: &str, timestamp: &str) -> PromptRecord {
+        let mut record = dated_record(id, timestamp);
+        record.source = "Codex session metadata".to_string();
+        record.session_id = format!("thread-{id}");
+        record.path = format!("/Users/wj/.codex/sessions/{id}.jsonl");
+        record.cwd = Some(format!("/Users/wj/Ai/System/10_Projects/{project}"));
+        record.text =
+            format!("Codex session project targets: /Users/wj/Ai/System/10_Projects/{project}");
+        record.word_count = count_words(&record.text);
+        record.char_count = record.text.chars().count();
+        record.hash = hash_text(&record.text);
         record.quality = assess_prompt_quality(&record.text, &[]);
         record
     }

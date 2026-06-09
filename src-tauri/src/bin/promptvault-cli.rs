@@ -9,18 +9,19 @@ use promptvault_lib::{
     run_project_work_log_normalization_candidates, run_project_work_log_normalization_proposals,
     run_project_work_log_normalization_review_queue,
     run_project_work_log_normalization_review_queue_update, run_project_work_log_review_queue,
-    run_project_work_log_review_queue_update, run_project_work_report, run_project_work_summary,
-    run_scan, source_specs, CancelScanOptions, ImportBatchOptions, ImportEventsOptions,
-    ImportStatesOptions, ImproveRequest, ProjectWorkLogExtractionCandidatesOptions,
+    run_project_work_log_review_queue_update, run_project_work_report,
+    run_project_work_session_index, run_project_work_summary, run_scan, source_specs,
+    CancelScanOptions, ImportBatchOptions, ImportEventsOptions, ImportStatesOptions,
+    ImproveRequest, ProjectWorkLogExtractionCandidatesOptions,
     ProjectWorkLogExtractionItemsOptions, ProjectWorkLogExtractionProposalsOptions,
     ProjectWorkLogExtractionRunsOptions, ProjectWorkLogFreezeOptions,
     ProjectWorkLogNormalizationApplyOptions, ProjectWorkLogNormalizationCandidatesOptions,
     ProjectWorkLogNormalizationProposalsOptions, ProjectWorkLogNormalizationReviewQueueOptions,
     ProjectWorkLogNormalizationReviewQueueUpdateOptions, ProjectWorkLogNormalizedItemsOptions,
     ProjectWorkLogReviewQueueOptions, ProjectWorkLogReviewQueueUpdateOptions,
-    ProjectWorkReportOptions, ProjectWorkSummaryOptions, ProjectWorkSummarySnapshotsOptions,
-    PromptRecord, ScanOptions, ScanPlanOptions, ScanProgressOptions, StoredPromptFacetsOptions,
-    StoredPromptsOptions,
+    ProjectWorkReportOptions, ProjectWorkSessionIndexOptions, ProjectWorkSummaryOptions,
+    ProjectWorkSummarySnapshotsOptions, PromptRecord, ScanOptions, ScanPlanOptions,
+    ScanProgressOptions, StoredPromptFacetsOptions, StoredPromptsOptions,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -358,6 +359,50 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     println!("- {}", item.evidence);
                 }
                 println!("  {}", item.source_path);
+            }
+        }
+        "work-session-index" => {
+            let json = take_flag(&mut args, "--json");
+            let reset = take_flag(&mut args, "--reset");
+            let mut limit = None;
+            let mut database_path = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?);
+                    }
+                    other => {
+                        return Err(format!("unknown work-session-index argument: {other}").into())
+                    }
+                }
+            }
+
+            let result = run_project_work_session_index(ProjectWorkSessionIndexOptions {
+                database_path,
+                limit,
+                reset: Some(reset),
+            })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+
+            println!("PromptVault project work session index");
+            println!("database: {}", result.database_path);
+            println!("requested_limit: {}", result.requested_limit);
+            println!("scanned_prompts: {}", result.scanned_prompt_count);
+            println!("sanitized_prompts: {}", result.sanitized_prompt_count);
+            println!("stored_prompts: {}", result.stored_prompt_count);
+            println!("reset: {}", result.reset);
+            if !result.warnings.is_empty() {
+                println!("warnings:");
+                for warning in result.warnings {
+                    println!("- {warning}");
+                }
             }
         }
         "work-log-coverage" => {
@@ -1889,6 +1934,7 @@ fn help_text() -> String {
         "  improve [--json] [--local] --prompt TEXT\n",
         "  improve [--json] [--local] < prompt.txt\n",
         "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
+        "  work-session-index [--limit N>0] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
         "  work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]\n",
@@ -1927,6 +1973,7 @@ fn help_text() -> String {
         "  work-log-normalization-review-queue-update marks one persisted normalization proposal approved or rejected without writing normalized project/day rows.\n",
         "  work-log-normalization-apply writes operator-approved normalization queue rows into an idempotent durable normalized project/day table.\n",
         "  work-log-normalized-items lists durable normalized project/day rows by project and date without applying queue changes.\n",
+        "  work-session-index scans real session evidence and upserts sanitized project-target records; --reset rebuilds the index explicitly.\n",
         "  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n",
         "  work-report session evidence is bounded by --session-limit.\n",
         "  work-summary builds project/date summaries with citation IDs; --include-extractions merges accepted AI work-log proposals into the summary preview; --include-saved-extractions merges stored accepted AI extraction rows without rereading raw progress logs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n",
@@ -2090,6 +2137,11 @@ struct ProjectWorkLogNormalizationApplyBridgePayload {
 #[derive(serde::Deserialize)]
 struct ProjectWorkLogNormalizedItemsBridgePayload {
     options: Option<ProjectWorkLogNormalizedItemsOptions>,
+}
+
+#[derive(serde::Deserialize)]
+struct ProjectWorkSessionIndexBridgePayload {
+    options: Option<ProjectWorkSessionIndexOptions>,
 }
 
 #[derive(serde::Deserialize, Default)]
@@ -2324,6 +2376,16 @@ fn handle_bridge_route(
             let result = run_list_project_work_summary_snapshots(options)?;
             write_json_response(stream, 200, &result)
         }
+        ("POST", "/api/work-session-index") => {
+            let payload =
+                serde_json::from_str::<ProjectWorkSessionIndexBridgePayload>(&request.body)?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_project_work_session_index(options)?;
+            write_json_response(stream, 200, &result)
+        }
         ("POST", "/api/work-log-coverage") => {
             let result = run_project_work_log_coverage()?;
             write_json_response(stream, 200, &result)
@@ -2484,6 +2546,7 @@ fn bridge_route_uses_database(method: &str, path: &str) -> bool {
             | ("POST", "/api/improve")
             | ("POST", "/api/work-summary")
             | ("POST", "/api/work-summary-snapshots")
+            | ("POST", "/api/work-session-index")
             | ("POST", "/api/work-log-review-queue")
             | ("POST", "/api/work-log-review-queue/update")
             | ("POST", "/api/work-log-extract")
@@ -2756,6 +2819,15 @@ mod tests {
     }
 
     #[test]
+    fn bridge_routes_work_session_index_validation_errors() {
+        let response = bridge_response_for("/api/work-session-index", r#"{"options":{"limit":0}}"#);
+
+        assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(response.contains("work-session-index limit requires a positive integer"));
+        assert!(response.contains("Access-Control-Allow-Origin: *"));
+    }
+
+    #[test]
     fn bridge_routes_work_log_item_validation_errors() {
         let response = bridge_response_for("/api/work-log-items", r#"{"options":{"limit":0}}"#);
 
@@ -2947,6 +3019,7 @@ mod tests {
             "/api/improve",
             "/api/work-summary",
             "/api/work-summary-snapshots",
+            "/api/work-session-index",
             "/api/work-log-review-queue",
             "/api/work-log-review-queue/update",
             "/api/work-log-extract",
@@ -3041,6 +3114,9 @@ mod tests {
         assert!(help.contains(
             "work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
         ));
+        assert!(
+            help.contains("work-session-index [--limit N>0] [--database PATH] [--reset] [--json]")
+        );
         assert!(help.contains("work-log-coverage [--json]"));
         assert!(help.contains("work-log-candidates [--limit N>0] [--json]"));
         assert!(help.contains(
@@ -3078,6 +3154,7 @@ mod tests {
             "work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]"
         ));
         assert!(help.contains("work-report reads project progress logs"));
+        assert!(help.contains("work-session-index scans real session evidence"));
         assert!(help.contains("work-log-coverage lists parsed and unparsed"));
         assert!(help.contains("work-log-candidates prepares unparsed progress logs"));
         assert!(help.contains("work-log-review-queue persists current extraction candidates"));

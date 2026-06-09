@@ -188,6 +188,7 @@ async function runBrowserQa() {
   let workManagementDurabilityWarning = "";
   let workManagementMeta = "";
   let workSummaryIndex = "";
+  let workSessionIndexBackfill = null;
   let coverageMeta = "";
   let workLogCandidatesMeta = "";
   let workLogNormalizationCandidatesMeta = "";
@@ -235,6 +236,20 @@ async function runBrowserQa() {
     const health = await bridgeJson(page, "/api/health");
     if (health.database_path !== DATABASE_PATH) {
       throw new Error(`Expected bridge database ${DATABASE_PATH}, got ${health.database_path}`);
+    }
+    step("work session index");
+    workSessionIndexBackfill = await bridgeJson(page, "/api/work-session-index", {
+      options: { limit: Math.min(WORK_SESSION_LIMIT, 5), reset: true },
+    });
+    if (
+      workSessionIndexBackfill.database_path !== DATABASE_PATH
+      || workSessionIndexBackfill.requested_limit < 1
+      || workSessionIndexBackfill.stored_prompt_count > workSessionIndexBackfill.scanned_prompt_count
+      || workSessionIndexBackfill.reset !== true
+    ) {
+      throw new Error(
+        `Work session index bridge route returned invalid counters: ${JSON.stringify(workSessionIndexBackfill)}`,
+      );
     }
     await page.locator('[data-browser-bridge-status="connected"]').waitFor({ timeout: 60000 });
     await page.locator('[data-work-summary-session-limit="true"]').fill(String(WORK_SESSION_LIMIT));
@@ -598,6 +613,7 @@ async function runBrowserQa() {
       importEvents: importEvents.total_events,
       snapshots: snapshots.total_snapshots,
       workSessionLimit: WORK_SESSION_LIMIT,
+      workSessionIndexBackfill,
       workSummaryIndex,
       workManagementMeta,
       workManagementDurabilityWarning,

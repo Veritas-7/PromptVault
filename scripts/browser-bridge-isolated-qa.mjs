@@ -485,6 +485,7 @@ async function runBrowserQa() {
   let coverageFilteredRows = [];
   let workLogCandidatesMeta = "";
   let workLogCandidateRows = [];
+  let workAiProviderStatusMetaAfterManagement = "";
   let workAiProviderStatusMeta = "";
   let workAiProviderStatusRows = [];
   let workLogNormalizationCandidatesMeta = "";
@@ -1309,13 +1310,21 @@ async function runBrowserQa() {
       (await page.locator('[data-work-management-session-backfill-warning="true"]').textContent())?.trim() ?? "";
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-readiness="true"]')?.textContent ?? "";
+      const providerText = document.querySelector('[data-work-ai-provider-status-meta="true"]')?.textContent ?? "";
       return text.includes("관리 준비도")
         && text.includes("진행로그 parsed")
         && text.includes("세션 백필 미완료")
-        && text.includes("AI provider");
+        && text.includes("AI provider")
+        && !text.includes("AI provider 미확인")
+        && providerText.includes("OpenAI")
+        && providerText.includes("GLM")
+        && providerText.includes("Codex")
+        && providerText.includes("fallback");
     }, undefined, { timeout: 120000 });
     workManagementReadiness =
       (await page.locator('[data-work-management-readiness="true"]').textContent())?.trim() ?? "";
+    workAiProviderStatusMetaAfterManagement =
+      (await page.locator('[data-work-ai-provider-status-meta="true"]').textContent())?.trim() ?? "";
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-review-decisions="true"]')?.textContent ?? "";
       return text.includes("검토 결정")
@@ -1907,6 +1916,7 @@ async function runBrowserQa() {
       coverageFilteredRows,
       workLogCandidatesMeta,
       workLogCandidateRows,
+      workAiProviderStatusMetaAfterManagement,
       workAiProviderStatusMeta,
       workAiProviderStatusRows,
       workLogNormalizationCandidatesMeta,

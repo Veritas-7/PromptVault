@@ -2422,6 +2422,7 @@ function App() {
     setWorkSummarySnapshotsState("loading");
     setWorkLogCoverageState("loading");
     setWorkLogCandidatesState("loading");
+    setWorkAiProviderStatusState("loading");
     setWorkLogExtractionRunMode("ai");
     setWorkLogExtractionState("loading");
     setWorkLogExtractionItemsState("loading");
@@ -2457,6 +2458,10 @@ function App() {
       setWorkLogCandidatesResult(nextCandidates);
       setWorkLogCandidatesState("ready");
 
+      const nextProviderStatus = await loadProjectWorkAiProviderStatus();
+      setWorkAiProviderStatusResult(nextProviderStatus);
+      setWorkAiProviderStatusState("ready");
+
       const nextExtraction = await loadProjectWorkLogExtractionProposals({
         ai: true,
       });
@@ -2485,6 +2490,7 @@ function App() {
       setWorkSummarySnapshotsState((current) => (current === "loading" ? "failed" : current));
       setWorkLogCoverageState((current) => (current === "loading" ? "failed" : current));
       setWorkLogCandidatesState((current) => (current === "loading" ? "failed" : current));
+      setWorkAiProviderStatusState((current) => (current === "loading" ? "failed" : current));
       setWorkLogExtractionState((current) => (current === "loading" ? "failed" : current));
       setWorkLogExtractionItemsState((current) => (current === "loading" ? "failed" : current));
     } finally {

@@ -1,10 +1,85 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 06:47 KST
+Updated: 2026-06-10 06:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Provider status in work management
+
+Current Goal:
+
+- Remove the remaining `AI provider 미확인` blind spot from the work-management
+  overview so `전체 관리` refresh shows actual OpenAI/GLM/Codex/fallback
+  readiness without requiring a separate provider-status click.
+
+Context:
+
+- PromptVault is already grouping project work by project/day from real Codex
+  session sources and project-local progress logs (`working.md`,
+  `workingd.md`, etc.).
+- The latest isolated QA coverage shows `877` project progress logs scanned:
+  `876` parsed, `1` pointer, `0` unparsed, across `31` projects and `9,878`
+  extracted work items.
+- Historical Codex session backfill is intentionally still incomplete:
+  `361/25,215` sessions indexed, `24,854` remaining. The app must continue to
+  show this as incomplete, not pretend the whole workspace is fully managed.
+
+Progress:
+
+- Updated `전체 관리` refresh to load work AI provider status in the same flow
+  as summaries, status export, snapshots, coverage, candidates, and extraction
+  queues.
+- The management readiness row now reports real provider readiness after a
+  management refresh: configured OpenAI/GLM/Codex state, fallback state, and
+  Codex opt-in requirements.
+- Extended isolated browser QA so the work-management overview waits for
+  provider state after `전체 관리` and fails if readiness still says
+  `AI provider 미확인`.
+
+Changes:
+
+- `src/App.tsx`: `refreshWorkManagementOverview()` now sets provider status to
+  loading, calls `loadProjectWorkAiProviderStatus()`, and preserves failure
+  state if the provider status call fails.
+- `scripts/browser-bridge-isolated-qa.mjs`: captures
+  `workAiProviderStatusMetaAfterManagement` and asserts provider readiness is
+  visible from the management flow itself.
+- `working.md`: records the real completion level and remaining backfill/review
+  gaps.
+
+Tests:
+
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`499` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge >
+  /tmp/promptvault-provider-in-management-qa.log 2>&1`.
+
+QA Evidence:
+
+- Provider status after only the management flow:
+  `외부 AI 미설정 · OpenAI 미설정 · GLM 미설정 · Codex CLI 감지/미연결 · fallback local-fallback-rules · 경고 2개`.
+- Readiness no longer shows `AI provider 미확인`; it now shows:
+  `AI provider 미설정 · fallback local-fallback-rules · Codex opt-in 필요`.
+- Management readiness still correctly reports incomplete backfill:
+  `진행로그 parsed 876/877개 · pointer 1개 · 세션 백필 미완료 361/25,215개 · 남음 24,854개`.
+- Review decision evidence is still visible:
+  `검토 결정 · 저장 row 72개 · 대기 69개 · stale 0개 · 승인 3개 · 거절 0개 · 추출 0/1개 · 정규화 2/2개 · 세션 67/69개`.
+
+Remaining:
+
+- Overall project/day work management is functional and evidence-backed, but
+  not complete enough to call the whole workspace fully managed.
+- Required remaining work: complete or continue the historical session backfill,
+  review the remaining `69` persisted queue decisions, and optionally connect
+  GLM/OpenAI keys or opt in to Codex CLI provider use for AI-assisted progress
+  log normalization/extraction.
+- SDK-backed AI enrichment is viable through the existing provider routes, but
+  durable writes remain review-gated; the correct next step is controlled
+  extraction/normalization plus operator approval, not blind automatic writes.
 
 ## Completed Slice - 2026-06-10 Review decision summary
 

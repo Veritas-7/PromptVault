@@ -59,6 +59,7 @@ import {
   filterWorkStatusExportRows,
   workLogProposalSaveStateText,
   workManagementFreezeActionLabel,
+  workManagementReadinessText,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
@@ -1038,6 +1039,103 @@ test("work session index planned remaining text follows current batch controls",
       })),
     }),
     null,
+  );
+});
+
+test("work management readiness text summarizes coverage, session backfill, queues, and AI providers", () => {
+  const sessionIndex: ProjectWorkSessionIndexResult = {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    requested_limit: 50,
+    batch_files: 25,
+    max_batches: 10,
+    until_complete: true,
+    batches_run: 10,
+    scanned_prompt_count: 349,
+    sanitized_prompt_count: 349,
+    stored_prompt_count: 349,
+    reset: false,
+    all_sources_completed: false,
+    source_states: [
+      {
+        source_id: "codex",
+        source_label: "Codex",
+        root_path: "/Users/wj/.codex/sessions",
+        total_files: 200,
+        next_file_index: 110,
+        processed_files: 110,
+        matched_prompt_count: 109,
+        completed: false,
+        updated_at: "2026-06-09T00:00:00Z",
+      },
+    ],
+    warnings: [],
+  };
+  const providerStatus = aiProviderStatusResult({
+    external_provider_available: true,
+    fallback_provider: "local-fallback-rules",
+    providers: [
+      aiProviderStatusResult().providers[0],
+      {
+        provider: "glm",
+        provider_runtime: "glm-chat-completions",
+        configured: true,
+        usable_for_work_management: true,
+        capabilities: ["work-summary", "work-log-extraction", "work-log-normalization"],
+        model: "glm-test",
+        endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        notes: ["GLM can be attempted."],
+      },
+      codexDetectedProviderStatusResult().providers[2],
+    ],
+    warnings: [],
+  });
+
+  assert.equal(workManagementReadinessText({}), null);
+  assert.equal(
+    workManagementReadinessText({
+      coverage: coverageResult(),
+      sessionIndex,
+      aiProviderStatus: providerStatus,
+      workLogReviewQueue: reviewQueueResult(),
+      normalizationReviewQueue: normalizationReviewQueueResult(),
+      sessionEvidenceReviewQueue: sessionEvidenceReviewQueueResult(),
+    }),
+    "관리 준비도 · 진행로그 parsed 28/32개 · unparsed 4개 · 세션 백필 미완료 110/200개 · 남음 90개 · 검토대기 추출 15개 · 정규화 4개 · 세션 32개 · AI provider GLM 사용 가능 · Codex opt-in 필요",
+  );
+  assert.equal(
+    workManagementReadinessText({
+      coverage: coverageResult({ files_seen: 32, parsed_file_count: 32, unparsed_file_count: 0 }),
+      sessionIndex: {
+        ...sessionIndex,
+        all_sources_completed: true,
+        source_states: sessionIndex.source_states.map((source) => ({
+          ...source,
+          processed_files: source.total_files,
+          next_file_index: source.total_files,
+          completed: true,
+        })),
+      },
+      aiProviderStatus: providerStatus,
+      workLogReviewQueue: reviewQueueResult({
+        pending_ai_review_count: 0,
+        risk_blocked_count: 0,
+        stale_count: 0,
+      }),
+      normalizationReviewQueue: normalizationReviewQueueResult({
+        pending_review_count: 0,
+        stale_count: 0,
+      }),
+      sessionEvidenceReviewQueue: sessionEvidenceReviewQueueResult({
+        pending_review_count: 0,
+        stale_count: 0,
+      }),
+    }),
+    "관리 준비도 · 진행로그 parsed 32/32개 · 세션 백필 완료 200/200개 · 검토대기 없음 · AI provider GLM 사용 가능 · Codex opt-in 필요",
+  );
+  assert.equal(
+    workManagementReadinessText({ statusExport: statusExportResult() }),
+    "관리 준비도 · 진행로그 미확인 · 세션 인덱스 limit 적용 200/500개 · 검토 큐 미확인 · AI provider 미확인",
   );
 });
 

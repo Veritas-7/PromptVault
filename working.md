@@ -1,10 +1,79 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 04:23 KST
+Updated: 2026-06-10 04:36 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Work-management readiness row
+
+Current Goal:
+
+- Make the answer to "how complete is project/day work management?" visible in
+  the app without requiring an operator to mentally combine coverage, session
+  index, review queue, and AI provider rows.
+- Keep the readiness row source-faithful: it should summarize existing results
+  only and must not trigger session backfill or durable review writes.
+
+Context:
+
+- The previous slices already exposed detailed progress-log coverage, partial
+  session-backfill warnings, review queues, and AI provider status.
+- Operators still had to inspect several separate rows to know whether the
+  ledger was complete, partially indexed, blocked on review queues, or waiting
+  for GLM/Codex/OpenAI provider setup.
+- The user explicitly asked whether project/day work is fully managed, whether
+  real sessions were parsed, and whether `workingd.md`/project progress logs are
+  included.
+
+Progress:
+
+- Added a `관리 준비도` row to the work-management panel.
+- The row combines:
+  - progress-log parse coverage (`parsed/unparsed`);
+  - session index/backfill completeness or status-export session-index limits;
+  - pending extraction, normalization, and session-evidence review queues;
+  - available work-management AI providers, including Codex opt-in status.
+- Browser bridge QA now waits for the readiness row in the real work-management
+  overview flow and records it in the final JSON output.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: added `workManagementReadinessText` and the small
+  internal helpers that summarize existing results.
+- `src/App.tsx`: renders `data-work-management-readiness` beside the existing
+  management overview metadata.
+- `tests/workSummaryStatus.test.ts`: covers partial, completed, and
+  status-export-only readiness states.
+- `scripts/browser-bridge-isolated-qa.mjs`: asserts the readiness row contains
+  progress-log coverage, partial session backfill, and AI provider status.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work management readiness"` (`37` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check`
+  - UI tests `491`, Rust lib tests `214`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated bridge QA ended with exit code `0`.
+  - Verified the new `관리 준비도` row during the work-management overview flow.
+  - QA output showed `31` projects, `26` days, `100` project/day rows, `9,643`
+    work items, `870` progress logs, and `3,033` matched session-evidence rows.
+  - The same run still showed checkpointed backfill: `25,203` total session
+    files, `349` stored session records in the bounded QA context, and `24,842`
+    files remaining after the long continue step.
+
+Remaining:
+
+- Full historical session backfill still needs repeated checkpoint runs or a
+  guided run-until-complete workflow.
+- Review queues still need operator triage before durable session-evidence or
+  title-normalization decisions are treated as final.
+- Codex work-management provider remains opt-in (`PROMPTVAULT_CODEX_WORK_PROVIDER=1`);
+  GLM is usable when configured, and OpenAI depends on `OPENAI_API_KEY`.
 
 ## Completed Slice - 2026-06-10 Large backfill preset control
 

@@ -63,6 +63,16 @@ export type WorkStatusExportRowFilter =
 
 export const WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT = 3;
 
+export interface WorkManagementReadinessInput {
+  coverage?: ProjectWorkLogCoverageResult | null;
+  sessionIndex?: ProjectWorkSessionIndexResult | null;
+  statusExport?: ProjectWorkStatusExportResult | null;
+  aiProviderStatus?: ProjectWorkAiProviderStatusResult | null;
+  workLogReviewQueue?: ProjectWorkLogReviewQueueResult | null;
+  normalizationReviewQueue?: ProjectWorkLogNormalizationReviewQueueResult | null;
+  sessionEvidenceReviewQueue?: ProjectWorkSessionEvidenceReviewQueueResult | null;
+}
+
 export function workSummaryActionLabel(
   state: WorkSummaryState,
   hasResult: boolean,
@@ -321,6 +331,107 @@ export function workSessionIndexPartialBackfillWarningText(
     `남은 파일 ${remainingFiles.toLocaleString()}개`,
     "상태 Export/요약/큐는 현재 인덱스 기준",
   ].join(" · ");
+}
+
+export function workManagementReadinessText(
+  input: WorkManagementReadinessInput,
+): string | null {
+  if (!hasWorkManagementReadinessInput(input)) return null;
+  const parts = ["관리 준비도"];
+  const coverage = input.coverage;
+  if (coverage) {
+    parts.push(`진행로그 parsed ${coverage.parsed_file_count.toLocaleString()}/${coverage.files_seen.toLocaleString()}개`);
+    if (coverage.unparsed_file_count > 0) {
+      parts.push(`unparsed ${coverage.unparsed_file_count.toLocaleString()}개`);
+    }
+  } else {
+    parts.push("진행로그 미확인");
+  }
+  const sessionIndexText = workManagementReadinessSessionText(input.sessionIndex ?? null, input.statusExport ?? null);
+  parts.push(sessionIndexText);
+  parts.push(workManagementReadinessReviewQueueText(input));
+  parts.push(workManagementReadinessProviderText(input.aiProviderStatus ?? null));
+  return parts.join(" · ");
+}
+
+function hasWorkManagementReadinessInput(input: WorkManagementReadinessInput): boolean {
+  return Boolean(
+    input.coverage
+      || input.sessionIndex
+      || input.statusExport
+      || input.aiProviderStatus
+      || input.workLogReviewQueue
+      || input.normalizationReviewQueue
+      || input.sessionEvidenceReviewQueue,
+  );
+}
+
+function workManagementReadinessSessionText(
+  sessionIndex: ProjectWorkSessionIndexResult | null,
+  statusExport: ProjectWorkStatusExportResult | null,
+): string {
+  if (sessionIndex?.source_states.length) {
+    const totalFiles = sessionIndex.source_states.reduce((sum, source) => sum + source.total_files, 0);
+    const processedFiles = sessionIndex.source_states.reduce((sum, source) => sum + source.processed_files, 0);
+    const remainingFiles = Math.max(0, totalFiles - processedFiles);
+    if (sessionIndex.all_sources_completed || remainingFiles === 0) {
+      return `세션 백필 완료 ${processedFiles.toLocaleString()}/${totalFiles.toLocaleString()}개`;
+    }
+    return [
+      `세션 백필 미완료 ${processedFiles.toLocaleString()}/${totalFiles.toLocaleString()}개`,
+      `남음 ${remainingFiles.toLocaleString()}개`,
+    ].join(" · ");
+  }
+  if (statusExport) {
+    if (statusExport.report_session_evidence_index_total_count > statusExport.report_session_evidence_index_count) {
+      return [
+        "세션 인덱스 limit 적용",
+        `${statusExport.report_session_evidence_index_count.toLocaleString()}/${statusExport.report_session_evidence_index_total_count.toLocaleString()}개`,
+      ].join(" ");
+    }
+    return `세션 인덱스 보관 ${statusExport.report_session_evidence_index_count.toLocaleString()}개`;
+  }
+  return "세션 백필 미확인";
+}
+
+function workManagementReadinessReviewQueueText(input: WorkManagementReadinessInput): string {
+  const workLogPending =
+    (input.workLogReviewQueue?.pending_ai_review_count ?? 0)
+    + (input.workLogReviewQueue?.risk_blocked_count ?? 0)
+    + (input.workLogReviewQueue?.stale_count ?? 0);
+  const normalizationPending =
+    (input.normalizationReviewQueue?.pending_review_count ?? 0)
+    + (input.normalizationReviewQueue?.stale_count ?? 0);
+  const sessionPending =
+    (input.sessionEvidenceReviewQueue?.pending_review_count ?? 0)
+    + (input.sessionEvidenceReviewQueue?.stale_count ?? 0);
+  if (!input.workLogReviewQueue && !input.normalizationReviewQueue && !input.sessionEvidenceReviewQueue) {
+    return "검토 큐 미확인";
+  }
+  if (workLogPending === 0 && normalizationPending === 0 && sessionPending === 0) {
+    return "검토대기 없음";
+  }
+  return [
+    `검토대기 추출 ${workLogPending.toLocaleString()}개`,
+    `정규화 ${normalizationPending.toLocaleString()}개`,
+    `세션 ${sessionPending.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+function workManagementReadinessProviderText(
+  result: ProjectWorkAiProviderStatusResult | null,
+): string {
+  if (!result) return "AI provider 미확인";
+  const usableProviders = result.providers.filter((provider) => provider.usable_for_work_management);
+  const usableProviderNames = usableProviders.map(workAiProviderDisplayName);
+  const codex = result.providers.find((provider) => provider.provider === "codex");
+  const parts = usableProviderNames.length
+    ? [`AI provider ${usableProviderNames.join("/")} 사용 가능`]
+    : [`AI provider 미설정 · fallback ${result.fallback_provider}`];
+  if (codex?.configured && !codex.usable_for_work_management) {
+    parts.push("Codex opt-in 필요");
+  }
+  return parts.join(" · ");
 }
 
 export function workStatusExportIndexStatusText(result: ProjectWorkStatusExportResult): string {

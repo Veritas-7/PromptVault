@@ -1,10 +1,79 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 05:23 KST
+Updated: 2026-06-10 05:38 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Work-management row next actions
+
+Current Goal:
+
+- Make each project/day management row show the next concrete operator action,
+  so working.md/workingd.md progress logs, saved extractions, normalization,
+  and session evidence gaps can be triaged by row instead of only by global
+  counters.
+
+Context:
+
+- The management overview already merges current summaries, snapshots,
+  progress-log coverage, saved extractions, normalized rows, and status export
+  rows by project/date.
+- The missing layer was a row-local action label that says whether the next
+  step is status export/session verification, session-evidence review,
+  title-normalization review, live-row persistence, confidence review, or
+  routine recheck.
+
+Progress:
+
+- Added a `workManagementOverviewNextActionText` helper with explicit
+  priority order for daily task-management gaps.
+- Rendered the helper in every management overview row.
+- Extended browser QA to require visible per-row `다음 조치` actions.
+
+Changes:
+
+- `src/workManagementOverview.ts`: adds row next-action classification.
+- `src/App.tsx`: displays `data-work-management-row-action` for each
+  project/day management row.
+- `tests/workManagementOverview.test.ts`: covers status-export gaps,
+  unresolved session evidence, title normalization, low confidence, AI title
+  normalization, and completed rows.
+- `scripts/browser-bridge-isolated-qa.mjs`: records and validates row action
+  text in the isolated browser flow.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts` (`10` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`492` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge >
+  /tmp/promptvault-row-action-qa.log 2>&1` for row-action evidence capture.
+
+QA Evidence:
+
+- Browser bridge QA verified visible row actions with
+  `data-work-management-row-action`.
+- Captured action examples: `다음 조치 · 상태 Export 로드로 세션 검증`, `다음
+  조치 · 세션근거 큐 검토 · 전체 인덱스 미해결`, and `다음 조치 · 라이브 고정
+  저장`.
+- The same QA run reported `31개 프로젝트`, `26일`, `작업 9,753개`,
+  `진행로그 873개`, `세션 근거 3,495건`, and `고유 50건`.
+- Management overview before normalization apply reported `관리 101개`,
+  `저장추출 100`, `세션미해결 18`, `제목정규화 6`, and `진행로그 872`.
+- Normalization apply updated the management overview to `정규화 1` with
+  `최신정규화 2026-06-09T20:36:53.119048+00:00`.
+
+Remaining:
+
+- Full historical session backfill is still operator-gated; use `완료 계획`
+  then explicitly click `긴 이어 백필` when ready.
+- Review queues still need operator or AI-assisted triage before durable
+  session-evidence and title-normalization decisions are final.
 
 ## Completed Slice - 2026-06-10 Session backfill completion plan control
 

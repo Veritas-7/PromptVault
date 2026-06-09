@@ -436,6 +436,7 @@ async function runBrowserQa() {
   let workManagementMissingConfidenceRows = [];
   let workManagementPersistenceRows = [];
   let workManagementSessionRows = [];
+  let workManagementActionRows = [];
   let workManagementDurabilityWarning = "";
   let workManagementSessionBackfillWarning = "";
   let workManagementReadiness = "";
@@ -1231,6 +1232,21 @@ async function runBrowserQa() {
     workManagementSessionRows =
       await page.locator('[data-work-management-row-session="true"]').allTextContents();
     await page.waitForFunction(() => {
+      const actions = [...document.querySelectorAll('[data-work-management-row-action="true"]')]
+        .map((element) => element.textContent ?? "");
+      return actions.length > 0
+        && actions.every((text) => text.includes("다음 조치"))
+        && actions.some((text) =>
+          text.includes("세션근거 큐 검토")
+          || text.includes("제목 정규화 큐 검토")
+          || text.includes("진행로그 추출 저장")
+          || text.includes("AI 제목 정규화 검토")
+          || text.includes("관리 완료")
+        );
+    }, undefined, { timeout: 120000 });
+    workManagementActionRows =
+      await page.locator('[data-work-management-row-action="true"]').allTextContents();
+    await page.waitForFunction(() => {
       return [...document.querySelectorAll('[data-work-management-row-persistence="true"]')]
         .some((element) => (element.textContent ?? "").includes("저장관리"));
     }, undefined, { timeout: 120000 });
@@ -1710,6 +1726,7 @@ async function runBrowserQa() {
       workManagementMissingConfidenceRows,
       workManagementPersistenceRows,
       workManagementSessionRows,
+      workManagementActionRows,
       coverageMeta,
       workLogCandidatesMeta,
       workLogCandidateRows,

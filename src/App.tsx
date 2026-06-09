@@ -220,6 +220,7 @@ import {
   workManagementOverviewDurabilityWarningText,
   workManagementOverviewFilterMetaText,
   workManagementOverviewMetaText,
+  workManagementOverviewNextActionText,
   workManagementOverviewPersistenceText,
   workManagementOverviewProjectSuggestions,
   workManagementOverviewSessionText,
@@ -4446,6 +4447,9 @@ function App() {
                   </span>
                   <span data-work-management-row-persistence="true">
                     {workManagementOverviewPersistenceText(row)}
+                  </span>
+                  <span data-work-management-row-action="true">
+                    {workManagementOverviewNextActionText(row)}
                   </span>
                 </article>
               ))}

@@ -427,6 +427,35 @@ export function workManagementOverviewSessionText(row: WorkManagementOverviewRow
   return parts.join(" · ");
 }
 
+export function workManagementOverviewNextActionText(row: WorkManagementOverviewRow): string {
+  if (row.status_export_count === 0) {
+    return "다음 조치 · 상태 Export 로드로 세션 검증";
+  }
+  if (row.needs_session_evidence) {
+    return row.session_evidence_audit === "unresolved-after-full-index"
+      ? "다음 조치 · 세션근거 큐 검토 · 전체 인덱스 미해결"
+      : "다음 조치 · 세션 백필 후 재검증 · 근거 limit 영향";
+  }
+  if (row.needs_title_normalization) {
+    return "다음 조치 · 제목 정규화 큐 검토";
+  }
+  if (row.persistence_state === "live_only") {
+    return row.progress_log_count > 0
+      ? "다음 조치 · 진행로그 추출 저장 또는 라이브 고정 저장"
+      : "다음 조치 · 라이브 고정 저장";
+  }
+  if (row.confidence_count === 0) {
+    return "다음 조치 · AI 추출 또는 정규화로 confidence 확보";
+  }
+  if (row.min_confidence !== null && row.min_confidence < 0.75) {
+    return "다음 조치 · 낮은 confidence row 재검토";
+  }
+  if (row.normalized_row_count === 0 && (row.saved_extraction_count > 0 || row.extraction_proposal_count > 0)) {
+    return "다음 조치 · AI 제목 정규화 검토";
+  }
+  return "다음 조치 · 관리 완료 · 정기 재검증";
+}
+
 export function workManagementOverviewDurabilityWarningText(
   overview: WorkManagementOverview,
 ): string | null {

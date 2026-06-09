@@ -11,6 +11,7 @@ import {
   workManagementOverviewDurabilityWarningText,
   workManagementOverviewFilterMetaText,
   workManagementOverviewMetaText,
+  workManagementOverviewNextActionText,
   workManagementOverviewPersistenceText,
   workManagementOverviewProjectSuggestions,
   workManagementOverviewSessionText,
@@ -565,12 +566,110 @@ test("work management overview status text exposes management coverage", () => {
   );
   assert.equal(workManagementOverviewConfidenceText(overview.rows[0]), "confidence 0.82-0.91");
   assert.equal(
+    workManagementOverviewNextActionText(overview.rows[0]),
+    "다음 조치 · 상태 Export 로드로 세션 검증",
+  );
+  assert.equal(
     workManagementOverviewPersistenceText(buildWorkManagementOverview({ coverage: coverageResult() }).rows[0]),
     "라이브만 · 저장근거 없음",
   );
   assert.equal(
     workManagementOverviewConfidenceText(buildWorkManagementOverview({ coverage: coverageResult() }).rows[0]),
     "confidence 없음",
+  );
+  assert.equal(
+    workManagementOverviewNextActionText(buildWorkManagementOverview({ coverage: coverageResult() }).rows[0]),
+    "다음 조치 · 상태 Export 로드로 세션 검증",
+  );
+});
+
+test("work management overview next action prioritizes daily task management gaps", () => {
+  const statusOverview = buildWorkManagementOverview({
+    coverage: coverageResult(),
+    statusExport: statusExportResult(),
+  });
+
+  const promptVault = statusOverview.rows.find((row) => row.key === "2026-06-09::PromptVault");
+  assert.ok(promptVault);
+  assert.equal(
+    workManagementOverviewNextActionText(promptVault),
+    "다음 조치 · 진행로그 추출 저장 또는 라이브 고정 저장",
+  );
+
+  const careVault = statusOverview.rows.find((row) => row.key === "2026-06-08::CareVault");
+  assert.ok(careVault);
+  assert.equal(
+    workManagementOverviewNextActionText(careVault),
+    "다음 조치 · 세션근거 큐 검토 · 전체 인덱스 미해결",
+  );
+
+  const titleOnly = buildWorkManagementOverview({
+    statusExport: {
+      ...statusExportResult(),
+      rows: [{
+        ...statusExportResult().rows[0],
+        needs_title_normalization: true,
+        session_evidence_count: 1,
+        unique_session_evidence_count: 1,
+      }],
+    },
+  }).rows[0];
+  assert.equal(
+    workManagementOverviewNextActionText(titleOnly),
+    "다음 조치 · 제목 정규화 큐 검토",
+  );
+
+  const lowConfidence = buildWorkManagementOverview({
+    extractionItems: extractionItemsResult(),
+    statusExport: {
+      ...statusExportResult(),
+      rows: [
+        ...statusExportResult().rows,
+        {
+          ...statusExportResult().rows[0],
+          date: "2026-06-04",
+          project: "RepoTutorStudio",
+          top_titles: ["RepoTutorStudio low confidence saved row"],
+          latest_source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md",
+          latest_source_file: "working.md",
+          session_evidence_count: 1,
+          unique_session_evidence_count: 1,
+          needs_session_evidence: false,
+          needs_title_normalization: false,
+        },
+      ],
+    },
+  }).rows.find((row) => row.key === "2026-06-04::RepoTutorStudio");
+  assert.ok(lowConfidence);
+  assert.equal(
+    workManagementOverviewNextActionText(lowConfidence),
+    "다음 조치 · 낮은 confidence row 재검토",
+  );
+
+  const savedExtraction = buildWorkManagementOverview({
+    extractionItems: {
+      ...extractionItemsResult(),
+      items: [extractionItemsResult().items[0]],
+    },
+    statusExport: {
+      ...statusExportResult(),
+      rows: [statusExportResult().rows[0]],
+    },
+  }).rows.find((row) => row.key === "2026-06-09::PromptVault");
+  assert.ok(savedExtraction);
+  assert.equal(
+    workManagementOverviewNextActionText(savedExtraction),
+    "다음 조치 · AI 제목 정규화 검토",
+  );
+
+  const normalized = buildWorkManagementOverview({
+    normalizedItems: normalizedItemsResult(),
+    statusExport: statusExportResult(),
+  }).rows.find((row) => row.key === "2026-06-09::PromptVault");
+  assert.ok(normalized);
+  assert.equal(
+    workManagementOverviewNextActionText(normalized),
+    "다음 조치 · 관리 완료 · 정기 재검증",
   );
 });
 

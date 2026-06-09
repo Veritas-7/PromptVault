@@ -1237,7 +1237,7 @@ export function workSessionEvidenceReviewQueueMetaText(
     `stale 전환 ${result.stale_candidate_count.toLocaleString()}개`,
     `검토 ${result.pending_review_count.toLocaleString()}개`,
     `stale ${result.stale_count.toLocaleString()}개`,
-    `승인 ${result.approved_count.toLocaleString()}개`,
+    `검토완료 ${result.approved_count.toLocaleString()}개`,
     `거절 ${result.rejected_count.toLocaleString()}개`,
     `제목정규화 ${result.needs_title_normalization_count.toLocaleString()}개`,
   ];
@@ -1274,7 +1274,7 @@ export function workSessionEvidenceReviewQueueItemStateText(
     : item.review_state === "stale"
       ? "stale"
       : item.review_state === "approved"
-        ? "승인됨"
+        ? "검토 완료"
         : "거절됨";
   const titleText = item.needs_title_normalization ? "제목 정규화 필요" : "제목 확인됨";
   return [

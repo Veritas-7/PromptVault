@@ -1932,14 +1932,14 @@ test("work session evidence review queue labels describe persisted review rows",
   );
   assert.equal(
     workSessionEvidenceReviewQueueMetaText("ready", sessionEvidenceReviewQueueResult()),
-    "세션근거 큐 저장 40개 · 표시 5개 · 동기화 36개 · stale 전환 2개 · 검토 30개 · stale 2개 · 승인 6개 · 거절 2개 · 제목정규화 12개",
+    "세션근거 큐 저장 40개 · 표시 5개 · 동기화 36개 · stale 전환 2개 · 검토 30개 · stale 2개 · 검토완료 6개 · 거절 2개 · 제목정규화 12개",
   );
   assert.equal(
     workSessionEvidenceReviewQueueMetaText(
       "ready",
       sessionEvidenceReviewQueueResult({ warnings: ["capped sync"] }),
     ),
-    "세션근거 큐 저장 40개 · 표시 5개 · 동기화 36개 · stale 전환 2개 · 검토 30개 · stale 2개 · 승인 6개 · 거절 2개 · 제목정규화 12개 · 경고 1개",
+    "세션근거 큐 저장 40개 · 표시 5개 · 동기화 36개 · stale 전환 2개 · 검토 30개 · stale 2개 · 검토완료 6개 · 거절 2개 · 제목정규화 12개 · 경고 1개",
   );
   assert.equal(
     workSessionEvidenceReviewQueueMetaText(failed, null),
@@ -1964,7 +1964,7 @@ test("work session evidence review queue labels describe persisted review rows",
       review_reason: "operator_approved_session_evidence",
       needs_title_normalization: false,
     })),
-    "승인됨 · operator_approved_session_evidence · unresolved-after-full-index · 제목 확인됨",
+    "검토 완료 · operator_approved_session_evidence · unresolved-after-full-index · 제목 확인됨",
   );
 });
 

@@ -1006,7 +1006,7 @@ async function runBrowserQa() {
     workSessionEvidenceReviewQueueMeta = [
       `큐 ${workSessionEvidenceReviewQueue.returned_item_count} / ${workSessionEvidenceReviewQueue.total_items}`,
       `동기화 ${workSessionEvidenceReviewQueue.synced_candidate_count}`,
-      `승인 ${workSessionEvidenceReviewQueue.approved_count}`,
+      `검토완료 ${workSessionEvidenceReviewQueue.approved_count}`,
       `대기 ${workSessionEvidenceReviewQueue.pending_review_count}`,
     ].join(" · ");
     workSessionEvidenceReviewQueueRows = workSessionEvidenceReviewQueue.items
@@ -1110,7 +1110,7 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-session-evidence-review-queue-meta="true"]')?.textContent ?? "";
       return text.includes("세션근거 큐 저장")
-        && text.includes("승인")
+        && text.includes("검토완료")
         && !text.includes("동기화 중");
     }, undefined, { timeout: 90000 });
     const sessionEvidenceQueueAfterUiApprove = await bridgeJson(

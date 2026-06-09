@@ -4909,7 +4909,7 @@ function App() {
                     <span>{item.date}</span>
                     {canApproveWorkSessionEvidenceReviewQueueItem(item) ? (
                       <button
-                        aria-label={`${item.project} ${item.date} 세션 근거 후보 승인`}
+                        aria-label={`${item.project} ${item.date} 세션 근거 미해결 후보 검토 완료`}
                         className="inline-action compact-action"
                         data-approve-work-session-evidence-review-queue={item.candidate_id}
                         disabled={isTopLevelActionLocked}
@@ -4923,7 +4923,7 @@ function App() {
                         <CheckCircle2 size={14} />
                         {workSessionEvidenceReviewQueueUpdatingCandidateId === item.candidate_id
                           ? "처리 중"
-                          : "승인"}
+                          : "검토 완료"}
                       </button>
                     ) : null}
                     {canRejectWorkSessionEvidenceReviewQueueItem(item) ? (

@@ -1,10 +1,71 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 01:47 KST
+Updated: 2026-06-10 02:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 session evidence review copy clarity
+
+Current Goal:
+
+- Reduce operator confusion in the session-evidence review queue.
+- Make it clear that the queue records review-complete/rejected decisions for
+  full-index unresolved project/day rows, not durable session-evidence writes.
+
+Context:
+
+- `work-session-evidence-review-queue` persists rows that still have no matched
+  session evidence after the selected full stored session index.
+- The API state is still `approved`/`rejected` for compatibility, but the
+  user-facing UI text previously said `승인`, which could imply that a real
+  session evidence record had been created.
+
+Progress:
+
+- Renamed the visible session-evidence review queue approved count from
+  `승인` to `검토완료`.
+- Renamed approved item state from `승인됨` to `검토 완료`.
+- Renamed the UI approve button and aria label to `검토 완료` while preserving
+  the existing `approved` API state and `data-approve-*` selectors.
+- Updated README and CLI docs to say review-complete queue rows do not write or
+  invent durable session evidence.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: updated session-evidence review queue meta and
+  state text.
+- `src/App.tsx`: updated the session-evidence review queue action label and
+  accessible label.
+- `tests/workSummaryStatus.test.ts`: updated label expectations.
+- `scripts/browser-bridge-isolated-qa.mjs`: updated browser QA expectations to
+  require `검토완료`.
+- `README.md`, `docs/CLI.md`: documented the review-complete meaning.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work session evidence review queue"`
+  - `36` matching tests passed.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `git diff --check`.
+- PASS: `npm run check`
+  - UI tests `489`, Rust lib tests `207`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser QA ended with exit code `0`.
+  - Verified `workSessionEvidenceReviewQueueUiMeta` contains
+    `검토완료 1개`.
+  - Verified queue rows render `검토 완료` buttons while retaining the
+    `approved` backend state.
+
+Remaining:
+
+- Session-evidence review-complete rows still do not create durable evidence.
+  That is intentional until a source-traced, review-gated durable session
+  evidence model is designed.
+- Title-normalization and unresolved full-index rows remain the next
+  work-management quality gaps.
 
 ## Completed Slice - 2026-06-10 full stored session index UI control
 

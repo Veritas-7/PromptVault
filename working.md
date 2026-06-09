@@ -1,10 +1,66 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 12:37 KST
+Updated: 2026-06-09 12:44 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 non-empty approved queue browser QA
+
+Current Goal:
+
+- Prove the new `승인 큐 저장` UI path with a non-empty approved review queue
+  row inside isolated browser QA.
+- Keep QA providerless so the synthetic click path cannot spend API credits or
+  depend on external network availability.
+
+Context:
+
+- The live corpus currently has no approved queue rows, so the previous browser
+  QA could only verify the empty/disabled state.
+- The app behavior still needed an end-to-end UI proof that an approved queue
+  row becomes a saved extraction item after a real browser click.
+
+Progress:
+
+- Browser QA now creates an empty temporary `PROMPTVAULT_SECRET_ENV` file and
+  clears provider key env vars for the bridge process, forcing local fallback
+  during QA.
+- Browser QA inserts a synthetic approved row into the isolated
+  `project_work_log_review_queue` table after proving the empty queue state.
+- Browser QA refreshes the queue through the UI, waits for `승인 1개`, clicks
+  `승인 큐 저장`, and verifies saved extraction persistence.
+
+Changes:
+
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added bridge-only providerless env;
+  - added synthetic approved queue row insertion via isolated SQLite DB;
+  - added assertions/output for empty disabled state, synthetic approved queue
+    meta, approved queue persistence, and saved synthetic extraction row.
+
+Tests:
+
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON showed:
+  - `approvedReviewQueueSaveDisabledWhenEmpty`: `true`;
+  - `workLogReviewQueueMetaAfterSynthetic`: `큐 저장 1개 · 표시 1개 · 동기화 0개 · stale 전환 0개 · AI 대기 0개 · 위험차단 0개 · stale 0개 · 승인 1개 · 거절 0개`;
+  - `approvedReviewQueuePersistence`: `accepted 제안 1개 저장 · 총 91개`;
+  - first saved extraction row: `QAProject 2026-06-09 Verified approved queue browser save`.
+
+Issues:
+
+- Synthetic row QA proves the UI and persistence path without external
+  provider calls. It does not prove a live OpenAI/GLM response for this route;
+  provider parsing remains covered by existing GLM/OpenAI extraction tests.
+
+Next Steps:
+
+- Add provider run/audit history for approved queue extraction attempts:
+  request status, provider/model, candidate IDs, saved count, warnings, and
+  failure reason.
 
 ## Current Slice - 2026-06-09 approved review queue extraction route
 

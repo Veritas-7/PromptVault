@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { chromium } from "playwright";
 
 const PROJECT_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
@@ -14,7 +14,10 @@ const WORK_SESSION_LIMIT = Number.parseInt(
 );
 const DATABASE_PATH = process.env.PROMPTVAULT_QA_DATABASE
   ?? join(mkdtempSync(join(tmpdir(), "promptvault-browser-qa-")), "qa.sqlite");
+const SECRET_ENV_DIR = mkdtempSync(join(tmpdir(), "promptvault-browser-qa-env-"));
+const SECRET_ENV_PATH = join(SECRET_ENV_DIR, "secrets.env");
 const START_TIMEOUT_MS = Number.parseInt(process.env.PROMPTVAULT_QA_START_TIMEOUT_MS ?? "90000", 10);
+writeFileSync(SECRET_ENV_PATH, "");
 
 function step(label) {
   console.log(`[qa] ${label}`);
@@ -51,6 +54,43 @@ function spawnServer(label, command, args, options = {}) {
     }
   });
   return child;
+}
+
+function bridgeQaEnv() {
+  return {
+    ...process.env,
+    PROMPTVAULT_SECRET_ENV: SECRET_ENV_PATH,
+    OPENAI_API_KEY: "",
+    GLM_API_KEY: "",
+    GLM_API_KEY_2: "",
+  };
+}
+
+function insertSyntheticApprovedReviewQueueRow() {
+  execFileSync("sqlite3", [
+    DATABASE_PATH,
+    `INSERT OR REPLACE INTO project_work_log_review_queue (
+        candidate_id, first_seen_at, last_seen_at, review_state, review_reason,
+        provider_route, project, source_path, source_file, candidate_reason,
+        excerpt, line_count, char_count, risk_flags_json, modified_at
+      ) VALUES (
+        'work-log-QA-approved-browser-a1',
+        '2026-06-09T00:00:00Z',
+        '2026-06-09T00:00:00Z',
+        'approved',
+        'operator_approved_for_backfill',
+        'ai_provider',
+        'QAProject',
+        '/tmp/QAProject/workingd.md',
+        'workingd.md',
+        'missing_dated_heading',
+        '- 2026-06-09: Verified approved queue browser save',
+        1,
+        54,
+        '[]',
+        NULL
+      );`,
+  ], { stdio: "pipe" });
 }
 
 function waitForHttp(url, timeoutMs) {
@@ -151,7 +191,9 @@ async function runBrowserQa() {
   let coverageMeta = "";
   let workLogCandidatesMeta = "";
   let workLogReviewQueueMeta = "";
-  let approvedReviewQueueSaveDisabled = null;
+  let approvedReviewQueueSaveDisabledWhenEmpty = null;
+  let workLogReviewQueueMetaAfterSynthetic = "";
+  let approvedReviewQueuePersistence = "";
   let workLogExtractionProviderWarning = "";
   let workLogItemRows = [];
 
@@ -374,12 +416,29 @@ async function runBrowserQa() {
     }, undefined, { timeout: 90000 });
     workLogReviewQueueMeta =
       (await page.locator('[data-work-log-review-queue-meta="true"]').textContent())?.trim() ?? "";
-    approvedReviewQueueSaveDisabled = await page
+    approvedReviewQueueSaveDisabledWhenEmpty = await page
       .locator('[data-save-approved-work-log-review-queue="true"]')
       .evaluate((button) => button.disabled);
-    if (!approvedReviewQueueSaveDisabled) {
+    if (!approvedReviewQueueSaveDisabledWhenEmpty) {
       throw new Error("Approved review queue save button should be disabled when approved queue count is zero");
     }
+    insertSyntheticApprovedReviewQueueRow();
+    await waitForEnabled(page, '[data-sync-work-log-review-queue="true"]');
+    await page.locator('[data-sync-work-log-review-queue="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-review-queue-meta="true"]')?.textContent ?? "";
+      return text.includes("큐 저장 1개") && text.includes("승인 1개");
+    }, undefined, { timeout: 90000 });
+    workLogReviewQueueMetaAfterSynthetic =
+      (await page.locator('[data-work-log-review-queue-meta="true"]').textContent())?.trim() ?? "";
+    await waitForEnabled(page, '[data-save-approved-work-log-review-queue="true"]');
+    await page.locator('[data-save-approved-work-log-review-queue="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-extraction-persistence="true"]')?.textContent ?? "";
+      return text.includes("accepted 제안 1개 저장");
+    }, undefined, { timeout: 90000 });
+    approvedReviewQueuePersistence =
+      (await page.locator('[data-work-log-extraction-persistence="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-load-work-log-extraction="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-extraction-meta="true"]')?.textContent ?? "";
@@ -427,7 +486,9 @@ async function runBrowserQa() {
       coverageMeta,
       workLogCandidatesMeta,
       workLogReviewQueueMeta,
-      approvedReviewQueueSaveDisabled,
+      approvedReviewQueueSaveDisabledWhenEmpty,
+      workLogReviewQueueMetaAfterSynthetic,
+      approvedReviewQueuePersistence,
       workLogExtractionProviderWarning,
       workLogItemRows,
     };
@@ -456,7 +517,7 @@ const bridge = spawnServer("bridge", "cargo", [
   `${HOST}:${BRIDGE_PORT}`,
   "--database",
   DATABASE_PATH,
-], { cwd: join(PROJECT_ROOT, "src-tauri") });
+], { cwd: join(PROJECT_ROOT, "src-tauri"), env: bridgeQaEnv() });
 const app = spawnServer("vite", "npm", ["run", "dev", "--", "--host", HOST, "--port", String(APP_PORT)]);
 
 try {
@@ -471,4 +532,5 @@ try {
   if (!process.env.PROMPTVAULT_QA_DATABASE) {
     rmSync(DATABASE_PATH, { force: true });
   }
+  rmSync(SECRET_ENV_DIR, { force: true, recursive: true });
 }

@@ -1,12 +1,105 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 19:23 KST
+Updated: 2026-06-09 19:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 session index total visibility
+## Current Slice - 2026-06-09 full-index management readiness follow-up
+
+Current Goal:
+
+- Answer the operator readiness question from fresh local evidence: project/day
+  status coverage, project-local progress logs, and real Codex/Codex CX session
+  parsing.
+- Separate what is now operational from what still needs normalization,
+  full-index performance work, and AI-assisted review.
+
+Context:
+
+- The operator asked whether project/day and day/work-item management is truly
+  complete, whether the report was verified against real sessions, and whether
+  project-local `working.md`, `workingd.md`, and related progress logs are
+  included.
+- This check used the permanent PromptVault database at
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite` and live local Codex
+  session files.
+
+Progress:
+
+- Continued confirmed long session-index backfills until all configured session
+  sources completed:
+  - run 1 stored `9,808` records, Codex `10,001 / 25,150`;
+  - run 2 stored `10,866` records, Codex `15,001 / 25,150`;
+  - run 3 stored `10,866` records, Codex `20,001 / 25,150`;
+  - run 4 stored `10,866` records, Codex `25,001 / 25,150`;
+  - run 5 stored `10,867` records and completed Codex `25,150 / 25,150`.
+- Fresh session-index verification now reports:
+  - stored sanitized session evidence records: `10,867`;
+  - Codex source: `25,150 / 25,150` files processed, `11,105` matched prompt
+    records, completed;
+  - Codex CX source: `11 / 11` files processed, completed;
+  - warnings: none.
+- Fresh project progress-log coverage reports:
+  - `838` progress logs seen;
+  - `837` parsed files;
+  - `0` unparsed files;
+  - `31` projects;
+  - `8,987` work items;
+  - pointer-only sample count: `0`.
+- Fresh default bounded status export reports:
+  - `91` project/day rows;
+  - `31` projects across `25` dates;
+  - `8,987` work items;
+  - `73,331` session-evidence links from `200` unique indexed records;
+  - stored index total visible as `10,867`;
+  - first page gaps: `12` rows still need session evidence and `8` rows need
+    title normalization.
+- The earlier high-limit full-index status export completed after a long wait:
+  - `session-limit=11000`;
+  - index used `10,867 / 10,867` stored records;
+  - `182,034` session-evidence links;
+  - `1,311` unique session evidence records;
+  - first page still had `12` rows needing session evidence and `8` needing
+    title normalization.
+
+Tests:
+
+- `work-session-index --batch-files 1 --max-batches 1 --json`: PASS with all
+  sources completed and no warnings.
+- `work-log-coverage --json`: PASS with `0` unparsed files.
+- `work-status-export --limit 25 --session-limit 200 --json`: PASS with
+  bounded, paged status export and total stored index visibility.
+- `work-status-export --limit 25 --session-limit 11000 --json`: PASS but slow;
+  this is the clearest current performance optimization target.
+
+Issues:
+
+- The core management path is operational, but it is not complete enough to call
+  finished:
+  - some project/day rows still have no matching session evidence even after the
+    full session index is available;
+  - several rows still need clearer work-title normalization;
+  - full-index export is too slow for a comfortable UI default;
+  - AI/provider-backed normalization is still review-gated and has not been
+    adopted as an automatic final approver.
+- Codex SDK, GLM SDK, or another local/remote model lane can help with title
+  normalization and row classification, but it should be implemented as a
+  draft/proposal workflow with saved evidence and review gates rather than a
+  blind auto-write.
+
+Next Steps:
+
+- Optimize full-index status export so the completed `10,867`-record session
+  index can be used interactively without long waits.
+- Add an AI-assisted normalization proposal lane for generic titles and
+  session-evidence gap explanations.
+- Keep project-local progress-log parsing visible by source path, date, project,
+  work item count, and extraction quality so `working.md` and `workingd.md`
+  evidence remains auditable.
+
+## Completed Slice - 2026-06-09 session index total visibility
 
 Current Goal:
 

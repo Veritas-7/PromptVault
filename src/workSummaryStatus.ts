@@ -229,14 +229,24 @@ export function workStatusExportIndexStatusText(result: ProjectWorkStatusExportR
     : result.report_session_evidence_index_used
       ? "세션 인덱스 사용"
       : "세션 직접 스캔";
-  return [
+  const parts = [
     indexState,
     workSummarySessionEvidenceModeLabel(result.report_session_evidence_mode),
     `스캔 ${result.report_session_scan_prompt_count.toLocaleString()}개`,
-    `보관 ${result.report_session_evidence_index_count.toLocaleString()}개`,
+  ];
+  if (result.report_session_evidence_index_total_count > result.report_session_evidence_index_count) {
+    parts.push(
+      `사용 ${result.report_session_evidence_index_count.toLocaleString()}개`,
+      `보관 총 ${result.report_session_evidence_index_total_count.toLocaleString()}개`,
+    );
+  } else {
+    parts.push(`보관 ${result.report_session_evidence_index_count.toLocaleString()}개`);
+  }
+  parts.push(
     `매칭 ${result.report_session_evidence_count.toLocaleString()}건`,
     `고유 ${result.report_unique_session_evidence_count.toLocaleString()}건`,
-  ].join(" · ");
+  );
+  return parts.join(" · ");
 }
 
 export function workStatusExportRowStatusText(row: ProjectWorkStatusExportRow): string {

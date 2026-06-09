@@ -174,6 +174,7 @@ function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = 
     report_session_evidence_index_used: true,
     report_session_evidence_index_updated: false,
     report_session_evidence_index_count: 200,
+    report_session_evidence_index_total_count: 500,
     report_session_evidence_mode: "metadata-first-raw-fallback",
     rows: [{
       date: "2026-06-09",
@@ -741,7 +742,7 @@ test("work status export text exposes project day evidence coverage", () => {
   );
   assert.equal(
     workStatusExportIndexStatusText(result),
-    "세션 인덱스 사용 · 근거 메타데이터 우선/raw fallback · 스캔 20개 · 보관 200개 · 매칭 9건 · 고유 3건",
+    "세션 인덱스 사용 · 근거 메타데이터 우선/raw fallback · 스캔 20개 · 사용 200개 · 보관 총 500개 · 매칭 9건 · 고유 3건",
   );
   assert.equal(
     workStatusExportRowStatusText(result.rows[0]),

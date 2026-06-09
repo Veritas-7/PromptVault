@@ -2199,6 +2199,8 @@ function parseProjectWorkStatusExportResult(value: unknown): ProjectWorkStatusEx
     || typeof value.report_session_evidence_index_used !== "boolean"
     || typeof value.report_session_evidence_index_updated !== "boolean"
     || !isNonNegativeSafeInteger(value.report_session_evidence_index_count)
+    || !isNonNegativeSafeInteger(value.report_session_evidence_index_total_count)
+    || value.report_session_evidence_index_count > value.report_session_evidence_index_total_count
     || !isNonBlankString(value.report_session_evidence_mode)
     || !Array.isArray(value.rows)
     || !value.rows.every(isProjectWorkStatusExportRow)

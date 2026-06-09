@@ -356,6 +356,7 @@ function projectWorkStatusExportPayload(overrides = {}) {
     report_session_evidence_index_used: true,
     report_session_evidence_index_updated: false,
     report_session_evidence_index_count: 200,
+    report_session_evidence_index_total_count: 500,
     report_session_evidence_mode: "metadata-first-raw-fallback",
     rows: [{
       date: "2026-06-09",
@@ -806,6 +807,29 @@ test("browser bridge work status export posts options and validates rows", async
   assert.equal(result.rows[0].project, "PromptVault");
   assert.equal(result.rows[0].source_files[1], "workingd.md");
   assert.equal(result.report_session_evidence_count, 7);
+  assert.equal(result.report_session_evidence_index_count, 200);
+  assert.equal(result.report_session_evidence_index_total_count, 500);
+});
+
+test("browser bridge work status export rejects impossible index counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkStatusExportPayload({
+    report_session_evidence_index_count: 501,
+    report_session_evidence_index_total_count: 500,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkStatusExport(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /report_session_evidence_index|workingd\.md|undefined/);
+      return true;
+    },
+  );
 });
 
 test("browser bridge work session index posts until-complete options and validates source states", async (t) => {

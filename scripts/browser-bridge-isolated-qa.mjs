@@ -437,6 +437,7 @@ async function runBrowserQa() {
         && meta.includes("프로젝트")
         && meta.includes("세션 근거")
         && index.includes("메타데이터 우선")
+        && index.includes("보관")
         && markdown.includes("Project/Day Rows")
         && document.querySelectorAll('[data-work-status-export-row="true"]').length > 0;
     }, undefined, { timeout: 120000 });

@@ -51,6 +51,7 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `repair` scans weakest prompts, runs deterministic local improvement for each one, writes no Markdown export, and returns redacted prompt/recommendation pairs. Repair batches are capped at 10 records.
 - `work-status-export` renders a compact project/day status Markdown table from the same project progress-log plus sanitized session-evidence report used by `work-report`.
 - `work-status-export --json` returns grouped rows with source files, top titles, item counts, session evidence counts, and review flags without raw session bodies.
+- `work-status-export --json` separates the session index records used by the current `--session-limit` from the total sanitized records stored in SQLite, so long backfills stay visible even when the export is bounded.
 - `work-status-export --offset N>=0` pages through later project/day rows when paired with `--limit`, avoiding an unbounded all-row render.
 - `work-session-index` upserts sanitized Codex/Codex CX session records so progress-log work items can be linked to real session evidence without storing raw session bodies.
 - `work-session-index --batch-files` is capped at `1..500`; short backfills up to `--max-batches 2` need no confirmation.

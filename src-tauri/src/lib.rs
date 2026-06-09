@@ -836,6 +836,7 @@ pub struct ProjectWorkStatusExportResult {
     pub report_session_evidence_index_used: bool,
     pub report_session_evidence_index_updated: bool,
     pub report_session_evidence_index_count: usize,
+    pub report_session_evidence_index_total_count: usize,
     pub report_session_evidence_mode: String,
     pub rows: Vec<ProjectWorkStatusExportRow>,
     pub warnings: Vec<String>,
@@ -1812,12 +1813,19 @@ pub fn run_project_work_status_export(
         .limit
         .unwrap_or(DEFAULT_PROJECT_WORK_STATUS_EXPORT_LIMIT);
     let limit = requested_limit.min(MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT);
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
     let report = run_project_work_report(ProjectWorkReportOptions {
         limit: None,
         session_limit: options.session_limit,
-        database_path: options.database_path,
+        database_path: Some(database_path.display().to_string()),
         refresh_session_index: options.refresh_session_index,
     })?;
+    let session_evidence_index_total_count =
+        project_work_session_index_total_count(&database_path)?;
     let mut warnings = report.warnings.clone();
     if requested_limit > MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT {
         warnings.push(format!(
@@ -1834,6 +1842,7 @@ pub fn run_project_work_status_export(
         &warnings,
         row_offset,
         total_row_count,
+        session_evidence_index_total_count,
     );
 
     Ok(ProjectWorkStatusExportResult {
@@ -1854,6 +1863,7 @@ pub fn run_project_work_status_export(
         report_session_evidence_index_used: report.session_evidence_index_used,
         report_session_evidence_index_updated: report.session_evidence_index_updated,
         report_session_evidence_index_count: report.session_evidence_index_count,
+        report_session_evidence_index_total_count: session_evidence_index_total_count,
         report_session_evidence_mode: report.session_evidence_mode.clone(),
         rows,
         warnings,
@@ -6886,6 +6896,18 @@ fn project_work_session_prompts_from_index(
         .collect()
 }
 
+fn project_work_session_index_total_count(
+    database_path: &Path,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let conn = open_promptvault_database(database_path)?;
+    let count = conn.query_row(
+        "SELECT COUNT(*) FROM project_work_session_evidence",
+        [],
+        |row| row.get::<_, i64>(0),
+    )?;
+    Ok(count as usize)
+}
+
 fn persist_project_work_session_index(
     database_path: &Path,
     prompts: &[PromptRecord],
@@ -7305,6 +7327,7 @@ fn render_project_work_status_export_markdown(
     warnings: &[String],
     row_offset: usize,
     total_row_count: usize,
+    session_evidence_index_total_count: usize,
 ) -> String {
     let mut out = String::new();
     out.push_str("# PromptVault Project/Day Work Status\n\n");
@@ -7320,13 +7343,14 @@ fn render_project_work_status_export_markdown(
         total_row_count
     ));
     out.push_str(&format!(
-        "- Session evidence: {} linked item matches · {} unique session records · {} scanned prompts · index used={} updated={} records={}\n",
+        "- Session evidence: {} linked item matches · {} unique session records · {} scanned prompts · index used={} updated={} records={} total_records={}\n",
         report.session_evidence_count,
         report.session_evidence_unique_count,
         report.session_scan_prompt_count,
         report.session_evidence_index_used,
         report.session_evidence_index_updated,
-        report.session_evidence_index_count
+        report.session_evidence_index_count,
+        session_evidence_index_total_count
     ));
     out.push_str(&format!(
         "- Session evidence mode: {}\n\n",
@@ -15359,7 +15383,7 @@ Progress:
 
         let rows = build_project_work_status_export_rows(&report);
         let markdown =
-            render_project_work_status_export_markdown(&report, &rows, &[], 0, rows.len());
+            render_project_work_status_export_markdown(&report, &rows, &[], 0, rows.len(), 1);
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].date, "2026-06-09");

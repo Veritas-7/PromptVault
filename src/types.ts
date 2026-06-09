@@ -248,6 +248,7 @@ export interface ProjectWorkStatusExportResult {
   report_session_evidence_index_used: boolean;
   report_session_evidence_index_updated: boolean;
   report_session_evidence_index_count: number;
+  report_session_evidence_index_total_count: number;
   report_session_evidence_mode: string;
   rows: ProjectWorkStatusExportRow[];
   warnings: string[];

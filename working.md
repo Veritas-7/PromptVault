@@ -1,12 +1,134 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 19:04 KST
+Updated: 2026-06-09 19:23 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 status export pagination
+## Current Slice - 2026-06-09 session index total visibility
+
+Current Goal:
+
+- Make real session parsing/backfill progress visible in the status export
+  itself, not only in the separate session-index backfill result.
+- Separate the session evidence index records used by the current bounded
+  `session_limit` from the total sanitized session evidence records already
+  stored in SQLite.
+
+Context:
+
+- A live confirmed long backfill was run against the current PromptVault
+  database at `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- The run processed real Codex/Codex CX session files and stores only sanitized
+  project-target evidence, not raw session bodies.
+- Before this slice, status export showed only the current bounded index usage
+  (`보관 200개`), which could hide that a longer backfill had already stored
+  more session evidence records.
+
+Progress:
+
+- Ran a live confirmed long session-index backfill:
+  - command: `work-session-index --batch-files 500 --max-batches 10
+    --until-complete --confirm-long-run --json`;
+  - stored sanitized index count increased to `4,828`;
+  - Codex source progressed to `5,001 / 25,150` files;
+  - Codex CX completed `11 / 11` files;
+  - safety cap warning remained expected:
+    `work-session-index until_complete stopped at max_batches before all
+    sources completed`.
+- Re-ran live status export with widened session evidence:
+  - `session-limit=5000` produced `181,690` linked matches and `1,112` unique
+    session records from an index total of `4,828`;
+  - `session-limit=200` still uses a bounded `200` records while total stored
+    records remain visible.
+- Added status export API/markdown/UI metadata:
+  - JSON: `report_session_evidence_index_total_count`;
+  - Markdown: `records=<used> total_records=<stored_total>`;
+  - UI: `사용 200개 · 보관 총 4,828개` when the stored index is larger than the
+    current export scope.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added `report_session_evidence_index_total_count` to status export results;
+  - added `project_work_session_index_total_count`;
+  - included `total_records` in status export Markdown.
+- `src/types.ts` and `src/promptVaultApi.ts`:
+  - added the new field to the frontend contract and reject impossible
+    `used > total` bridge responses.
+- `src/workSummaryStatus.ts`:
+  - changed status export index copy to show `사용 N개 · 보관 총 M개` when a
+    bounded export uses fewer records than the stored index.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - now asserts status export index meta includes stored index wording.
+- `README.md` and `docs/CLI.md`:
+  - documented current index usage vs total stored sanitized index records.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`:
+  - added parser and UI text coverage for the new field.
+
+Tests:
+
+- `work-log-coverage --json`: PASS. Live output showed `837` progress logs,
+  `836` parsed files, `0` unparsed gaps, and one pointer-only `workingd.md`.
+- `work-log-candidates --limit 20 --json`: PASS. Live output showed
+  `candidate_count=0`, `review_queue_state=empty`, and
+  `review_queue_reason=no_unparsed_progress_logs`.
+- `work-log-review-queue --sync-candidates --json`: PASS. Live output showed
+  `total_items=0`.
+- Confirmed long session index backfill: PASS with expected safety-cap warning.
+  Evidence file: `/tmp/promptvault-session-index-long-20260609.json`.
+- Live status export after backfill:
+  - `work-status-export --limit 25 --session-limit 5000 --json`: PASS,
+    `index_count=4,828`, `session_evidence=181,690`,
+    `unique_session_evidence=1,112`;
+  - `work-status-export --limit 25 --session-limit 200 --json`: PASS,
+    `session_evidence=73,235`, `unique_session_evidence=200`;
+  - new CLI check showed `records=200 total_records=4828`.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts
+  --test-name-pattern "work status export|session index"`: PASS (`213`
+  tests).
+- `cargo test --manifest-path src-tauri/Cargo.toml work_status_export
+  -- --nocapture`: PASS (`3` lib tests plus bridge validation).
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Browser evidence:
+  - `workStatusExportIndex`: `세션 인덱스 사용 · ... · 스캔 200개 · 사용
+    200개 · 보관 총 349개 · 매칭 73,286건 · 고유 200건`;
+  - work-log coverage: `838개 로그 · parsed 837개 · unparsed 0개`;
+  - work-log candidates: `백필큐 비어 있음 · 이유 unparsed 없음`.
+- `npm run check`: PASS, including UI tests (`472`), production build, Rust lib
+  tests (`193`), CLI tests (`31`), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- The permanent session index is broader now but still incomplete:
+  `5,001 / 25,150` Codex files processed. Additional confirmed long-continue
+  runs are still needed for full session evidence coverage.
+- Status export with `session-limit=5000` took noticeably longer than the
+  default bounded scope. This is acceptable for explicit operator runs but is a
+  performance optimization candidate before making high limits the UI default.
+- The work-log extraction queue is currently empty because progress-log parsing
+  has no unparsed gaps; normalization review still has work remaining for
+  generic/low-confidence parsed rows.
+
+Research:
+
+- No external research was needed. This slice used live local session files,
+  the existing SQLite evidence index, CLI checks, browser bridge QA, and full
+  test verification.
+
+Next Steps:
+
+- Continue confirmed long session-index backfills until the Codex source is
+  complete, then re-run status export gap filters.
+- Add a persisted session-index run history view if operators need to audit
+  when and how the evidence index advanced.
+- Work through normalization review queue rows so generic parsed titles become
+  clearer project/day work items.
+
+## Completed Slice - 2026-06-09 status export pagination
 
 Current Goal:
 

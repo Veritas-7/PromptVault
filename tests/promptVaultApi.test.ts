@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   cancelScan,
+  freezeProjectWorkLogManagementRows,
   importBatch,
   improvePrompt,
   loadProjectWorkLogCandidates,
@@ -844,6 +845,54 @@ test("browser bridge work log extraction posts approved candidate ids for review
     },
   });
   assert.equal(result.persistence?.saved_item_count, 1);
+});
+
+test("browser bridge work log freeze posts options and validates persistence", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogExtractionProposalsPayload({
+      provider: "progress-log-freeze",
+      used_ai: false,
+      candidate_count: 2,
+      accepted_count: 2,
+      proposals: [
+        projectWorkLogExtractionProposalsPayload().proposals[0],
+        {
+          ...projectWorkLogExtractionProposalsPayload().proposals[0],
+          candidate_id: "work-log-freeze-PromptVault-b1b2c3d4e5",
+          project: "PromptVault",
+          source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+          source_file: "working.md",
+          date: "2026-06-09",
+          title: "Frozen management row",
+          status: "managed",
+          evidence: "Frozen parsed progress log row from working.md; 5 parsed work items in this file.",
+          confidence: 1,
+        },
+      ],
+      persistence: {
+        database_path: "/tmp/promptvault.sqlite",
+        saved_item_count: 2,
+        total_saved_item_count: 5,
+      },
+    })), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await freezeProjectWorkLogManagementRows({ limit: 50 });
+
+  assert.match(requestPath, /\/api\/work-log-freeze$/);
+  assert.deepEqual(JSON.parse(requestBody), { options: { limit: 50 } });
+  assert.equal(result.provider, "progress-log-freeze");
+  assert.equal(result.used_ai, false);
+  assert.equal(result.accepted_count, 2);
+  assert.equal(result.persistence?.saved_item_count, 2);
 });
 
 test("browser bridge work log extraction items posts filters and validates saved rows", async (t) => {

@@ -132,6 +132,8 @@ async function runBrowserQa() {
   const page = await browser.newPage();
   const consoleErrors = [];
   const httpErrors = [];
+  let workLogFreezePersistence = "";
+  let workManagementMetaAfterFreeze = "";
 
   page.on("console", (message) => {
     if (["error", "warning"].includes(message.type())) {
@@ -267,6 +269,22 @@ async function runBrowserQa() {
       const text = document.querySelector('[data-work-management-durability-warning="true"]')?.textContent ?? "";
       return text.includes("라이브만") && text.includes("저장관리");
     }, undefined, { timeout: 120000 });
+    await page.locator('[data-freeze-work-management-live-rows="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-extraction-persistence="true"]')?.textContent ?? "";
+      return text.includes("accepted 제안") && text.includes("저장");
+    }, undefined, { timeout: 120000 });
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-management-overview-meta="true"]')?.textContent ?? "";
+      return text.includes("라이브만 0") && text.includes("저장관리");
+    }, undefined, { timeout: 120000 });
+    await page.waitForFunction(() => {
+      return !document.querySelector('[data-work-management-durability-warning="true"]');
+    }, undefined, { timeout: 120000 });
+    workLogFreezePersistence =
+      (await page.locator('[data-work-log-extraction-persistence="true"]').textContent())?.trim() ?? "";
+    workManagementMetaAfterFreeze =
+      (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-load-work-log-coverage="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-coverage-meta="true"]')?.textContent ?? "";
@@ -306,7 +324,9 @@ async function runBrowserQa() {
       workManagementMeta:
         (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "",
       workManagementDurabilityWarning:
-        (await page.locator('[data-work-management-durability-warning="true"]').textContent())?.trim() ?? "",
+        (await page.locator('[data-work-management-durability-warning="true"]').textContent().catch(() => ""))?.trim() ?? "",
+      workManagementMetaAfterFreeze,
+      workLogFreezePersistence,
       workManagementPersistenceRows:
         await page.locator('[data-work-management-row-persistence="true"]').allTextContents(),
       coverageMeta:

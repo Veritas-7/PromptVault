@@ -20,6 +20,7 @@ import {
   workLogExtractionSavedCandidateIds,
   workLogExtractionUnsavedAcceptedIds,
   workLogProposalSaveStateText,
+  workManagementFreezeActionLabel,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
@@ -41,6 +42,7 @@ import {
   type WorkLogCoverageState,
   type WorkLogExtractionState,
   type WorkLogExtractionItemsState,
+  type WorkManagementFreezeState,
   type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
@@ -293,6 +295,26 @@ test("work management refresh action label explains overview loading and locks",
   assert.equal(
     workManagementRefreshActionLabel("ready", true, lockState({ scanRunning: true })),
     "스캔 실행 중에는 전체 작업 관리를 새로고침할 수 없습니다",
+  );
+});
+
+test("work management freeze action label explains save state and locks", () => {
+  const loading: WorkManagementFreezeState = "loading";
+  assert.equal(
+    workManagementFreezeActionLabel("idle", 3, lockState()),
+    "live-only 작업 관리 row 3개를 저장 관리로 고정",
+  );
+  assert.equal(
+    workManagementFreezeActionLabel(loading, 3, lockState({ workSummaryRunning: true })),
+    "live-only 작업 관리 row 고정 저장 중",
+  );
+  assert.equal(
+    workManagementFreezeActionLabel("ready", 0, lockState()),
+    "고정 저장할 live-only 작업 관리 row가 없습니다",
+  );
+  assert.equal(
+    workManagementFreezeActionLabel("ready", 3, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 live-only 작업 관리 row를 고정 저장할 수 없습니다",
   );
 });
 

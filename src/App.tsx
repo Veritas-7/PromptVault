@@ -109,6 +109,7 @@ import {
   importBatch,
   improvePrompt,
   isBrowserQaMode,
+  freezeProjectWorkLogManagementRows,
   loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
   loadProjectWorkLogExtractionProposals,
@@ -244,6 +245,7 @@ import {
   workLogExtractionReviewLabel,
   workLogExtractionSavedCandidateIds,
   workLogExtractionUnsavedAcceptedIds,
+  workManagementFreezeActionLabel,
   workManagementRefreshActionLabel,
   workLogCoverageActionLabel,
   workLogCoverageFailureText,
@@ -266,6 +268,7 @@ import {
   type WorkLogExtractionRunMode,
   type WorkLogExtractionState,
   type WorkLogExtractionItemsState,
+  type WorkManagementFreezeState,
   type WorkManagementRefreshState,
   type WorkSummarySnapshotsState,
   type WorkSummaryState,
@@ -282,6 +285,7 @@ const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
 const WORK_LOG_CANDIDATE_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_DISPLAY_LIMIT = 5;
 const WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT = 5;
+const WORK_LOG_EXTRACTION_ITEM_MANAGEMENT_LIMIT = 1_000;
 const WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT = 6;
 const IMPORT_BATCH_FILES = 5;
 const IMPORT_STATES_DISPLAY_LIMIT = 8;
@@ -340,6 +344,8 @@ function App() {
     useState<WorkLogExtractionItemsState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
+  const [workManagementFreezeState, setWorkManagementFreezeState] =
+    useState<WorkManagementFreezeState>("idle");
   const [workSummarySessionLimitInput, setWorkSummarySessionLimitInput] = useState(
     String(WORK_SUMMARY_DEFAULT_SESSION_LIMIT),
   );
@@ -421,7 +427,8 @@ function App() {
     || workLogCandidatesState === "loading"
     || workLogExtractionState === "loading"
     || workLogExtractionItemsState === "loading"
-    || workManagementRefreshState === "loading";
+    || workManagementRefreshState === "loading"
+    || workManagementFreezeState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
   const isBrowserBridgeDisconnected = browserQaMode && browserBridgeStatus === "disconnected";
   const actionLockState = {
@@ -721,6 +728,9 @@ function App() {
   const workManagementDurabilityWarning = workManagementOverviewLoaded
     ? workManagementOverviewDurabilityWarningText(workManagementOverview)
     : null;
+  const workManagementLiveOnlyRowCount = workManagementOverviewLoaded
+    ? workManagementOverview.live_only_row_count
+    : 0;
   const storedFacetSummary = storedFacetSummaryText(
     storedFacetsState,
     storedFilterCount,
@@ -888,11 +898,12 @@ function App() {
   function workLogExtractionItemOptions({
     date = workLogExtractionItemDateFilter,
     project = workLogExtractionItemProjectFilter,
-  }: { date?: string; project?: string } = {}): ProjectWorkLogExtractionItemsOptions {
+    limit = WORK_LOG_EXTRACTION_ITEM_MANAGEMENT_LIMIT,
+  }: { date?: string; project?: string; limit?: number } = {}): ProjectWorkLogExtractionItemsOptions {
     const trimmedDate = date.trim();
     const trimmedProject = project.trim();
     return {
-      limit: WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT,
+      limit,
       ...(trimmedDate ? { date: trimmedDate } : {}),
       ...(trimmedProject ? { project: trimmedProject } : {}),
     };
@@ -1167,6 +1178,32 @@ function App() {
       setWorkLogCoverageState((current) => (current === "loading" ? "failed" : current));
       setWorkLogCandidatesState((current) => (current === "loading" ? "failed" : current));
       setWorkLogExtractionState((current) => (current === "loading" ? "failed" : current));
+      setWorkLogExtractionItemsState((current) => (current === "loading" ? "failed" : current));
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function freezeWorkManagementLiveRows() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkManagementFreezeState("loading");
+    setWorkLogExtractionRunMode("local");
+    try {
+      const next = await freezeProjectWorkLogManagementRows();
+      setWorkLogExtractionResult(next);
+      setWorkLogExtractionState("ready");
+      setWorkManagementFreezeState("ready");
+
+      setWorkLogExtractionItemsState("loading");
+      const nextItems = await listProjectWorkLogExtractionItems(workLogExtractionItemOptions());
+      setWorkLogExtractionItemsResult(nextItems);
+      setWorkLogExtractionItemsState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkManagementFreezeState("failed");
       setWorkLogExtractionItemsState((current) => (current === "loading" ? "failed" : current));
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
@@ -1917,6 +1954,21 @@ function App() {
               {workLogExtractionState === "loading" ? "처리 중" : "선택 저장"}
             </button>
             <button
+              aria-label={workManagementFreezeActionLabel(
+                workManagementFreezeState,
+                workManagementLiveOnlyRowCount,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-freeze-work-management-live-rows="true"
+              disabled={isTopLevelActionLocked || workManagementLiveOnlyRowCount === 0}
+              onClick={() => void freezeWorkManagementLiveRows()}
+              type="button"
+            >
+              <Database size={15} />
+              {workManagementFreezeState === "loading" ? "고정 저장 중" : "라이브 고정 저장"}
+            </button>
+            <button
               aria-label={workLogExtractionItemsActionLabel(
                 workLogExtractionItemsState,
                 workLogExtractionItemsResult !== null,
@@ -2215,7 +2267,7 @@ function App() {
             onClick={() => {
               setWorkLogExtractionItemDateFilter("");
               setWorkLogExtractionItemProjectFilter("");
-              void refreshWorkLogExtractionItems({ limit: WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT });
+              void refreshWorkLogExtractionItems({ limit: WORK_LOG_EXTRACTION_ITEM_MANAGEMENT_LIMIT });
             }}
             type="button"
           >

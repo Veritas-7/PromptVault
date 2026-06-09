@@ -21,6 +21,7 @@ export type WorkLogCandidatesState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionItemsState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
+export type WorkManagementFreezeState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunMode = "ai" | "local";
 
 export const WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT = 3;
@@ -49,6 +50,20 @@ export function workManagementRefreshActionLabel(
     return `${lockReason}에는 전체 작업 관리를 ${hasOverview ? "새로고침" : "불러오기"}할 수 없습니다`;
   }
   return hasOverview ? "전체 작업 관리 새로고침" : "전체 작업 관리 불러오기";
+}
+
+export function workManagementFreezeActionLabel(
+  state: WorkManagementFreezeState,
+  liveOnlyRowCount: number,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "live-only 작업 관리 row 고정 저장 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 live-only 작업 관리 row를 고정 저장할 수 없습니다`;
+  }
+  if (liveOnlyRowCount <= 0) return "고정 저장할 live-only 작업 관리 row가 없습니다";
+  return `live-only 작업 관리 row ${liveOnlyRowCount.toLocaleString()}개를 저장 관리로 고정`;
 }
 
 export function workSummaryFailureText(state: WorkSummaryState): string | null {

@@ -1,10 +1,111 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 09:58 KST
+Updated: 2026-06-09 10:20 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 live-only management freeze
+
+Current Goal:
+
+- Add an explicit freeze/save action for live-only project/date management
+  rows, so parsed progress-log rows become durable SQLite management records
+  without requiring a separate AI extraction candidate.
+- Keep the overview calculation honest by reading enough saved extraction rows
+  for management accounting while still displaying only the compact first
+  few saved rows in the UI.
+
+Context:
+
+- The previous slice made the gap visible: browser QA showed one saved
+  snapshot row and 44 live-only rows from parsed project progress logs.
+- The operator question is about actual completion level: project/day work
+  management must be backed by real Codex session parsing and project-local
+  progress logs such as `working.md`, `workingd.md`, `WORKING_LOG.md`,
+  `WORKLOG.md`, `PROJECT_STATUS.md`, and dated plan worklogs.
+- AI extraction via OpenAI/GLM providers already exists for unparsed logs,
+  but the current live corpus has no unparsed progress-log file. This slice
+  therefore freezes already parsed project/day rows locally rather than
+  invoking AI.
+
+Progress:
+
+- Added backend `project_work_log_freeze`/`work-log-freeze` support.
+- The freeze command scans parsed progress-log coverage, groups rows by
+  `(project, latest_date)`, skips project/date pairs already represented by
+  saved snapshots or saved extraction rows, creates accepted
+  `progress-log-freeze` proposals, and persists them to
+  `project_work_log_extraction_items`.
+- Added browser bridge endpoint `POST /api/work-log-freeze`.
+- Added frontend API and a `라이브 고정 저장` action in the management panel.
+- After freeze, the UI refreshes saved extraction items with a management
+  limit of 1000, so `저장관리`/`라이브만` counts are not computed from the
+  5-row display slice.
+- Extended isolated browser QA to click the freeze button and verify that the
+  durability warning disappears.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - adds freeze options, persisted project/date pair lookup, parsed-log
+    grouping, proposal creation, persistence, and unit coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - adds `work-log-freeze`, bridge validation, and route wiring.
+- `src/promptVaultApi.ts`:
+  - adds `freezeProjectWorkLogManagementRows`.
+- `src/App.tsx`:
+  - adds freeze state/action and management-limit saved item refresh.
+- `src/workSummaryStatus.ts`:
+  - adds freeze action label text.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`:
+  - cover bridge freeze parsing and UI labels.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - verifies freeze persistence and post-freeze durable management state in
+    the real browser bridge flow.
+
+Verification:
+
+- CLI temp DB freeze verification: PASS. `work-log-freeze --database <tmp>
+  --json` saved 45 accepted `progress-log-freeze` rows. The live sample
+  included `CareVault/working.md`, `PromptVault/working.md`,
+  `enterprise_diagnosis_flutter/workingd.md`,
+  `NuancedNarrator/docs/WORKING_LOG.md`, `Jclaw/WORKLOG.md`,
+  `PROJECT_STATUS.md` files, and
+  `notebooklm-llm-wiki-flow/docs/plans/*worklog.md`.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS
+  after fixing the management saved-item limit. Final QA JSON:
+  `workSessionLimit=200`,
+  `workSummaryIndex="세션 인덱스 사용 · 근거 메타데이터 우선/raw fallback · 스캔 200개 · 보관 200개 · 매칭 80건 · 고유 1건"`,
+  `coverageMeta="782개 로그 · parsed 781개 · unparsed 0개 · 31개 프로젝트 · 작업 8,514개"`,
+  `workLogFreezePersistence="accepted 제안 44개 저장 · 총 44개"`,
+  and
+  `workManagementMetaAfterFreeze="관리 45개 · 31개 프로젝트 · 19일 · 현재요약 1 · 스냅샷 1 · 추출제안 0 · 저장추출 44 · 진행로그 781 · 저장관리 45 · 라이브만 0 ..."`
+- `npm run check`: PASS. UI `434` tests, Vite build, Rust lib `165`
+  tests, CLI `24` tests, doc-tests, and clippy all passed.
+
+Completion Level:
+
+- Managed now: actual Codex/Codex-CX session evidence indexing, project/date
+  grouping, project-local progress-log coverage, saved summary snapshots,
+  AI/local extraction proposal persistence, saved extraction item listing,
+  durable-vs-live management overview, and freeze of parsed live-only rows.
+- Not complete yet: there is no historical backfill UI for all sessions/logs
+  beyond the chosen scan limits, no recurring scheduler, and no AI
+  normalization pass over already parsed but low-quality titles/evidence.
+  OpenAI/GLM SDK-backed AI extraction is wired for unparsed candidates, but
+  this verified live corpus had `unparsed 0개`, so this slice did not exercise
+  a live provider call.
+
+Next Steps:
+
+- Commit and push this freeze slice.
+- Next product slice: add an audited backfill/report view for all saved
+  project/day rows with filters by project, date, source type, and confidence.
+- Later AI slice: use the existing OpenAI/GLM provider layer to normalize
+  low-quality parsed titles/evidence and to classify ambiguous progress-log
+  rows, with before/after review rather than silent rewriting.
 
 ## Current Slice - 2026-06-09 live-only management warning
 

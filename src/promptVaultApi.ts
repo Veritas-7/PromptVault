@@ -114,6 +114,11 @@ export interface ProjectWorkLogExtractionOptions {
   approved_candidate_ids?: string[];
 }
 
+export interface ProjectWorkLogFreezeOptions {
+  limit?: number;
+  database_path?: string;
+}
+
 export interface ProjectWorkLogExtractionItemsOptions {
   database_path?: string;
   limit?: number;
@@ -256,6 +261,19 @@ export async function loadProjectWorkLogExtractionProposals(
   }
   return postBridge<ProjectWorkLogExtractionProposalsResult>(
     "/api/work-log-extract",
+    { options },
+    parseProjectWorkLogExtractionProposalsResult,
+  );
+}
+
+export async function freezeProjectWorkLogManagementRows(
+  options: ProjectWorkLogFreezeOptions = {},
+): Promise<ProjectWorkLogExtractionProposalsResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogExtractionProposalsResult>("project_work_log_freeze", { options });
+  }
+  return postBridge<ProjectWorkLogExtractionProposalsResult>(
+    "/api/work-log-freeze",
     { options },
     parseProjectWorkLogExtractionProposalsResult,
   );

@@ -47,6 +47,8 @@ const DEFAULT_PROJECT_WORK_LOG_CANDIDATE_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT: usize = 100;
 const DEFAULT_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_EXTRACTION_ITEM_LIMIT: usize = 200;
+const DEFAULT_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 200;
+const MAX_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 1_000;
 const PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS: u64 = 12;
 const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
 const MAX_STORED_PROMPT_LIMIT: usize = 1_000;
@@ -195,6 +197,12 @@ pub struct ProjectWorkLogExtractionProposalsOptions {
     pub database_path: Option<String>,
     pub save: Option<bool>,
     pub approved_candidate_ids: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkLogFreezeOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -799,6 +807,13 @@ async fn project_work_log_extract(
 }
 
 #[tauri::command]
+fn project_work_log_freeze(
+    options: Option<ProjectWorkLogFreezeOptions>,
+) -> Result<ProjectWorkLogExtractionProposalsResult, String> {
+    run_project_work_log_freeze(options.unwrap_or_default()).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
 fn project_work_log_items(
     options: Option<ProjectWorkLogExtractionItemsOptions>,
 ) -> Result<ProjectWorkLogExtractionItemsResult, String> {
@@ -1365,6 +1380,39 @@ pub fn run_list_project_work_log_extraction_items(
         items: item_rows.items,
         warnings: Vec::new(),
     })
+}
+
+pub fn run_project_work_log_freeze(
+    options: ProjectWorkLogFreezeOptions,
+) -> Result<ProjectWorkLogExtractionProposalsResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-log freeze limit requires a positive integer".into());
+    }
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_LOG_FREEZE_LIMIT)
+        .min(MAX_PROJECT_WORK_LOG_FREEZE_LIMIT);
+    let coverage = run_project_work_log_coverage()?;
+    let persisted_pairs = {
+        let conn = open_promptvault_database(&database_path)?;
+        read_project_work_persisted_pairs(&conn)?
+    };
+    let mut result =
+        project_work_log_freeze_proposals_from_coverage(&coverage, &persisted_pairs, limit);
+    result.persistence = Some(persist_project_work_log_extraction_proposals(
+        &database_path,
+        &result,
+        None,
+    )?);
+    Ok(result)
 }
 
 pub async fn run_project_work_summary(
@@ -3390,6 +3438,134 @@ fn build_project_progress_log_coverage(
         files,
         warnings,
     })
+}
+
+#[derive(Debug, Clone)]
+struct ProjectWorkLogFreezeGroup {
+    project: String,
+    date: String,
+    title: String,
+    source_path: String,
+    source_file: String,
+    file_count: usize,
+    work_item_count: usize,
+}
+
+fn project_work_log_freeze_proposals_from_coverage(
+    coverage: &ProjectWorkLogCoverageResult,
+    persisted_pairs: &HashSet<(String, String)>,
+    limit: usize,
+) -> ProjectWorkLogExtractionProposalsResult {
+    let mut groups = BTreeMap::<(String, String), ProjectWorkLogFreezeGroup>::new();
+    for file in &coverage.files {
+        if file.status != "parsed" {
+            continue;
+        }
+        let Some(date) = file
+            .latest_date
+            .as_deref()
+            .map(str::trim)
+            .filter(|date| !date.is_empty())
+        else {
+            continue;
+        };
+        if persisted_pairs.contains(&(file.project.clone(), date.to_string())) {
+            continue;
+        }
+        let key = (file.project.clone(), date.to_string());
+        let entry = groups
+            .entry(key)
+            .or_insert_with(|| ProjectWorkLogFreezeGroup {
+                project: file.project.clone(),
+                date: date.to_string(),
+                title: file
+                    .latest_title
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|title| !title.is_empty())
+                    .unwrap_or("Parsed progress log")
+                    .to_string(),
+                source_path: file.source_path.clone(),
+                source_file: file.source_file.clone(),
+                file_count: 0,
+                work_item_count: 0,
+            });
+        entry.file_count += 1;
+        entry.work_item_count += file.work_item_count;
+    }
+
+    let candidate_count = groups.len();
+    let mut warnings = coverage.warnings.clone();
+    let mut groups = groups.into_values().collect::<Vec<_>>();
+    groups.sort_by(|left, right| {
+        right
+            .date
+            .cmp(&left.date)
+            .then_with(|| left.project.cmp(&right.project))
+    });
+    if groups.len() > limit {
+        warnings.push(format!(
+            "live-only 관리 row {}개 중 {}개만 고정 저장 대상으로 처리했습니다.",
+            groups.len(),
+            limit
+        ));
+        groups.truncate(limit);
+    }
+    if candidate_count == 0 {
+        warnings.push("고정 저장할 live-only parsed 진행로그 row가 없습니다.".to_string());
+    }
+
+    let proposals = groups
+        .into_iter()
+        .map(project_work_log_freeze_group_to_proposal)
+        .collect::<Vec<_>>();
+
+    ProjectWorkLogExtractionProposalsResult {
+        generated_at: Utc::now().to_rfc3339(),
+        root_path: coverage.root_path.clone(),
+        provider: "progress-log-freeze".to_string(),
+        used_ai: false,
+        candidate_count,
+        accepted_count: proposals.len(),
+        rejected_count: 0,
+        proposals,
+        persistence: None,
+        warnings,
+    }
+}
+
+fn project_work_log_freeze_group_to_proposal(
+    group: ProjectWorkLogFreezeGroup,
+) -> ProjectWorkLogExtractionProposal {
+    let hash = hash_text(&format!("{}:{}", group.project, group.date));
+    let hash_segment = hash.chars().take(10).collect::<String>();
+    let evidence = if group.file_count == 1 {
+        format!(
+            "Frozen parsed progress log row from {}; {} parsed work items in this file.",
+            group.source_file, group.work_item_count
+        )
+    } else {
+        format!(
+            "Frozen parsed progress log row from {} parsed logs; {} parsed work items total. Representative: {}.",
+            group.file_count, group.work_item_count, group.source_file
+        )
+    };
+    ProjectWorkLogExtractionProposal {
+        candidate_id: format!(
+            "work-log-freeze-{}-{hash_segment}",
+            summary_id_segment(&group.project)
+        ),
+        project: group.project,
+        source_path: group.source_path,
+        source_file: group.source_file,
+        date: Some(group.date),
+        title: group.title,
+        status: "managed".to_string(),
+        evidence,
+        confidence: 1.0,
+        accepted: true,
+        rejection_reason: None,
+    }
 }
 
 fn build_project_progress_log_extraction_candidates(
@@ -7028,6 +7204,32 @@ fn project_work_log_extraction_item_matches_filters(
         && project_filter.is_none_or(|filter| project == filter)
 }
 
+fn read_project_work_persisted_pairs(
+    conn: &Connection,
+) -> Result<HashSet<(String, String)>, Box<dyn std::error::Error>> {
+    let mut pairs = HashSet::new();
+    let mut item_stmt =
+        conn.prepare("SELECT project, proposal_date FROM project_work_log_extraction_items")?;
+    let mut item_rows = item_stmt.query([])?;
+    while let Some(row) = item_rows.next()? {
+        let project: String = row.get(0)?;
+        let date: String = row.get(1)?;
+        pairs.insert((project, date));
+    }
+
+    let mut snapshot_stmt =
+        conn.prepare("SELECT summaries_json FROM project_work_summary_snapshots")?;
+    let mut snapshot_rows = snapshot_stmt.query([])?;
+    while let Some(row) = snapshot_rows.next()? {
+        let summaries_json: String = row.get(0)?;
+        let summaries: Vec<ProjectWorkSummary> = serde_json::from_str(&summaries_json)?;
+        for summary in summaries {
+            pairs.insert((summary.project, summary.date));
+        }
+    }
+    Ok(pairs)
+}
+
 fn persist_project_work_summary_snapshot(
     database_path: &Path,
     result: &ProjectWorkSummaryResult,
@@ -8411,6 +8613,7 @@ pub fn run() {
             project_work_log_coverage,
             project_work_log_candidates,
             project_work_log_extract,
+            project_work_log_freeze,
             project_work_log_items
         ])
         .run(tauri::generate_context!())
@@ -12152,6 +12355,82 @@ Progress:
         assert_eq!(stored_project, "RepoTutorStudio");
 
         std::fs::remove_file(db_path).expect("remove extraction db");
+    }
+
+    #[test]
+    fn project_work_log_freeze_groups_live_only_parsed_rows() {
+        let coverage = ProjectWorkLogCoverageResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
+            files_seen: 4,
+            parsed_file_count: 3,
+            unparsed_file_count: 1,
+            project_count: 3,
+            work_item_count: 8,
+            files: vec![
+                ProjectWorkLogCoverageFile {
+                    project: "PromptVault".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md"
+                        .to_string(),
+                    source_file: "working.md".to_string(),
+                    status: "parsed".to_string(),
+                    work_item_count: 5,
+                    latest_date: Some("2026-06-09".to_string()),
+                    latest_title: Some("Live management row".to_string()),
+                    modified_at: Some("2026-06-09T00:00:00Z".to_string()),
+                },
+                ProjectWorkLogCoverageFile {
+                    project: "PromptVault".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/progress.md"
+                        .to_string(),
+                    source_file: "progress.md".to_string(),
+                    status: "parsed".to_string(),
+                    work_item_count: 2,
+                    latest_date: Some("2026-06-09".to_string()),
+                    latest_title: Some("Progress detail".to_string()),
+                    modified_at: Some("2026-06-09T01:00:00Z".to_string()),
+                },
+                ProjectWorkLogCoverageFile {
+                    project: "CareVault".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md"
+                        .to_string(),
+                    source_file: "workingd.md".to_string(),
+                    status: "parsed".to_string(),
+                    work_item_count: 1,
+                    latest_date: Some("2026-06-08".to_string()),
+                    latest_title: Some("Already saved".to_string()),
+                    modified_at: Some("2026-06-08T00:00:00Z".to_string()),
+                },
+                ProjectWorkLogCoverageFile {
+                    project: "Draft".to_string(),
+                    source_path: "/Users/wj/Ai/System/10_Projects/Draft/working.md".to_string(),
+                    source_file: "working.md".to_string(),
+                    status: "unparsed".to_string(),
+                    work_item_count: 0,
+                    latest_date: None,
+                    latest_title: None,
+                    modified_at: None,
+                },
+            ],
+            warnings: Vec::new(),
+        };
+        let persisted_pairs = HashSet::from([("CareVault".to_string(), "2026-06-08".to_string())]);
+
+        let result =
+            project_work_log_freeze_proposals_from_coverage(&coverage, &persisted_pairs, 10);
+
+        assert_eq!(result.provider, "progress-log-freeze");
+        assert!(!result.used_ai);
+        assert_eq!(result.candidate_count, 1);
+        assert_eq!(result.accepted_count, 1);
+        assert_eq!(result.rejected_count, 0);
+        let proposal = &result.proposals[0];
+        assert_eq!(proposal.project, "PromptVault");
+        assert_eq!(proposal.date.as_deref(), Some("2026-06-09"));
+        assert_eq!(proposal.status, "managed");
+        assert_eq!(proposal.confidence, 1.0);
+        assert!(proposal.evidence.contains("2 parsed logs"));
+        assert!(proposal.evidence.contains("7 parsed work items total"));
     }
 
     #[test]

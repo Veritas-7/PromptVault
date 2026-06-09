@@ -111,6 +111,7 @@ import {
   improvePrompt,
   isBrowserQaMode,
   freezeProjectWorkLogManagementRows,
+  loadProjectWorkAiProviderHealth,
   loadProjectWorkAiProviderStatus,
   loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
@@ -275,6 +276,7 @@ import type {
   ImportEventsResult,
   ImportStatesResult,
   ImproveResult,
+  ProjectWorkAiProviderHealthResult,
   ProjectWorkAiProviderStatusResult,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
@@ -305,6 +307,10 @@ import {
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
   workLogCandidateReviewLabel,
+  workAiProviderHealthActionLabel,
+  workAiProviderHealthFailureText,
+  workAiProviderHealthMetaText,
+  workAiProviderHealthProviderText,
   workAiProviderStatusActionLabel,
   workAiProviderStatusFailureText,
   workAiProviderStatusMetaText,
@@ -397,6 +403,7 @@ import {
   workSummarySnapshotDisplaySummaries,
   workSummarySnapshotExtractionMergeText,
   workSummarySnapshotSummaryOverflowText,
+  type WorkAiProviderHealthState,
   type WorkAiProviderStatusState,
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
@@ -749,6 +756,8 @@ function App() {
   const [workLogCandidatesState, setWorkLogCandidatesState] = useState<WorkLogCandidatesState>("idle");
   const [workAiProviderStatusState, setWorkAiProviderStatusState] =
     useState<WorkAiProviderStatusState>("idle");
+  const [workAiProviderHealthState, setWorkAiProviderHealthState] =
+    useState<WorkAiProviderHealthState>("idle");
   const [workLogReviewQueueState, setWorkLogReviewQueueState] = useState<WorkLogReviewQueueState>("idle");
   const [workLogExtractionState, setWorkLogExtractionState] = useState<WorkLogExtractionState>("idle");
   const [workLogExtractionRunMode, setWorkLogExtractionRunMode] =
@@ -808,6 +817,8 @@ function App() {
     useState<ProjectWorkLogExtractionCandidatesResult | null>(null);
   const [workAiProviderStatusResult, setWorkAiProviderStatusResult] =
     useState<ProjectWorkAiProviderStatusResult | null>(null);
+  const [workAiProviderHealthResult, setWorkAiProviderHealthResult] =
+    useState<ProjectWorkAiProviderHealthResult | null>(null);
   const [workLogReviewQueueResult, setWorkLogReviewQueueResult] =
     useState<ProjectWorkLogReviewQueueResult | null>(null);
   const [workLogReviewQueueUpdatingCandidateId, setWorkLogReviewQueueUpdatingCandidateId] =
@@ -1180,6 +1191,12 @@ function App() {
     workAiProviderStatusState,
     workAiProviderStatusResult,
   );
+  const workAiProviderHealthFailureMessage =
+    workAiProviderHealthFailureText(workAiProviderHealthState);
+  const workAiProviderHealthMeta = workAiProviderHealthMetaText(
+    workAiProviderHealthState,
+    workAiProviderHealthResult,
+  );
   const workLogReviewQueueFailureMessage = workLogReviewQueueFailureText(workLogReviewQueueState);
   const workLogReviewQueueMeta = workLogReviewQueueMetaText(workLogReviewQueueState, workLogReviewQueueResult);
   const workLogExtractionFailureMessage = workLogExtractionFailureText(workLogExtractionState);
@@ -1454,6 +1471,7 @@ function App() {
   const visibleWorkLogExtractionRuns =
     workLogExtractionRunsResult?.runs.slice(0, WORK_LOG_EXTRACTION_RUN_DISPLAY_LIMIT) ?? [];
   const visibleWorkAiProviderStatusProviders = workAiProviderStatusResult?.providers ?? [];
+  const visibleWorkAiProviderHealthProviders = workAiProviderHealthResult?.providers ?? [];
   const visibleWorkLogNormalizationCandidates =
     workLogNormalizationCandidatesResult?.candidates.slice(
       0,
@@ -2141,6 +2159,24 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkAiProviderStatusState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function refreshWorkAiProviderHealth() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkAiProviderHealthState("loading");
+    try {
+      const next = await loadProjectWorkAiProviderHealth();
+      setWorkAiProviderHealthResult(next);
+      setWorkAiProviderHealthState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkAiProviderHealthState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -3415,6 +3451,25 @@ function App() {
                   : "provider 상태"}
             </button>
             <button
+              aria-label={workAiProviderHealthActionLabel(
+                workAiProviderHealthState,
+                workAiProviderHealthResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-ai-provider-health="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void refreshWorkAiProviderHealth()}
+              type="button"
+            >
+              <Sparkles size={15} />
+              {workAiProviderHealthState === "loading"
+                ? "live probe 중"
+                : workAiProviderHealthResult
+                  ? "live probe 재실행"
+                  : "provider live probe"}
+            </button>
+            <button
               aria-label={workLogNormalizationCandidatesActionLabel(
                 workLogNormalizationCandidatesState,
                 workLogNormalizationCandidatesResult !== null,
@@ -3841,6 +3896,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workAiProviderStatusFailureMessage}</span>
+          </div>
+        ) : null}
+        {workAiProviderHealthFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-ai-provider-health-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workAiProviderHealthFailureMessage}</span>
           </div>
         ) : null}
         {workLogNormalizationProposalsFailureMessage ? (
@@ -4886,6 +4951,12 @@ function App() {
             <span>{workAiProviderStatusMeta}</span>
           </div>
         ) : null}
+        {workAiProviderHealthResult || workAiProviderHealthState !== "idle" ? (
+          <div className="work-summary-index" data-work-ai-provider-health-meta="true">
+            <Sparkles size={15} />
+            <span>{workAiProviderHealthMeta}</span>
+          </div>
+        ) : null}
         {workLogReviewQueueResult || workLogReviewQueueState !== "idle" ? (
           <div className="work-summary-index" data-work-log-review-queue-meta="true">
             <Database size={15} />
@@ -5268,6 +5339,22 @@ function App() {
                   <span>{provider.provider_runtime}</span>
                 </div>
                 <p>{workAiProviderStatusProviderText(provider)}</p>
+                {provider.notes.map((note, index) => (
+                  <span key={textListItemKey(note, index)}>{note}</span>
+                ))}
+              </article>
+            ))}
+          </div>
+        ) : null}
+        {workAiProviderHealthResult ? (
+          <div className="work-summary-list" data-work-ai-provider-health="true">
+            {visibleWorkAiProviderHealthProviders.map((provider) => (
+              <article className="work-summary-row" key={provider.provider_runtime}>
+                <div>
+                  <strong>{provider.provider}</strong>
+                  <span>{provider.health_status}</span>
+                </div>
+                <p>{workAiProviderHealthProviderText(provider)}</p>
                 {provider.notes.map((note, index) => (
                   <span key={textListItemKey(note, index)}>{note}</span>
                 ))}

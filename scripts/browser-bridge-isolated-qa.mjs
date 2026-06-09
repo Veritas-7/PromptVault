@@ -491,6 +491,8 @@ async function runBrowserQa() {
   let workAiProviderStatusMetaAfterManagement = "";
   let workAiProviderStatusMeta = "";
   let workAiProviderStatusRows = [];
+  let workAiProviderHealthMeta = "";
+  let workAiProviderHealthRows = [];
   let workLogNormalizationCandidatesMeta = "";
   let workLogNormalizationCandidateRows = [];
   let workLogNormalizationProposalsMeta = "";
@@ -1525,6 +1527,30 @@ async function runBrowserQa() {
       (await page.locator('[data-work-ai-provider-status-meta="true"]').textContent())?.trim() ?? "";
     workAiProviderStatusRows =
       await page.locator('[data-work-ai-provider-status="true"] article').allTextContents();
+    step("work AI provider live health");
+    await waitForEnabled(page, '[data-load-work-ai-provider-health="true"]');
+    await page.locator('[data-load-work-ai-provider-health="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-ai-provider-health-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-ai-provider-health="true"] article'));
+      const rowText = rows.map((row) => row.textContent ?? "").join("\n");
+      return text.includes("live provider")
+        && text.includes("attempted")
+        && rows.length >= 3
+        && rowText.includes("openai-responses")
+        && rowText.includes("glm-chat-completions")
+        && (rowText.includes("codex-sdk") || rowText.includes("codex-cli-exec"))
+        && (
+          rowText.includes("정상")
+          || rowText.includes("실패")
+          || rowText.includes("건너뜀")
+          || rowText.includes("미설정")
+        );
+    }, undefined, { timeout: 120000 });
+    workAiProviderHealthMeta =
+      (await page.locator('[data-work-ai-provider-health-meta="true"]').textContent())?.trim() ?? "";
+    workAiProviderHealthRows =
+      await page.locator('[data-work-ai-provider-health="true"] article').allTextContents();
     step("work log normalization candidates");
     await page.locator('[data-work-log-normalization-needs-title-only="true"]').check();
     await page.waitForFunction(() => {
@@ -1948,6 +1974,8 @@ async function runBrowserQa() {
       workAiProviderStatusMetaAfterManagement,
       workAiProviderStatusMeta,
       workAiProviderStatusRows,
+      workAiProviderHealthMeta,
+      workAiProviderHealthRows,
       workLogNormalizationCandidatesMeta,
       workLogNormalizationCandidateRows,
       workLogNormalizationProposalsMeta,

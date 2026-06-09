@@ -5,6 +5,7 @@ import {
   freezeProjectWorkLogManagementRows,
   importBatch,
   improvePrompt,
+  loadProjectWorkAiProviderHealth,
   loadProjectWorkAiProviderStatus,
   loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
@@ -712,6 +713,62 @@ function projectWorkAiProviderStatusPayload(overrides = {}) {
       },
     ],
     warnings: ["OpenAI/GLM provider key가 없어 work-management AI 단계는 로컬 fallback으로 실행됩니다."],
+    ...overrides,
+  };
+}
+
+function projectWorkAiProviderHealthPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    live_provider_available: true,
+    providers: [
+      {
+        provider: "openai",
+        provider_runtime: "openai-responses",
+        configured: true,
+        probe_attempted: true,
+        live_ok: true,
+        health_status: "ok",
+        model: "gpt-test",
+        endpoint: "https://api.openai.com/v1/responses",
+        timeout_seconds: 12,
+        duration_ms: 321,
+        http_status: 200,
+        error: null,
+        notes: ["OpenAI live probe sent a minimal schema-bound request."],
+      },
+      {
+        provider: "glm",
+        provider_runtime: "glm-chat-completions",
+        configured: true,
+        probe_attempted: true,
+        live_ok: false,
+        health_status: "failed",
+        model: "glm-test",
+        endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        timeout_seconds: 12,
+        duration_ms: 12_000,
+        http_status: null,
+        error: "operation timed out",
+        notes: ["GLM live probe transport failed."],
+      },
+      {
+        provider: "codex",
+        provider_runtime: "codex-cli-exec",
+        configured: true,
+        probe_attempted: false,
+        live_ok: false,
+        health_status: "skipped",
+        model: null,
+        endpoint: "/usr/local/bin/codex",
+        timeout_seconds: 90,
+        duration_ms: null,
+        http_status: null,
+        error: null,
+        notes: ["Codex live probe skipped because PROMPTVAULT_CODEX_WORK_PROVIDER=1 is not set."],
+      },
+    ],
+    warnings: ["glm-chat-completions live health failed: operation timed out"],
     ...overrides,
   };
 }
@@ -1866,6 +1923,80 @@ test("browser bridge work AI provider status rejects unusable capability rows", 
 
   await assert.rejects(
     () => loadProjectWorkAiProviderStatus(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /OPENAI_API_KEY|GLM_API_KEY|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work AI provider health validates live probe rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkAiProviderHealthPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkAiProviderHealth();
+
+  assert.match(requestPath, /\/api\/work-ai-provider-health$/);
+  assert.deepEqual(JSON.parse(requestBody), {});
+  assert.equal(result.live_provider_available, true);
+  assert.equal(result.providers.length, 3);
+  assert.equal(result.providers[0].health_status, "ok");
+  assert.equal(result.providers[0].live_ok, true);
+  assert.equal(result.providers[1].health_status, "failed");
+  assert.equal(result.providers[1].error, "operation timed out");
+  assert.equal(result.providers[2].health_status, "skipped");
+  assert.equal(result.providers[2].probe_attempted, false);
+});
+
+test("browser bridge work AI provider health rejects inconsistent live availability", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkAiProviderHealthPayload({
+    live_provider_available: false,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkAiProviderHealth(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /OPENAI_API_KEY|GLM_API_KEY|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work AI provider health rejects impossible ok rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkAiProviderHealthPayload({
+    providers: [
+      {
+        ...projectWorkAiProviderHealthPayload().providers[0],
+        probe_attempted: false,
+      },
+      projectWorkAiProviderHealthPayload().providers[1],
+      projectWorkAiProviderHealthPayload().providers[2],
+    ],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkAiProviderHealth(),
     (error) => {
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);

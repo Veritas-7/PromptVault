@@ -883,3 +883,26 @@ export interface ProjectWorkAiProviderStatusResult {
   providers: ProjectWorkAiProviderStatusProvider[];
   warnings: string[];
 }
+
+export interface ProjectWorkAiProviderHealthProvider {
+  provider: string;
+  provider_runtime: string;
+  configured: boolean;
+  probe_attempted: boolean;
+  live_ok: boolean;
+  health_status: string;
+  model: string | null;
+  endpoint: string | null;
+  timeout_seconds: number | null;
+  duration_ms: number | null;
+  http_status: number | null;
+  error: string | null;
+  notes: string[];
+}
+
+export interface ProjectWorkAiProviderHealthResult {
+  generated_at: string;
+  live_provider_available: boolean;
+  providers: ProjectWorkAiProviderHealthProvider[];
+  warnings: string[];
+}

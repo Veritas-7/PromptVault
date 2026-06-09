@@ -6,6 +6,10 @@ import {
   canRejectWorkLogNormalizationReviewQueueItem,
   canApproveWorkSessionEvidenceReviewQueueItem,
   canRejectWorkSessionEvidenceReviewQueueItem,
+  workAiProviderHealthActionLabel,
+  workAiProviderHealthFailureText,
+  workAiProviderHealthMetaText,
+  workAiProviderHealthProviderText,
   workAiProviderStatusActionLabel,
   workAiProviderStatusFailureText,
   workAiProviderStatusMetaText,
@@ -100,6 +104,7 @@ import {
   workSummarySnapshotDisplaySummaries,
   workSummarySnapshotSummaryOverflowText,
   workSummarySnapshotVisibleSummaries,
+  type WorkAiProviderHealthState,
   type WorkAiProviderStatusState,
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
@@ -120,6 +125,7 @@ import {
   type WorkSummaryState,
 } from "../src/workSummaryStatus.ts";
 import type {
+  ProjectWorkAiProviderHealthResult,
   ProjectWorkAiProviderStatusResult,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidate,
@@ -223,6 +229,64 @@ function codexDetectedProviderStatusResult(): ProjectWorkAiProviderStatusResult 
       },
     ],
   });
+}
+
+function aiProviderHealthResult(
+  overrides: Partial<ProjectWorkAiProviderHealthResult> = {},
+): ProjectWorkAiProviderHealthResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    live_provider_available: true,
+    providers: [
+      {
+        provider: "openai",
+        provider_runtime: "openai-responses",
+        configured: true,
+        probe_attempted: true,
+        live_ok: true,
+        health_status: "ok",
+        model: "gpt-test",
+        endpoint: "https://api.openai.com/v1/responses",
+        timeout_seconds: 12,
+        duration_ms: 432,
+        http_status: 200,
+        error: null,
+        notes: ["OpenAI live probe sent a minimal schema-bound request."],
+      },
+      {
+        provider: "glm",
+        provider_runtime: "glm-chat-completions",
+        configured: true,
+        probe_attempted: true,
+        live_ok: false,
+        health_status: "failed",
+        model: "glm-test",
+        endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        timeout_seconds: 12,
+        duration_ms: 12_000,
+        http_status: null,
+        error: "operation timed out",
+        notes: ["GLM live probe transport failed."],
+      },
+      {
+        provider: "codex",
+        provider_runtime: "codex-cli-exec",
+        configured: true,
+        probe_attempted: false,
+        live_ok: false,
+        health_status: "skipped",
+        model: null,
+        endpoint: "/usr/local/bin/codex",
+        timeout_seconds: 90,
+        duration_ms: null,
+        http_status: null,
+        error: null,
+        notes: ["Codex live probe skipped because PROMPTVAULT_CODEX_WORK_PROVIDER=1 is not set."],
+      },
+    ],
+    warnings: ["glm-chat-completions live health failed: operation timed out"],
+    ...overrides,
+  };
 }
 
 function summaryResult(overrides: Partial<ProjectWorkSummaryResult> = {}): ProjectWorkSummaryResult {
@@ -2078,6 +2142,70 @@ test("work AI provider status labels expose external readiness and codex gap", (
   assert.equal(
     workAiProviderStatusProviderText(codexDetectedProviderStatusResult().providers[2]),
     "Codex · configured · 사용 불가 · codex-cli-exec · model gpt-5.3-codex · /usr/local/bin/codex · timeout 90s",
+  );
+});
+
+test("work AI provider health labels expose live probe status and failures", () => {
+  const failed: WorkAiProviderHealthState = "failed";
+  const health = aiProviderHealthResult();
+  const noLive = aiProviderHealthResult({
+    live_provider_available: false,
+    providers: health.providers.map((provider) => ({
+      ...provider,
+      live_ok: false,
+      health_status: provider.health_status === "ok" ? "failed" : provider.health_status,
+      error: provider.provider === "openai" ? "HTTP 401 Unauthorized" : provider.error,
+    })),
+  });
+
+  assert.equal(
+    workAiProviderHealthActionLabel("idle", false, lockState()),
+    "AI provider live probe",
+  );
+  assert.equal(
+    workAiProviderHealthActionLabel("ready", true, lockState()),
+    "AI provider live probe 다시 실행",
+  );
+  assert.equal(
+    workAiProviderHealthActionLabel("ready", true, lockState({ workSummaryRunning: true })),
+    "작업 요약 생성 중에는 AI provider live probe를 다시 실행할 수 없습니다",
+  );
+  assert.equal(
+    workAiProviderHealthMetaText("idle", null),
+    "아직 실행한 AI provider live probe 없음",
+  );
+  assert.equal(
+    workAiProviderHealthMetaText("loading", health),
+    "AI provider live probe 실행 중",
+  );
+  assert.equal(
+    workAiProviderHealthMetaText("ready", health),
+    "live provider 있음 · ok 1개 · attempted 2개 · failed 1개 · skipped 1개 · 경고 1개",
+  );
+  assert.equal(
+    workAiProviderHealthMetaText("ready", noLive),
+    "live provider 없음 · ok 0개 · attempted 2개 · failed 2개 · skipped 1개 · 경고 1개",
+  );
+  assert.equal(
+    workAiProviderHealthMetaText(failed, null),
+    "AI provider live probe를 사용할 수 없음",
+  );
+  assert.equal(
+    workAiProviderHealthFailureText(failed),
+    "AI provider live probe를 실행하지 못했습니다. 브리지 상태와 provider 설정을 확인하세요.",
+  );
+  assert.equal(workAiProviderHealthFailureText("ready"), null);
+  assert.equal(
+    workAiProviderHealthProviderText(health.providers[0]),
+    "OpenAI · 정상 · probe 실행 · live ok · openai-responses · model gpt-test · https://api.openai.com/v1/responses · timeout 12s · 432ms · HTTP 200",
+  );
+  assert.equal(
+    workAiProviderHealthProviderText(health.providers[1]),
+    "GLM · 실패 · probe 실행 · live 미확인 · glm-chat-completions · model glm-test · https://open.bigmodel.cn/api/paas/v4/chat/completions · timeout 12s · 12,000ms · operation timed out",
+  );
+  assert.equal(
+    workAiProviderHealthProviderText(health.providers[2]),
+    "Codex · 건너뜀 · probe 미실행 · live 미확인 · codex-cli-exec · /usr/local/bin/codex · timeout 90s",
   );
 });
 

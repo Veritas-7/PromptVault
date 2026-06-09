@@ -11,6 +11,7 @@ import type {
   ImportEventsResult,
   ImportStatesResult,
   ImproveResult,
+  ProjectWorkAiProviderHealthResult,
   ProjectWorkAiProviderStatusResult,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
@@ -520,6 +521,17 @@ export async function loadProjectWorkAiProviderStatus(): Promise<ProjectWorkAiPr
     "/api/work-ai-provider-status",
     {},
     parseProjectWorkAiProviderStatusResult,
+  );
+}
+
+export async function loadProjectWorkAiProviderHealth(): Promise<ProjectWorkAiProviderHealthResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkAiProviderHealthResult>("project_work_ai_provider_health");
+  }
+  return postBridge<ProjectWorkAiProviderHealthResult>(
+    "/api/work-ai-provider-health",
+    {},
+    parseProjectWorkAiProviderHealthResult,
   );
 }
 
@@ -1981,6 +1993,64 @@ function parseProjectWorkAiProviderStatusResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkAiProviderStatusResult;
+}
+
+const PROJECT_WORK_AI_PROVIDER_HEALTH_STATUSES = new Set([
+  "not_configured",
+  "skipped",
+  "ok",
+  "failed",
+]);
+
+function isProjectWorkAiProviderHealthProvider(value: unknown): boolean {
+  if (!isRecord(value)
+    || !isNonBlankString(value.provider)
+    || !isNonBlankString(value.provider_runtime)
+    || typeof value.configured !== "boolean"
+    || typeof value.probe_attempted !== "boolean"
+    || typeof value.live_ok !== "boolean"
+    || !isNonBlankString(value.health_status)
+    || !PROJECT_WORK_AI_PROVIDER_HEALTH_STATUSES.has(value.health_status)
+    || !isNullableNonBlankString(value.model)
+    || !isNullableNonBlankString(value.endpoint)
+    || !isNullablePositiveSafeInteger(value.timeout_seconds)
+    || !isNullableNonNegativeSafeInteger(value.duration_ms)
+    || !isNullableNonNegativeSafeInteger(value.http_status)
+    || !isNullableNonBlankString(value.error)
+    || !isNonBlankStringArray(value.notes)) {
+    return false;
+  }
+  if (value.live_ok !== (value.health_status === "ok")) return false;
+  if (value.live_ok && !value.probe_attempted) return false;
+  if (!value.configured && value.probe_attempted) return false;
+  if (value.health_status === "not_configured" && value.configured) return false;
+  if (value.health_status === "skipped" && value.probe_attempted) return false;
+  return true;
+}
+
+function parseProjectWorkAiProviderHealthResult(
+  value: unknown,
+): ProjectWorkAiProviderHealthResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || typeof value.live_provider_available !== "boolean"
+    || !Array.isArray(value.providers)
+    || value.providers.length < 3
+    || !value.providers.every(isProjectWorkAiProviderHealthProvider)
+    || !recordStringFieldValuesAreUnique(value.providers, "provider_runtime")
+    || !value.providers.some((provider) => isRecord(provider) && provider.provider === "openai")
+    || !value.providers.some((provider) => isRecord(provider) && provider.provider === "glm")
+    || !value.providers.some((provider) => isRecord(provider) && provider.provider === "codex")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  const hasLiveProvider = value.providers.some((provider) => {
+    return isRecord(provider) && provider.live_ok === true;
+  });
+  if (value.live_provider_available !== hasLiveProvider) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkAiProviderHealthResult;
 }
 
 function isProjectWorkLogNormalizationCandidate(value: unknown): boolean {

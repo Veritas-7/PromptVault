@@ -1,10 +1,104 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 08:06 KST
+Updated: 2026-06-10 08:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Provider live health probe
+
+Current Goal:
+
+- Add a controlled, read-only live health probe for work-management AI
+  providers so "configured" is not mistaken for "usable right now" when
+  reducing project/day review queues.
+
+Context:
+
+- Persistent PromptVault already parses project progress logs and Codex session
+  evidence into project/day management views, but AI-backed queue reduction is
+  still limited by provider reliability.
+- `work-ai-provider-status` proves configuration and timeout caps, not live
+  health. GLM is configured with a 12-second HTTP cap; Codex CLI is detected but
+  intentionally disabled unless `PROMPTVAULT_CODEX_WORK_PROVIDER=1` is set.
+- A previous same-command probe observed GLM HTTP 200 in about 10.9 seconds,
+  while the latest probe timed out at 12 seconds. Treat GLM as latency-flaky at
+  the current cap, not reliably healthy.
+
+Progress:
+
+- Added `work-ai-provider-health` as a CLI command, Tauri command, and local
+  browser bridge route.
+- The probe sends minimal schema-bound/read-only requests to configured
+  OpenAI/GLM providers and reports `ok`, `failed`, `not_configured`, or
+  `skipped` without exposing secret values.
+- Codex health remains opt-in only and is skipped unless
+  `PROMPTVAULT_CODEX_WORK_PROVIDER=1` is set.
+- The UI now has a separate live-health action and renders provider rows with
+  runtime, status, attempt state, duration, timeout, HTTP status, notes, and
+  sanitized failure text.
+- The browser bridge QA script now clicks the health action and requires
+  OpenAI/GLM/Codex rows before continuing through work-management flows.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds provider health structs, probes, command handler,
+  schema-bound OpenAI/GLM minimal checks, Codex opt-in skip handling, and
+  provider-health regression tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds
+  `work-ai-provider-health [--json]`, help text, and
+  `/api/work-ai-provider-health`.
+- `src/types.ts`, `src/promptVaultApi.ts`: add and validate the browser bridge
+  health response contract.
+- `src/workSummaryStatus.ts`, `src/App.tsx`: add UI state, labels, metadata,
+  rows, loading/error copy, and lock-aware health action behavior.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`: cover
+  valid health rows, inconsistent live availability, impossible `ok` rows, and
+  display copy.
+- `scripts/browser-bridge-isolated-qa.mjs`: validates live-health rows in the
+  isolated browser flow.
+- `README.md`: documents the new CLI command and bridge endpoint.
+
+Tests:
+
+- PASS: `cargo fmt --manifest-path src-tauri/Cargo.toml`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_ai_provider_health --lib`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules --bin promptvault-cli`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work AI provider health"`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work AI provider health"`.
+- PASS: `npm run check` (`503` UI tests, `217` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS/OBSERVED: `cargo run --manifest-path src-tauri/Cargo.toml --quiet --bin promptvault-cli -- work-ai-provider-health --json`.
+- PASS/OBSERVED: `cargo run --manifest-path src-tauri/Cargo.toml --quiet --bin promptvault-cli -- work-log-normalization-proposals --needs-title-normalization --limit 1 --ai --json`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- Latest persistent health probe:
+  - OpenAI: `not_configured`, probe skipped.
+  - GLM: configured, attempted, failed after `12003ms`, transport cause
+    `operation timed out`.
+  - Codex: detected at the user Node install path, skipped because
+    `PROMPTVAULT_CODEX_WORK_PROVIDER=1` is not set.
+  - `live_provider_available: false`.
+- Latest persistent normalization proposal probe still returned
+  `local-normalization-rules` with `used_ai: false`; warning preserved the GLM
+  timeout cause and Codex opt-in disabled state.
+- Isolated browser bridge QA clicked the new live-health action, verified
+  OpenAI/GLM/Codex provider rows, then continued through normalization
+  proposals, review queues, apply, approved `workingd.md` queue save, extraction
+  run history, and saved work-log items against temporary DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-eC0xt2/qa.sqlite`.
+
+Remaining:
+
+- Run diff/secret checks, stage only explicit changed paths, then commit and
+  push if verification stays green.
+- Next useful functional slice is reducing GLM timeout/payload fragility or
+  enabling a deliberately scoped Codex opt-in route; do not claim complete
+  autonomous project/day management while review queues remain unresolved.
 
 ## Completed Slice - 2026-06-10 Provider status timeout visibility
 

@@ -2,6 +2,8 @@ import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import { pathDisplayText } from "./promptRowA11y.ts";
 import { riskFlagLabel } from "./riskLabels.ts";
 import type {
+  ProjectWorkAiProviderHealthProvider,
+  ProjectWorkAiProviderHealthResult,
   ProjectWorkAiProviderStatusProvider,
   ProjectWorkAiProviderStatusResult,
   ProjectWorkLogCoverageResult,
@@ -38,6 +40,7 @@ export type WorkSummarySnapshotsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCoverageState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCandidatesState = "idle" | "loading" | "ready" | "failed";
 export type WorkAiProviderStatusState = "idle" | "loading" | "ready" | "failed";
+export type WorkAiProviderHealthState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionItemsState = "idle" | "loading" | "ready" | "failed";
@@ -1171,6 +1174,88 @@ export function workAiProviderStatusProviderText(
   return parts.join(" · ");
 }
 
+export function workAiProviderHealthActionLabel(
+  state: WorkAiProviderHealthState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "AI provider live probe 실행 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 AI provider live probe를 ${hasResult ? "다시 실행" : "실행"}할 수 없습니다`;
+  }
+  return hasResult ? "AI provider live probe 다시 실행" : "AI provider live probe";
+}
+
+export function workAiProviderHealthMetaText(
+  state: WorkAiProviderHealthState,
+  result: ProjectWorkAiProviderHealthResult | null,
+): string {
+  if (state === "loading") return "AI provider live probe 실행 중";
+  if (!result) {
+    return state === "failed"
+      ? "AI provider live probe를 사용할 수 없음"
+      : "아직 실행한 AI provider live probe 없음";
+  }
+  const okCount = result.providers.filter((provider) => provider.live_ok).length;
+  const attemptedCount = result.providers.filter((provider) => provider.probe_attempted).length;
+  const failedCount = result.providers.filter((provider) => provider.health_status === "failed").length;
+  const skippedCount = result.providers.filter((provider) => provider.health_status === "skipped").length;
+  const parts = [
+    result.live_provider_available ? "live provider 있음" : "live provider 없음",
+    `ok ${okCount.toLocaleString()}개`,
+    `attempted ${attemptedCount.toLocaleString()}개`,
+  ];
+  if (failedCount > 0) parts.push(`failed ${failedCount.toLocaleString()}개`);
+  if (skippedCount > 0) parts.push(`skipped ${skippedCount.toLocaleString()}개`);
+  if (result.warnings.length > 0) parts.push(`경고 ${result.warnings.length.toLocaleString()}개`);
+  return parts.join(" · ");
+}
+
+export function workAiProviderHealthFailureText(
+  state: WorkAiProviderHealthState,
+): string | null {
+  if (state !== "failed") return null;
+  return "AI provider live probe를 실행하지 못했습니다. 브리지 상태와 provider 설정을 확인하세요.";
+}
+
+export function workAiProviderHealthProviderText(
+  provider: ProjectWorkAiProviderHealthProvider,
+): string {
+  const parts = [
+    workAiProviderName(provider.provider),
+    providerHealthStatusLabel(provider.health_status),
+    provider.probe_attempted ? "probe 실행" : "probe 미실행",
+    provider.live_ok ? "live ok" : "live 미확인",
+    provider.provider_runtime,
+  ];
+  if (provider.model) parts.push(`model ${provider.model}`);
+  if (provider.endpoint) parts.push(provider.endpoint);
+  if (provider.timeout_seconds !== null) {
+    parts.push(`timeout ${provider.timeout_seconds.toLocaleString()}s`);
+  }
+  if (provider.duration_ms !== null) {
+    parts.push(`${provider.duration_ms.toLocaleString()}ms`);
+  }
+  if (provider.http_status !== null) {
+    parts.push(`HTTP ${provider.http_status.toLocaleString()}`);
+  }
+  if (provider.error) {
+    parts.push(provider.error);
+  }
+  return parts.join(" · ");
+}
+
+function providerHealthStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    not_configured: "미설정",
+    skipped: "건너뜀",
+    ok: "정상",
+    failed: "실패",
+  };
+  return labels[status] ?? status;
+}
+
 function workAiProviderCapabilityLabel(capability: string): string {
   const labels: Record<string, string> = {
     "work-summary": "작업 요약",
@@ -1197,10 +1282,14 @@ function codexProviderStatusLabel(
 }
 
 function workAiProviderDisplayName(provider: ProjectWorkAiProviderStatusProvider): string {
-  if (provider.provider === "openai") return "OpenAI";
-  if (provider.provider === "glm") return "GLM";
-  if (provider.provider === "codex") return "Codex";
-  return provider.provider;
+  return workAiProviderName(provider.provider);
+}
+
+function workAiProviderName(provider: string): string {
+  if (provider === "openai") return "OpenAI";
+  if (provider === "glm") return "GLM";
+  if (provider === "codex") return "Codex";
+  return provider;
 }
 
 export function workLogReviewQueueActionLabel(

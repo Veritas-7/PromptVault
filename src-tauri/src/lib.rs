@@ -1346,6 +1346,31 @@ pub struct ProjectWorkAiProviderStatusResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkAiProviderHealthProvider {
+    pub provider: String,
+    pub provider_runtime: String,
+    pub configured: bool,
+    pub probe_attempted: bool,
+    pub live_ok: bool,
+    pub health_status: String,
+    pub model: Option<String>,
+    pub endpoint: Option<String>,
+    pub timeout_seconds: Option<u64>,
+    pub duration_ms: Option<u64>,
+    pub http_status: Option<u16>,
+    pub error: Option<String>,
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkAiProviderHealthResult {
+    pub generated_at: String,
+    pub live_provider_available: bool,
+    pub providers: Vec<ProjectWorkAiProviderHealthProvider>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QualityDelta {
     pub before: PromptQuality,
     pub after: PromptQuality,
@@ -1460,6 +1485,11 @@ async fn improve_prompt(request: ImproveRequest) -> Result<ImproveResult, String
 #[tauri::command]
 fn project_work_ai_provider_status() -> Result<ProjectWorkAiProviderStatusResult, String> {
     Ok(run_project_work_ai_provider_status())
+}
+
+#[tauri::command]
+async fn project_work_ai_provider_health() -> Result<ProjectWorkAiProviderHealthResult, String> {
+    run_project_work_ai_provider_health().await
 }
 
 #[tauri::command]
@@ -15290,6 +15320,11 @@ pub fn run_project_work_ai_provider_status() -> ProjectWorkAiProviderStatusResul
     project_work_ai_provider_status_from_env(load_improve_env())
 }
 
+pub async fn run_project_work_ai_provider_health(
+) -> Result<ProjectWorkAiProviderHealthResult, String> {
+    project_work_ai_provider_health_from_env(load_improve_env()).await
+}
+
 fn project_work_ai_provider_status_from_env(
     env: HashMap<String, String>,
 ) -> ProjectWorkAiProviderStatusResult {
@@ -15416,6 +15451,479 @@ fn project_work_ai_provider_status_from_env(
         ],
         warnings,
     }
+}
+
+async fn project_work_ai_provider_health_from_env(
+    env: HashMap<String, String>,
+) -> Result<ProjectWorkAiProviderHealthResult, String> {
+    let mut providers = Vec::new();
+    let openai = probe_openai_project_work_ai_provider_health(&env).await;
+    let glm = probe_glm_project_work_ai_provider_health(&env).await;
+    let codex = probe_codex_project_work_ai_provider_health(&env).await;
+    providers.push(openai);
+    providers.push(glm);
+    providers.push(codex);
+
+    let live_provider_available = providers.iter().any(|provider| provider.live_ok);
+    let mut warnings = Vec::new();
+    if !live_provider_available {
+        warnings.push(
+            "No AI provider passed the live health probe; proposal routes may still fall back locally or require provider repair.".to_string(),
+        );
+    }
+    for provider in providers
+        .iter()
+        .filter(|provider| provider.configured && !provider.live_ok)
+    {
+        if let Some(error) = &provider.error {
+            warnings.push(format!(
+                "{} live health failed: {}",
+                provider.provider_runtime, error
+            ));
+        }
+    }
+
+    Ok(ProjectWorkAiProviderHealthResult {
+        generated_at: Utc::now().to_rfc3339(),
+        live_provider_available,
+        providers,
+        warnings,
+    })
+}
+
+async fn probe_openai_project_work_ai_provider_health(
+    env: &HashMap<String, String>,
+) -> ProjectWorkAiProviderHealthProvider {
+    let model = openai_model_from_env(env);
+    let endpoint = normalize_openai_responses_endpoint(
+        &env.get("OPENAI_RESPONSES_ENDPOINT")
+            .or_else(|| env.get("OPENAI_BASE_URL"))
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_OPENAI_RESPONSES_ENDPOINT.to_string()),
+    );
+    let timeout_seconds = PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS;
+    let api_key = match openai_api_key_from_env(env) {
+        Some(value) => value,
+        None => {
+            return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+                provider: "openai",
+                provider_runtime: "openai-responses",
+                configured: false,
+                probe_attempted: false,
+                live_ok: false,
+                health_status: "not_configured",
+                model: Some(model),
+                endpoint: Some(endpoint),
+                timeout_seconds: Some(timeout_seconds),
+                duration_ms: None,
+                http_status: None,
+                error: None,
+                notes: vec!["OPENAI_API_KEY is not configured; live probe skipped.".to_string()],
+            });
+        }
+    };
+    let body = serde_json::json!({
+        "model": model,
+        "input": [
+            {
+                "role": "developer",
+                "content": [
+                    { "type": "input_text", "text": "Return only JSON matching the schema: {\"ok\":true}." }
+                ]
+            },
+            {
+                "role": "user",
+                "content": [
+                    { "type": "input_text", "text": "PromptVault work-management provider health probe. Return {\"ok\":true}." }
+                ]
+            }
+        ],
+        "temperature": 0,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "provider_health",
+                "strict": true,
+                "schema": provider_health_json_schema()
+            }
+        }
+    });
+    let started_at = std::time::Instant::now();
+    let client = match provider_health_http_client("OpenAI") {
+        Ok(value) => value,
+        Err(err) => {
+            return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+                provider: "openai",
+                provider_runtime: "openai-responses",
+                configured: true,
+                probe_attempted: false,
+                live_ok: false,
+                health_status: "failed",
+                model: Some(model),
+                endpoint: Some(endpoint),
+                timeout_seconds: Some(timeout_seconds),
+                duration_ms: None,
+                http_status: None,
+                error: Some(err),
+                notes: vec!["OpenAI health probe could not build an HTTP client.".to_string()],
+            });
+        }
+    };
+    let response = match client
+        .post(&endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => {
+            return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+                provider: "openai",
+                provider_runtime: "openai-responses",
+                configured: true,
+                probe_attempted: true,
+                live_ok: false,
+                health_status: "failed",
+                model: Some(model),
+                endpoint: Some(endpoint),
+                timeout_seconds: Some(timeout_seconds),
+                duration_ms: Some(started_at.elapsed().as_millis() as u64),
+                http_status: None,
+                error: Some(provider_request_error_detail(&err)),
+                notes: vec!["OpenAI live probe transport failed.".to_string()],
+            });
+        }
+    };
+    let status = response.status();
+    let duration_ms = Some(started_at.elapsed().as_millis() as u64);
+    if !status.is_success() {
+        return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+            provider: "openai",
+            provider_runtime: "openai-responses",
+            configured: true,
+            probe_attempted: true,
+            live_ok: false,
+            health_status: "failed",
+            model: Some(model),
+            endpoint: Some(endpoint),
+            timeout_seconds: Some(timeout_seconds),
+            duration_ms,
+            http_status: Some(status.as_u16()),
+            error: Some(format!("HTTP {status}")),
+            notes: vec!["OpenAI live probe returned a non-success HTTP status.".to_string()],
+        });
+    }
+    let parse_result = response
+        .json::<Value>()
+        .await
+        .map_err(|err| format!("OpenAI health response JSON parse failed: {err}"))
+        .and_then(|value| {
+            openai_response_content(&value)
+                .ok_or_else(|| "OpenAI health response did not include output text.".to_string())
+        })
+        .and_then(|content| {
+            provider_health_content_ok(&content)
+                .then_some(())
+                .ok_or_else(|| "OpenAI health response did not return ok=true.".to_string())
+        });
+    project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+        provider: "openai",
+        provider_runtime: "openai-responses",
+        configured: true,
+        probe_attempted: true,
+        live_ok: parse_result.is_ok(),
+        health_status: if parse_result.is_ok() { "ok" } else { "failed" },
+        model: Some(model),
+        endpoint: Some(endpoint),
+        timeout_seconds: Some(timeout_seconds),
+        duration_ms,
+        http_status: Some(status.as_u16()),
+        error: parse_result.err(),
+        notes: vec!["OpenAI live probe sent a minimal schema-bound request.".to_string()],
+    })
+}
+
+async fn probe_glm_project_work_ai_provider_health(
+    env: &HashMap<String, String>,
+) -> ProjectWorkAiProviderHealthProvider {
+    let model = glm_model_from_env(env);
+    let endpoint = normalize_chat_endpoint(
+        &env.get("GLM_CODING_ENDPOINT")
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_GLM_CHAT_ENDPOINT.to_string()),
+    );
+    let timeout_seconds = PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS;
+    let api_key = match glm_api_key_from_env(env) {
+        Some(value) => value,
+        None => {
+            return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+                provider: "glm",
+                provider_runtime: "glm-chat-completions",
+                configured: false,
+                probe_attempted: false,
+                live_ok: false,
+                health_status: "not_configured",
+                model: Some(model),
+                endpoint: Some(endpoint),
+                timeout_seconds: Some(timeout_seconds),
+                duration_ms: None,
+                http_status: None,
+                error: None,
+                notes: vec![
+                    "GLM_API_KEY/GLM_API_KEY_2 is not configured; live probe skipped.".to_string(),
+                ],
+            });
+        }
+    };
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [
+            { "role": "system", "content": "Return only JSON matching: {\"ok\":true}." },
+            { "role": "user", "content": "PromptVault work-management provider health probe. Return {\"ok\":true}." }
+        ],
+        "temperature": 0,
+        "response_format": { "type": "json_object" }
+    });
+    let started_at = std::time::Instant::now();
+    let client = match provider_health_http_client("GLM") {
+        Ok(value) => value,
+        Err(err) => {
+            return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+                provider: "glm",
+                provider_runtime: "glm-chat-completions",
+                configured: true,
+                probe_attempted: false,
+                live_ok: false,
+                health_status: "failed",
+                model: Some(model),
+                endpoint: Some(endpoint),
+                timeout_seconds: Some(timeout_seconds),
+                duration_ms: None,
+                http_status: None,
+                error: Some(err),
+                notes: vec!["GLM health probe could not build an HTTP client.".to_string()],
+            });
+        }
+    };
+    let response = match client
+        .post(&endpoint)
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(value) => value,
+        Err(err) => {
+            return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+                provider: "glm",
+                provider_runtime: "glm-chat-completions",
+                configured: true,
+                probe_attempted: true,
+                live_ok: false,
+                health_status: "failed",
+                model: Some(model),
+                endpoint: Some(endpoint),
+                timeout_seconds: Some(timeout_seconds),
+                duration_ms: Some(started_at.elapsed().as_millis() as u64),
+                http_status: None,
+                error: Some(provider_request_error_detail(&err)),
+                notes: vec!["GLM live probe transport failed.".to_string()],
+            });
+        }
+    };
+    let status = response.status();
+    let duration_ms = Some(started_at.elapsed().as_millis() as u64);
+    if !status.is_success() {
+        return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+            provider: "glm",
+            provider_runtime: "glm-chat-completions",
+            configured: true,
+            probe_attempted: true,
+            live_ok: false,
+            health_status: "failed",
+            model: Some(model),
+            endpoint: Some(endpoint),
+            timeout_seconds: Some(timeout_seconds),
+            duration_ms,
+            http_status: Some(status.as_u16()),
+            error: Some(format!("HTTP {status}")),
+            notes: vec!["GLM live probe returned a non-success HTTP status.".to_string()],
+        });
+    }
+    let parse_result = response
+        .json::<Value>()
+        .await
+        .map_err(|err| format!("GLM health response JSON parse failed: {err}"))
+        .and_then(|value| {
+            value
+                .pointer("/choices/0/message/content")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| "GLM health response did not include message content.".to_string())
+        })
+        .and_then(|content| {
+            provider_health_content_ok(&content)
+                .then_some(())
+                .ok_or_else(|| "GLM health response did not return ok=true.".to_string())
+        });
+    project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+        provider: "glm",
+        provider_runtime: "glm-chat-completions",
+        configured: true,
+        probe_attempted: true,
+        live_ok: parse_result.is_ok(),
+        health_status: if parse_result.is_ok() { "ok" } else { "failed" },
+        model: Some(model),
+        endpoint: Some(endpoint),
+        timeout_seconds: Some(timeout_seconds),
+        duration_ms,
+        http_status: Some(status.as_u16()),
+        error: parse_result.err(),
+        notes: vec!["GLM live probe sent a minimal JSON-object request.".to_string()],
+    })
+}
+
+async fn probe_codex_project_work_ai_provider_health(
+    env: &HashMap<String, String>,
+) -> ProjectWorkAiProviderHealthProvider {
+    let exec_path = codex_exec_path_from_env(env);
+    let configured = exec_path.is_some();
+    let endpoint = exec_path.clone();
+    let timeout_seconds = configured.then(|| codex_work_provider_timeout_seconds(env));
+    if !configured {
+        return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+            provider: "codex",
+            provider_runtime: "codex-sdk",
+            configured: false,
+            probe_attempted: false,
+            live_ok: false,
+            health_status: "not_configured",
+            model: non_empty_env_value(env, "CODEX_MODEL"),
+            endpoint,
+            timeout_seconds,
+            duration_ms: None,
+            http_status: None,
+            error: None,
+            notes: vec!["No codex executable was detected; live probe skipped.".to_string()],
+        });
+    }
+    if !codex_work_provider_enabled(env) {
+        return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+            provider: "codex",
+            provider_runtime: "codex-cli-exec",
+            configured: true,
+            probe_attempted: false,
+            live_ok: false,
+            health_status: "skipped",
+            model: non_empty_env_value(env, "CODEX_MODEL"),
+            endpoint,
+            timeout_seconds,
+            duration_ms: None,
+            http_status: None,
+            error: None,
+            notes: vec![
+                "Codex live probe skipped because PROMPTVAULT_CODEX_WORK_PROVIDER=1 is not set."
+                    .to_string(),
+            ],
+        });
+    }
+    let prompt = "Return only JSON matching the schema: {\"ok\":true}. Do not read files, write files, run commands, or use external context.".to_string();
+    let started_at = std::time::Instant::now();
+    let result = request_codex_schema_bound_json(
+        env,
+        "Codex provider health",
+        "provider-health",
+        provider_health_json_schema(),
+        prompt,
+    )
+    .await
+    .and_then(|content| {
+        provider_health_content_ok(&content)
+            .then_some(())
+            .ok_or_else(|| "Codex health response did not return ok=true.".to_string())
+    });
+    project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
+        provider: "codex",
+        provider_runtime: "codex-cli-exec",
+        configured: true,
+        probe_attempted: true,
+        live_ok: result.is_ok(),
+        health_status: if result.is_ok() { "ok" } else { "failed" },
+        model: non_empty_env_value(env, "CODEX_MODEL"),
+        endpoint,
+        timeout_seconds,
+        duration_ms: Some(started_at.elapsed().as_millis() as u64),
+        http_status: None,
+        error: result.err(),
+        notes: vec![
+            "Codex live probe used read-only sandbox, ephemeral state, and output-schema validation."
+                .to_string(),
+        ],
+    })
+}
+
+struct ProjectWorkAiProviderHealthRow<'a> {
+    provider: &'a str,
+    provider_runtime: &'a str,
+    configured: bool,
+    probe_attempted: bool,
+    live_ok: bool,
+    health_status: &'a str,
+    model: Option<String>,
+    endpoint: Option<String>,
+    timeout_seconds: Option<u64>,
+    duration_ms: Option<u64>,
+    http_status: Option<u16>,
+    error: Option<String>,
+    notes: Vec<String>,
+}
+
+fn project_work_ai_provider_health_row(
+    row: ProjectWorkAiProviderHealthRow<'_>,
+) -> ProjectWorkAiProviderHealthProvider {
+    ProjectWorkAiProviderHealthProvider {
+        provider: row.provider.to_string(),
+        provider_runtime: row.provider_runtime.to_string(),
+        configured: row.configured,
+        probe_attempted: row.probe_attempted,
+        live_ok: row.live_ok,
+        health_status: row.health_status.to_string(),
+        model: row.model,
+        endpoint: row.endpoint,
+        timeout_seconds: row.timeout_seconds,
+        duration_ms: row.duration_ms,
+        http_status: row.http_status,
+        error: row.error,
+        notes: row.notes,
+    }
+}
+
+fn provider_health_http_client(provider: &str) -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(
+            PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS,
+        ))
+        .build()
+        .map_err(|err| format!("{provider} provider health HTTP client 생성 실패: {err}"))
+}
+
+fn provider_health_json_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "ok": { "type": "boolean" }
+        },
+        "required": ["ok"]
+    })
+}
+
+fn provider_health_content_ok(content: &str) -> bool {
+    serde_json::from_str::<Value>(content)
+        .ok()
+        .and_then(|value| value.get("ok").and_then(Value::as_bool))
+        .unwrap_or(false)
 }
 
 fn provider_work_management_capabilities(configured: bool) -> Vec<String> {
@@ -15561,6 +16069,7 @@ pub fn run() {
             load_stored_prompts,
             improve_prompt,
             project_work_ai_provider_status,
+            project_work_ai_provider_health,
             project_work_summary,
             project_work_status_export,
             project_work_session_evidence_candidates,
@@ -16053,6 +16562,123 @@ mod tests {
         assert!(!codex.configured);
         assert!(!codex.usable_for_work_management);
         assert!(codex.capabilities.is_empty());
+    }
+
+    #[tokio::test]
+    async fn project_work_ai_provider_health_probes_openai_and_glm_without_secrets() {
+        let openai_response = serde_json::json!({
+            "output_text": "{\"ok\":true}"
+        });
+        let glm_response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": "{\"ok\":true}"
+                }
+            }]
+        });
+        let (openai_base_url, openai_request_rx) = spawn_json_server(200, openai_response);
+        let (glm_base_url, glm_request_rx) = spawn_json_server(200, glm_response);
+        let mut env = HashMap::new();
+        env.insert("OPENAI_API_KEY".to_string(), "mock-openai-key".to_string());
+        env.insert("OPENAI_MODEL".to_string(), "mock-openai-model".to_string());
+        env.insert(
+            "OPENAI_RESPONSES_ENDPOINT".to_string(),
+            format!("{openai_base_url}/v1/responses"),
+        );
+        env.insert("GLM_API_KEY".to_string(), "mock-glm-key".to_string());
+        env.insert("GLM_CODING_MODEL".to_string(), "mock-glm-model".to_string());
+        env.insert("GLM_CODING_ENDPOINT".to_string(), glm_base_url);
+
+        let result = project_work_ai_provider_health_from_env(env)
+            .await
+            .expect("provider health");
+
+        assert!(result.live_provider_available);
+        let openai = result
+            .providers
+            .iter()
+            .find(|provider| provider.provider == "openai")
+            .expect("openai health row");
+        assert!(openai.configured);
+        assert!(openai.probe_attempted);
+        assert!(openai.live_ok);
+        assert_eq!(openai.health_status, "ok");
+        assert_eq!(openai.http_status, Some(200));
+        assert_eq!(openai.model.as_deref(), Some("mock-openai-model"));
+        let glm = result
+            .providers
+            .iter()
+            .find(|provider| provider.provider == "glm")
+            .expect("glm health row");
+        assert!(glm.configured);
+        assert!(glm.probe_attempted);
+        assert!(glm.live_ok);
+        assert_eq!(glm.health_status, "ok");
+        assert_eq!(glm.http_status, Some(200));
+        let codex = result
+            .providers
+            .iter()
+            .find(|provider| provider.provider == "codex")
+            .expect("codex health row");
+        assert_eq!(codex.health_status, "not_configured");
+        assert!(!codex.probe_attempted);
+
+        let openai_request = openai_request_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("captured openai health request");
+        let glm_request = glm_request_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("captured glm health request");
+        assert!(openai_request.starts_with("POST /v1/responses HTTP/1.1"));
+        assert!(openai_request.contains("authorization: Bearer mock-openai-key"));
+        assert!(openai_request.contains("\"provider_health\""));
+        assert!(glm_request.starts_with("POST /chat/completions HTTP/1.1"));
+        assert!(glm_request.contains("authorization: Bearer mock-glm-key"));
+
+        let serialized = serde_json::to_string(&result).expect("serialize health");
+        assert!(!serialized.contains("mock-openai-key"));
+        assert!(!serialized.contains("mock-glm-key"));
+    }
+
+    #[tokio::test]
+    async fn project_work_ai_provider_health_reports_http_failures() {
+        let glm_response = serde_json::json!({
+            "error": {
+                "message": "bad key"
+            }
+        });
+        let (glm_base_url, request_rx) = spawn_json_server(500, glm_response);
+        let mut env = HashMap::new();
+        env.insert("GLM_API_KEY".to_string(), "mock-glm-key".to_string());
+        env.insert("GLM_CODING_ENDPOINT".to_string(), glm_base_url);
+
+        let result = project_work_ai_provider_health_from_env(env)
+            .await
+            .expect("provider health");
+
+        assert!(!result.live_provider_available);
+        let glm = result
+            .providers
+            .iter()
+            .find(|provider| provider.provider == "glm")
+            .expect("glm health row");
+        assert!(glm.configured);
+        assert!(glm.probe_attempted);
+        assert!(!glm.live_ok);
+        assert_eq!(glm.health_status, "failed");
+        assert_eq!(glm.http_status, Some(500));
+        assert_eq!(glm.error.as_deref(), Some("HTTP 500 Internal Server Error"));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("glm-chat-completions live health failed")));
+        let request = request_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("captured glm health request");
+        assert!(request.contains("authorization: Bearer mock-glm-key"));
+
+        let serialized = serde_json::to_string(&result).expect("serialize health");
+        assert!(!serialized.contains("mock-glm-key"));
     }
 
     #[tokio::test]

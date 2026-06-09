@@ -126,6 +126,7 @@ import {
   scanPrompts,
   type ProjectWorkLogExtractionItemsOptions,
   type ProjectWorkSummarySnapshotsOptions,
+  updateProjectWorkLogReviewQueueItem,
 } from "./promptVaultApi";
 import {
   MAX_SCAN_LIMIT,
@@ -419,6 +420,8 @@ function App() {
     useState<ProjectWorkLogExtractionCandidatesResult | null>(null);
   const [workLogReviewQueueResult, setWorkLogReviewQueueResult] =
     useState<ProjectWorkLogReviewQueueResult | null>(null);
+  const [workLogReviewQueueUpdatingCandidateId, setWorkLogReviewQueueUpdatingCandidateId] =
+    useState<string | null>(null);
   const [workLogExtractionResult, setWorkLogExtractionResult] =
     useState<ProjectWorkLogExtractionProposalsResult | null>(null);
   const [workLogExtractionItemsResult, setWorkLogExtractionItemsResult] =
@@ -1114,6 +1117,36 @@ function App() {
       setWorkLogCandidatesState((current) => (current === "loading" ? "failed" : current));
       setWorkLogReviewQueueState("failed");
     } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function updateWorkLogReviewQueueItem(
+    candidateId: string,
+    reviewState: "approved" | "rejected",
+  ) {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    const reviewReason = reviewState === "approved"
+      ? "operator_approved_for_backfill"
+      : "operator_rejected_from_backfill";
+    setError(null);
+    setWorkLogReviewQueueState("loading");
+    setWorkLogReviewQueueUpdatingCandidateId(candidateId);
+    try {
+      const nextQueue = await updateProjectWorkLogReviewQueueItem({
+        candidate_id: candidateId,
+        review_state: reviewState,
+        review_reason: reviewReason,
+      });
+      setWorkLogReviewQueueResult(nextQueue);
+      setWorkLogReviewQueueState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogReviewQueueState("failed");
+    } finally {
+      setWorkLogReviewQueueUpdatingCandidateId(null);
       releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
@@ -2833,6 +2866,34 @@ function App() {
                   <div>
                     <strong>{item.project}</strong>
                     <span>{item.source_file}</span>
+                    {item.review_state === "approved" || item.review_state === "rejected" ? null : (
+                      <>
+                        <button
+                          aria-label={`${item.project} 백필큐 후보 승인`}
+                          className="inline-action compact-action"
+                          data-approve-work-log-review-queue={item.candidate_id}
+                          disabled={isTopLevelActionLocked}
+                          onClick={() => void updateWorkLogReviewQueueItem(item.candidate_id, "approved")}
+                          type="button"
+                        >
+                          <CheckCircle2 size={14} />
+                          {workLogReviewQueueUpdatingCandidateId === item.candidate_id
+                            ? "처리 중"
+                            : "승인"}
+                        </button>
+                        <button
+                          aria-label={`${item.project} 백필큐 후보 거절`}
+                          className="inline-action compact-action"
+                          data-reject-work-log-review-queue={item.candidate_id}
+                          disabled={isTopLevelActionLocked}
+                          onClick={() => void updateWorkLogReviewQueueItem(item.candidate_id, "rejected")}
+                          type="button"
+                        >
+                          <XCircle size={14} />
+                          거절
+                        </button>
+                      </>
+                    )}
                   </div>
                   <p className="work-log-candidate-excerpt">{item.excerpt}</p>
                   <span data-work-log-review-queue-state={item.candidate_id}>

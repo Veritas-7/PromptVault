@@ -19,6 +19,7 @@ import {
   planScan,
   scanProgress,
   scanPrompts,
+  updateProjectWorkLogReviewQueueItem,
 } from "../src/promptVaultApi.ts";
 
 function emptyScanStats(overrides = {}) {
@@ -803,6 +804,48 @@ test("browser bridge work log review queue posts sync option and validates persi
   assert.equal(result.risk_blocked_count, 1);
   assert.equal(result.items[0].review_state, "risk_blocked");
   assert.equal(result.items[0].provider_route, "local_review");
+});
+
+test("browser bridge work log review queue update posts review state", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogReviewQueuePayload({
+      pending_ai_review_count: 0,
+      risk_blocked_count: 0,
+      approved_count: 1,
+      items: [
+        {
+          ...projectWorkLogReviewQueuePayload().items[0],
+          review_state: "approved",
+          review_reason: "operator_approved_for_backfill",
+        },
+      ],
+    })), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await updateProjectWorkLogReviewQueueItem({
+    candidate_id: "work-log-CareVault-a1b2c3d4e5",
+    review_state: "approved",
+    review_reason: "operator_approved_for_backfill",
+  });
+
+  assert.match(requestPath, /\/api\/work-log-review-queue\/update$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      candidate_id: "work-log-CareVault-a1b2c3d4e5",
+      review_state: "approved",
+      review_reason: "operator_approved_for_backfill",
+    },
+  });
+  assert.equal(result.approved_count, 1);
+  assert.equal(result.items[0].review_state, "approved");
 });
 
 test("browser bridge work log review queue rejects impossible counters", async (t) => {

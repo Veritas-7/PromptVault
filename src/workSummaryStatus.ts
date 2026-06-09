@@ -317,6 +317,8 @@ export function workLogReviewQueueItemStateText(item: ProjectWorkLogReviewQueueI
 function workLogReviewQueueReasonText(reason: string): string {
   const labels: Record<string, string> = {
     candidate_no_longer_live: "live 후보에서 사라짐",
+    operator_approved_for_backfill: "운영자가 백필 검토 승인",
+    operator_rejected_from_backfill: "운영자가 백필 검토 거절",
     risk_flags_require_local_review: "위험 패턴으로 로컬 검토 필요",
     safe_ai_candidate_ready: "AI provider 전송 가능",
   };

@@ -4,12 +4,13 @@ use promptvault_lib::{
     run_list_project_work_log_extraction_items, run_list_project_work_summary_snapshots,
     run_list_stored_prompt_facets, run_load_stored_prompts, run_project_work_log_coverage,
     run_project_work_log_extraction_candidates, run_project_work_log_extraction_proposals,
-    run_project_work_log_freeze, run_project_work_log_review_queue, run_project_work_report,
-    run_project_work_summary, run_scan, source_specs, CancelScanOptions, ImportBatchOptions,
-    ImportEventsOptions, ImportStatesOptions, ImproveRequest,
-    ProjectWorkLogExtractionCandidatesOptions, ProjectWorkLogExtractionItemsOptions,
-    ProjectWorkLogExtractionProposalsOptions, ProjectWorkLogFreezeOptions,
-    ProjectWorkLogReviewQueueOptions, ProjectWorkReportOptions, ProjectWorkSummaryOptions,
+    run_project_work_log_freeze, run_project_work_log_review_queue,
+    run_project_work_log_review_queue_update, run_project_work_report, run_project_work_summary,
+    run_scan, source_specs, CancelScanOptions, ImportBatchOptions, ImportEventsOptions,
+    ImportStatesOptions, ImproveRequest, ProjectWorkLogExtractionCandidatesOptions,
+    ProjectWorkLogExtractionItemsOptions, ProjectWorkLogExtractionProposalsOptions,
+    ProjectWorkLogFreezeOptions, ProjectWorkLogReviewQueueOptions,
+    ProjectWorkLogReviewQueueUpdateOptions, ProjectWorkReportOptions, ProjectWorkSummaryOptions,
     ProjectWorkSummarySnapshotsOptions, PromptRecord, ScanOptions, ScanPlanOptions,
     ScanProgressOptions, StoredPromptFacetsOptions, StoredPromptsOptions,
 };
@@ -508,6 +509,69 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 println!("- reason: {}", item.review_reason);
                 println!("- source: {} · {}", item.source_file, item.source_path);
                 println!("- excerpt: {}", item.excerpt);
+            }
+        }
+        "work-log-review-queue-update" => {
+            let json = take_flag(&mut args, "--json");
+            let mut limit = None;
+            let mut database_path = None;
+            let mut candidate_id = None;
+            let mut review_state = None;
+            let mut review_reason = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?);
+                    }
+                    "--candidate-id" => {
+                        candidate_id = Some(parse_required_arg(iter.next(), "--candidate-id")?);
+                    }
+                    "--state" => {
+                        review_state = Some(parse_required_arg(iter.next(), "--state")?);
+                    }
+                    "--reason" => {
+                        review_reason = Some(parse_required_arg(iter.next(), "--reason")?);
+                    }
+                    other => {
+                        return Err(format!(
+                            "unknown work-log-review-queue-update argument: {other}"
+                        )
+                        .into())
+                    }
+                }
+            }
+            let result =
+                run_project_work_log_review_queue_update(ProjectWorkLogReviewQueueUpdateOptions {
+                    database_path,
+                    limit,
+                    candidate_id: candidate_id
+                        .ok_or("work-log-review-queue-update requires --candidate-id")?,
+                    review_state: review_state
+                        .ok_or("work-log-review-queue-update requires --state")?,
+                    review_reason,
+                })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+
+            println!("PromptVault project work log review queue update");
+            println!("database: {}", result.database_path);
+            println!("total_items: {}", result.total_items);
+            println!("pending_ai_review: {}", result.pending_ai_review_count);
+            println!("risk_blocked: {}", result.risk_blocked_count);
+            println!("stale: {}", result.stale_count);
+            println!("approved: {}", result.approved_count);
+            println!("rejected: {}", result.rejected_count);
+            for item in &result.items {
+                println!(
+                    "\n{} · {} · {} · {}",
+                    item.candidate_id, item.project, item.review_state, item.review_reason
+                );
             }
         }
         "work-log-extract" => {
@@ -1305,7 +1369,7 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-log-coverage [--json]\n  work-log-candidates [--limit N>0] [--json]\n  work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]\n  work-log-extract [--limit N>0] [--database PATH] [--save] [--ai] [--json]\n  work-log-freeze [--limit N>0] [--database PATH] [--json]\n  work-log-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]\n  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174] [--database PATH]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-log-coverage lists parsed and unparsed project progress logs by project.\n  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n  work-log-review-queue persists current extraction candidates into a review queue and marks disappeared candidates stale.\n  work-log-extract validates AI extraction proposals before they can become dated work items; --save persists accepted dated proposals to SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-log-freeze saves live-only parsed project/date progress-log rows to SQLite without running AI extraction.\n  work-log-items lists saved accepted AI extraction rows by project and date without reading raw progress logs.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  work-summary builds project/date summaries with citation IDs; --include-extractions merges accepted AI work-log proposals into the summary preview; --include-saved-extractions merges stored accepted AI extraction rows without rereading raw progress logs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity.\n  serve --database PATH isolates browser-bridge persistence for full click QA without touching the permanent vault."
+    "PromptVault CLI\n\nCommands:\n  sources [--json]\n  plan [--source ID[,ID...]] [--json]\n  import-batch --source ID [--files N>0] [--reset] [--json]\n  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n  improve [--json] [--local] --prompt TEXT\n  improve [--json] [--local] < prompt.txt\n  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n  work-log-coverage [--json]\n  work-log-candidates [--limit N>0] [--json]\n  work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]\n  work-log-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n  work-log-extract [--limit N>0] [--database PATH] [--save] [--ai] [--json]\n  work-log-freeze [--limit N>0] [--database PATH] [--json]\n  work-log-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]\n  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n  serve [--addr 127.0.0.1:5174] [--database PATH]\n\nRules:\n  plan inventories matching source files without reading prompt bodies.\n  import-batch persists one resumable source slice and updates its DB cursor.\n  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n  --no-persist keeps scan results out of the PromptVault database.\n  work-report reads project progress logs and groups slice work by date and project.\n  work-log-coverage lists parsed and unparsed project progress logs by project.\n  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n  work-log-review-queue persists current extraction candidates into a review queue and marks disappeared candidates stale.\n  work-log-review-queue-update marks one persisted candidate approved or rejected with an audit reason.\n  work-log-extract validates AI extraction proposals before they can become dated work items; --save persists accepted dated proposals to SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-log-freeze saves live-only parsed project/date progress-log rows to SQLite without running AI extraction.\n  work-log-items lists saved accepted AI extraction rows by project and date without reading raw progress logs.\n  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n  work-report session evidence is bounded by --session-limit.\n  work-summary builds project/date summaries with citation IDs; --include-extractions merges accepted AI work-log proposals into the summary preview; --include-saved-extractions merges stored accepted AI extraction rows without rereading raw progress logs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n  --output cannot be combined with --no-export.\n  Use only one preview sort selector: --preview-sort or --weakest-first.\n  repair --count is capped at 10.\n  repair scans are side-effect-free and do not update the PromptVault database.\n  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity.\n  serve --database PATH isolates browser-bridge persistence for full click QA without touching the permanent vault."
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1401,6 +1465,11 @@ struct ProjectWorkLogCandidatesBridgePayload {
 #[derive(serde::Deserialize)]
 struct ProjectWorkLogReviewQueueBridgePayload {
     options: Option<ProjectWorkLogReviewQueueOptions>,
+}
+
+#[derive(serde::Deserialize)]
+struct ProjectWorkLogReviewQueueUpdateBridgePayload {
+    options: ProjectWorkLogReviewQueueUpdateOptions,
 }
 
 #[derive(serde::Deserialize)]
@@ -1671,6 +1740,17 @@ fn handle_bridge_route(
             let result = run_project_work_log_review_queue(options)?;
             write_json_response(stream, 200, &result)
         }
+        ("POST", "/api/work-log-review-queue/update") => {
+            let payload = serde_json::from_str::<ProjectWorkLogReviewQueueUpdateBridgePayload>(
+                &request.body,
+            )?;
+            let mut options = payload.options;
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_project_work_log_review_queue_update(options)?;
+            write_json_response(stream, 200, &result)
+        }
         ("POST", "/api/work-log-extract") => {
             let payload =
                 serde_json::from_str::<ProjectWorkLogExtractionBridgePayload>(&request.body)?;
@@ -1719,6 +1799,7 @@ fn bridge_route_uses_database(method: &str, path: &str) -> bool {
             | ("POST", "/api/work-summary")
             | ("POST", "/api/work-summary-snapshots")
             | ("POST", "/api/work-log-review-queue")
+            | ("POST", "/api/work-log-review-queue/update")
             | ("POST", "/api/work-log-extract")
             | ("POST", "/api/work-log-freeze")
             | ("POST", "/api/work-log-items")
@@ -2015,6 +2096,17 @@ mod tests {
         assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
         assert!(response.contains("work-log review queue limit requires a positive integer"));
         assert!(response.contains("Access-Control-Allow-Origin: *"));
+
+        let update_response = bridge_response_for(
+            "/api/work-log-review-queue/update",
+            r#"{"options":{"candidate_id":"work-log-Test-a1","review_state":"pending_ai_review"}}"#,
+        );
+
+        assert!(update_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(
+            update_response.contains("work-log review queue state must be approved or rejected")
+        );
+        assert!(update_response.contains("Access-Control-Allow-Origin: *"));
     }
 
     #[test]
@@ -2054,6 +2146,7 @@ mod tests {
             "/api/work-summary",
             "/api/work-summary-snapshots",
             "/api/work-log-review-queue",
+            "/api/work-log-review-queue/update",
             "/api/work-log-extract",
             "/api/work-log-freeze",
             "/api/work-log-items",
@@ -2145,6 +2238,8 @@ mod tests {
             "work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]"
         ));
         assert!(help
+            .contains("work-log-review-queue-update --candidate-id ID --state approved|rejected"));
+        assert!(help
             .contains("work-log-extract [--limit N>0] [--database PATH] [--save] [--ai] [--json]"));
         assert!(help.contains("work-log-freeze [--limit N>0] [--database PATH] [--json]"));
         assert!(help.contains(
@@ -2160,6 +2255,7 @@ mod tests {
         assert!(help.contains("work-log-coverage lists parsed and unparsed"));
         assert!(help.contains("work-log-candidates prepares unparsed progress logs"));
         assert!(help.contains("work-log-review-queue persists current extraction candidates"));
+        assert!(help.contains("work-log-review-queue-update marks one persisted candidate"));
         assert!(help.contains("work-log-extract validates AI extraction proposals"));
         assert!(help.contains("--save persists accepted dated proposals to SQLite"));
         assert!(help.contains("work-log-freeze saves live-only parsed project/date"));

@@ -875,6 +875,11 @@ h3 {
   white-space: nowrap;
 }
 
+.compact-action {
+  min-height: 28px;
+  padding: 0 8px;
+}
+
 .session-limit-control {
   align-items: center;
   background: #f7faf5;

@@ -104,6 +104,13 @@ function waitForBridgeHealth(timeoutMs) {
   });
 }
 
+async function waitForEnabled(page, selector, timeout = 120000) {
+  await page.waitForFunction((targetSelector) => {
+    const element = document.querySelector(targetSelector);
+    return Boolean(element && !element.disabled && element.getAttribute("aria-disabled") !== "true");
+  }, selector, { timeout });
+}
+
 async function bridgeJson(page, path, body = {}) {
   return page.evaluate(
     async ({ path, body, bridgePort }) => {
@@ -287,6 +294,7 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     workManagementDurabilityWarning =
       (await page.locator('[data-work-management-durability-warning="true"]').textContent())?.trim() ?? "";
+    await waitForEnabled(page, '[data-work-management-sort="true"]');
     await page.locator('[data-work-management-sort="true"]').selectOption("missing_confidence_first");
     await page.waitForFunction(() => {
       const rows = [...document.querySelectorAll('[data-work-management-overview="true"] article')];
@@ -294,6 +302,7 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     workManagementMissingConfidenceRows =
       await page.locator('[data-work-management-overview="true"] article').allTextContents();
+    await waitForEnabled(page, '[data-freeze-work-management-live-rows="true"]');
     await page.locator('[data-freeze-work-management-live-rows="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-extraction-persistence="true"]')?.textContent ?? "";
@@ -311,8 +320,11 @@ async function runBrowserQa() {
       (await page.locator('[data-work-log-extraction-persistence="true"]').textContent())?.trim() ?? "";
     workManagementMetaAfterFreeze =
       (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
+    await waitForEnabled(page, '[data-work-management-project-filter="true"]');
     await page.locator('[data-work-management-project-filter="true"]').fill("notebooklm-llm-wiki-flow");
+    await waitForEnabled(page, '[data-work-management-source-filter="true"]');
     await page.locator('[data-work-management-source-filter="true"]').selectOption("saved_extraction");
+    await waitForEnabled(page, '[data-work-management-min-confidence-filter="true"]');
     await page.locator('[data-work-management-min-confidence-filter="true"]').fill("0.99");
     await page.locator('[data-apply-work-management-filters="true"]').click();
     await page.waitForFunction(() => {

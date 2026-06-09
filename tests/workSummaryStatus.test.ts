@@ -635,6 +635,20 @@ test("work log review queue labels describe persisted candidate state", () => {
     })),
     "위험 차단 · 위험 패턴으로 로컬 검토 필요",
   );
+  assert.equal(
+    workLogReviewQueueItemStateText(reviewQueueItem({
+      review_state: "approved",
+      review_reason: "operator_approved_for_backfill",
+    })),
+    "승인됨 · 운영자가 백필 검토 승인",
+  );
+  assert.equal(
+    workLogReviewQueueItemStateText(reviewQueueItem({
+      review_state: "rejected",
+      review_reason: "operator_rejected_from_backfill",
+    })),
+    "거절됨 · 운영자가 백필 검토 거절",
+  );
 });
 
 test("work log extraction labels describe accepted and rejected AI proposals", () => {

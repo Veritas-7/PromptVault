@@ -1,10 +1,128 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 12:08 KST
+Updated: 2026-06-09 12:25 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 review queue approve/reject mutation
+
+Current Goal:
+
+- Let operators mark persisted work-log review queue rows `approved` or
+  `rejected` from backend, CLI, browser bridge, and UI.
+- Keep decisions auditable with review reasons before any AI provider backfill
+  step runs.
+- Clarify the current completion level: project/day/session coverage is live
+  and verified against real logs; approved queue rows are not yet routed into
+  OpenAI/GLM/Codex SDK extraction.
+
+Context:
+
+- The app already parses session/work-log evidence into project/day/task
+  management views and exposes coverage numbers from real local files.
+- Project-local progress logs are part of the coverage scan, including
+  `working.md` and `workingd.md` style files. The latest live CLI check saw
+  `CareVault/workingd.md` as a pointer log and parsed
+  `enterprise_diagnosis_flutter/workingd.md` with `154` work items.
+- Live production coverage currently has no unparsed work-log candidates, so
+  the review queue is empty in the real DB. Non-empty approve/reject behavior
+  is verified with Rust fixtures, bridge/API tests, and a temporary SQLite DB.
+- The next meaningful slice is to take `approved` queue rows and run provider
+  extraction/backfill through a controlled SDK route, likely OpenAI/GLM first,
+  with local audit state preserved.
+
+Progress:
+
+- Added persisted review queue mutation support:
+  - `approved` marks a row as operator-approved for AI backfill;
+  - `rejected` marks a row as operator-rejected and keeps it out of provider
+    extraction;
+  - missing candidate IDs, blank candidate IDs, invalid states, and invalid
+    limits fail closed.
+- Added `work-log-review-queue-update` CLI command with JSON and human output.
+- Added browser bridge route `POST /api/work-log-review-queue/update`, protected
+  by the same DB serialization lock as the queue reader.
+- Added Tauri command `project_work_log_review_queue_update`.
+- Added UI row-level approve/reject controls for non-final queue rows and
+  Korean status/reason labels.
+- Added browser-bridge QA waits around work-management controls after the first
+  isolated QA run exposed a real timing issue: a sort select could still be
+  disabled while a top-level action was finishing.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added queue update options, Tauri command, validation, DB update helper,
+    default audit reasons, and Rust coverage for safe approval plus stale risk
+    rejection.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added CLI parser, bridge payload, bridge route, help text, invalid-state
+    test, and DB-lock coverage.
+- `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`, `src/App.tsx`,
+  `src/App.css`:
+  - added API call, reason labels, approve/reject row actions, pending action
+    lock state, and compact action styling.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`:
+  - added bridge update request/response coverage and approved/rejected copy
+    coverage.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added `waitForEnabled` and stabilized work-management/filter actions.
+
+Tests:
+
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS after running
+  `cargo fmt`.
+- `cargo check --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml project_work_log_review_queue -- --nocapture`: PASS.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`: PASS, `185` tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`: PASS, `25` tests.
+- `npm run build`: PASS.
+- `npm run test:ui`: PASS, `440` tests.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS
+  after adding enabled-state waits. Final browser QA showed:
+  - `workManagementMeta`: `관리 91개 · 31개 프로젝트 · 25일`;
+  - `coverageMeta`: `796개 로그 · parsed 795개 · unparsed 0개 · 31개 프로젝트 · 작업 8,629개`;
+  - `workLogCandidatesMeta`: `백필큐 비어 있음 · 이유 unparsed 없음 · pending 0개 · AI 전송가능 0개 · 위험차단 0개`;
+  - `workLogReviewQueueMeta`: `큐 저장 0개 · 표시 0개 · 동기화 0개 · stale 전환 0개 · AI 대기 0개 · 위험차단 0개 · stale 0개 · 승인 0개 · 거절 0개`.
+- Live CLI coverage:
+  - `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-coverage --json`: PASS.
+  - Latest counts: `files_seen=797`, `parsed_file_count=796`,
+    `unparsed_file_count=0`, `project_count=31`, `work_item_count=8630`,
+    warnings `[]`.
+- Live CLI queue:
+  - `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-review-queue --sync-candidates --json`: PASS.
+  - Latest counts: `synced_candidate_count=0`, `stale_candidate_count=0`,
+    `total_items=0`, all queue states `0`, warnings `[]`.
+- Temporary SQLite CLI approve path:
+  - Initialized a temp DB, inserted a fixture review row, then ran
+    `work-log-review-queue-update --candidate-id work-log-QA-a1 --state approved --json`.
+  - PASS: `approved_count=1`, row state `approved`, reason
+    `operator_approved_for_backfill`, route `ai_provider`, warnings `[]`.
+
+Issues:
+
+- The live queue is empty because the current real log corpus has
+  `unparsed_file_count=0`; current production UI has no live row to click for
+  approve/reject. The non-empty decision path is covered by tests and a temp DB
+  CLI proof.
+- Approved queue rows are not yet connected to actual OpenAI/GLM/Codex SDK
+  extraction/backfill. That is the next feature slice, not part of this
+  commit.
+- Coverage numbers can drift during long sessions because `working.md` and
+  other progress logs are live files and are included in the scan.
+
+Next Steps:
+
+- Add an `approved_review_queue_only` provider extraction route that reads only
+  approved persisted queue rows, sends them through the configured AI SDK, and
+  records provider/model/prompt/result/audit status in SQLite.
+- Add UI action such as `승인된 큐로 AI 제안 생성` with explicit provider status,
+  error handling, and dry-run/report-only mode.
+- Add fixture coverage for project-local `workingd.md` parsing so the
+  project/day/task requirement remains locked even when live corpus contents
+  change.
 
 ## Current Slice - 2026-06-09 persisted AI backfill review queue
 

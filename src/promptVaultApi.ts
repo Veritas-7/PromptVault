@@ -113,6 +113,14 @@ export interface ProjectWorkLogReviewQueueOptions {
   sync_candidates?: boolean;
 }
 
+export interface ProjectWorkLogReviewQueueUpdateOptions {
+  database_path?: string;
+  limit?: number;
+  candidate_id: string;
+  review_state: "approved" | "rejected";
+  review_reason?: string;
+}
+
 export interface ProjectWorkLogExtractionOptions {
   limit?: number;
   ai?: boolean;
@@ -268,6 +276,19 @@ export async function loadProjectWorkLogReviewQueue(
   }
   return postBridge<ProjectWorkLogReviewQueueResult>(
     "/api/work-log-review-queue",
+    { options },
+    parseProjectWorkLogReviewQueueResult,
+  );
+}
+
+export async function updateProjectWorkLogReviewQueueItem(
+  options: ProjectWorkLogReviewQueueUpdateOptions,
+): Promise<ProjectWorkLogReviewQueueResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkLogReviewQueueResult>("project_work_log_review_queue_update", { options });
+  }
+  return postBridge<ProjectWorkLogReviewQueueResult>(
+    "/api/work-log-review-queue/update",
     { options },
     parseProjectWorkLogReviewQueueResult,
   );

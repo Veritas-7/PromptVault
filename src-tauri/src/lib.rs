@@ -207,6 +207,15 @@ pub struct ProjectWorkLogReviewQueueOptions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkLogReviewQueueUpdateOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub candidate_id: String,
+    pub review_state: String,
+    pub review_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkLogExtractionProposalsOptions {
     pub limit: Option<usize>,
     pub ai: Option<bool>,
@@ -866,6 +875,13 @@ fn project_work_log_review_queue(
 }
 
 #[tauri::command]
+fn project_work_log_review_queue_update(
+    options: ProjectWorkLogReviewQueueUpdateOptions,
+) -> Result<ProjectWorkLogReviewQueueResult, String> {
+    run_project_work_log_review_queue_update(options).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
 async fn project_work_log_extract(
     options: Option<ProjectWorkLogExtractionProposalsOptions>,
 ) -> Result<ProjectWorkLogExtractionProposalsResult, String> {
@@ -1394,6 +1410,62 @@ pub fn run_project_work_log_review_queue(
         rejected_count: rows.rejected_count,
         items: rows.items,
         warnings,
+    })
+}
+
+pub fn run_project_work_log_review_queue_update(
+    options: ProjectWorkLogReviewQueueUpdateOptions,
+) -> Result<ProjectWorkLogReviewQueueResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("database path requires a non-empty value".into());
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-log review queue limit requires a positive integer".into());
+    }
+    let candidate_id = options.candidate_id.trim();
+    if candidate_id.is_empty() {
+        return Err("work-log review queue candidate id requires a non-empty value".into());
+    }
+    let (review_state, default_reason) =
+        normalized_project_work_log_review_queue_update_state(&options.review_state)?;
+    let review_reason = normalized_optional_filter(
+        options.review_reason.as_deref(),
+        "work-log review queue reason requires a non-empty value",
+    )?
+    .unwrap_or_else(|| default_reason.to_string());
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_LOG_REVIEW_QUEUE_LIMIT)
+        .min(MAX_PROJECT_WORK_LOG_REVIEW_QUEUE_LIMIT);
+    let conn = open_promptvault_database(&database_path)?;
+    update_project_work_log_review_queue_state(
+        &conn,
+        candidate_id,
+        review_state,
+        &review_reason,
+        &generated_at,
+    )?;
+    let rows = read_project_work_log_review_queue(&conn, limit)?;
+    Ok(ProjectWorkLogReviewQueueResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        synced_candidate_count: 0,
+        stale_candidate_count: 0,
+        total_items: rows.total_items,
+        returned_item_count: rows.items.len(),
+        pending_ai_review_count: rows.pending_ai_review_count,
+        risk_blocked_count: rows.risk_blocked_count,
+        stale_count: rows.stale_count,
+        approved_count: rows.approved_count,
+        rejected_count: rows.rejected_count,
+        items: rows.items,
+        warnings: Vec::new(),
     })
 }
 
@@ -7388,6 +7460,35 @@ fn project_work_log_review_queue_defaults(
     }
 }
 
+fn normalized_project_work_log_review_queue_update_state(
+    review_state: &str,
+) -> Result<(&'static str, &'static str), Box<dyn std::error::Error>> {
+    match review_state.trim() {
+        "approved" => Ok(("approved", "operator_approved_for_backfill")),
+        "rejected" => Ok(("rejected", "operator_rejected_from_backfill")),
+        _ => Err("work-log review queue state must be approved or rejected".into()),
+    }
+}
+
+fn update_project_work_log_review_queue_state(
+    conn: &Connection,
+    candidate_id: &str,
+    review_state: &str,
+    review_reason: &str,
+    updated_at: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let changed = conn.execute(
+        "UPDATE project_work_log_review_queue
+         SET review_state=?2, review_reason=?3, last_seen_at=?4
+         WHERE candidate_id=?1",
+        params![candidate_id, review_state, review_reason, updated_at],
+    )?;
+    if changed == 0 {
+        return Err("work-log review queue candidate not found".into());
+    }
+    Ok(())
+}
+
 struct ProjectWorkLogReviewQueueRows {
     total_items: usize,
     pending_ai_review_count: usize,
@@ -9028,6 +9129,7 @@ pub fn run() {
             project_work_log_coverage,
             project_work_log_candidates,
             project_work_log_review_queue,
+            project_work_log_review_queue_update,
             project_work_log_extract,
             project_work_log_freeze,
             project_work_log_items
@@ -12713,19 +12815,57 @@ Progress:
         assert_eq!(rows.items[1].review_state, "risk_blocked");
         assert_eq!(rows.items[1].provider_route, "local_review");
 
+        update_project_work_log_review_queue_state(
+            &conn,
+            "work-log-Safe-a1b2c3d4e5",
+            "approved",
+            "operator_approved_for_backfill",
+            "2026-06-09T00:30:00Z",
+        )
+        .expect("approve safe queue row");
+        let rows = read_project_work_log_review_queue(&conn, 10).expect("read updated queue");
+        assert_eq!(rows.pending_ai_review_count, 0);
+        assert_eq!(rows.risk_blocked_count, 1);
+        assert_eq!(rows.approved_count, 1);
+        assert_eq!(rows.rejected_count, 0);
+        assert!(rows.items.iter().any(|item| {
+            item.candidate_id == "work-log-Safe-a1b2c3d4e5"
+                && item.review_state == "approved"
+                && item.review_reason == "operator_approved_for_backfill"
+        }));
+
         let stale_count =
             sync_project_work_log_review_queue(&mut conn, &[safe], "2026-06-09T01:00:00Z")
                 .expect("sync queue again");
         assert_eq!(stale_count, 1);
         let rows = read_project_work_log_review_queue(&conn, 10).expect("read queue again");
         assert_eq!(rows.total_items, 2);
-        assert_eq!(rows.pending_ai_review_count, 1);
+        assert_eq!(rows.pending_ai_review_count, 0);
         assert_eq!(rows.risk_blocked_count, 0);
         assert_eq!(rows.stale_count, 1);
+        assert_eq!(rows.approved_count, 1);
+        assert_eq!(rows.rejected_count, 0);
         assert!(rows.items.iter().any(|item| {
             item.candidate_id == "work-log-Risky-a1b2c3d4e5"
                 && item.review_state == "stale"
                 && item.review_reason == "candidate_no_longer_live"
+        }));
+
+        update_project_work_log_review_queue_state(
+            &conn,
+            "work-log-Risky-a1b2c3d4e5",
+            "rejected",
+            "risk_flags_require_manual_followup",
+            "2026-06-09T01:30:00Z",
+        )
+        .expect("reject stale risky queue row");
+        let rows = read_project_work_log_review_queue(&conn, 10).expect("read rejected queue");
+        assert_eq!(rows.stale_count, 0);
+        assert_eq!(rows.rejected_count, 1);
+        assert!(rows.items.iter().any(|item| {
+            item.candidate_id == "work-log-Risky-a1b2c3d4e5"
+                && item.review_state == "rejected"
+                && item.review_reason == "risk_flags_require_manual_followup"
         }));
     }
 

@@ -86,7 +86,8 @@ const DEFAULT_PROJECT_WORK_LOG_NORMALIZED_ITEM_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_LOG_NORMALIZED_ITEM_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 200;
 const MAX_PROJECT_WORK_LOG_FREEZE_LIMIT: usize = 1_000;
-const PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS: u64 = 12;
+const DEFAULT_AI_HTTP_PROVIDER_TIMEOUT_SECONDS: u64 = 12;
+const MAX_AI_HTTP_PROVIDER_TIMEOUT_SECONDS: u64 = 120;
 const DEFAULT_STORED_PROMPT_LIMIT: usize = 200;
 const MAX_STORED_PROMPT_LIMIT: usize = 1_000;
 const DEFAULT_STORED_FACET_LIMIT: usize = 50;
@@ -4147,7 +4148,7 @@ async fn request_openai_improvement(
         }
     });
 
-    let client = project_work_log_extraction_http_client("OpenAI")?;
+    let client = project_work_log_extraction_http_client("OpenAI", env)?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -4202,7 +4203,7 @@ async fn request_glm_improvement(
         "response_format": { "type": "json_object" }
     });
 
-    let client = project_work_log_extraction_http_client("GLM")?;
+    let client = project_work_log_extraction_http_client("GLM", env)?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -5896,7 +5897,7 @@ async fn request_openai_project_work_log_extraction(
         }
     });
 
-    let client = project_work_log_extraction_http_client("OpenAI")?;
+    let client = project_work_log_extraction_http_client("OpenAI", env)?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -5964,7 +5965,7 @@ async fn request_glm_project_work_log_extraction(
         "response_format": { "type": "json_object" }
     });
 
-    let client = project_work_log_extraction_http_client("GLM")?;
+    let client = project_work_log_extraction_http_client("GLM", env)?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -6099,11 +6100,13 @@ fn project_work_log_extraction_messages(
     (system, truncate_chars(&user, 24_000))
 }
 
-fn project_work_log_extraction_http_client(provider: &str) -> Result<reqwest::Client, String> {
+fn project_work_log_extraction_http_client(
+    provider: &str,
+    env: &HashMap<String, String>,
+) -> Result<reqwest::Client, String> {
+    let timeout_seconds = ai_http_provider_timeout_seconds(env);
     reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(
-            PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS,
-        ))
+        .timeout(std::time::Duration::from_secs(timeout_seconds))
         .build()
         .map_err(|err| {
             format!(
@@ -8662,7 +8665,7 @@ async fn request_openai_project_work_session_evidence_proposals(
         }
     });
 
-    let client = project_work_log_extraction_http_client("OpenAI")?;
+    let client = project_work_log_extraction_http_client("OpenAI", env)?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -8787,7 +8790,7 @@ async fn request_glm_project_work_session_evidence_proposals(
         "response_format": { "type": "json_object" }
     });
 
-    let client = project_work_log_extraction_http_client("GLM")?;
+    let client = project_work_log_extraction_http_client("GLM", env)?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -13100,7 +13103,7 @@ async fn request_openai_project_work_log_normalization(
         }
     });
 
-    let client = project_work_log_extraction_http_client("OpenAI")?;
+    let client = project_work_log_extraction_http_client("OpenAI", env)?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -13221,7 +13224,7 @@ async fn request_glm_project_work_log_normalization(
         "response_format": { "type": "json_object" }
     });
 
-    let client = project_work_log_extraction_http_client("GLM")?;
+    let client = project_work_log_extraction_http_client("GLM", env)?;
     let response = client
         .post(endpoint)
         .bearer_auth(api_key)
@@ -15304,6 +15307,7 @@ fn load_improve_env() -> HashMap<String, String> {
         "CODEX_HOME",
         "CODEX_MODEL",
         "CODEX_PROFILE",
+        "PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS",
         "PROMPTVAULT_CODEX_WORK_PROVIDER",
         "PROMPTVAULT_CODEX_TIMEOUT_SECONDS",
     ] {
@@ -15345,6 +15349,7 @@ fn project_work_ai_provider_status_from_env(
             .cloned()
             .unwrap_or_else(|| DEFAULT_GLM_CHAT_ENDPOINT.to_string()),
     );
+    let ai_http_timeout_seconds = ai_http_provider_timeout_seconds(&env);
     let external_provider_available = openai_configured || glm_configured;
     let mut warnings = Vec::new();
     if !external_provider_available {
@@ -15383,7 +15388,7 @@ fn project_work_ai_provider_status_from_env(
                 capabilities: provider_work_management_capabilities(openai_configured),
                 model: Some(openai_model_from_env(&env)),
                 endpoint: Some(openai_endpoint),
-                timeout_seconds: Some(PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS),
+                timeout_seconds: Some(ai_http_timeout_seconds),
                 notes: if openai_configured {
                     vec![
                         "work-log extraction, normalization, summaries, and session-evidence proposals can attempt OpenAI first.".to_string(),
@@ -15401,7 +15406,7 @@ fn project_work_ai_provider_status_from_env(
                 capabilities: provider_work_management_capabilities(glm_configured),
                 model: Some(glm_model_from_env(&env)),
                 endpoint: Some(glm_endpoint),
-                timeout_seconds: Some(PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS),
+                timeout_seconds: Some(ai_http_timeout_seconds),
                 notes: if glm_configured {
                     vec![
                         "work-log extraction, normalization, summaries, and session-evidence proposals can attempt GLM after OpenAI.".to_string(),
@@ -15501,7 +15506,7 @@ async fn probe_openai_project_work_ai_provider_health(
             .cloned()
             .unwrap_or_else(|| DEFAULT_OPENAI_RESPONSES_ENDPOINT.to_string()),
     );
-    let timeout_seconds = PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS;
+    let timeout_seconds = ai_http_provider_timeout_seconds(env);
     let api_key = match openai_api_key_from_env(env) {
         Some(value) => value,
         None => {
@@ -15549,7 +15554,7 @@ async fn probe_openai_project_work_ai_provider_health(
         }
     });
     let started_at = std::time::Instant::now();
-    let client = match provider_health_http_client("OpenAI") {
+    let client = match provider_health_http_client("OpenAI", timeout_seconds) {
         Ok(value) => value,
         Err(err) => {
             return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
@@ -15653,7 +15658,7 @@ async fn probe_glm_project_work_ai_provider_health(
             .cloned()
             .unwrap_or_else(|| DEFAULT_GLM_CHAT_ENDPOINT.to_string()),
     );
-    let timeout_seconds = PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS;
+    let timeout_seconds = ai_http_provider_timeout_seconds(env);
     let api_key = match glm_api_key_from_env(env) {
         Some(value) => value,
         None => {
@@ -15686,7 +15691,7 @@ async fn probe_glm_project_work_ai_provider_health(
         "response_format": { "type": "json_object" }
     });
     let started_at = std::time::Instant::now();
-    let client = match provider_health_http_client("GLM") {
+    let client = match provider_health_http_client("GLM", timeout_seconds) {
         Ok(value) => value,
         Err(err) => {
             return project_work_ai_provider_health_row(ProjectWorkAiProviderHealthRow {
@@ -15899,11 +15904,12 @@ fn project_work_ai_provider_health_row(
     }
 }
 
-fn provider_health_http_client(provider: &str) -> Result<reqwest::Client, String> {
+fn provider_health_http_client(
+    provider: &str,
+    timeout_seconds: u64,
+) -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .timeout(Duration::from_secs(
-            PROJECT_WORK_LOG_EXTRACTION_PROVIDER_TIMEOUT_SECONDS,
-        ))
+        .timeout(Duration::from_secs(timeout_seconds))
         .build()
         .map_err(|err| format!("{provider} provider health HTTP client 생성 실패: {err}"))
 }
@@ -15964,6 +15970,13 @@ fn codex_work_provider_enabled(env: &HashMap<String, String>) -> bool {
             )
         })
         .unwrap_or(false)
+}
+
+fn ai_http_provider_timeout_seconds(env: &HashMap<String, String>) -> u64 {
+    non_empty_env_value(env, "PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS")
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|seconds| (1..=MAX_AI_HTTP_PROVIDER_TIMEOUT_SECONDS).contains(seconds))
+        .unwrap_or(DEFAULT_AI_HTTP_PROVIDER_TIMEOUT_SECONDS)
 }
 
 fn codex_work_provider_timeout_seconds(env: &HashMap<String, String>) -> u64 {
@@ -16384,6 +16397,39 @@ mod tests {
     }
 
     #[test]
+    fn ai_http_provider_timeout_seconds_is_bounded_and_overrideable() {
+        assert_eq!(
+            ai_http_provider_timeout_seconds(&HashMap::new()),
+            DEFAULT_AI_HTTP_PROVIDER_TIMEOUT_SECONDS
+        );
+
+        let mut env = HashMap::new();
+        env.insert(
+            "PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS".to_string(),
+            "30".to_string(),
+        );
+        assert_eq!(ai_http_provider_timeout_seconds(&env), 30);
+
+        env.insert(
+            "PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS".to_string(),
+            "0".to_string(),
+        );
+        assert_eq!(
+            ai_http_provider_timeout_seconds(&env),
+            DEFAULT_AI_HTTP_PROVIDER_TIMEOUT_SECONDS
+        );
+
+        env.insert(
+            "PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS".to_string(),
+            (MAX_AI_HTTP_PROVIDER_TIMEOUT_SECONDS + 1).to_string(),
+        );
+        assert_eq!(
+            ai_http_provider_timeout_seconds(&env),
+            DEFAULT_AI_HTTP_PROVIDER_TIMEOUT_SECONDS
+        );
+    }
+
+    #[test]
     fn project_work_ai_provider_status_reports_configured_providers_without_secrets() {
         let mut env = HashMap::new();
         env.insert("OPENAI_API_KEY".to_string(), "openai-secret".to_string());
@@ -16397,6 +16443,10 @@ mod tests {
         env.insert(
             "GLM_CODING_ENDPOINT".to_string(),
             "https://open.bigmodel.cn/api/paas/v4".to_string(),
+        );
+        env.insert(
+            "PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS".to_string(),
+            "30".to_string(),
         );
 
         let result = project_work_ai_provider_status_from_env(env);
@@ -16424,6 +16474,7 @@ mod tests {
             openai.endpoint.as_deref(),
             Some("https://api.openai.com/v1/responses")
         );
+        assert_eq!(openai.timeout_seconds, Some(30));
         let glm = result
             .providers
             .iter()
@@ -16445,6 +16496,7 @@ mod tests {
             glm.endpoint.as_deref(),
             Some("https://open.bigmodel.cn/api/paas/v4/chat/completions")
         );
+        assert_eq!(glm.timeout_seconds, Some(30));
         let serialized = serde_json::to_string(&result).expect("serialize status");
         assert!(!serialized.contains("openai-secret"));
         assert!(!serialized.contains("glm-secret"));
@@ -16588,6 +16640,10 @@ mod tests {
         env.insert("GLM_API_KEY".to_string(), "mock-glm-key".to_string());
         env.insert("GLM_CODING_MODEL".to_string(), "mock-glm-model".to_string());
         env.insert("GLM_CODING_ENDPOINT".to_string(), glm_base_url);
+        env.insert(
+            "PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS".to_string(),
+            "30".to_string(),
+        );
 
         let result = project_work_ai_provider_health_from_env(env)
             .await
@@ -16605,6 +16661,7 @@ mod tests {
         assert_eq!(openai.health_status, "ok");
         assert_eq!(openai.http_status, Some(200));
         assert_eq!(openai.model.as_deref(), Some("mock-openai-model"));
+        assert_eq!(openai.timeout_seconds, Some(30));
         let glm = result
             .providers
             .iter()
@@ -16615,6 +16672,7 @@ mod tests {
         assert!(glm.live_ok);
         assert_eq!(glm.health_status, "ok");
         assert_eq!(glm.http_status, Some(200));
+        assert_eq!(glm.timeout_seconds, Some(30));
         let codex = result
             .providers
             .iter()

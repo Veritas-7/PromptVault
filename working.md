@@ -1,10 +1,82 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 08:35 KST
+Updated: 2026-06-10 08:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Bounded AI HTTP timeout override
+
+Current Goal:
+
+- Reduce GLM timeout fragility without making provider calls unbounded, so
+  project/day normalization and session-evidence proposal work can be retried
+  through AI when the provider is slow but healthy.
+
+Context:
+
+- Default OpenAI/GLM HTTP timeout remains 12 seconds.
+- The last live-health slice showed GLM sometimes succeeds around 9-11 seconds
+  and sometimes times out at 12 seconds. A bounded override is safer than
+  raising the default for every user.
+- Codex still uses its separate `PROMPTVAULT_CODEX_TIMEOUT_SECONDS` and remains
+  disabled unless `PROMPTVAULT_CODEX_WORK_PROVIDER=1` is set.
+
+Progress:
+
+- Added `PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS` for OpenAI/GLM HTTP provider
+  routes, bounded to `1..=120` seconds.
+- Routed prompt improvement, work-log extraction, session-evidence proposals,
+  work summary, work-log normalization, provider status, and provider health
+  through the same timeout helper.
+- Added a unit test proving default, valid override, zero, and above-max values.
+- Updated provider status/health tests so the exposed `timeout_seconds` follows
+  the override.
+- Documented the new environment variable in README.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: replaces the fixed 12-second provider constant with
+  bounded `PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS` parsing, wires all OpenAI/GLM
+  HTTP client creation through it, adds status/health exposure, and extends
+  tests.
+- `README.md`: documents the OpenAI/GLM HTTP timeout override and bounds.
+
+Tests:
+
+- PASS: `cargo fmt --manifest-path src-tauri/Cargo.toml`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml ai_http_provider_timeout_seconds --lib`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_ai_provider --lib`.
+- PASS/OBSERVED: `PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS=30 cargo run --manifest-path src-tauri/Cargo.toml --quiet --bin promptvault-cli -- work-ai-provider-status --json`.
+- PASS/OBSERVED: `PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS=30 cargo run --manifest-path src-tauri/Cargo.toml --quiet --bin promptvault-cli -- work-ai-provider-health --json`.
+- PASS/OBSERVED: `PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS=30 cargo run --manifest-path src-tauri/Cargo.toml --quiet --bin promptvault-cli -- work-log-normalization-proposals --needs-title-normalization --limit 1 --ai --json`.
+- PASS: `npm run check` (`503` UI tests, `218` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- With `PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS=30`, provider status reported
+  OpenAI/GLM `timeout_seconds: 30` while Codex stayed at its separate 90-second
+  opt-in timeout.
+- With the same override, GLM live health passed with HTTP 200 after `15620ms`.
+- With the same override, a persistent title-normalization proposal switched
+  from local fallback to `provider: glm`, `used_ai: true`, `accepted_count: 1`,
+  `confidence: 0.82`.
+- Isolated browser bridge QA still passed on the default 12-second behavior and
+  verified provider status/live-health UI rows, work-log normalization,
+  review queues, approved `workingd.md` queue save, extraction run history, and
+  saved work-log items against temporary DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-nV4lBZ/qa.sqlite`.
+
+Remaining:
+
+- Run diff/secret checks, stage only explicit changed paths, then commit and
+  push.
+- Next useful slice is a safe operator flow for applying accepted AI
+  normalization/session-evidence proposals in batches; keep durable writes
+  review-gated.
 
 ## Completed Slice - 2026-06-10 Provider live health probe
 

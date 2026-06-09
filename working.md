@@ -1,10 +1,141 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 00:04 KST
+Updated: 2026-06-10 00:19 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 source artifact role classification
+
+Current Goal:
+
+- Make project/day management distinguish which project-local work artifacts
+  produced each row, not just list raw filenames.
+- Classify source files such as `working.md`, `workingd.md`,
+  `WORKING_LOG.md`, `PROJECT_STATUS.md`, progress logs, generated reports, and
+  dated work-log files.
+- Expose the role summary through status export, session-evidence candidates,
+  and the persisted session-evidence review queue without changing the queue DB
+  schema.
+
+Context:
+
+- The operator asked whether project-local `workingd.md` and other working
+  logs are being understood and managed per project/day.
+- Existing rows already preserved `source_files` and `latest_source_file`, but
+  that forced the operator to infer whether a file was canonical handoff state,
+  a generated report, or a project status document.
+- This slice keeps the data source-traced and deterministic. It does not add AI
+  proposal generation or durable session-evidence apply yet.
+
+Progress:
+
+- Added backend source artifact role classification.
+- Added structured fields:
+  - `source_file_roles`;
+  - `latest_source_role`.
+- The fields are now present on:
+  - `ProjectWorkStatusExportRow`;
+  - `ProjectWorkSessionEvidenceCandidate`;
+  - `ProjectWorkSessionEvidenceReviewQueueItem`.
+- Existing review queue rows compute roles at read time from stored
+  `source_files_json`; no SQLite migration is required.
+- App UI now displays source role summaries in status export row details and in
+  session-evidence review queue rows.
+- Browser bridge QA fixture now requires role text in status-export details and
+  session-evidence review queue UI rows.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added `project_work_source_file_role` and role aggregation helpers;
+  - added role fields to status export rows, session-evidence candidates, and
+    review queue items;
+  - added role summaries to status-export Markdown output;
+  - added Rust tests for role classification.
+- `src/types.ts` and `src/promptVaultApi.ts`:
+  - added TypeScript role fields and strict bridge validation.
+- `src/workSummaryStatus.ts`:
+  - added Korean role labels and UI helper text.
+- `src/App.tsx`:
+  - displays role summaries in status export detail rows and session-evidence
+    review queue rows.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`:
+  - added fixture fields and helper assertions.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added role fields to mocked status export fixture;
+  - checks role text in direct UI flows.
+- `README.md` and `docs/CLI.md`:
+  - documented source artifact role classification in project/day management.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`:
+  PASS, `222` tests.
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `npm run build`: PASS.
+- First `cargo fmt --check`: FAIL, formatting diff only.
+- `cargo fmt`: applied.
+- Second `cargo fmt --check`: PASS.
+- `cargo test project_work_source_file_roles_classify_progress_artifacts`:
+  PASS.
+- `cargo test session_evidence_candidates_keep_only_full_index_unresolved_rows`:
+  PASS.
+- `cargo test project_work_session_evidence_review_queue_syncs_and_preserves_operator_state`:
+  PASS.
+- Live DB check:
+  `cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 3 --json`:
+  PASS.
+  - Current full stored session index: `10867 / 10867`.
+  - Current unresolved full-index candidates: `43`.
+  - Sample roles:
+    - `CareVault/working.md`: `handoff-log`;
+    - `NuancedNarrator/docs/WORKING_LOG.md`: `work-log`;
+    - `PromptVault/working.md`: `handoff-log`.
+- Live DB queue read:
+  `cargo run --bin promptvault-cli -- work-session-evidence-review-queue --limit 3 --json`:
+  PASS.
+  - Existing queued rows now expose computed role fields.
+  - Example: `novel-source-collector/PROJECT_STATUS.md` classified as
+    `project-status`.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  - `workStatusExportRowDetail` included
+    `로그 유형 · 핸드오프 로그 1개 · 최근 핸드오프 로그`.
+  - `workStatusExportUnresolvedFixtureRowDetail` included the same role line
+    and `전체 인덱스에서도 미해결`.
+  - `workSessionEvidenceCandidateRows` included role values such as
+    `working.md · handoff-log`.
+  - `workSessionEvidenceReviewQueueUiRows` included
+    `로그 유형 · 핸드오프 로그 1개 · 최근 핸드오프 로그` and
+    `로그 유형 · 프로젝트 상태 1개 · 최근 프로젝트 상태`.
+  - UI approval still persisted as:
+    `approved · operator_approved_session_evidence`.
+- `npm run check`: PASS.
+  - UI tests: `481` passed.
+  - Production build: PASS.
+  - Rust lib tests: `203` passed.
+  - CLI tests: `33` passed.
+  - doc-tests: PASS.
+  - clippy with `-D warnings`: PASS.
+
+Issues:
+
+- This improves project-local artifact understanding and UI visibility, but it
+  still does not generate AI/Codex/GLM repair proposals or durable session
+  evidence records.
+- The live candidate count moved from earlier `36` to `43` because new
+  project-local work logs have been parsed since the previous slice.
+
+Research:
+
+- No external research was required. The slice uses deterministic source-path
+  classification and existing review queue contracts.
+
+Next Steps:
+
+- Then add AI-assisted session-evidence proposal generation with explicit
+  source trace, confidence, and operator approval gates.
 
 ## Completed Slice - 2026-06-10 session evidence review queue UI
 

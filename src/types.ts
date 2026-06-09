@@ -219,10 +219,12 @@ export interface ProjectWorkStatusExportRow {
   work_item_count: number;
   source_file_count: number;
   source_files: string[];
+  source_file_roles: FrequencyItem[];
   top_titles: string[];
   sample_evidence: string;
   latest_source_path: string;
   latest_source_file: string;
+  latest_source_role: string;
   session_evidence_count: number;
   unique_session_evidence_count: number;
   session_sources: FrequencyItem[];
@@ -264,10 +266,12 @@ export interface ProjectWorkSessionEvidenceCandidate {
   work_item_count: number;
   source_file_count: number;
   source_files: string[];
+  source_file_roles: FrequencyItem[];
   top_titles: string[];
   sample_evidence: string;
   latest_source_path: string;
   latest_source_file: string;
+  latest_source_role: string;
   reason: string;
   session_evidence_audit: string;
   needs_title_normalization: boolean;
@@ -313,10 +317,12 @@ export interface ProjectWorkSessionEvidenceReviewQueueItem {
   work_item_count: number;
   source_file_count: number;
   source_files: string[];
+  source_file_roles: FrequencyItem[];
   top_titles: string[];
   sample_evidence: string;
   latest_source_path: string;
   latest_source_file: string;
+  latest_source_role: string;
   candidate_reason: string;
   session_evidence_audit: string;
   needs_title_normalization: boolean;

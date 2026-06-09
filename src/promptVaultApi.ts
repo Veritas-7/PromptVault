@@ -2184,6 +2184,18 @@ function summaryCitationIdsAreUnique(citations: unknown): boolean {
   return recordStringFieldValuesAreUnique(citations, "id");
 }
 
+function isProjectWorkSourceFileRole(value: unknown): boolean {
+  return [
+    "handoff-log",
+    "work-log",
+    "project-status",
+    "progress-log",
+    "generated-report",
+    "dated-work-log",
+    "progress-artifact",
+  ].includes(String(value));
+}
+
 function isProjectWorkStatusExportRow(value: unknown): boolean {
   return isRecord(value)
     && isNonBlankString(value.date)
@@ -2194,11 +2206,15 @@ function isProjectWorkStatusExportRow(value: unknown): boolean {
     && Array.isArray(value.source_files)
     && isNonBlankStringArray(value.source_files)
     && value.source_files.length === value.source_file_count
+    && isFrequencyItemsWithinTotal(value.source_file_roles, value.source_file_count)
+    && Array.isArray(value.source_file_roles)
+    && value.source_file_roles.every((item) => isRecord(item) && isProjectWorkSourceFileRole(item.text))
     && Array.isArray(value.top_titles)
     && isNonBlankStringArray(value.top_titles)
     && typeof value.sample_evidence === "string"
     && isNonBlankString(value.latest_source_path)
     && isNonBlankString(value.latest_source_file)
+    && isProjectWorkSourceFileRole(value.latest_source_role)
     && isNonNegativeSafeInteger(value.session_evidence_count)
     && isNonNegativeSafeIntegerAtMost(value.unique_session_evidence_count, value.session_evidence_count)
     && isFrequencyItemsWithinTotal(value.source_statuses, value.work_item_count)
@@ -2298,11 +2314,15 @@ function isProjectWorkSessionEvidenceCandidate(value: unknown): boolean {
     && Array.isArray(value.source_files)
     && isNonBlankStringArray(value.source_files)
     && value.source_files.length === value.source_file_count
+    && isFrequencyItemsWithinTotal(value.source_file_roles, value.source_file_count)
+    && Array.isArray(value.source_file_roles)
+    && value.source_file_roles.every((item) => isRecord(item) && isProjectWorkSourceFileRole(item.text))
     && Array.isArray(value.top_titles)
     && isNonBlankStringArray(value.top_titles)
     && typeof value.sample_evidence === "string"
     && isNonBlankString(value.latest_source_path)
     && isNonBlankString(value.latest_source_file)
+    && isProjectWorkSourceFileRole(value.latest_source_role)
     && isNonBlankString(value.reason)
     && value.session_evidence_audit === "unresolved-after-full-index"
     && typeof value.needs_title_normalization === "boolean"
@@ -2368,11 +2388,15 @@ function isProjectWorkSessionEvidenceReviewQueueItem(value: unknown): boolean {
     && Array.isArray(value.source_files)
     && isNonBlankStringArray(value.source_files)
     && value.source_files.length === value.source_file_count
+    && isFrequencyItemsWithinTotal(value.source_file_roles, value.source_file_count)
+    && Array.isArray(value.source_file_roles)
+    && value.source_file_roles.every((item) => isRecord(item) && isProjectWorkSourceFileRole(item.text))
     && Array.isArray(value.top_titles)
     && isNonBlankStringArray(value.top_titles)
     && typeof value.sample_evidence === "string"
     && isNonBlankString(value.latest_source_path)
     && isNonBlankString(value.latest_source_file)
+    && isProjectWorkSourceFileRole(value.latest_source_role)
     && isNonBlankString(value.candidate_reason)
     && value.session_evidence_audit === "unresolved-after-full-index"
     && typeof value.needs_title_normalization === "boolean"

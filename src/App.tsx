@@ -310,6 +310,7 @@ import {
   workSessionEvidenceReviewQueueFailureText,
   workSessionEvidenceReviewQueueItemStateText,
   workSessionEvidenceReviewQueueMetaText,
+  workSessionEvidenceReviewQueueSourceRolesText,
   canApproveWorkSessionEvidenceReviewQueueItem,
   canRejectWorkSessionEvidenceReviewQueueItem,
   workLogExtractionMetaText,
@@ -342,6 +343,7 @@ import {
   workStatusExportRowFilterLabel,
   workStatusExportRowSessionSourcesText,
   workStatusExportRowSourceFilesText,
+  workStatusExportRowSourceRolesText,
   workStatusExportRowSourceStatusesText,
   workStatusExportRowStatusText,
   workSummarySnapshotsActionLabel,
@@ -4100,6 +4102,7 @@ function App() {
                       {detailsExpanded ? (
                         <div className="work-status-export-row-detail" data-work-status-export-row-detail="true">
                           <span>{workStatusExportRowSourceFilesText(row)}</span>
+                          <span>{workStatusExportRowSourceRolesText(row)}</span>
                           <span>{workStatusExportRowSourceStatusesText(row)}</span>
                           <span>{workStatusExportRowSessionSourcesText(row)}</span>
                           <span>최근 근거 파일 · {pathDisplayText(row.latest_source_path)}</span>
@@ -4704,6 +4707,7 @@ function App() {
                     작업 {item.work_item_count.toLocaleString()}개 · source{" "}
                     {item.source_file_count.toLocaleString()}개 · {item.candidate_reason}
                   </span>
+                  <span>{workSessionEvidenceReviewQueueSourceRolesText(item)}</span>
                   <span>
                     {item.latest_source_file} · seen {item.first_seen_at} / {item.last_seen_at}
                   </span>

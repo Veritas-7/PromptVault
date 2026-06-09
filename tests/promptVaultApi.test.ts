@@ -369,10 +369,12 @@ function projectWorkStatusExportPayload(overrides = {}) {
       work_item_count: 3,
       source_file_count: 2,
       source_files: ["working.md", "workingd.md"],
+      source_file_roles: [{ text: "handoff-log", count: 2 }],
       top_titles: ["Status export UI"],
       sample_evidence: "Added status export UI evidence.",
       latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
       latest_source_file: "working.md",
+      latest_source_role: "handoff-log",
       session_evidence_count: 7,
       unique_session_evidence_count: 2,
       session_sources: [{ text: "Codex local sessions", count: 7 }],
@@ -418,10 +420,12 @@ function projectWorkSessionEvidenceCandidatesPayload(overrides = {}) {
       work_item_count: 3,
       source_file_count: 2,
       source_files: ["working.md", "workingd.md"],
+      source_file_roles: [{ text: "handoff-log", count: 2 }],
       top_titles: ["Full-index evidence review"],
       sample_evidence: "Added full-index evidence review candidate.",
       latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
       latest_source_file: "working.md",
+      latest_source_role: "handoff-log",
       reason: "unresolved_after_full_index,no_session_evidence,needs_title_normalization",
       session_evidence_audit: "unresolved-after-full-index",
       needs_title_normalization: true,
@@ -883,6 +887,9 @@ test("browser bridge work status export posts options and validates rows", async
   assert.equal(result.row_offset, 1);
   assert.equal(result.rows[0].project, "PromptVault");
   assert.equal(result.rows[0].source_files[1], "workingd.md");
+  assert.equal(result.rows[0].source_file_roles[0].text, "handoff-log");
+  assert.equal(result.rows[0].source_file_roles[0].count, 2);
+  assert.equal(result.rows[0].latest_source_role, "handoff-log");
   assert.equal(result.report_session_evidence_count, 7);
   assert.equal(result.report_session_evidence_index_count, 200);
   assert.equal(result.report_session_evidence_index_total_count, 500);
@@ -941,6 +948,8 @@ test("browser bridge work session evidence candidates posts options and validate
   assert.equal(result.session_limit_used, 500);
   assert.equal(result.candidates[0].project, "PromptVault");
   assert.equal(result.candidates[0].source_files[1], "workingd.md");
+  assert.equal(result.candidates[0].source_file_roles[0].text, "handoff-log");
+  assert.equal(result.candidates[0].latest_source_role, "handoff-log");
   assert.equal(result.candidates[0].session_evidence_audit, "unresolved-after-full-index");
 });
 
@@ -999,6 +1008,8 @@ test("browser bridge work session evidence review queue posts sync options and v
   assert.equal(result.items[0].candidate_id, "session-evidence-PromptVault-a1b2c3d4e5");
   assert.equal(result.items[0].review_state, "pending_review");
   assert.equal(result.items[0].source_files[1], "workingd.md");
+  assert.equal(result.items[0].source_file_roles[0].text, "handoff-log");
+  assert.equal(result.items[0].latest_source_role, "handoff-log");
 });
 
 test("browser bridge work session evidence review queue update posts decision options", async (t) => {

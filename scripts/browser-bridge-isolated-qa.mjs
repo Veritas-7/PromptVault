@@ -256,10 +256,12 @@ function unresolvedWorkStatusExportFixture() {
       work_item_count: 2,
       source_file_count: 1,
       source_files: ["working.md"],
+      source_file_roles: [{ text: "handoff-log", count: 1 }],
       top_titles: ["Full index unresolved fixture"],
       sample_evidence: "2026-06-09: Full index unresolved fixture evidence.",
       latest_source_path: "/tmp/QAFixture/working.md",
       latest_source_file: "working.md",
+      latest_source_role: "handoff-log",
       session_evidence_count: 0,
       unique_session_evidence_count: 0,
       session_sources: [],
@@ -274,10 +276,12 @@ function unresolvedWorkStatusExportFixture() {
       work_item_count: 2,
       source_file_count: 1,
       source_files: ["working.md"],
+      source_file_roles: [{ text: "handoff-log", count: 1 }],
       top_titles: ["Session supported fixture"],
       sample_evidence: "2026-06-09: Supported fixture evidence.",
       latest_source_path: "/tmp/QASupported/working.md",
       latest_source_file: "working.md",
+      latest_source_role: "handoff-log",
       session_evidence_count: 12,
       unique_session_evidence_count: 3,
       session_sources: [{ text: "Codex local sessions", count: 12 }],
@@ -792,7 +796,9 @@ async function runBrowserQa() {
     await page.locator('[data-work-status-export-row-toggle="true"]').first().click();
     await page.waitForFunction(() => {
       const detail = document.querySelector('[data-work-status-export-row-detail="true"]')?.textContent ?? "";
-      return detail.includes("매칭된 세션 근거 없음") && detail.includes("제한된 근거만 사용 중");
+      return detail.includes("매칭된 세션 근거 없음")
+        && detail.includes("제한된 근거만 사용 중")
+        && detail.includes("로그 유형");
     }, undefined, { timeout: 30000 });
     workStatusExportBoundedFilteredRowDetail =
       (await page.locator('[data-work-status-export-row-detail="true"]').first().textContent())?.trim() ?? "";
@@ -825,7 +831,9 @@ async function runBrowserQa() {
     await page.locator('[data-work-status-export-row-toggle="true"]').first().click();
     await page.waitForFunction(() => {
       const detail = document.querySelector('[data-work-status-export-row-detail="true"]')?.textContent ?? "";
-      return detail.includes("매칭된 세션 근거 없음") && detail.includes("전체 인덱스에서도 미해결");
+      return detail.includes("매칭된 세션 근거 없음")
+        && detail.includes("전체 인덱스에서도 미해결")
+        && detail.includes("핸드오프 로그");
     }, undefined, { timeout: 30000 });
     workStatusExportUnresolvedFixtureRowDetail =
       (await page.locator('[data-work-status-export-row-detail="true"]').first().textContent())?.trim() ?? "";
@@ -868,7 +876,9 @@ async function runBrowserQa() {
       `limit ${workSessionEvidenceCandidates.session_limit_used}`,
     ].join(" · ");
     workSessionEvidenceCandidateRows = workSessionEvidenceCandidates.candidates
-      .map((candidate) => `${candidate.project} · ${candidate.date} · ${candidate.latest_source_file}`);
+      .map((candidate) =>
+        `${candidate.project} · ${candidate.date} · ${candidate.latest_source_file} · ${candidate.latest_source_role}`
+      );
     step("work session evidence review queue bridge");
     const workSessionEvidenceReviewQueue = await bridgeJson(
       page,
@@ -909,7 +919,9 @@ async function runBrowserQa() {
       `대기 ${workSessionEvidenceReviewQueue.pending_review_count}`,
     ].join(" · ");
     workSessionEvidenceReviewQueueRows = workSessionEvidenceReviewQueue.items
-      .map((item) => `${item.project} · ${item.date} · ${item.review_state} · ${item.latest_source_file}`);
+      .map((item) =>
+        `${item.project} · ${item.date} · ${item.review_state} · ${item.latest_source_file} · ${item.latest_source_role}`
+      );
     if (workSessionEvidenceReviewQueue.items.length > 0) {
       const firstItem = workSessionEvidenceReviewQueue.items[0];
       const approvedQueue = await bridgeJson(
@@ -949,7 +961,10 @@ async function runBrowserQa() {
       return text.includes("세션근거 큐 저장")
         && text.includes("표시")
         && text.includes("검토")
-        && rows.some((row) => (row.textContent ?? "").includes("unresolved-after-full-index"));
+        && rows.some((row) => {
+          const rowText = row.textContent ?? "";
+          return rowText.includes("unresolved-after-full-index") && rowText.includes("로그 유형");
+        });
     }, undefined, { timeout: 120000 });
     workSessionEvidenceReviewQueueUiMeta =
       (await page.locator('[data-work-session-evidence-review-queue-meta="true"]').textContent())?.trim() ?? "";

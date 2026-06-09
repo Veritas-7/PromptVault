@@ -327,6 +327,34 @@ export function workStatusExportRowSourceFilesText(row: ProjectWorkStatusExportR
   return `진행로그 ${row.source_file_count.toLocaleString()}개 · ${visibleFiles.join(", ")}${suffix}`;
 }
 
+export function workSourceFileRoleLabel(role: string): string {
+  const labels: Record<string, string> = {
+    "handoff-log": "핸드오프 로그",
+    "work-log": "작업 로그",
+    "project-status": "프로젝트 상태",
+    "progress-log": "진행 로그",
+    "generated-report": "생성 리포트",
+    "dated-work-log": "날짜별 작업 로그",
+    "progress-artifact": "진행 산출물",
+  };
+  return labels[role] ?? role;
+}
+
+function workSourceFileRolesInlineText(items: { text: string; count: number }[]): string {
+  return items
+    .slice(0, 4)
+    .map((item) => `${workSourceFileRoleLabel(item.text)} ${item.count.toLocaleString()}개`)
+    .join(", ");
+}
+
+export function workStatusExportRowSourceRolesText(row: ProjectWorkStatusExportRow): string {
+  if (!row.source_file_roles.length) return "로그 유형 없음";
+  return [
+    `로그 유형 · ${workSourceFileRolesInlineText(row.source_file_roles)}`,
+    `최근 ${workSourceFileRoleLabel(row.latest_source_role)}`,
+  ].join(" · ");
+}
+
 export function workStatusExportRowSourceStatusesText(row: ProjectWorkStatusExportRow): string {
   if (!row.source_statuses.length) return "진행 상태값 없음";
   return `진행 상태 · ${frequencyItemsInlineText(row.source_statuses)}`;
@@ -1100,6 +1128,16 @@ export function workSessionEvidenceReviewQueueItemStateText(
     item.review_reason,
     item.session_evidence_audit,
     titleText,
+  ].join(" · ");
+}
+
+export function workSessionEvidenceReviewQueueSourceRolesText(
+  item: ProjectWorkSessionEvidenceReviewQueueItem,
+): string {
+  if (!item.source_file_roles.length) return "로그 유형 없음";
+  return [
+    `로그 유형 · ${workSourceFileRolesInlineText(item.source_file_roles)}`,
+    `최근 ${workSourceFileRoleLabel(item.latest_source_role)}`,
   ].join(" · ");
 }
 

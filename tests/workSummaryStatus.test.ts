@@ -71,8 +71,11 @@ import {
   workStatusExportRowFilterLabel,
   workStatusExportRowSessionSourcesText,
   workStatusExportRowSourceFilesText,
+  workStatusExportRowSourceRolesText,
   workStatusExportRowSourceStatusesText,
   workStatusExportRowStatusText,
+  workSourceFileRoleLabel,
+  workSessionEvidenceReviewQueueSourceRolesText,
   workSummarySnapshotsActionLabel,
   workSummarySnapshotsFailureText,
   workSummarySnapshotsMetaText,
@@ -198,10 +201,12 @@ function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = 
       work_item_count: 2,
       source_file_count: 1,
       source_files: ["working.md"],
+      source_file_roles: [{ text: "handoff-log", count: 1 }],
       top_titles: ["Status export"],
       sample_evidence: "Status export evidence",
       latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
       latest_source_file: "working.md",
+      latest_source_role: "handoff-log",
       session_evidence_count: 0,
       unique_session_evidence_count: 0,
       session_sources: [],
@@ -216,10 +221,12 @@ function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = 
       work_item_count: 8,
       source_file_count: 3,
       source_files: ["working.md", "workingd.md", "WORKLOG.md"],
+      source_file_roles: [{ text: "handoff-log", count: 2 }, { text: "work-log", count: 1 }],
       top_titles: ["CareVault session evidence"],
       sample_evidence: "CareVault evidence",
       latest_source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
       latest_source_file: "workingd.md",
+      latest_source_role: "handoff-log",
       session_evidence_count: 9,
       unique_session_evidence_count: 3,
       session_sources: [{ text: "Codex local sessions", count: 9 }],
@@ -582,14 +589,16 @@ function sessionEvidenceReviewQueueItem(
     project: "PromptVault",
     date: "2026-06-09",
     operational_status: "needs_session_evidence",
-    source_statuses: [{ label: "logged", count: 2 }],
+    source_statuses: [{ text: "logged", count: 2 }],
     work_item_count: 4,
     source_file_count: 2,
     source_files: ["working.md", "workingd.md"],
+    source_file_roles: [{ text: "handoff-log", count: 2 }],
     top_titles: ["PromptVault session evidence queue"],
     sample_evidence: "- 2026-06-09: PromptVault session evidence queue",
     latest_source_path: "/tmp/PromptVault/working.md",
     latest_source_file: "working.md",
+    latest_source_role: "handoff-log",
     candidate_reason: "unresolved_after_full_index,needs_title_normalization",
     session_evidence_audit: "unresolved-after-full-index",
     needs_title_normalization: true,
@@ -888,6 +897,11 @@ test("work status export text exposes project day evidence coverage", () => {
   assert.equal(
     workStatusExportRowSourceFilesText(result.rows[1]),
     "진행로그 3개 · working.md, workingd.md, WORKLOG.md",
+  );
+  assert.equal(workSourceFileRoleLabel("handoff-log"), "핸드오프 로그");
+  assert.equal(
+    workStatusExportRowSourceRolesText(result.rows[1]),
+    "로그 유형 · 핸드오프 로그 2개, 작업 로그 1개 · 최근 핸드오프 로그",
   );
   assert.equal(workStatusExportRowSourceStatusesText(result.rows[0]), "진행 상태 · done 2건");
   assert.equal(
@@ -1693,6 +1707,10 @@ test("work session evidence review queue labels describe persisted review rows",
   assert.equal(
     workSessionEvidenceReviewQueueItemStateText(sessionEvidenceReviewQueueItem()),
     "검토 대기 · unresolved_session_evidence · unresolved-after-full-index · 제목 정규화 필요",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueSourceRolesText(sessionEvidenceReviewQueueItem()),
+    "로그 유형 · 핸드오프 로그 2개 · 최근 핸드오프 로그",
   );
   assert.equal(
     workSessionEvidenceReviewQueueItemStateText(sessionEvidenceReviewQueueItem({

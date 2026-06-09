@@ -812,10 +812,12 @@ pub struct ProjectWorkStatusExportRow {
     pub work_item_count: usize,
     pub source_file_count: usize,
     pub source_files: Vec<String>,
+    pub source_file_roles: Vec<FrequencyItem>,
     pub top_titles: Vec<String>,
     pub sample_evidence: String,
     pub latest_source_path: String,
     pub latest_source_file: String,
+    pub latest_source_role: String,
     pub session_evidence_count: usize,
     pub unique_session_evidence_count: usize,
     pub session_sources: Vec<FrequencyItem>,
@@ -867,10 +869,12 @@ pub struct ProjectWorkSessionEvidenceCandidate {
     pub work_item_count: usize,
     pub source_file_count: usize,
     pub source_files: Vec<String>,
+    pub source_file_roles: Vec<FrequencyItem>,
     pub top_titles: Vec<String>,
     pub sample_evidence: String,
     pub latest_source_path: String,
     pub latest_source_file: String,
+    pub latest_source_role: String,
     pub reason: String,
     pub session_evidence_audit: String,
     pub needs_title_normalization: bool,
@@ -936,10 +940,12 @@ pub struct ProjectWorkSessionEvidenceReviewQueueItem {
     pub work_item_count: usize,
     pub source_file_count: usize,
     pub source_files: Vec<String>,
+    pub source_file_roles: Vec<FrequencyItem>,
     pub top_titles: Vec<String>,
     pub sample_evidence: String,
     pub latest_source_path: String,
     pub latest_source_file: String,
+    pub latest_source_role: String,
     pub candidate_reason: String,
     pub session_evidence_audit: String,
     pub needs_title_normalization: bool,
@@ -7911,6 +7917,9 @@ fn build_project_work_status_export_rows(
                 }
             }
 
+            let source_files = source_files.into_iter().collect::<Vec<_>>();
+            let source_file_roles = project_work_source_file_roles(&source_files);
+            let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
             let session_evidence_count = items
                 .iter()
                 .map(|item| item.session_evidence_count)
@@ -7931,11 +7940,13 @@ fn build_project_work_status_export_rows(
                 source_statuses: rank_counts(status_counts, usize::MAX),
                 work_item_count: items.len(),
                 source_file_count: source_files.len(),
-                source_files: source_files.into_iter().collect(),
+                source_files,
+                source_file_roles,
                 top_titles: titles.into_iter().take(5).collect(),
                 sample_evidence,
                 latest_source_path,
                 latest_source_file,
+                latest_source_role,
                 session_evidence_count,
                 unique_session_evidence_count: unique_session_keys.len(),
                 session_sources: rank_counts(session_source_counts, usize::MAX),
@@ -7976,6 +7987,70 @@ fn project_work_status_session_evidence_audit(
         return "bounded-session-limit".to_string();
     }
     "unresolved-after-full-index".to_string()
+}
+
+fn project_work_source_file_roles(source_files: &[String]) -> Vec<FrequencyItem> {
+    let mut role_counts = HashMap::new();
+    for source_file in source_files {
+        *role_counts
+            .entry(project_work_source_file_role(source_file).to_string())
+            .or_default() += 1;
+    }
+    rank_counts(role_counts, usize::MAX)
+}
+
+fn project_work_source_file_role(source_file: &str) -> &'static str {
+    let file_name = Path::new(source_file)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(source_file)
+        .trim();
+    let lower = file_name.to_ascii_lowercase();
+    let stem = Path::new(file_name)
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or(file_name)
+        .to_ascii_lowercase();
+    let normalized_stem = stem.replace(['-', ' '], "_");
+
+    if matches!(lower.as_str(), "working.md" | "workingd.md")
+        || normalized_stem == "working"
+        || normalized_stem == "workingd"
+    {
+        return "handoff-log";
+    }
+    if normalized_stem.starts_with("run_worklog_report")
+        || normalized_stem.contains("worklog_report")
+        || normalized_stem.contains("work_log_report")
+    {
+        return "generated-report";
+    }
+    if normalized_stem == "working_log"
+        || normalized_stem == "worklog"
+        || normalized_stem.contains("worklog")
+        || normalized_stem.contains("work_log")
+    {
+        return "work-log";
+    }
+    if normalized_stem == "project_status"
+        || normalized_stem.ends_with("_status")
+        || normalized_stem.contains("project_status")
+    {
+        return "project-status";
+    }
+    if normalized_stem == "progress_log"
+        || normalized_stem.ends_with("_progress")
+        || normalized_stem.contains("progress")
+    {
+        return "progress-log";
+    }
+    if normalized_stem.contains("report") {
+        return "generated-report";
+    }
+    if find_iso_date_start(file_name).is_some() {
+        return "dated-work-log";
+    }
+    "progress-artifact"
 }
 
 fn build_project_work_session_evidence_candidates_from_rows(
@@ -8019,10 +8094,12 @@ fn project_work_session_evidence_candidate_from_row(
         work_item_count: row.work_item_count,
         source_file_count: row.source_file_count,
         source_files: row.source_files.clone(),
+        source_file_roles: row.source_file_roles.clone(),
         top_titles: row.top_titles.clone(),
         sample_evidence: row.sample_evidence.clone(),
         latest_source_path: row.latest_source_path.clone(),
         latest_source_file: row.latest_source_file.clone(),
+        latest_source_role: row.latest_source_role.clone(),
         reason: reasons.join(","),
         session_evidence_audit: row.session_evidence_audit.clone(),
         needs_title_normalization: row.needs_title_normalization,
@@ -8232,6 +8309,10 @@ fn read_project_work_session_evidence_review_queue(
         let source_statuses_json: String = row.get(8)?;
         let source_files_json: String = row.get(11)?;
         let top_titles_json: String = row.get(12)?;
+        let source_files = serde_json::from_str::<Vec<String>>(&source_files_json)?;
+        let latest_source_file = row.get::<_, String>(15)?;
+        let source_file_roles = project_work_source_file_roles(&source_files);
+        let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
         items.push(ProjectWorkSessionEvidenceReviewQueueItem {
             candidate_id: row.get(0)?,
             first_seen_at: row.get(1)?,
@@ -8244,11 +8325,13 @@ fn read_project_work_session_evidence_review_queue(
             source_statuses: serde_json::from_str(&source_statuses_json)?,
             work_item_count: row.get::<_, i64>(9)? as usize,
             source_file_count: row.get::<_, i64>(10)? as usize,
-            source_files: serde_json::from_str(&source_files_json)?,
+            source_files,
+            source_file_roles,
             top_titles: serde_json::from_str(&top_titles_json)?,
             sample_evidence: row.get(13)?,
             latest_source_path: row.get(14)?,
-            latest_source_file: row.get(15)?,
+            latest_source_file,
+            latest_source_role,
             candidate_reason: row.get(16)?,
             session_evidence_audit: row.get(17)?,
             needs_title_normalization,
@@ -8371,6 +8454,16 @@ fn render_project_work_status_export_markdown(
                 .collect::<Vec<_>>()
                 .join(", ")
         };
+        let role_summary = if row.source_file_roles.is_empty() {
+            "role unknown".to_string()
+        } else {
+            row.source_file_roles
+                .iter()
+                .take(3)
+                .map(|role| format!("{} {}", role.text, role.count))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
         out.push_str(&format!(
             "| {} | {} | {} | {} | {} | {} | {} | {} |\n",
             markdown_cell(&row.date),
@@ -8378,7 +8471,7 @@ fn render_project_work_status_export_markdown(
             markdown_cell(&row.operational_status),
             row.work_item_count,
             markdown_cell(&session_summary),
-            markdown_cell(&source_summary),
+            markdown_cell(&format!("{source_summary} ({role_summary})")),
             markdown_cell(&title_summary),
             markdown_cell(&row.sample_evidence)
         ));
@@ -16713,10 +16806,15 @@ Status: completed as a source-only/report-only hardening slice.
             work_item_count: 1,
             source_file_count: 1,
             source_files: vec!["working.md".to_string()],
+            source_file_roles: vec![FrequencyItem {
+                text: "handoff-log".to_string(),
+                count: 1,
+            }],
             top_titles: vec!["Work".to_string()],
             sample_evidence: "Evidence".to_string(),
             latest_source_path: format!("/tmp/{project}/working.md"),
             latest_source_file: "working.md".to_string(),
+            latest_source_role: "handoff-log".to_string(),
             session_evidence_count: 1,
             unique_session_evidence_count: 1,
             session_sources: vec![FrequencyItem {
@@ -16746,6 +16844,59 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(!truncated);
         assert_eq!(next, None);
         assert!(page.is_empty());
+    }
+
+    #[test]
+    fn project_work_source_file_roles_classify_progress_artifacts() {
+        let files = vec![
+            "working.md".to_string(),
+            "workingd.md".to_string(),
+            "WORKING_LOG.md".to_string(),
+            "PROJECT_STATUS.md".to_string(),
+            "run-worklog-report.md".to_string(),
+            "2026-06-09-refresh-notes.md".to_string(),
+            "notes.md".to_string(),
+        ];
+
+        assert_eq!(project_work_source_file_role("working.md"), "handoff-log");
+        assert_eq!(project_work_source_file_role("workingd.md"), "handoff-log");
+        assert_eq!(project_work_source_file_role("WORKING_LOG.md"), "work-log");
+        assert_eq!(
+            project_work_source_file_role("PROJECT_STATUS.md"),
+            "project-status"
+        );
+        assert_eq!(
+            project_work_source_file_role("run-worklog-report.md"),
+            "generated-report"
+        );
+        assert_eq!(
+            project_work_source_file_role("2026-06-09-refresh-notes.md"),
+            "dated-work-log"
+        );
+        assert_eq!(
+            project_work_source_file_role("notes.md"),
+            "progress-artifact"
+        );
+
+        let roles = project_work_source_file_roles(&files);
+        assert!(roles
+            .iter()
+            .any(|role| role.text == "handoff-log" && role.count == 2));
+        assert!(roles
+            .iter()
+            .any(|role| role.text == "work-log" && role.count == 1));
+        assert!(roles
+            .iter()
+            .any(|role| role.text == "project-status" && role.count == 1));
+        assert!(roles
+            .iter()
+            .any(|role| role.text == "generated-report" && role.count == 1));
+        assert!(roles
+            .iter()
+            .any(|role| role.text == "dated-work-log" && role.count == 1));
+        assert!(roles
+            .iter()
+            .any(|role| role.text == "progress-artifact" && role.count == 1));
     }
 
     #[test]
@@ -16786,10 +16937,15 @@ Status: completed as a source-only/report-only hardening slice.
                 work_item_count: 2,
                 source_file_count: 1,
                 source_files: vec!["working.md".to_string()],
+                source_file_roles: vec![FrequencyItem {
+                    text: "handoff-log".to_string(),
+                    count: 1,
+                }],
                 top_titles: vec![format!("{project} full-index evidence review")],
                 sample_evidence: format!("{project} still has no session evidence."),
                 latest_source_path: format!("/Users/wj/Ai/System/10_Projects/{project}/working.md"),
                 latest_source_file: "working.md".to_string(),
+                latest_source_role: "handoff-log".to_string(),
                 session_evidence_count,
                 unique_session_evidence_count: session_evidence_count,
                 session_sources: Vec::new(),
@@ -18991,10 +19147,15 @@ Status: completed as a source-only/report-only hardening slice.
             work_item_count: 1,
             source_file_count: 1,
             source_files: vec!["working.md".to_string()],
+            source_file_roles: vec![FrequencyItem {
+                text: "handoff-log".to_string(),
+                count: 1,
+            }],
             top_titles: vec!["Safe work".to_string()],
             sample_evidence: "2026-06-09: Safe work".to_string(),
             latest_source_path: "/tmp/SafeProject/working.md".to_string(),
             latest_source_file: "working.md".to_string(),
+            latest_source_role: "handoff-log".to_string(),
             reason: "unresolved_after_full_index,no_session_evidence".to_string(),
             session_evidence_audit: "unresolved-after-full-index".to_string(),
             needs_title_normalization: false,
@@ -19011,10 +19172,15 @@ Status: completed as a source-only/report-only hardening slice.
             work_item_count: 2,
             source_file_count: 1,
             source_files: vec!["workingd.md".to_string()],
+            source_file_roles: vec![FrequencyItem {
+                text: "handoff-log".to_string(),
+                count: 1,
+            }],
             top_titles: vec!["Progress log updated".to_string()],
             sample_evidence: "2026-06-08: Progress log updated".to_string(),
             latest_source_path: "/tmp/RoughProject/workingd.md".to_string(),
             latest_source_file: "workingd.md".to_string(),
+            latest_source_role: "handoff-log".to_string(),
             reason: "unresolved_after_full_index,no_session_evidence,needs_title_normalization"
                 .to_string(),
             session_evidence_audit: "unresolved-after-full-index".to_string(),

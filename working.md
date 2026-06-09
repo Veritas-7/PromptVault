@@ -1,10 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 20:43 KST
+Updated: 2026-06-09 20:57 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-09 AI normalization quality gate
+
+Current Goal:
+
+- Tighten AI-backed work-log normalization so provider proposals only become
+  accepted when confidence and source-evidence gates are strong enough for
+  durable project/day management.
+- Keep local fallback proposals review-only.
+
+Context:
+
+- PromptVault already scans project-local progress logs and sanitized real
+  Codex/Codex CX session evidence into project/day work management views.
+- Normalization proposals already validate status, source-backed evidence,
+  finite confidence, and risk flags before a proposal can become accepted.
+- The remaining safety gap was that accepted AI normalization confidence used
+  the extraction-style low threshold instead of a stricter normalization
+  threshold suitable for operator review queues.
+
+Progress:
+
+- Added a named normalization acceptance confidence constant set to `0.80`.
+- Updated the OpenAI/GLM normalization prompt contract to tell providers to use
+  confidence at least `0.80` only when the supplied candidate evidence fully
+  supports the normalized title and status.
+- Updated normalization validation so AI proposals below `0.80` are rejected as
+  `low_confidence`.
+- Added a direct AI-content validation test that proves:
+  - confidence exactly `0.80` is accepted when evidence is source-backed;
+  - confidence `0.79` is rejected as `low_confidence`;
+  - invented evidence is rejected as `evidence_not_in_candidate_evidence`;
+  - candidate risk flags are rejected as `candidate_has_risk_flags`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added `PROJECT_WORK_LOG_NORMALIZATION_MIN_ACCEPTED_CONFIDENCE`;
+  - wired the threshold into provider prompt text and proposal validation;
+  - added `ai_normalization_proposals_require_high_confidence_and_source_evidence`.
+- `working.md`:
+  - recorded the current AI normalization quality-gate slice.
+
+Tests:
+
+- Initial `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: FAIL
+  because rustfmt wanted one vector literal on a single line; fixed with
+  `cargo fmt`.
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  ai_normalization_proposals_require_high_confidence_and_source_evidence --
+  --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_log_normalization_with_env_chunks_glm_requests -- --nocapture`:
+  PASS.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS.
+- `npm run check`: PASS.
+  - UI tests: `473` passed.
+  - Production build: passed.
+  - Rust lib tests: `195` passed.
+  - CLI tests: `31` passed.
+  - Doc-tests: passed.
+  - clippy `-D warnings`: passed.
+- `git diff --check`: PASS.
+- `gitleaks dir . --no-banner --redact`: PASS, no leaks found.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  Evidence from isolated browser result:
+  - status export showed `91` rows, `31` projects, `25` days, `842` progress
+    files, and `20,502` session evidence links from `50` unique records;
+  - work-log coverage showed `842` logs, `837` parsed, `4` unparsed;
+  - normalization candidates showed `91` rows and no normalization risk flags;
+  - providerless local normalization proposals stayed review-only:
+    `accepted 0`, `review 40`;
+  - normalization review queue synced `91` rows, approved one pending local row,
+    applied it into durable normalized items, and preserved the stale fixture
+    guard with `approveButtonCount=0`, `rejectButtonCount=1`;
+  - saved extraction/run-history rows populated in the isolated database.
+
+Issues:
+
+- The browser QA intentionally runs providerless for deterministic local
+  validation, so the new provider confidence threshold is covered by Rust tests
+  rather than by a live OpenAI/GLM call.
+
+Next Steps:
+
+- Continue AI-assisted normalization review for rows with `generic_title` or
+  missing session evidence.
+- Consider a separate mocked bridge fixture for rejected AI normalization
+  proposals if the UI needs deterministic rendering coverage for
+  `low_confidence` and evidence-mismatch reasons.
 
 ## Current Slice - 2026-06-09 stale normalization browser fixture
 

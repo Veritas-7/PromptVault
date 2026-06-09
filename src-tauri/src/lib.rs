@@ -63,6 +63,7 @@ const MAX_PROJECT_WORK_LOG_NORMALIZATION_PROPOSAL_LIMIT: usize = 100;
 const PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_CHUNK_MAX_CANDIDATES: usize = 8;
 const PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_CHUNK_TARGET_CHARS: usize = 18_000;
 const PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_PROMPT_MAX_CHARS: usize = 24_000;
+const PROJECT_WORK_LOG_NORMALIZATION_MIN_ACCEPTED_CONFIDENCE: f64 = 0.80;
 const DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_REVIEW_QUEUE_LIMIT: usize = 50;
 const MAX_PROJECT_WORK_LOG_NORMALIZATION_REVIEW_QUEUE_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_NORMALIZED_ITEM_LIMIT: usize = 20;
@@ -10913,8 +10914,11 @@ fn project_work_log_normalization_json_schema() -> Value {
 
 fn project_work_log_normalization_messages(
     candidates: &[ProjectWorkLogNormalizationCandidate],
-) -> (&'static str, String) {
-    let system = "You normalize project/date work-management rows for an engineering operator. Use only supplied candidate evidence. Do not invent projects, dates, tasks, sessions, or evidence. Return JSON only with key proposals. Each accepted proposal must use a candidate_id exactly as supplied, a concise normalized_title, normalized_status from proposed/current/done/blocked/mixed/unknown, normalized_evidence copied verbatim from the candidate evidence, and confidence from 0 to 1.";
+) -> (String, String) {
+    let system = format!(
+        "You normalize project/date work-management rows for an engineering operator. Use only supplied candidate evidence. Do not invent projects, dates, tasks, sessions, or evidence. Return JSON only with key proposals. Each accepted proposal must use a candidate_id exactly as supplied, a concise normalized_title, normalized_status from proposed/current/done/blocked/mixed/unknown, normalized_evidence copied verbatim from the candidate evidence, and confidence from 0 to 1. Use confidence at least {:.2} only when the candidate evidence fully supports the normalized title and status.",
+        PROJECT_WORK_LOG_NORMALIZATION_MIN_ACCEPTED_CONFIDENCE
+    );
     let mut user = String::new();
     user.push_str("Candidates:\n");
     for candidate in candidates {
@@ -11116,7 +11120,7 @@ fn validate_project_work_log_normalization_proposal(
     if !confidence.is_finite() || !(0.0..=1.0).contains(&confidence) {
         return Some("invalid_confidence".to_string());
     }
-    if confidence < 0.65 {
+    if confidence < PROJECT_WORK_LOG_NORMALIZATION_MIN_ACCEPTED_CONFIDENCE {
         return Some("low_confidence".to_string());
     }
     if !detect_risks(&format!(
@@ -16680,6 +16684,113 @@ Progress:
         assert!(user.contains("Project: PromptVault"));
         assert!(user.contains("Return JSON:"));
         assert!(user.chars().count() <= PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_PROMPT_MAX_CHARS);
+    }
+
+    #[test]
+    fn ai_normalization_proposals_require_high_confidence_and_source_evidence() {
+        let accepted = normalization_candidate_for_test(
+            "work-normalize-PromptVault-accepted".to_string(),
+            "2026-06-09: Added supported normalization evidence.".to_string(),
+        );
+        let low_confidence = normalization_candidate_for_test(
+            "work-normalize-PromptVault-low-confidence".to_string(),
+            "2026-06-09: Added low-confidence normalization evidence.".to_string(),
+        );
+        let invented_evidence = normalization_candidate_for_test(
+            "work-normalize-PromptVault-invented".to_string(),
+            "2026-06-09: Added source-backed normalization evidence.".to_string(),
+        );
+        let mut candidate_risk = normalization_candidate_for_test(
+            "work-normalize-PromptVault-risk".to_string(),
+            "2026-06-09: Added risky normalization evidence.".to_string(),
+        );
+        candidate_risk.risk_flags = vec!["possible_api_key".to_string()];
+        let candidates = vec![accepted, low_confidence, invented_evidence, candidate_risk];
+        let candidates_result = ProjectWorkLogNormalizationCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            database_path: "/tmp/promptvault.sqlite".to_string(),
+            total_candidate_count: candidates.len(),
+            returned_candidate_count: candidates.len(),
+            report_total_items: candidates.len(),
+            report_project_count: 1,
+            report_date_count: 1,
+            candidates: candidates.clone(),
+            warnings: Vec::new(),
+        };
+        let content = serde_json::json!({
+            "proposals": [
+                {
+                    "candidate_id": "work-normalize-PromptVault-accepted",
+                    "normalized_title": "Supported normalization evidence",
+                    "normalized_status": "current",
+                    "normalized_evidence": "2026-06-09: Added supported normalization evidence.",
+                    "confidence": PROJECT_WORK_LOG_NORMALIZATION_MIN_ACCEPTED_CONFIDENCE
+                },
+                {
+                    "candidate_id": "work-normalize-PromptVault-low-confidence",
+                    "normalized_title": "Low-confidence normalization evidence",
+                    "normalized_status": "current",
+                    "normalized_evidence": "2026-06-09: Added low-confidence normalization evidence.",
+                    "confidence": PROJECT_WORK_LOG_NORMALIZATION_MIN_ACCEPTED_CONFIDENCE - 0.01
+                },
+                {
+                    "candidate_id": "work-normalize-PromptVault-invented",
+                    "normalized_title": "Invented normalization evidence",
+                    "normalized_status": "current",
+                    "normalized_evidence": "2026-06-09: Invented normalization evidence.",
+                    "confidence": 0.95
+                },
+                {
+                    "candidate_id": "work-normalize-PromptVault-risk",
+                    "normalized_title": "Risky normalization evidence",
+                    "normalized_status": "current",
+                    "normalized_evidence": "2026-06-09: Added risky normalization evidence.",
+                    "confidence": 0.95
+                }
+            ]
+        })
+        .to_string();
+
+        let result = project_work_log_normalization_proposals_from_content(
+            &candidates_result,
+            ProjectWorkLogNormalizationRuntime {
+                provider: "glm",
+                provider_model: Some("glm-test-model".to_string()),
+                provider_runtime: "glm-chat-completions",
+                used_ai: true,
+            },
+            &candidates,
+            &content,
+            Vec::new(),
+        )
+        .expect("validated normalization proposals");
+
+        assert_eq!(result.accepted_count, 1);
+        assert_eq!(result.rejected_count, 3);
+        let proposals_by_id = result
+            .proposals
+            .iter()
+            .map(|proposal| (proposal.candidate_id.as_str(), proposal))
+            .collect::<BTreeMap<_, _>>();
+        assert!(proposals_by_id["work-normalize-PromptVault-accepted"].accepted);
+        assert_eq!(
+            proposals_by_id["work-normalize-PromptVault-low-confidence"]
+                .rejection_reason
+                .as_deref(),
+            Some("low_confidence")
+        );
+        assert_eq!(
+            proposals_by_id["work-normalize-PromptVault-invented"]
+                .rejection_reason
+                .as_deref(),
+            Some("evidence_not_in_candidate_evidence")
+        );
+        assert_eq!(
+            proposals_by_id["work-normalize-PromptVault-risk"]
+                .rejection_reason
+                .as_deref(),
+            Some("candidate_has_risk_flags")
+        );
     }
 
     fn glm_normalization_response_for(

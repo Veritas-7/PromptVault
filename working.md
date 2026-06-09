@@ -1,12 +1,123 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 17:34 KST
+Updated: 2026-06-09 17:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 rough-title normalization candidate priority
+## Current Slice - 2026-06-09 compact project/day status export
+
+Current Goal:
+
+- Answer the operator's concern with a concrete, app-external project/day
+  status export that uses the same managed work-report source of truth.
+- Make the current management coverage visible without raw session bodies:
+  project progress-log rows, per-day/project grouping, source files, rough title
+  flags, and sanitized session evidence counts.
+
+Context:
+
+- `work-report` already parses project-local progress Markdown such as
+  `working.md`, `workingd.md`, `WORKING_LOG.md`, `WORKLOG.md`,
+  `PROJECT_STATUS.md`, and related progress-log names, then attaches Codex /
+  Codex CX session evidence through the sanitized session index.
+- The operator asked whether project/day work is fully managed and whether real
+  sessions are actually parsed. The correct answer is now visible in the live
+  export: the system manages many project/day rows, but some rows still remain
+  `progress-log-only` until more session index backfill runs.
+
+Progress:
+
+- Added a backend `run_project_work_status_export` API.
+- Added CLI command:
+  `work-status-export [--limit N>0] [--session-limit N>0] [--database PATH]
+  [--refresh-session-index] [--json]`.
+- The command renders compact Markdown by default and returns JSON rows with
+  date, project, operational status, source statuses, source files, top titles,
+  sample evidence, session evidence counts, unique session count, session
+  sources, and review flags.
+- Operational status now distinguishes:
+  - `active`: current slice exists for that project/day;
+  - `session-supported`: progress-log rows have linked sanitized session
+    evidence;
+  - `progress-log-only`: progress-log rows exist but no matching session
+    evidence has been indexed yet.
+- Updated README and `docs/CLI.md` with the new command and verification
+  examples.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added status-export option/result/row structs;
+  - added project/day row grouping and Markdown rendering;
+  - added Markdown cell escaping for compact tables;
+  - added tests for project/day grouping and zero-limit validation.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added `work-status-export` command;
+  - updated help text and help regression test.
+- `README.md` and `docs/CLI.md`:
+  - documented the command for agent-native outside-app review.
+- `working.md`:
+  - recorded live management scope and verification results.
+
+Tests:
+
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_status_export_groups_project_day_rows -- --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml
+  work_status_export_rejects_zero_limit_before_scan -- --nocapture`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli
+  help_text_documents_cli_validation_rules -- --nocapture`: PASS.
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli --
+  work-status-export --limit 8 --session-limit 200`: PASS. Live output showed:
+  - `8878` work items;
+  - `31` projects;
+  - `25` days;
+  - `830` progress files;
+  - `200` scanned/indexed session records;
+  - `72783` linked item-level session evidence matches;
+  - mixed row states including `active`, `session-supported`, and
+    `progress-log-only`.
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli --
+  work-status-export --limit 3 --session-limit 200 --json | jq ...`: PASS.
+  JSON showed `returned_row_count=3`, `rows_truncated=true`,
+  `report_total_items=8878`, `report_project_count=31`, `report_date_count=25`,
+  `report_files_seen=830`, `report_session_scan_prompt_count=200`,
+  `report_session_evidence_count=72783`, and first row `CareVault /
+  2026-06-09 / session-supported`.
+- `npm run check`: PASS, including UI tests (`464`), production build, Rust
+  lib tests (`190`), CLI tests (`30`), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- Browser-bridge click QA was not rerun for this slice because this is a
+  CLI/backend export and did not alter the UI/browser route.
+- Full all-history session exhaustion is still not complete. The current live
+  export used the existing sanitized session index with `200` indexed session
+  records, so `progress-log-only` rows remain expected until bounded backfill
+  continues.
+- AI provider-backed cleanup is still review/operator-triggered. The system can
+  route cleanup through OpenAI/GLM/local normalization flows, but this slice did
+  not auto-apply AI cleanup.
+
+Research:
+
+- No external research was needed. The implementation reuses existing
+  work-report, progress-log parser, and sanitized session-evidence index
+  contracts.
+
+Next Steps:
+
+- Add a confirmation-gated long-continue session-index mode that can keep
+  filling the sanitized session index while honoring the `batch_files <= 500`
+  cap.
+- Consider exposing the compact project/day export in the browser UI after the
+  backend/CLI contract has stabilized.
+- Continue improving rough-title normalization review, especially rows marked
+  `needs_title_normalization`.
+
+## Completed Slice - 2026-06-09 rough-title normalization candidate priority
 
 Current Goal:
 

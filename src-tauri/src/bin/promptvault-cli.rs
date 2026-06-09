@@ -10,18 +10,18 @@ use promptvault_lib::{
     run_project_work_log_normalization_review_queue,
     run_project_work_log_normalization_review_queue_update, run_project_work_log_review_queue,
     run_project_work_log_review_queue_update, run_project_work_report,
-    run_project_work_session_index, run_project_work_summary, run_scan, source_specs,
-    CancelScanOptions, ImportBatchOptions, ImportEventsOptions, ImportStatesOptions,
-    ImproveRequest, ProjectWorkLogExtractionCandidatesOptions,
+    run_project_work_session_index, run_project_work_status_export, run_project_work_summary,
+    run_scan, source_specs, CancelScanOptions, ImportBatchOptions, ImportEventsOptions,
+    ImportStatesOptions, ImproveRequest, ProjectWorkLogExtractionCandidatesOptions,
     ProjectWorkLogExtractionItemsOptions, ProjectWorkLogExtractionProposalsOptions,
     ProjectWorkLogExtractionRunsOptions, ProjectWorkLogFreezeOptions,
     ProjectWorkLogNormalizationApplyOptions, ProjectWorkLogNormalizationCandidatesOptions,
     ProjectWorkLogNormalizationProposalsOptions, ProjectWorkLogNormalizationReviewQueueOptions,
     ProjectWorkLogNormalizationReviewQueueUpdateOptions, ProjectWorkLogNormalizedItemsOptions,
     ProjectWorkLogReviewQueueOptions, ProjectWorkLogReviewQueueUpdateOptions,
-    ProjectWorkReportOptions, ProjectWorkSessionIndexOptions, ProjectWorkSummaryOptions,
-    ProjectWorkSummarySnapshotsOptions, PromptRecord, ScanOptions, ScanPlanOptions,
-    ScanProgressOptions, StoredPromptFacetsOptions, StoredPromptsOptions,
+    ProjectWorkReportOptions, ProjectWorkSessionIndexOptions, ProjectWorkStatusExportOptions,
+    ProjectWorkSummaryOptions, ProjectWorkSummarySnapshotsOptions, PromptRecord, ScanOptions,
+    ScanPlanOptions, ScanProgressOptions, StoredPromptFacetsOptions, StoredPromptsOptions,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -360,6 +360,43 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 println!("  {}", item.source_path);
             }
+        }
+        "work-status-export" => {
+            let json = take_flag(&mut args, "--json");
+            let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
+            let mut limit = None;
+            let mut session_limit = None;
+            let mut database_path = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--session-limit" => {
+                        session_limit =
+                            Some(parse_positive_usize_arg(iter.next(), "--session-limit")?);
+                    }
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?);
+                    }
+                    other => {
+                        return Err(format!("unknown work-status-export argument: {other}").into())
+                    }
+                }
+            }
+
+            let result = run_project_work_status_export(ProjectWorkStatusExportOptions {
+                limit,
+                session_limit,
+                database_path,
+                refresh_session_index: Some(refresh_session_index),
+            })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+            println!("{}", result.markdown);
         }
         "work-session-index" => {
             let json = take_flag(&mut args, "--json");
@@ -1968,6 +2005,7 @@ fn help_text() -> String {
         "  improve [--json] [--local] --prompt TEXT\n",
         "  improve [--json] [--local] < prompt.txt\n",
         "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
+        "  work-status-export [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
         "  work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
@@ -1993,6 +2031,7 @@ fn help_text() -> String {
         "  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n",
         "  --no-persist keeps scan results out of the PromptVault database.\n",
         "  work-report reads project progress logs and groups slice work by date and project.\n",
+        "  work-status-export renders compact project/day Markdown and JSON rows from the same progress-log plus session-evidence report.\n",
         "  work-log-coverage lists parsed and unparsed project progress logs by project.\n",
         "  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n",
         "  work-log-review-queue persists current extraction candidates into a review queue and marks disappeared candidates stale.\n",
@@ -3201,6 +3240,9 @@ mod tests {
         assert!(help.contains(
             "work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
         ));
+        assert!(help.contains(
+            "work-status-export [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
+        ));
         assert!(
             help.contains(
                 "work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--database PATH] [--reset] [--json]"
@@ -3243,6 +3285,7 @@ mod tests {
             "work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]"
         ));
         assert!(help.contains("work-report reads project progress logs"));
+        assert!(help.contains("work-status-export renders compact project/day Markdown"));
         assert!(help.contains("work-session-index scans real session evidence"));
         assert!(help.contains("--batch-files resumes from per-source file cursors"));
         assert!(help.contains("--max-batches repeats checkpoint batches"));

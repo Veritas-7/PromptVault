@@ -30,6 +30,8 @@ const PROJECT_PROGRESS_TAIL_CHARS: usize = 8_000;
 const DEFAULT_PROJECT_WORK_SESSION_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_SESSION_INDEX_UNTIL_COMPLETE_MAX_BATCHES: usize = 1_000;
 const MAX_PROJECT_WORK_SESSION_INDEX_BATCH_FILES: usize = 500;
+const DEFAULT_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 80;
+const MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 1_000;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
 const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
 const PROJECT_WORK_SESSION_SOURCE_IDS: &[&str] = &[
@@ -783,6 +785,55 @@ pub struct ProjectWorkReportOptions {
     pub session_limit: Option<usize>,
     pub database_path: Option<String>,
     pub refresh_session_index: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkStatusExportOptions {
+    pub limit: Option<usize>,
+    pub session_limit: Option<usize>,
+    pub database_path: Option<String>,
+    pub refresh_session_index: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkStatusExportRow {
+    pub date: String,
+    pub project: String,
+    pub operational_status: String,
+    pub source_statuses: Vec<FrequencyItem>,
+    pub work_item_count: usize,
+    pub source_file_count: usize,
+    pub source_files: Vec<String>,
+    pub top_titles: Vec<String>,
+    pub sample_evidence: String,
+    pub latest_source_path: String,
+    pub latest_source_file: String,
+    pub session_evidence_count: usize,
+    pub unique_session_evidence_count: usize,
+    pub session_sources: Vec<FrequencyItem>,
+    pub needs_session_evidence: bool,
+    pub needs_title_normalization: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkStatusExportResult {
+    pub generated_at: String,
+    pub markdown: String,
+    pub returned_row_count: usize,
+    pub rows_truncated: bool,
+    pub report_total_items: usize,
+    pub report_project_count: usize,
+    pub report_date_count: usize,
+    pub report_files_seen: usize,
+    pub report_session_scan_prompt_count: usize,
+    pub report_session_evidence_count: usize,
+    pub report_unique_session_evidence_count: usize,
+    pub report_session_evidence_index_used: bool,
+    pub report_session_evidence_index_updated: bool,
+    pub report_session_evidence_index_count: usize,
+    pub report_session_evidence_mode: String,
+    pub rows: Vec<ProjectWorkStatusExportRow>,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -1729,6 +1780,62 @@ pub fn run_project_work_report(
         );
     }
     Ok(report)
+}
+
+pub fn run_project_work_status_export(
+    options: ProjectWorkStatusExportOptions,
+) -> Result<ProjectWorkStatusExportResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-status-export limit requires a positive integer".into());
+    }
+    if matches!(options.session_limit, Some(0)) {
+        return Err("work-status-export session_limit requires a positive integer".into());
+    }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("work-status-export database path requires a non-empty value".into());
+    }
+
+    let requested_limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_STATUS_EXPORT_LIMIT);
+    let limit = requested_limit.min(MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT);
+    let report = run_project_work_report(ProjectWorkReportOptions {
+        limit: None,
+        session_limit: options.session_limit,
+        database_path: options.database_path,
+        refresh_session_index: options.refresh_session_index,
+    })?;
+    let mut warnings = report.warnings.clone();
+    if requested_limit > MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT {
+        warnings.push(format!(
+            "work-status-export limit capped at {MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT}"
+        ));
+    }
+
+    let all_rows = build_project_work_status_export_rows(&report);
+    let rows_truncated = all_rows.len() > limit;
+    let rows = all_rows.into_iter().take(limit).collect::<Vec<_>>();
+    let markdown = render_project_work_status_export_markdown(&report, &rows, &warnings);
+
+    Ok(ProjectWorkStatusExportResult {
+        generated_at: report.generated_at.clone(),
+        markdown,
+        returned_row_count: rows.len(),
+        rows_truncated,
+        report_total_items: report.total_items,
+        report_project_count: report.project_count,
+        report_date_count: report.date_count,
+        report_files_seen: report.files_seen,
+        report_session_scan_prompt_count: report.session_scan_prompt_count,
+        report_session_evidence_count: report.session_evidence_count,
+        report_unique_session_evidence_count: report.session_evidence_unique_count,
+        report_session_evidence_index_used: report.session_evidence_index_used,
+        report_session_evidence_index_updated: report.session_evidence_index_updated,
+        report_session_evidence_index_count: report.session_evidence_index_count,
+        report_session_evidence_mode: report.session_evidence_mode.clone(),
+        rows,
+        warnings,
+    })
 }
 
 fn project_work_session_index_effective_max_batches(
@@ -7026,6 +7133,180 @@ fn refresh_project_work_session_summary(report: &mut ProjectWorkReport) {
     report.session_evidence_unique_sources = rank_counts(unique_source_counts, usize::MAX);
 }
 
+fn build_project_work_status_export_rows(
+    report: &ProjectWorkReport,
+) -> Vec<ProjectWorkStatusExportRow> {
+    let mut grouped = BTreeMap::<(String, String), Vec<&ProjectWorkItem>>::new();
+    for item in &report.items {
+        grouped
+            .entry((item.date.clone(), item.project.clone()))
+            .or_default()
+            .push(item);
+    }
+
+    let mut rows = grouped
+        .into_iter()
+        .map(|((date, project), items)| {
+            let mut status_counts = HashMap::new();
+            let mut source_files = BTreeSet::new();
+            let mut unique_session_keys = BTreeSet::new();
+            let mut session_source_counts = HashMap::new();
+            let mut titles = Vec::new();
+            let mut seen_titles = BTreeSet::new();
+            let mut sample_evidence = String::new();
+            let mut latest_source_path = String::new();
+            let mut latest_source_file = String::new();
+            let mut has_current = false;
+            let mut needs_title_normalization = false;
+
+            for item in &items {
+                *status_counts.entry(item.status.clone()).or_default() += 1;
+                source_files.insert(item.source_file.clone());
+                unique_session_keys.extend(item.session_evidence_keys.iter().cloned());
+                for source in &item.session_sources {
+                    *session_source_counts
+                        .entry(source.text.clone())
+                        .or_default() += source.count;
+                }
+                if seen_titles.insert(item.title.clone()) {
+                    titles.push(truncate_chars(&item.title, 120));
+                }
+                if sample_evidence.is_empty() && !item.evidence.trim().is_empty() {
+                    sample_evidence = truncate_chars(&redact_sensitive_text(&item.evidence), 220);
+                }
+                if latest_source_path.is_empty() {
+                    latest_source_path = item.source_path.clone();
+                    latest_source_file = item.source_file.clone();
+                }
+                if item.status == "current" {
+                    has_current = true;
+                }
+                if project_work_log_title_is_generic_or_rough(&item.title) {
+                    needs_title_normalization = true;
+                }
+            }
+
+            let session_evidence_count = items
+                .iter()
+                .map(|item| item.session_evidence_count)
+                .sum::<usize>();
+            let operational_status = if has_current {
+                "active"
+            } else if session_evidence_count > 0 {
+                "session-supported"
+            } else {
+                "progress-log-only"
+            }
+            .to_string();
+
+            ProjectWorkStatusExportRow {
+                date,
+                project,
+                operational_status,
+                source_statuses: rank_counts(status_counts, usize::MAX),
+                work_item_count: items.len(),
+                source_file_count: source_files.len(),
+                source_files: source_files.into_iter().collect(),
+                top_titles: titles.into_iter().take(5).collect(),
+                sample_evidence,
+                latest_source_path,
+                latest_source_file,
+                session_evidence_count,
+                unique_session_evidence_count: unique_session_keys.len(),
+                session_sources: rank_counts(session_source_counts, usize::MAX),
+                needs_session_evidence: session_evidence_count == 0,
+                needs_title_normalization,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    rows.sort_by(|left, right| {
+        right
+            .date
+            .cmp(&left.date)
+            .then_with(|| left.project.cmp(&right.project))
+    });
+    rows
+}
+
+fn render_project_work_status_export_markdown(
+    report: &ProjectWorkReport,
+    rows: &[ProjectWorkStatusExportRow],
+    warnings: &[String],
+) -> String {
+    let mut out = String::new();
+    out.push_str("# PromptVault Project/Day Work Status\n\n");
+    out.push_str(&format!("- Generated: {}\n", report.generated_at));
+    out.push_str(&format!(
+        "- Report scope: {} work items · {} projects · {} days · {} progress files\n",
+        report.total_items, report.project_count, report.date_count, report.files_seen
+    ));
+    out.push_str(&format!(
+        "- Session evidence: {} linked item matches · {} unique session records · {} scanned prompts · index used={} updated={} records={}\n",
+        report.session_evidence_count,
+        report.session_evidence_unique_count,
+        report.session_scan_prompt_count,
+        report.session_evidence_index_used,
+        report.session_evidence_index_updated,
+        report.session_evidence_index_count
+    ));
+    out.push_str(&format!(
+        "- Session evidence mode: {}\n\n",
+        report.session_evidence_mode
+    ));
+
+    if !warnings.is_empty() {
+        out.push_str("## Warnings\n\n");
+        for warning in warnings {
+            out.push_str(&format!("- {}\n", markdown_inline(warning)));
+        }
+        out.push('\n');
+    }
+
+    out.push_str("## Project/Day Rows\n\n");
+    out.push_str("| Date | Project | Status | Items | Sessions | Sources | Titles | Evidence |\n");
+    out.push_str("|---|---|---:|---:|---:|---|---|---|\n");
+    for row in rows {
+        let session_summary = if row.session_sources.is_empty() {
+            "none".to_string()
+        } else {
+            row.session_sources
+                .iter()
+                .take(3)
+                .map(|source| format!("{} {}", source.text, source.count))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let title_summary = if row.top_titles.is_empty() {
+            "untitled".to_string()
+        } else {
+            row.top_titles.join("; ")
+        };
+        let source_summary = if row.source_files.is_empty() {
+            row.latest_source_file.clone()
+        } else {
+            row.source_files
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        out.push_str(&format!(
+            "| {} | {} | {} | {} | {} | {} | {} | {} |\n",
+            markdown_cell(&row.date),
+            markdown_cell(&row.project),
+            markdown_cell(&row.operational_status),
+            row.work_item_count,
+            markdown_cell(&session_summary),
+            markdown_cell(&source_summary),
+            markdown_cell(&title_summary),
+            markdown_cell(&row.sample_evidence)
+        ));
+    }
+    out
+}
+
 fn build_project_work_summaries(
     report: &ProjectWorkReport,
     limit: usize,
@@ -7526,6 +7807,14 @@ fn truncate_chars(text: &str, limit: usize) -> String {
     let mut out = text.chars().take(take).collect::<String>();
     out.push_str(suffix);
     out
+}
+
+fn markdown_inline(text: &str) -> String {
+    text.replace('\n', " ").trim().to_string()
+}
+
+fn markdown_cell(text: &str) -> String {
+    markdown_inline(text).replace('|', "\\|")
 }
 
 fn work_item_counts_by_date(items: &[ProjectWorkItem]) -> Vec<FrequencyItem> {
@@ -14904,6 +15193,81 @@ Progress:
             summaries[0].citations[0].session_sources[0].text,
             "Codex session metadata"
         );
+    }
+
+    #[test]
+    fn project_work_status_export_groups_project_day_rows() {
+        let path = PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md");
+        let text = r#"## Current Slice - 2026-06-09 Parser repair | CLI export
+
+- Fixed parser state mismatch.
+
+## Previous Slice - 2026-06-09 Browser QA
+
+- Verified bridge retry flow.
+"#;
+        let mut items = project_progress_work_items_from_text(&path, text);
+        let mut prompt = dated_record("status-export-session", "2026-06-08T15:30:00Z");
+        prompt.source = "Codex session metadata".to_string();
+        prompt.text =
+            "Codex session project targets: /Users/wj/Ai/System/10_Projects/ExampleProject"
+                .to_string();
+        attach_session_evidence(&mut items, &[prompt]);
+
+        let mut report = ProjectWorkReport {
+            generated_at: "2026-06-09T01:00:00Z".to_string(),
+            total_items: 0,
+            project_count: 0,
+            date_count: 0,
+            files_seen: 1,
+            items_by_date: Vec::new(),
+            items_by_project: Vec::new(),
+            session_scan_prompt_count: 1,
+            session_scan_sources: Vec::new(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_unique_count: 0,
+            session_evidence_unique_sources: Vec::new(),
+            session_evidence_index_used: true,
+            session_evidence_index_updated: false,
+            session_evidence_index_count: 1,
+            session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
+            items,
+            warnings: Vec::new(),
+        };
+        refresh_project_work_item_summary(&mut report);
+        refresh_project_work_session_summary(&mut report);
+
+        let rows = build_project_work_status_export_rows(&report);
+        let markdown = render_project_work_status_export_markdown(&report, &rows, &[]);
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].date, "2026-06-09");
+        assert_eq!(rows[0].project, "ExampleProject");
+        assert_eq!(rows[0].operational_status, "active");
+        assert_eq!(rows[0].work_item_count, 2);
+        assert_eq!(rows[0].session_evidence_count, 2);
+        assert_eq!(rows[0].unique_session_evidence_count, 1);
+        assert!(!rows[0].needs_session_evidence);
+        assert!(rows[0]
+            .top_titles
+            .iter()
+            .any(|title| title.contains("Parser repair | CLI export")));
+        assert!(markdown.contains("# PromptVault Project/Day Work Status"));
+        assert!(markdown.contains("Parser repair \\| CLI export"));
+        assert!(markdown.contains("Codex session metadata 2"));
+    }
+
+    #[test]
+    fn work_status_export_rejects_zero_limit_before_scan() {
+        let err = run_project_work_status_export(ProjectWorkStatusExportOptions {
+            limit: Some(0),
+            ..Default::default()
+        })
+        .expect_err("zero export limit should fail")
+        .to_string();
+
+        assert!(err.contains("work-status-export limit requires a positive integer"));
     }
 
     #[tokio::test]

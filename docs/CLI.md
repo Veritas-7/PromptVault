@@ -15,6 +15,7 @@ cargo run --bin promptvault-cli -- improve [--local] --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve [--local] --json --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve [--local] < prompt.txt
 cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [--count N>0] --json
+cargo run --bin promptvault-cli -- work-status-export [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]
 cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PATH]
 ```
 
@@ -47,6 +48,8 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `improve` requires a non-empty prompt from `--prompt` or stdin and exits non-zero for empty or flag-like `--prompt` values.
 - `improve --local` bypasses OpenAI/GLM and uses deterministic local prompt-improvement rules for reproducible smoke tests and offline repair queues.
 - `repair` scans weakest prompts, runs deterministic local improvement for each one, writes no Markdown export, and returns redacted prompt/recommendation pairs. Repair batches are capped at 10 records.
+- `work-status-export` renders a compact project/day status Markdown table from the same project progress-log plus sanitized session-evidence report used by `work-report`.
+- `work-status-export --json` returns grouped rows with source files, top titles, item counts, session evidence counts, and review flags without raw session bodies.
 - `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, and `/api/import-events` on the requested local address.
 - `serve --database PATH` makes browser-bridge persistence use the supplied SQLite file by default, so full click QA can exercise save/import flows without touching the permanent vault. Per-request `database_path` payload fields still take precedence.
 
@@ -84,6 +87,8 @@ cargo run --bin promptvault-cli -- improve --json --prompt "make better"
 cargo run --bin promptvault-cli -- improve --local --json --prompt "make better"
 set +e; cargo run --bin promptvault-cli -- improve --json --prompt ""; test "$?" -ne 0; set -e
 cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
+cargo run --bin promptvault-cli -- work-status-export --limit 8 --session-limit 200
+cargo run --bin promptvault-cli -- work-status-export --limit 3 --session-limit 200 --json
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174 --database /tmp/promptvault-browser-qa.sqlite
 curl http://127.0.0.1:5174/api/health

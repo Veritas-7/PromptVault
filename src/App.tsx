@@ -186,11 +186,20 @@ import {
 } from "./workLogPreviewFilters";
 import { groupWorkLogExtractionItemsByProjectDate } from "./workLogExtractionItemGroups";
 import {
+  activeWorkManagementOverviewFilterCount,
   buildWorkManagementOverview,
+  emptyWorkManagementOverviewFilters,
+  filterWorkManagementOverviewRows,
+  workManagementOverviewDateSuggestions,
   workManagementOverviewDurabilityWarningText,
+  workManagementOverviewFilterMetaText,
   workManagementOverviewMetaText,
   workManagementOverviewPersistenceText,
+  workManagementOverviewProjectSuggestions,
   workManagementOverviewSourceText,
+  type WorkManagementOverviewFilters,
+  type WorkManagementOverviewPersistenceState,
+  type WorkManagementOverviewSource,
 } from "./workManagementOverview";
 import {
   storedFacetSummaryText,
@@ -300,6 +309,27 @@ function acceptedWorkLogExtractionIds(result: ProjectWorkLogExtractionProposalsR
 const FREQUENCY_DISPLAY_LIMIT = 12;
 const PROMPT_LIST_DISPLAY_LIMIT = 200;
 
+const WORK_MANAGEMENT_SOURCE_OPTIONS: Array<{
+  label: string;
+  value: "" | WorkManagementOverviewSource;
+}> = [
+  { label: "전체 소스", value: "" },
+  { label: "현재요약", value: "current_summary" },
+  { label: "스냅샷", value: "snapshot" },
+  { label: "추출제안", value: "extraction_proposal" },
+  { label: "저장추출", value: "saved_extraction" },
+  { label: "진행로그", value: "progress_log" },
+];
+
+const WORK_MANAGEMENT_PERSISTENCE_OPTIONS: Array<{
+  label: string;
+  value: "" | WorkManagementOverviewPersistenceState;
+}> = [
+  { label: "전체 상태", value: "" },
+  { label: "저장관리", value: "persisted" },
+  { label: "라이브만", value: "live_only" },
+];
+
 function waitForNextImportBatch(): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, CONTINUOUS_IMPORT_PAUSE_MS);
@@ -379,6 +409,8 @@ function App() {
   const [workLogPreviewFilters, setWorkLogPreviewFilters] = useState<WorkLogPreviewFilters>(() =>
     emptyWorkLogPreviewFilters(),
   );
+  const [workManagementOverviewFilters, setWorkManagementOverviewFilters] =
+    useState<WorkManagementOverviewFilters>(() => emptyWorkManagementOverviewFilters());
   const [expandedWorkSummarySnapshotIds, setExpandedWorkSummarySnapshotIds] = useState<Set<number>>(
     () => new Set(),
   );
@@ -719,12 +751,28 @@ function App() {
     workSummaryResult,
     workSummarySnapshotsResult,
   ]);
+  const workManagementOverviewFilterCount = activeWorkManagementOverviewFilterCount(
+    workManagementOverviewFilters,
+  );
+  const filteredWorkManagementOverviewRows = filterWorkManagementOverviewRows(
+    workManagementOverview.rows,
+    workManagementOverviewFilters,
+  );
   const visibleWorkManagementOverviewRows =
-    workManagementOverview.rows.slice(0, WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT);
+    filteredWorkManagementOverviewRows.slice(0, WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT);
   const hiddenWorkManagementOverviewRowCount = Math.max(
     0,
-    workManagementOverview.rows.length - WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT,
+    filteredWorkManagementOverviewRows.length - WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT,
   );
+  const workManagementOverviewFilterMeta = workManagementOverviewFilterMetaText(
+    filteredWorkManagementOverviewRows.length,
+    workManagementOverview.rows.length,
+    workManagementOverviewFilterCount,
+  );
+  const workManagementOverviewDateFilterSuggestions =
+    workManagementOverviewDateSuggestions(workManagementOverview.rows);
+  const workManagementOverviewProjectFilterSuggestions =
+    workManagementOverviewProjectSuggestions(workManagementOverview.rows);
   const workManagementDurabilityWarning = workManagementOverviewLoaded
     ? workManagementOverviewDurabilityWarningText(workManagementOverview)
     : null;
@@ -2285,6 +2333,123 @@ function App() {
             <option key={project} value={project} />
           ))}
         </datalist>
+        <form
+          className="work-summary-filter-row work-management-filter-row"
+          data-work-management-overview-filters="true"
+          onSubmit={(event) => {
+            event.preventDefault();
+          }}
+        >
+          <label>
+            <span>관리 날짜</span>
+            <input
+              aria-label="프로젝트 일자 관리 감사 날짜 필터"
+              data-work-management-date-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-management-date-options"
+              onChange={(event) =>
+                setWorkManagementOverviewFilters((current) => ({
+                  ...current,
+                  date: event.target.value,
+                }))}
+              placeholder="2026-06-09"
+              type="text"
+              value={workManagementOverviewFilters.date}
+            />
+          </label>
+          <label>
+            <span>프로젝트</span>
+            <input
+              aria-label="프로젝트 일자 관리 감사 프로젝트 필터"
+              data-work-management-project-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-management-project-options"
+              onChange={(event) =>
+                setWorkManagementOverviewFilters((current) => ({
+                  ...current,
+                  project: event.target.value,
+                }))}
+              placeholder="PromptVault"
+              type="text"
+              value={workManagementOverviewFilters.project}
+            />
+          </label>
+          <label>
+            <span>근거 소스</span>
+            <select
+              aria-label="프로젝트 일자 관리 감사 근거 소스 필터"
+              data-work-management-source-filter="true"
+              disabled={isTopLevelActionLocked}
+              onChange={(event) =>
+                setWorkManagementOverviewFilters((current) => ({
+                  ...current,
+                  source: event.target.value as WorkManagementOverviewFilters["source"],
+                }))}
+              value={workManagementOverviewFilters.source}
+            >
+              {WORK_MANAGEMENT_SOURCE_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>저장 상태</span>
+            <select
+              aria-label="프로젝트 일자 관리 감사 저장 상태 필터"
+              data-work-management-state-filter="true"
+              disabled={isTopLevelActionLocked}
+              onChange={(event) =>
+                setWorkManagementOverviewFilters((current) => ({
+                  ...current,
+                  persistence: event.target.value as WorkManagementOverviewFilters["persistence"],
+                }))}
+              value={workManagementOverviewFilters.persistence}
+            >
+              {WORK_MANAGEMENT_PERSISTENCE_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            aria-label={
+              workManagementOverviewFilterCount
+                ? `프로젝트 일자 관리 감사 필터 ${workManagementOverviewFilterCount.toLocaleString()}개 적용`
+                : "필터 없이 프로젝트 일자 관리 감사 보기"
+            }
+            className="inline-action"
+            data-apply-work-management-filters="true"
+            disabled={isTopLevelActionLocked}
+            type="submit"
+          >
+            <Search size={15} />
+            필터 적용
+          </button>
+          <button
+            aria-label="프로젝트 일자 관리 감사 필터 초기화"
+            className="inline-action"
+            data-clear-work-management-filters="true"
+            disabled={isTopLevelActionLocked || workManagementOverviewFilterCount === 0}
+            onClick={() => setWorkManagementOverviewFilters(emptyWorkManagementOverviewFilters())}
+            type="button"
+          >
+            <XCircle size={15} />
+            초기화
+          </button>
+        </form>
+        <datalist id="work-management-date-options">
+          {workManagementOverviewDateFilterSuggestions.map((date) => (
+            <option key={date} value={date} />
+          ))}
+        </datalist>
+        <datalist id="work-management-project-options">
+          {workManagementOverviewProjectFilterSuggestions.map((project) => (
+            <option key={project} value={project} />
+          ))}
+        </datalist>
         <div
           className={`work-summary-index ${workSummarySessionLimitInvalid ? "warning" : ""}`}
           data-work-summary-session-limit-meta="true"
@@ -2370,6 +2535,12 @@ function App() {
             <span>{workManagementOverviewMetaText(workManagementOverview)}</span>
           </div>
         ) : null}
+        {workManagementOverviewLoaded ? (
+          <div className="work-summary-index" data-work-management-filter-meta="true">
+            <Search size={15} />
+            <span>{workManagementOverviewFilterMeta}</span>
+          </div>
+        ) : null}
         {workManagementDurabilityWarning ? (
           <div className="work-summary-index warning" data-work-management-durability-warning="true">
             <AlertTriangle size={15} />
@@ -2405,7 +2576,9 @@ function App() {
             </div>
           ) : (
             <div className="empty compact" data-empty-work-management-overview="true">
-              로드된 프로젝트/일자 관리 근거 없음
+              {workManagementOverviewFilterCount
+                ? "필터에 맞는 프로젝트/일자 관리 row 없음"
+                : "로드된 프로젝트/일자 관리 근거 없음"}
             </div>
           )
         ) : null}

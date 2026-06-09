@@ -134,6 +134,8 @@ async function runBrowserQa() {
   const httpErrors = [];
   let workLogFreezePersistence = "";
   let workManagementMetaAfterFreeze = "";
+  let workManagementFilterMeta = "";
+  let workManagementFilteredRows = [];
 
   page.on("console", (message) => {
     if (["error", "warning"].includes(message.type())) {
@@ -285,6 +287,24 @@ async function runBrowserQa() {
       (await page.locator('[data-work-log-extraction-persistence="true"]').textContent())?.trim() ?? "";
     workManagementMetaAfterFreeze =
       (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
+    await page.locator('[data-work-management-project-filter="true"]').fill("notebooklm-llm-wiki-flow");
+    await page.locator('[data-work-management-source-filter="true"]').selectOption("saved_extraction");
+    await page.locator('[data-apply-work-management-filters="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-management-filter-meta="true"]')?.textContent ?? "";
+      const rows = [...document.querySelectorAll('[data-work-management-overview="true"] article')];
+      return text.includes("관리 감사 필터 2개")
+        && rows.some((row) => (row.textContent ?? "").includes("notebooklm-llm-wiki-flow"));
+    }, undefined, { timeout: 120000 });
+    workManagementFilterMeta =
+      (await page.locator('[data-work-management-filter-meta="true"]').textContent())?.trim() ?? "";
+    workManagementFilteredRows =
+      await page.locator('[data-work-management-overview="true"] article').allTextContents();
+    await page.locator('[data-clear-work-management-filters="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-management-filter-meta="true"]')?.textContent ?? "";
+      return text.includes("관리 감사 필터 없음");
+    }, undefined, { timeout: 120000 });
     await page.locator('[data-load-work-log-coverage="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-coverage-meta="true"]')?.textContent ?? "";
@@ -327,6 +347,8 @@ async function runBrowserQa() {
         (await page.locator('[data-work-management-durability-warning="true"]').textContent().catch(() => ""))?.trim() ?? "",
       workManagementMetaAfterFreeze,
       workLogFreezePersistence,
+      workManagementFilterMeta,
+      workManagementFilteredRows,
       workManagementPersistenceRows:
         await page.locator('[data-work-management-row-persistence="true"]').allTextContents(),
       coverageMeta:

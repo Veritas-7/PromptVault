@@ -1,3 +1,4 @@
+import { storedFilterSuggestionValues } from "./storedFilters.ts";
 import type {
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionItemsResult,
@@ -13,6 +14,13 @@ export type WorkManagementOverviewSource =
   | "saved_extraction"
   | "progress_log";
 export type WorkManagementOverviewPersistenceState = "persisted" | "live_only";
+
+export interface WorkManagementOverviewFilters {
+  date: string;
+  project: string;
+  source: "" | WorkManagementOverviewSource;
+  persistence: "" | WorkManagementOverviewPersistenceState;
+}
 
 export interface WorkManagementOverviewInput {
   summary?: ProjectWorkSummaryResult | null;
@@ -54,6 +62,26 @@ export interface WorkManagementOverview {
   latest_snapshot_created_at: string | null;
   latest_saved_extraction_at: string | null;
   rows: WorkManagementOverviewRow[];
+}
+
+export function emptyWorkManagementOverviewFilters(): WorkManagementOverviewFilters {
+  return {
+    date: "",
+    persistence: "",
+    project: "",
+    source: "",
+  };
+}
+
+export function activeWorkManagementOverviewFilterCount(
+  filters: WorkManagementOverviewFilters,
+): number {
+  return [
+    filters.date,
+    filters.persistence,
+    filters.project,
+    filters.source,
+  ].filter((value) => value.trim()).length;
 }
 
 const SOURCE_ORDER: WorkManagementOverviewSource[] = [
@@ -179,6 +207,49 @@ export function workManagementOverviewMetaText(overview: WorkManagementOverview)
     `최신스냅샷 ${overview.latest_snapshot_created_at ?? "없음"}`,
     `최신저장추출 ${overview.latest_saved_extraction_at ?? "없음"}`,
   ].join(" · ");
+}
+
+export function filterWorkManagementOverviewRows(
+  rows: readonly WorkManagementOverviewRow[],
+  filters: WorkManagementOverviewFilters,
+): WorkManagementOverviewRow[] {
+  const date = filters.date.trim();
+  const project = filters.project.trim();
+  const source = filters.source.trim();
+  const persistence = filters.persistence.trim();
+  return rows.filter((row) => {
+    if (date && row.date !== date) return false;
+    if (project && row.project !== project) return false;
+    if (source && !row.sources.includes(source as WorkManagementOverviewSource)) return false;
+    if (persistence && row.persistence_state !== persistence) return false;
+    return true;
+  });
+}
+
+export function workManagementOverviewDateSuggestions(
+  rows: readonly WorkManagementOverviewRow[],
+): string[] {
+  return storedFilterSuggestionValues(rows.map((row) => row.date));
+}
+
+export function workManagementOverviewProjectSuggestions(
+  rows: readonly WorkManagementOverviewRow[],
+): string[] {
+  return storedFilterSuggestionValues(rows.map((row) => row.project));
+}
+
+export function workManagementOverviewFilterMetaText(
+  resultCount: number,
+  totalCount: number,
+  activeFilterCount: number,
+): string {
+  const parts = [
+    activeFilterCount > 0
+      ? `관리 감사 필터 ${activeFilterCount.toLocaleString()}개`
+      : "관리 감사 필터 없음",
+    `결과 ${resultCount.toLocaleString()} / ${totalCount.toLocaleString()}개`,
+  ];
+  return parts.join(" · ");
 }
 
 export function workManagementOverviewSourceText(row: WorkManagementOverviewRow): string {

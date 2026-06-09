@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  activeWorkManagementOverviewFilterCount,
   buildWorkManagementOverview,
+  emptyWorkManagementOverviewFilters,
+  filterWorkManagementOverviewRows,
+  workManagementOverviewDateSuggestions,
   workManagementOverviewDurabilityWarningText,
+  workManagementOverviewFilterMetaText,
   workManagementOverviewMetaText,
   workManagementOverviewPersistenceText,
+  workManagementOverviewProjectSuggestions,
   workManagementOverviewSourceText,
 } from "../src/workManagementOverview.ts";
 import type {
@@ -364,6 +370,75 @@ test("work management overview status text exposes management coverage", () => {
   assert.equal(
     workManagementOverviewPersistenceText(buildWorkManagementOverview({ coverage: coverageResult() }).rows[0]),
     "라이브만 · 저장근거 없음",
+  );
+});
+
+test("work management overview filters expose auditable project date rows", () => {
+  const overview = buildWorkManagementOverview({
+    coverage: coverageResult(),
+    extractionItems: extractionItemsResult(),
+    extractionProposals: extractionProposalsResult(),
+    snapshots: snapshotsResult(),
+    summary: summaryResult(),
+  });
+
+  assert.deepEqual(emptyWorkManagementOverviewFilters(), {
+    date: "",
+    persistence: "",
+    project: "",
+    source: "",
+  });
+  assert.equal(activeWorkManagementOverviewFilterCount({
+    date: "2026-06-09",
+    persistence: "persisted",
+    project: " PromptVault ",
+    source: "saved_extraction",
+  }), 4);
+
+  assert.deepEqual(
+    filterWorkManagementOverviewRows(overview.rows, {
+      date: "2026-06-09",
+      persistence: "persisted",
+      project: "PromptVault",
+      source: "saved_extraction",
+    }).map((row) => row.key),
+    ["2026-06-09::PromptVault"],
+  );
+  assert.deepEqual(
+    filterWorkManagementOverviewRows(overview.rows, {
+      date: "",
+      persistence: "",
+      project: "",
+      source: "extraction_proposal",
+    }).map((row) => row.key),
+    ["2026-06-08::CareVault"],
+  );
+  assert.deepEqual(
+    filterWorkManagementOverviewRows(overview.rows, {
+      date: "",
+      persistence: "live_only",
+      project: "",
+      source: "",
+    }),
+    [],
+  );
+  assert.deepEqual(workManagementOverviewDateSuggestions(overview.rows), [
+    "2026-06-04",
+    "2026-06-08",
+    "2026-06-09",
+  ]);
+  assert.deepEqual(workManagementOverviewProjectSuggestions(overview.rows), [
+    "CareVault",
+    "PromptVault",
+    "RepoTutorStudio",
+  ]);
+  assert.equal(
+    workManagementOverviewFilterMetaText(1, 3, 2),
+    "관리 감사 필터 2개 · 결과 1 / 3개",
+  );
+  assert.equal(
+    workManagementOverviewFilterMetaText(3, 3, 0),
+    "관리 감사 필터 없음 · 결과 3 / 3개",
   );
 });
 

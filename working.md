@@ -1,10 +1,95 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 10:20 KST
+Updated: 2026-06-09 10:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 management audit filters
+
+Current Goal:
+
+- Make the project/day management overview auditable after freeze by letting
+  the operator filter management rows by date, project, evidence source, and
+  persistence state.
+- Avoid the old behavior where only the first six management rows were
+  visible and the rest could only be inferred from the overflow count.
+
+Context:
+
+- The previous slice proved that parsed progress-log rows can be frozen into
+  durable SQLite management rows.
+- The live browser QA corpus now has many hidden management rows:
+  `45` project/day rows, but only `6` are visible at once.
+- The next product gap was not another backend save path; it was operator
+  auditability of saved rows by project/date/source.
+
+Progress:
+
+- Added pure work-management overview filter helpers for date, project,
+  source, and persistence state.
+- Added project/date datalist suggestions from all loaded management rows.
+- Added a management audit filter row to the work-management panel:
+  `관리 날짜`, `프로젝트`, `근거 소스`, `저장 상태`, apply, and reset.
+- Added a filter meta chip that reports active filter count and result size,
+  e.g. `관리 감사 필터 2개 · 결과 9 / 45개`.
+- Extended browser bridge QA to filter to
+  `notebooklm-llm-wiki-flow` + `저장추출`, verify filtered rows are visible,
+  and reset filters before continuing the rest of the flow.
+
+Changes:
+
+- `src/workManagementOverview.ts`:
+  - adds `WorkManagementOverviewFilters`, empty/default helpers, active count,
+    row filtering, date/project suggestions, and filter meta text.
+- `src/App.tsx`:
+  - adds audit filter state, source/state option sets, filter form, filter
+    meta, and filtered management row rendering.
+- `src/App.css`:
+  - adds the wider management filter grid and select styling.
+- `tests/workManagementOverview.test.ts`:
+  - covers filter shape, active count, combined filtering, suggestions, and
+    filter meta text.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - verifies the new filter controls inside the real browser bridge flow.
+
+Tests:
+
+- `npm run test:ui`: PASS, UI `435` tests.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final QA JSON included
+  `workSessionLimit=200`,
+  `workManagementMetaAfterFreeze="관리 45개 · 31개 프로젝트 · 19일 ... 저장관리 45 · 라이브만 0 ..."`,
+  `workManagementFilterMeta="관리 감사 필터 2개 · 결과 9 / 45개"`,
+  and filtered rows for `notebooklm-llm-wiki-flow` dated 2026-06-09 through
+  2026-06-04.
+- `npm run check`: PASS. UI `435` tests, Vite build, Rust lib `165`
+  tests, CLI `24` tests, doc-tests, and clippy all passed.
+
+Issues:
+
+- This is an in-memory audit filter over the currently loaded management
+  overview. It does not yet run a historical all-session/all-log backfill.
+- Confidence filtering is still only visible in saved extraction item rows;
+  management overview rows do not yet aggregate min/max confidence.
+
+Research:
+
+- No external research needed for this slice. The implementation followed the
+  existing `work-summary-filter-row` UI pattern and the current overview data
+  model.
+
+Next Steps:
+
+- Commit and push this audit-filter slice.
+- Next product slice: add confidence/min-confidence aggregation to
+  management rows so frozen extraction quality can be audited without opening
+  every saved item.
+- Later product slice: add an explicit backfill/report view that can scan
+  beyond the current session/log limits and show saved project/day coverage
+  across the full local history.
 
 ## Current Slice - 2026-06-09 live-only management freeze
 

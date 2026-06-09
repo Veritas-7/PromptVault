@@ -413,6 +413,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("root: {}", result.root_path);
             println!("files_seen: {}", result.files_seen);
             println!("candidates: {}", result.candidate_count);
+            println!(
+                "review_queue: {} ({})",
+                result.review_queue_state, result.review_queue_reason
+            );
+            println!("pending_review: {}", result.pending_review_count);
+            println!("safe_ai_candidates: {}", result.safe_ai_candidate_count);
+            println!("risk_blocked_candidates: {}", result.risk_blocked_candidate_count);
             println!("skipped_parsed: {}", result.skipped_parsed_file_count);
             println!(
                 "skipped_unreadable: {}",

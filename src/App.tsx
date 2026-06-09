@@ -2722,6 +2722,9 @@ function App() {
                     {workLogCandidateReviewLabel(candidate)}
                   </span>
                   <span>
+                    queue · {candidate.risk_flags.length ? "로컬/수동 검토 전용" : "AI provider 전송 가능"}
+                  </span>
+                  <span>
                     risk{" "}
                     {candidate.risk_flags.length
                       ? candidate.risk_flags.map(riskFlagLabel).join(", ")

@@ -1293,6 +1293,11 @@ function projectWorkLogExtractionCandidatesWithinResult(value: unknown): boolean
     || !isNonNegativeSafeInteger(value.skipped_unreadable_file_count)
     || !isNonNegativeSafeInteger(value.skipped_empty_file_count)
     || !isNonNegativeSafeInteger(value.skipped_pointer_file_count)
+    || !isNonBlankString(value.review_queue_state)
+    || !isNonBlankString(value.review_queue_reason)
+    || !isNonNegativeSafeInteger(value.pending_review_count)
+    || !isNonNegativeSafeInteger(value.safe_ai_candidate_count)
+    || !isNonNegativeSafeInteger(value.risk_blocked_candidate_count)
     || !isNonNegativeSafeInteger(value.candidate_count)) {
     return false;
   }
@@ -1303,6 +1308,8 @@ function projectWorkLogExtractionCandidatesWithinResult(value: unknown): boolean
     + value.candidates.length;
   return Number.isSafeInteger(accountedFileCount)
     && value.candidate_count === value.candidates.length
+    && value.pending_review_count === value.candidate_count
+    && value.safe_ai_candidate_count + value.risk_blocked_candidate_count === value.candidate_count
     && accountedFileCount <= value.files_seen;
 }
 

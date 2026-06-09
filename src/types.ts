@@ -255,6 +255,11 @@ export interface ProjectWorkLogExtractionCandidatesResult {
   skipped_unreadable_file_count: number;
   skipped_empty_file_count: number;
   skipped_pointer_file_count: number;
+  review_queue_state: string;
+  review_queue_reason: string;
+  pending_review_count: number;
+  safe_ai_candidate_count: number;
+  risk_blocked_candidate_count: number;
   candidate_count: number;
   candidates: ProjectWorkLogExtractionCandidate[];
   warnings: string[];

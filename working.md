@@ -1,10 +1,118 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 11:32 KST
+Updated: 2026-06-09 11:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 AI backfill review queue audit metadata
+
+Current Goal:
+
+- Start the explicit AI-assisted review/backfill queue by making candidate
+  queue state auditable before any provider call.
+- Show whether unparsed/ambiguous progress-log candidates are pending, safe to
+  send to OpenAI/GLM, or blocked for local/manual review because of risk flags.
+
+Context:
+
+- The previous slice persisted provider/model/runtime metadata for extraction
+  results and saved rows.
+- The remaining product gap is a full review/backfill queue with approval state
+  and saved audit history. This slice is the first vertical piece: queue status
+  and routing metadata from backend to CLI/API/UI/browser QA.
+- Live data currently has no unparsed progress-log candidates, so the queue
+  should explicitly say it is empty because there are no unparsed logs, not
+  because provider wiring is missing.
+
+Progress:
+
+- Added queue metadata to `ProjectWorkLogExtractionCandidatesResult`:
+  `review_queue_state`, `review_queue_reason`, `pending_review_count`,
+  `safe_ai_candidate_count`, and `risk_blocked_candidate_count`.
+- Queue state now distinguishes:
+  - `empty` / `no_unparsed_progress_logs`;
+  - `needs_review` / `safe_ai_candidates_ready`;
+  - `needs_review` / `mixed_safe_and_risk_blocked_candidates`;
+  - `needs_review` / `risk_blocked_candidates_need_local_review`;
+  - empty cases with unreadable logs or missing excerpts.
+- Browser/API validation now rejects impossible queue counters, including
+  `pending_review_count != candidate_count` or safe+risk counts that do not
+  equal the candidate count.
+- UI candidate meta now shows:
+  `백필큐 ... · 이유 ... · pending ... · AI 전송가능 ... · 위험차단 ...`.
+- Candidate rows now show whether a row is `AI provider 전송 가능` or
+  `로컬/수동 검토 전용`.
+- Isolated browser QA now asserts the queue-empty DOM state and includes
+  `workLogCandidatesMeta` in the final JSON.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - computes queue state/reason and safe/risk candidate counts;
+  - added Rust coverage for mixed safe/risk candidates and pointer-only empty
+    queues.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - prints review queue state, reason, pending count, safe AI candidate count,
+    and risk-blocked count for `work-log-candidates`.
+- `src/types.ts`, `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`,
+  `src/App.tsx`:
+  - carry, validate, and display the queue metadata.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`:
+  - cover queue metadata parsing and user-facing queue status text.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - waits for the new queue-empty DOM text and records
+    `workLogCandidatesMeta`.
+
+Tests:
+
+- `cargo check --manifest-path src-tauri/Cargo.toml`: PASS.
+- `npm run test:ui -- tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`: PASS. The package script ran the full UI suite, `436` tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml project_progress_log_extraction_candidates`: PASS, `2` Rust tests.
+- `npm run build`: PASS.
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-candidates --json`: PASS. Live summary before the browser QA:
+  `files_seen=790`, queue `empty/no_unparsed_progress_logs`,
+  `pending=0`, `safe=0`, `risk=0`, `candidates=0`, no warnings.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final isolated browser QA JSON included:
+  - `coverageMeta`: `791개 로그 · parsed 790개 · unparsed 0개 · 31개 프로젝트 · 작업 8,590개`;
+  - `workLogCandidatesMeta`: `백필큐 비어 있음 · 이유 unparsed 없음 · pending 0개 · AI 전송가능 0개 · 위험차단 0개 · parsed 제외 790개 · unreadable 0개 · empty 0개 · pointer 1개`;
+  - `workManagementMeta`: `관리 91개 · 31개 프로젝트 · 25일 · 현재요약 1 · 스냅샷 1 · 추출제안 0 · 저장추출 90 · 진행로그 790 · 저장관리 91 · 라이브만 0`.
+- `npm run check`: PASS. UI `436` tests, Vite build, Rust lib `167` tests,
+  CLI `24` tests, doc-tests, and clippy all passed.
+- Post-`working.md` update recheck,
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-candidates --json`: PASS.
+  Final live summary: `files_seen=791`, queue
+  `empty/no_unparsed_progress_logs`, `pending=0`, `safe=0`, `risk=0`,
+  `candidates=0`, no warnings.
+- Post-`working.md` update recheck,
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-coverage --json`: PASS.
+  Final live summary: `files_seen=791`, `parsed=790`, `unparsed=0`,
+  `project_count=31`, `work_item_count=8,592`, no warnings.
+
+Issues:
+
+- This is not the full AI-assisted review/backfill queue yet. It exposes and
+  validates queue state, but does not persist a separate candidate queue table
+  or per-candidate approval/rejection state before extraction.
+- Live data still has `candidate_count=0`, so provider behavior for real
+  unparsed candidates is covered by fixture tests, not by current production
+  progress logs.
+- Staged secret scan, commit, and push are still pending for this slice.
+
+Research:
+
+- No external research needed. This is a continuation of the existing
+  progress-log extraction architecture.
+
+Next Steps:
+
+- Run full `npm run check`, diff checks, staged secret scan, then commit and
+  push.
+- Next product slice after this: persist explicit candidate queue review state
+  for unparsed/ambiguous logs before extraction, including approval/rejection
+  audit rows.
 
 ## Current Slice - 2026-06-09 extraction runtime metadata
 

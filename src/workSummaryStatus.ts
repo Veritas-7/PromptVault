@@ -218,12 +218,44 @@ export function workLogCandidatesMetaText(
   if (state === "loading") return "AI 추출 후보 확인 중";
   if (!result) return state === "failed" ? "AI 추출 후보를 사용할 수 없음" : "아직 확인한 AI 추출 후보 없음";
   return [
-    `후보 ${result.candidate_count.toLocaleString()}개`,
+    workLogCandidateQueueText(result),
+    `이유 ${workLogCandidateQueueReasonText(result.review_queue_reason)}`,
+    `pending ${result.pending_review_count.toLocaleString()}개`,
+    `AI 전송가능 ${result.safe_ai_candidate_count.toLocaleString()}개`,
+    `위험차단 ${result.risk_blocked_candidate_count.toLocaleString()}개`,
     `parsed 제외 ${result.skipped_parsed_file_count.toLocaleString()}개`,
     `unreadable ${result.skipped_unreadable_file_count.toLocaleString()}개`,
     `empty ${result.skipped_empty_file_count.toLocaleString()}개`,
     `pointer ${result.skipped_pointer_file_count.toLocaleString()}개`,
   ].join(" · ");
+}
+
+function workLogCandidateQueueText(result: ProjectWorkLogExtractionCandidatesResult): string {
+  const state = result.review_queue_state === "empty"
+    ? "비어 있음"
+    : result.review_queue_state === "needs_review"
+      ? "검토 필요"
+      : result.review_queue_state;
+  return `백필큐 ${state}`;
+}
+
+function workLogCandidateQueueReasonText(reason: string): string {
+  switch (reason) {
+    case "no_unparsed_progress_logs":
+      return "unparsed 없음";
+    case "unparsed_logs_without_excerpt":
+      return "excerpt 없음";
+    case "unreadable_progress_logs":
+      return "읽기 실패";
+    case "safe_ai_candidates_ready":
+      return "AI 후보 준비";
+    case "mixed_safe_and_risk_blocked_candidates":
+      return "AI/로컬 검토 혼합";
+    case "risk_blocked_candidates_need_local_review":
+      return "로컬 검토 필요";
+    default:
+      return reason;
+  }
 }
 
 export function workLogCandidatesFailureText(state: WorkLogCandidatesState): string | null {

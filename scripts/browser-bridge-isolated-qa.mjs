@@ -142,6 +142,7 @@ async function runBrowserQa() {
   let workManagementMeta = "";
   let workSummaryIndex = "";
   let coverageMeta = "";
+  let workLogCandidatesMeta = "";
   let workLogExtractionProviderWarning = "";
   let workLogItemRows = [];
 
@@ -342,8 +343,13 @@ async function runBrowserQa() {
     await page.locator('[data-load-work-log-candidates="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-candidates-meta="true"]')?.textContent ?? "";
-      return text.includes("후보 0개") || text.includes("후보 없음");
+      return text.includes("백필큐 비어 있음")
+        && text.includes("이유 unparsed 없음")
+        && text.includes("AI 전송가능 0개")
+        && text.includes("위험차단 0개");
     }, undefined, { timeout: 90000 });
+    workLogCandidatesMeta =
+      (await page.locator('[data-work-log-candidates-meta="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-load-work-log-extraction="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-extraction-meta="true"]')?.textContent ?? "";
@@ -389,6 +395,7 @@ async function runBrowserQa() {
       workManagementMissingConfidenceRows,
       workManagementPersistenceRows,
       coverageMeta,
+      workLogCandidatesMeta,
       workLogExtractionProviderWarning,
       workLogItemRows,
     };

@@ -147,6 +147,11 @@ function candidatesResult(
     skipped_unreadable_file_count: 1,
     skipped_empty_file_count: 2,
     skipped_pointer_file_count: 1,
+    review_queue_state: "needs_review",
+    review_queue_reason: "mixed_safe_and_risk_blocked_candidates",
+    pending_review_count: 13,
+    safe_ai_candidate_count: 10,
+    risk_blocked_candidate_count: 3,
     candidate_count: 13,
     candidates: [],
     warnings: [],
@@ -512,7 +517,18 @@ test("work log candidate labels describe AI extraction inputs", () => {
   assert.equal(workLogCandidatesMetaText("loading", candidatesResult()), "AI 추출 후보 확인 중");
   assert.equal(
     workLogCandidatesMetaText("ready", candidatesResult()),
-    "후보 13개 · parsed 제외 16개 · unreadable 1개 · empty 2개 · pointer 1개",
+    "백필큐 검토 필요 · 이유 AI/로컬 검토 혼합 · pending 13개 · AI 전송가능 10개 · 위험차단 3개 · parsed 제외 16개 · unreadable 1개 · empty 2개 · pointer 1개",
+  );
+  assert.equal(
+    workLogCandidatesMetaText("ready", candidatesResult({
+      review_queue_state: "empty",
+      review_queue_reason: "no_unparsed_progress_logs",
+      pending_review_count: 0,
+      safe_ai_candidate_count: 0,
+      risk_blocked_candidate_count: 0,
+      candidate_count: 0,
+    })),
+    "백필큐 비어 있음 · 이유 unparsed 없음 · pending 0개 · AI 전송가능 0개 · 위험차단 0개 · parsed 제외 16개 · unreadable 1개 · empty 2개 · pointer 1개",
   );
   assert.equal(workLogCandidatesMetaText(failed, null), "AI 추출 후보를 사용할 수 없음");
   assert.equal(

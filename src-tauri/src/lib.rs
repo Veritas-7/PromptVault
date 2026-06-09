@@ -235,6 +235,11 @@ pub struct ProjectWorkLogExtractionCandidatesResult {
     pub skipped_unreadable_file_count: usize,
     pub skipped_empty_file_count: usize,
     pub skipped_pointer_file_count: usize,
+    pub review_queue_state: String,
+    pub review_queue_reason: String,
+    pub pending_review_count: usize,
+    pub safe_ai_candidate_count: usize,
+    pub risk_blocked_candidate_count: usize,
     pub candidate_count: usize,
     pub candidates: Vec<ProjectWorkLogExtractionCandidate>,
     pub warnings: Vec<String>,
@@ -3663,6 +3668,24 @@ fn build_project_progress_log_extraction_candidates(
         candidates.truncate(limit);
     }
     let candidate_count = candidates.len();
+    let risk_blocked_candidate_count = candidates
+        .iter()
+        .filter(|candidate| !candidate.risk_flags.is_empty())
+        .count();
+    let safe_ai_candidate_count = candidate_count.saturating_sub(risk_blocked_candidate_count);
+    let review_queue_state = if candidate_count == 0 {
+        "empty"
+    } else {
+        "needs_review"
+    }
+    .to_string();
+    let review_queue_reason = project_work_log_review_queue_reason(
+        candidate_count,
+        safe_ai_candidate_count,
+        risk_blocked_candidate_count,
+        skipped_unreadable_file_count,
+        skipped_empty_file_count,
+    );
 
     Ok(ProjectWorkLogExtractionCandidatesResult {
         generated_at: Utc::now().to_rfc3339(),
@@ -3672,10 +3695,40 @@ fn build_project_progress_log_extraction_candidates(
         skipped_unreadable_file_count,
         skipped_empty_file_count,
         skipped_pointer_file_count,
+        review_queue_state,
+        review_queue_reason,
+        pending_review_count: candidate_count,
+        safe_ai_candidate_count,
+        risk_blocked_candidate_count,
         candidate_count,
         candidates,
         warnings,
     })
+}
+
+fn project_work_log_review_queue_reason(
+    candidate_count: usize,
+    safe_ai_candidate_count: usize,
+    risk_blocked_candidate_count: usize,
+    skipped_unreadable_file_count: usize,
+    skipped_empty_file_count: usize,
+) -> String {
+    if candidate_count == 0 {
+        if skipped_unreadable_file_count > 0 {
+            return "unreadable_progress_logs".to_string();
+        }
+        if skipped_empty_file_count > 0 {
+            return "unparsed_logs_without_excerpt".to_string();
+        }
+        return "no_unparsed_progress_logs".to_string();
+    }
+    if safe_ai_candidate_count > 0 && risk_blocked_candidate_count > 0 {
+        return "mixed_safe_and_risk_blocked_candidates".to_string();
+    }
+    if safe_ai_candidate_count > 0 {
+        return "safe_ai_candidates_ready".to_string();
+    }
+    "risk_blocked_candidates_need_local_review".to_string()
 }
 
 fn project_progress_log_is_pointer(text: &str) -> bool {
@@ -11553,8 +11606,10 @@ Progress:
         ));
         let alpha_dir = root.join("Alpha");
         let beta_dir = root.join("Beta");
+        let gamma_dir = root.join("Gamma");
         std::fs::create_dir_all(&alpha_dir).expect("create alpha dir");
         std::fs::create_dir_all(&beta_dir).expect("create beta dir");
+        std::fs::create_dir_all(&gamma_dir).expect("create gamma dir");
         std::fs::write(
             alpha_dir.join("working.md"),
             "# Current Slice - 2026-06-09 Parsed alpha\n\n- Already structured.\n",
@@ -11565,6 +11620,11 @@ Progress:
             "Ideas\n\n- Backfill older work notes\n- Keep api_key=short-secret-value local only\n",
         )
         .expect("write unparsed progress log");
+        std::fs::write(
+            gamma_dir.join("working.md"),
+            "Notes\n\n- Backfill safe work notes from a cumulative log\n",
+        )
+        .expect("write safe unparsed progress log");
         let source = SourceSpec {
             id: "project-progress-logs",
             label: "Project progress logs",
@@ -11575,10 +11635,18 @@ Progress:
         let result = build_project_progress_log_extraction_candidates(&source, Some(10))
             .expect("build extraction candidates");
 
-        assert_eq!(result.files_seen, 2);
+        assert_eq!(result.files_seen, 3);
         assert_eq!(result.skipped_parsed_file_count, 1);
         assert_eq!(result.skipped_unreadable_file_count, 0);
-        assert_eq!(result.candidate_count, 1);
+        assert_eq!(result.review_queue_state, "needs_review");
+        assert_eq!(
+            result.review_queue_reason,
+            "mixed_safe_and_risk_blocked_candidates"
+        );
+        assert_eq!(result.pending_review_count, 2);
+        assert_eq!(result.safe_ai_candidate_count, 1);
+        assert_eq!(result.risk_blocked_candidate_count, 1);
+        assert_eq!(result.candidate_count, 2);
         assert_eq!(result.candidates[0].project, "Beta");
         assert_eq!(result.candidates[0].source_file, "workingd.md");
         assert_eq!(result.candidates[0].reason, "missing_dated_heading");
@@ -11593,6 +11661,8 @@ Progress:
             .risk_flags
             .iter()
             .any(|flag| flag == "possible_api_key"));
+        assert_eq!(result.candidates[1].project, "Gamma");
+        assert!(result.candidates[1].risk_flags.is_empty());
 
         std::fs::remove_dir_all(root).expect("remove candidates fixture");
     }
@@ -11625,6 +11695,11 @@ Progress:
         assert_eq!(result.skipped_unreadable_file_count, 0);
         assert_eq!(result.skipped_empty_file_count, 0);
         assert_eq!(result.skipped_pointer_file_count, 1);
+        assert_eq!(result.review_queue_state, "empty");
+        assert_eq!(result.review_queue_reason, "no_unparsed_progress_logs");
+        assert_eq!(result.pending_review_count, 0);
+        assert_eq!(result.safe_ai_candidate_count, 0);
+        assert_eq!(result.risk_blocked_candidate_count, 0);
         assert_eq!(result.candidate_count, 0);
 
         std::fs::remove_dir_all(root).expect("remove pointer candidates fixture");
@@ -11757,7 +11832,12 @@ Progress:
             skipped_unreadable_file_count: 0,
             skipped_empty_file_count: 0,
             skipped_pointer_file_count: 0,
-            candidate_count: 3,
+            review_queue_state: "needs_review".to_string(),
+            review_queue_reason: "mixed_safe_and_risk_blocked_candidates".to_string(),
+            pending_review_count: 2,
+            safe_ai_candidate_count: 1,
+            risk_blocked_candidate_count: 1,
+            candidate_count: 2,
             candidates: vec![
                 ProjectWorkLogExtractionCandidate {
                     candidate_id: "work-log-Beta-a1b2c3d4e5".to_string(),
@@ -11824,6 +11904,11 @@ Progress:
             skipped_unreadable_file_count: 0,
             skipped_empty_file_count: 0,
             skipped_pointer_file_count: 0,
+            review_queue_state: "needs_review".to_string(),
+            review_queue_reason: "mixed_safe_and_risk_blocked_candidates".to_string(),
+            pending_review_count: 3,
+            safe_ai_candidate_count: 2,
+            risk_blocked_candidate_count: 1,
             candidate_count: 3,
             candidates: vec![
                 ProjectWorkLogExtractionCandidate {
@@ -11926,6 +12011,11 @@ Progress:
             skipped_unreadable_file_count: 0,
             skipped_empty_file_count: 0,
             skipped_pointer_file_count: 0,
+            review_queue_state: "needs_review".to_string(),
+            review_queue_reason: "risk_blocked_candidates_need_local_review".to_string(),
+            pending_review_count: 1,
+            safe_ai_candidate_count: 0,
+            risk_blocked_candidate_count: 1,
             candidate_count: 1,
             candidates: vec![ProjectWorkLogExtractionCandidate {
                 candidate_id: "work-log-SnapTranslate-a1b2c3d4e5".to_string(),
@@ -11968,6 +12058,11 @@ Progress:
             skipped_unreadable_file_count: 0,
             skipped_empty_file_count: 0,
             skipped_pointer_file_count: 0,
+            review_queue_state: "needs_review".to_string(),
+            review_queue_reason: "mixed_safe_and_risk_blocked_candidates".to_string(),
+            pending_review_count: 2,
+            safe_ai_candidate_count: 1,
+            risk_blocked_candidate_count: 1,
             candidate_count: 2,
             candidates: vec![
                 ProjectWorkLogExtractionCandidate {
@@ -12746,6 +12841,11 @@ Progress:
             skipped_unreadable_file_count: 0,
             skipped_empty_file_count: 0,
             skipped_pointer_file_count: 0,
+            review_queue_state: "needs_review".to_string(),
+            review_queue_reason: "safe_ai_candidates_ready".to_string(),
+            pending_review_count: 1,
+            safe_ai_candidate_count: 1,
+            risk_blocked_candidate_count: 0,
             candidate_count: 1,
             candidates: vec![candidate],
             warnings: Vec::new(),
@@ -12789,6 +12889,11 @@ Progress:
             skipped_unreadable_file_count: 0,
             skipped_empty_file_count: 0,
             skipped_pointer_file_count: 0,
+            review_queue_state: "empty".to_string(),
+            review_queue_reason: "no_unparsed_progress_logs".to_string(),
+            pending_review_count: 0,
+            safe_ai_candidate_count: 0,
+            risk_blocked_candidate_count: 0,
             candidate_count: 0,
             candidates: Vec::new(),
             warnings: Vec::new(),

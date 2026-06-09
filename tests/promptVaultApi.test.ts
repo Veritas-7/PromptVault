@@ -356,6 +356,11 @@ function projectWorkLogCandidatesPayload(overrides = {}) {
     skipped_unreadable_file_count: 0,
     skipped_empty_file_count: 0,
     skipped_pointer_file_count: 0,
+    review_queue_state: "needs_review",
+    review_queue_reason: "risk_blocked_candidates_need_local_review",
+    pending_review_count: 1,
+    safe_ai_candidate_count: 0,
+    risk_blocked_candidate_count: 1,
     candidate_count: 1,
     candidates: [{
       candidate_id: "work-log-CareVault-a1b2c3d4e5",
@@ -710,6 +715,11 @@ test("browser bridge work log candidates posts limit and validates redacted cand
   assert.deepEqual(JSON.parse(requestBody), { options: { limit: 5 } });
   assert.equal(result.files_seen, 2);
   assert.equal(result.skipped_parsed_file_count, 1);
+  assert.equal(result.review_queue_state, "needs_review");
+  assert.equal(result.review_queue_reason, "risk_blocked_candidates_need_local_review");
+  assert.equal(result.pending_review_count, 1);
+  assert.equal(result.safe_ai_candidate_count, 0);
+  assert.equal(result.risk_blocked_candidate_count, 1);
   assert.equal(result.candidate_count, 1);
   assert.equal(result.candidates[0].project, "CareVault");
   assert.equal(result.candidates[0].reason, "missing_dated_heading");

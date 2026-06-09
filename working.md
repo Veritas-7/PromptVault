@@ -1,12 +1,122 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 17:10 KST
+Updated: 2026-06-09 17:19 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 session backfill remaining estimate helper
+## Current Slice - 2026-06-09 bounded session backfill batch control and status answer
+
+Current Goal:
+
+- Make the real Codex/Codex CX session-index backfill less tedious without
+  making it unbounded by default.
+- Answer the operator's status concern with live evidence: project/day work
+  management, real session parsing, and project-local `working.md` /
+  `workingd.md` style progress-log coverage are already implemented and
+  verified; the remaining gap is full all-history session exhaustion plus
+  higher-quality AI cleanup for odd progress-log shapes.
+
+Context:
+
+- Work management currently has three input surfaces:
+  - project-local progress Markdown files such as `working.md`, `workingd.md`,
+    `WORKING_LOG.md`, `WORKLOG.md`, `PROJECT_STATUS.md`, `PROGRESS_LOG.md`,
+    `progress.md`, and `*-worklog.md` / `*-progress.md`;
+  - Codex/Codex CX session JSONL metadata/raw fallback evidence;
+  - saved extraction, freeze, review-queue, and normalization SQLite rows.
+- Progress Markdown discovery ignores heavy generated/cache directories such
+  as `.git`, `.next`, `node_modules`, `target`, `dist`, `build`, and similar
+  outputs.
+- The current session-index backfill is intentionally bounded and cursored.
+  It is not claiming that every one of the `25k+` Codex session files has
+  already been consumed.
+
+Progress:
+
+- Added an operator-editable `백필` numeric input for session-index backfill.
+- Empty input uses the existing session-limit-derived default.
+- Manual input is bounded to `1-500` files per source batch in the UI.
+- Reset and continue actions are disabled while the input is invalid.
+- The UI now shows the effective per-source batch size, whether it is default
+  or manual, and the total per-click capacity.
+- Browser QA now fills `25`, verifies `source당 25개`, and confirms the
+  continue estimate changes to `클릭당 소스별 최대 50개`.
+
+Changes:
+
+- `src/App.tsx`:
+  - added bounded batch-size parsing/status helpers;
+  - added `workSessionIndexBatchFilesInput` state and validation;
+  - passes the effective batch size into `project_work_session_index`;
+  - renders the batch input and status row in the work-summary toolbar.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - fills the new batch input with `25`;
+  - asserts reset/continue source progress and remaining-click math use the
+    manual batch value.
+- `working.md`:
+  - records the current implementation level and operator-facing answer.
+
+Tests:
+
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON included:
+  - reset source state with manual batch `25`: Codex `50 / 25,145`, Codex CX
+    `11 / 11`;
+  - continue source state: Codex `100 / 25,145`, Codex CX `11 / 11`;
+  - remaining helper: `남은 파일 25,045개 · 활성 소스 1개 · 클릭당 소스별
+    최대 50개 · 이어 백필 예상 501회`;
+  - work summary index: `99` stored session evidence records, `80` matches;
+  - work management: `91` managed rows, `31` projects, `25` days,
+    `저장관리 91`, `라이브만 0`;
+  - coverage: `829` progress logs, `828` parsed, `0` unparsed, `31` projects,
+    `8,910` work items;
+  - approved review queue save and normalization apply flows both saved one row.
+- `npm run check`: PASS, including UI tests (`463`), production build, Rust lib
+  tests (`186`), CLI tests (`30`), doc-tests, and clippy `-D warnings`.
+- Live status recheck:
+  - `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli --
+    work-log-coverage --json`: PASS, `files_seen=830`,
+    `parsed_file_count=829`, `unparsed_file_count=0`, `project_count=31`,
+    `work_item_count=8913`.
+  - `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli --
+    work-report --session-limit 200 --json`: PASS, `total_items=8913`,
+    `project_count=31`, `date_count=25`, `session_scan_prompt_count=200`,
+    `session_evidence_count=72663`, `session_evidence_index_used=true`,
+    `session_evidence_mode=metadata-first-raw-fallback`.
+
+Issues:
+
+- Full Codex all-history session indexing is still incomplete by design. The
+  UI now makes the remaining work visible and lets the operator increase the
+  bounded batch size, but it still requires repeated continue clicks or a
+  future confirmation-gated long run.
+- The frontend caps manual `batch_files` at `500`, but the backend currently
+  only validates that `batch_files` is positive. A future slice should add a
+  backend cap or explicit high-batch confirmation contract.
+- Deterministic progress-log parsing currently has no live unparsed backlog,
+  but some parsed titles are still rough (`Untitled work`, date fragments, or
+  generic headings). The OpenAI/GLM normalization lane exists for this, but
+  quality tuning remains useful.
+
+Research:
+
+- No external research was needed. The status answer is based on live CLI
+  output and current source inspection.
+
+Next Steps:
+
+- Add backend batch-size cap/confirmation metadata to match the UI cap.
+- Add a one-click "long continue" mode only after confirmation and visible
+  estimated runtime/capacity.
+- Improve normalization candidate ranking so rough project-log titles are
+  prioritized even when all progress logs are technically parsed.
+- Add a compact project/day status export so the current management state can
+  be reviewed outside the app.
+
+## Completed Slice - 2026-06-09 session backfill remaining estimate helper
 
 Current Goal:
 

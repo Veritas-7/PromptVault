@@ -244,6 +244,11 @@ async function runBrowserQa() {
       throw new Error(`Expected bridge database ${DATABASE_PATH}, got ${health.database_path}`);
     }
     step("work session index");
+    await page.locator('[data-work-session-index-batch-files="true"]').fill("25");
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-session-index-batch-files-meta="true"]')?.textContent ?? "";
+      return text.includes("source당 25개") && text.includes("클릭당 최대 50개");
+    }, undefined, { timeout: 60000 });
     await page.locator('[data-run-work-session-index-backfill="true"]').click();
     await page.waitForFunction(() => {
       const meta = document.querySelector('[data-work-session-index-meta="true"]')?.textContent ?? "";
@@ -280,7 +285,7 @@ async function runBrowserQa() {
         && meta.includes("배치 2 / 2배치")
         && warning.includes("max_batches")
         && remaining.includes("남은 파일")
-        && remaining.includes("클릭당 소스별 최대")
+        && remaining.includes("클릭당 소스별 최대 50개")
         && remaining.includes("이어 백필 예상")
         && processedFiles > previousCodexProcessedFiles;
     }, resetCodexProcessedFiles, { timeout: 120000 });

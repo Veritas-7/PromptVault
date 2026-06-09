@@ -342,6 +342,7 @@ const WORK_SUMMARY_LIMIT = 80;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_SESSION_INDEX_MAX_BATCHES = 2;
+const WORK_SESSION_INDEX_MAX_BATCH_FILES = 500;
 const WORK_LOG_COVERAGE_DISPLAY_LIMIT = 8;
 const WORK_LOG_CANDIDATE_DISPLAY_LIMIT = 5;
 const WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
@@ -372,6 +373,34 @@ function acceptedWorkLogExtractionIds(result: ProjectWorkLogExtractionProposalsR
 
 function workSessionIndexBatchFiles(sessionLimit: number): number {
   return Math.max(1, Math.ceil(sessionLimit / WORK_SESSION_INDEX_MAX_BATCHES));
+}
+
+function parseWorkSessionIndexBatchFiles(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > WORK_SESSION_INDEX_MAX_BATCH_FILES) {
+    return null;
+  }
+  return parsed;
+}
+
+function workSessionIndexBatchFilesStatusText(
+  input: string,
+  effectiveBatchFiles: number | null,
+): string {
+  if (input.trim() !== "" && parseWorkSessionIndexBatchFiles(input) === null) {
+    return `백필 배치 파일은 1-${WORK_SESSION_INDEX_MAX_BATCH_FILES.toLocaleString()} 사이 숫자 또는 빈 값`;
+  }
+  if (effectiveBatchFiles === null) {
+    return "세션 백필 배치 계산 대기";
+  }
+  const mode = input.trim() === "" ? "기본값" : "수동값";
+  return [
+    `세션 백필 source당 ${effectiveBatchFiles.toLocaleString()}개`,
+    mode,
+    `클릭당 최대 ${(effectiveBatchFiles * WORK_SESSION_INDEX_MAX_BATCHES).toLocaleString()}개`,
+  ].join(" · ");
 }
 
 function workSessionIndexMetaText(
@@ -542,6 +571,7 @@ function App() {
   const [workSummarySessionLimitInput, setWorkSummarySessionLimitInput] = useState(
     String(WORK_SUMMARY_DEFAULT_SESSION_LIMIT),
   );
+  const [workSessionIndexBatchFilesInput, setWorkSessionIndexBatchFilesInput] = useState("");
   const [importMode, setImportMode] = useState<ImportRunMode | null>(null);
   const [activeImportSourceId, setActiveImportSourceId] = useState<string | null>(null);
   const [selectedImportSourceIds, setSelectedImportSourceIds] = useState<string[]>([]);
@@ -710,6 +740,18 @@ function App() {
   const workSummarySessionLimit = parseWorkSummarySessionLimit(workSummarySessionLimitInput);
   const workSummarySessionLimitInvalid = workSummarySessionLimit === null;
   const workSummarySessionLimitStatus = workSummarySessionLimitStatusText(workSummarySessionLimitInput);
+  const workSessionIndexBatchFilesOverride = workSessionIndexBatchFilesInput.trim() === ""
+    ? null
+    : parseWorkSessionIndexBatchFiles(workSessionIndexBatchFilesInput);
+  const workSessionIndexBatchFilesInvalid =
+    workSessionIndexBatchFilesInput.trim() !== "" && workSessionIndexBatchFilesOverride === null;
+  const workSessionIndexEffectiveBatchFiles = workSummarySessionLimit === null
+    ? null
+    : workSessionIndexBatchFilesOverride ?? workSessionIndexBatchFiles(workSummarySessionLimit);
+  const workSessionIndexBatchFilesStatus = workSessionIndexBatchFilesStatusText(
+    workSessionIndexBatchFilesInput,
+    workSessionIndexEffectiveBatchFiles,
+  );
   const hasPromptResult = result !== null;
   const previewModePendingMessage = pendingPreviewModeNotice(
     result?.preview_sort,
@@ -1659,13 +1701,18 @@ function App() {
       setWorkSessionIndexState("failed");
       return;
     }
+    if (workSessionIndexEffectiveBatchFiles === null || workSessionIndexBatchFilesInvalid) {
+      setError(workSessionIndexBatchFilesStatus);
+      setWorkSessionIndexState("failed");
+      return;
+    }
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkSessionIndexRunMode(mode);
     setWorkSessionIndexState("loading");
     try {
       const next = await runProjectWorkSessionIndex({
-        batch_files: workSessionIndexBatchFiles(sessionLimit),
+        batch_files: workSessionIndexEffectiveBatchFiles,
         max_batches: WORK_SESSION_INDEX_MAX_BATCHES,
         until_complete: true,
         reset: mode === "reset",
@@ -2349,6 +2396,24 @@ function App() {
                 onChange={(event) => setWorkSummarySessionLimitInput(event.currentTarget.value)}
               />
             </label>
+            <label className="session-limit-control">
+              <span>백필</span>
+              <input
+                aria-label="세션 백필 source당 파일 배치 수. 비우면 세션 기준 기본값을 사용합니다"
+                data-work-session-index-batch-files="true"
+                disabled={isTopLevelActionLocked}
+                min={1}
+                max={WORK_SESSION_INDEX_MAX_BATCH_FILES}
+                step={10}
+                type="number"
+                placeholder={`기본 ${
+                  (workSessionIndexEffectiveBatchFiles
+                    ?? workSessionIndexBatchFiles(WORK_SUMMARY_DEFAULT_SESSION_LIMIT)).toLocaleString()
+                }`}
+                value={workSessionIndexBatchFilesInput}
+                onChange={(event) => setWorkSessionIndexBatchFilesInput(event.currentTarget.value)}
+              />
+            </label>
             <button
               aria-label={workManagementRefreshActionLabel(
                 workManagementRefreshState,
@@ -2403,7 +2468,7 @@ function App() {
               className="inline-action"
               data-run-work-session-index-backfill="true"
               data-run-work-session-index-reset-backfill="true"
-              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid || workSessionIndexBatchFilesInvalid}
               onClick={() => void runWorkSessionIndexBackfill("reset")}
               type="button"
             >
@@ -2416,7 +2481,7 @@ function App() {
               aria-label="저장된 세션 인덱스 커서부터 제한된 배치만큼 이어서 백필"
               className="inline-action"
               data-run-work-session-index-continue-backfill="true"
-              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid || workSessionIndexBatchFilesInvalid}
               onClick={() => void runWorkSessionIndexBackfill("continue")}
               type="button"
             >
@@ -3287,6 +3352,13 @@ function App() {
         >
           <Brain size={15} />
           <span>{workSummarySessionLimitStatus}</span>
+        </div>
+        <div
+          className={`work-summary-index ${workSessionIndexBatchFilesInvalid ? "warning" : ""}`}
+          data-work-session-index-batch-files-meta="true"
+        >
+          <Database size={15} />
+          <span>{workSessionIndexBatchFilesStatus}</span>
         </div>
         {workSessionIndexMeta ? (
           <div className="work-summary-index" data-work-session-index-meta="true">

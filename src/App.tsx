@@ -635,6 +635,7 @@ const WORK_MANAGEMENT_SORT_OPTIONS: Array<{
   value: WorkManagementOverviewSort;
 }> = [
   { label: "최신 날짜순", value: "date_desc" },
+  { label: "검토 조치 우선", value: "review_action_first" },
   { label: "라이브만 우선", value: "live_only_first" },
   { label: "confidence 없음 우선", value: "missing_confidence_first" },
   { label: "낮은 confidence 우선", value: "low_confidence_first" },

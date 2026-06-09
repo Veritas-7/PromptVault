@@ -21,6 +21,7 @@ export type WorkManagementOverviewSource =
 export type WorkManagementOverviewPersistenceState = "persisted" | "live_only";
 export type WorkManagementOverviewSort =
   | "date_desc"
+  | "review_action_first"
   | "live_only_first"
   | "missing_confidence_first"
   | "low_confidence_first"
@@ -330,6 +331,10 @@ export function sortWorkManagementOverviewRows(
 ): WorkManagementOverviewRow[] {
   const next = [...rows];
   next.sort((left, right) => {
+    if (sort === "review_action_first") {
+      const actionOrder = reviewActionSortValue(left) - reviewActionSortValue(right);
+      if (actionOrder !== 0) return actionOrder;
+    }
     if (sort === "live_only_first") {
       const persistenceOrder = persistenceSortValue(left) - persistenceSortValue(right);
       if (persistenceOrder !== 0) return persistenceOrder;
@@ -546,6 +551,20 @@ function missingConfidenceSortValue(row: WorkManagementOverviewRow): number {
 
 function confidenceSortValue(row: WorkManagementOverviewRow): number {
   return row.min_confidence ?? Number.POSITIVE_INFINITY;
+}
+
+function reviewActionSortValue(row: WorkManagementOverviewRow): number {
+  if (row.needs_session_evidence && row.session_evidence_audit === "unresolved-after-full-index") return 0;
+  if (row.needs_title_normalization) return 1;
+  if (row.needs_session_evidence) return 2;
+  if (row.persistence_state === "live_only") return 3;
+  if (row.confidence_count === 0) return 4;
+  if (row.min_confidence !== null && row.min_confidence < 0.75) return 5;
+  if (row.normalized_row_count === 0 && (row.saved_extraction_count > 0 || row.extraction_proposal_count > 0)) {
+    return 6;
+  }
+  if (row.status_export_count === 0) return 7;
+  return 8;
 }
 
 function sumRows(

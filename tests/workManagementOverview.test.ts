@@ -791,6 +791,53 @@ test("work management overview sorting exposes audit-first row orders", () => {
       "2026-06-01::OnlyProgress",
     ],
   );
+  const actionOverview = buildWorkManagementOverview({
+    coverage: {
+      ...coverage,
+      files: [
+        ...coverage.files,
+        {
+          project: "OnlyProgress",
+          source_path: "/Users/wj/Ai/System/10_Projects/OnlyProgress/working.md",
+          source_file: "working.md",
+          status: "parsed",
+          work_item_count: 50,
+          latest_date: "2026-06-01",
+          latest_title: "Progress-only backlog",
+          modified_at: "2026-06-09T01:40:00Z",
+        },
+      ],
+    },
+    extractionItems: extractionItemsResult(),
+    normalizedItems: normalizedItemsResult(),
+    statusExport: {
+      ...statusExportResult(),
+      rows: [
+        ...statusExportResult().rows,
+        {
+          ...statusExportResult().rows[0],
+          date: "2026-06-04",
+          project: "RepoTutorStudio",
+          top_titles: ["RepoTutorStudio low confidence saved row"],
+          latest_source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md",
+          latest_source_file: "working.md",
+          session_evidence_count: 1,
+          unique_session_evidence_count: 1,
+          needs_session_evidence: false,
+          needs_title_normalization: false,
+        },
+      ],
+    },
+  });
+  assert.deepEqual(
+    sortWorkManagementOverviewRows(actionOverview.rows, "review_action_first").map((row) => row.key),
+    [
+      "2026-06-08::CareVault",
+      "2026-06-01::OnlyProgress",
+      "2026-06-04::RepoTutorStudio",
+      "2026-06-09::PromptVault",
+    ],
+  );
   assert.deepEqual(
     sortWorkManagementOverviewRows(overview.rows, "live_only_first").map((row) => row.key),
     [

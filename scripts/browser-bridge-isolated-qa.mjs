@@ -433,6 +433,7 @@ async function runBrowserQa() {
   let workManagementMetaAfterFreeze = "";
   let workManagementFilterMeta = "";
   let workManagementFilteredRows = [];
+  let workManagementReviewActionRows = [];
   let workManagementMissingConfidenceRows = [];
   let workManagementPersistenceRows = [];
   let workManagementSessionRows = [];
@@ -1288,6 +1289,23 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     workManagementNextAction =
       (await page.locator('[data-work-management-next-action="true"]').textContent())?.trim() ?? "";
+    step("work management review action sort");
+    await waitForEnabled(page, '[data-work-management-sort="true"]');
+    await page.locator('[data-work-management-sort="true"]').selectOption("review_action_first");
+    await page.waitForFunction(() => {
+      const firstRow = document.querySelector('[data-work-management-overview="true"] article');
+      const text = firstRow?.textContent ?? "";
+      return text.includes("다음 조치")
+        && (
+          text.includes("세션근거 큐 검토")
+          || text.includes("제목 정규화 큐 검토")
+          || text.includes("세션 백필 후 재검증")
+          || text.includes("진행로그 추출 저장")
+          || text.includes("라이브 고정 저장")
+        );
+    }, undefined, { timeout: 120000 });
+    workManagementReviewActionRows =
+      await page.locator('[data-work-management-overview="true"] article').allTextContents();
     step("work management missing confidence sort");
     await waitForEnabled(page, '[data-work-management-sort="true"]');
     await page.locator('[data-work-management-sort="true"]').selectOption("missing_confidence_first");
@@ -1723,6 +1741,7 @@ async function runBrowserQa() {
       workLogFreezePersistence,
       workManagementFilterMeta,
       workManagementFilteredRows,
+      workManagementReviewActionRows,
       workManagementMissingConfidenceRows,
       workManagementPersistenceRows,
       workManagementSessionRows,

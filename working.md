@@ -1,10 +1,67 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 05:38 KST
+Updated: 2026-06-10 05:47 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Work-management review action sort
+
+Current Goal:
+
+- Make the project/day management overview sort by review action priority so
+  unresolved session-evidence, title-normalization, live-only, confidence, and
+  AI-normalization rows can be triaged faster.
+
+Context:
+
+- The previous slice added row-local `다음 조치` text, but operators still had
+  to scan rows manually or use indirect sorts like missing confidence.
+- Review queue triage needs the rows with confirmed session-evidence or title
+  cleanup work to rise above routine completed rows.
+
+Progress:
+
+- Added `review_action_first` as a management overview sort mode.
+- Added the UI label `검토 조치 우선`.
+- Browser QA now selects that sort and asserts that the first visible row has
+  a concrete review/persistence action.
+
+Changes:
+
+- `src/workManagementOverview.ts`: adds review-action sort priority.
+- `src/App.tsx`: exposes the new sort option.
+- `tests/workManagementOverview.test.ts`: covers review-action row ordering.
+- `scripts/browser-bridge-isolated-qa.mjs`: clicks the new sort option in the
+  isolated browser flow.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts` (`10` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check` (`492` UI tests, `214` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge >
+  /tmp/promptvault-review-action-sort-qa.log 2>&1`.
+
+QA Evidence:
+
+- The isolated browser QA selected `review_action_first` via
+  `data-work-management-sort`.
+- The first review-action rows included `다음 조치 · 제목 정규화 큐 검토` and
+  `다음 조치 · 세션 백필 후 재검증 · 근거 limit 영향`.
+- The same QA run reported `31개 프로젝트`, `26일`, `작업 9,770개`,
+  `진행로그 873개`, `세션 근거 3,527건`, and `고유 50건`.
+- Management overview reported `관리 101개`, `저장추출 100`,
+  `세션미해결 18`, `제목정규화 6`, and `진행로그 873`.
+
+Remaining:
+
+- Full historical session backfill remains operator-gated.
+- Review queues still need operator or AI-assisted approval/rejection decisions
+  before durable session-evidence and title-normalization state is final.
 
 ## Completed Slice - 2026-06-10 Work-management row next actions
 

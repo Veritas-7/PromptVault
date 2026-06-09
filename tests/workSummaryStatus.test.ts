@@ -6,6 +6,10 @@ import {
   canRejectWorkLogNormalizationReviewQueueItem,
   canApproveWorkSessionEvidenceReviewQueueItem,
   canRejectWorkSessionEvidenceReviewQueueItem,
+  workAiProviderStatusActionLabel,
+  workAiProviderStatusFailureText,
+  workAiProviderStatusMetaText,
+  workAiProviderStatusProviderText,
   workLogCandidatesActionLabel,
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
@@ -88,6 +92,7 @@ import {
   workSummarySnapshotDisplaySummaries,
   workSummarySnapshotSummaryOverflowText,
   workSummarySnapshotVisibleSummaries,
+  type WorkAiProviderStatusState,
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
   type WorkLogReviewQueueState,
@@ -107,6 +112,7 @@ import {
   type WorkSummaryState,
 } from "../src/workSummaryStatus.ts";
 import type {
+  ProjectWorkAiProviderStatusResult,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidate,
   ProjectWorkLogExtractionCandidatesResult,
@@ -140,6 +146,47 @@ function lockState(overrides: Partial<ActionLockState> = {}): ActionLockState {
     scanRunning: false,
     storedLoadRunning: false,
     workSummaryRunning: false,
+    ...overrides,
+  };
+}
+
+function aiProviderStatusResult(
+  overrides: Partial<ProjectWorkAiProviderStatusResult> = {},
+): ProjectWorkAiProviderStatusResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    external_provider_available: false,
+    fallback_provider: "local-fallback-rules",
+    providers: [
+      {
+        provider: "openai",
+        provider_runtime: "openai-responses",
+        configured: false,
+        usable_for_work_management: false,
+        model: "gpt-test",
+        endpoint: "https://api.openai.com/v1/responses",
+        notes: ["OPENAI_API_KEY is not configured."],
+      },
+      {
+        provider: "glm",
+        provider_runtime: "glm-chat-completions",
+        configured: false,
+        usable_for_work_management: false,
+        model: "glm-test",
+        endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        notes: ["GLM_API_KEY/GLM_API_KEY_2 is not configured."],
+      },
+      {
+        provider: "codex",
+        provider_runtime: "codex-sdk",
+        configured: false,
+        usable_for_work_management: false,
+        model: null,
+        endpoint: null,
+        notes: ["No Codex SDK work-management provider is wired yet."],
+      },
+    ],
+    warnings: ["Codex SDK provider route는 아직 구현되지 않았습니다."],
     ...overrides,
   };
 }
@@ -1519,6 +1566,86 @@ test("work log extraction run labels describe approved queue audit history", () 
     "작업 추출 실행 이력을 불러오지 못했습니다. 데이터베이스 경로나 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogExtractionRunsFailureText("ready"), null);
+});
+
+test("work AI provider status labels expose external readiness and codex gap", () => {
+  const failed: WorkAiProviderStatusState = "failed";
+  const configured = aiProviderStatusResult({
+    external_provider_available: true,
+    providers: [
+      {
+        provider: "openai",
+        provider_runtime: "openai-responses",
+        configured: true,
+        usable_for_work_management: true,
+        model: "gpt-test",
+        endpoint: "https://api.openai.com/v1/responses",
+        notes: ["OpenAI can be attempted first."],
+      },
+      {
+        provider: "glm",
+        provider_runtime: "glm-chat-completions",
+        configured: false,
+        usable_for_work_management: false,
+        model: "glm-test",
+        endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        notes: ["GLM_API_KEY/GLM_API_KEY_2 is not configured."],
+      },
+      {
+        provider: "codex",
+        provider_runtime: "codex-sdk",
+        configured: false,
+        usable_for_work_management: false,
+        model: null,
+        endpoint: null,
+        notes: ["No Codex SDK work-management provider is wired yet."],
+      },
+    ],
+    warnings: [],
+  });
+
+  assert.equal(workAiProviderStatusActionLabel("idle", false, lockState()), "AI provider 상태");
+  assert.equal(
+    workAiProviderStatusActionLabel("ready", true, lockState()),
+    "AI provider 상태 새로고침",
+  );
+  assert.equal(
+    workAiProviderStatusActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 AI provider 상태를 새로고침할 수 없습니다",
+  );
+  assert.equal(
+    workAiProviderStatusMetaText("idle", null),
+    "아직 확인한 AI provider 상태 없음",
+  );
+  assert.equal(
+    workAiProviderStatusMetaText("loading", aiProviderStatusResult()),
+    "AI provider 상태 확인 중",
+  );
+  assert.equal(
+    workAiProviderStatusMetaText("ready", aiProviderStatusResult()),
+    "외부 AI 미설정 · OpenAI 미설정 · GLM 미설정 · Codex SDK 미구현 · fallback local-fallback-rules · 경고 1개",
+  );
+  assert.equal(
+    workAiProviderStatusMetaText("ready", configured),
+    "외부 AI 사용 가능 · OpenAI configured · GLM 미설정 · Codex SDK 미구현 · fallback local-fallback-rules",
+  );
+  assert.equal(
+    workAiProviderStatusMetaText(failed, null),
+    "AI provider 상태를 사용할 수 없음",
+  );
+  assert.equal(
+    workAiProviderStatusFailureText(failed),
+    "AI provider 상태를 확인하지 못했습니다. 브리지 상태와 로컬 provider 설정을 확인하세요.",
+  );
+  assert.equal(workAiProviderStatusFailureText("ready"), null);
+  assert.equal(
+    workAiProviderStatusProviderText(configured.providers[0]),
+    "OpenAI · configured · work-management 사용 가능 · openai-responses · model gpt-test · https://api.openai.com/v1/responses",
+  );
+  assert.equal(
+    workAiProviderStatusProviderText(aiProviderStatusResult().providers[2]),
+    "Codex SDK · 미설정 · 사용 불가 · codex-sdk",
+  );
 });
 
 test("work log normalization candidate labels describe parsed rows needing AI cleanup", () => {

@@ -11,6 +11,7 @@ import type {
   ImportEventsResult,
   ImportStatesResult,
   ImproveResult,
+  ProjectWorkAiProviderStatusResult,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkLogExtractionItemsResult,
@@ -504,6 +505,17 @@ export async function loadProjectWorkLogExtractionProposals(
     "/api/work-log-extract",
     { options },
     parseProjectWorkLogExtractionProposalsResult,
+  );
+}
+
+export async function loadProjectWorkAiProviderStatus(): Promise<ProjectWorkAiProviderStatusResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkAiProviderStatusResult>("project_work_ai_provider_status");
+  }
+  return postBridge<ProjectWorkAiProviderStatusResult>(
+    "/api/work-ai-provider-status",
+    {},
+    parseProjectWorkAiProviderStatusResult,
   );
 }
 
@@ -1921,6 +1933,46 @@ function parseProjectWorkLogExtractionRunsResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkLogExtractionRunsResult;
+}
+
+function isProjectWorkAiProviderStatusProvider(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.provider)
+    && isNonBlankString(value.provider_runtime)
+    && typeof value.configured === "boolean"
+    && typeof value.usable_for_work_management === "boolean"
+    && (!value.usable_for_work_management || value.configured)
+    && isNullableNonBlankString(value.model)
+    && isNullableNonBlankString(value.endpoint)
+    && isNonBlankStringArray(value.notes);
+}
+
+function parseProjectWorkAiProviderStatusResult(
+  value: unknown,
+): ProjectWorkAiProviderStatusResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || typeof value.external_provider_available !== "boolean"
+    || !isNonBlankString(value.fallback_provider)
+    || !Array.isArray(value.providers)
+    || value.providers.length < 3
+    || !value.providers.every(isProjectWorkAiProviderStatusProvider)
+    || !recordStringFieldValuesAreUnique(value.providers, "provider_runtime")
+    || !value.providers.some((provider) => isRecord(provider) && provider.provider === "openai")
+    || !value.providers.some((provider) => isRecord(provider) && provider.provider === "glm")
+    || !value.providers.some((provider) => isRecord(provider) && provider.provider === "codex")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  const hasUsableExternalProvider = value.providers.some((provider) => {
+    return isRecord(provider)
+      && provider.usable_for_work_management === true
+      && provider.provider !== "codex";
+  });
+  if (value.external_provider_available !== hasUsableExternalProvider) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkAiProviderStatusResult;
 }
 
 function isProjectWorkLogNormalizationCandidate(value: unknown): boolean {

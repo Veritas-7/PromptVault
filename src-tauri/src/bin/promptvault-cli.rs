@@ -3,11 +3,11 @@ use promptvault_lib::{
     redact_sensitive_text, run_import_batch, run_list_import_events, run_list_import_states,
     run_list_project_work_log_extraction_items, run_list_project_work_log_extraction_runs,
     run_list_project_work_log_normalized_items, run_list_project_work_summary_snapshots,
-    run_list_stored_prompt_facets, run_load_stored_prompts, run_project_work_log_coverage,
-    run_project_work_log_extraction_candidates, run_project_work_log_extraction_proposals,
-    run_project_work_log_freeze, run_project_work_log_normalization_apply,
-    run_project_work_log_normalization_candidates, run_project_work_log_normalization_proposals,
-    run_project_work_log_normalization_review_queue,
+    run_list_stored_prompt_facets, run_load_stored_prompts, run_project_work_ai_provider_status,
+    run_project_work_log_coverage, run_project_work_log_extraction_candidates,
+    run_project_work_log_extraction_proposals, run_project_work_log_freeze,
+    run_project_work_log_normalization_apply, run_project_work_log_normalization_candidates,
+    run_project_work_log_normalization_proposals, run_project_work_log_normalization_review_queue,
     run_project_work_log_normalization_review_queue_update, run_project_work_log_review_queue,
     run_project_work_log_review_queue_update, run_project_work_report,
     run_project_work_session_evidence_candidates, run_project_work_session_evidence_proposals,
@@ -889,6 +889,49 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 println!("- reason: {}", candidate.reason);
                 println!("- excerpt: {}", candidate.excerpt);
                 println!("  {}", candidate.source_path);
+            }
+        }
+        "work-ai-provider-status" => {
+            let json = take_flag(&mut args, "--json");
+            if !args.is_empty() {
+                return Err(format!(
+                    "unknown work-ai-provider-status argument: {}",
+                    args.join(" ")
+                )
+                .into());
+            }
+            let result = run_project_work_ai_provider_status();
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+
+            println!("PromptVault work AI provider status");
+            println!(
+                "external_provider_available: {}",
+                result.external_provider_available
+            );
+            println!("fallback_provider: {}", result.fallback_provider);
+            for provider in &result.providers {
+                println!(
+                    "- {} · {} · configured={} · usable={}",
+                    provider.provider,
+                    provider.provider_runtime,
+                    provider.configured,
+                    provider.usable_for_work_management
+                );
+                if let Some(model) = &provider.model {
+                    println!("  model: {model}");
+                }
+                if let Some(endpoint) = &provider.endpoint {
+                    println!("  endpoint: {endpoint}");
+                }
+                for note in &provider.notes {
+                    println!("  note: {note}");
+                }
+            }
+            if !result.warnings.is_empty() {
+                println!("warnings: {}", result.warnings.join("; "));
             }
         }
         "work-log-review-queue" => {
@@ -2327,6 +2370,7 @@ fn help_text() -> String {
         "  work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
+        "  work-ai-provider-status [--json]\n",
         "  work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]\n",
         "  work-log-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n",
         "  work-log-extract [--limit N>0] [--database PATH] [--save] [--ai] [--approved-review-queue] [--json]\n",
@@ -2356,6 +2400,7 @@ fn help_text() -> String {
         "  work-session-evidence-review-queue-update marks one persisted session-evidence candidate approved or rejected with an audit reason.\n",
         "  work-log-coverage lists parsed and unparsed project progress logs by project.\n",
         "  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n",
+        "  work-ai-provider-status reports OpenAI/GLM/Codex work-management provider readiness without exposing secrets.\n",
         "  work-log-review-queue persists current extraction candidates into a review queue and marks disappeared candidates stale.\n",
         "  work-log-review-queue-update marks one persisted candidate approved or rejected with an audit reason.\n",
         "  work-log-extract validates AI extraction proposals before they can become dated work items; --save persists accepted dated proposals to SQLite; --ai uses configured OpenAI/GLM providers with local fallback; --approved-review-queue reads only operator-approved review queue rows.\n",
@@ -2874,6 +2919,10 @@ fn handle_bridge_route(
                 run_project_work_log_extraction_candidates(payload.options.unwrap_or_default())?;
             write_json_response(stream, 200, &result)
         }
+        ("POST", "/api/work-ai-provider-status") => {
+            let result = run_project_work_ai_provider_status();
+            write_json_response(stream, 200, &result)
+        }
         ("POST", "/api/work-log-review-queue") => {
             let payload =
                 serde_json::from_str::<ProjectWorkLogReviewQueueBridgePayload>(&request.body)?;
@@ -3029,6 +3078,7 @@ fn bridge_route_uses_database(method: &str, path: &str) -> bool {
             | ("POST", "/api/work-session-evidence-review-queue/update")
             | ("POST", "/api/work-summary-snapshots")
             | ("POST", "/api/work-session-index")
+            | ("POST", "/api/work-ai-provider-status")
             | ("POST", "/api/work-log-review-queue")
             | ("POST", "/api/work-log-review-queue/update")
             | ("POST", "/api/work-log-extract")
@@ -3746,6 +3796,7 @@ mod tests {
         );
         assert!(help.contains("work-log-coverage [--json]"));
         assert!(help.contains("work-log-candidates [--limit N>0] [--json]"));
+        assert!(help.contains("work-ai-provider-status [--json]"));
         assert!(help.contains(
             "work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]"
         ));
@@ -3793,6 +3844,7 @@ mod tests {
         assert!(help.contains("--confirm-long-run is required above the short-run batch cap"));
         assert!(help.contains("work-log-coverage lists parsed and unparsed"));
         assert!(help.contains("work-log-candidates prepares unparsed progress logs"));
+        assert!(help.contains("work-ai-provider-status reports OpenAI/GLM/Codex"));
         assert!(help.contains("work-log-review-queue persists current extraction candidates"));
         assert!(help.contains("work-log-review-queue-update marks one persisted candidate"));
         assert!(help.contains("work-log-extract validates AI extraction proposals"));

@@ -111,6 +111,7 @@ import {
   improvePrompt,
   isBrowserQaMode,
   freezeProjectWorkLogManagementRows,
+  loadProjectWorkAiProviderStatus,
   loadProjectWorkLogCandidates,
   loadProjectWorkLogCoverage,
   loadProjectWorkLogExtractionProposals,
@@ -251,6 +252,7 @@ import type {
   ImportEventsResult,
   ImportStatesResult,
   ImproveResult,
+  ProjectWorkAiProviderStatusResult,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidatesResult,
   ProjectWorkLogExtractionItemsResult,
@@ -280,6 +282,10 @@ import {
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
   workLogCandidateReviewLabel,
+  workAiProviderStatusActionLabel,
+  workAiProviderStatusFailureText,
+  workAiProviderStatusMetaText,
+  workAiProviderStatusProviderText,
   workLogReviewQueueActionLabel,
   workLogReviewQueueFailureText,
   workLogReviewQueueItemStateText,
@@ -360,6 +366,7 @@ import {
   workSummarySnapshotDisplaySummaries,
   workSummarySnapshotExtractionMergeText,
   workSummarySnapshotSummaryOverflowText,
+  type WorkAiProviderStatusState,
   type WorkLogCandidatesState,
   type WorkLogCoverageState,
   type WorkLogReviewQueueState,
@@ -641,6 +648,8 @@ function App() {
   const [workSummarySnapshotsState, setWorkSummarySnapshotsState] = useState<WorkSummarySnapshotsState>("idle");
   const [workLogCoverageState, setWorkLogCoverageState] = useState<WorkLogCoverageState>("idle");
   const [workLogCandidatesState, setWorkLogCandidatesState] = useState<WorkLogCandidatesState>("idle");
+  const [workAiProviderStatusState, setWorkAiProviderStatusState] =
+    useState<WorkAiProviderStatusState>("idle");
   const [workLogReviewQueueState, setWorkLogReviewQueueState] = useState<WorkLogReviewQueueState>("idle");
   const [workLogExtractionState, setWorkLogExtractionState] = useState<WorkLogExtractionState>("idle");
   const [workLogExtractionRunMode, setWorkLogExtractionRunMode] =
@@ -693,6 +702,8 @@ function App() {
   const [workLogCoverageResult, setWorkLogCoverageResult] = useState<ProjectWorkLogCoverageResult | null>(null);
   const [workLogCandidatesResult, setWorkLogCandidatesResult] =
     useState<ProjectWorkLogExtractionCandidatesResult | null>(null);
+  const [workAiProviderStatusResult, setWorkAiProviderStatusResult] =
+    useState<ProjectWorkAiProviderStatusResult | null>(null);
   const [workLogReviewQueueResult, setWorkLogReviewQueueResult] =
     useState<ProjectWorkLogReviewQueueResult | null>(null);
   const [workLogReviewQueueUpdatingCandidateId, setWorkLogReviewQueueUpdatingCandidateId] =
@@ -793,6 +804,7 @@ function App() {
     || workSummarySnapshotsState === "loading"
     || workLogCoverageState === "loading"
     || workLogCandidatesState === "loading"
+    || workAiProviderStatusState === "loading"
     || workLogReviewQueueState === "loading"
     || workLogExtractionState === "loading"
     || workLogExtractionItemsState === "loading"
@@ -1022,6 +1034,12 @@ function App() {
   const workLogCoverageMeta = workLogCoverageMetaText(workLogCoverageState, workLogCoverageResult);
   const workLogCandidatesFailureMessage = workLogCandidatesFailureText(workLogCandidatesState);
   const workLogCandidatesMeta = workLogCandidatesMetaText(workLogCandidatesState, workLogCandidatesResult);
+  const workAiProviderStatusFailureMessage =
+    workAiProviderStatusFailureText(workAiProviderStatusState);
+  const workAiProviderStatusMeta = workAiProviderStatusMetaText(
+    workAiProviderStatusState,
+    workAiProviderStatusResult,
+  );
   const workLogReviewQueueFailureMessage = workLogReviewQueueFailureText(workLogReviewQueueState);
   const workLogReviewQueueMeta = workLogReviewQueueMetaText(workLogReviewQueueState, workLogReviewQueueResult);
   const workLogExtractionFailureMessage = workLogExtractionFailureText(workLogExtractionState);
@@ -1182,6 +1200,7 @@ function App() {
     workLogExtractionItemsResult?.items.slice(0, WORK_LOG_EXTRACTION_ITEM_DISPLAY_LIMIT) ?? [];
   const visibleWorkLogExtractionRuns =
     workLogExtractionRunsResult?.runs.slice(0, WORK_LOG_EXTRACTION_RUN_DISPLAY_LIMIT) ?? [];
+  const visibleWorkAiProviderStatusProviders = workAiProviderStatusResult?.providers ?? [];
   const visibleWorkLogNormalizationCandidates =
     workLogNormalizationCandidatesResult?.candidates.slice(
       0,
@@ -1848,6 +1867,24 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkLogCandidatesState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function refreshWorkAiProviderStatus() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkAiProviderStatusState("loading");
+    try {
+      const next = await loadProjectWorkAiProviderStatus();
+      setWorkAiProviderStatusResult(next);
+      setWorkAiProviderStatusState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkAiProviderStatusState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -3027,6 +3064,25 @@ function App() {
                 : "추출 후보"}
             </button>
             <button
+              aria-label={workAiProviderStatusActionLabel(
+                workAiProviderStatusState,
+                workAiProviderStatusResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-ai-provider-status="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void refreshWorkAiProviderStatus()}
+              type="button"
+            >
+              <Sparkles size={15} />
+              {workAiProviderStatusState === "loading"
+                ? "provider 확인 중"
+                : workAiProviderStatusResult
+                  ? "provider 상태 새로고침"
+                  : "provider 상태"}
+            </button>
+            <button
               aria-label={workLogNormalizationCandidatesActionLabel(
                 workLogNormalizationCandidatesState,
                 workLogNormalizationCandidatesResult !== null,
@@ -3412,6 +3468,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workLogNormalizationCandidatesFailureMessage}</span>
+          </div>
+        ) : null}
+        {workAiProviderStatusFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-ai-provider-status-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workAiProviderStatusFailureMessage}</span>
           </div>
         ) : null}
         {workLogNormalizationProposalsFailureMessage ? (
@@ -4023,6 +4089,12 @@ function App() {
             <span>{workLogCandidatesMeta}</span>
           </div>
         ) : null}
+        {workAiProviderStatusResult || workAiProviderStatusState !== "idle" ? (
+          <div className="work-summary-index" data-work-ai-provider-status-meta="true">
+            <Sparkles size={15} />
+            <span>{workAiProviderStatusMeta}</span>
+          </div>
+        ) : null}
         {workLogReviewQueueResult || workLogReviewQueueState !== "idle" ? (
           <div className="work-summary-index" data-work-log-review-queue-meta="true">
             <Database size={15} />
@@ -4327,6 +4399,22 @@ function App() {
                 : "AI 추출 후보로 보낼 unparsed 진행 로그 없음"}
             </div>
           )
+        ) : null}
+        {workAiProviderStatusResult ? (
+          <div className="work-summary-list" data-work-ai-provider-status="true">
+            {visibleWorkAiProviderStatusProviders.map((provider) => (
+              <article className="work-summary-row" key={provider.provider_runtime}>
+                <div>
+                  <strong>{provider.provider}</strong>
+                  <span>{provider.provider_runtime}</span>
+                </div>
+                <p>{workAiProviderStatusProviderText(provider)}</p>
+                {provider.notes.map((note, index) => (
+                  <span key={textListItemKey(note, index)}>{note}</span>
+                ))}
+              </article>
+            ))}
+          </div>
         ) : null}
         {workLogReviewQueueResult ? (
           visibleWorkLogReviewQueueItems.length ? (

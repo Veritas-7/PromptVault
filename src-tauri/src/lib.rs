@@ -1314,6 +1314,26 @@ pub struct ImprovePersistence {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkAiProviderStatusProvider {
+    pub provider: String,
+    pub provider_runtime: String,
+    pub configured: bool,
+    pub usable_for_work_management: bool,
+    pub model: Option<String>,
+    pub endpoint: Option<String>,
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkAiProviderStatusResult {
+    pub generated_at: String,
+    pub external_provider_available: bool,
+    pub fallback_provider: String,
+    pub providers: Vec<ProjectWorkAiProviderStatusProvider>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QualityDelta {
     pub before: PromptQuality,
     pub after: PromptQuality,
@@ -1423,6 +1443,11 @@ async fn improve_prompt(request: ImproveRequest) -> Result<ImproveResult, String
     improve_prompt_inner(request)
         .await
         .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_ai_provider_status() -> Result<ProjectWorkAiProviderStatusResult, String> {
+    Ok(run_project_work_ai_provider_status())
 }
 
 #[tauri::command]
@@ -14688,6 +14713,86 @@ fn load_improve_env() -> HashMap<String, String> {
     env
 }
 
+pub fn run_project_work_ai_provider_status() -> ProjectWorkAiProviderStatusResult {
+    project_work_ai_provider_status_from_env(load_improve_env())
+}
+
+fn project_work_ai_provider_status_from_env(
+    env: HashMap<String, String>,
+) -> ProjectWorkAiProviderStatusResult {
+    let openai_configured = openai_api_key_from_env(&env).is_some();
+    let glm_configured = glm_api_key_from_env(&env).is_some();
+    let openai_endpoint = normalize_openai_responses_endpoint(
+        &env.get("OPENAI_RESPONSES_ENDPOINT")
+            .or_else(|| env.get("OPENAI_BASE_URL"))
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_OPENAI_RESPONSES_ENDPOINT.to_string()),
+    );
+    let glm_endpoint = normalize_chat_endpoint(
+        &env.get("GLM_CODING_ENDPOINT")
+            .cloned()
+            .unwrap_or_else(|| DEFAULT_GLM_CHAT_ENDPOINT.to_string()),
+    );
+    let external_provider_available = openai_configured || glm_configured;
+    let mut warnings = Vec::new();
+    if !external_provider_available {
+        warnings.push(
+            "OpenAI/GLM provider key가 없어 work-management AI 단계는 로컬 fallback으로 실행됩니다."
+                .to_string(),
+        );
+    }
+    warnings.push(
+        "Codex SDK provider route는 아직 구현되지 않아 work-log/session-evidence reconciliation에 사용할 수 없습니다."
+            .to_string(),
+    );
+
+    ProjectWorkAiProviderStatusResult {
+        generated_at: Utc::now().to_rfc3339(),
+        external_provider_available,
+        fallback_provider: "local-fallback-rules".to_string(),
+        providers: vec![
+            ProjectWorkAiProviderStatusProvider {
+                provider: "openai".to_string(),
+                provider_runtime: "openai-responses".to_string(),
+                configured: openai_configured,
+                usable_for_work_management: openai_configured,
+                model: Some(openai_model_from_env(&env)),
+                endpoint: Some(openai_endpoint),
+                notes: if openai_configured {
+                    vec!["work-log extraction, normalization, summaries, and session-evidence proposals can attempt OpenAI first.".to_string()]
+                } else {
+                    vec!["OPENAI_API_KEY is not configured.".to_string()]
+                },
+            },
+            ProjectWorkAiProviderStatusProvider {
+                provider: "glm".to_string(),
+                provider_runtime: "glm-chat-completions".to_string(),
+                configured: glm_configured,
+                usable_for_work_management: glm_configured,
+                model: Some(glm_model_from_env(&env)),
+                endpoint: Some(glm_endpoint),
+                notes: if glm_configured {
+                    vec!["work-log extraction, normalization, summaries, and session-evidence proposals can attempt GLM after OpenAI.".to_string()]
+                } else {
+                    vec!["GLM_API_KEY/GLM_API_KEY_2 is not configured.".to_string()]
+                },
+            },
+            ProjectWorkAiProviderStatusProvider {
+                provider: "codex".to_string(),
+                provider_runtime: "codex-sdk".to_string(),
+                configured: false,
+                usable_for_work_management: false,
+                model: non_empty_env_value(&env, "CODEX_MODEL"),
+                endpoint: non_empty_env_value(&env, "CODEX_SDK_ENDPOINT"),
+                notes: vec![
+                    "No Codex SDK work-management provider is wired yet; this row tracks that remaining implementation gap.".to_string(),
+                ],
+            },
+        ],
+        warnings,
+    }
+}
+
 fn non_empty_env_value(env: &HashMap<String, String>, key: &str) -> Option<String> {
     env.get(key)
         .map(|value| value.trim())
@@ -14764,6 +14869,7 @@ pub fn run() {
             list_stored_prompt_facets,
             load_stored_prompts,
             improve_prompt,
+            project_work_ai_provider_status,
             project_work_summary,
             project_work_status_export,
             project_work_session_evidence_candidates,
@@ -15075,6 +15181,78 @@ mod tests {
         env.insert("GLM_CODING_MODEL".to_string(), "   ".to_string());
 
         assert_eq!(glm_model_from_env(&env), "glm-4.6");
+    }
+
+    #[test]
+    fn project_work_ai_provider_status_reports_configured_providers_without_secrets() {
+        let mut env = HashMap::new();
+        env.insert("OPENAI_API_KEY".to_string(), "openai-secret".to_string());
+        env.insert("OPENAI_MODEL".to_string(), "gpt-test".to_string());
+        env.insert(
+            "OPENAI_BASE_URL".to_string(),
+            "https://api.openai.com".to_string(),
+        );
+        env.insert("GLM_API_KEY_2".to_string(), "glm-secret".to_string());
+        env.insert("GLM_CODING_MODEL".to_string(), "glm-test".to_string());
+        env.insert(
+            "GLM_CODING_ENDPOINT".to_string(),
+            "https://open.bigmodel.cn/api/paas/v4".to_string(),
+        );
+
+        let result = project_work_ai_provider_status_from_env(env);
+
+        assert!(result.external_provider_available);
+        assert_eq!(result.fallback_provider, "local-fallback-rules");
+        let openai = result
+            .providers
+            .iter()
+            .find(|provider| provider.provider == "openai")
+            .expect("openai row");
+        assert!(openai.configured);
+        assert!(openai.usable_for_work_management);
+        assert_eq!(openai.model.as_deref(), Some("gpt-test"));
+        assert_eq!(
+            openai.endpoint.as_deref(),
+            Some("https://api.openai.com/v1/responses")
+        );
+        let glm = result
+            .providers
+            .iter()
+            .find(|provider| provider.provider == "glm")
+            .expect("glm row");
+        assert!(glm.configured);
+        assert!(glm.usable_for_work_management);
+        assert_eq!(glm.model.as_deref(), Some("glm-test"));
+        assert_eq!(
+            glm.endpoint.as_deref(),
+            Some("https://open.bigmodel.cn/api/paas/v4/chat/completions")
+        );
+        let serialized = serde_json::to_string(&result).expect("serialize status");
+        assert!(!serialized.contains("openai-secret"));
+        assert!(!serialized.contains("glm-secret"));
+        assert!(serialized.contains("codex-sdk"));
+    }
+
+    #[test]
+    fn project_work_ai_provider_status_warns_when_external_providers_are_missing() {
+        let result = project_work_ai_provider_status_from_env(HashMap::new());
+
+        assert!(!result.external_provider_available);
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("OpenAI/GLM")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Codex SDK")));
+        let codex = result
+            .providers
+            .iter()
+            .find(|provider| provider.provider == "codex")
+            .expect("codex row");
+        assert!(!codex.configured);
+        assert!(!codex.usable_for_work_management);
     }
 
     #[tokio::test]

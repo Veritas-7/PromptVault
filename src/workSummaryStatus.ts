@@ -2,6 +2,8 @@ import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import { pathDisplayText } from "./promptRowA11y.ts";
 import { riskFlagLabel } from "./riskLabels.ts";
 import type {
+  ProjectWorkAiProviderStatusProvider,
+  ProjectWorkAiProviderStatusResult,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionCandidate,
   ProjectWorkLogExtractionCandidatesResult,
@@ -35,6 +37,7 @@ export type WorkStatusExportState = "idle" | "loading" | "ready" | "failed";
 export type WorkSummarySnapshotsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCoverageState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogCandidatesState = "idle" | "loading" | "ready" | "failed";
+export type WorkAiProviderStatusState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionItemsState = "idle" | "loading" | "ready" | "failed";
@@ -546,6 +549,83 @@ function workLogCandidateQueueReasonText(reason: string): string {
 export function workLogCandidatesFailureText(state: WorkLogCandidatesState): string | null {
   if (state !== "failed") return null;
   return "AI 추출 후보를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.";
+}
+
+export function workAiProviderStatusActionLabel(
+  state: WorkAiProviderStatusState,
+  hasResult: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "AI provider 상태 확인 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 AI provider 상태를 ${hasResult ? "새로고침" : "확인"}할 수 없습니다`;
+  }
+  return hasResult ? "AI provider 상태 새로고침" : "AI provider 상태";
+}
+
+export function workAiProviderStatusMetaText(
+  state: WorkAiProviderStatusState,
+  result: ProjectWorkAiProviderStatusResult | null,
+): string {
+  if (state === "loading") return "AI provider 상태 확인 중";
+  if (!result) {
+    return state === "failed"
+      ? "AI provider 상태를 사용할 수 없음"
+      : "아직 확인한 AI provider 상태 없음";
+  }
+  const openai = result.providers.find((provider) => provider.provider === "openai");
+  const glm = result.providers.find((provider) => provider.provider === "glm");
+  const codex = result.providers.find((provider) => provider.provider === "codex");
+  const parts = [
+    result.external_provider_available ? "외부 AI 사용 가능" : "외부 AI 미설정",
+    `OpenAI ${providerConfiguredLabel(openai)}`,
+    `GLM ${providerConfiguredLabel(glm)}`,
+    `Codex SDK ${codex?.usable_for_work_management ? "사용 가능" : "미구현"}`,
+    `fallback ${result.fallback_provider}`,
+  ];
+  if (result.warnings.length > 0) {
+    parts.push(`경고 ${result.warnings.length.toLocaleString()}개`);
+  }
+  return parts.join(" · ");
+}
+
+export function workAiProviderStatusFailureText(
+  state: WorkAiProviderStatusState,
+): string | null {
+  if (state !== "failed") return null;
+  return "AI provider 상태를 확인하지 못했습니다. 브리지 상태와 로컬 provider 설정을 확인하세요.";
+}
+
+export function workAiProviderStatusProviderText(
+  provider: ProjectWorkAiProviderStatusProvider,
+): string {
+  const parts = [
+    workAiProviderDisplayName(provider),
+    provider.configured ? "configured" : "미설정",
+    provider.usable_for_work_management ? "work-management 사용 가능" : "사용 불가",
+    provider.provider_runtime,
+  ];
+  if (provider.model) {
+    parts.push(`model ${provider.model}`);
+  }
+  if (provider.endpoint) {
+    parts.push(provider.endpoint);
+  }
+  return parts.join(" · ");
+}
+
+function providerConfiguredLabel(
+  provider: ProjectWorkAiProviderStatusProvider | undefined,
+): string {
+  return provider?.configured ? "configured" : "미설정";
+}
+
+function workAiProviderDisplayName(provider: ProjectWorkAiProviderStatusProvider): string {
+  if (provider.provider === "openai") return "OpenAI";
+  if (provider.provider === "glm") return "GLM";
+  if (provider.provider === "codex") return "Codex SDK";
+  return provider.provider;
 }
 
 export function workLogReviewQueueActionLabel(

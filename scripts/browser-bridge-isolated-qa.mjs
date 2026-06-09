@@ -473,6 +473,8 @@ async function runBrowserQa() {
   let coverageMeta = "";
   let workLogCandidatesMeta = "";
   let workLogCandidateRows = [];
+  let workAiProviderStatusMeta = "";
+  let workAiProviderStatusRows = [];
   let workLogNormalizationCandidatesMeta = "";
   let workLogNormalizationCandidateRows = [];
   let workLogNormalizationProposalsMeta = "";
@@ -1230,6 +1232,25 @@ async function runBrowserQa() {
       (await page.locator('[data-work-log-candidates-meta="true"]').textContent())?.trim() ?? "";
     workLogCandidateRows =
       await page.locator('[data-work-log-candidates="true"] article').allTextContents();
+    step("work AI provider status");
+    await waitForEnabled(page, '[data-load-work-ai-provider-status="true"]');
+    await page.locator('[data-load-work-ai-provider-status="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-ai-provider-status-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-ai-provider-status="true"] article'));
+      const rowText = rows.map((row) => row.textContent ?? "").join("\n");
+      return text.includes("OpenAI")
+        && text.includes("GLM")
+        && text.includes("Codex SDK")
+        && text.includes("fallback")
+        && rowText.includes("openai-responses")
+        && rowText.includes("glm-chat-completions")
+        && rowText.includes("codex-sdk");
+    }, undefined, { timeout: 90000 });
+    workAiProviderStatusMeta =
+      (await page.locator('[data-work-ai-provider-status-meta="true"]').textContent())?.trim() ?? "";
+    workAiProviderStatusRows =
+      await page.locator('[data-work-ai-provider-status="true"] article').allTextContents();
     step("work log normalization candidates");
     await waitForEnabled(page, '[data-load-work-log-normalization-candidates="true"]');
     await page.locator('[data-load-work-log-normalization-candidates="true"]').click();
@@ -1541,6 +1562,8 @@ async function runBrowserQa() {
       coverageMeta,
       workLogCandidatesMeta,
       workLogCandidateRows,
+      workAiProviderStatusMeta,
+      workAiProviderStatusRows,
       workLogNormalizationCandidatesMeta,
       workLogNormalizationCandidateRows,
       workLogNormalizationProposalsMeta,

@@ -862,3 +862,21 @@ export interface ImproveResult {
     prompt_improvement_count: number;
   } | null;
 }
+
+export interface ProjectWorkAiProviderStatusProvider {
+  provider: string;
+  provider_runtime: string;
+  configured: boolean;
+  usable_for_work_management: boolean;
+  model: string | null;
+  endpoint: string | null;
+  notes: string[];
+}
+
+export interface ProjectWorkAiProviderStatusResult {
+  generated_at: string;
+  external_provider_available: boolean;
+  fallback_provider: string;
+  providers: ProjectWorkAiProviderStatusProvider[];
+  warnings: string[];
+}

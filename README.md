@@ -80,14 +80,27 @@ npm run qa:browser-bridge
 
 The runner starts Vite and the local bridge, points the bridge at a temporary
 SQLite file, clicks through scan, local improvement, plan/import, stored prompt
-loading, work summary snapshot saving, and work-log management, then prints the
-observed counters. To run the same bridge manually, point it at a temporary
+loading, work summary snapshot saving, session-evidence review queue sync/update,
+and work-log management, then prints the observed counters. To run the same bridge manually, point it at a temporary
 SQLite file:
 
 ```bash
 cd src-tauri
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174 --database /tmp/promptvault-browser-qa.sqlite
 ```
+
+For project/day work-ledger checks outside the UI, use:
+
+```bash
+cd src-tauri
+cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --json
+cargo run --bin promptvault-cli -- work-session-evidence-review-queue --sync-candidates --limit 20 --json
+```
+
+The candidates command is read-only. The review-queue command stores unresolved
+full-index session-evidence candidates for operator approval/rejection, preserving
+source trace from project logs such as `working.md`, `workingd.md`,
+`WORKING_LOG.md`, and `PROJECT_STATUS.md`.
 
 The default permanent vault is:
 

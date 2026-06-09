@@ -35,6 +35,8 @@ const DEFAULT_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 80;
 const MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 1_000;
 const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT: usize = 200;
+const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT: usize = 50;
+const MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT: usize = 200;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
 const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
 const PROJECT_WORK_METADATA_TAIL_TIMESTAMP_LINES: usize = 200;
@@ -903,6 +905,64 @@ pub struct ProjectWorkSessionEvidenceCandidatesResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSessionEvidenceReviewQueueOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub sync_candidates: Option<bool>,
+    pub session_limit: Option<usize>,
+    pub refresh_session_index: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSessionEvidenceReviewQueueUpdateOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub candidate_id: String,
+    pub review_state: String,
+    pub review_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceReviewQueueItem {
+    pub candidate_id: String,
+    pub first_seen_at: String,
+    pub last_seen_at: String,
+    pub review_state: String,
+    pub review_reason: String,
+    pub project: String,
+    pub date: String,
+    pub operational_status: String,
+    pub source_statuses: Vec<FrequencyItem>,
+    pub work_item_count: usize,
+    pub source_file_count: usize,
+    pub source_files: Vec<String>,
+    pub top_titles: Vec<String>,
+    pub sample_evidence: String,
+    pub latest_source_path: String,
+    pub latest_source_file: String,
+    pub candidate_reason: String,
+    pub session_evidence_audit: String,
+    pub needs_title_normalization: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceReviewQueueResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub synced_candidate_count: usize,
+    pub stale_candidate_count: usize,
+    pub total_items: usize,
+    pub returned_item_count: usize,
+    pub pending_review_count: usize,
+    pub stale_count: usize,
+    pub approved_count: usize,
+    pub rejected_count: usize,
+    pub needs_title_normalization_count: usize,
+    pub items: Vec<ProjectWorkSessionEvidenceReviewQueueItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkSessionIndexOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
@@ -1313,6 +1373,21 @@ fn project_work_session_evidence_candidates(
 ) -> Result<ProjectWorkSessionEvidenceCandidatesResult, String> {
     run_project_work_session_evidence_candidates(options.unwrap_or_default())
         .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_session_evidence_review_queue(
+    options: Option<ProjectWorkSessionEvidenceReviewQueueOptions>,
+) -> Result<ProjectWorkSessionEvidenceReviewQueueResult, String> {
+    run_project_work_session_evidence_review_queue(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_session_evidence_review_queue_update(
+    options: ProjectWorkSessionEvidenceReviewQueueUpdateOptions,
+) -> Result<ProjectWorkSessionEvidenceReviewQueueResult, String> {
+    run_project_work_session_evidence_review_queue_update(options).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -2047,6 +2122,138 @@ pub fn run_project_work_session_evidence_candidates(
         needs_title_normalization_count,
         candidates,
         warnings,
+    })
+}
+
+pub fn run_project_work_session_evidence_review_queue(
+    options: ProjectWorkSessionEvidenceReviewQueueOptions,
+) -> Result<ProjectWorkSessionEvidenceReviewQueueResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-session-evidence-review-queue limit requires a positive integer".into());
+    }
+    if matches!(options.session_limit, Some(0)) {
+        return Err(
+            "work-session-evidence-review-queue session_limit requires a positive integer".into(),
+        );
+    }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err(
+            "work-session-evidence-review-queue database path requires a non-empty value".into(),
+        );
+    }
+
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT)
+        .min(MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT);
+    let mut conn = open_promptvault_database(&database_path)?;
+    let mut synced_candidate_count = 0usize;
+    let mut stale_candidate_count = 0usize;
+    let mut warnings = Vec::new();
+
+    if options.sync_candidates.unwrap_or(false) {
+        let candidates = run_project_work_session_evidence_candidates(
+            ProjectWorkSessionEvidenceCandidatesOptions {
+                database_path: Some(database_path.display().to_string()),
+                limit: Some(MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT),
+                session_limit: options.session_limit,
+                refresh_session_index: options.refresh_session_index,
+            },
+        )?;
+        if candidates.returned_candidate_count < candidates.total_candidate_count {
+            warnings.push(format!(
+                "Only {} of {} session evidence candidates were synced; stale marking was skipped for this run.",
+                candidates.returned_candidate_count, candidates.total_candidate_count
+            ));
+        }
+        synced_candidate_count = candidates.candidates.len();
+        stale_candidate_count =
+            sync_project_work_session_evidence_review_queue(&mut conn, &candidates, &generated_at)?;
+        warnings.extend(candidates.warnings);
+    }
+
+    let rows = read_project_work_session_evidence_review_queue(&conn, limit)?;
+    Ok(ProjectWorkSessionEvidenceReviewQueueResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        synced_candidate_count,
+        stale_candidate_count,
+        total_items: rows.total_items,
+        returned_item_count: rows.items.len(),
+        pending_review_count: rows.pending_review_count,
+        stale_count: rows.stale_count,
+        approved_count: rows.approved_count,
+        rejected_count: rows.rejected_count,
+        needs_title_normalization_count: rows.needs_title_normalization_count,
+        items: rows.items,
+        warnings,
+    })
+}
+
+pub fn run_project_work_session_evidence_review_queue_update(
+    options: ProjectWorkSessionEvidenceReviewQueueUpdateOptions,
+) -> Result<ProjectWorkSessionEvidenceReviewQueueResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-session-evidence-review-queue limit requires a positive integer".into());
+    }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err(
+            "work-session-evidence-review-queue database path requires a non-empty value".into(),
+        );
+    }
+    let candidate_id = options.candidate_id.trim();
+    if candidate_id.is_empty() {
+        return Err(
+            "work-session-evidence-review-queue candidate id requires a non-empty value".into(),
+        );
+    }
+    let (review_state, default_reason) =
+        normalized_project_work_session_evidence_review_queue_update_state(&options.review_state)?;
+    let review_reason = normalized_optional_filter(
+        options.review_reason.as_deref(),
+        "work-session-evidence-review-queue reason requires a non-empty value",
+    )?
+    .unwrap_or_else(|| default_reason.to_string());
+
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT)
+        .min(MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT);
+    let conn = open_promptvault_database(&database_path)?;
+    update_project_work_session_evidence_review_queue_state(
+        &conn,
+        candidate_id,
+        review_state,
+        &review_reason,
+        &generated_at,
+    )?;
+    let rows = read_project_work_session_evidence_review_queue(&conn, limit)?;
+    Ok(ProjectWorkSessionEvidenceReviewQueueResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        synced_candidate_count: 0,
+        stale_candidate_count: 0,
+        total_items: rows.total_items,
+        returned_item_count: rows.items.len(),
+        pending_review_count: rows.pending_review_count,
+        stale_count: rows.stale_count,
+        approved_count: rows.approved_count,
+        rejected_count: rows.rejected_count,
+        needs_title_normalization_count: rows.needs_title_normalization_count,
+        items: rows.items,
+        warnings: Vec::new(),
     })
 }
 
@@ -7822,6 +8029,242 @@ fn project_work_session_evidence_candidate_from_row(
     }
 }
 
+fn sync_project_work_session_evidence_review_queue(
+    conn: &mut Connection,
+    result: &ProjectWorkSessionEvidenceCandidatesResult,
+    sync_at: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let mark_missing_stale = result.returned_candidate_count == result.total_candidate_count;
+    let tx = conn.transaction()?;
+    for candidate in &result.candidates {
+        let source_statuses_json = serde_json::to_string(&candidate.source_statuses)?;
+        let source_files_json = serde_json::to_string(&candidate.source_files)?;
+        let top_titles_json = serde_json::to_string(&candidate.top_titles)?;
+        tx.execute(
+            "INSERT INTO project_work_session_evidence_review_queue (
+                candidate_id, first_seen_at, last_seen_at, review_state, review_reason,
+                project, proposal_date, operational_status, source_statuses_json,
+                work_item_count, source_file_count, source_files_json, top_titles_json,
+                sample_evidence, latest_source_path, latest_source_file, candidate_reason,
+                session_evidence_audit, needs_title_normalization
+            ) VALUES (
+                ?1, ?2, ?3, 'pending_review', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
+                ?12, ?13, ?14, ?15, ?16, ?17, ?18
+            )
+            ON CONFLICT(candidate_id) DO UPDATE SET
+                last_seen_at=excluded.last_seen_at,
+                project=excluded.project,
+                proposal_date=excluded.proposal_date,
+                operational_status=excluded.operational_status,
+                source_statuses_json=excluded.source_statuses_json,
+                work_item_count=excluded.work_item_count,
+                source_file_count=excluded.source_file_count,
+                source_files_json=excluded.source_files_json,
+                top_titles_json=excluded.top_titles_json,
+                sample_evidence=excluded.sample_evidence,
+                latest_source_path=excluded.latest_source_path,
+                latest_source_file=excluded.latest_source_file,
+                candidate_reason=excluded.candidate_reason,
+                session_evidence_audit=excluded.session_evidence_audit,
+                needs_title_normalization=excluded.needs_title_normalization,
+                review_state=CASE
+                    WHEN project_work_session_evidence_review_queue.review_state IN ('approved', 'rejected')
+                    THEN project_work_session_evidence_review_queue.review_state
+                    ELSE excluded.review_state
+                END,
+                review_reason=CASE
+                    WHEN project_work_session_evidence_review_queue.review_state IN ('approved', 'rejected')
+                    THEN project_work_session_evidence_review_queue.review_reason
+                    ELSE excluded.review_reason
+                END",
+            params![
+                &candidate.candidate_id,
+                sync_at,
+                sync_at,
+                project_work_session_evidence_review_queue_reason(candidate),
+                &candidate.project,
+                &candidate.date,
+                &candidate.operational_status,
+                &source_statuses_json,
+                candidate.work_item_count as i64,
+                candidate.source_file_count as i64,
+                &source_files_json,
+                &top_titles_json,
+                &candidate.sample_evidence,
+                &candidate.latest_source_path,
+                &candidate.latest_source_file,
+                &candidate.reason,
+                &candidate.session_evidence_audit,
+                candidate.needs_title_normalization as i64,
+            ],
+        )?;
+    }
+    let stale_candidate_count = if mark_missing_stale {
+        tx.execute(
+            "UPDATE project_work_session_evidence_review_queue
+             SET review_state='stale', review_reason='candidate_no_longer_live', last_seen_at=?1
+             WHERE review_state IN ('pending_review', 'stale')
+                AND last_seen_at <> ?1",
+            params![sync_at],
+        )?
+    } else {
+        0
+    };
+    tx.commit()?;
+    Ok(stale_candidate_count)
+}
+
+fn project_work_session_evidence_review_queue_reason(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+) -> &'static str {
+    if candidate.needs_title_normalization {
+        "session_evidence_candidate_needs_title_normalization"
+    } else {
+        "session_evidence_candidate_ready"
+    }
+}
+
+fn normalized_project_work_session_evidence_review_queue_update_state(
+    review_state: &str,
+) -> Result<(&'static str, &'static str), Box<dyn std::error::Error>> {
+    match review_state.trim() {
+        "approved" => Ok(("approved", "operator_approved_session_evidence_review")),
+        "rejected" => Ok(("rejected", "operator_rejected_session_evidence_review")),
+        _ => Err("work-session-evidence-review-queue state must be approved or rejected".into()),
+    }
+}
+
+fn update_project_work_session_evidence_review_queue_state(
+    conn: &Connection,
+    candidate_id: &str,
+    review_state: &str,
+    review_reason: &str,
+    updated_at: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let current_review_state = conn
+        .query_row(
+            "SELECT review_state
+             FROM project_work_session_evidence_review_queue
+             WHERE candidate_id=?1",
+            params![candidate_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    let Some(current_review_state) = current_review_state else {
+        return Err("work-session-evidence-review-queue candidate not found".into());
+    };
+    if current_review_state == "stale" && review_state == "approved" {
+        return Err(
+            "stale work-session-evidence-review-queue candidates cannot be approved; sync candidates first"
+                .into(),
+        );
+    }
+    let changed = conn.execute(
+        "UPDATE project_work_session_evidence_review_queue
+         SET review_state=?2, review_reason=?3, last_seen_at=?4
+         WHERE candidate_id=?1",
+        params![candidate_id, review_state, review_reason, updated_at],
+    )?;
+    if changed == 0 {
+        return Err("work-session-evidence-review-queue candidate not found".into());
+    }
+    Ok(())
+}
+
+struct ProjectWorkSessionEvidenceReviewQueueRows {
+    total_items: usize,
+    pending_review_count: usize,
+    stale_count: usize,
+    approved_count: usize,
+    rejected_count: usize,
+    needs_title_normalization_count: usize,
+    items: Vec<ProjectWorkSessionEvidenceReviewQueueItem>,
+}
+
+fn read_project_work_session_evidence_review_queue(
+    conn: &Connection,
+    limit: usize,
+) -> Result<ProjectWorkSessionEvidenceReviewQueueRows, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT candidate_id, first_seen_at, last_seen_at, review_state, review_reason,
+            project, proposal_date, operational_status, source_statuses_json,
+            work_item_count, source_file_count, source_files_json, top_titles_json,
+            sample_evidence, latest_source_path, latest_source_file, candidate_reason,
+            session_evidence_audit, needs_title_normalization
+         FROM project_work_session_evidence_review_queue
+         ORDER BY
+            CASE review_state
+                WHEN 'pending_review' THEN 0
+                WHEN 'stale' THEN 1
+                WHEN 'approved' THEN 2
+                WHEN 'rejected' THEN 3
+                ELSE 4
+            END,
+            last_seen_at DESC,
+            proposal_date DESC,
+            project ASC",
+    )?;
+    let mut rows = stmt.query([])?;
+    let mut total_items = 0usize;
+    let mut pending_review_count = 0usize;
+    let mut stale_count = 0usize;
+    let mut approved_count = 0usize;
+    let mut rejected_count = 0usize;
+    let mut needs_title_normalization_count = 0usize;
+    let mut items = Vec::new();
+    while let Some(row) = rows.next()? {
+        let review_state: String = row.get(3)?;
+        let needs_title_normalization = row.get::<_, i64>(18)? != 0;
+        total_items += 1;
+        match review_state.as_str() {
+            "pending_review" => pending_review_count += 1,
+            "stale" => stale_count += 1,
+            "approved" => approved_count += 1,
+            "rejected" => rejected_count += 1,
+            _ => {}
+        }
+        if needs_title_normalization {
+            needs_title_normalization_count += 1;
+        }
+        if items.len() >= limit {
+            continue;
+        }
+        let source_statuses_json: String = row.get(8)?;
+        let source_files_json: String = row.get(11)?;
+        let top_titles_json: String = row.get(12)?;
+        items.push(ProjectWorkSessionEvidenceReviewQueueItem {
+            candidate_id: row.get(0)?,
+            first_seen_at: row.get(1)?,
+            last_seen_at: row.get(2)?,
+            review_state,
+            review_reason: row.get(4)?,
+            project: row.get(5)?,
+            date: row.get(6)?,
+            operational_status: row.get(7)?,
+            source_statuses: serde_json::from_str(&source_statuses_json)?,
+            work_item_count: row.get::<_, i64>(9)? as usize,
+            source_file_count: row.get::<_, i64>(10)? as usize,
+            source_files: serde_json::from_str(&source_files_json)?,
+            top_titles: serde_json::from_str(&top_titles_json)?,
+            sample_evidence: row.get(13)?,
+            latest_source_path: row.get(14)?,
+            latest_source_file: row.get(15)?,
+            candidate_reason: row.get(16)?,
+            session_evidence_audit: row.get(17)?,
+            needs_title_normalization,
+        });
+    }
+    Ok(ProjectWorkSessionEvidenceReviewQueueRows {
+        total_items,
+        pending_review_count,
+        stale_count,
+        approved_count,
+        rejected_count,
+        needs_title_normalization_count,
+        items,
+    })
+}
+
 fn paginate_project_work_status_export_rows(
     all_rows: Vec<ProjectWorkStatusExportRow>,
     limit: usize,
@@ -9426,6 +9869,31 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             completed INTEGER NOT NULL,
             updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS project_work_session_evidence_review_queue (
+            candidate_id TEXT PRIMARY KEY,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            review_state TEXT NOT NULL,
+            review_reason TEXT NOT NULL,
+            project TEXT NOT NULL,
+            proposal_date TEXT NOT NULL,
+            operational_status TEXT NOT NULL,
+            source_statuses_json TEXT NOT NULL,
+            work_item_count INTEGER NOT NULL,
+            source_file_count INTEGER NOT NULL,
+            source_files_json TEXT NOT NULL,
+            top_titles_json TEXT NOT NULL,
+            sample_evidence TEXT NOT NULL,
+            latest_source_path TEXT NOT NULL,
+            latest_source_file TEXT NOT NULL,
+            candidate_reason TEXT NOT NULL,
+            session_evidence_audit TEXT NOT NULL,
+            needs_title_normalization INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_review_queue_state
+            ON project_work_session_evidence_review_queue(review_state, last_seen_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_review_queue_project_date
+            ON project_work_session_evidence_review_queue(project, proposal_date);
         CREATE TABLE IF NOT EXISTS project_work_log_review_queue (
             candidate_id TEXT PRIMARY KEY,
             first_seen_at TEXT NOT NULL,
@@ -13256,6 +13724,8 @@ pub fn run() {
             project_work_summary,
             project_work_status_export,
             project_work_session_evidence_candidates,
+            project_work_session_evidence_review_queue,
+            project_work_session_evidence_review_queue_update,
             project_work_summary_snapshots,
             project_work_log_coverage,
             project_work_log_candidates,
@@ -18495,6 +18965,184 @@ Status: completed as a source-only/report-only hardening slice.
                 && item.review_state == "rejected"
                 && item.review_reason == "operator_rejected_normalization"
         }));
+
+        drop(conn);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
+    fn project_work_session_evidence_review_queue_syncs_and_preserves_operator_state() {
+        let suffix = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-project-work-session-evidence-review-queue-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut conn = open_promptvault_database(&db_path).expect("open db");
+        let safe = ProjectWorkSessionEvidenceCandidate {
+            candidate_id: "session-evidence-SafeProject-a1b2c3d4e5".to_string(),
+            date: "2026-06-09".to_string(),
+            project: "SafeProject".to_string(),
+            operational_status: "progress-log-only".to_string(),
+            source_statuses: vec![FrequencyItem {
+                text: "done".to_string(),
+                count: 1,
+            }],
+            work_item_count: 1,
+            source_file_count: 1,
+            source_files: vec!["working.md".to_string()],
+            top_titles: vec!["Safe work".to_string()],
+            sample_evidence: "2026-06-09: Safe work".to_string(),
+            latest_source_path: "/tmp/SafeProject/working.md".to_string(),
+            latest_source_file: "working.md".to_string(),
+            reason: "unresolved_after_full_index,no_session_evidence".to_string(),
+            session_evidence_audit: "unresolved-after-full-index".to_string(),
+            needs_title_normalization: false,
+        };
+        let rough = ProjectWorkSessionEvidenceCandidate {
+            candidate_id: "session-evidence-RoughProject-b1b2c3d4e5".to_string(),
+            date: "2026-06-08".to_string(),
+            project: "RoughProject".to_string(),
+            operational_status: "progress-log-only".to_string(),
+            source_statuses: vec![FrequencyItem {
+                text: "current".to_string(),
+                count: 2,
+            }],
+            work_item_count: 2,
+            source_file_count: 1,
+            source_files: vec!["workingd.md".to_string()],
+            top_titles: vec!["Progress log updated".to_string()],
+            sample_evidence: "2026-06-08: Progress log updated".to_string(),
+            latest_source_path: "/tmp/RoughProject/workingd.md".to_string(),
+            latest_source_file: "workingd.md".to_string(),
+            reason: "unresolved_after_full_index,no_session_evidence,needs_title_normalization"
+                .to_string(),
+            session_evidence_audit: "unresolved-after-full-index".to_string(),
+            needs_title_normalization: true,
+        };
+        let result = ProjectWorkSessionEvidenceCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            database_path: db_path.display().to_string(),
+            requested_limit: 20,
+            session_limit_used: 100,
+            total_candidate_count: 2,
+            returned_candidate_count: 2,
+            report_total_rows: 2,
+            report_total_items: 3,
+            report_project_count: 2,
+            report_date_count: 2,
+            report_files_seen: 2,
+            report_session_scan_prompt_count: 0,
+            report_session_evidence_count: 0,
+            report_unique_session_evidence_count: 0,
+            report_session_evidence_index_used: true,
+            report_session_evidence_index_updated: false,
+            report_session_evidence_index_count: 100,
+            report_session_evidence_index_total_count: 100,
+            report_session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
+            bounded_session_limit_count: 0,
+            unresolved_after_full_index_count: 2,
+            needs_title_normalization_count: 1,
+            candidates: vec![safe.clone(), rough.clone()],
+            warnings: Vec::new(),
+        };
+
+        let stale_count = sync_project_work_session_evidence_review_queue(
+            &mut conn,
+            &result,
+            "2026-06-09T00:00:00Z",
+        )
+        .expect("sync session evidence queue");
+        assert_eq!(stale_count, 0);
+        let rows = read_project_work_session_evidence_review_queue(&conn, 10).expect("read queue");
+        assert_eq!(rows.total_items, 2);
+        assert_eq!(rows.pending_review_count, 2);
+        assert_eq!(rows.needs_title_normalization_count, 1);
+        assert!(rows.items.iter().any(|item| {
+            item.candidate_id == "session-evidence-SafeProject-a1b2c3d4e5"
+                && item.review_state == "pending_review"
+                && item.review_reason == "session_evidence_candidate_ready"
+        }));
+        assert!(rows.items.iter().any(|item| {
+            item.candidate_id == "session-evidence-RoughProject-b1b2c3d4e5"
+                && item.review_reason == "session_evidence_candidate_needs_title_normalization"
+                && item.needs_title_normalization
+                && item.source_files == vec!["workingd.md".to_string()]
+        }));
+
+        update_project_work_session_evidence_review_queue_state(
+            &conn,
+            "session-evidence-SafeProject-a1b2c3d4e5",
+            "approved",
+            "operator_approved_session_evidence_review",
+            "2026-06-09T00:30:00Z",
+        )
+        .expect("approve session evidence row");
+        let rows =
+            read_project_work_session_evidence_review_queue(&conn, 10).expect("read approved");
+        assert_eq!(rows.pending_review_count, 1);
+        assert_eq!(rows.approved_count, 1);
+
+        let result = ProjectWorkSessionEvidenceCandidatesResult {
+            candidates: vec![safe],
+            total_candidate_count: 1,
+            returned_candidate_count: 1,
+            report_total_rows: 1,
+            report_total_items: 1,
+            report_project_count: 1,
+            report_date_count: 1,
+            report_files_seen: 1,
+            unresolved_after_full_index_count: 1,
+            needs_title_normalization_count: 0,
+            ..result
+        };
+        let stale_count = sync_project_work_session_evidence_review_queue(
+            &mut conn,
+            &result,
+            "2026-06-09T01:00:00Z",
+        )
+        .expect("sync queue again");
+        assert_eq!(stale_count, 1);
+        let rows = read_project_work_session_evidence_review_queue(&conn, 10).expect("read stale");
+        assert_eq!(rows.pending_review_count, 0);
+        assert_eq!(rows.stale_count, 1);
+        assert_eq!(rows.approved_count, 1);
+        assert!(rows.items.iter().any(|item| {
+            item.candidate_id == "session-evidence-SafeProject-a1b2c3d4e5"
+                && item.review_state == "approved"
+                && item.review_reason == "operator_approved_session_evidence_review"
+        }));
+        assert!(rows.items.iter().any(|item| {
+            item.candidate_id == "session-evidence-RoughProject-b1b2c3d4e5"
+                && item.review_state == "stale"
+                && item.review_reason == "candidate_no_longer_live"
+        }));
+
+        let stale_approval_error = update_project_work_session_evidence_review_queue_state(
+            &conn,
+            "session-evidence-RoughProject-b1b2c3d4e5",
+            "approved",
+            "operator_approved_session_evidence_review",
+            "2026-06-09T01:15:00Z",
+        )
+        .expect_err("stale row cannot be approved");
+        assert_eq!(
+            stale_approval_error.to_string(),
+            "stale work-session-evidence-review-queue candidates cannot be approved; sync candidates first"
+        );
+
+        update_project_work_session_evidence_review_queue_state(
+            &conn,
+            "session-evidence-RoughProject-b1b2c3d4e5",
+            "rejected",
+            "operator_rejected_session_evidence_review",
+            "2026-06-09T01:30:00Z",
+        )
+        .expect("reject stale row");
+        let rows =
+            read_project_work_session_evidence_review_queue(&conn, 10).expect("read rejected");
+        assert_eq!(rows.stale_count, 0);
+        assert_eq!(rows.rejected_count, 1);
 
         drop(conn);
         let _ = std::fs::remove_file(&db_path);

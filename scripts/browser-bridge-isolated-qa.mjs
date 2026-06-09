@@ -452,6 +452,9 @@ async function runBrowserQa() {
   let workStatusExportUnresolvedFixtureRowDetail = "";
   let workSessionEvidenceCandidatesMeta = "";
   let workSessionEvidenceCandidateRows = [];
+  let workSessionEvidenceReviewQueueMeta = "";
+  let workSessionEvidenceReviewQueueRows = [];
+  let workSessionEvidenceReviewQueueStateAfterApprove = "";
   let workStatusExportMarkdown = "";
   let workSummaryIndex = "";
   let workSessionIndexBackfill = null;
@@ -863,6 +866,77 @@ async function runBrowserQa() {
     ].join(" · ");
     workSessionEvidenceCandidateRows = workSessionEvidenceCandidates.candidates
       .map((candidate) => `${candidate.project} · ${candidate.date} · ${candidate.latest_source_file}`);
+    step("work session evidence review queue bridge");
+    const workSessionEvidenceReviewQueue = await bridgeJson(
+      page,
+      "/api/work-session-evidence-review-queue",
+      { options: { limit: 5, sync_candidates: true } },
+    );
+    if (workSessionEvidenceReviewQueue.database_path !== DATABASE_PATH) {
+      throw new Error(
+        `Session evidence review queue did not use isolated DB: ${workSessionEvidenceReviewQueue.database_path}`,
+      );
+    }
+    if (
+      workSessionEvidenceReviewQueue.synced_candidate_count
+        !== Math.min(workSessionEvidenceCandidates.total_candidate_count, 200)
+      || workSessionEvidenceReviewQueue.returned_item_count
+        !== workSessionEvidenceReviewQueue.items.length
+      || workSessionEvidenceReviewQueue.returned_item_count
+        > workSessionEvidenceReviewQueue.total_items
+      || workSessionEvidenceReviewQueue.pending_review_count
+        + workSessionEvidenceReviewQueue.stale_count
+        + workSessionEvidenceReviewQueue.approved_count
+        + workSessionEvidenceReviewQueue.rejected_count
+        !== workSessionEvidenceReviewQueue.total_items
+    ) {
+      throw new Error(`Invalid session evidence review queue counters: ${JSON.stringify(workSessionEvidenceReviewQueue)}`);
+    }
+    if (
+      workSessionEvidenceReviewQueue.items.some(
+        (item) => item.session_evidence_audit !== "unresolved-after-full-index",
+      )
+    ) {
+      throw new Error(`Session evidence review queue included non-unresolved rows: ${JSON.stringify(workSessionEvidenceReviewQueue.items)}`);
+    }
+    workSessionEvidenceReviewQueueMeta = [
+      `큐 ${workSessionEvidenceReviewQueue.returned_item_count} / ${workSessionEvidenceReviewQueue.total_items}`,
+      `동기화 ${workSessionEvidenceReviewQueue.synced_candidate_count}`,
+      `승인 ${workSessionEvidenceReviewQueue.approved_count}`,
+      `대기 ${workSessionEvidenceReviewQueue.pending_review_count}`,
+    ].join(" · ");
+    workSessionEvidenceReviewQueueRows = workSessionEvidenceReviewQueue.items
+      .map((item) => `${item.project} · ${item.date} · ${item.review_state} · ${item.latest_source_file}`);
+    if (workSessionEvidenceReviewQueue.items.length > 0) {
+      const firstItem = workSessionEvidenceReviewQueue.items[0];
+      const approvedQueue = await bridgeJson(
+        page,
+        "/api/work-session-evidence-review-queue/update",
+        {
+          options: {
+            candidate_id: firstItem.candidate_id,
+            review_state: "approved",
+            review_reason: "browser_qa_approved_session_evidence_review",
+            limit: 200,
+          },
+        },
+      );
+      if (
+        approvedQueue.database_path !== DATABASE_PATH
+        || approvedQueue.approved_count < 1
+        || !approvedQueue.items.some(
+          (item) => item.candidate_id === firstItem.candidate_id
+            && item.review_state === "approved"
+            && item.review_reason === "browser_qa_approved_session_evidence_review",
+        )
+      ) {
+        throw new Error(`Session evidence review queue approval failed: ${JSON.stringify(approvedQueue)}`);
+      }
+      workSessionEvidenceReviewQueueStateAfterApprove =
+        `${firstItem.candidate_id} · approved · ${approvedQueue.approved_count}`;
+    } else {
+      workSessionEvidenceReviewQueueStateAfterApprove = "no session evidence review candidates";
+    }
     await page.locator('[data-save-work-summary-snapshot="true"]').click();
     await page.waitForFunction((databasePath) => {
       const text = document.querySelector('[data-work-summary-persistence="true"]')?.textContent ?? "";
@@ -1272,6 +1346,9 @@ async function runBrowserQa() {
       workStatusExportUnresolvedFixtureRowDetail,
       workSessionEvidenceCandidatesMeta,
       workSessionEvidenceCandidateRows,
+      workSessionEvidenceReviewQueueMeta,
+      workSessionEvidenceReviewQueueRows,
+      workSessionEvidenceReviewQueueStateAfterApprove,
       workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,
       workManagementDurabilityWarning,

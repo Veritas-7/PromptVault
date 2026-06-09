@@ -24,6 +24,7 @@ import type {
   ProjectWorkLogReviewQueueResult,
   ProjectWorkReport,
   ProjectWorkSessionEvidenceCandidatesResult,
+  ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
   ProjectWorkStatusExportResult,
   ProjectWorkSummaryResult,
@@ -118,6 +119,22 @@ export interface ProjectWorkSessionEvidenceCandidatesOptions {
   limit?: number;
   session_limit?: number;
   refresh_session_index?: boolean;
+}
+
+export interface ProjectWorkSessionEvidenceReviewQueueOptions {
+  database_path?: string;
+  limit?: number;
+  sync_candidates?: boolean;
+  session_limit?: number;
+  refresh_session_index?: boolean;
+}
+
+export interface ProjectWorkSessionEvidenceReviewQueueUpdateOptions {
+  database_path?: string;
+  limit?: number;
+  candidate_id: string;
+  review_state: string;
+  review_reason?: string;
 }
 
 export interface ProjectWorkSessionIndexOptions {
@@ -358,6 +375,38 @@ export async function loadProjectWorkSessionEvidenceCandidates(
     "/api/work-session-evidence-candidates",
     { options },
     parseProjectWorkSessionEvidenceCandidatesResult,
+  );
+}
+
+export async function loadProjectWorkSessionEvidenceReviewQueue(
+  options: ProjectWorkSessionEvidenceReviewQueueOptions = {},
+): Promise<ProjectWorkSessionEvidenceReviewQueueResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkSessionEvidenceReviewQueueResult>(
+      "project_work_session_evidence_review_queue",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkSessionEvidenceReviewQueueResult>(
+    "/api/work-session-evidence-review-queue",
+    { options },
+    parseProjectWorkSessionEvidenceReviewQueueResult,
+  );
+}
+
+export async function updateProjectWorkSessionEvidenceReviewQueue(
+  options: ProjectWorkSessionEvidenceReviewQueueUpdateOptions,
+): Promise<ProjectWorkSessionEvidenceReviewQueueResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkSessionEvidenceReviewQueueResult>(
+      "project_work_session_evidence_review_queue_update",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkSessionEvidenceReviewQueueResult>(
+    "/api/work-session-evidence-review-queue/update",
+    { options },
+    parseProjectWorkSessionEvidenceReviewQueueResult,
   );
 }
 
@@ -2302,6 +2351,68 @@ function parseProjectWorkSessionEvidenceCandidatesResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkSessionEvidenceCandidatesResult;
+}
+
+function isProjectWorkSessionEvidenceReviewQueueItem(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.candidate_id)
+    && isTimestampString(value.first_seen_at)
+    && isTimestampString(value.last_seen_at)
+    && ["pending_review", "stale", "approved", "rejected"].includes(String(value.review_state))
+    && isNonBlankString(value.review_reason)
+    && isNonBlankString(value.date)
+    && isNonBlankString(value.project)
+    && ["active", "session-supported", "progress-log-only"].includes(String(value.operational_status))
+    && isPositiveSafeInteger(value.work_item_count)
+    && isPositiveSafeInteger(value.source_file_count)
+    && Array.isArray(value.source_files)
+    && isNonBlankStringArray(value.source_files)
+    && value.source_files.length === value.source_file_count
+    && Array.isArray(value.top_titles)
+    && isNonBlankStringArray(value.top_titles)
+    && typeof value.sample_evidence === "string"
+    && isNonBlankString(value.latest_source_path)
+    && isNonBlankString(value.latest_source_file)
+    && isNonBlankString(value.candidate_reason)
+    && value.session_evidence_audit === "unresolved-after-full-index"
+    && typeof value.needs_title_normalization === "boolean"
+    && isFrequencyItemsWithinTotal(value.source_statuses, value.work_item_count);
+}
+
+function parseProjectWorkSessionEvidenceReviewQueueResult(
+  value: unknown,
+): ProjectWorkSessionEvidenceReviewQueueResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !isNonNegativeSafeInteger(value.synced_candidate_count)
+    || !isNonNegativeSafeInteger(value.stale_candidate_count)
+    || !isNonNegativeSafeInteger(value.total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.returned_item_count, value.total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.pending_review_count, value.total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.stale_count, value.total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.approved_count, value.total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.rejected_count, value.total_items)
+    || Number(value.pending_review_count)
+      + Number(value.stale_count)
+      + Number(value.approved_count)
+      + Number(value.rejected_count)
+      !== value.total_items
+    || !isNonNegativeSafeIntegerAtMost(value.needs_title_normalization_count, value.total_items)
+    || !Array.isArray(value.items)
+    || value.items.length !== value.returned_item_count
+    || !value.items.every(isProjectWorkSessionEvidenceReviewQueueItem)
+    || !recordStringFieldValuesAreUnique(value.items, "candidate_id")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  const needsTitleRows = value.items.filter((item) => (
+    isRecord(item) && item.needs_title_normalization === true
+  )).length;
+  if (needsTitleRows > Number(value.needs_title_normalization_count)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkSessionEvidenceReviewQueueResult;
 }
 
 function isProjectWorkSummary(value: unknown): boolean {

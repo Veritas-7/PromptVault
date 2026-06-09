@@ -1,10 +1,129 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 23:25 KST
+Updated: 2026-06-09 23:45 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-09 session evidence review queue
+
+Current Goal:
+
+- Continue the user-requested project/day work management hardening beyond the
+  read-only unresolved session-evidence candidate list.
+- Persist unresolved full-index session-evidence candidates into an operator
+  review queue so the app can manage the remaining `36` production gaps instead
+  of only reporting them.
+- Keep the slice safe: no invented session evidence, no automatic source writes,
+  and no approval without an explicit queue decision.
+
+Context:
+
+- The previous slice proved real session parsing against the full stored
+  session index and exposed `work-session-evidence-candidates`.
+- That still left a product gap: unresolved rows were visible but not durable as
+  review tasks.
+- Existing extraction/normalization queues already use SQLite
+  `pending_review` / `stale` / `approved` / `rejected` state. This slice reuses
+  that state model for session-evidence candidate review.
+
+Progress:
+
+- Added persistent `project_work_session_evidence_review_queue` storage.
+- Added CLI/API/bridge commands:
+  - `work-session-evidence-review-queue`;
+  - `work-session-evidence-review-queue-update`;
+  - `/api/work-session-evidence-review-queue`;
+  - `/api/work-session-evidence-review-queue/update`.
+- Queue sync preserves operator `approved` / `rejected` rows across later syncs.
+- Pending rows that disappear are marked `stale` only when the full candidate
+  set was available; partial capped syncs do not stale unseen rows.
+- Stale rows cannot be approved until candidates are synced again, but can be
+  rejected for cleanup.
+- Browser-bridge QA now calls the new route from the browser context and, when
+  candidates exist, approves one item in the isolated SQLite DB.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added review queue structs/options/results;
+  - added SQLite table and indexes;
+  - added sync/read/update helpers and Tauri commands;
+  - added lifecycle test for sync, approval preservation, stale marking, stale
+    approval rejection, and stale rejection.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added CLI commands, bridge payloads/routes, DB-lock routing, help text, and
+    route validation tests.
+- `src/types.ts` and `src/promptVaultApi.ts`:
+  - added review queue result types;
+  - added load/update functions;
+  - added strict bridge response validation.
+- `tests/promptVaultApi.test.ts`:
+  - added review queue load/update bridge tests and malformed counter rejection.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added isolated route QA for queue sync and approval update.
+- `README.md` and `docs/CLI.md`:
+  - documented the review queue CLI/bridge behavior.
+
+Tests:
+
+- `cargo run --bin promptvault-cli -- work-session-evidence-review-queue --sync-candidates --limit 5 --json`:
+  PASS against the live PromptVault DB.
+  - `synced_candidate_count`: `36`.
+  - `total_items`: `36`.
+  - `pending_review_count`: `36`.
+  - `needs_title_normalization_count`: `12`.
+  - Sample files included `working.md`, `WORKING_LOG.md`, and
+    `PROJECT_STATUS.md`; targeted tests cover `workingd.md` preservation.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`:
+  PASS, `188` tests.
+- `cargo test project_work_session_evidence_review_queue_syncs_and_preserves_operator_state`:
+  PASS.
+- `cargo test --bin promptvault-cli bridge_routes_work_session_evidence_review_queue_validation_errors`:
+  PASS.
+- `cargo test --bin promptvault-cli help_text_documents_cli_validation_rules`:
+  PASS.
+- `cargo fmt --check`: PASS after formatting.
+- `node --check scripts/browser-bridge-isolated-qa.mjs`: PASS.
+- `npm run build`: PASS after tightening TypeScript counter parsing.
+- `npm run check`: PASS after the parser fix.
+  - UI tests: `479` passed.
+  - Production build: PASS.
+  - Rust lib tests: `202` passed.
+  - CLI tests: `33` passed.
+  - clippy with `-D warnings`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`: PASS.
+  - Review queue route evidence:
+    `큐 5 / 57 · 동기화 57 · 승인 0 · 대기 57`.
+  - Candidate rows included `working.md`, `PROJECT_STATUS.md`, and
+    `WORKING_LOG.md`-style project progress artifacts from the isolated QA DB.
+  - Approval update verified:
+    `session-evidence-ResearchFlowAI-3d8fe06d70 · approved · 1`.
+
+Issues:
+
+- This queue manages unresolved session-evidence candidates, but still does not
+  generate AI/Codex/GLM repair proposals. That provider step should write
+  proposal metadata into this queue or a linked proposal table before any
+  durable apply.
+- No UI list has been added for the new queue yet. Current verification is
+  CLI/bridge/API-level and browser-context route QA.
+
+Research:
+
+- No external research was required. The implementation reuses existing local
+  queue and bridge patterns.
+
+Next Steps:
+
+- Add AI-assisted session-evidence proposal generation using the existing
+  OpenAI/GLM provider infrastructure, with confidence/source-trace fields and
+  explicit operator approval.
+- Add UI controls for reviewing the new queue once the proposal contract is in
+  place.
+- Add durable apply only after the queue can distinguish confirmed session
+  evidence from “needs manual follow-up” decisions.
 
 ## Completed Slice - 2026-06-09 session evidence candidates bridge
 

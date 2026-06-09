@@ -300,6 +300,44 @@ export interface ProjectWorkSessionEvidenceCandidatesResult {
   warnings: string[];
 }
 
+export interface ProjectWorkSessionEvidenceReviewQueueItem {
+  candidate_id: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  review_state: string;
+  review_reason: string;
+  project: string;
+  date: string;
+  operational_status: string;
+  source_statuses: FrequencyItem[];
+  work_item_count: number;
+  source_file_count: number;
+  source_files: string[];
+  top_titles: string[];
+  sample_evidence: string;
+  latest_source_path: string;
+  latest_source_file: string;
+  candidate_reason: string;
+  session_evidence_audit: string;
+  needs_title_normalization: boolean;
+}
+
+export interface ProjectWorkSessionEvidenceReviewQueueResult {
+  generated_at: string;
+  database_path: string;
+  synced_candidate_count: number;
+  stale_candidate_count: number;
+  total_items: number;
+  returned_item_count: number;
+  pending_review_count: number;
+  stale_count: number;
+  approved_count: number;
+  rejected_count: number;
+  needs_title_normalization_count: number;
+  items: ProjectWorkSessionEvidenceReviewQueueItem[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSessionIndexSourceState {
   source_id: string;
   source_label: string;

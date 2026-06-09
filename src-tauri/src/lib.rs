@@ -8,9 +8,12 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
+use tokio::io::AsyncWriteExt;
+use tokio::process::Command;
 use walkdir::WalkDir;
 
 const APP_DIR_NAME: &str = "PromptVault";
@@ -75,6 +78,8 @@ const PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_CHUNK_MAX_CANDIDATES: usize = 8;
 const PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_CHUNK_TARGET_CHARS: usize = 18_000;
 const PROJECT_WORK_LOG_NORMALIZATION_PROVIDER_PROMPT_MAX_CHARS: usize = 24_000;
 const PROJECT_WORK_LOG_NORMALIZATION_MIN_ACCEPTED_CONFIDENCE: f64 = 0.80;
+const DEFAULT_CODEX_WORK_PROVIDER_TIMEOUT_SECONDS: u64 = 90;
+const MAX_CODEX_WORK_PROVIDER_TIMEOUT_SECONDS: u64 = 300;
 const DEFAULT_PROJECT_WORK_LOG_NORMALIZATION_REVIEW_QUEUE_LIMIT: usize = 50;
 const MAX_PROJECT_WORK_LOG_NORMALIZATION_REVIEW_QUEUE_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_LOG_NORMALIZED_ITEM_LIMIT: usize = 20;
@@ -12663,6 +12668,31 @@ async fn project_work_log_normalization_proposals_with_env(
             Err(warning) => warnings.push(warning),
         }
     }
+    if codex_work_provider_enabled(&env) {
+        match request_codex_project_work_log_normalization_chunked(
+            &candidates,
+            &safe_candidates,
+            &env,
+        )
+        .await
+        {
+            Ok(mut result) => {
+                result.warnings.extend(warnings);
+                append_blocked_work_log_normalization_proposals(
+                    &mut result,
+                    &blocked_candidates,
+                    &candidates,
+                );
+                return Ok(result);
+            }
+            Err(warning) => warnings.push(warning),
+        }
+    } else if codex_exec_path_from_env(&env).is_some() {
+        warnings.push(
+            "Codex CLI는 감지됐지만 PROMPTVAULT_CODEX_WORK_PROVIDER=1이 아니어서 work-log normalization provider로 사용하지 않았습니다."
+                .to_string(),
+        );
+    }
     if openai_api_key_from_env(&env).is_none() && glm_api_key_from_env(&env).is_none() {
         warnings.push(
             "OPENAI_API_KEY 및 GLM_API_KEY/GLM_API_KEY_2가 없어 로컬 normalization fallback을 사용했습니다."
@@ -12929,6 +12959,180 @@ async fn request_glm_project_work_log_normalization(
     .map_err(|err| {
         format!("GLM work-log normalization 검증 실패: {err}; 로컬 fallback을 사용했습니다.")
     })
+}
+
+async fn request_codex_project_work_log_normalization_chunked(
+    candidates_result: &ProjectWorkLogNormalizationCandidatesResult,
+    candidates: &[ProjectWorkLogNormalizationCandidate],
+    env: &HashMap<String, String>,
+) -> Result<ProjectWorkLogNormalizationProposalsResult, String> {
+    let chunks = project_work_log_normalization_candidate_chunks(candidates);
+    if chunks.len() <= 1 {
+        return request_codex_project_work_log_normalization(candidates_result, candidates, env)
+            .await;
+    }
+
+    let model = non_empty_env_value(env, "CODEX_MODEL");
+    let mut proposals = Vec::new();
+    let mut warnings = vec![format!(
+        "Codex work-log normalization 후보 {}개를 {}개 chunk로 나누어 처리했습니다.",
+        candidates.len(),
+        chunks.len()
+    )];
+    let chunk_count = chunks.len();
+    for (index, chunk) in chunks.into_iter().enumerate() {
+        let mut chunk_result =
+            request_codex_project_work_log_normalization(candidates_result, chunk, env)
+                .await
+                .map_err(|err| {
+                    format!(
+                        "Codex work-log normalization chunk {}/{} 실패: {err}",
+                        index + 1,
+                        chunk_count
+                    )
+                })?;
+        proposals.append(&mut chunk_result.proposals);
+        warnings.append(&mut chunk_result.warnings);
+    }
+
+    Ok(finish_project_work_log_normalization_proposals(
+        candidates_result,
+        ProjectWorkLogNormalizationRuntime {
+            provider: "codex",
+            provider_model: model,
+            provider_runtime: "codex-cli-exec",
+            used_ai: true,
+        },
+        proposals,
+        warnings,
+    ))
+}
+
+async fn request_codex_project_work_log_normalization(
+    candidates_result: &ProjectWorkLogNormalizationCandidatesResult,
+    candidates: &[ProjectWorkLogNormalizationCandidate],
+    env: &HashMap<String, String>,
+) -> Result<ProjectWorkLogNormalizationProposalsResult, String> {
+    let exec_path = codex_exec_path_from_env(env).ok_or_else(|| {
+        "Codex CLI provider가 활성화됐지만 codex 실행 파일을 찾을 수 없습니다.".to_string()
+    })?;
+    let schema_path = codex_work_provider_temp_path("schema.json");
+    let output_path = codex_work_provider_temp_path("output.json");
+    let schema = serde_json::to_string(&project_work_log_normalization_json_schema())
+        .map_err(|err| format!("Codex JSON schema 직렬화 실패: {err}"))?;
+    fs::write(&schema_path, schema)
+        .map_err(|err| format!("Codex JSON schema 임시 파일 작성 실패: {err}"))?;
+
+    let (system, user) = project_work_log_normalization_messages(candidates);
+    let prompt = format!(
+        "{system}\n\n{user}\n\nSafety constraints: do not read files, do not write files, do not run commands, and do not use external context. Return only JSON that satisfies the provided output schema."
+    );
+
+    let mut command = Command::new(&exec_path);
+    command
+        .arg("exec")
+        .arg("--sandbox")
+        .arg("read-only")
+        .arg("--ephemeral")
+        .arg("--output-schema")
+        .arg(&schema_path)
+        .arg("--output-last-message")
+        .arg(&output_path)
+        .arg("--cd")
+        .arg(current_codex_workdir())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    if let Some(model) = non_empty_env_value(env, "CODEX_MODEL") {
+        command.arg("--model").arg(model);
+    }
+    if let Some(profile) = non_empty_env_value(env, "CODEX_PROFILE") {
+        command.arg("--profile").arg(profile);
+    }
+
+    let mut child = command.spawn().map_err(|err| {
+        cleanup_codex_work_provider_files(&[&schema_path, &output_path]);
+        format!("Codex work-log normalization 실행 실패: {err}; 로컬 fallback을 사용합니다.")
+    })?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(prompt.as_bytes()).await.map_err(|err| {
+            cleanup_codex_work_provider_files(&[&schema_path, &output_path]);
+            format!(
+                "Codex work-log normalization prompt 전달 실패: {err}; 로컬 fallback을 사용합니다."
+            )
+        })?;
+    }
+
+    let timeout_seconds = codex_work_provider_timeout_seconds(env);
+    let output =
+        tokio::time::timeout(Duration::from_secs(timeout_seconds), child.wait_with_output())
+            .await
+            .map_err(|_| {
+                cleanup_codex_work_provider_files(&[&schema_path, &output_path]);
+                format!(
+                    "Codex work-log normalization이 {timeout_seconds}초 안에 끝나지 않아 로컬 fallback을 사용합니다."
+                )
+            })?
+            .map_err(|err| {
+                cleanup_codex_work_provider_files(&[&schema_path, &output_path]);
+                format!("Codex work-log normalization 결과 대기 실패: {err}; 로컬 fallback을 사용합니다.")
+            })?;
+    if !output.status.success() {
+        let stderr = truncate_chars(
+            &redact_sensitive_text(&String::from_utf8_lossy(&output.stderr)),
+            500,
+        );
+        cleanup_codex_work_provider_files(&[&schema_path, &output_path]);
+        return Err(format!(
+            "Codex work-log normalization이 exit status {}를 반환했습니다: {}; 로컬 fallback을 사용합니다.",
+            output.status, stderr
+        ));
+    }
+
+    let content = fs::read_to_string(&output_path)
+        .ok()
+        .filter(|text| !text.trim().is_empty())
+        .unwrap_or_else(|| String::from_utf8_lossy(&output.stdout).to_string());
+    cleanup_codex_work_provider_files(&[&schema_path, &output_path]);
+    project_work_log_normalization_proposals_from_content(
+        candidates_result,
+        ProjectWorkLogNormalizationRuntime {
+            provider: "codex",
+            provider_model: non_empty_env_value(env, "CODEX_MODEL"),
+            provider_runtime: "codex-cli-exec",
+            used_ai: true,
+        },
+        candidates,
+        &content,
+        vec![
+            "Codex work-log normalization은 read-only sandbox, ephemeral state, output-schema 검증으로 실행됐습니다."
+                .to_string(),
+        ],
+    )
+    .map_err(|err| {
+        format!("Codex work-log normalization 검증 실패: {err}; 로컬 fallback을 사용합니다.")
+    })
+}
+
+fn codex_work_provider_temp_path(suffix: &str) -> PathBuf {
+    let nonce = Utc::now()
+        .timestamp_nanos_opt()
+        .unwrap_or_else(|| Utc::now().timestamp_micros() * 1_000);
+    std::env::temp_dir().join(format!(
+        "promptvault-codex-work-normalization-{}-{nonce}-{suffix}",
+        std::process::id()
+    ))
+}
+
+fn cleanup_codex_work_provider_files(paths: &[&Path]) {
+    for path in paths {
+        let _ = fs::remove_file(path);
+    }
+}
+
+fn current_codex_workdir() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| user_home_dir())
 }
 
 fn project_work_log_normalization_json_schema() -> Value {
@@ -14756,6 +14960,8 @@ fn load_improve_env() -> HashMap<String, String> {
         "CODEX_HOME",
         "CODEX_MODEL",
         "CODEX_PROFILE",
+        "PROMPTVAULT_CODEX_WORK_PROVIDER",
+        "PROMPTVAULT_CODEX_TIMEOUT_SECONDS",
     ] {
         if let Ok(value) = std::env::var(key) {
             if !value.trim().is_empty() {
@@ -14777,6 +14983,8 @@ fn project_work_ai_provider_status_from_env(
     let glm_configured = glm_api_key_from_env(&env).is_some();
     let codex_exec_path = codex_exec_path_from_env(&env);
     let codex_configured = codex_exec_path.is_some();
+    let codex_enabled = codex_work_provider_enabled(&env);
+    let codex_usable = codex_configured && codex_enabled;
     let openai_endpoint = normalize_openai_responses_endpoint(
         &env.get("OPENAI_RESPONSES_ENDPOINT")
             .or_else(|| env.get("OPENAI_BASE_URL"))
@@ -14796,9 +15004,14 @@ fn project_work_ai_provider_status_from_env(
                 .to_string(),
         );
     }
-    if codex_configured {
+    if codex_usable {
         warnings.push(
-            "Codex CLI route가 감지되었지만 review-gated proposal 생성에는 아직 연결되지 않았습니다; OpenAI/GLM/local provider 순서는 그대로 유지됩니다."
+            "Codex CLI work-log normalization provider가 opt-in으로 활성화되어 있습니다; durable 저장은 review queue 승인 후에만 가능합니다."
+                .to_string(),
+        );
+    } else if codex_configured {
+        warnings.push(
+            "Codex CLI route가 감지되었지만 PROMPTVAULT_CODEX_WORK_PROVIDER=1이 아니어서 proposal 생성에는 사용하지 않습니다."
                 .to_string(),
         );
     } else {
@@ -14849,14 +15062,20 @@ fn project_work_ai_provider_status_from_env(
                     "codex-sdk".to_string()
                 },
                 configured: codex_configured,
-                usable_for_work_management: false,
-                capabilities: Vec::new(),
+                usable_for_work_management: codex_usable,
+                capabilities: codex_work_management_capabilities(codex_usable),
                 model: non_empty_env_value(&env, "CODEX_MODEL"),
                 endpoint: codex_exec_path.clone(),
                 notes: if let Some(path) = codex_exec_path {
-                    let mut notes = vec![format!(
-                        "codex exec was detected at {path}; proposal generation remains disabled until a source-traced runner is wired behind review gates."
-                    )];
+                    let mut notes = if codex_usable {
+                        vec![format!(
+                            "codex exec is opt-in enabled at {path}; work-log normalization runs with read-only sandbox, ephemeral state, and output-schema validation."
+                        )]
+                    } else {
+                        vec![format!(
+                            "codex exec was detected at {path}; set PROMPTVAULT_CODEX_WORK_PROVIDER=1 to enable review-gated work-log normalization proposals."
+                        )]
+                    };
                     if let Some(profile) = non_empty_env_value(&env, "CODEX_PROFILE") {
                         notes.push(format!("CODEX_PROFILE is set to {profile}."));
                     }
@@ -14889,6 +15108,32 @@ fn provider_work_management_capabilities(configured: bool) -> Vec<String> {
     } else {
         Vec::new()
     }
+}
+
+fn codex_work_management_capabilities(usable: bool) -> Vec<String> {
+    if usable {
+        vec!["work-log-normalization".to_string()]
+    } else {
+        Vec::new()
+    }
+}
+
+fn codex_work_provider_enabled(env: &HashMap<String, String>) -> bool {
+    non_empty_env_value(env, "PROMPTVAULT_CODEX_WORK_PROVIDER")
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn codex_work_provider_timeout_seconds(env: &HashMap<String, String>) -> u64 {
+    non_empty_env_value(env, "PROMPTVAULT_CODEX_TIMEOUT_SECONDS")
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|seconds| (1..=MAX_CODEX_WORK_PROVIDER_TIMEOUT_SECONDS).contains(seconds))
+        .unwrap_or(DEFAULT_CODEX_WORK_PROVIDER_TIMEOUT_SECONDS)
 }
 
 fn codex_exec_path_from_env(env: &HashMap<String, String>) -> Option<String> {
@@ -15408,8 +15653,46 @@ mod tests {
         assert!(result
             .warnings
             .iter()
-            .any(|warning| warning
-                .contains("감지되었지만 review-gated proposal 생성에는 아직 연결되지")));
+            .any(|warning| warning.contains("PROMPTVAULT_CODEX_WORK_PROVIDER=1이 아니어서")));
+    }
+
+    #[test]
+    fn project_work_ai_provider_status_marks_codex_opt_in_normalization_capability() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-codex-provider-status-enabled-{}",
+            std::process::id()
+        ));
+        let bin_dir = root.join("bin");
+        std::fs::create_dir_all(&bin_dir).expect("create codex bin fixture");
+        let codex_path = bin_dir.join("codex");
+        std::fs::write(&codex_path, "#!/bin/sh\n").expect("write fake codex");
+        let mut env = HashMap::new();
+        env.insert("PATH".to_string(), bin_dir.to_string_lossy().to_string());
+        env.insert(
+            "PROMPTVAULT_CODEX_WORK_PROVIDER".to_string(),
+            "1".to_string(),
+        );
+        env.insert("CODEX_MODEL".to_string(), "gpt-5.3-codex".to_string());
+
+        let result = project_work_ai_provider_status_from_env(env);
+        let codex = result
+            .providers
+            .iter()
+            .find(|provider| provider.provider == "codex")
+            .expect("codex row");
+
+        assert!(codex.configured);
+        assert!(codex.usable_for_work_management);
+        assert_eq!(codex.capabilities, vec!["work-log-normalization"]);
+        assert_eq!(codex.provider_runtime, "codex-cli-exec");
+        assert!(codex
+            .notes
+            .iter()
+            .any(|note| note.contains("read-only sandbox")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("opt-in으로 활성화")));
     }
 
     #[test]
@@ -21765,6 +22048,111 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(request.contains("authorization: Bearer glm-key"));
         assert!(request.contains("\"model\":\"glm-test-model\""));
         assert!(request.contains("work-log-Beta-a1b2c3d4e5"));
+    }
+
+    #[tokio::test]
+    async fn project_work_log_normalization_with_env_uses_opt_in_codex_cli_provider() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-codex-normalization-provider-{}",
+            std::process::id()
+        ));
+        let bin_dir = root.join("bin");
+        std::fs::create_dir_all(&bin_dir).expect("create codex bin fixture");
+        let codex_path = bin_dir.join("codex");
+        let prompt_capture_path = root.join("captured-prompt.txt");
+        let response = serde_json::json!({
+            "proposals": [
+                {
+                    "candidate_id": "work-normalize-Beta-a1b2c3d4e5",
+                    "normalized_title": "Created project root and initialized git",
+                    "normalized_status": "done",
+                    "normalized_evidence": "2026-06-04: Created project root and initialized a new git repository.",
+                    "confidence": 0.91
+                }
+            ]
+        })
+        .to_string();
+        let script = format!(
+            "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"--output-last-message\" ]; then\n    shift\n    out=\"$1\"\n  fi\n  shift\ndone\ncat > \"{}\"\ncat > \"$out\" <<'JSON'\n{}\nJSON\n",
+            prompt_capture_path.to_string_lossy(),
+            response
+        );
+        std::fs::write(&codex_path, script).expect("write fake codex");
+        let mut permissions = std::fs::metadata(&codex_path)
+            .expect("codex metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&codex_path, permissions).expect("make fake codex executable");
+
+        let candidate = ProjectWorkLogNormalizationCandidate {
+            candidate_id: "work-normalize-Beta-a1b2c3d4e5".to_string(),
+            project: "Beta".to_string(),
+            date: "2026-06-04".to_string(),
+            title: "Beta 2026-06-04 parsed work rows".to_string(),
+            status: "logged".to_string(),
+            source_path: "/tmp/Beta/workingd.md".to_string(),
+            source_file: "workingd.md".to_string(),
+            reason: "no_ai_normalization,no_session_evidence,generic_title".to_string(),
+            evidence: "2026-06-04: Created project root and initialized a new git repository."
+                .to_string(),
+            work_item_count: 1,
+            session_evidence_count: 0,
+            saved_extraction_count: 0,
+            ai_saved_extraction_count: 0,
+            best_ai_confidence: None,
+            risk_flags: Vec::new(),
+        };
+        let candidates = ProjectWorkLogNormalizationCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            database_path: "/tmp/promptvault.sqlite".to_string(),
+            total_candidate_count: 1,
+            returned_candidate_count: 1,
+            report_total_items: 1,
+            report_project_count: 1,
+            report_date_count: 1,
+            candidates: vec![candidate],
+            warnings: Vec::new(),
+        };
+        let mut env = HashMap::new();
+        env.insert(
+            "PROMPTVAULT_CODEX_EXEC_PATH".to_string(),
+            codex_path.to_string_lossy().to_string(),
+        );
+        env.insert(
+            "PROMPTVAULT_CODEX_WORK_PROVIDER".to_string(),
+            "1".to_string(),
+        );
+        env.insert("CODEX_MODEL".to_string(), "gpt-5.3-codex".to_string());
+        env.insert("CODEX_PROFILE".to_string(), "promptvault".to_string());
+
+        let result = project_work_log_normalization_proposals_with_env(candidates, false, env)
+            .await
+            .expect("Codex normalization proposals");
+        let captured_prompt =
+            std::fs::read_to_string(&prompt_capture_path).expect("read captured prompt");
+
+        assert_eq!(result.provider, "codex");
+        assert_eq!(result.provider_model.as_deref(), Some("gpt-5.3-codex"));
+        assert_eq!(result.provider_runtime, "codex-cli-exec");
+        assert!(result.used_ai);
+        assert_eq!(result.accepted_count, 1);
+        assert_eq!(result.rejected_count, 0);
+        assert!(result.proposals[0].accepted);
+        assert_eq!(
+            result.proposals[0].normalized_title,
+            "Created project root and initialized git"
+        );
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("read-only sandbox")));
+        assert!(captured_prompt.contains("work-normalize-Beta-a1b2c3d4e5"));
+        assert!(captured_prompt.contains("Do not invent projects"));
+        assert!(captured_prompt.contains("do not read files"));
+
+        std::fs::remove_dir_all(root).expect("remove codex normalization fixture");
     }
 
     #[tokio::test]

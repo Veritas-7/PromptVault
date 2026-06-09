@@ -1,10 +1,108 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 03:07 KST
+Updated: 2026-06-10 03:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Codex opt-in work-log normalization provider
+
+Current Goal:
+
+- Answer the operator status question with live evidence, then close the next
+  concrete gap: Codex should be usable for AI-assisted project/day work-log
+  title cleanup, but only behind an explicit opt-in and review gate.
+- Keep the default behavior fail-closed so detecting `codex exec` never starts
+  proposal generation by itself.
+
+Context:
+
+- Live `work-log-coverage --json` verified `/Users/wj/Ai/System/10_Projects`
+  progress-log parsing against real project files:
+  `866` files seen, `865` parsed, `0` unparsed readable logs, `31` projects,
+  and `9,521` parsed work items at the start of this slice.
+- Live `work-status-export --json` verified real project/day management rows
+  from progress logs plus sanitized session evidence:
+  `31` projects, `26` days, `99` project/day rows, and the full stored session
+  index count `10,867`.
+- Project-local artifacts are covered, including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, generated `*-worklog.md`,
+  `PROGRESS_LOG.md`, `progress.md`, and `PROJECT_STATUS.md`.
+- GLM is configured and usable for `work-summary`, `work-log-extraction`,
+  `work-log-normalization`, and `session-evidence-proposals`.
+- Codex CLI is detected locally but should remain opt-in because it can execute
+  a model run and must be bounded with read-only sandboxing, ephemeral state,
+  schema output, timeout, and existing evidence validation.
+
+Progress:
+
+- Added an opt-in Codex CLI runner for `work-log-normalization` only.
+- Codex is enabled only when `PROMPTVAULT_CODEX_WORK_PROVIDER=1` is set.
+- The runner calls `codex exec` with `--sandbox read-only`, `--ephemeral`,
+  `--output-schema`, `--output-last-message`, and stdin prompt delivery.
+- Added a timeout guard with default `90` seconds and
+  `PROMPTVAULT_CODEX_TIMEOUT_SECONDS` override capped at `300` seconds.
+- Reused the existing normalization JSON schema and copied-evidence validator:
+  proposals are accepted only when the returned evidence is present in the
+  candidate evidence and confidence/status pass the existing checks.
+- Provider status now distinguishes:
+  - default Codex detected but unusable, `capabilities: []`;
+  - opt-in Codex usable, `capabilities: ["work-log-normalization"]`.
+- OpenAI/GLM/local fallback order is preserved. Codex runs after OpenAI/GLM
+  attempts fail or are unavailable, and durable writes still require the
+  normalization review queue and apply step.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added Codex opt-in detection, timeout parsing, provider
+  status capability reporting, read-only/ephemeral Codex normalization runner,
+  cleanup of temp schema/output files, and Rust tests with a fake Codex binary.
+- `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`: enabled Tokio `process`,
+  `time`, and `io-util` features required for bounded process execution and
+  stdin prompt delivery.
+- `README.md`, `docs/CLI.md`: documented Codex opt-in boundaries,
+  `PROMPTVAULT_CODEX_WORK_PROVIDER=1`, and timeout behavior.
+
+Tests:
+
+- PASS: `cargo fmt --check`.
+- PASS: `cargo test project_work_ai_provider_status -- --nocapture`.
+- PASS: `cargo test project_work_log_normalization -- --nocapture`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "work AI provider status"`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work AI provider status"`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `cargo run --quiet --bin promptvault-cli -- work-ai-provider-status --json`
+  - Default environment: GLM usable with four capabilities; Codex detected at
+    `/Users/wj/.nvm/versions/node/v22.22.1/bin/codex` but
+    `usable_for_work_management: false` and `capabilities: []`.
+- PASS: `PROMPTVAULT_CODEX_WORK_PROVIDER=1 cargo run --quiet --bin promptvault-cli -- work-ai-provider-status --json`
+  - Opt-in environment: Codex reports `usable_for_work_management: true` and
+    `capabilities: ["work-log-normalization"]`.
+- PASS: `npm run check`
+  - UI tests `490`, Rust lib tests `211`, CLI tests `34`, doc tests, build,
+    and clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser QA ended with exit code `0`.
+  - Verified work status export, full stored session index controls,
+    session-evidence candidates/proposals/review queues, provider status,
+    work-log coverage, normalization candidates/proposals/review/apply, stale
+    queue behavior, approved review-queue save, run history, and saved items.
+  - QA output showed current managed status around `31` projects, `26` days,
+    `9,533` work items, `867` progress logs, and `99` project/day rows in the
+    isolated run context.
+
+Remaining:
+
+- Codex is now connected only for work-log normalization, not for session
+  evidence proposals, extraction, or summaries.
+- GLM remains the live configured provider in the normal environment; Codex
+  opt-in should be used deliberately for review-gated title cleanup runs.
+- Durable session-evidence writes are still intentionally unavailable; current
+  session-evidence proposals remain review-only.
+- The remaining management gap is operator/AI backfill: approve or reject
+  normalization rows, apply approved rows, then re-run session-evidence review
+  on rows whose titles were cleaned.
 
 ## Completed Slice - 2026-06-10 AI provider capability visibility
 

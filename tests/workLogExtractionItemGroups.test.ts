@@ -11,6 +11,8 @@ function item(overrides: Partial<ProjectWorkLogExtractionItem> = {}): ProjectWor
     saved_at: "2026-06-09T05:00:00+09:00",
     run_generated_at: "2026-06-09T05:00:00+09:00",
     provider: "local-extraction-rules",
+    provider_model: null,
+    provider_runtime: "local-extraction-rules",
     used_ai: false,
     candidate_id: "work-log-CareVault-a1",
     project: "CareVault",

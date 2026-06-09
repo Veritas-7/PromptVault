@@ -278,6 +278,8 @@ export interface ProjectWorkLogExtractionProposalsResult {
   generated_at: string;
   root_path: string;
   provider: string;
+  provider_model: string | null;
+  provider_runtime: string;
   used_ai: boolean;
   candidate_count: number;
   accepted_count: number;
@@ -298,6 +300,8 @@ export interface ProjectWorkLogExtractionItem {
   saved_at: string;
   run_generated_at: string;
   provider: string;
+  provider_model: string | null;
+  provider_runtime: string;
   used_ai: boolean;
   candidate_id: string;
   project: string;

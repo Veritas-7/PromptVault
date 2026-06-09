@@ -2842,6 +2842,9 @@ function App() {
                       <p className="work-log-proposal-evidence">{item.evidence}</p>
                       <span>
                         #{item.id.toLocaleString()} · {item.provider}
+                        {" · "}
+                        {item.provider_runtime}
+                        {item.provider_model ? ` · model ${item.provider_model}` : ""}
                         {item.used_ai ? " · AI" : " · local"} · {item.status} · confidence{" "}
                         {item.confidence.toFixed(2)}
                       </span>

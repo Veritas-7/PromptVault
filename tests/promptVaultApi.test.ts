@@ -379,6 +379,8 @@ function projectWorkLogExtractionProposalsPayload(overrides = {}) {
     generated_at: "2026-06-09T00:00:00Z",
     root_path: "/Users/wj/Ai/System/10_Projects",
     provider: "glm",
+    provider_model: "glm-test-model",
+    provider_runtime: "glm-chat-completions",
     used_ai: true,
     candidate_count: 1,
     accepted_count: 1,
@@ -415,6 +417,8 @@ function projectWorkLogExtractionItemsPayload(overrides = {}) {
       saved_at: "2026-06-09T01:00:00Z",
       run_generated_at: "2026-06-09T00:00:00Z",
       provider: "glm",
+      provider_model: "glm-test-model",
+      provider_runtime: "glm-chat-completions",
       used_ai: true,
       candidate_id: "work-log-CareVault-a1b2c3d4e5",
       project: "CareVault",
@@ -750,6 +754,8 @@ test("browser bridge work log extraction posts AI option and validates proposals
   assert.match(requestPath, /\/api\/work-log-extract$/);
   assert.deepEqual(JSON.parse(requestBody), { options: { limit: 5, ai: true } });
   assert.equal(result.provider, "glm");
+  assert.equal(result.provider_model, "glm-test-model");
+  assert.equal(result.provider_runtime, "glm-chat-completions");
   assert.equal(result.used_ai, true);
   assert.equal(result.accepted_count, 1);
   assert.equal(result.rejected_count, 0);
@@ -767,6 +773,8 @@ test("browser bridge work log extraction posts local-only option", async (t) => 
     requestBody = String(init?.body ?? "");
     return new Response(JSON.stringify(projectWorkLogExtractionProposalsPayload({
       provider: "local-extraction-rules",
+      provider_model: null,
+      provider_runtime: "local-extraction-rules",
       used_ai: false,
     })), { status: 200 });
   };
@@ -856,6 +864,8 @@ test("browser bridge work log freeze posts options and validates persistence", a
     requestBody = String(init?.body ?? "");
     return new Response(JSON.stringify(projectWorkLogExtractionProposalsPayload({
       provider: "progress-log-freeze",
+      provider_model: null,
+      provider_runtime: "progress-log-freeze",
       used_ai: false,
       candidate_count: 2,
       accepted_count: 2,
@@ -920,6 +930,8 @@ test("browser bridge work log extraction items posts filters and validates saved
   });
   assert.equal(result.returned_item_count, 1);
   assert.equal(result.items[0].project, "CareVault");
+  assert.equal(result.items[0].provider_model, "glm-test-model");
+  assert.equal(result.items[0].provider_runtime, "glm-chat-completions");
   assert.equal(result.items[0].date, "2026-06-04");
   assert.equal(result.items[0].source_file, "workingd.md");
   assert.deepEqual(result.items[0].warnings, ["provider warning"]);

@@ -60,6 +60,13 @@ const SCAN_CANCELED_NOT_PERSISTED_WARNING: &str = "취소된 스캔은 저장소
 
 type ScanCancelFlag = Arc<AtomicBool>;
 
+struct ProjectWorkLogExtractionRuntime<'a> {
+    provider: &'a str,
+    provider_model: Option<String>,
+    provider_runtime: &'a str,
+    used_ai: bool,
+}
+
 static SCAN_CANCEL_FLAGS: OnceLock<Mutex<HashMap<String, ScanCancelFlag>>> = OnceLock::new();
 static SCAN_PROGRESS: OnceLock<Mutex<HashMap<String, ScanProgress>>> = OnceLock::new();
 
@@ -253,6 +260,8 @@ pub struct ProjectWorkLogExtractionProposalsResult {
     pub generated_at: String,
     pub root_path: String,
     pub provider: String,
+    pub provider_model: Option<String>,
+    pub provider_runtime: String,
     pub used_ai: bool,
     pub candidate_count: usize,
     pub accepted_count: usize,
@@ -275,6 +284,8 @@ pub struct ProjectWorkLogExtractionItem {
     pub saved_at: String,
     pub run_generated_at: String,
     pub provider: String,
+    pub provider_model: Option<String>,
+    pub provider_runtime: String,
     pub used_ai: bool,
     pub candidate_id: String,
     pub project: String,
@@ -3528,6 +3539,8 @@ fn project_work_log_freeze_proposals_from_report(
         generated_at: Utc::now().to_rfc3339(),
         root_path: root_path.display().to_string(),
         provider: "progress-log-freeze".to_string(),
+        provider_model: None,
+        provider_runtime: "progress-log-freeze".to_string(),
         used_ai: false,
         candidate_count,
         accepted_count: proposals.len(),
@@ -3759,8 +3772,12 @@ async fn project_work_log_extraction_proposals_with_env(
     if safe_candidates.is_empty() {
         return Ok(finish_project_work_log_extraction_proposals(
             candidates.root_path,
-            "local-extraction-rules",
-            false,
+            ProjectWorkLogExtractionRuntime {
+                provider: "local-extraction-rules",
+                provider_model: None,
+                provider_runtime: "local-extraction-rules",
+                used_ai: false,
+            },
             candidates.candidate_count,
             blocked_candidates
                 .iter()
@@ -3895,12 +3912,16 @@ async fn request_openai_project_work_log_extraction(
             .to_string()
     })?;
     project_work_log_extraction_proposals_from_content(
-        "openai",
+        ProjectWorkLogExtractionRuntime {
+            provider: "openai",
+            provider_model: Some(model),
+            provider_runtime: "openai-responses",
+            used_ai: true,
+        },
         root_path,
         candidates,
         &content,
         Vec::new(),
-        true,
     )
     .map_err(|err| {
         format!("OpenAI work-log extraction 검증 실패: {err}; 로컬 fallback을 사용합니다.")
@@ -3956,12 +3977,16 @@ async fn request_glm_project_work_log_extraction(
             "GLM work-log extraction 응답 content가 없어 로컬 fallback을 사용했습니다.".to_string()
         })?;
     project_work_log_extraction_proposals_from_content(
-        "glm",
+        ProjectWorkLogExtractionRuntime {
+            provider: "glm",
+            provider_model: Some(model),
+            provider_runtime: "glm-chat-completions",
+            used_ai: true,
+        },
         root_path,
         candidates,
         content,
         Vec::new(),
-        true,
     )
     .map_err(|err| {
         format!("GLM work-log extraction 검증 실패: {err}; 로컬 fallback을 사용했습니다.")
@@ -4035,12 +4060,11 @@ fn project_work_log_extraction_http_client(provider: &str) -> Result<reqwest::Cl
 }
 
 fn project_work_log_extraction_proposals_from_content(
-    provider: &str,
+    runtime: ProjectWorkLogExtractionRuntime<'_>,
     root_path: &str,
     candidates: &[ProjectWorkLogExtractionCandidate],
     content: &str,
     warnings: Vec<String>,
-    used_ai: bool,
 ) -> Result<ProjectWorkLogExtractionProposalsResult, Box<dyn std::error::Error>> {
     let envelope: AiProjectWorkLogExtractionEnvelope = serde_json::from_str(content)?;
     let mut proposals_by_candidate = BTreeMap::<String, AiProjectWorkLogExtractionProposal>::new();
@@ -4059,7 +4083,7 @@ fn project_work_log_extraction_proposals_from_content(
     if !duplicate_candidate_ids.is_empty() {
         result_warnings.push(format!(
             "{} provider returned duplicate candidate IDs: {}",
-            provider,
+            runtime.provider,
             duplicate_candidate_ids
                 .into_iter()
                 .collect::<Vec<_>>()
@@ -4081,7 +4105,7 @@ fn project_work_log_extraction_proposals_from_content(
     if !proposals_by_candidate.is_empty() {
         result_warnings.push(format!(
             "{} provider returned unknown candidate IDs: {}",
-            provider,
+            runtime.provider,
             proposals_by_candidate
                 .keys()
                 .cloned()
@@ -4092,8 +4116,7 @@ fn project_work_log_extraction_proposals_from_content(
 
     Ok(finish_project_work_log_extraction_proposals(
         root_path.to_string(),
-        provider,
-        used_ai,
+        runtime,
         candidates.len(),
         proposals,
         result_warnings,
@@ -4193,8 +4216,12 @@ fn local_project_work_log_extraction_proposals(
         .collect::<Vec<_>>();
     finish_project_work_log_extraction_proposals(
         candidates.root_path,
-        "local-extraction-rules",
-        false,
+        ProjectWorkLogExtractionRuntime {
+            provider: "local-extraction-rules",
+            provider_model: None,
+            provider_runtime: "local-extraction-rules",
+            used_ai: false,
+        },
         candidates.candidate_count,
         proposals,
         warnings,
@@ -4553,8 +4580,7 @@ fn append_blocked_work_log_extraction_proposals(
 
 fn finish_project_work_log_extraction_proposals(
     root_path: String,
-    provider: &str,
-    used_ai: bool,
+    runtime: ProjectWorkLogExtractionRuntime<'_>,
     candidate_count: usize,
     proposals: Vec<ProjectWorkLogExtractionProposal>,
     warnings: Vec<String>,
@@ -4562,8 +4588,10 @@ fn finish_project_work_log_extraction_proposals(
     let mut result = ProjectWorkLogExtractionProposalsResult {
         generated_at: Utc::now().to_rfc3339(),
         root_path,
-        provider: provider.to_string(),
-        used_ai,
+        provider: runtime.provider.to_string(),
+        provider_model: runtime.provider_model,
+        provider_runtime: runtime.provider_runtime.to_string(),
+        used_ai: runtime.used_ai,
         candidate_count,
         accepted_count: 0,
         rejected_count: 0,
@@ -6997,6 +7025,8 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             saved_at TEXT NOT NULL,
             run_generated_at TEXT NOT NULL,
             provider TEXT NOT NULL,
+            provider_model TEXT,
+            provider_runtime TEXT NOT NULL DEFAULT 'unknown',
             used_ai INTEGER NOT NULL,
             candidate_id TEXT NOT NULL,
             project TEXT NOT NULL,
@@ -7034,14 +7064,41 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             ON project_work_summary_snapshots(created_at DESC);
         ",
     )?;
+    ensure_project_work_log_extraction_items_schema(conn)?;
     ensure_project_work_summary_snapshot_schema(conn)?;
+    Ok(())
+}
+
+fn ensure_project_work_log_extraction_items_schema(
+    conn: &Connection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !sqlite_table_has_column(conn, "project_work_log_extraction_items", "provider_model")? {
+        conn.execute(
+            "ALTER TABLE project_work_log_extraction_items ADD COLUMN provider_model TEXT",
+            [],
+        )?;
+    }
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_log_extraction_items",
+        "provider_runtime",
+    )? {
+        conn.execute(
+            "ALTER TABLE project_work_log_extraction_items ADD COLUMN provider_runtime TEXT NOT NULL DEFAULT 'unknown'",
+            [],
+        )?;
+    }
     Ok(())
 }
 
 fn ensure_project_work_summary_snapshot_schema(
     conn: &Connection,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if !project_work_summary_snapshots_has_column(conn, "extraction_merge_json")? {
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_summary_snapshots",
+        "extraction_merge_json",
+    )? {
         conn.execute(
             "ALTER TABLE project_work_summary_snapshots ADD COLUMN extraction_merge_json TEXT",
             [],
@@ -7050,11 +7107,13 @@ fn ensure_project_work_summary_snapshot_schema(
     Ok(())
 }
 
-fn project_work_summary_snapshots_has_column(
+fn sqlite_table_has_column(
     conn: &Connection,
+    table: &str,
     column: &str,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    let mut stmt = conn.prepare("PRAGMA table_info(project_work_summary_snapshots)")?;
+    let pragma = format!("PRAGMA table_info({table})");
+    let mut stmt = conn.prepare(&pragma)?;
     let mut rows = stmt.query([])?;
     while let Some(row) = rows.next()? {
         let name: String = row.get(1)?;
@@ -7094,14 +7153,16 @@ fn persist_project_work_log_extraction_proposals(
         };
         let changed = tx.execute(
             "INSERT OR IGNORE INTO project_work_log_extraction_items (
-                saved_at, run_generated_at, provider, used_ai, candidate_id, project,
-                source_path, source_file, proposal_date, title, status, evidence,
-                confidence, warnings_json
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                saved_at, run_generated_at, provider, provider_model, provider_runtime,
+                used_ai, candidate_id, project, source_path, source_file, proposal_date,
+                title, status, evidence, confidence, warnings_json
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 &saved_at,
                 &result.generated_at,
                 &result.provider,
+                result.provider_model.as_deref(),
+                &result.provider_runtime,
                 result.used_ai as i64,
                 &proposal.candidate_id,
                 &proposal.project,
@@ -7146,7 +7207,7 @@ fn read_project_work_log_extraction_items(
     let mut stmt = conn.prepare(
         "SELECT id, saved_at, run_generated_at, provider, used_ai, candidate_id, project,
             source_path, source_file, proposal_date, title, status, evidence, confidence,
-            warnings_json
+            warnings_json, provider_model, provider_runtime
          FROM project_work_log_extraction_items
          ORDER BY id DESC",
     )?;
@@ -7173,11 +7234,14 @@ fn read_project_work_log_extraction_items(
             continue;
         }
         let warnings_json: String = row.get(14)?;
+        let provider_runtime: String = row.get(16)?;
         items.push(ProjectWorkLogExtractionItem {
             id: row.get(0)?,
             saved_at: row.get(1)?,
             run_generated_at: row.get(2)?,
             provider: row.get(3)?,
+            provider_model: row.get(15)?,
+            provider_runtime,
             used_ai: row.get::<_, i64>(4)? != 0,
             candidate_id: row.get(5)?,
             project,
@@ -11657,16 +11721,22 @@ Progress:
         let content = r#"{"proposals":[{"candidate_id":"work-log-Beta-a1b2c3d4e5","date":"2026-06-09","title":"Migration notes","status":"proposed","evidence":"Backfill migration notes","confidence":0.91}]}"#;
 
         let result = project_work_log_extraction_proposals_from_content(
-            "glm",
+            ProjectWorkLogExtractionRuntime {
+                provider: "glm",
+                provider_model: Some("glm-test-model".to_string()),
+                provider_runtime: "glm-chat-completions",
+                used_ai: true,
+            },
             "/tmp",
             &[candidate],
             content,
             Vec::new(),
-            true,
         )
         .expect("parse AI extraction proposal");
 
         assert_eq!(result.provider, "glm");
+        assert_eq!(result.provider_model.as_deref(), Some("glm-test-model"));
+        assert_eq!(result.provider_runtime, "glm-chat-completions");
         assert!(result.used_ai);
         assert_eq!(result.accepted_count, 0);
         assert_eq!(result.rejected_count, 1);
@@ -11966,6 +12036,8 @@ Progress:
             generated_at: "2026-06-09T00:00:00Z".to_string(),
             root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
             provider: "glm".to_string(),
+            provider_model: Some("glm-test-model".to_string()),
+            provider_runtime: "glm-chat-completions".to_string(),
             used_ai: true,
             candidate_count: 3,
             accepted_count: 1,
@@ -12075,6 +12147,8 @@ Progress:
             generated_at: "2026-06-09T00:00:00Z".to_string(),
             root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
             provider: "glm".to_string(),
+            provider_model: Some("glm-test-model".to_string()),
+            provider_runtime: "glm-chat-completions".to_string(),
             used_ai: true,
             candidate_count: 1,
             accepted_count: 1,
@@ -12163,6 +12237,8 @@ Progress:
                 saved_at: "2026-06-09T00:01:00Z".to_string(),
                 run_generated_at: "2026-06-09T00:00:00Z".to_string(),
                 provider: "glm".to_string(),
+                provider_model: Some("glm-test-model".to_string()),
+                provider_runtime: "glm-chat-completions".to_string(),
                 used_ai: true,
                 candidate_id: "work-log-CareVault-a1b2c3d4e5".to_string(),
                 project: "CareVault".to_string(),
@@ -12206,6 +12282,8 @@ Progress:
             generated_at: "2026-06-09T00:00:00Z".to_string(),
             root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
             provider: "glm".to_string(),
+            provider_model: Some("glm-test-model".to_string()),
+            provider_runtime: "glm-chat-completions".to_string(),
             used_ai: true,
             candidate_count: 3,
             accepted_count: 2,
@@ -12264,9 +12342,17 @@ Progress:
         assert_eq!(persistence.total_saved_item_count, 1);
 
         let conn = Connection::open(&db_path).expect("open extraction db");
-        let stored: (String, String, String, String, String) = conn
+        let stored: (
+            String,
+            Option<String>,
+            String,
+            String,
+            String,
+            String,
+            String,
+        ) = conn
             .query_row(
-                "SELECT provider, project, proposal_date, source_file, warnings_json
+                "SELECT provider, provider_model, provider_runtime, project, proposal_date, source_file, warnings_json
                  FROM project_work_log_extraction_items",
                 [],
                 |row| {
@@ -12276,15 +12362,19 @@ Progress:
                         row.get(2)?,
                         row.get(3)?,
                         row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
                     ))
                 },
             )
             .expect("read saved extraction");
         assert_eq!(stored.0, "glm");
-        assert_eq!(stored.1, "CareVault");
-        assert_eq!(stored.2, "2026-06-04");
-        assert_eq!(stored.3, "workingd.md");
-        assert!(stored.4.contains("provider warning"));
+        assert_eq!(stored.1.as_deref(), Some("glm-test-model"));
+        assert_eq!(stored.2, "glm-chat-completions");
+        assert_eq!(stored.3, "CareVault");
+        assert_eq!(stored.4, "2026-06-04");
+        assert_eq!(stored.5, "workingd.md");
+        assert!(stored.6.contains("provider warning"));
 
         std::fs::remove_file(db_path).expect("remove extraction db");
     }
@@ -12299,6 +12389,8 @@ Progress:
             generated_at: "2026-06-09T00:00:00Z".to_string(),
             root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
             provider: "local-extraction-rules".to_string(),
+            provider_model: None,
+            provider_runtime: "local-extraction-rules".to_string(),
             used_ai: false,
             candidate_count: 2,
             accepted_count: 2,
@@ -12512,9 +12604,95 @@ Progress:
         assert_eq!(result.items[0].project, "CareVault");
         assert_eq!(result.items[0].date, "2026-06-04");
         assert_eq!(result.items[0].source_file, "workingd.md");
+        assert_eq!(result.items[0].provider, "glm");
+        assert_eq!(result.items[0].provider_model, None);
+        assert_eq!(result.items[0].provider_runtime, "unknown");
         assert_eq!(result.items[0].warnings, vec!["provider warning"]);
 
         std::fs::remove_file(db_path).expect("remove extraction items db");
+    }
+
+    #[test]
+    fn project_work_log_extraction_items_schema_migrates_runtime_metadata() {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-project-work-log-extraction-legacy-schema-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        {
+            let conn = Connection::open(&db_path).expect("open legacy extraction db");
+            conn.execute_batch(
+                "
+                CREATE TABLE project_work_log_extraction_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    saved_at TEXT NOT NULL,
+                    run_generated_at TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    used_ai INTEGER NOT NULL,
+                    candidate_id TEXT NOT NULL,
+                    project TEXT NOT NULL,
+                    source_path TEXT NOT NULL,
+                    source_file TEXT NOT NULL,
+                    proposal_date TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    evidence TEXT NOT NULL,
+                    confidence REAL NOT NULL,
+                    warnings_json TEXT NOT NULL,
+                    UNIQUE(candidate_id, proposal_date, title, evidence)
+                );
+                ",
+            )
+            .expect("create legacy extraction table");
+        }
+
+        let conn = open_promptvault_database(&db_path).expect("migrate extraction db");
+        assert!(sqlite_table_has_column(
+            &conn,
+            "project_work_log_extraction_items",
+            "provider_model"
+        )
+        .expect("provider_model column check"));
+        assert!(sqlite_table_has_column(
+            &conn,
+            "project_work_log_extraction_items",
+            "provider_runtime"
+        )
+        .expect("provider_runtime column check"));
+        conn.execute(
+            "INSERT INTO project_work_log_extraction_items (
+                saved_at, run_generated_at, provider, used_ai, candidate_id, project,
+                source_path, source_file, proposal_date, title, status, evidence,
+                confidence, warnings_json
+            ) VALUES (
+                '2026-06-09T00:00:00Z', '2026-06-09T00:00:00Z', 'glm', 1,
+                'work-log-CareVault-legacy', 'CareVault',
+                '/Users/wj/Ai/System/10_Projects/CareVault/workingd.md', 'workingd.md',
+                '2026-06-04', 'Legacy saved extraction', 'proposed',
+                '2026-06-04: Legacy saved extraction', 0.91, '[]'
+            )",
+            [],
+        )
+        .expect("insert migrated legacy extraction row");
+        drop(conn);
+
+        let result =
+            run_list_project_work_log_extraction_items(ProjectWorkLogExtractionItemsOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(5),
+                date: None,
+                project: None,
+            })
+            .expect("list migrated extraction items");
+
+        assert_eq!(result.returned_item_count, 1);
+        assert_eq!(result.items[0].provider_model, None);
+        assert_eq!(result.items[0].provider_runtime, "unknown");
+
+        std::fs::remove_file(db_path).expect("remove legacy extraction db");
     }
 
     #[tokio::test]
@@ -12581,6 +12759,8 @@ Progress:
             .expect("capture GLM request");
 
         assert_eq!(result.provider, "glm");
+        assert_eq!(result.provider_model.as_deref(), Some("glm-test-model"));
+        assert_eq!(result.provider_runtime, "glm-chat-completions");
         assert!(result.used_ai);
         assert_eq!(result.candidate_count, 1);
         assert_eq!(result.accepted_count, 1);
@@ -12619,6 +12799,8 @@ Progress:
             .expect("empty AI extraction proposals");
 
         assert_eq!(result.provider, "local-extraction-rules");
+        assert_eq!(result.provider_model, None);
+        assert_eq!(result.provider_runtime, "local-extraction-rules");
         assert!(!result.used_ai);
         assert_eq!(result.candidate_count, 0);
         assert_eq!(result.accepted_count, 0);

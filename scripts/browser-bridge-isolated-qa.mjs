@@ -143,6 +143,7 @@ async function runBrowserQa() {
   let workSummaryIndex = "";
   let coverageMeta = "";
   let workLogExtractionProviderWarning = "";
+  let workLogItemRows = [];
 
   page.on("console", (message) => {
     if (["error", "warning"].includes(message.type())) {
@@ -358,6 +359,11 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       return Boolean(document.querySelector('[data-work-log-items-meta="true"]'));
     }, undefined, { timeout: 90000 });
+    await page.waitForFunction(() => {
+      const rows = Array.from(document.querySelectorAll('[data-work-log-items="true"] article'));
+      return rows.some((row) => (row.textContent ?? "").includes("progress-log-freeze"));
+    }, undefined, { timeout: 90000 });
+    workLogItemRows = await page.locator('[data-work-log-items="true"] article').allTextContents();
 
     if (consoleErrors.length > 0) {
       throw new Error(`Browser console errors:\n${consoleErrors.join("\n")}`);
@@ -384,6 +390,7 @@ async function runBrowserQa() {
       workManagementPersistenceRows,
       coverageMeta,
       workLogExtractionProviderWarning,
+      workLogItemRows,
     };
     console.log(JSON.stringify(result, null, 2));
   } finally {

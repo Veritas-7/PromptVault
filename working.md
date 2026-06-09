@@ -1,10 +1,116 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 11:17 KST
+Updated: 2026-06-09 11:32 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 extraction runtime metadata
+
+Current Goal:
+
+- Make progress-log extraction and durable saved rows auditable by provider,
+  model, and runtime.
+- Answer the operator concern honestly: project/day progress-log management is
+  partially complete and verified with real data, but the AI-assisted reviewed
+  backfill queue is still the next product slice.
+
+Context:
+
+- Deterministic parsing now covers project-local progress logs such as
+  `working.md`, `workingd.md`, `WORKING_LOG.md`, `PROJECT_STATUS.md`,
+  `PROGRESS_LOG.md`, and related plan worklogs.
+- Actual Codex session evidence is parsed with a bounded recent-session path:
+  metadata first, raw prompt fallback when needed.
+- OpenAI/GLM extraction plumbing already exists for safe candidate excerpts,
+  but current live coverage has `candidate_count=0` because no unparsed
+  progress-log files remain. That means live AI provider calls are skipped
+  until a real ambiguous/unparsed candidate exists.
+
+Progress:
+
+- Added provider runtime metadata to AI/local/freeze extraction results:
+  `provider_model` and `provider_runtime`.
+- Persisted the metadata in SQLite `project_work_log_extraction_items` and
+  added migration support for existing databases:
+  legacy rows read as `provider_runtime="unknown"` and `provider_model=null`.
+- Set explicit runtime values:
+  `openai-responses`, `glm-chat-completions`, `local-extraction-rules`, and
+  `progress-log-freeze`.
+- Exposed the metadata through Rust API structs, browser bridge validation,
+  TypeScript types, CLI output, overview UI meta text, and saved extraction row
+  display.
+- Extended isolated browser QA to load saved work-log item rows and verify the
+  freeze runtime is visible in the rendered UI.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added extraction runtime metadata fields, DB schema migration, persistence,
+    readback, and unit coverage;
+  - grouped provider/model/runtime/AI flags in
+    `ProjectWorkLogExtractionRuntime` after clippy rejected an 8-argument
+    helper signature.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - prints provider runtime and optional model for extraction results and saved
+    work-log items.
+- `src/types.ts`, `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`,
+  `src/App.tsx`:
+  - carry and display runtime/model metadata in the UI/API layer.
+- `tests/*.test.ts` work-management fixtures:
+  - updated expected extraction metadata and display text.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - captures saved work-log item rows and asserts runtime-backed freeze rows
+    appear in browser QA output.
+
+Tests:
+
+- `cargo check --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-report --session-limit 200 --json`: PASS. Live summary:
+  `31` projects, `25` dates, `8,578` parsed work items, `789` progress files,
+  `200` scanned session prompts, `69,049` session evidence matches,
+  `session_evidence_mode=metadata-first-raw-fallback`, no warnings.
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-coverage --json`: PASS. Live summary:
+  `files_seen=789`, `parsed_file_count=788`, `unparsed_file_count=0`,
+  `project_count=31`, `work_item_count=8,578`, no warnings.
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-log-candidates --json`: PASS. Live summary:
+  `candidate_count=0`, no warnings.
+- `npm run check`: PASS after the clippy refactor. UI `436` tests, Vite build,
+  Rust lib `167` tests, CLI `24` tests, doc-tests, and clippy all passed.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final isolated browser QA JSON included:
+  - `workSessionLimit=200`;
+  - `workSummaryIndex`: `스캔 200개 · 보관 200개 · 매칭 80건 · 고유 1건`;
+  - `workManagementMeta`: `관리 91개 · 31개 프로젝트 · 25일 · 현재요약 1 · 스냅샷 1 · 추출제안 0 · 저장추출 90 · 진행로그 788 · 저장관리 91 · 라이브만 0`;
+  - `workLogFreezePersistence`: `accepted 제안 90개 저장 · 총 90개`;
+  - saved row text containing `#90 · progress-log-freeze · progress-log-freeze · local · managed · confidence 1.00`.
+
+Issues:
+
+- Current completion level: real project/day parsing, progress-log coverage,
+  durable freeze rows, saved management rows, bounded real session evidence,
+  and provider/runtime audit metadata are implemented and verified.
+- Not complete yet: there is no full AI-assisted review/backfill queue for
+  ambiguous or newly unparsed logs. OpenAI/GLM can be called for safe
+  candidates, but the product still needs queue UI/state for provider/model,
+  confidence, approval, rejection reason, and saved audit history.
+- Live session verification is bounded to the configured recent-session limit
+  (`200` in this verification), not an unrestricted all-history session parse.
+- The first `npm run check` attempt in this slice failed on clippy
+  `too_many_arguments`; the helper was refactored and the full check passed.
+
+Research:
+
+- No external research needed. This slice used existing OpenAI/GLM extraction
+  plumbing and added auditable runtime metadata around it.
+
+Next Steps:
+
+- Commit and push this runtime metadata slice.
+- Next product slice: build the explicit AI-assisted review/backfill queue for
+  ambiguous or unparsed progress logs, using OpenAI/GLM only for safe excerpts
+  and keeping deterministic parsed rows as the source of truth.
 
 ## Current Slice - 2026-06-09 AI extraction zero-candidate diagnostics
 

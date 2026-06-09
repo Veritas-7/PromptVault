@@ -1371,6 +1371,8 @@ function parseProjectWorkLogExtractionProposalsResult(
     || !isTimestampString(value.generated_at)
     || !isNonBlankString(value.root_path)
     || !isNonBlankString(value.provider)
+    || !isNullableNonBlankString(value.provider_model)
+    || !isNonBlankString(value.provider_runtime)
     || typeof value.used_ai !== "boolean"
     || !Array.isArray(value.proposals)
     || !value.proposals.every(isProjectWorkLogExtractionProposal)
@@ -1389,6 +1391,8 @@ function isProjectWorkLogExtractionItem(value: unknown): boolean {
     && isTimestampString(value.saved_at)
     && isTimestampString(value.run_generated_at)
     && isNonBlankString(value.provider)
+    && isNullableNonBlankString(value.provider_model)
+    && isNonBlankString(value.provider_runtime)
     && typeof value.used_ai === "boolean"
     && isNonBlankString(value.candidate_id)
     && isNonBlankString(value.project)

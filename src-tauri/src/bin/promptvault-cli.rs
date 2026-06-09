@@ -479,6 +479,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("PromptVault project work log extraction proposals");
             println!("root: {}", result.root_path);
             println!("provider: {}", result.provider);
+            println!(
+                "provider_runtime: {}{}",
+                result.provider_runtime,
+                result
+                    .provider_model
+                    .as_ref()
+                    .map(|model| format!(" · model {model}"))
+                    .unwrap_or_default()
+            );
             println!("used_ai: {}", result.used_ai);
             println!("candidates: {}", result.candidate_count);
             println!("accepted: {}", result.accepted_count);
@@ -619,8 +628,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("returned: {}", result.returned_item_count);
             for item in &result.items {
                 println!(
-                    "\n#{} · {} · {} · {} · confidence {:.2}",
-                    item.id, item.date, item.project, item.provider, item.confidence
+                    "\n#{} · {} · {} · {} · {}{} · confidence {:.2}",
+                    item.id,
+                    item.date,
+                    item.project,
+                    item.provider,
+                    item.provider_runtime,
+                    item.provider_model
+                        .as_ref()
+                        .map(|model| format!(" · model {model}"))
+                        .unwrap_or_default(),
+                    item.confidence
                 );
                 println!("- title: {}", item.title);
                 println!("- status: {}", item.status);

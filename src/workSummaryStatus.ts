@@ -265,11 +265,24 @@ export function workLogExtractionMetaText(
   if (state === "loading") return `${label} 생성 중`;
   if (!result) return state === "failed" ? "AI 작업 추출 제안을 사용할 수 없음" : `아직 생성한 ${label} 없음`;
   return [
-    result.used_ai ? `AI ${result.provider}` : `로컬 ${result.provider}`,
+    workLogExtractionProviderRuntimeText(result),
     `후보 ${result.candidate_count.toLocaleString()}개`,
     `accepted ${result.accepted_count.toLocaleString()}개`,
     `rejected ${result.rejected_count.toLocaleString()}개`,
   ].join(" · ");
+}
+
+function workLogExtractionProviderRuntimeText(
+  result: ProjectWorkLogExtractionProposalsResult,
+): string {
+  const parts = [result.used_ai ? `AI ${result.provider}` : `로컬 ${result.provider}`];
+  if (result.provider_runtime !== result.provider) {
+    parts.push(result.provider_runtime);
+  }
+  if (result.provider_model) {
+    parts.push(`model ${result.provider_model}`);
+  }
+  return parts.join(" · ");
 }
 
 export function workLogExtractionProviderNoticeText(

@@ -179,6 +179,8 @@ function extractionResult(
     generated_at: "2026-06-09T00:00:00Z",
     root_path: "/Users/wj/Ai/System/10_Projects",
     provider: "glm",
+    provider_model: "glm-test-model",
+    provider_runtime: "glm-chat-completions",
     used_ai: true,
     candidate_count: 13,
     accepted_count: 3,
@@ -571,10 +573,15 @@ test("work log extraction labels describe accepted and rejected AI proposals", (
   );
   assert.equal(
     workLogExtractionMetaText("ready", extractionResult()),
-    "AI glm · 후보 13개 · accepted 3개 · rejected 10개",
+    "AI glm · glm-chat-completions · model glm-test-model · 후보 13개 · accepted 3개 · rejected 10개",
   );
   assert.equal(
-    workLogExtractionMetaText("ready", extractionResult({ used_ai: false, provider: "local-extraction-rules" })),
+    workLogExtractionMetaText("ready", extractionResult({
+      used_ai: false,
+      provider: "local-extraction-rules",
+      provider_model: null,
+      provider_runtime: "local-extraction-rules",
+    })),
     "로컬 local-extraction-rules · 후보 13개 · accepted 3개 · rejected 10개",
   );
   assert.equal(workLogExtractionMetaText(failed, null), "AI 작업 추출 제안을 사용할 수 없음");

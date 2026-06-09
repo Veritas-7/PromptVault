@@ -1,10 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 12:25 KST
+Updated: 2026-06-09 12:37 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 approved review queue extraction route
+
+Current Goal:
+
+- Connect operator-approved persisted work-log review queue rows to the
+  existing AI/local work-log extraction pipeline.
+- Let CLI, browser bridge, Tauri, and UI run "approved queue only" extraction
+  and SQLite persistence without resending unapproved or risk-blocked rows.
+- Preserve existing safety behavior: risky approved rows are still blocked from
+  external provider calls by the existing risk partition.
+
+Context:
+
+- Previous slices completed project/day/session/work-log coverage, durable
+  review queue sync, and approve/reject mutation.
+- The missing link was turning `review_state='approved'` queue rows into actual
+  extraction candidates for OpenAI/GLM/local fallback.
+- The live default DB currently has no approved queue rows because the real log
+  corpus has `unparsed=0`, so live execution should be a safe no-op. Non-empty
+  behavior is verified with temp DB fixtures and tests.
+
+Progress:
+
+- Added `approved_review_queue_only` to `ProjectWorkLogExtractionProposalsOptions`.
+- Added backend reader that loads only `approved` rows from
+  `project_work_log_review_queue` and converts them into
+  `ProjectWorkLogExtractionCandidate` values.
+- Updated `run_project_work_log_extraction_proposals` so
+  `approved_review_queue_only=true` uses the persisted approved queue instead
+  of scanning raw unparsed logs.
+- When `save=true`, persistence is bounded to the approved queue candidate IDs,
+  so unapproved accepted proposals cannot be saved through this route.
+- Added CLI flag `work-log-extract --approved-review-queue`.
+- Added UI button `승인 큐 저장`, disabled when the queue has no approved rows.
+- Added browser-bridge QA assertion that the new button is disabled when live
+  approved queue count is zero.
+
+Changes:
+
+- `src-tauri/src/lib.rs`:
+  - added approved queue extraction option, approved-queue candidate loader,
+    DB reader, and async Rust regression test.
+- `src-tauri/src/bin/promptvault-cli.rs`:
+  - added `--approved-review-queue` parsing and help/rule documentation.
+- `src/promptVaultApi.ts`:
+  - added browser/Tauri API option `approved_review_queue_only`.
+- `src/App.tsx`:
+  - added approved queue count, API option forwarding, and `승인 큐 저장`
+    action.
+- `tests/promptVaultApi.test.ts`:
+  - added bridge payload coverage for approved queue only saves.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - records and asserts disabled state for the approved queue save button when
+    approved count is zero.
+
+Tests:
+
+- `cargo check --manifest-path src-tauri/Cargo.toml`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml approved_review_queue_rows_feed_work_log_extraction_save -- --nocapture`: PASS.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`: PASS, `163` tests.
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli help_text_documents_cli_validation_rules -- --nocapture`: PASS.
+- Temp DB CLI happy path:
+  - inserted one approved `project_work_log_review_queue` row;
+  - ran `work-log-extract --approved-review-queue --save --json`;
+  - PASS: `candidate_count=1`, `accepted_count=1`, `saved_item_count=1`,
+    `total_saved_item_count=1`.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check`: PASS.
+- `npm run build`: PASS.
+- `cargo test --manifest-path src-tauri/Cargo.toml project_work_log -- --nocapture`: PASS, `11` tests.
+- `npm run test:ui`: PASS, `441` tests.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final browser QA showed:
+  - `coverageMeta`: `798개 로그 · parsed 797개 · unparsed 0개 · 31개 프로젝트 · 작업 8,643개`;
+  - `workLogReviewQueueMeta`: `큐 저장 0개 · 표시 0개 · 동기화 0개 · stale 전환 0개 · AI 대기 0개 · 위험차단 0개 · stale 0개 · 승인 0개 · 거절 0개`;
+  - `approvedReviewQueueSaveDisabled`: `true`.
+- Live default DB:
+  - `work-log-review-queue --sync-candidates --json`: PASS,
+    `total_items=0`, all state counts `0`, warnings `[]`.
+  - `work-log-extract --approved-review-queue --ai --json`: PASS,
+    `candidate_count=0`, `accepted_count=0`, `used_ai=false`, warning says
+    provider call was skipped because there were no candidates.
+
+Issues:
+
+- Live approved queue remains empty because the current real log corpus has no
+  unparsed candidates. The full non-empty route is verified with temp DB and
+  automated tests rather than current production rows.
+- This slice connects approved queue rows to the existing OpenAI/GLM/local
+  extraction path, but it does not add a separate provider run history table for
+  queued extraction attempts. Current durable output is
+  `project_work_log_extraction_items` plus existing queue state.
+
+Next Steps:
+
+- Add provider run/audit history for approved queue extraction attempts:
+  request status, provider/model, candidate IDs, saved count, warnings, and
+  failure reason.
+- Add a non-empty isolated browser QA fixture for approving a synthetic queue
+  row and clicking `승인 큐 저장` end-to-end in the UI.
 
 ## Current Slice - 2026-06-09 review queue approve/reject mutation
 

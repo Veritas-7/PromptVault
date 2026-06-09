@@ -222,6 +222,7 @@ pub struct ProjectWorkLogExtractionProposalsOptions {
     pub database_path: Option<String>,
     pub save: Option<bool>,
     pub approved_candidate_ids: Option<Vec<String>>,
+    pub approved_review_queue_only: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -1486,15 +1487,32 @@ pub async fn run_project_work_log_extraction_proposals(
         .map(PathBuf::from)
         .unwrap_or_else(default_database_path);
     let save = options.save.unwrap_or(false);
-    let candidates =
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_LOG_CANDIDATE_LIMIT)
+        .min(MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT);
+    let approved_review_queue_only = options.approved_review_queue_only.unwrap_or(false);
+    let candidates = if approved_review_queue_only {
+        run_project_work_log_extraction_candidates_from_approved_review_queue(
+            &database_path,
+            limit,
+        )?
+    } else {
         run_project_work_log_extraction_candidates(ProjectWorkLogExtractionCandidatesOptions {
-            limit: Some(
-                options
-                    .limit
-                    .unwrap_or(DEFAULT_PROJECT_WORK_LOG_CANDIDATE_LIMIT)
-                    .min(MAX_PROJECT_WORK_LOG_CANDIDATE_LIMIT),
-            ),
-        })?;
+            limit: Some(limit),
+        })?
+    };
+    let approved_review_queue_candidate_ids = if approved_review_queue_only {
+        Some(
+            candidates
+                .candidates
+                .iter()
+                .map(|candidate| candidate.candidate_id.clone())
+                .collect::<HashSet<_>>(),
+        )
+    } else {
+        None
+    };
     let mut result = project_work_log_extraction_proposals_with_env(
         candidates,
         !options.ai.unwrap_or(false),
@@ -1502,10 +1520,13 @@ pub async fn run_project_work_log_extraction_proposals(
     )
     .await?;
     if save {
+        let persistence_approved_candidate_ids = approved_review_queue_candidate_ids
+            .as_ref()
+            .or(approved_candidate_ids.as_ref());
         result.persistence = Some(persist_project_work_log_extraction_proposals(
             &database_path,
             &result,
-            approved_candidate_ids.as_ref(),
+            persistence_approved_candidate_ids,
         )?);
     }
     Ok(result)
@@ -1526,6 +1547,58 @@ fn normalized_project_work_log_approved_candidate_ids(
         normalized.insert(trimmed.to_string());
     }
     Ok(Some(normalized))
+}
+
+fn run_project_work_log_extraction_candidates_from_approved_review_queue(
+    database_path: &Path,
+    limit: usize,
+) -> Result<ProjectWorkLogExtractionCandidatesResult, Box<dyn std::error::Error>> {
+    let conn = open_promptvault_database(database_path)?;
+    let candidates = read_project_work_log_review_queue_candidates(&conn, "approved", limit)?;
+    let root_path = source_specs()
+        .into_iter()
+        .find(|source| source.id == "project-progress-logs")
+        .map(|source| source.root.display().to_string())
+        .unwrap_or_else(|| {
+            user_home_dir()
+                .join("Ai/System/10_Projects")
+                .display()
+                .to_string()
+        });
+    let files_seen = candidates
+        .iter()
+        .map(|candidate| candidate.source_path.clone())
+        .collect::<BTreeSet<_>>()
+        .len();
+    let risk_blocked_candidate_count = candidates
+        .iter()
+        .filter(|candidate| !candidate.risk_flags.is_empty())
+        .count();
+    let safe_ai_candidate_count = candidates
+        .len()
+        .saturating_sub(risk_blocked_candidate_count);
+    let (review_queue_state, review_queue_reason) = if candidates.is_empty() {
+        ("empty", "no_approved_review_queue_candidates")
+    } else {
+        ("approved", "approved_review_queue_candidates_ready")
+    };
+    Ok(ProjectWorkLogExtractionCandidatesResult {
+        generated_at: Utc::now().to_rfc3339(),
+        root_path,
+        files_seen,
+        skipped_parsed_file_count: 0,
+        skipped_unreadable_file_count: 0,
+        skipped_empty_file_count: 0,
+        skipped_pointer_file_count: 0,
+        review_queue_state: review_queue_state.to_string(),
+        review_queue_reason: review_queue_reason.to_string(),
+        pending_review_count: candidates.len(),
+        safe_ai_candidate_count,
+        risk_blocked_candidate_count,
+        candidate_count: candidates.len(),
+        candidates,
+        warnings: Vec::new(),
+    })
 }
 
 pub fn run_list_project_work_log_extraction_items(
@@ -1648,6 +1721,7 @@ pub async fn run_project_work_summary(
                 database_path: None,
                 save: None,
                 approved_candidate_ids: None,
+                approved_review_queue_only: None,
             })
             .await?;
         Some(merge_project_work_log_extraction_proposals_into_report(
@@ -7571,6 +7645,41 @@ fn read_project_work_log_review_queue(
     })
 }
 
+fn read_project_work_log_review_queue_candidates(
+    conn: &Connection,
+    review_state: &str,
+    limit: usize,
+) -> Result<Vec<ProjectWorkLogExtractionCandidate>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT candidate_id, project, source_path, source_file, candidate_reason, excerpt,
+            line_count, char_count, risk_flags_json, modified_at
+         FROM project_work_log_review_queue
+         WHERE review_state=?1
+         ORDER BY last_seen_at DESC
+         LIMIT ?2",
+    )?;
+    let rows = stmt.query_map(params![review_state, limit as i64], |row| {
+        let risk_flags_json: String = row.get(8)?;
+        let risk_flags = serde_json::from_str(&risk_flags_json).map_err(|err| {
+            rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(err))
+        })?;
+        Ok(ProjectWorkLogExtractionCandidate {
+            candidate_id: row.get(0)?,
+            project: row.get(1)?,
+            source_path: row.get(2)?,
+            source_file: row.get(3)?,
+            reason: row.get(4)?,
+            excerpt: row.get(5)?,
+            line_count: row.get::<_, i64>(6)? as usize,
+            char_count: row.get::<_, i64>(7)? as usize,
+            risk_flags,
+            modified_at: row.get(9)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|err| err.into())
+}
+
 fn persist_project_work_log_extraction_proposals(
     database_path: &Path,
     result: &ProjectWorkLogExtractionProposalsResult,
@@ -13049,6 +13158,91 @@ Progress:
         assert_eq!(stored_project, "RepoTutorStudio");
 
         std::fs::remove_file(db_path).expect("remove extraction db");
+    }
+
+    #[tokio::test]
+    async fn approved_review_queue_rows_feed_work_log_extraction_save() {
+        let suffix = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-approved-review-queue-extraction-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut conn = open_promptvault_database(&db_path).expect("open db");
+        let approved = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-CareVault-a1b2c3d4e5".to_string(),
+            project: "CareVault".to_string(),
+            source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md".to_string(),
+            source_file: "workingd.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt: "- 2026-06-04: Backfilled older work notes".to_string(),
+            line_count: 1,
+            char_count: 43,
+            risk_flags: Vec::new(),
+            modified_at: None,
+        };
+        let pending = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-RepoTutorStudio-b1b2c3d4e5".to_string(),
+            project: "RepoTutorStudio".to_string(),
+            source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md".to_string(),
+            source_file: "working.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt: "- 2026-06-05: Initialized work log parser".to_string(),
+            line_count: 1,
+            char_count: 43,
+            risk_flags: Vec::new(),
+            modified_at: None,
+        };
+        sync_project_work_log_review_queue(
+            &mut conn,
+            &[approved.clone(), pending],
+            "2026-06-09T00:00:00Z",
+        )
+        .expect("sync review queue");
+        update_project_work_log_review_queue_state(
+            &conn,
+            &approved.candidate_id,
+            "approved",
+            "operator_approved_for_backfill",
+            "2026-06-09T00:05:00Z",
+        )
+        .expect("approve one queue row");
+        drop(conn);
+
+        let result =
+            run_project_work_log_extraction_proposals(ProjectWorkLogExtractionProposalsOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(10),
+                ai: Some(false),
+                save: Some(true),
+                approved_candidate_ids: None,
+                approved_review_queue_only: Some(true),
+            })
+            .await
+            .expect("extract approved queue rows");
+
+        assert_eq!(result.provider, "local-extraction-rules");
+        assert_eq!(result.candidate_count, 1);
+        assert_eq!(result.accepted_count, 1);
+        assert_eq!(result.rejected_count, 0);
+        assert_eq!(result.proposals[0].candidate_id, approved.candidate_id);
+        assert_eq!(
+            result.persistence.as_ref().map(|p| p.saved_item_count),
+            Some(1)
+        );
+
+        let conn = Connection::open(&db_path).expect("open extraction db");
+        let stored: (String, String) = conn
+            .query_row(
+                "SELECT candidate_id, project FROM project_work_log_extraction_items",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read saved approved queue extraction");
+        assert_eq!(stored.0, approved.candidate_id);
+        assert_eq!(stored.1, "CareVault");
+
+        std::fs::remove_file(db_path).expect("remove approved queue extraction db");
     }
 
     #[test]

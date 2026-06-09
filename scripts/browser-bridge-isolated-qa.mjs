@@ -151,6 +151,7 @@ async function runBrowserQa() {
   let coverageMeta = "";
   let workLogCandidatesMeta = "";
   let workLogReviewQueueMeta = "";
+  let approvedReviewQueueSaveDisabled = null;
   let workLogExtractionProviderWarning = "";
   let workLogItemRows = [];
 
@@ -373,6 +374,12 @@ async function runBrowserQa() {
     }, undefined, { timeout: 90000 });
     workLogReviewQueueMeta =
       (await page.locator('[data-work-log-review-queue-meta="true"]').textContent())?.trim() ?? "";
+    approvedReviewQueueSaveDisabled = await page
+      .locator('[data-save-approved-work-log-review-queue="true"]')
+      .evaluate((button) => button.disabled);
+    if (!approvedReviewQueueSaveDisabled) {
+      throw new Error("Approved review queue save button should be disabled when approved queue count is zero");
+    }
     await page.locator('[data-load-work-log-extraction="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-extraction-meta="true"]')?.textContent ?? "";
@@ -420,6 +427,7 @@ async function runBrowserQa() {
       coverageMeta,
       workLogCandidatesMeta,
       workLogReviewQueueMeta,
+      approvedReviewQueueSaveDisabled,
       workLogExtractionProviderWarning,
       workLogItemRows,
     };

@@ -987,6 +987,42 @@ test("browser bridge work log extraction posts approved candidate ids for review
   assert.equal(result.persistence?.saved_item_count, 1);
 });
 
+test("browser bridge work log extraction can save only approved review queue rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkLogExtractionProposalsPayload({
+      persistence: {
+        database_path: "/tmp/promptvault.sqlite",
+        saved_item_count: 1,
+        total_saved_item_count: 4,
+      },
+    })), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkLogExtractionProposals({
+    ai: true,
+    save: true,
+    approved_review_queue_only: true,
+  });
+
+  assert.match(requestPath, /\/api\/work-log-extract$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      ai: true,
+      save: true,
+      approved_review_queue_only: true,
+    },
+  });
+  assert.equal(result.persistence?.saved_item_count, 1);
+});
+
 test("browser bridge work log freeze posts options and validates persistence", async (t) => {
   const originalFetch = globalThis.fetch;
   let requestPath = "";

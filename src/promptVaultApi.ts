@@ -127,6 +127,7 @@ export interface ProjectWorkLogExtractionOptions {
   database_path?: string;
   save?: boolean;
   approved_candidate_ids?: string[];
+  approved_review_queue_only?: boolean;
 }
 
 export interface ProjectWorkLogFreezeOptions {

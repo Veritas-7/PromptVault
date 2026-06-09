@@ -738,6 +738,7 @@ function App() {
   );
   const visibleWorkLogReviewQueueItems =
     workLogReviewQueueResult?.items.slice(0, WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT) ?? [];
+  const approvedWorkLogReviewQueueCount = workLogReviewQueueResult?.approved_count ?? 0;
   const hiddenWorkLogReviewQueueItemCount = Math.max(
     0,
     (workLogReviewQueueResult?.items.length ?? 0) - WORK_LOG_REVIEW_QUEUE_DISPLAY_LIMIT,
@@ -1166,8 +1167,14 @@ function App() {
   async function refreshWorkLogExtraction({
     save = false,
     approvedCandidateIds,
+    approvedReviewQueueOnly = false,
     ai,
-  }: { save?: boolean; approvedCandidateIds?: string[]; ai?: boolean } = {}) {
+  }: {
+    save?: boolean;
+    approvedCandidateIds?: string[];
+    approvedReviewQueueOnly?: boolean;
+    ai?: boolean;
+  } = {}) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     const useAi = ai ?? (save ? (workLogExtractionResult?.used_ai ?? true) : true);
     setError(null);
@@ -1178,6 +1185,7 @@ function App() {
         ai: useAi,
         save,
         approved_candidate_ids: save ? approvedCandidateIds : undefined,
+        approved_review_queue_only: approvedReviewQueueOnly || undefined,
       });
       const nextAcceptedIds = new Set(acceptedWorkLogExtractionIds(next));
       setWorkLogExtractionResult(next);
@@ -2115,6 +2123,26 @@ function App() {
             >
               <Database size={15} />
               {workLogExtractionState === "loading" ? "처리 중" : "선택 저장"}
+            </button>
+            <button
+              aria-label={
+                approvedWorkLogReviewQueueCount
+                  ? `승인된 백필큐 후보 ${approvedWorkLogReviewQueueCount.toLocaleString()}개를 AI 추출 후 SQLite 관리 데이터로 저장`
+                  : "승인된 백필큐 후보가 없어 AI 저장을 실행할 수 없습니다"
+              }
+              className="inline-action"
+              data-save-approved-work-log-review-queue="true"
+              disabled={isTopLevelActionLocked || approvedWorkLogReviewQueueCount === 0}
+              onClick={() =>
+                void refreshWorkLogExtraction({
+                  save: true,
+                  ai: true,
+                  approvedReviewQueueOnly: true,
+                })}
+              type="button"
+            >
+              <ShieldCheck size={15} />
+              {workLogExtractionState === "loading" ? "승인 큐 처리 중" : "승인 큐 저장"}
             </button>
             <button
               aria-label={workManagementFreezeActionLabel(

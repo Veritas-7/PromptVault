@@ -289,11 +289,12 @@ async function runBrowserQa() {
       (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-work-management-project-filter="true"]').fill("notebooklm-llm-wiki-flow");
     await page.locator('[data-work-management-source-filter="true"]').selectOption("saved_extraction");
+    await page.locator('[data-work-management-min-confidence-filter="true"]').fill("0.99");
     await page.locator('[data-apply-work-management-filters="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-filter-meta="true"]')?.textContent ?? "";
       const rows = [...document.querySelectorAll('[data-work-management-overview="true"] article')];
-      return text.includes("관리 감사 필터 2개")
+      return text.includes("관리 감사 필터 3개")
         && rows.some((row) => (row.textContent ?? "").includes("notebooklm-llm-wiki-flow"));
     }, undefined, { timeout: 120000 });
     workManagementFilterMeta =

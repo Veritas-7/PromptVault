@@ -5,6 +5,7 @@ import {
   buildWorkManagementOverview,
   emptyWorkManagementOverviewFilters,
   filterWorkManagementOverviewRows,
+  workManagementOverviewConfidenceText,
   workManagementOverviewDateSuggestions,
   workManagementOverviewDurabilityWarningText,
   workManagementOverviewFilterMetaText,
@@ -277,6 +278,9 @@ test("work management overview merges source evidence by project and date", () =
   assert.equal(promptVault.progress_log_count, 1);
   assert.equal(promptVault.work_item_count, 5);
   assert.equal(promptVault.session_evidence_count, 2);
+  assert.equal(promptVault.confidence_count, 1);
+  assert.equal(promptVault.min_confidence, 0.82);
+  assert.equal(promptVault.max_confidence, 0.82);
   assert.equal(promptVault.persistence_state, "persisted");
   assert.equal(promptVault.latest_snapshot_created_at, "2026-06-09T01:00:00Z");
   assert.equal(promptVault.latest_saved_extraction_at, "2026-06-09T01:30:00Z");
@@ -285,6 +289,9 @@ test("work management overview merges source evidence by project and date", () =
   const careVault = overview.rows[1];
   assert.deepEqual(careVault.sources, ["snapshot", "extraction_proposal"]);
   assert.equal(careVault.extraction_proposal_count, 1);
+  assert.equal(careVault.confidence_count, 1);
+  assert.equal(careVault.min_confidence, 0.76);
+  assert.equal(careVault.max_confidence, 0.76);
   assert.equal(careVault.persistence_state, "persisted");
   assert.equal(careVault.latest_snapshot_created_at, "2026-06-09T01:00:00Z");
   assert.equal(careVault.latest_saved_extraction_at, null);
@@ -292,6 +299,8 @@ test("work management overview merges source evidence by project and date", () =
 
   const repoTutorStudio = overview.rows[2];
   assert.equal(repoTutorStudio.persistence_state, "persisted");
+  assert.equal(repoTutorStudio.min_confidence, 0.72);
+  assert.equal(repoTutorStudio.max_confidence, 0.72);
   assert.equal(repoTutorStudio.latest_snapshot_created_at, null);
   assert.equal(repoTutorStudio.latest_saved_extraction_at, "2026-06-09T01:31:00Z");
 });
@@ -367,9 +376,14 @@ test("work management overview status text exposes management coverage", () => {
     workManagementOverviewPersistenceText(overview.rows[0]),
     "저장관리 · 최신 스냅샷 2026-06-09T01:00:00Z · 최신 저장추출 2026-06-09T01:30:00Z",
   );
+  assert.equal(workManagementOverviewConfidenceText(overview.rows[0]), "confidence 0.82");
   assert.equal(
     workManagementOverviewPersistenceText(buildWorkManagementOverview({ coverage: coverageResult() }).rows[0]),
     "라이브만 · 저장근거 없음",
+  );
+  assert.equal(
+    workManagementOverviewConfidenceText(buildWorkManagementOverview({ coverage: coverageResult() }).rows[0]),
+    "confidence 없음",
   );
 });
 
@@ -384,20 +398,23 @@ test("work management overview filters expose auditable project date rows", () =
 
   assert.deepEqual(emptyWorkManagementOverviewFilters(), {
     date: "",
+    minConfidence: "",
     persistence: "",
     project: "",
     source: "",
   });
   assert.equal(activeWorkManagementOverviewFilterCount({
     date: "2026-06-09",
+    minConfidence: "0.8",
     persistence: "persisted",
     project: " PromptVault ",
     source: "saved_extraction",
-  }), 4);
+  }), 5);
 
   assert.deepEqual(
     filterWorkManagementOverviewRows(overview.rows, {
       date: "2026-06-09",
+      minConfidence: "0.8",
       persistence: "persisted",
       project: "PromptVault",
       source: "saved_extraction",
@@ -407,6 +424,17 @@ test("work management overview filters expose auditable project date rows", () =
   assert.deepEqual(
     filterWorkManagementOverviewRows(overview.rows, {
       date: "",
+      minConfidence: "0.8",
+      persistence: "",
+      project: "",
+      source: "extraction_proposal",
+    }).map((row) => row.key),
+    [],
+  );
+  assert.deepEqual(
+    filterWorkManagementOverviewRows(overview.rows, {
+      date: "",
+      minConfidence: "0.7",
       persistence: "",
       project: "",
       source: "extraction_proposal",
@@ -416,6 +444,7 @@ test("work management overview filters expose auditable project date rows", () =
   assert.deepEqual(
     filterWorkManagementOverviewRows(overview.rows, {
       date: "",
+      minConfidence: "",
       persistence: "live_only",
       project: "",
       source: "",

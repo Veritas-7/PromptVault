@@ -190,6 +190,7 @@ import {
   buildWorkManagementOverview,
   emptyWorkManagementOverviewFilters,
   filterWorkManagementOverviewRows,
+  workManagementOverviewConfidenceText,
   workManagementOverviewDateSuggestions,
   workManagementOverviewDurabilityWarningText,
   workManagementOverviewFilterMetaText,
@@ -2414,6 +2415,26 @@ function App() {
               ))}
             </select>
           </label>
+          <label>
+            <span>최소 신뢰도</span>
+            <input
+              aria-label="프로젝트 일자 관리 감사 최소 confidence 필터"
+              data-work-management-min-confidence-filter="true"
+              disabled={isTopLevelActionLocked}
+              inputMode="decimal"
+              max="1"
+              min="0"
+              onChange={(event) =>
+                setWorkManagementOverviewFilters((current) => ({
+                  ...current,
+                  minConfidence: event.target.value,
+                }))}
+              placeholder="0.80"
+              step="0.01"
+              type="number"
+              value={workManagementOverviewFilters.minConfidence}
+            />
+          </label>
           <button
             aria-label={
               workManagementOverviewFilterCount
@@ -2561,7 +2582,7 @@ function App() {
                     {workManagementOverviewSourceText(row)} · 작업 {row.work_item_count.toLocaleString()}개 ·
                     세션 근거 {row.session_evidence_count.toLocaleString()}건 · 추출제안{" "}
                     {row.extraction_proposal_count.toLocaleString()}개 · 저장추출{" "}
-                    {row.saved_extraction_count.toLocaleString()}개
+                    {row.saved_extraction_count.toLocaleString()}개 · {workManagementOverviewConfidenceText(row)}
                   </span>
                   <span data-work-management-row-persistence="true">
                     {workManagementOverviewPersistenceText(row)}

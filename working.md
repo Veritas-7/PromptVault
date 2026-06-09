@@ -1,10 +1,88 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 10:35 KST
+Updated: 2026-06-09 10:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Current Slice - 2026-06-09 management confidence audit
+
+Current Goal:
+
+- Add confidence visibility and minimum-confidence filtering to project/day
+  management audit rows.
+- Let the operator distinguish rows backed by extraction confidence from
+  snapshot/progress-only rows that have no extraction confidence.
+
+Context:
+
+- The previous audit-filter slice exposed date/project/source/persistence
+  filtering but left confidence only inside saved extraction item rows.
+- For project/day management, confidence should be visible at the row level so
+  low-quality extracted or frozen rows can be found without opening every
+  saved item.
+
+Progress:
+
+- Management rows now aggregate confidence from accepted extraction proposals
+  and saved extraction items.
+- Rows expose `confidence_count`, `min_confidence`, and `max_confidence`.
+- Row text now displays either `confidence 없음`, a single value such as
+  `confidence 1.00`, or a range such as `confidence 0.72-0.82`.
+- The management audit filter now includes `최소 신뢰도`, stored in the same
+  filter state as date/project/source/persistence.
+- Minimum confidence filtering requires the row's minimum confidence to be at
+  or above the requested value. Rows without extraction confidence are
+  excluded only when the minimum-confidence filter is active.
+- Browser QA now applies project + source + minimum-confidence filters against
+  the live frozen `notebooklm-llm-wiki-flow` rows.
+
+Changes:
+
+- `src/workManagementOverview.ts`:
+  - adds confidence aggregation, confidence text, and minimum-confidence
+    filtering.
+- `src/App.tsx`:
+  - adds the `최소 신뢰도` number input and row-level confidence display.
+- `src/App.css`:
+  - widens the management filter grid for the additional numeric input.
+- `tests/workManagementOverview.test.ts`:
+  - covers row confidence aggregation, confidence text, active filter counts,
+    and min-confidence filtering.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - verifies `project + saved_extraction + min confidence 0.99` in the real
+    browser bridge flow.
+
+Tests:
+
+- `npm run test:ui`: PASS, UI `435` tests.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final QA JSON included
+  `workManagementFilterMeta="관리 감사 필터 3개 · 결과 9 / 45개"` and filtered
+  `notebooklm-llm-wiki-flow` rows containing `confidence 1.00`.
+- `npm run check`: PASS. UI `435` tests, Vite build, Rust lib `165`
+  tests, CLI `24` tests, doc-tests, and clippy all passed.
+
+Issues:
+
+- Confidence is aggregated only from extraction proposals/items. Snapshot-only
+  and progress-only rows correctly show `confidence 없음`.
+- The management overview still does not expose provider-specific confidence
+  rollups or low-confidence sorting. That is a later audit improvement.
+
+Research:
+
+- No external research needed. This reused existing extraction confidence
+  fields and the current management overview aggregation.
+
+Next Steps:
+
+- Commit and push this confidence-audit slice.
+- Next product slice: add sorting or low-confidence-first controls for the
+  management overview, or add a dedicated all-history backfill/report view
+  beyond the current loaded scan limits.
 
 ## Current Slice - 2026-06-09 management audit filters
 
@@ -72,8 +150,6 @@ Issues:
 
 - This is an in-memory audit filter over the currently loaded management
   overview. It does not yet run a historical all-session/all-log backfill.
-- Confidence filtering is still only visible in saved extraction item rows;
-  management overview rows do not yet aggregate min/max confidence.
 
 Research:
 

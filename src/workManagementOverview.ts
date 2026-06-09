@@ -17,6 +17,7 @@ export type WorkManagementOverviewPersistenceState = "persisted" | "live_only";
 
 export interface WorkManagementOverviewFilters {
   date: string;
+  minConfidence: string;
   project: string;
   source: "" | WorkManagementOverviewSource;
   persistence: "" | WorkManagementOverviewPersistenceState;
@@ -42,6 +43,9 @@ export interface WorkManagementOverviewRow {
   progress_log_count: number;
   work_item_count: number;
   session_evidence_count: number;
+  confidence_count: number;
+  min_confidence: number | null;
+  max_confidence: number | null;
   persistence_state: WorkManagementOverviewPersistenceState;
   latest_snapshot_created_at: string | null;
   latest_saved_extraction_at: string | null;
@@ -67,6 +71,7 @@ export interface WorkManagementOverview {
 export function emptyWorkManagementOverviewFilters(): WorkManagementOverviewFilters {
   return {
     date: "",
+    minConfidence: "",
     persistence: "",
     project: "",
     source: "",
@@ -78,6 +83,7 @@ export function activeWorkManagementOverviewFilterCount(
 ): number {
   return [
     filters.date,
+    filters.minConfidence,
     filters.persistence,
     filters.project,
     filters.source,
@@ -136,6 +142,7 @@ export function buildWorkManagementOverview(
     row.work_item_count = Math.max(row.work_item_count, row.saved_extraction_count);
     row.latest_title ??= item.title;
     row.latest_saved_extraction_at = latestTimestamp(row.latest_saved_extraction_at, item.saved_at);
+    addRowConfidence(row, item.confidence);
     row.sourceSet.add("saved_extraction");
   }
 
@@ -149,6 +156,7 @@ export function buildWorkManagementOverview(
     row.extraction_proposal_count += 1;
     row.work_item_count = Math.max(row.work_item_count, row.extraction_proposal_count);
     row.latest_title ??= proposal.title;
+    addRowConfidence(row, proposal.confidence);
     row.sourceSet.add("extraction_proposal");
   }
 
@@ -214,6 +222,7 @@ export function filterWorkManagementOverviewRows(
   filters: WorkManagementOverviewFilters,
 ): WorkManagementOverviewRow[] {
   const date = filters.date.trim();
+  const minConfidence = normalizedConfidenceFilter(filters.minConfidence);
   const project = filters.project.trim();
   const source = filters.source.trim();
   const persistence = filters.persistence.trim();
@@ -222,6 +231,9 @@ export function filterWorkManagementOverviewRows(
     if (project && row.project !== project) return false;
     if (source && !row.sources.includes(source as WorkManagementOverviewSource)) return false;
     if (persistence && row.persistence_state !== persistence) return false;
+    if (minConfidence !== null) {
+      if (row.min_confidence === null || row.min_confidence < minConfidence) return false;
+    }
     return true;
   });
 }
@@ -254,6 +266,16 @@ export function workManagementOverviewFilterMetaText(
 
 export function workManagementOverviewSourceText(row: WorkManagementOverviewRow): string {
   return row.sources.map((source) => SOURCE_LABELS[source]).join(" · ");
+}
+
+export function workManagementOverviewConfidenceText(row: WorkManagementOverviewRow): string {
+  if (row.confidence_count === 0 || row.min_confidence === null || row.max_confidence === null) {
+    return "confidence 없음";
+  }
+  if (row.min_confidence === row.max_confidence) {
+    return `confidence ${row.min_confidence.toFixed(2)}`;
+  }
+  return `confidence ${row.min_confidence.toFixed(2)}-${row.max_confidence.toFixed(2)}`;
 }
 
 export function workManagementOverviewPersistenceText(row: WorkManagementOverviewRow): string {
@@ -305,6 +327,9 @@ function upsertRow(
     progress_log_count: 0,
     work_item_count: 0,
     session_evidence_count: 0,
+    confidence_count: 0,
+    min_confidence: null,
+    max_confidence: null,
     persistence_state: "live_only",
     latest_snapshot_created_at: null,
     latest_saved_extraction_at: null,
@@ -312,6 +337,24 @@ function upsertRow(
   };
   rowsByKey.set(key, row);
   return row;
+}
+
+function addRowConfidence(row: MutableWorkManagementOverviewRow, confidence: number): void {
+  if (!Number.isFinite(confidence)) return;
+  row.confidence_count += 1;
+  row.min_confidence = row.min_confidence === null
+    ? confidence
+    : Math.min(row.min_confidence, confidence);
+  row.max_confidence = row.max_confidence === null
+    ? confidence
+    : Math.max(row.max_confidence, confidence);
+}
+
+function normalizedConfidenceFilter(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function sumRows(

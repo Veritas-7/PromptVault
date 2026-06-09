@@ -223,10 +223,11 @@ h3 {
 
 .work-summary-filter-row.work-management-filter-row {
   grid-template-columns:
-    minmax(130px, 0.45fr)
-    minmax(150px, 0.65fr)
-    minmax(130px, 0.45fr)
     minmax(120px, 0.4fr)
+    minmax(145px, 0.55fr)
+    minmax(120px, 0.4fr)
+    minmax(110px, 0.35fr)
+    minmax(100px, 0.3fr)
     auto
     auto;
 }

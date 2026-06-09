@@ -1,10 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 01:14 KST
+Updated: 2026-06-10 01:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 work AI provider status and management readiness
+
+Current Goal:
+
+- Answer the operator question about how complete the project/day work ledger is,
+  whether real Codex sessions are parsed, and whether project-local
+  `working.md`/`workingd.md`/progress-log files are included.
+- Make AI provider readiness visible in the app and CLI so local fallback,
+  OpenAI/GLM readiness, and the missing Codex SDK provider route are not hidden.
+
+Context:
+
+- The work-management surface already inventories project/day rows from
+  project-local progress logs and joins sanitized Codex/Codex CX session
+  evidence where available.
+- It still is not a fully closed AI-managed ledger: unresolved rows,
+  title-normalization rows, and provider-pending rows remain visible rather than
+  automatically finalized.
+- OpenAI/GLM HTTP provider paths exist for work-log extraction,
+  normalization, summaries, and session-evidence proposals. Codex SDK is now
+  tracked as an explicit unavailable route until a real provider is wired.
+
+Progress:
+
+- Added backend/UI/CLI provider status reporting for OpenAI, GLM, Codex SDK,
+  fallback route, configured state, work-management usability, endpoint/model
+  metadata, and warnings without exposing secret values.
+- Added a work-management toolbar button and bridge API route so the browser UI
+  can check provider readiness alongside work-log candidates.
+- Extended isolated browser QA to click the provider status button and require
+  OpenAI, GLM, Codex SDK, fallback, and runtime rows to render.
+- Updated README and CLI docs with `work-ai-provider-status` and
+  `/api/work-ai-provider-status`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added `ProjectWorkAiProviderStatus*` result structs,
+  `project_work_ai_provider_status` Tauri command, env-derived readiness helper,
+  and focused Rust tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: added `work-ai-provider-status
+  [--json]`, bridge endpoint, and help text coverage.
+- `src/types.ts`, `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`,
+  `src/App.tsx`: added frontend contract validation, status helper text, UI
+  button, meta row, provider detail rows, and failure state.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`: added
+  malformed/inconsistent provider response tests and UI text coverage.
+- `scripts/browser-bridge-isolated-qa.mjs`: added actual click/DOM verification
+  for provider status.
+- `README.md`, `docs/CLI.md`: documented the new operator check.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts tests/promptVaultApi.test.ts`
+  - `229` tests passed.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_ai_provider_status -- --nocapture`
+  - `2` provider status tests passed.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules -- --nocapture`
+  - CLI help contract test passed.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run check`
+  - UI tests `489`, Rust lib tests `207`, CLI tests `34`, doc tests, and
+    clippy passed.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  - Isolated browser QA ended with exit code `0`.
+  - Verified real session-index backfill over `/Users/wj/.codex/sessions` and
+    `/Users/wj/.codex-cx/sessions`.
+  - Observed work status counters in QA: `31` projects, `26` days, `9,404`
+    work items, `861` progress logs, `7,024` session-evidence matches, `99`
+    project/day rows, `12` session-evidence-needed rows under the bounded
+    `50` session limit, and provider status rows including
+    `openai-responses`, `glm-chat-completions`, and `codex-sdk`.
+  - Verified `workingd.md` handling through the saved extraction fixture:
+    `/tmp/QAProject/workingd.md` was saved as an approved work-log item.
+
+Issues:
+
+- This is a strong inventory/audit and review-queue system, not a fully
+  autonomous closed ledger yet.
+- Actual AI-backed durable reconciliation is still gated: OpenAI/GLM keys may
+  be absent in QA, risky content is fail-closed, and Codex SDK is not yet wired
+  as a work-management provider.
+- Some project/day rows are still unresolved after the available session index
+  or require title normalization before durable session evidence can be
+  approved.
+
+Research:
+
+- Checked official OpenAI/Codex documentation during this slice. The codebase
+  currently has OpenAI Responses and GLM chat-completions provider paths, but no
+  Codex SDK provider implementation.
+
+Next Steps:
+
+- Add a real Codex SDK or equivalent work-management provider route, with the
+  same source-trace, secret-redaction, and review-queue gates used by the
+  existing OpenAI/GLM/local proposal paths.
+- Continue reducing unresolved project/day rows by applying title
+  normalization, then session-evidence review, then durable save/apply flows.
 
 ## Completed Slice - 2026-06-10 management overview session coverage status
 

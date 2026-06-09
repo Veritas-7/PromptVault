@@ -1,12 +1,105 @@
 # PromptVault Working Log
 
-Updated: 2026-06-09 16:58 KST
+Updated: 2026-06-09 17:05 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Current Slice - 2026-06-09 session index backfill UI progress
+## Current Slice - 2026-06-09 continue-from-cursor session backfill UI
+
+Current Goal:
+
+- Let the operator continue a bounded real-session backfill from the saved
+  cursor without resetting source states every time.
+- Keep the action safe and inspectable: one click can advance only the bounded
+  `max_batches=2` window, while the UI shows whether the run was "처음부터" or
+  "이어가기".
+- Verify the behavior against actual Codex/Codex CX session files in isolated
+  browser QA.
+
+Context:
+
+- The backend already persists `project_work_session_index_states` and uses
+  `reset=false` to resume each source from its prior `next_file_index`.
+- The previous UI exposed only a reset-style "세션 백필" button, which proved
+  bounded ingestion but made repeated operator progress ambiguous.
+- No project `.impeccable.md`, `design.md`, or `DESIGN.md` exists. This slice
+  follows the existing dense operations-console UI rather than introducing a
+  new visual system.
+
+Progress:
+
+- Split the session backfill operation into two UI actions:
+  - "처음부터 백필" resets cursor state and runs the bounded batch window;
+  - "이어 백필" preserves cursor state and advances from the saved cursor.
+- Added loading copy that identifies which mode is running.
+- Added the run mode to the rendered session-index meta row.
+- Updated browser QA to click reset, record the Codex processed-file count,
+  click continue, and assert that Codex processed files advance.
+- Added API contract coverage for `reset=false` bridge requests.
+
+Changes:
+
+- `src/App.tsx`:
+  - added `WorkSessionIndexBackfillMode`;
+  - added per-mode loading state;
+  - changed `runWorkSessionIndexBackfill` to accept `reset` vs `continue`;
+  - added separate reset and continue buttons.
+- `scripts/browser-bridge-isolated-qa.mjs`:
+  - added source processed-file parsing;
+  - verifies reset and continue UI flows in the same browser QA run.
+- `tests/promptVaultApi.test.ts`:
+  - added `browser bridge work session index posts continue-from-cursor options`.
+- `working.md`:
+  - recorded the current slice, tests, and remaining issues.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`:
+  PASS, `179` tests.
+- `npm run build`: PASS.
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=200 npm run qa:browser-bridge`: PASS.
+  Final JSON included:
+  - reset meta: `until-complete · 처음부터 · 배치 2 / 2배치`;
+  - reset source state: Codex `20 / 25,145`, Codex CX `11 / 11`;
+  - continue meta: `until-complete · 이어가기 · 배치 2 / 2배치`;
+  - continue source state: Codex `40 / 25,145`, Codex CX `11 / 11`;
+  - work summary index used `39` stored session evidence records and `80`
+    matches;
+  - coverage: `828` progress logs, `827` parsed, `0` unparsed, `31` projects,
+    `8,901` work items;
+  - work management: `91` managed rows, `31` projects, `25` days,
+    `저장관리 91`, `라이브만 0`;
+  - approved review queue save and normalization apply flows both saved one row.
+- `npm run check`: PASS, including UI tests (`463`), production build, Rust lib
+  tests (`186`), CLI tests (`30`), doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- This still does not execute the full all-history ingestion for `25,145` Codex
+  session files. It gives the operator a safe repeatable continue button.
+- The UI still has fixed batch policy (`max_batches=2`) rather than an
+  operator-adjustable batch size or "run until complete with confirmation"
+  workflow.
+- Live OpenAI/GLM provider execution remains outside isolated QA; this run again
+  verified fallback and review-gated persistence.
+
+Research:
+
+- No external research was needed. Existing backend cursor persistence and local
+  tests were sufficient for this slice.
+
+Next Steps:
+
+- Add an operator-visible estimate/progress helper for remaining source files
+  and the number of bounded clicks needed to complete the Codex source.
+- Consider a confirmation-gated "run more batches" control after the repeated
+  continue flow proves stable.
+- Add a credentialed provider smoke only when live OpenAI/GLM keys are intended
+  to be exercised.
+
+## Completed Slice - 2026-06-09 session index backfill UI progress
 
 Current Goal:
 

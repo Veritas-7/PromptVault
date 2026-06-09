@@ -118,6 +118,12 @@ function waitForHttp(url, timeoutMs) {
   });
 }
 
+function sourceProcessedFileCount(sourceStateText, sourceLabel) {
+  const row = sourceStateText.find((text) => text.includes(sourceLabel));
+  const match = row?.match(/파일\s+([\d,]+)\s+\//);
+  return match ? Number.parseInt(match[1].replaceAll(",", ""), 10) : 0;
+}
+
 function waitForBridgeHealth(timeoutMs) {
   const url = `http://${HOST}:${BRIDGE_PORT}/api/health`;
   const started = Date.now();
@@ -244,15 +250,43 @@ async function runBrowserQa() {
       const warning = document.querySelector('[data-work-session-index-warning="true"]')?.textContent ?? "";
       const sourceStates = document.querySelector('[data-work-session-index-source-states="true"]')?.textContent ?? "";
       return meta.includes("until-complete")
+        && meta.includes("처음부터")
         && meta.includes("배치 2 / 2배치")
         && warning.includes("max_batches")
         && sourceStates.includes("Codex")
         && sourceStates.includes("파일");
     }, undefined, { timeout: 120000 });
-    workSessionIndexBackfill = {
+    const resetWorkSessionIndexBackfill = {
       meta: (await page.locator('[data-work-session-index-meta="true"]').textContent())?.trim() ?? "",
       warning: (await page.locator('[data-work-session-index-warning="true"]').textContent())?.trim() ?? "",
       sourceStates: await page.locator('[data-work-session-index-source-state="true"]').allTextContents(),
+    };
+    const resetCodexProcessedFiles = sourceProcessedFileCount(
+      resetWorkSessionIndexBackfill.sourceStates,
+      "Codex",
+    );
+    await page.locator('[data-run-work-session-index-continue-backfill="true"]').click();
+    await page.waitForFunction((previousCodexProcessedFiles) => {
+      const meta = document.querySelector('[data-work-session-index-meta="true"]')?.textContent ?? "";
+      const warning = document.querySelector('[data-work-session-index-warning="true"]')?.textContent ?? "";
+      const sourceStates = Array.from(document.querySelectorAll('[data-work-session-index-source-state="true"]'))
+        .map((row) => row.textContent ?? "");
+      const codexRow = sourceStates.find((row) => row.includes("Codex")) ?? "";
+      const match = codexRow.match(/파일\s+([\d,]+)\s+\//);
+      const processedFiles = match ? Number.parseInt(match[1].replaceAll(",", ""), 10) : 0;
+      return meta.includes("until-complete")
+        && meta.includes("이어가기")
+        && meta.includes("배치 2 / 2배치")
+        && warning.includes("max_batches")
+        && processedFiles > previousCodexProcessedFiles;
+    }, resetCodexProcessedFiles, { timeout: 120000 });
+    workSessionIndexBackfill = {
+      reset: resetWorkSessionIndexBackfill,
+      continued: {
+        meta: (await page.locator('[data-work-session-index-meta="true"]').textContent())?.trim() ?? "",
+        warning: (await page.locator('[data-work-session-index-warning="true"]').textContent())?.trim() ?? "",
+        sourceStates: await page.locator('[data-work-session-index-source-state="true"]').allTextContents(),
+      },
     };
     await page.locator('[data-browser-bridge-status="connected"]').waitFor({ timeout: 60000 });
     await page.locator('[data-work-summary-session-limit="true"]').fill(String(WORK_SESSION_LIMIT));

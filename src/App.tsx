@@ -336,6 +336,7 @@ type ScanState = ScanRunState;
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionIndexState = "idle" | "loading" | "ready" | "failed";
+type WorkSessionIndexBackfillMode = "reset" | "continue";
 const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
@@ -376,8 +377,12 @@ function workSessionIndexBatchFiles(sessionLimit: number): number {
 function workSessionIndexMetaText(
   state: WorkSessionIndexState,
   result: ProjectWorkSessionIndexResult | null,
+  mode: WorkSessionIndexBackfillMode | null = null,
 ): string | null {
-  if (state === "loading") return "세션 백필 실행 중";
+  if (state === "loading") {
+    const modeText = mode === "continue" ? "이어가기" : "처음부터";
+    return `세션 백필 ${modeText} 실행 중`;
+  }
   if (state === "failed") return "세션 백필 실패";
   if (!result) return null;
   const processedFiles = result.source_states.reduce((sum, source) => sum + source.processed_files, 0);
@@ -387,6 +392,7 @@ function workSessionIndexMetaText(
   const completion = result.all_sources_completed ? "완료" : "진행 중";
   return [
     result.until_complete ? "until-complete" : "bounded",
+    result.reset ? "처음부터" : "이어가기",
     `배치 ${result.batches_run.toLocaleString()} / ${maxBatches}`,
     `파일 ${processedFiles.toLocaleString()} / ${totalFiles.toLocaleString()}`,
     `근거 ${matchedPrompts.toLocaleString()}개`,
@@ -480,6 +486,8 @@ function App() {
   const [storedFacetsState, setStoredFacetsState] = useState<StoredFacetsState>("idle");
   const [workSummaryState, setWorkSummaryState] = useState<WorkSummaryState>("idle");
   const [workSessionIndexState, setWorkSessionIndexState] = useState<WorkSessionIndexState>("idle");
+  const [workSessionIndexRunMode, setWorkSessionIndexRunMode] =
+    useState<WorkSessionIndexBackfillMode | null>(null);
   const [workSummarySnapshotsState, setWorkSummarySnapshotsState] = useState<WorkSummarySnapshotsState>("idle");
   const [workLogCoverageState, setWorkLogCoverageState] = useState<WorkLogCoverageState>("idle");
   const [workLogCandidatesState, setWorkLogCandidatesState] = useState<WorkLogCandidatesState>("idle");
@@ -788,7 +796,11 @@ function App() {
   const storedFacetsFailureMessage = storedFacetsFailureText(storedFacetsState);
   const workSummaryFailureMessage = workSummaryFailureText(workSummaryState);
   const workSummaryMeta = workSummaryMetaText(workSummaryState, workSummaryResult);
-  const workSessionIndexMeta = workSessionIndexMetaText(workSessionIndexState, workSessionIndexResult);
+  const workSessionIndexMeta = workSessionIndexMetaText(
+    workSessionIndexState,
+    workSessionIndexResult,
+    workSessionIndexRunMode,
+  );
   const workSessionIndexWarning = workSessionIndexWarningText(workSessionIndexResult);
   const workSummaryIndexStatus = workSummaryResult ? workSummaryIndexStatusText(workSummaryResult) : null;
   const workSummaryPersistenceStatus = workSummaryResult ? workSummaryPersistenceText(workSummaryResult) : null;
@@ -1610,7 +1622,7 @@ function App() {
     }
   }
 
-  async function runWorkSessionIndexBackfill() {
+  async function runWorkSessionIndexBackfill(mode: WorkSessionIndexBackfillMode) {
     const sessionLimit = workSummarySessionLimit;
     if (sessionLimit === null) {
       const message = workSummarySessionLimitStatus;
@@ -1620,13 +1632,14 @@ function App() {
     }
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
+    setWorkSessionIndexRunMode(mode);
     setWorkSessionIndexState("loading");
     try {
       const next = await runProjectWorkSessionIndex({
         batch_files: workSessionIndexBatchFiles(sessionLimit),
         max_batches: WORK_SESSION_INDEX_MAX_BATCHES,
         until_complete: true,
-        reset: true,
+        reset: mode === "reset",
       });
       setWorkSessionIndexResult(next);
       setWorkSessionIndexState("ready");
@@ -1636,6 +1649,7 @@ function App() {
       setError(message);
       setWorkSessionIndexState("failed");
     } finally {
+      setWorkSessionIndexRunMode(null);
       releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
@@ -2356,15 +2370,31 @@ function App() {
               세션 재스캔
             </button>
             <button
-              aria-label="실제 Codex 세션 인덱스를 until-complete 의도로 제한된 배치만큼 백필"
+              aria-label="실제 Codex 세션 인덱스를 처음부터 초기화해 제한된 배치만큼 백필"
               className="inline-action"
               data-run-work-session-index-backfill="true"
+              data-run-work-session-index-reset-backfill="true"
               disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
-              onClick={() => void runWorkSessionIndexBackfill()}
+              onClick={() => void runWorkSessionIndexBackfill("reset")}
               type="button"
             >
               <Database size={15} />
-              {workSessionIndexState === "loading" ? "백필 중" : "세션 백필"}
+              {workSessionIndexState === "loading" && workSessionIndexRunMode === "reset"
+                ? "초기화 중"
+                : "처음부터 백필"}
+            </button>
+            <button
+              aria-label="저장된 세션 인덱스 커서부터 제한된 배치만큼 이어서 백필"
+              className="inline-action"
+              data-run-work-session-index-continue-backfill="true"
+              disabled={isTopLevelActionLocked || workSummarySessionLimitInvalid}
+              onClick={() => void runWorkSessionIndexBackfill("continue")}
+              type="button"
+            >
+              <RefreshCw size={15} />
+              {workSessionIndexState === "loading" && workSessionIndexRunMode === "continue"
+                ? "이어가는 중"
+                : "이어 백필"}
             </button>
             <button
               aria-label="현재 프로젝트 작업 요약을 SQLite 스냅샷으로 저장"

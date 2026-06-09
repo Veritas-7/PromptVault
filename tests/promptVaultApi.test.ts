@@ -763,6 +763,65 @@ test("browser bridge work session index posts until-complete options and validat
   assert.equal(result.warnings.length, 1);
 });
 
+test("browser bridge work session index posts continue-from-cursor options", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestBody = "";
+  globalThis.fetch = async (_input, init) => {
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionIndexPayload({
+      reset: false,
+      scanned_prompt_count: 198,
+      sanitized_prompt_count: 198,
+      stored_prompt_count: 198,
+      source_states: [
+        {
+          source_id: "codex",
+          source_label: "Codex",
+          root_path: "/Users/wj/.codex/sessions",
+          total_files: 25145,
+          next_file_index: 400,
+          processed_files: 400,
+          matched_prompt_count: 397,
+          completed: false,
+          updated_at: "2026-06-09T00:00:00Z",
+        },
+        {
+          source_id: "codex-cx",
+          source_label: "Codex CX",
+          root_path: "/Users/wj/.codex-cx/sessions",
+          total_files: 11,
+          next_file_index: 11,
+          processed_files: 11,
+          matched_prompt_count: 0,
+          completed: true,
+          updated_at: "2026-06-09T00:00:00Z",
+        },
+      ],
+    })), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await runProjectWorkSessionIndex({
+    batch_files: 100,
+    max_batches: 2,
+    until_complete: true,
+    reset: false,
+  });
+
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      batch_files: 100,
+      max_batches: 2,
+      until_complete: true,
+      reset: false,
+    },
+  });
+  assert.equal(result.reset, false);
+  assert.equal(result.source_states[0].processed_files, 400);
+});
+
 test("browser bridge work summary posts extraction merge options and validates merge metadata", async (t) => {
   const originalFetch = globalThis.fetch;
   let requestPath = "";

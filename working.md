@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 19:48 KST
+Updated: 2026-06-10 19:53 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,7 +33,51 @@ Short-Term Goal:
 
 Current Work:
 
-- Active completed implementation slice, ready to commit:
+- Latest completed implementation slice:
+  `fix: document source evidence cli help`.
+- Completed behavior:
+  improve source-trace command discoverability for the remaining unresolved
+  project/day session-evidence rows. Live CLI checks still show `26` candidates
+  with `unresolved_after_full_index_count=26`. The next operator path is
+  `work-session-evidence-source-search` followed by
+  `work-session-evidence-source-proposals`, but both commands currently exit
+  `1` on `--help` with `unknown ... argument: --help`, even though they are the
+  core read-only source-trace inspection commands for the unresolved rows.
+- Current implementation status:
+  `src-tauri/src/bin/promptvault-cli.rs` now adds
+  `work-session-evidence-source-search --help` / `-h` / `help` and
+  `work-session-evidence-source-proposals --help` / `-h` / `help` handling.
+  The new help text documents bounded redacted JSONL/Antigravity DB source
+  reads, same-project source hints, copied source-search snippets, weak-trace
+  blockers, manual review, no automatic approval/link creation,
+  `work-session-evidence-review-queue-update`, copied source review metadata,
+  and `work-session-evidence-review-apply`. Unit tests for both help bodies
+  have been added.
+- Verification for active slice:
+  `cargo fmt && cargo test --bin promptvault-cli help` passed with `6` tests.
+  `cargo build --bin promptvault-cli` passed. The rebuilt commands
+  `src-tauri/target/debug/promptvault-cli work-session-evidence-source-search
+  --help` and `src-tauri/target/debug/promptvault-cli
+  work-session-evidence-source-proposals --help` now both exit `0` and print
+  `18` lines. `git diff --check` passed. `npm run check` passed: UI tests
+  `523` passed, Vite/TypeScript build passed, Rust lib tests `240` passed, CLI
+  tests `39` passed, doc-tests passed, and clippy `-D warnings` passed.
+  Browser-bridge QA was not rerun for this CLI-only help slice because no
+  bridge/API/UI behavior changed.
+- Previous completed implementation slice:
+  `3b6fc6a fix: document session evidence proposal help`.
+- Verification for previous slice:
+  `cargo fmt` passed. `cargo test --bin promptvault-cli help` passed with `4`
+  tests. `cargo build --bin promptvault-cli` passed. The rebuilt command
+  `src-tauri/target/debug/promptvault-cli work-session-evidence-proposals
+  --help` now exits `0` and prints `21` lines documenting usage, `--ai`,
+  OpenAI/GLM fallback, read-only source-traced proposals, no automatic session
+  evidence links, and the review queue/apply flow. `git diff --check` passed.
+  `npm run check` passed: UI tests `523` passed, Vite/TypeScript build passed,
+  Rust lib tests `240` passed, CLI tests `37` passed, doc-tests passed, and
+  clippy `-D warnings` passed. Browser-bridge QA was not rerun for this
+  CLI-only help slice because no bridge/API/UI behavior changed.
+- Earlier completed implementation slice:
   improve session-evidence proposal discoverability for the remaining
   unresolved project/day rows. Live CLI checks still show `26` candidates with
   `unresolved_after_full_index_count=26`. The command
@@ -50,17 +94,6 @@ Current Work:
   `work-session-evidence-review-queue --sync-candidates`, copied trace metadata,
   and `work-session-evidence-review-apply`. A unit test for the help body has
   been added.
-- Verification for active slice:
-  `cargo fmt` passed. `cargo test --bin promptvault-cli help` passed with `4`
-  tests. `cargo build --bin promptvault-cli` passed. The rebuilt command
-  `src-tauri/target/debug/promptvault-cli work-session-evidence-proposals
-  --help` now exits `0` and prints `21` lines documenting usage, `--ai`,
-  OpenAI/GLM fallback, read-only source-traced proposals, no automatic session
-  evidence links, and the review queue/apply flow. `git diff --check` passed.
-  `npm run check` passed: UI tests `523` passed, Vite/TypeScript build passed,
-  Rust lib tests `240` passed, CLI tests `37` passed, doc-tests passed, and
-  clippy `-D warnings` passed. Browser-bridge QA was not rerun for this
-  CLI-only help slice because no bridge/API/UI behavior changed.
 - Previous completed implementation slice:
   `331187b fix: document normalization proposal help`.
 - Verification for previous slice:

@@ -931,6 +931,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "work-session-evidence-source-search" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_session_evidence_source_search_help_text());
+                return Ok(());
+            }
             let json = take_flag(&mut args, "--json");
             let mut limit = None;
             let mut max_lines = None;
@@ -1004,6 +1008,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "work-session-evidence-source-proposals" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_session_evidence_source_proposals_help_text());
+                return Ok(());
+            }
             let json = take_flag(&mut args, "--json");
             let mut limit = None;
             let mut max_lines = None;
@@ -2853,6 +2861,54 @@ fn work_session_evidence_proposals_help_text() -> String {
     .join("\n")
 }
 
+fn work_session_evidence_source_search_help_text() -> String {
+    [
+        "PromptVault work-session-evidence-source-search",
+        "",
+        "Usage:",
+        "  promptvault-cli work-session-evidence-source-search --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--json]",
+        "",
+        "Purpose:",
+        "  Searches one known raw session source for query-matched user prompt snippets.",
+        "  Supports bounded, redacted reads of JSONL session files and Antigravity SQLite conversation DB files.",
+        "  Use this after work-session-evidence-candidates exposes a same-project source hint for an unresolved project/day row.",
+        "",
+        "Review safety:",
+        "  This command is read-only and does not approve or create session evidence.",
+        "  Returned snippets are source-trace input for work-session-evidence-source-proposals.",
+        "  Limits are bounded so a single source file cannot be scanned without review.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-session-evidence-source-search --source-path /path/to/session.jsonl --query \"PromptVault review\" --json",
+        "  promptvault-cli work-session-evidence-source-search --source-path /path/to/conversation.db --query \"CareVault\" --limit 5 --max-lines 2000 --json",
+    ]
+    .join("\n")
+}
+
+fn work_session_evidence_source_proposals_help_text() -> String {
+    [
+        "PromptVault work-session-evidence-source-proposals",
+        "",
+        "Usage:",
+        "  promptvault-cli work-session-evidence-source-proposals --candidate-id ID --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--database PATH] [--json]",
+        "",
+        "Purpose:",
+        "  Validates copied source-search snippets against one unresolved project/day candidate.",
+        "  Returns manual review proposals and blocks weak traces such as project-only, generic, instruction-only, risky, or far-date hits.",
+        "  Use this before approving a source-backed session evidence row.",
+        "",
+        "Review safety:",
+        "  This command does not approve candidates or create durable session evidence links.",
+        "  Approvals must be persisted through work-session-evidence-review-queue-update with copied source review metadata.",
+        "  Apply only operator-approved rows with work-session-evidence-review-apply.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-Example-123 --source-path /path/to/session.jsonl --query \"Example\" --json",
+        "  promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-Example-123 --source-path /path/to/conversation.db --query \"Example\" --limit 5 --json",
+    ]
+    .join("\n")
+}
+
 fn work_log_normalization_proposals_help_text() -> String {
     [
         "PromptVault work-log-normalization-proposals",
@@ -4624,6 +4680,38 @@ mod tests {
         assert!(help.contains("does not create session evidence links"));
         assert!(help.contains("work-session-evidence-review-queue --sync-candidates"));
         assert!(help.contains("copied trace metadata"));
+        assert!(help.contains("work-session-evidence-review-apply"));
+    }
+
+    #[test]
+    fn work_session_evidence_source_search_help_documents_read_only_search_safety() {
+        let help = work_session_evidence_source_search_help_text();
+
+        assert!(help.contains(
+            "promptvault-cli work-session-evidence-source-search --source-path PATH --query TEXT"
+        ));
+        assert!(help.contains("known raw session source"));
+        assert!(help.contains("JSONL session files and Antigravity SQLite conversation DB files"));
+        assert!(help.contains("same-project source hint"));
+        assert!(help.contains("read-only and does not approve or create session evidence"));
+        assert!(help.contains("work-session-evidence-source-proposals"));
+        assert!(help.contains("Limits are bounded"));
+    }
+
+    #[test]
+    fn work_session_evidence_source_proposals_help_documents_manual_review_safety() {
+        let help = work_session_evidence_source_proposals_help_text();
+
+        assert!(help
+            .contains("promptvault-cli work-session-evidence-source-proposals --candidate-id ID"));
+        assert!(help.contains("copied source-search snippets"));
+        assert!(help.contains("manual review proposals"));
+        assert!(help.contains("project-only, generic, instruction-only, risky, or far-date"));
+        assert!(
+            help.contains("does not approve candidates or create durable session evidence links")
+        );
+        assert!(help.contains("work-session-evidence-review-queue-update"));
+        assert!(help.contains("copied source review metadata"));
         assert!(help.contains("work-session-evidence-review-apply"));
     }
 

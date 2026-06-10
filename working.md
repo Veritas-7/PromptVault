@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 11:40 KST
+Updated: 2026-06-10 12:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,29 +33,132 @@ Short-Term Goal:
 
 Current Work:
 
-- Current uncommitted slice: project-status snapshot title-normalization
-  false-positive cleanup.
-- The previous timestamp-heading parser slice was committed and pushed as
-  `b955982 fix: normalize timestamp-only worklog headings`.
-- This slice makes `PROJECT_STATUS.md` fallback rows titled
-  `Project status snapshot updated` count as valid project-status snapshots
-  rather than rough titles requiring AI cleanup, while preserving actual rough
-  `PROJECT_STATUS.md` titles such as `)`.
-- Targeted Rust tests, actual default-vault CLI checks, full `npm run check`,
-  and isolated browser-bridge QA passed. Remaining before handoff is
-  diff/secret checks, explicit-path staging, commit, push, and status
-  confirmation.
+- Current uncommitted slice: body-derived progress-log title cleanup.
+- The previous project-status snapshot title-normalization slice was committed
+  and pushed as
+  `1521d5d fix: exclude project status snapshots from title cleanup`.
+- This slice promotes safe body/heading text into titles when parsed progress
+  headings are placeholders such as `Untitled work`, `)`, or
+  `Progress log updated`, and fixes normalization candidates so hidden rough
+  titles beyond the first representative titles are still surfaced.
+- Targeted Rust parser and normalization-candidate tests, `npm run check`, and
+  isolated browser-bridge QA passed. Real default-vault checks now report `0`
+  `needs_title_normalization` rows and `0` title-only normalization candidates.
+  Remaining before handoff is diff/secret checks, explicit-path staging,
+  commit, push, and status confirmation.
 
 Management Coverage Status:
 
 - The app does manage project/day work from real parsed artifacts: current
   default-vault export reported `32` projects, `26` days, `889` progress files,
-  `7,746` work items, `97` project/day rows, and a full stored session index of
+  `7,754` work items, `97` project/day rows, and a full stored session index of
   `10,599` prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
   related progress artifacts, but the remaining unresolved review queues mean the
   whole management system is not yet complete.
+
+## Current Slice - 2026-06-10 Body-derived progress-log title cleanup
+
+Current Goal:
+
+- Remove the remaining `needs_title_normalization` blockers by deriving safe
+  titles from progress-log body/heading evidence when the parsed heading title
+  is only a placeholder.
+
+Context:
+
+- After `1521d5d`, actual default-vault status export still had `16`
+  `needs_title_normalization` rows and `11` title-only normalization candidate
+  groups.
+- The first parser change in this slice promoted safe body text for placeholder
+  headings and dropped the status-export title-normalization count to `2`.
+- That revealed a consistency bug: `work-log-normalization-candidates
+  --needs-title-normalization` returned `0` while `work-status-export` still
+  showed `2` title-normalization rows, because normalization grouping only
+  inspected the first representative titles.
+- The final two rows were safe-date fallback files whose headings were rejected
+  as false-positive sensitive text: normal `Authorization Summary` domain titles
+  and long hyphenated worklog slugs.
+
+Progress:
+
+- Added a finalize step for parsed `ProjectWorkItem` rows so rough titles can be
+  replaced with the first safe body title candidate from the same section.
+- Added body-title cleanup for ordered list markers and Markdown bold markers,
+  while still rejecting metadata, sensitive, and risk-flagged lines.
+- Changed normalization grouping to accumulate `needs_title_normalization` from
+  every item in a project/day group, not only from the first representative
+  titles.
+- Narrowed title safety filtering so `authorization` as a normal domain word is
+  allowed, while real `Authorization:` headers remain covered by existing risk
+  regexes.
+- Added title-only slug handling for long hyphenated worklog headings by
+  humanizing safe slugs into spaced titles.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds safe body-title promotion, title-safe slug
+  handling, narrower sensitive-title filtering, and full-group
+  title-normalization tracking.
+- `scripts/browser-bridge-isolated-qa.mjs`: keeps title-only filter coverage but
+  treats `0` title-only rows as a valid success state, then reloads the general
+  normalization queue for review/apply coverage.
+- `working.md`: records this slice, live default-vault evidence, and remaining
+  work-management gaps.
+
+Tests:
+
+- PASS: `cargo test
+  project_progress_work_items_promote_safe_body_title_for_rough_headings`.
+- PASS: `cargo test
+  project_progress_work_items_safe_date_titles_allow_authorization_and_slug_headings`.
+- PASS: `cargo test project_progress_work_items_` (`8` parser tests).
+- PASS: `cargo test
+  normalization_candidates_title_filter_sees_rough_titles_after_representative_titles`.
+- PASS: `cargo test normalization_candidates` (`5` normalization-candidate
+  tests).
+- PASS: actual default-vault `work-status-export --limit 200
+  --full-session-index --json`: `needs_title_normalization` rows dropped from
+  `16` to `0`; session-evidence-needed rows remain `44`.
+- PASS: actual default-vault `work-log-normalization-candidates --limit 80
+  --needs-title-normalization --json`: title-only candidate count dropped to
+  `0`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run check` (UI tests, Rust library tests, CLI tests, doc tests,
+  build, and clippy).
+- FIXED QA EXPECTATION: the first isolated browser-bridge QA run failed at
+  `work session evidence proposals UI` because the script still expected a
+  title-only proposal row. With title debt cleared, the correct UI state is
+  `0` title-only candidates plus a provider-skip warning.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+  Verified title-only `0` candidate states, session-evidence review/apply,
+  work management overview, provider status/health, normalization
+  candidates/proposals/review/apply/reload, stale/rejected AI fixtures, and
+  approved review queue save. The isolated QA DB was
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-SbQhkR/qa.sqlite`.
+
+Issues:
+
+- Title-normalization blockers are cleared in the live default-vault snapshot,
+  but `44` project/day rows still need session-evidence review.
+- Full normalization candidate queue still has `97` groups, mostly
+  `no_ai_normalization` and `no_session_evidence`; those are broader AI/operator
+  cleanup work, not rough-title parser debt.
+- The browser QA script needed to be updated because the product state improved
+  from title-only rows present to title-only rows absent. That is now covered as
+  an explicit empty-state success path.
+
+Research:
+
+- No external research used. The changes came from live default-vault export,
+  candidate queue inspection, and source-level parser tests.
+
+Next Steps:
+
+- Run diff/secret checks.
+- Stage only `src-tauri/src/lib.rs`, `scripts/browser-bridge-isolated-qa.mjs`,
+  and `working.md`, then commit and push if all gates pass.
 
 ## Completed Slice - 2026-06-10 Project-status snapshot title-normalization cleanup
 

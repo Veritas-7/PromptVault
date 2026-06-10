@@ -1131,17 +1131,20 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const meta = document.querySelector('[data-work-session-evidence-proposals-meta="true"]')?.textContent ?? "";
       const rows = Array.from(document.querySelectorAll('[data-work-session-evidence-proposals="true"] article'));
+      const hasTitleCleanupRow = rows.some((row) => {
+        const text = row.textContent ?? "";
+        return text.includes("unresolved-after-full-index")
+          && text.includes("provider")
+          && text.includes("제목 정규화 우선")
+          && (text.includes("승인 검토 가능") || text.includes("local_fallback_requires"));
+      });
+      const hasEmptyTitleOnlyState = rows.length === 0
+        && (meta.includes("후보 0") || meta.includes("표시 0"));
       return meta.includes("세션인덱스")
         && meta.includes("후보")
         && meta.includes("표시")
         && document.querySelector('[data-work-session-evidence-needs-title-only="true"]')?.checked
-        && rows.some((row) => {
-          const text = row.textContent ?? "";
-          return text.includes("unresolved-after-full-index")
-            && text.includes("provider")
-            && text.includes("제목 정규화 우선")
-            && (text.includes("승인 검토 가능") || text.includes("local_fallback_requires"));
-        });
+        && (hasTitleCleanupRow || hasEmptyTitleOnlyState);
     }, undefined, { timeout: 120000 });
     workSessionEvidenceProposalsUiMeta =
       (await page.locator('[data-work-session-evidence-proposals-meta="true"]').textContent())?.trim() ?? "";
@@ -1156,6 +1159,11 @@ async function runBrowserQa() {
     }
     workSessionEvidenceProposalsUiRows =
       await page.locator('[data-work-session-evidence-proposals="true"] article').allTextContents();
+    await page.locator('[data-work-session-evidence-needs-title-only="true"]').uncheck();
+    await page.waitForFunction(() => {
+      const input = document.querySelector('[data-work-session-evidence-needs-title-only="true"]');
+      return Boolean(input && !input.checked);
+    }, undefined, { timeout: 30000 });
     step("work session evidence review queue UI");
     await waitForEnabled(page, '[data-sync-work-session-evidence-review-queue="true"]');
     await page.locator('[data-sync-work-session-evidence-review-queue="true"]').click();
@@ -1679,17 +1687,39 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-normalization-candidates-meta="true"]')?.textContent ?? "";
       const rows = Array.from(document.querySelectorAll('[data-work-log-normalization-candidates="true"] article'));
+      const hasTitleCleanupRow = rows.some((row) => {
+        const rowText = row.textContent ?? "";
+        return rowText.includes("AI 저장") && rowText.includes("generic_title");
+      });
+      const hasEmptyTitleOnlyState = rows.length === 0
+        && (text.includes("후보 0") || text.includes("표시 0"));
       return text.includes("정규화 후보")
         && text.includes("원본 작업")
-        && rows.some((row) => {
-          const rowText = row.textContent ?? "";
-          return rowText.includes("AI 저장") && rowText.includes("generic_title");
-        });
+        && (hasTitleCleanupRow || hasEmptyTitleOnlyState);
     }, undefined, { timeout: 120000 });
     workLogNormalizationCandidatesMeta =
       (await page.locator('[data-work-log-normalization-candidates-meta="true"]').textContent())?.trim() ?? "";
     workLogNormalizationCandidateRows =
       await page.locator('[data-work-log-normalization-candidates="true"] article').allTextContents();
+    if (!workLogNormalizationCandidateRows.some((row) => row.includes("generic_title"))) {
+      await page.locator('[data-work-log-normalization-needs-title-only="true"]').uncheck();
+      await page.waitForFunction(() => {
+        const input = document.querySelector('[data-work-log-normalization-needs-title-only="true"]');
+        return Boolean(input && !input.checked);
+      }, undefined, { timeout: 30000 });
+      await page.locator('[data-load-work-log-normalization-candidates="true"]').click();
+      await page.waitForFunction(() => {
+        const text = document.querySelector('[data-work-log-normalization-candidates-meta="true"]')?.textContent ?? "";
+        const rows = Array.from(document.querySelectorAll('[data-work-log-normalization-candidates="true"] article'));
+        return text.includes("정규화 후보")
+          && text.includes("원본 작업")
+          && rows.some((row) => (row.textContent ?? "").includes("AI 저장"));
+      }, undefined, { timeout: 120000 });
+      workLogNormalizationCandidatesMeta =
+        (await page.locator('[data-work-log-normalization-candidates-meta="true"]').textContent())?.trim() ?? "";
+      workLogNormalizationCandidateRows =
+        await page.locator('[data-work-log-normalization-candidates="true"] article').allTextContents();
+    }
     step("work log normalization proposals");
     await waitForEnabled(page, '[data-load-work-log-normalization-proposals="true"]');
     await page.locator('[data-load-work-log-normalization-proposals="true"]').click();
@@ -1703,7 +1733,8 @@ async function runBrowserQa() {
         && providerAttemptVisible
         && rows.some((row) => {
           const rowText = row.textContent ?? "";
-          return rowText.includes("AI 검토 필요") && rowText.includes("generic_title");
+          return rowText.includes("AI 검토 필요")
+            && (rowText.includes("generic_title") || rowText.includes("no_session_evidence"));
         });
     }, undefined, { timeout: 120000 });
     workLogNormalizationProposalsMeta =

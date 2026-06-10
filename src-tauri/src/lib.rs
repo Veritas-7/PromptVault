@@ -6776,9 +6776,49 @@ fn local_project_work_log_first_safe_heading(lines: &[&str]) -> Option<String> {
             if !trimmed.starts_with('#') {
                 return None;
             }
-            local_project_work_log_safe_context_line(trimmed)
+            local_project_work_log_safe_title_line(trimmed)
         })
         .next()
+}
+
+fn local_project_work_log_safe_title_line(line: &str) -> Option<String> {
+    local_project_work_log_safe_context_line(line)
+        .or_else(|| local_project_work_log_safe_slug_title_line(line))
+}
+
+fn local_project_work_log_safe_slug_title_line(line: &str) -> Option<String> {
+    let cleaned = line
+        .trim()
+        .trim_matches('|')
+        .trim()
+        .trim_start_matches(['#', '-', '*', '>', ' ', '\t'])
+        .trim()
+        .trim_matches('*')
+        .trim();
+    if !(cleaned.contains('-') || cleaned.contains('_')) {
+        return None;
+    }
+    let risks = detect_risks(cleaned);
+    if !risks.iter().any(|risk| risk == "long_base64_like_token")
+        || risks.iter().any(|risk| risk != "long_base64_like_token")
+    {
+        return None;
+    }
+    let humanized = cleaned
+        .chars()
+        .map(|ch| if ch == '-' || ch == '_' { ' ' } else { ch })
+        .collect::<String>();
+    let normalized = humanized.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.split_whitespace().count() < 3 {
+        return None;
+    }
+    if local_project_work_log_context_line_looks_sensitive(&normalized) {
+        return None;
+    }
+    if !detect_risks(&normalized).is_empty() {
+        return None;
+    }
+    local_project_work_log_safe_context_line(&normalized)
 }
 
 fn local_project_work_log_safe_context_line(line: &str) -> Option<String> {
@@ -6807,16 +6847,9 @@ fn local_project_work_log_safe_context_line(line: &str) -> Option<String> {
 
 fn local_project_work_log_context_line_looks_sensitive(line: &str) -> bool {
     let lower = line.to_ascii_lowercase();
-    [
-        "authorization",
-        "cookie",
-        "installed sha",
-        "password",
-        "secret",
-        "token",
-    ]
-    .iter()
-    .any(|marker| lower.contains(marker))
+    ["cookie", "installed sha", "password", "secret", "token"]
+        .iter()
+        .any(|marker| lower.contains(marker))
         || lower.contains("api key")
         || lower.contains("key:")
         || lower.contains("sha:")
@@ -7079,9 +7112,8 @@ fn project_progress_work_items_from_text_for_project(
 
     for line in text.lines() {
         if let Some((date, status, title)) = parse_project_work_heading(line) {
-            if let Some(mut item) = current.take() {
-                item.evidence = project_work_evidence(&body);
-                items.push(item);
+            if let Some(item) = current.take() {
+                items.push(finalize_project_progress_work_item(item, &body));
                 body.clear();
             }
             current = Some(ProjectWorkItem {
@@ -7104,9 +7136,8 @@ fn project_progress_work_items_from_text_for_project(
         }
     }
 
-    if let Some(mut item) = current {
-        item.evidence = project_work_evidence(&body);
-        items.push(item);
+    if let Some(item) = current {
+        items.push(finalize_project_progress_work_item(item, &body));
     }
     if items.is_empty() {
         if let Some(item) = project_progress_work_item_from_safe_date_field(
@@ -7147,6 +7178,19 @@ fn project_progress_work_items_from_text_for_project(
     }
 
     items
+}
+
+fn finalize_project_progress_work_item(
+    mut item: ProjectWorkItem,
+    body: &[String],
+) -> ProjectWorkItem {
+    item.evidence = project_work_evidence(body);
+    if project_work_log_title_is_generic_or_rough(&item.title) {
+        if let Some(title) = project_work_title_from_body(body) {
+            item.title = title;
+        }
+    }
+    item
 }
 
 fn project_progress_work_item_from_safe_date_field(
@@ -10769,6 +10813,70 @@ fn project_work_evidence(lines: &[String]) -> String {
     String::new()
 }
 
+fn project_work_title_from_body(lines: &[String]) -> Option<String> {
+    lines
+        .iter()
+        .filter_map(|line| project_work_title_candidate_from_body_line(line))
+        .find(|title| !project_work_log_title_is_generic_or_rough(title))
+}
+
+fn project_work_title_candidate_from_body_line(line: &str) -> Option<String> {
+    let mut cleaned = line
+        .trim()
+        .trim_start_matches(['-', '*', '>', ' ', '\t'])
+        .trim();
+    cleaned = project_work_trim_ordered_marker(cleaned);
+    if cleaned.is_empty() || cleaned.ends_with(':') || cleaned.starts_with('#') {
+        return None;
+    }
+    if project_progress_work_log_metadata_line(cleaned)
+        || project_work_body_title_line_is_low_signal_metadata(cleaned)
+    {
+        return None;
+    }
+    let markdown_cleaned = cleaned
+        .replace("**", "")
+        .replace("__", "")
+        .trim_matches('|')
+        .trim()
+        .to_string();
+    local_project_work_log_safe_title_line(&markdown_cleaned)
+}
+
+fn project_work_trim_ordered_marker(value: &str) -> &str {
+    let mut chars = value.char_indices();
+    let Some((_, first)) = chars.next() else {
+        return value;
+    };
+    if !first.is_ascii_digit() {
+        return value;
+    }
+    for (index, ch) in chars {
+        if ch.is_ascii_digit() {
+            continue;
+        }
+        if matches!(ch, '.' | ')') {
+            return value[index + ch.len_utf8()..].trim_start();
+        }
+        break;
+    }
+    value
+}
+
+fn project_work_body_title_line_is_low_signal_metadata(line: &str) -> bool {
+    let lower = line
+        .trim_start_matches(['-', '*', '>', ' ', '\t'])
+        .trim_matches('*')
+        .trim()
+        .to_ascii_lowercase();
+    lower.starts_with("version:")
+        || lower.starts_with("version ")
+        || lower.starts_with("버전:")
+        || lower.starts_with("버전 ")
+        || lower.starts_with("참여 ai")
+        || lower.starts_with("참여 surface")
+}
+
 fn truncate_chars(text: &str, limit: usize) -> String {
     if text.chars().count() <= limit {
         return text.to_string();
@@ -13130,6 +13238,7 @@ struct ProjectWorkLogNormalizationGroup {
     evidence: Vec<String>,
     work_item_count: usize,
     session_evidence_count: usize,
+    needs_title_normalization: bool,
 }
 
 fn build_project_work_log_normalization_candidates_from_report(
@@ -13153,9 +13262,13 @@ fn build_project_work_log_normalization_candidates_from_report(
                 evidence: Vec::new(),
                 work_item_count: 0,
                 session_evidence_count: 0,
+                needs_title_normalization: false,
             });
         group.work_item_count += 1;
         group.session_evidence_count += item.session_evidence_count;
+        if project_work_item_needs_title_normalization(item) {
+            group.needs_title_normalization = true;
+        }
         if group.titles.len() < 4 && !item.title.trim().is_empty() {
             group.titles.push(item.title.clone());
         }
@@ -13247,7 +13360,7 @@ fn project_work_log_normalization_candidate_from_group(
     if group.session_evidence_count == 0 {
         reasons.push("no_session_evidence");
     }
-    if project_work_log_normalization_group_titles_are_generic(group) {
+    if group.needs_title_normalization {
         reasons.push("generic_title");
     }
     if reasons.is_empty() {
@@ -18924,6 +19037,47 @@ Progress:
     }
 
     #[test]
+    fn project_progress_work_items_safe_date_titles_allow_authorization_and_slug_headings() {
+        let authorization_path = PathBuf::from(
+            "/tmp/notebooklm-llm-wiki-flow/docs/plans/2026-06-06-qwen-omlx-authorization-summary-sha-surface-worklog.md",
+        );
+        let authorization_text = "# Qwen oMLX Authorization Summary SHA Surface Worklog\n\nDate: 2026-06-06\n\nScope:\n- Source/test-only hardening.";
+        let slug_path = PathBuf::from(
+            "/tmp/notebooklm-llm-wiki-flow/docs/plans/2026-06-05-source-conflict-resolution-gate-modern-boundary-refresh-worklog.md",
+        );
+        let slug_text = "# source-conflict-resolution-gate-modern-boundary-refresh Worklog\n\nTimestamp: 2026-06-05 16:29 KST\n\nScope:\n- Report-only/source-test hardening.";
+
+        let authorization_items = project_progress_work_items_from_text_for_project(
+            &authorization_path,
+            authorization_text,
+            "notebooklm-llm-wiki-flow",
+        );
+        let slug_items = project_progress_work_items_from_text_for_project(
+            &slug_path,
+            slug_text,
+            "notebooklm-llm-wiki-flow",
+        );
+
+        assert_eq!(authorization_items.len(), 1);
+        assert_eq!(authorization_items[0].date, "2026-06-06");
+        assert_eq!(
+            authorization_items[0].title,
+            "Qwen oMLX Authorization Summary SHA Surface Worklog"
+        );
+        assert_ne!(authorization_items[0].title, "Progress log updated");
+        assert!(detect_risks(&authorization_items[0].title).is_empty());
+
+        assert_eq!(slug_items.len(), 1);
+        assert_eq!(slug_items[0].date, "2026-06-05");
+        assert_eq!(
+            slug_items[0].title,
+            "source conflict resolution gate modern boundary refresh Worklog"
+        );
+        assert_ne!(slug_items[0].title, "Progress log updated");
+        assert!(detect_risks(&slug_items[0].title).is_empty());
+    }
+
+    #[test]
     fn project_progress_work_items_use_heading_prefix_for_timestamp_only_titles() {
         let path = PathBuf::from("/tmp/PromptVault/working.md");
         let text = r#"# PromptVault Working Log
@@ -18946,6 +19100,54 @@ Long-Term Goal:
         assert!(items[0].evidence.contains("Make PromptVault a reliable"));
         assert!(detect_risks(&items[0].title).is_empty());
         assert!(detect_risks(&items[0].evidence).is_empty());
+    }
+
+    #[test]
+    fn project_progress_work_items_promote_safe_body_title_for_rough_headings() {
+        let progress_path = PathBuf::from("/tmp/LocalMind/progress.md");
+        let progress_text = r#"# LocalMind Progress
+
+## 2026-06-05
+
+- Closed the accessibility launch-prompt recovery gap.
+- token: local-only value must not become a title.
+"#;
+        let status_path = PathBuf::from("/tmp/novel-source-collector/PROJECT_STATUS.md");
+        let status_text = r#"# novel-source-collector
+
+## 2026-06-09 )
+
+- 1. **Web Dashboard** (`/dashboard`): Real-time collection progress, integrity check, merge controls.
+"#;
+
+        let progress_items = project_progress_work_items_from_text_for_project(
+            &progress_path,
+            progress_text,
+            "LocalMind",
+        );
+        let status_items = project_progress_work_items_from_text_for_project(
+            &status_path,
+            status_text,
+            "novel-source-collector",
+        );
+
+        assert_eq!(progress_items.len(), 1);
+        assert_eq!(progress_items[0].date, "2026-06-05");
+        assert_eq!(
+            progress_items[0].title,
+            "Closed the accessibility launch-prompt recovery gap."
+        );
+        assert_ne!(progress_items[0].title, "Untitled work");
+        assert!(detect_risks(&progress_items[0].title).is_empty());
+
+        assert_eq!(status_items.len(), 1);
+        assert_eq!(status_items[0].date, "2026-06-09");
+        assert_eq!(
+            status_items[0].title,
+            "Web Dashboard (`/dashboard`): Real-time collection progress, integrity check, merge controls."
+        );
+        assert_ne!(status_items[0].title, ")");
+        assert!(detect_risks(&status_items[0].title).is_empty());
     }
 
     #[test]
@@ -21634,6 +21836,72 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(non_title.total_candidate_count, 1);
         assert_eq!(non_title.candidates[0].project, "ClearTitleProject");
         assert!(!non_title.candidates[0].reason.contains("generic_title"));
+    }
+
+    #[test]
+    fn normalization_candidates_title_filter_sees_rough_titles_after_representative_titles() {
+        let mut items = Vec::new();
+        for index in 0..4 {
+            items.push(ProjectWorkItem {
+                date: "2026-06-09".to_string(),
+                project: "MixedTitleProject".to_string(),
+                title: format!("Clear parsed work title {index}"),
+                status: "logged".to_string(),
+                source_path: format!("/tmp/MixedTitleProject/worklog-{index}.md"),
+                source_file: format!("worklog-{index}.md"),
+                evidence: format!("Clear parsed work title {index}."),
+                session_evidence_count: 0,
+                session_sources: Vec::new(),
+                session_evidence_keys: Vec::new(),
+            });
+        }
+        items.push(ProjectWorkItem {
+            date: "2026-06-09".to_string(),
+            project: "MixedTitleProject".to_string(),
+            title: ")".to_string(),
+            status: "logged".to_string(),
+            source_path: "/tmp/MixedTitleProject/worklog-hidden-rough.md".to_string(),
+            source_file: "worklog-hidden-rough.md".to_string(),
+            evidence: "Hidden rough title still needs operator review.".to_string(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_keys: Vec::new(),
+        });
+        let report = ProjectWorkReport {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            total_items: items.len(),
+            project_count: 1,
+            date_count: 1,
+            files_seen: 5,
+            items_by_date: Vec::new(),
+            items_by_project: Vec::new(),
+            session_scan_prompt_count: 0,
+            session_scan_sources: Vec::new(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_unique_count: 0,
+            session_evidence_unique_sources: Vec::new(),
+            session_evidence_index_used: false,
+            session_evidence_index_updated: false,
+            session_evidence_index_count: 0,
+            session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
+            items,
+            warnings: Vec::new(),
+        };
+
+        let title_only = build_project_work_log_normalization_candidates_from_report(
+            &report,
+            &HashMap::new(),
+            10,
+            Some(true),
+        );
+
+        assert_eq!(title_only.total_candidate_count, 1);
+        assert_eq!(title_only.candidates[0].project, "MixedTitleProject");
+        assert!(title_only.candidates[0].reason.contains("generic_title"));
+        assert!(title_only.candidates[0]
+            .title
+            .starts_with("Clear parsed work title 0"));
     }
 
     #[test]

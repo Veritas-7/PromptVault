@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 20:02 KST
+Updated: 2026-06-10 20:14 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,6 +34,47 @@ Short-Term Goal:
 Current Work:
 
 - Active completed implementation slice:
+  tightened source-proposal false-positive blocking after sampling the top
+  unresolved session-evidence rows. Read-only sampling of the top 8 unresolved
+  candidates still shows `26` total candidates and found mostly blocked source
+  traces, but two risky `review_ready` cases survived: a CareVault trace that
+  starts as a "Read-only audit task" / "Your task" subagent instruction despite
+  mentioning already-implemented work, and oss-favorites traces that matched
+  only generic terms such as `docs`, `상태를`, and `만들고`.
+- Completed behavior:
+  `src-tauri/src/lib.rs` now blocks strong instruction markers such as
+  `read-only audit task`, `read-only sidecar`, and `your task:` before generic
+  evidence matching, so subagent instruction prompts cannot become reviewed
+  session evidence just because they mention already-implemented context. The
+  generic source-match term filter now includes path/general terms such as
+  `10_projects`, `app`, `system`, `users`, `doc`, `docs`, and Korean general
+  work-status terms such as `만들고`, `상태`, `상태를`, `작업`, `진행`, and `확인`.
+  These terms can still appear in source-search diagnostics, but they cannot
+  make a source proposal review-ready by themselves.
+- Verification for active slice:
+  `cargo fmt && cargo test session_evidence_source_proposals --lib` passed with
+  `8` source-proposal tests. `cargo build --bin promptvault-cli` passed. The
+  real CareVault source-proposal probe against
+  `/Users/wj/.codex/sessions/2026/06/04/rollout-2026-06-04T00-42-05-019e8e26-26a4-78f3-a505-6640d8bb0f38.jsonl`
+  now returns `review_ready_count=0`, `blocked_count=1`, blocker
+  `source_trace_is_instruction_only`. The real oss-favorites source-proposal
+  probe against
+  `/Users/wj/.codex/sessions/2026/06/01/rollout-2026-06-01T13-50-29-019e8184-e076-7183-8587-4f434627ed0a.jsonl`
+  now returns `review_ready_count=0`, `blocked_count=5`, with all returned
+  rows blocked as `source_hit_matches_only_project_or_generic_terms`. `git diff
+  --check` passed. `npm run check` passed: UI tests `523` passed, Vite /
+  TypeScript build passed, Rust lib tests `242` passed, CLI tests `45` passed,
+  doc-tests passed, and clippy `-D warnings` passed. Browser-bridge QA was not
+  rerun for this backend/CLI source-proposal blocker slice because no
+  bridge/API/UI behavior changed.
+- Next work:
+  continue the remaining `26` unresolved session-evidence rows, using
+  source-search/source-proposal probes and review-queue approval only when the
+  copied trace is direct work evidence rather than generic project/path/status
+  text or subagent instructions.
+- Previous completed implementation slice:
+  `80ba77e fix: document session evidence workflow help`.
+- Previous completed behavior:
   finish command-specific help coverage for the remaining session-evidence
   workflow commands. Live CLI checks showed
   `work-session-evidence-candidates --help`,

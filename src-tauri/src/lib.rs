@@ -9900,19 +9900,17 @@ fn project_work_session_evidence_source_proposal_from_hit(
     .collect::<Vec<_>>();
     risk_flags.sort();
     risk_flags.dedup();
-    let source_hit_evidence_blocker =
-        project_work_session_source_hit_evidence_blocker(candidate, hit);
     let source_hit_date_blocker = project_work_session_source_hit_date_blocker(candidate, hit);
     let blocker_reason = if candidate.needs_title_normalization {
         Some("title_normalization_required_first".to_string())
     } else if !trace_validated {
         Some("source_trace_not_copied_from_search_hit".to_string())
-    } else if let Some(blocker) = source_hit_evidence_blocker {
-        Some(blocker.to_string())
     } else if !risk_flags.is_empty() {
         Some("candidate_or_source_hit_has_risk_flags".to_string())
     } else if project_work_session_source_trace_is_instruction_only(&source_trace) {
         Some("source_trace_is_instruction_only".to_string())
+    } else if let Some(blocker) = project_work_session_source_hit_evidence_blocker(candidate, hit) {
+        Some(blocker.to_string())
     } else {
         source_hit_date_blocker.map(|blocker| blocker.to_string())
     };
@@ -9988,7 +9986,26 @@ fn project_work_session_source_hit_evidence_blocker(
 }
 
 fn project_work_session_source_match_term_is_generic(term: &str) -> bool {
-    matches!(term, "git" | "main" | "origin" | "status")
+    matches!(
+        term,
+        "10_projects"
+            | "app"
+            | "doc"
+            | "docs"
+            | "git"
+            | "main"
+            | "origin"
+            | "status"
+            | "system"
+            | "user"
+            | "users"
+            | "만들고"
+            | "상태"
+            | "상태를"
+            | "작업"
+            | "진행"
+            | "확인"
+    )
 }
 
 fn project_work_session_source_hit_date_blocker(
@@ -10006,6 +10023,18 @@ fn project_work_session_source_hit_date_blocker(
 
 fn project_work_session_source_trace_is_instruction_only(trace: &str) -> bool {
     let normalized = frequency_safe_prompt_text(trace);
+    if [
+        "read-only audit task",
+        "read-only sidecar",
+        "read-only sidecar qa",
+        "your task:",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
+    {
+        return true;
+    }
+
     let has_instruction_marker = [
         "do not ask user",
         "do not edit",
@@ -23160,6 +23189,68 @@ Status: completed as a source-only/report-only hardening slice.
     }
 
     #[test]
+    fn session_evidence_source_proposals_block_docs_and_korean_generic_only_hits() {
+        let candidate = session_evidence_candidate_fixture(
+            "session-evidence-oss-favorites-docs-generic-source-proposal",
+            "oss-favorites",
+            "2026-05-31: `docs/UX_STABILIZATION_120_PLAN.md`에 130개 개선 항목을 만들고 구현 상태를 추적하기 시작했다.",
+            false,
+        );
+        let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
+            generated_at: "2026-05-31T00:00:00Z".to_string(),
+            source_path: "/Users/wj/.codex/sessions/2026/06/01/rollout.jsonl".to_string(),
+            query:
+                "120개 안정화 계획 docs/UX_STABILIZATION_120_PLAN.md 만들고 상태를 추적"
+                    .to_string(),
+            query_term_count: 7,
+            requested_limit: 5,
+            requested_max_lines: 100_000,
+            scanned_line_count: 12,
+            matched_line_count: 1,
+            returned_item_count: 1,
+            items: vec![ProjectWorkSessionEvidenceSourceSearchItem {
+                id: "source-hit-docs-korean-generic".to_string(),
+                line_number: 7,
+                session_id: Some("turn-source-hit-docs-korean-generic".to_string()),
+                timestamp: Some("2026-06-01T04:50:38Z".to_string()),
+                cwd: Some("/Users/wj/Ai/System/10_Projects/oss-favorites".to_string()),
+                match_score: 3,
+                matched_terms: vec![
+                    "docs".to_string(),
+                    "만들고".to_string(),
+                    "상태를".to_string(),
+                ],
+                excerpt: "진행했습니다. 이번 autoresearch 반복에서 실제 red를 하나 잡고 고쳤습니다. 현재 상태: 커밋/푸시 완료.".to_string(),
+                word_count: 12,
+                char_count: 79,
+                risk_flags: Vec::new(),
+            }],
+            warnings: vec![
+                "Raw source search is read-only and redacted; returned snippets do not create or approve session evidence."
+                    .to_string(),
+            ],
+        };
+
+        let result = project_work_session_evidence_source_proposals_from_search(
+            Path::new("/tmp/promptvault.sqlite"),
+            &candidate,
+            source_search,
+        );
+
+        assert_eq!(result.returned_proposal_count, 1);
+        assert_eq!(result.review_ready_count, 0);
+        assert_eq!(result.blocked_count, 1);
+        let proposal = &result.proposals[0];
+        assert!(proposal.trace_validated);
+        assert!(!proposal.review_ready);
+        assert_eq!(
+            proposal.blocker_reason.as_deref(),
+            Some("source_hit_matches_only_project_or_generic_terms")
+        );
+        assert_eq!(proposal.match_score, 3);
+    }
+
+    #[test]
     fn session_evidence_source_proposals_block_far_source_dates() {
         let candidate = session_evidence_candidate_fixture(
             "session-evidence-oss-favorites-far-source-proposal",
@@ -23258,6 +23349,69 @@ Status: completed as a source-only/report-only hardening slice.
                 excerpt: "CareVault read-only sidecar QA. Workdir: /Users/wj/Ai/System/10_Projects/CareVault. Do not edit files. Do not run git writes. Inspect src/App.tsx only, focusing on user-triggered state-changing handlers. Return concise findings with handler names, UI labels if clear, and line references. Do not ask user questions.".to_string(),
                 word_count: 41,
                 char_count: 326,
+                risk_flags: Vec::new(),
+            }],
+            warnings: vec![
+                "Raw source search is read-only and redacted; returned snippets do not create or approve session evidence."
+                    .to_string(),
+            ],
+        };
+
+        let result = project_work_session_evidence_source_proposals_from_search(
+            Path::new("/tmp/promptvault.sqlite"),
+            &candidate,
+            source_search,
+        );
+
+        assert_eq!(result.returned_proposal_count, 1);
+        assert_eq!(result.review_ready_count, 0);
+        assert_eq!(result.blocked_count, 1);
+        let proposal = &result.proposals[0];
+        assert!(proposal.trace_validated);
+        assert!(!proposal.review_ready);
+        assert_eq!(
+            proposal.blocker_reason.as_deref(),
+            Some("source_trace_is_instruction_only")
+        );
+        assert_eq!(proposal.match_score, 5);
+    }
+
+    #[test]
+    fn session_evidence_source_proposals_block_read_only_audit_task_even_with_context_completion_words(
+    ) {
+        let candidate = session_evidence_candidate_fixture(
+            "session-evidence-CareVault-audit-task-source-proposal",
+            "CareVault",
+            "2026-06-03: CareVault implementation update needs reviewed session evidence.",
+            false,
+        );
+        let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
+            generated_at: "2026-06-04T00:00:00Z".to_string(),
+            source_path: "/Users/wj/.codex/sessions/2026/06/04/rollout.jsonl".to_string(),
+            query: "CareVault implementation update Correct app root".to_string(),
+            query_term_count: 5,
+            requested_limit: 5,
+            requested_max_lines: 100_000,
+            scanned_line_count: 12,
+            matched_line_count: 1,
+            returned_item_count: 1,
+            items: vec![ProjectWorkSessionEvidenceSourceSearchItem {
+                id: "source-hit-read-only-audit-task".to_string(),
+                line_number: 6,
+                session_id: Some("turn-source-hit-read-only-audit-task".to_string()),
+                timestamp: Some("2026-06-04T00:42:05Z".to_string()),
+                cwd: Some("/Users/wj/Ai/System/10_Projects/CareVault".to_string()),
+                match_score: 5,
+                matched_terms: vec![
+                    "10_projects".to_string(),
+                    "app".to_string(),
+                    "carevault".to_string(),
+                    "system".to_string(),
+                    "users".to_string(),
+                ],
+                excerpt: "Read-only audit task in /Users/wj/Ai/System/10_Projects/CareVault. The main agent has already implemented and tested backup import failure UX and broad cmux QA. Your task: inspect src/App.tsx and working.md, then return a concise checklist. Do not edit files. Do not run git writes.".to_string(),
+                word_count: 43,
+                char_count: 287,
                 risk_flags: Vec::new(),
             }],
             warnings: vec![

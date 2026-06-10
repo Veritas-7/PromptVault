@@ -634,6 +634,20 @@ test("work management overview next action prioritizes daily task management gap
   assert.ok(careVault);
   assert.equal(
     workManagementOverviewNextActionText(careVault),
+    "다음 조치 · 제목 정규화 큐 검토",
+  );
+
+  const adjacentSessionOnly = buildWorkManagementOverview({
+    statusExport: {
+      ...statusExportResult(),
+      rows: [{
+        ...statusExportResult().rows[1],
+        needs_title_normalization: false,
+      }],
+    },
+  }).rows[0];
+  assert.equal(
+    workManagementOverviewNextActionText(adjacentSessionOnly),
     "다음 조치 · 인접 날짜 세션 후보 검토 · 2026-06-09 · 1일 차이",
   );
 
@@ -650,6 +664,23 @@ test("work management overview next action prioritizes daily task management gap
   }).rows[0];
   assert.equal(
     workManagementOverviewNextActionText(titleOnly),
+    "다음 조치 · 제목 정규화 큐 검토",
+  );
+  const titleAndSession = buildWorkManagementOverview({
+    statusExport: {
+      ...statusExportResult(),
+      rows: [{
+        ...statusExportResult().rows[0],
+        needs_title_normalization: true,
+        needs_session_evidence: true,
+        session_evidence_count: 0,
+        unique_session_evidence_count: 0,
+        same_project_same_date_session_count: 2,
+      }],
+    },
+  }).rows[0];
+  assert.equal(
+    workManagementOverviewNextActionText(titleAndSession),
     "다음 조치 · 제목 정규화 큐 검토",
   );
 

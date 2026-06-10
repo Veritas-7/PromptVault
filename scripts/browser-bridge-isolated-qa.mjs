@@ -2338,6 +2338,16 @@ async function runBrowserQa() {
           && text.includes("세션매칭")
           && text.includes("세션미해결");
       }, undefined, { timeout: 120000 });
+      await page.waitForFunction(() => {
+        return [...document.querySelectorAll('[data-work-management-overview="true"] article')]
+          .some((row) => {
+            const text = row.textContent ?? "";
+            return text.includes("QAFixture")
+              && text.includes("제목 정규화 필요")
+              && text.includes("세션 근거 0건")
+              && text.includes("다음 조치 · 제목 정규화 큐 검토");
+          });
+      }, undefined, { timeout: 120000 });
     });
     await waitForEnabled(page, '[data-work-management-project-filter="true"]');
     await page.waitForFunction(() => {

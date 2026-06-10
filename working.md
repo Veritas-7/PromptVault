@@ -1,10 +1,106 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 05:04 KST
+Updated: 2026-06-11 05:16 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 05:04 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Make row-level work-management `다음 조치` prioritize title normalization when
+  a project/day row needs both title cleanup and session-evidence review, because
+  title-normalization rows are blocked from review-complete until their title
+  state is cleaned up.
+
+Current Active Work:
+
+- Previous management next-action clarification slice is complete, verified,
+  committed, and pushed as
+  `0fda160 ux: clarify long backfill next actions`.
+- Documentation correction is pushed as
+  `ce916a3 docs: record long backfill guidance completion`.
+- Fresh repo check at resume showed `main...origin/main` clean with local HEAD
+  and `origin/main` both at
+  `ce916a372907dbb2c2ec570fdd422adbfcb4cc0d`.
+- Current slice is in progress: row-level next-action ordering for rows that
+  need both title normalization and session evidence.
+
+Progress:
+
+- Confirmed goal identity still anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Memory registry had no direct PromptVault hit, so live repo state remains the
+  active source of truth.
+- Inspected `workManagementOverviewNextActionText` and tests. The current order
+  handles `needs_session_evidence` before `needs_title_normalization`, even
+  though the session-evidence review flow treats title-normalization rows as
+  blocked from review-complete.
+- Updated row-level next-action ordering so title-normalization rows show
+  `다음 조치 · 제목 정규화 큐 검토` before session-evidence review hints.
+- Preserved coverage for the adjacent-date session-candidate path by adding a
+  title-clean fixture variant.
+- Extended browser-bridge QA's unresolved status-export fixture so the
+  `QAFixture` row must show title-normalization as the next action while also
+  showing `세션 근거 0건` and `제목 정규화 필요`.
+- Verified the focused test, script syntax, diff whitespace, and isolated
+  browser-bridge QA. The browser QA passed through the `QAFixture` combined
+  title-normalization/session-evidence blocker DOM assertion.
+- Ran the full repository check and whole-tree secret scan after the browser
+  QA. Both passed.
+- Staged only the four intended paths and ran staged whitespace and secret
+  gates. Both passed.
+
+Changes:
+
+- `src/workManagementOverview.ts`: prioritizes title-normalization next action
+  before session-evidence review actions.
+- `tests/workManagementOverview.test.ts`: covers rows that need both title
+  normalization and session evidence, while retaining adjacent-date session
+  candidate coverage for title-clean rows.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies the combined
+  title-normalization/session-evidence blocker row through the DOM.
+- `working.md`: records this new slice and verification plan.
+
+Tests:
+
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts`
+  (`10` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `git diff --check`.
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check` (UI tests, TypeScript/Vite build, Rust CLI build,
+  Rust lib tests, CLI tests, doc-tests, and clippy `-D warnings`).
+- PASS: `gitleaks dir . --no-banner --redact` (`no leaks found`).
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact` (`no leaks found`).
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- This is a row-level UX correction only; it does not attach session evidence or
+  approve review-queue decisions.
+
+Next Step:
+
+- Commit and push the verified title-normalization next-action slice.
 
 ## Resume Snapshot - 2026-06-11 04:52 KST
 

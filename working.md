@@ -64,14 +64,14 @@ Current Work:
   returned `review_ready=1` now return `review_ready_count=0`,
   `blocked_count=1`, and `blocker_reason=source_trace_is_instruction_only`.
   No durable approval/apply command was run.
-- Tests run for latest slice:
+- Tests run for previous slice:
   `cargo test session_evidence_source_proposals --lib` passed with `4` tests;
   `node --disable-warning=ExperimentalWarning --experimental-transform-types
   --test tests/workSummaryStatus.test.ts` passed with `47` tests. An earlier
   direct `node --test --import tsx tests/workSummaryStatus.test.ts` command
   failed because this repo does not use `tsx`; the correct project test command
   above passed.
-- Full verification for latest slice:
+- Full verification for previous slice:
   `npm run check` passed: UI tests `523` passed, Vite/TypeScript build passed,
   `cargo build --bin promptvault-cli` passed, Rust lib tests `238` passed, CLI
   tests `35` passed, doc-tests passed, and clippy `-D warnings` passed.

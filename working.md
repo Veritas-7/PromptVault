@@ -33,10 +33,11 @@ Short-Term Goal:
 
 Current Work:
 
-- Latest verified implementation slice in this worktree: source-proposal
-  blocker states now render operator-readable Korean/actionable text in the
-  review queue UI instead of raw internal reason codes. Commit hash should be
-  refreshed after this note is committed.
+- Latest pushed implementation slice:
+  `3eb7a54 fix: label source proposal blockers`.
+- Latest verified behavior: source-proposal blocker states now render
+  operator-readable Korean/actionable text in the review queue UI instead of raw
+  internal reason codes.
 - Previous pushed implementation slice:
   `9d209c3 fix: block weak source evidence proposals`.
 - Current repo HEAD should be refreshed with `git log -5 --oneline` on resume;
@@ -388,7 +389,8 @@ Current Goal:
 
 - Make source-proposal blocker states operator-readable in the review queue UI
   without weakening the backend fail-closed source-trace gate.
-- Commit hash: pending until this note is committed.
+- Pushed implementation commit:
+  `3eb7a54 fix: label source proposal blockers`.
 
 Context:
 

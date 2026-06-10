@@ -16,6 +16,7 @@ use promptvault_lib::{
     run_project_work_session_evidence_proposals, run_project_work_session_evidence_review_apply,
     run_project_work_session_evidence_review_queue,
     run_project_work_session_evidence_review_queue_update,
+    run_project_work_session_evidence_source_audit,
     run_project_work_session_evidence_source_proposals,
     run_project_work_session_evidence_source_search, run_project_work_session_index,
     run_project_work_status_export, run_project_work_summary, run_scan, source_specs,
@@ -31,8 +32,8 @@ use promptvault_lib::{
     ProjectWorkSessionEvidenceNearbyOptions, ProjectWorkSessionEvidenceProposalsOptions,
     ProjectWorkSessionEvidenceReviewApplyOptions, ProjectWorkSessionEvidenceReviewQueueOptions,
     ProjectWorkSessionEvidenceReviewQueueUpdateOptions,
-    ProjectWorkSessionEvidenceReviewedItemsOptions, ProjectWorkSessionEvidenceSourceProposal,
-    ProjectWorkSessionEvidenceSourceProposalsOptions,
+    ProjectWorkSessionEvidenceReviewedItemsOptions, ProjectWorkSessionEvidenceSourceAuditOptions,
+    ProjectWorkSessionEvidenceSourceProposal, ProjectWorkSessionEvidenceSourceProposalsOptions,
     ProjectWorkSessionEvidenceSourceSearchOptions, ProjectWorkSessionIndexOptions,
     ProjectWorkStatusExportOptions, ProjectWorkSummaryOptions, ProjectWorkSummarySnapshotsOptions,
     PromptRecord, ScanOptions, ScanPlanOptions, ScanProgressOptions, StoredPromptFacetsOptions,
@@ -1156,6 +1157,142 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 if !proposal.matched_terms.is_empty() {
                     println!("- matched: {}", proposal.matched_terms.join(", "));
+                }
+            }
+            if !result.warnings.is_empty() {
+                println!("\nwarnings: {}", result.warnings.join("; "));
+            }
+        }
+        "work-session-evidence-source-audit" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_session_evidence_source_audit_help_text());
+                return Ok(());
+            }
+            let json = take_flag(&mut args, "--json");
+            let sync_candidates = take_flag(&mut args, "--sync-candidates");
+            let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
+            let mut limit = None;
+            let mut nearby_limit = None;
+            let mut source_limit = None;
+            let mut max_lines = None;
+            let mut session_limit = None;
+            let mut database_path = None;
+            let mut row_filter = None;
+            let mut review_state_filter = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--nearby-limit" => {
+                        nearby_limit =
+                            Some(parse_positive_usize_arg(iter.next(), "--nearby-limit")?);
+                    }
+                    "--source-limit" => {
+                        source_limit =
+                            Some(parse_positive_usize_arg(iter.next(), "--source-limit")?);
+                    }
+                    "--max-lines" => {
+                        max_lines = Some(parse_positive_usize_arg(iter.next(), "--max-lines")?);
+                    }
+                    "--session-limit" => {
+                        session_limit =
+                            Some(parse_positive_usize_arg(iter.next(), "--session-limit")?);
+                    }
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?);
+                    }
+                    "--row-filter" => {
+                        row_filter = Some(parse_required_arg(iter.next(), "--row-filter")?);
+                    }
+                    "--review-state" => {
+                        review_state_filter =
+                            Some(parse_required_arg(iter.next(), "--review-state")?);
+                    }
+                    other => {
+                        return Err(format!(
+                            "unknown work-session-evidence-source-audit argument: {other}"
+                        )
+                        .into())
+                    }
+                }
+            }
+            let result = run_project_work_session_evidence_source_audit(
+                ProjectWorkSessionEvidenceSourceAuditOptions {
+                    database_path,
+                    limit,
+                    row_filter,
+                    review_state_filter,
+                    sync_candidates: Some(sync_candidates),
+                    session_limit,
+                    refresh_session_index: Some(refresh_session_index),
+                    nearby_limit,
+                    source_limit,
+                    max_lines,
+                },
+            )?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+            println!("PromptVault session evidence source audit");
+            println!("database: {}", result.database_path);
+            println!(
+                "items: audited {} / returned {} / total {}",
+                result.audited_item_count, result.returned_item_count, result.total_items
+            );
+            println!(
+                "review_ready_rows: {} · blocked_rows: {} · no_recommended_source: {} · no_source_hits: {}",
+                result.rows_with_review_ready_count,
+                result.rows_with_blocked_proposals_count,
+                result.no_recommended_source_count,
+                result.no_source_hit_count
+            );
+            println!(
+                "proposal_counts: review_ready {} · blocked {}",
+                result.total_review_ready_count, result.total_blocked_count
+            );
+            if !result.blocker_reason_counts.is_empty() {
+                println!(
+                    "blockers: {}",
+                    result
+                        .blocker_reason_counts
+                        .iter()
+                        .map(|item| format!("{}={}", item.text, item.count))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+            for item in &result.items {
+                println!(
+                    "\n{} · {} · {} · {}",
+                    item.candidate_id, item.project, item.date, item.outcome
+                );
+                if let Some(source_path) = &item.recommended_source_path {
+                    println!("  source: {source_path}");
+                }
+                if let Some(session_id) = &item.recommended_session_id {
+                    println!("  session: {session_id}");
+                }
+                println!(
+                    "  nearby returned {} / total {} · source hits {} / matches {} · proposals ready {} blocked {}",
+                    item.nearby_returned_item_count,
+                    item.nearby_total_match_count,
+                    item.source_search_returned_item_count,
+                    item.source_search_matched_line_count,
+                    item.review_ready_count,
+                    item.blocked_count
+                );
+                if !item.blocker_reason_counts.is_empty() {
+                    println!(
+                        "  blockers: {}",
+                        item.blocker_reason_counts
+                            .iter()
+                            .map(|blocker| format!("{}={}", blocker.text, blocker.count))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
                 }
             }
             if !result.warnings.is_empty() {
@@ -3055,6 +3192,29 @@ fn work_session_evidence_source_proposals_help_text() -> String {
     .join("\n")
 }
 
+fn work_session_evidence_source_audit_help_text() -> String {
+    [
+        "PromptVault work-session-evidence-source-audit",
+        "",
+        "Usage:",
+        "  promptvault-cli work-session-evidence-source-audit [--limit N>0] [--row-filter FILTER] [--review-state pending_review|stale|approved|rejected|all] [--nearby-limit N>0] [--source-limit N>0] [--max-lines N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]",
+        "",
+        "Purpose:",
+        "  Audits persisted session-evidence review queue rows by chaining nearby session hints, bounded source search, and source proposal validation.",
+        "  Summarizes per-row outcomes and blocker/risk counts so operators can triage pending rows without probing each row manually.",
+        "",
+        "Review safety:",
+        "  This command is read-only and does not approve, reject, apply, or create session evidence.",
+        "  Weak metadata-only/project-only nearby hints are skipped as automatic recommended sources.",
+        "  Use review queue update/apply commands only after manually reviewing copied source traces.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-session-evidence-source-audit --row-filter near-session-date-hint --review-state pending_review --json",
+        "  promptvault-cli work-session-evidence-source-audit --limit 20 --nearby-limit 6 --source-limit 5 --max-lines 100000 --json",
+    ]
+    .join("\n")
+}
+
 fn work_session_evidence_reviewed_items_help_text() -> String {
     [
         "PromptVault work-session-evidence-reviewed-items",
@@ -3198,6 +3358,7 @@ fn help_text() -> String {
         "  work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--query TEXT] [--database PATH] [--json]\n",
         "  work-session-evidence-source-search --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--json]\n",
         "  work-session-evidence-source-proposals --candidate-id ID --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--database PATH] [--json]\n",
+        "  work-session-evidence-source-audit [--limit N>0] [--row-filter FILTER] [--review-state pending_review|stale|approved|rejected|all] [--nearby-limit N>0] [--source-limit N>0] [--max-lines N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]\n",
         "  work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
@@ -3235,6 +3396,7 @@ fn help_text() -> String {
         "  work-session-evidence-nearby lists same-project session records nearest a target project/date as navigation hints only; optional --query ranks nearby rows by local token overlap but does not approve or create session evidence.\n",
         "  work-session-evidence-source-search reads one known JSONL or Antigravity SQLite session source in a bounded, redacted, read-only way and returns query-matched user prompt snippets; it does not approve or create session evidence.\n",
         "  work-session-evidence-source-proposals validates copied source-search snippets for one unresolved candidate and returns review-ready manual proposals without approving or creating durable session evidence.\n",
+        "  work-session-evidence-source-audit chains review queue rows through nearby hints, bounded source search, and source proposal validation to summarize review-ready rows, blockers, and weak metadata-only rows without approving or writing decisions.\n",
         "  work-log-coverage lists parsed and unparsed project progress logs by project.\n",
         "  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n",
         "  work-ai-provider-status reports OpenAI/GLM/Codex work-management provider readiness without exposing secrets.\n",
@@ -4837,6 +4999,9 @@ mod tests {
         assert!(help.contains(
             "work-session-evidence-source-proposals --candidate-id ID --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--database PATH] [--json]"
         ));
+        assert!(help.contains(
+            "work-session-evidence-source-audit [--limit N>0] [--row-filter FILTER] [--review-state pending_review|stale|approved|rejected|all]"
+        ));
         assert!(
             help.contains(
                 "work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]"
@@ -4894,6 +5059,9 @@ mod tests {
         ));
         assert!(help.contains(
             "work-session-evidence-reviewed-items lists durable reviewed session-evidence audit rows"
+        ));
+        assert!(help.contains(
+            "work-session-evidence-source-audit chains review queue rows through nearby hints"
         ));
         assert!(help.contains("work-session-index scans real session evidence"));
         assert!(help.contains("--batch-files resumes from per-source file cursors"));
@@ -5040,6 +5208,22 @@ mod tests {
         assert!(help.contains("work-session-evidence-review-queue-update"));
         assert!(help.contains("copied source review metadata"));
         assert!(help.contains("work-session-evidence-review-apply"));
+    }
+
+    #[test]
+    fn work_session_evidence_source_audit_help_documents_batch_review_safety() {
+        let help = work_session_evidence_source_audit_help_text();
+
+        assert!(help.contains("promptvault-cli work-session-evidence-source-audit"));
+        assert!(help.contains("--row-filter FILTER"));
+        assert!(help.contains("--review-state pending_review|stale|approved|rejected|all"));
+        assert!(help.contains("nearby session hints"));
+        assert!(help.contains("blocker/risk counts"));
+        assert!(help.contains("read-only and does not approve, reject, apply"));
+        assert!(help.contains("Weak metadata-only/project-only nearby hints are skipped"));
+        assert!(
+            help.contains("work-session-evidence-source-audit --row-filter near-session-date-hint")
+        );
     }
 
     #[test]

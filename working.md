@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 22:43 KST
+Updated: 2026-06-10 22:54 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,65 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed implementation slice:
+  added a read-only batch source-audit workflow for persisted session-evidence
+  review queue rows. Operators can now audit a filtered queue page without
+  probing each row manually: review queue row -> same-project nearby session
+  hint -> bounded raw source search -> copied-trace source-proposal validation.
+- Changes:
+  `src-tauri/src/lib.rs` now exposes
+  `run_project_work_session_evidence_source_audit` and audit result structs.
+  The audit records per-row outcomes (`review_ready`, `blocked`,
+  `no_recommended_source`, `no_source_hits`, or error states), source-search
+  counts, proposal counts, blocker reason counts, and risk flag counts. The
+  backend source-audit recommender skips weak `Codex session metadata`
+  project-target hints, including cases where only the project identifier plus
+  generic terms such as `session` or `evidence` matched. `src-tauri/src/bin/promptvault-cli.rs`
+  adds `work-session-evidence-source-audit` with `--row-filter`,
+  `--review-state`, `--nearby-limit`, `--source-limit`, `--max-lines`,
+  `--sync-candidates`, and JSON output.
+- Verification:
+  added Rust coverage
+  `session_evidence_source_audit_summarizes_review_ready_and_metadata_only_rows`
+  using a real temp SQLite review queue, real persisted session index records,
+  and a real temp JSONL source file. The first run exposed that metadata-only
+  rows could still be auto-selected when generic terms matched; the helper was
+  tightened and the test now passes. Also passed
+  `cargo fmt --manifest-path src-tauri/Cargo.toml --check`,
+  `cargo test --manifest-path src-tauri/Cargo.toml
+  session_evidence_source_audit --lib`,
+  `cargo test --manifest-path src-tauri/Cargo.toml
+  session_evidence_source_search --lib` (`3` tests),
+  `cargo test --manifest-path src-tauri/Cargo.toml
+  session_evidence_source_proposals --lib` (`8` tests),
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli
+  work_session_evidence_source_audit_help_documents_batch_review_safety`,
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli
+  help_text_documents_cli_validation_rules`, and
+  `cargo build --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`.
+  Full `npm run check` passed afterward: UI tests, Vite / TypeScript build,
+  `cargo build --bin promptvault-cli`, Rust lib tests `252`, CLI tests `47`,
+  doc-tests, and clippy `-D warnings`.
+- Live default-vault verification:
+  `src-tauri/target/debug/promptvault-cli work-session-evidence-source-audit
+  --row-filter near-session-date-hint --review-state pending_review
+  --nearby-limit 6 --source-limit 5 --max-lines 100000 --json` audited the
+  real remaining `8` near-session pending rows. Result: `0` rows review-ready,
+  `3` rows blocked by proposal validation, `4` rows with no recommended source
+  after metadata-only/project-only skip, and `1` row with a recommended source
+  but no source-search hits. Aggregate blockers: `source_trace_is_instruction_only`
+  `2`, `candidate_or_source_hit_has_risk_flags` `1`.
+- Current unresolved rows:
+  `ResearchFlowAI:2026-06-08`, `autoresearch-skill-system:2026-06-06`,
+  `ResearchFlowAI:2026-06-04`, and `CareVault:2026-06-03` now land in
+  `no_recommended_source`; `CareVault:2026-06-05` lands in `no_source_hits`;
+  `enterprise_diagnosis_flutter:2026-06-08` is blocked by risk flags;
+  `oss-favorites:2026-05-31` and `pdf-a4-rebuilder:2026-05-31` are blocked as
+  instruction-only traces.
+- Next product work:
+  expose this batch source-audit summary in the UI or use it to guide explicit
+  operator decisions. Do not approve any of these `8` rows yet; the live audit
+  found no `review_ready` source trace.
 - Completed implementation slice:
   source-search results are now ranked by match quality before truncating to the
   requested limit. This fixes the earlier behavior where a source file's first

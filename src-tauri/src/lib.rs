@@ -1292,6 +1292,69 @@ pub struct ProjectWorkSessionEvidenceSourceProposalsResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSessionEvidenceSourceAuditOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub row_filter: Option<String>,
+    pub review_state_filter: Option<String>,
+    pub sync_candidates: Option<bool>,
+    pub session_limit: Option<usize>,
+    pub refresh_session_index: Option<bool>,
+    pub nearby_limit: Option<usize>,
+    pub source_limit: Option<usize>,
+    pub max_lines: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceSourceAuditItem {
+    pub candidate_id: String,
+    pub project: String,
+    pub date: String,
+    pub review_state: String,
+    pub review_reason: String,
+    pub outcome: String,
+    pub recommended_source_path: Option<String>,
+    pub recommended_session_id: Option<String>,
+    pub recommended_prompt_date: Option<String>,
+    pub recommended_match_score: Option<usize>,
+    pub nearby_total_match_count: usize,
+    pub nearby_returned_item_count: usize,
+    pub source_search_scanned_line_count: usize,
+    pub source_search_matched_line_count: usize,
+    pub source_search_returned_item_count: usize,
+    pub returned_proposal_count: usize,
+    pub review_ready_count: usize,
+    pub blocked_count: usize,
+    pub blocker_reason_counts: Vec<FrequencyItem>,
+    pub risk_flag_counts: Vec<FrequencyItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceSourceAuditResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub requested_limit: usize,
+    pub nearby_limit_used: usize,
+    pub source_limit_used: usize,
+    pub max_lines_used: usize,
+    pub total_items: usize,
+    pub returned_item_count: usize,
+    pub audited_item_count: usize,
+    pub no_recommended_source_count: usize,
+    pub no_source_hit_count: usize,
+    pub rows_with_review_ready_count: usize,
+    pub rows_with_blocked_proposals_count: usize,
+    pub total_review_ready_count: usize,
+    pub total_blocked_count: usize,
+    pub outcome_counts: Vec<FrequencyItem>,
+    pub blocker_reason_counts: Vec<FrequencyItem>,
+    pub risk_flag_counts: Vec<FrequencyItem>,
+    pub items: Vec<ProjectWorkSessionEvidenceSourceAuditItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkSessionIndexOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
@@ -3166,6 +3229,175 @@ pub fn run_project_work_session_evidence_source_proposals(
         candidate,
         source_search,
     ))
+}
+
+pub fn run_project_work_session_evidence_source_audit(
+    options: ProjectWorkSessionEvidenceSourceAuditOptions,
+) -> Result<ProjectWorkSessionEvidenceSourceAuditResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-session-evidence-source-audit limit requires a positive integer".into());
+    }
+    if matches!(options.session_limit, Some(0)) {
+        return Err(
+            "work-session-evidence-source-audit session-limit requires a positive integer".into(),
+        );
+    }
+    if matches!(options.nearby_limit, Some(0)) {
+        return Err(
+            "work-session-evidence-source-audit nearby-limit requires a positive integer".into(),
+        );
+    }
+    if matches!(options.source_limit, Some(0)) {
+        return Err(
+            "work-session-evidence-source-audit source-limit requires a positive integer".into(),
+        );
+    }
+    if matches!(options.max_lines, Some(0)) {
+        return Err(
+            "work-session-evidence-source-audit max-lines requires a positive integer".into(),
+        );
+    }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err(
+            "work-session-evidence-source-audit database path requires a non-empty value".into(),
+        );
+    }
+
+    let requested_limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT);
+    let limit = requested_limit.min(MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT);
+    let nearby_limit = options
+        .nearby_limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT)
+        .min(MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT);
+    let source_limit = options
+        .source_limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_LIMIT)
+        .min(MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_LIMIT);
+    let max_lines = options
+        .max_lines
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES)
+        .min(MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES);
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let mut warnings = Vec::new();
+    if requested_limit > MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT {
+        warnings.push(format!(
+            "work-session-evidence-source-audit limit capped at {MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT}"
+        ));
+    }
+    if options.nearby_limit.unwrap_or(nearby_limit) > MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT
+    {
+        warnings.push(format!(
+            "work-session-evidence-source-audit nearby-limit capped at {MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT}"
+        ));
+    }
+    if options.source_limit.unwrap_or(source_limit)
+        > MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_LIMIT
+    {
+        warnings.push(format!(
+            "work-session-evidence-source-audit source-limit capped at {MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_LIMIT}"
+        ));
+    }
+    if options.max_lines.unwrap_or(max_lines)
+        > MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES
+    {
+        warnings.push(format!(
+            "work-session-evidence-source-audit max-lines capped at {MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES}"
+        ));
+    }
+
+    let queue = run_project_work_session_evidence_review_queue(
+        ProjectWorkSessionEvidenceReviewQueueOptions {
+            database_path: Some(database_path.display().to_string()),
+            limit: Some(limit),
+            row_filter: options.row_filter,
+            review_state_filter: options.review_state_filter,
+            sync_candidates: options.sync_candidates,
+            session_limit: options.session_limit,
+            refresh_session_index: options.refresh_session_index,
+        },
+    )?;
+    warnings.extend(queue.warnings.iter().cloned());
+    warnings.push(
+        "Source audit is read-only; it does not approve, reject, apply, or create session evidence."
+            .to_string(),
+    );
+
+    let conn = open_promptvault_database(&database_path)?;
+    let mut items = Vec::new();
+    for row in &queue.items {
+        items.push(project_work_session_evidence_source_audit_item(
+            &database_path,
+            &conn,
+            row,
+            nearby_limit,
+            source_limit,
+            max_lines,
+        ));
+    }
+
+    let no_recommended_source_count = items
+        .iter()
+        .filter(|item| item.outcome == "no_recommended_source")
+        .count();
+    let no_source_hit_count = items
+        .iter()
+        .filter(|item| item.outcome == "no_source_hits")
+        .count();
+    let rows_with_review_ready_count = items
+        .iter()
+        .filter(|item| item.review_ready_count > 0)
+        .count();
+    let rows_with_blocked_proposals_count =
+        items.iter().filter(|item| item.blocked_count > 0).count();
+    let total_review_ready_count = items.iter().map(|item| item.review_ready_count).sum();
+    let total_blocked_count = items.iter().map(|item| item.blocked_count).sum();
+    let outcome_counts = frequency_counts(
+        items
+            .iter()
+            .map(|item| item.outcome.clone())
+            .collect::<Vec<_>>(),
+    );
+    let blocker_reason_counts = aggregate_frequency_items(
+        items
+            .iter()
+            .flat_map(|item| item.blocker_reason_counts.iter().cloned())
+            .collect::<Vec<_>>(),
+    );
+    let risk_flag_counts = aggregate_frequency_items(
+        items
+            .iter()
+            .flat_map(|item| item.risk_flag_counts.iter().cloned())
+            .collect::<Vec<_>>(),
+    );
+
+    Ok(ProjectWorkSessionEvidenceSourceAuditResult {
+        generated_at: Utc::now().to_rfc3339(),
+        database_path: database_path.display().to_string(),
+        requested_limit,
+        nearby_limit_used: nearby_limit,
+        source_limit_used: source_limit,
+        max_lines_used: max_lines,
+        total_items: queue.total_items,
+        returned_item_count: queue.returned_item_count,
+        audited_item_count: items.len(),
+        no_recommended_source_count,
+        no_source_hit_count,
+        rows_with_review_ready_count,
+        rows_with_blocked_proposals_count,
+        total_review_ready_count,
+        total_blocked_count,
+        outcome_counts,
+        blocker_reason_counts,
+        risk_flag_counts,
+        items,
+        warnings,
+    })
 }
 
 pub fn run_project_work_session_index(
@@ -10071,6 +10303,280 @@ fn project_work_session_evidence_source_proposals_from_search(
         proposals,
         warnings,
     }
+}
+
+fn project_work_session_evidence_source_audit_item(
+    database_path: &Path,
+    conn: &Connection,
+    row: &ProjectWorkSessionEvidenceReviewQueueItem,
+    nearby_limit: usize,
+    source_limit: usize,
+    max_lines: usize,
+) -> ProjectWorkSessionEvidenceSourceAuditItem {
+    let query = project_work_session_evidence_review_queue_item_source_query(row);
+    let mut warnings = Vec::new();
+    let mut recommended_source_path = None;
+    let mut recommended_session_id = None;
+    let mut recommended_prompt_date = None;
+    let mut recommended_match_score = None;
+    let mut nearby_total_match_count = 0usize;
+    let mut nearby_returned_item_count = 0usize;
+    let mut source_search_scanned_line_count = 0usize;
+    let mut source_search_matched_line_count = 0usize;
+    let mut source_search_returned_item_count = 0usize;
+    let mut returned_proposal_count = 0usize;
+    let mut review_ready_count = 0usize;
+    let mut blocked_count = 0usize;
+    let mut blocker_reason_counts = Vec::new();
+    let mut risk_flag_counts = Vec::new();
+    let mut outcome = "no_recommended_source".to_string();
+
+    match run_project_work_session_evidence_nearby(ProjectWorkSessionEvidenceNearbyOptions {
+        database_path: Some(database_path.display().to_string()),
+        project: row.project.clone(),
+        date: row.date.clone(),
+        limit: Some(nearby_limit),
+        query: Some(query.clone()),
+    }) {
+        Ok(nearby) => {
+            nearby_total_match_count = nearby.total_match_count;
+            nearby_returned_item_count = nearby.returned_item_count;
+            if let Some(recommended) =
+                recommended_project_work_session_evidence_source_audit_nearby_item(
+                    &row.project,
+                    &nearby.items,
+                )
+            {
+                recommended_source_path = Some(recommended.source_path.clone());
+                recommended_session_id = Some(recommended.session_id.clone());
+                recommended_prompt_date = Some(recommended.prompt_date.clone());
+                recommended_match_score = Some(recommended.match_score);
+
+                let source_indexed = project_work_session_source_path_indexed_for_project(
+                    conn,
+                    &row.project,
+                    &recommended.source_path,
+                )
+                .unwrap_or(false);
+                if !source_indexed {
+                    outcome = "source_not_indexed_for_project".to_string();
+                    warnings.push(
+                        "Recommended nearby source path is no longer indexed for this project."
+                            .to_string(),
+                    );
+                } else {
+                    match run_project_work_session_evidence_source_search(
+                        ProjectWorkSessionEvidenceSourceSearchOptions {
+                            source_path: recommended.source_path.clone(),
+                            query,
+                            limit: Some(source_limit),
+                            max_lines: Some(max_lines),
+                        },
+                    ) {
+                        Ok(source_search) => {
+                            source_search_scanned_line_count = source_search.scanned_line_count;
+                            source_search_matched_line_count = source_search.matched_line_count;
+                            source_search_returned_item_count = source_search.returned_item_count;
+                            if source_search.returned_item_count == 0 {
+                                outcome = "no_source_hits".to_string();
+                            } else {
+                                let candidate =
+                                    project_work_session_evidence_candidate_from_review_queue_item(
+                                        row,
+                                    );
+                                let proposals =
+                                    project_work_session_evidence_source_proposals_from_search(
+                                        database_path,
+                                        &candidate,
+                                        source_search,
+                                    );
+                                returned_proposal_count = proposals.returned_proposal_count;
+                                review_ready_count = proposals.review_ready_count;
+                                blocked_count = proposals.blocked_count;
+                                blocker_reason_counts =
+                                    project_work_session_evidence_source_audit_blocker_counts(
+                                        &proposals.proposals,
+                                    );
+                                risk_flag_counts =
+                                    project_work_session_evidence_source_audit_risk_flag_counts(
+                                        &proposals.proposals,
+                                    );
+                                outcome = if review_ready_count > 0 {
+                                    "review_ready".to_string()
+                                } else if blocked_count > 0 {
+                                    "blocked".to_string()
+                                } else {
+                                    "no_source_hits".to_string()
+                                };
+                                warnings.extend(proposals.warnings);
+                            }
+                        }
+                        Err(err) => {
+                            outcome = "source_search_error".to_string();
+                            warnings.push(format!("Source search failed: {err}"));
+                        }
+                    }
+                }
+            } else if nearby_returned_item_count > 0 {
+                warnings.push(
+                    "Only weak metadata-only/project-only nearby session hints were found."
+                        .to_string(),
+                );
+            }
+        }
+        Err(err) => {
+            outcome = "nearby_error".to_string();
+            warnings.push(format!("Nearby session lookup failed: {err}"));
+        }
+    }
+
+    ProjectWorkSessionEvidenceSourceAuditItem {
+        candidate_id: row.candidate_id.clone(),
+        project: row.project.clone(),
+        date: row.date.clone(),
+        review_state: row.review_state.clone(),
+        review_reason: row.review_reason.clone(),
+        outcome,
+        recommended_source_path,
+        recommended_session_id,
+        recommended_prompt_date,
+        recommended_match_score,
+        nearby_total_match_count,
+        nearby_returned_item_count,
+        source_search_scanned_line_count,
+        source_search_matched_line_count,
+        source_search_returned_item_count,
+        returned_proposal_count,
+        review_ready_count,
+        blocked_count,
+        blocker_reason_counts,
+        risk_flag_counts,
+        warnings,
+    }
+}
+
+fn project_work_session_evidence_review_queue_item_source_query(
+    item: &ProjectWorkSessionEvidenceReviewQueueItem,
+) -> String {
+    let mut parts = vec![item.project.clone(), item.date.clone()];
+    parts.extend(item.top_titles.iter().take(5).cloned());
+    if !item.sample_evidence.trim().is_empty() {
+        parts.push(item.sample_evidence.clone());
+    }
+    parts.join("\n")
+}
+
+fn recommended_project_work_session_evidence_source_audit_nearby_item<'a>(
+    project: &str,
+    items: &'a [ProjectWorkSessionEvidenceNearbyItem],
+) -> Option<&'a ProjectWorkSessionEvidenceNearbyItem> {
+    items.iter().find(|item| {
+        !project_work_session_evidence_nearby_item_is_weak_metadata_only(project, item)
+    })
+}
+
+fn project_work_session_evidence_nearby_item_is_weak_metadata_only(
+    project: &str,
+    item: &ProjectWorkSessionEvidenceNearbyItem,
+) -> bool {
+    let source = frequency_safe_prompt_text(&item.source);
+    let excerpt = frequency_safe_prompt_text(&item.excerpt);
+    let metadata_source = source.contains("session metadata");
+    let metadata_excerpt = excerpt.contains("session project targets")
+        || excerpt.contains("indexed session project targets");
+    let project_terms = project_work_session_project_identifier_terms(project);
+    let has_specific_evidence_match = item.matched_terms.iter().any(|term| {
+        !project_terms.contains(term.as_str())
+            && !project_work_session_evidence_nearby_metadata_term_is_generic(term)
+    });
+    let weak_match =
+        item.match_score <= 1 || item.matched_terms.len() <= 1 || !has_specific_evidence_match;
+    metadata_source && metadata_excerpt && weak_match
+}
+
+fn project_work_session_evidence_nearby_metadata_term_is_generic(term: &str) -> bool {
+    project_work_session_source_match_term_is_generic(term)
+        || matches!(
+            term,
+            "evidence"
+                | "indexed"
+                | "needs"
+                | "project"
+                | "review"
+                | "reviewed"
+                | "session"
+                | "sessions"
+                | "source"
+                | "trace"
+        )
+}
+
+fn project_work_session_evidence_candidate_from_review_queue_item(
+    item: &ProjectWorkSessionEvidenceReviewQueueItem,
+) -> ProjectWorkSessionEvidenceCandidate {
+    ProjectWorkSessionEvidenceCandidate {
+        candidate_id: item.candidate_id.clone(),
+        date: item.date.clone(),
+        project: item.project.clone(),
+        operational_status: item.operational_status.clone(),
+        source_statuses: item.source_statuses.clone(),
+        work_item_count: item.work_item_count,
+        source_file_count: item.source_file_count,
+        source_files: item.source_files.clone(),
+        source_file_roles: item.source_file_roles.clone(),
+        top_titles: item.top_titles.clone(),
+        sample_evidence: item.sample_evidence.clone(),
+        latest_source_path: item.latest_source_path.clone(),
+        latest_source_file: item.latest_source_file.clone(),
+        latest_source_role: item.latest_source_role.clone(),
+        reason: item.candidate_reason.clone(),
+        session_evidence_audit: item.session_evidence_audit.clone(),
+        needs_title_normalization: item.needs_title_normalization,
+        same_project_same_date_session_count: item.same_project_same_date_session_count,
+        same_project_other_session_dates: item.same_project_other_session_dates.clone(),
+        same_project_other_session_date_count: item.same_project_other_session_date_count,
+        nearest_same_project_other_session_date: item
+            .nearest_same_project_other_session_date
+            .clone(),
+    }
+}
+
+fn project_work_session_evidence_source_audit_blocker_counts(
+    proposals: &[ProjectWorkSessionEvidenceSourceProposal],
+) -> Vec<FrequencyItem> {
+    frequency_counts(
+        proposals
+            .iter()
+            .filter_map(|proposal| proposal.blocker_reason.clone())
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn project_work_session_evidence_source_audit_risk_flag_counts(
+    proposals: &[ProjectWorkSessionEvidenceSourceProposal],
+) -> Vec<FrequencyItem> {
+    frequency_counts(
+        proposals
+            .iter()
+            .flat_map(|proposal| proposal.risk_flags.iter().cloned())
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn frequency_counts(values: Vec<String>) -> Vec<FrequencyItem> {
+    let mut counts = HashMap::new();
+    for value in values {
+        *counts.entry(value).or_default() += 1;
+    }
+    rank_counts(counts, usize::MAX)
+}
+
+fn aggregate_frequency_items(items: Vec<FrequencyItem>) -> Vec<FrequencyItem> {
+    let mut counts = HashMap::new();
+    for item in items {
+        *counts.entry(item.text).or_default() += item.count;
+    }
+    rank_counts(counts, usize::MAX)
 }
 
 fn project_work_session_evidence_source_proposal_from_hit(
@@ -24261,6 +24767,140 @@ Status: completed as a source-only/report-only hardening slice.
             .any(|warning| warning.contains("review input only")));
 
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn session_evidence_source_audit_summarizes_review_ready_and_metadata_only_rows() {
+        let suffix = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-session-source-audit-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let source_path = std::env::temp_dir().join(format!(
+            "promptvault-session-source-audit-{}-{suffix}.jsonl",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&source_path);
+        std::fs::write(
+            &source_path,
+            [
+                r#"{"type":"turn_context","payload":{"cwd":"/Users/wj/Ai/System/10_Projects/AuditProject"}}"#,
+                r#"{"type":"response_item","timestamp":"2026-06-08T12:00:00Z","payload":{"role":"user","content":"AuditProject implemented durable batch blocker summary source trace workflow and ran cargo test."}}"#,
+                "",
+            ]
+            .join("\n"),
+        )
+        .expect("write source audit jsonl fixture");
+
+        let mut ready_prompt = project_path_session_record(
+            "source-audit-ready",
+            "AuditProject",
+            "2026-06-08T12:00:00Z",
+        );
+        ready_prompt.source = "Codex session user prompt".to_string();
+        ready_prompt.path = source_path.display().to_string();
+        ready_prompt.text =
+            "AuditProject implemented durable batch blocker summary source trace workflow."
+                .to_string();
+        ready_prompt.word_count = count_words(&ready_prompt.text);
+        ready_prompt.char_count = ready_prompt.text.chars().count();
+        ready_prompt.hash = hash_text(&ready_prompt.text);
+        ready_prompt.quality = assess_prompt_quality(&ready_prompt.text, &[]);
+        let metadata_prompt = project_path_session_record(
+            "source-audit-metadata",
+            "MetadataOnlyProject",
+            "2026-06-08T12:00:00Z",
+        );
+        persist_project_work_session_index(&db_path, &[ready_prompt, metadata_prompt])
+            .expect("persist source audit session index");
+
+        let mut ready_candidate = session_evidence_candidate_fixture(
+            "session-evidence-AuditProject-source-audit",
+            "AuditProject",
+            "2026-06-08: AuditProject durable batch blocker summary needs reviewed session evidence.",
+            false,
+        );
+        ready_candidate.date = "2026-06-08".to_string();
+        ready_candidate.top_titles = vec!["durable batch blocker summary".to_string()];
+        ready_candidate.sample_evidence =
+            "AuditProject durable batch blocker summary source trace workflow.".to_string();
+        ready_candidate.same_project_same_date_session_count = 1;
+        let mut metadata_candidate = session_evidence_candidate_fixture(
+            "session-evidence-MetadataOnlyProject-source-audit",
+            "MetadataOnlyProject",
+            "2026-06-08: MetadataOnlyProject needs reviewed session evidence.",
+            false,
+        );
+        metadata_candidate.date = "2026-06-08".to_string();
+        metadata_candidate.same_project_same_date_session_count = 1;
+        let result =
+            session_evidence_candidates_result_fixture(vec![ready_candidate, metadata_candidate]);
+        let mut conn = open_promptvault_database(&db_path).expect("open source audit db");
+        sync_project_work_session_evidence_review_queue(&mut conn, &result, "2026-06-08T13:00:00Z")
+            .expect("sync source audit queue");
+        drop(conn);
+
+        let audit = run_project_work_session_evidence_source_audit(
+            ProjectWorkSessionEvidenceSourceAuditOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(10),
+                row_filter: Some("near-session-date-hint".to_string()),
+                review_state_filter: Some("pending_review".to_string()),
+                nearby_limit: Some(5),
+                source_limit: Some(5),
+                max_lines: Some(20),
+                ..Default::default()
+            },
+        )
+        .expect("run source audit");
+
+        assert_eq!(audit.total_items, 2);
+        assert_eq!(audit.audited_item_count, 2);
+        assert_eq!(audit.rows_with_review_ready_count, 1);
+        assert_eq!(audit.no_recommended_source_count, 1);
+        assert_eq!(
+            audit
+                .outcome_counts
+                .iter()
+                .find(|item| item.text == "review_ready")
+                .map(|item| item.count),
+            Some(1)
+        );
+        assert_eq!(
+            audit
+                .outcome_counts
+                .iter()
+                .find(|item| item.text == "no_recommended_source")
+                .map(|item| item.count),
+            Some(1)
+        );
+        let ready_item = audit
+            .items
+            .iter()
+            .find(|item| item.project == "AuditProject")
+            .expect("ready audit item");
+        assert_eq!(ready_item.outcome, "review_ready");
+        assert_eq!(ready_item.review_ready_count, 1);
+        assert_eq!(ready_item.source_search_returned_item_count, 1);
+        assert_eq!(
+            ready_item.recommended_source_path.as_deref(),
+            Some(source_path.to_str().expect("utf8 source path"))
+        );
+        let metadata_item = audit
+            .items
+            .iter()
+            .find(|item| item.project == "MetadataOnlyProject")
+            .expect("metadata-only audit item");
+        assert_eq!(metadata_item.outcome, "no_recommended_source");
+        assert_eq!(metadata_item.source_search_returned_item_count, 0);
+        assert!(metadata_item
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("metadata-only/project-only")));
+
+        let _ = std::fs::remove_file(db_path);
+        let _ = std::fs::remove_file(source_path);
     }
 
     #[test]

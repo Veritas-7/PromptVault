@@ -33,14 +33,16 @@ Short-Term Goal:
 
 Current Work:
 
-- Completed local slice, commit pending:
+- Completed implementation slice:
+  `1d3af9b feat: filter session evidence queue in ui`.
+- Completed behavior:
   expose the safe read-only session-evidence review queue `row_filter` in the
   app UI so operators can choose `near-session-date-hint` or
   `stale-session-date-hint` before refreshing the persisted queue view.
 - Current implementation status:
-  implemented and fully verified locally; staging/commit/push are pending. The
-  backend/CLI/API row-filter slice is committed as `dac55ad`. This UI slice
-  passes the selected filter into
+  committed and pushed to `origin main` as `1d3af9b`. The backend/CLI/API
+  row-filter slice is committed as `dac55ad`. This UI slice passes the selected
+  filter into
   `loadProjectWorkSessionEvidenceReviewQueue` without changing
   `--sync-candidates` semantics. Changing the UI filter clears the previous
   queue result so the UI does not silently show stale rows from another queue
@@ -59,11 +61,12 @@ Current Work:
   `git diff --check` passed. Full `npm run check` passed: UI tests `523`
   passed, Vite / TypeScript build passed, `cargo build --bin promptvault-cli`
   passed, Rust lib tests `248` passed, CLI tests `46` passed, doc-tests passed,
-  and clippy `-D warnings` passed.
+  and clippy `-D warnings` passed. Staged secret scan passed with
+  `gitleaks protect --staged --no-banner` (`no leaks found`).
 - Next verification checklist:
-  stage explicit files only (`src/App.tsx`, `working.md`), run cached diff
-  checks and `gitleaks protect --staged --no-banner`, commit, push, then update
-  this log with the final commit hash.
+  commit this log-only hash update and push it, then continue with the next
+  product work: inspect the `9` near pending session-evidence rows and approve
+  only rows with copied source trace metadata.
 - Completed implementation slice:
   `dac55ad fix: filter session evidence review queue`.
 - Completed behavior:

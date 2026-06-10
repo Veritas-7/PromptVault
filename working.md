@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 03:40 KST
+Updated: 2026-06-11 03:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-11 03:40 KST
+## Resume Snapshot - 2026-06-11 03:43 KST
 
 Long-Term Goal:
 
@@ -29,9 +29,11 @@ Short-Term Goal:
 
 Current Goal:
 
-- In progress: add regression coverage and docs for `PROGRESS_LOG.md` handling
+- Completed and pushed: `71a3457 test: cover progress log ingestion artifacts`.
+- This slice added regression coverage and docs for `PROGRESS_LOG.md` handling
   in progress-log matching, coverage summaries, and source artifact role
-  classification.
+  classification. If a later docs-only handoff commit exists, use
+  `git log -1 --oneline` for the latest repository tip.
 
 Context:
 
@@ -58,6 +60,8 @@ Progress:
   producing a parsed project/day row.
 - Added source artifact role coverage so `PROGRESS_LOG.md` is classified as
   `progress-log`.
+- Committed and pushed the guardrail slice as
+  `71a3457 test: cover progress log ingestion artifacts`.
 
 Changes:
 
@@ -84,6 +88,12 @@ Tests:
 - Full `npm run check` passed: UI tests `534`, Vite / TypeScript build, Rust
   CLI build, Rust lib tests `256`, CLI tests `47`, doc-tests, and clippy
   `-D warnings`.
+- Pre-push checks for `71a3457` passed: full
+  `gitleaks dir . --no-banner --redact`, staged
+  `gitleaks protect --staged --no-banner`, explicit-path commit, push to
+  `origin/main`, clean `git status --short --branch`, and matching
+  `HEAD`/`origin/main` at
+  `71a3457708818e953d08b40a82b7f51bf6173c43`.
 
 Issues:
 
@@ -99,7 +109,10 @@ Research:
 
 Next Steps:
 
-- Run pre-push gitleaks checks, then commit/push if clean.
+- Next implementation candidate: inspect whether `work-status-export` and
+  work-management overview should surface source-role counts for
+  `progress-log` separately from handoff/work-log/project-status rows in the UI,
+  now that `PROGRESS_LOG.md` coverage is explicitly guarded.
 
 ## Resume Snapshot - 2026-06-11 03:34 KST
 

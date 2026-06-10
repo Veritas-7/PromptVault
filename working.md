@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 18:15 KST
+Updated: 2026-06-10 18:16 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,17 +34,19 @@ Short-Term Goal:
 Current Work:
 
 - Latest pushed implementation slice:
-  `3eb7a54 fix: label source proposal blockers`.
-- Latest verified local implementation slice, pending commit:
+  `7783e05 fix: block split project source matches`.
+- Latest verified behavior:
   split project-token source proposal gate. The backend now treats
   CamelCase/separator-derived project-name parts such as `repotutor` and
   `studio` as project identifier terms, so a source hit that only matches
   `RepoTutorStudio` / `RepoTutor Studio` name variants is blocked instead of
   becoming review-ready.
-- Latest verified behavior: source-proposal blocker states now render
+- Previous pushed implementation slice:
+  `3eb7a54 fix: label source proposal blockers`.
+- Previous verified behavior: source-proposal blocker states now render
   operator-readable Korean/actionable text in the review queue UI instead of raw
   internal reason codes.
-- Previous pushed implementation slice:
+- Earlier pushed implementation slice:
   `9d209c3 fix: block weak source evidence proposals`.
 - Current repo HEAD should be refreshed with `git log -5 --oneline` on resume;
   docs-only baseline commits may move after this implementation slice.
@@ -417,7 +419,7 @@ Current Goal:
 - Prevent source proposals from becoming review-ready when the only source-hit
   matches are project-name variants split from CamelCase or separator names.
 - Pushed implementation commit:
-  pending.
+  `7783e05 fix: block split project source matches`.
 
 Context:
 
@@ -476,9 +478,8 @@ Issues:
 
 Next Steps:
 
-- Commit this backend gate and this `working.md` update, then continue the
-  remaining `26` pending review rows with copied source traces that include
-  non-project evidence terms or stronger source-line proof.
+- Continue the remaining `26` pending review rows with copied source traces that
+  include non-project evidence terms or stronger source-line proof.
 
 ## Completed Slice - 2026-06-10 Source proposal blocker UI labels
 

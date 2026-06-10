@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 12:22 KST
+Updated: 2026-06-10 12:27 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,18 +33,22 @@ Short-Term Goal:
 
 Current Work:
 
-- Current uncommitted slice: long Codex session daily metadata evidence.
-- The previous body-derived progress-log title cleanup slice was committed and
+- Latest completed and pushed slice:
+  `3f4185e fix: index codex session evidence by activity date`.
+- The earlier body-derived progress-log title cleanup slice was completed and
   pushed as `c392add fix: clear rough worklog title normalization debt`.
-- This slice expands Codex/Codex CX session metadata evidence from one
-  latest-activity record per session into one source-traced record per KST
-  activity date. This preserves source trace while letting multi-day Codex
-  threads support project/day worklog rows on their actual work dates.
-- Targeted metadata/session-evidence tests passed. Actual default-vault
-  reindex increased stored session evidence from `10,599` to `11,417` rows and
-  dropped unresolved session-evidence candidates from `44` to `31`. Remaining
-  before handoff is diff/secret checks, explicit-path staging, commit, push,
-  and status confirmation.
+- Actual default-vault verification after `3f4185e`: stored sanitized session
+  evidence increased from `10,599` to `11,417`; unresolved session-evidence
+  candidates dropped from `44` to `31`; title-normalization rows remain `0`.
+- Current next implementation slice: investigate the remaining `31`
+  session-evidence candidates and close the source-coverage gap where the full
+  persistent session index currently contains Codex/Codex CX metadata evidence
+  but not yet durable Claude Code or Antigravity session evidence.
+- The next change should stay source-traced and reviewable. Do not infer
+  cross-date or cross-project evidence unless the target session artifact proves
+  it. If durable non-Codex indexing is too broad for the next slice, add an
+  operator-visible diagnostic that clearly states which session sources are
+  fully indexed and which are still raw-fallback/proposal-only.
 
 Management Coverage Status:
 
@@ -57,7 +61,72 @@ Management Coverage Status:
   related progress artifacts, but the remaining unresolved review queues mean the
   whole management system is not yet complete.
 
-## Current Slice - 2026-06-10 Long Codex session daily metadata evidence
+## Current Slice - 2026-06-10 Session-source coverage gap
+
+Current Goal:
+
+- Reduce or clearly explain the remaining `31` session-evidence candidates by
+  checking whether their proof lives in non-Codex session sources such as Claude
+  Code or Antigravity logs.
+
+Context:
+
+- The latest full session index is clean and complete for Codex/Codex CX
+  metadata, but SQLite currently reports persisted session evidence under
+  `Codex session metadata` only.
+- Code constants list additional session source IDs:
+  `claude-code-projects`, `claude-code-history`, and
+  `antigravity-cli-history`, but the checkpointed full-index path currently
+  filters to Codex/Codex CX metadata source IDs.
+- Remaining candidates include recent rows for `LocalMind`, `ResearchFlowAI`,
+  `oss-favorites`, and `RepoTutorStudio`, plus older rows across several other
+  projects.
+
+Progress:
+
+- Verified thread identity still points to PromptVault at
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified working tree was clean after commit `3f4185e`.
+- Started inspecting candidate distribution and source coverage. The broad
+  manual search across local session directories was noisy and should not be
+  treated as implementation proof.
+
+Changes:
+
+- `working.md`: refreshed the handoff state so the latest completed slice is no
+  longer mislabeled as uncommitted work, and the next source-coverage target is
+  visible at the top of the file.
+
+Tests:
+
+- PASS: goal identity guard via
+  `codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`.
+- PASS: `git status --short --branch` showed `## main...origin/main` before
+  this documentation refresh.
+
+Issues:
+
+- The next implementation must avoid storing raw sensitive prompt content.
+  Persisted evidence should remain sanitized project/date/session metadata and
+  source references only.
+- Need focused source-specific tests before expanding checkpointed indexing to
+  any non-Codex source.
+
+Research:
+
+- No external research used for this handoff refresh.
+
+Next Steps:
+
+- Inspect existing source scanner and sanitization flow for Claude Code and
+  Antigravity session artifacts.
+- Add a small failing regression test that proves a non-Codex source can support
+  a project/day row without persisting prompt body text.
+- Implement the narrowest durable indexing or diagnostic improvement, then run
+  targeted Rust tests, full `npm run check`, isolated browser-bridge QA, diff
+  checks, and secret scans before commit/push.
+
+## Completed Slice - 2026-06-10 Long Codex session daily metadata evidence
 
 Current Goal:
 
@@ -145,8 +214,10 @@ Research:
 
 Next Steps:
 
-- Run diff/secret checks, stage only `src-tauri/src/lib.rs` and `working.md`,
-  then commit and push if all gates pass.
+- Completed as commit
+  `3f4185e fix: index codex session evidence by activity date`, pushed to
+  `origin/main`. Continue with the session-source coverage gap described in the
+  current slice above.
 
 ## Completed Slice - 2026-06-10 Body-derived progress-log title cleanup
 

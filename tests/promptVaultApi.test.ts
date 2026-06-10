@@ -1558,6 +1558,7 @@ test("browser bridge work session evidence review queue posts sync options and v
   const result = await loadProjectWorkSessionEvidenceReviewQueue({
     limit: 10,
     row_filter: "near-session-date-hint",
+    review_state_filter: "pending_review",
     session_limit: 500,
     sync_candidates: true,
     refresh_session_index: true,
@@ -1568,6 +1569,7 @@ test("browser bridge work session evidence review queue posts sync options and v
     options: {
       limit: 10,
       row_filter: "near-session-date-hint",
+      review_state_filter: "pending_review",
       session_limit: 500,
       sync_candidates: true,
       refresh_session_index: true,

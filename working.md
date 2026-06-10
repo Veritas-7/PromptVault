@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 21:49 KST
+Updated: 2026-06-10 22:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,43 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed implementation slice:
+  session-evidence review queue now supports a separate operator decision-state
+  server filter. `--row-filter` still narrows by project/day evidence shape;
+  the new `--review-state pending_review|stale|approved|rejected|all` narrows
+  the persisted queue by review state without changing sync behavior.
+- Changes:
+  added `review_state_filter` to the Rust review-queue options and browser API
+  request type, added CLI `--review-state`, added a UI `검토 상태` select for
+  the session-evidence review queue, and kept the default UI state as `전체
+  상태` so approved rows remain visible for apply workflows unless the operator
+  explicitly chooses `검토 대기`.
+- Live default-vault verification:
+  `work-session-evidence-review-queue --row-filter near-session-date-hint
+  --review-state pending_review --json` returns `8` total/returned rows, all
+  with `review_state=pending_review`, and excludes the already approved
+  `RepoTutorStudio` row. The same command with `--review-state approved`
+  returns `1` row, `RepoTutorStudio:2026-06-10`.
+- Browser verification:
+  headless Playwright against local Vite `127.0.0.1:5182` with mocked bridge
+  selected `인접 세션 후보` plus `검토 대기` and clicked the queue action. The
+  actual POST body contained `row_filter: "near-session-date-hint"`,
+  `review_state_filter: "pending_review"`, and `sync_candidates: true`; console
+  errors and page errors were empty. The temporary Vite server was stopped and
+  port `5182` had no remaining listener.
+- Verification:
+  focused frontend tests passed with `261` tests; `npm run build` passed;
+  focused Rust `cargo test session_evidence_review_queue --lib` passed with `4`
+  tests. Full `npm run check` passed: UI tests `524` passed, Vite / TypeScript
+  build passed, `cargo build --bin promptvault-cli` passed, Rust lib tests
+  `250` passed, CLI tests `46` passed, doc-tests passed, and clippy
+  `-D warnings` passed.
+- Next product work:
+  use the new focused command
+  `work-session-evidence-review-queue --row-filter near-session-date-hint
+  --review-state pending_review --json` as the default operator starting point
+  for the remaining `8` near-session pending rows, then improve source
+  selection/search or reject unsafe rows.
 - Completed implementation slice:
   work status export now surfaces durable reviewed session-evidence audit rows
   for project/date rows. This is an audit hint, not a synthetic session match:

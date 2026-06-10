@@ -1027,6 +1027,7 @@ pub struct ProjectWorkSessionEvidenceReviewQueueOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
     pub row_filter: Option<String>,
+    pub review_state_filter: Option<String>,
     pub sync_candidates: Option<bool>,
     pub session_limit: Option<usize>,
     pub refresh_session_index: Option<bool>,
@@ -2666,6 +2667,10 @@ pub fn run_project_work_session_evidence_review_queue(
         options.row_filter.as_deref(),
         "work-session-evidence-review-queue",
     )?;
+    let review_state_filter = normalize_project_work_session_evidence_review_state_filter(
+        options.review_state_filter.as_deref(),
+        "work-session-evidence-review-queue",
+    )?;
 
     let generated_at = Utc::now().to_rfc3339();
     let database_path = options
@@ -2705,7 +2710,12 @@ pub fn run_project_work_session_evidence_review_queue(
         warnings.extend(candidates.warnings);
     }
 
-    let rows = read_project_work_session_evidence_review_queue(&conn, limit, row_filter)?;
+    let rows = read_project_work_session_evidence_review_queue(
+        &conn,
+        limit,
+        row_filter,
+        review_state_filter,
+    )?;
     Ok(ProjectWorkSessionEvidenceReviewQueueResult {
         generated_at,
         database_path: database_path.display().to_string(),
@@ -2767,7 +2777,7 @@ pub fn run_project_work_session_evidence_review_queue_update(
         options.source_review.as_ref(),
         &generated_at,
     )?;
-    let rows = read_project_work_session_evidence_review_queue(&conn, limit, None)?;
+    let rows = read_project_work_session_evidence_review_queue(&conn, limit, None, None)?;
     Ok(ProjectWorkSessionEvidenceReviewQueueResult {
         generated_at,
         database_path: database_path.display().to_string(),
@@ -11698,6 +11708,7 @@ fn read_project_work_session_evidence_review_queue(
     conn: &Connection,
     limit: usize,
     row_filter: Option<&str>,
+    review_state_filter: Option<&str>,
 ) -> Result<ProjectWorkSessionEvidenceReviewQueueRows, Box<dyn std::error::Error>> {
     let mut stmt = conn.prepare(
         "SELECT candidate_id, first_seen_at, last_seen_at, review_state, review_reason,
@@ -11775,6 +11786,12 @@ fn read_project_work_session_evidence_review_queue(
             )?,
         };
         if !project_work_session_evidence_review_queue_item_matches_filter(&item, row_filter) {
+            continue;
+        }
+        if !project_work_session_evidence_review_queue_item_matches_review_state_filter(
+            &item,
+            review_state_filter,
+        ) {
             continue;
         }
         total_items += 1;
@@ -12124,6 +12141,23 @@ fn normalize_project_work_row_filter<'a>(
     }
 }
 
+fn normalize_project_work_session_evidence_review_state_filter<'a>(
+    review_state_filter: Option<&'a str>,
+    command: &str,
+) -> Result<Option<&'a str>, Box<dyn std::error::Error>> {
+    let Some(review_state_filter) = review_state_filter
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    match review_state_filter {
+        "all" => Ok(None),
+        "pending_review" | "stale" | "approved" | "rejected" => Ok(Some(review_state_filter)),
+        _ => Err(format!("{command} unknown review_state_filter: {review_state_filter}").into()),
+    }
+}
+
 fn filter_project_work_status_export_rows(
     rows: Vec<ProjectWorkStatusExportRow>,
     row_filter: Option<&str>,
@@ -12271,6 +12305,16 @@ fn project_work_session_evidence_review_queue_item_matches_filter(
         }
         _ => false,
     }
+}
+
+fn project_work_session_evidence_review_queue_item_matches_review_state_filter(
+    item: &ProjectWorkSessionEvidenceReviewQueueItem,
+    review_state_filter: Option<&str>,
+) -> bool {
+    let Some(review_state_filter) = review_state_filter else {
+        return true;
+    };
+    item.review_state == review_state_filter
 }
 
 fn project_work_session_evidence_review_queue_item_has_near_session_date_hint(
@@ -24337,6 +24381,7 @@ Status: completed as a source-only/report-only hardening slice.
             &conn,
             1,
             Some("near-session-date-hint"),
+            None,
         )
         .expect("read near rows");
         assert_eq!(near_rows.total_items, 2);
@@ -24348,10 +24393,44 @@ Status: completed as a source-only/report-only hardening slice.
             )
         );
 
+        update_project_work_session_evidence_review_queue_state(
+            &conn,
+            "session-evidence-SameDateQueue-a1b2c3d4e5",
+            "approved",
+            "operator_approved_session_evidence_review",
+            None,
+            "2026-06-09T00:05:00Z",
+        )
+        .expect("approve same-date queue row");
+        let pending_near_rows = read_project_work_session_evidence_review_queue(
+            &conn,
+            10,
+            Some("near-session-date-hint"),
+            Some("pending_review"),
+        )
+        .expect("read pending near rows");
+        assert_eq!(pending_near_rows.total_items, 1);
+        assert_eq!(pending_near_rows.pending_review_count, 1);
+        assert_eq!(pending_near_rows.approved_count, 0);
+        assert_eq!(pending_near_rows.items[0].project, "NearQueue");
+
+        let approved_near_rows = read_project_work_session_evidence_review_queue(
+            &conn,
+            10,
+            Some("near-session-date-hint"),
+            Some("approved"),
+        )
+        .expect("read approved near rows");
+        assert_eq!(approved_near_rows.total_items, 1);
+        assert_eq!(approved_near_rows.pending_review_count, 0);
+        assert_eq!(approved_near_rows.approved_count, 1);
+        assert_eq!(approved_near_rows.items[0].project, "SameDateQueue");
+
         let stale_rows = read_project_work_session_evidence_review_queue(
             &conn,
             10,
             Some("stale-session-date-hint"),
+            None,
         )
         .expect("read stale hint rows");
         assert_eq!(stale_rows.total_items, 1);
@@ -24361,6 +24440,7 @@ Status: completed as a source-only/report-only hardening slice.
             &conn,
             10,
             Some("needs-title-normalization"),
+            None,
         )
         .expect("read title rows");
         assert_eq!(title_rows.total_items, 1);
@@ -24383,6 +24463,21 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(error
             .to_string()
             .contains("work-session-evidence-review-queue unknown row_filter: not-a-filter"));
+    }
+
+    #[test]
+    fn session_evidence_review_queue_rejects_unknown_review_state_filter_before_scan() {
+        let error = run_project_work_session_evidence_review_queue(
+            ProjectWorkSessionEvidenceReviewQueueOptions {
+                review_state_filter: Some("done".to_string()),
+                ..Default::default()
+            },
+        )
+        .expect_err("unknown review state filter should fail before scanning");
+
+        assert!(error
+            .to_string()
+            .contains("work-session-evidence-review-queue unknown review_state_filter: done"));
     }
 
     #[test]
@@ -27168,8 +27263,8 @@ Status: completed as a source-only/report-only hardening slice.
         )
         .expect("sync session evidence queue");
         assert_eq!(stale_count, 0);
-        let rows =
-            read_project_work_session_evidence_review_queue(&conn, 10, None).expect("read queue");
+        let rows = read_project_work_session_evidence_review_queue(&conn, 10, None, None)
+            .expect("read queue");
         assert_eq!(rows.total_items, 3);
         assert_eq!(rows.pending_review_count, 3);
         assert_eq!(rows.needs_title_normalization_count, 1);
@@ -27227,7 +27322,7 @@ Status: completed as a source-only/report-only hardening slice.
             "2026-06-09T00:30:00Z",
         )
         .expect("approve session evidence row");
-        let rows = read_project_work_session_evidence_review_queue(&conn, 10, None)
+        let rows = read_project_work_session_evidence_review_queue(&conn, 10, None, None)
             .expect("read approved");
         assert_eq!(rows.pending_review_count, 2);
         assert_eq!(rows.approved_count, 1);
@@ -27252,8 +27347,8 @@ Status: completed as a source-only/report-only hardening slice.
         )
         .expect("sync queue again");
         assert_eq!(stale_count, 2);
-        let rows =
-            read_project_work_session_evidence_review_queue(&conn, 10, None).expect("read stale");
+        let rows = read_project_work_session_evidence_review_queue(&conn, 10, None, None)
+            .expect("read stale");
         assert_eq!(rows.pending_review_count, 0);
         assert_eq!(rows.stale_count, 2);
         assert_eq!(rows.approved_count, 1);
@@ -27296,7 +27391,7 @@ Status: completed as a source-only/report-only hardening slice.
             "2026-06-09T01:30:00Z",
         )
         .expect("reject stale row");
-        let rows = read_project_work_session_evidence_review_queue(&conn, 10, None)
+        let rows = read_project_work_session_evidence_review_queue(&conn, 10, None, None)
             .expect("read rejected");
         assert_eq!(rows.stale_count, 1);
         assert_eq!(rows.rejected_count, 1);

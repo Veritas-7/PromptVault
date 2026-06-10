@@ -747,6 +747,11 @@ const WORK_REVIEW_QUEUE_STATE_FILTER_OPTIONS: Array<{
   { label: "거절", value: "rejected" },
 ];
 
+function workReviewQueueStateFilterLabel(filter: WorkReviewQueueStateFilter): string {
+  return WORK_REVIEW_QUEUE_STATE_FILTER_OPTIONS.find((option) => option.value === filter)?.label
+    ?? filter;
+}
+
 const WORK_LOG_REVIEW_QUEUE_STATE_FILTER_OPTIONS: Array<{
   label: string;
   value: WorkReviewQueueStateFilter;
@@ -971,6 +976,10 @@ function App() {
     workSessionEvidenceReviewQueueRowFilter,
     setWorkSessionEvidenceReviewQueueRowFilter,
   ] = useState<WorkStatusExportRowFilter>("all");
+  const [
+    workSessionEvidenceReviewQueueReviewStateFilter,
+    setWorkSessionEvidenceReviewQueueReviewStateFilter,
+  ] = useState<WorkReviewQueueStateFilter>("");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [resultOrigin, setResultOrigin] = useState<PromptResultOrigin | null>(null);
   const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
@@ -1527,6 +1536,12 @@ function App() {
       : `세션근거 큐 조회 범위 · ${workStatusExportRowFilterLabel(
           workSessionEvidenceReviewQueueRowFilter,
         )}`;
+  const workSessionEvidenceReviewQueueReviewStateFilterMeta =
+    workSessionEvidenceReviewQueueReviewStateFilter
+      ? `세션근거 큐 검토상태 · ${workReviewQueueStateFilterLabel(
+          workSessionEvidenceReviewQueueReviewStateFilter,
+        )}`
+      : null;
   const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
   const filteredWorkStatusExportRows = useMemo(() => {
     return filterWorkStatusExportRows(workStatusExportResult?.rows ?? [], workStatusExportRowFilter);
@@ -1955,6 +1970,9 @@ function App() {
       ...(workSessionEvidenceReviewQueueRowFilter === "all"
         ? {}
         : { row_filter: workSessionEvidenceReviewQueueRowFilter }),
+      ...(workSessionEvidenceReviewQueueReviewStateFilter
+        ? { review_state_filter: workSessionEvidenceReviewQueueReviewStateFilter }
+        : {}),
       ...(syncCandidates ? { sync_candidates: true } : {}),
     };
   }
@@ -4086,6 +4104,28 @@ function App() {
                 ))}
               </select>
             </label>
+            <label className="local-recommendation-toggle">
+              <span>검토 상태</span>
+              <select
+                aria-label="세션 근거 검토 큐 서버 검토 상태 필터"
+                data-work-session-evidence-review-queue-review-state-filter="true"
+                disabled={isTopLevelActionLocked}
+                onChange={(event) => {
+                  setWorkSessionEvidenceReviewQueueReviewStateFilter(
+                    event.target.value as WorkReviewQueueStateFilter,
+                  );
+                  setWorkSessionEvidenceReviewQueueResult(null);
+                  setWorkSessionEvidenceReviewQueueState("idle");
+                }}
+                value={workSessionEvidenceReviewQueueReviewStateFilter}
+              >
+                {WORK_REVIEW_QUEUE_STATE_FILTER_OPTIONS.map((filter) => (
+                  <option key={filter.value || "all"} value={filter.value}>
+                    {filter.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               aria-label={workSessionEvidenceReviewQueueActionLabel(
                 workSessionEvidenceReviewQueueState,
@@ -5722,6 +5762,15 @@ function App() {
           >
             <Search size={15} />
             <span>{workSessionEvidenceReviewQueueRowFilterMeta}</span>
+          </div>
+        ) : null}
+        {workSessionEvidenceReviewQueueReviewStateFilterMeta ? (
+          <div
+            className="work-summary-index"
+            data-work-session-evidence-review-queue-review-state-filter-meta="true"
+          >
+            <Search size={15} />
+            <span>{workSessionEvidenceReviewQueueReviewStateFilterMeta}</span>
           </div>
         ) : null}
         {workManagementReviewDecisions ? (

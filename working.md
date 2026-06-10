@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 18:02 KST
+Updated: 2026-06-10 18:15 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -35,6 +35,12 @@ Current Work:
 
 - Latest pushed implementation slice:
   `3eb7a54 fix: label source proposal blockers`.
+- Latest verified local implementation slice, pending commit:
+  split project-token source proposal gate. The backend now treats
+  CamelCase/separator-derived project-name parts such as `repotutor` and
+  `studio` as project identifier terms, so a source hit that only matches
+  `RepoTutorStudio` / `RepoTutor Studio` name variants is blocked instead of
+  becoming review-ready.
 - Latest verified behavior: source-proposal blocker states now render
   operator-readable Korean/actionable text in the review queue UI instead of raw
   internal reason codes.
@@ -335,6 +341,27 @@ Current Work:
   assumption: that filter may legitimately return zero rows, so the script now
   verifies either zero rows or rows all marked `세션 근거 필요`. Ports `5174` and
   `5177` had no remaining listeners after QA cleanup.
+- Current split project-token gate proof:
+  The stricter project-identifier gate was extended after default-vault probing
+  showed the same weak `RepoTutorStudio` source hit could become review-ready if
+  the query included both `RepoTutorStudio` and spaced title text
+  `RepoTutor Studio`. That source hit matched only project-name variants:
+  `["repotutor", "repotutorstudio", "studio"]`, while the copied trace was still
+  the unrelated prompt `Analyze local/simple-ts-app for beginner learning.
+  Source files are already filtered for secrets.` After rebuilding
+  `promptvault-cli`, the same command returned `review_ready_count=0`,
+  `blocked_count=1`, and blocker `source_hit_matches_only_project_identifier`.
+  Verification passed: `cargo fmt --check --manifest-path src-tauri/Cargo.toml`;
+  `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_source_proposals_block_project_identifier_only_hits`;
+  `cargo build --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`;
+  `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_source_proposals`;
+  default-vault CLI repro proof; `npm run check` with Rust library tests
+  (`237` passed), CLI tests (`35` passed), doc tests, and clippy with
+  `-D warnings`; and
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` against
+  isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-C431v3/qa.sqlite`.
+  Ports `5174` and `5177` had no remaining listeners after QA cleanup.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is continuing unresolved project/day session-evidence review and
@@ -379,9 +406,79 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-review-queue --limit 20 --sync-candidates --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --query "RepoTutorStudio 2026-06-10" --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-search --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
-- `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
+- `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10 Resume Snapshot RepoTutor Studio must help a vibe-coding learner provide a GitHub repository" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Split project-token source gate
+
+Current Goal:
+
+- Prevent source proposals from becoming review-ready when the only source-hit
+  matches are project-name variants split from CamelCase or separator names.
+- Pushed implementation commit:
+  pending.
+
+Context:
+
+- The previous weak source-hit gate blocked a `RepoTutorStudio` proposal when
+  the only matched term was the contiguous project identifier
+  `repotutorstudio`.
+- A default-vault repro showed a bypass: when the query included spaced title
+  text such as `RepoTutor Studio`, the same unrelated source trace matched
+  `["repotutor", "repotutorstudio", "studio"]` and became review-ready.
+- Those split tokens are still only project identity, not evidence that the
+  source line proves the target project/day work item.
+
+Progress:
+
+- Expanded project identifier term generation to include original safe tokens,
+  CamelCase/separator-derived boundary parts, and contiguous combinations of
+  those parts.
+- Updated the Rust regression so `RepoTutorStudio` project terms include
+  `repotutorstudio`, `repotutor`, and `studio`.
+- Verified the default-vault `RepoTutorStudio` repro now blocks the previously
+  review-ready spaced-project-name source hit.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added project identifier boundary splitting helpers
+  and hardened the source-proposal project-identifier-only regression.
+- `working.md`: records the resume context, exact repro, verification commands,
+  QA cleanup, and remaining queue status.
+
+Tests:
+
+- PASS: `cargo fmt --check --manifest-path src-tauri/Cargo.toml`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_source_proposals_block_project_identifier_only_hits`.
+- PASS: `cargo build --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_source_proposals`
+  (`3` matching tests passed).
+- PASS: default-vault CLI repro for
+  `session-evidence-RepoTutorStudio-072eff316b` returned
+  `review_ready_count=0`, `blocked_count=1`, blocker
+  `source_hit_matches_only_project_identifier`, and matched terms
+  `["repotutor", "repotutorstudio", "studio"]`.
+- PASS: `npm run check`. This covered UI/API tests, production build,
+  `cargo build --bin promptvault-cli`, Rust library tests (`237` passed), CLI
+  tests (`35` passed), doc tests, and clippy with `-D warnings`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-C431v3/qa.sqlite`.
+- PASS: `lsof -nP -iTCP:5174 -sTCP:LISTEN` and
+  `lsof -nP -iTCP:5177 -sTCP:LISTEN` returned no listeners after QA cleanup.
+
+Issues:
+
+- This is a safety gate, not a queue reducer. Default-vault review state remains
+  `48` stored review rows, `26` pending review rows, `22` stale rows, and `26`
+  synced candidates.
+
+Next Steps:
+
+- Commit this backend gate and this `working.md` update, then continue the
+  remaining `26` pending review rows with copied source traces that include
+  non-project evidence terms or stronger source-line proof.
 
 ## Completed Slice - 2026-06-10 Source proposal blocker UI labels
 

@@ -9961,20 +9961,71 @@ fn project_work_session_source_hit_has_evidence_match(
 
 fn project_work_session_project_identifier_terms(project: &str) -> HashSet<String> {
     let stop = stop_words();
-    word_regex()
-        .find_iter(&frequency_safe_prompt_text(project))
+    let mut terms = HashSet::new();
+
+    for mat in word_regex().find_iter(&frequency_safe_prompt_text(project)) {
+        project_work_session_insert_project_identifier_term(&mut terms, &stop, mat.as_str());
+    }
+
+    let boundary_text = project_work_session_project_identifier_boundary_text(project);
+    let parts = word_regex()
+        .find_iter(&frequency_safe_prompt_text(&boundary_text))
         .filter_map(|mat| {
-            let token = mat
-                .as_str()
-                .trim_matches(|ch: char| ch == '_' || ch == '-')
-                .to_string();
-            if token.chars().count() < 3 || stop.contains(token.as_str()) {
+            let token = mat.as_str().trim_matches(|ch: char| ch == '_' || ch == '-');
+            if token.chars().count() < 3 || stop.contains(token) {
                 None
             } else {
-                Some(token)
+                Some(token.to_string())
             }
         })
-        .collect()
+        .collect::<Vec<_>>();
+
+    for start in 0..parts.len() {
+        let mut combined = String::new();
+        for part in parts.iter().skip(start) {
+            combined.push_str(part);
+            project_work_session_insert_project_identifier_term(&mut terms, &stop, &combined);
+        }
+    }
+
+    terms
+}
+
+fn project_work_session_insert_project_identifier_term(
+    terms: &mut HashSet<String>,
+    stop: &HashSet<&'static str>,
+    term: &str,
+) {
+    let token = term
+        .trim_matches(|ch: char| ch == '_' || ch == '-')
+        .to_string();
+    if token.chars().count() >= 3 && !stop.contains(token.as_str()) {
+        terms.insert(token);
+    }
+}
+
+fn project_work_session_project_identifier_boundary_text(project: &str) -> String {
+    let mut text = String::new();
+    let mut previous: Option<char> = None;
+    for ch in project.chars() {
+        if ch == '_' || ch == '-' || ch.is_whitespace() {
+            text.push(' ');
+            previous = Some(' ');
+            continue;
+        }
+        if let Some(prev) = previous {
+            if project_work_session_project_identifier_needs_boundary(prev, ch) {
+                text.push(' ');
+            }
+        }
+        text.push(ch);
+        previous = Some(ch);
+    }
+    text
+}
+
+fn project_work_session_project_identifier_needs_boundary(previous: char, current: char) -> bool {
+    (previous.is_ascii_lowercase() || previous.is_ascii_digit()) && current.is_ascii_uppercase()
 }
 
 fn project_work_session_project_like_pattern(project: &str) -> String {
@@ -22885,6 +22936,11 @@ Status: completed as a source-only/report-only hardening slice.
 
     #[test]
     fn session_evidence_source_proposals_block_project_identifier_only_hits() {
+        let project_terms = project_work_session_project_identifier_terms("RepoTutorStudio");
+        assert!(project_terms.contains("repotutorstudio"));
+        assert!(project_terms.contains("repotutor"));
+        assert!(project_terms.contains("studio"));
+
         let candidate = session_evidence_candidate_fixture(
             "session-evidence-RepoTutorStudio-source-proposal",
             "RepoTutorStudio",
@@ -22894,8 +22950,8 @@ Status: completed as a source-only/report-only hardening slice.
         let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
             generated_at: "2026-06-10T00:00:00Z".to_string(),
             source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl".to_string(),
-            query: "RepoTutorStudio 2026-06-10 Resume Snapshot".to_string(),
-            query_term_count: 3,
+            query: "RepoTutorStudio 2026-06-10 Resume Snapshot RepoTutor Studio".to_string(),
+            query_term_count: 6,
             requested_limit: 5,
             requested_max_lines: 100_000,
             scanned_line_count: 12,
@@ -22907,8 +22963,12 @@ Status: completed as a source-only/report-only hardening slice.
                 session_id: Some("turn-source-hit-project-only".to_string()),
                 timestamp: Some("2026-06-09T12:00:00Z".to_string()),
                 cwd: Some("/Users/wj/Ai/System/10_Projects/RepoTutorStudio".to_string()),
-                match_score: 1,
-                matched_terms: vec!["repotutorstudio".to_string()],
+                match_score: 3,
+                matched_terms: vec![
+                    "repotutor".to_string(),
+                    "repotutorstudio".to_string(),
+                    "studio".to_string(),
+                ],
                 excerpt:
                     "Analyze local/simple-ts-app for beginner learning. Source files are already filtered for secrets."
                         .to_string(),
@@ -22938,8 +22998,15 @@ Status: completed as a source-only/report-only hardening slice.
             proposal.blocker_reason.as_deref(),
             Some("source_hit_matches_only_project_identifier")
         );
-        assert_eq!(proposal.match_score, 1);
-        assert_eq!(proposal.matched_terms, vec!["repotutorstudio".to_string()]);
+        assert_eq!(proposal.match_score, 3);
+        assert_eq!(
+            proposal.matched_terms,
+            vec![
+                "repotutor".to_string(),
+                "repotutorstudio".to_string(),
+                "studio".to_string(),
+            ]
+        );
     }
 
     #[test]

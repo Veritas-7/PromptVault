@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 22:07 KST
+Updated: 2026-06-10 22:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,43 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed implementation slice:
+  source-proposal review panels now summarize blocker distribution directly in
+  the UI. The panel still shows review-ready/blocked counts and `matched lines`,
+  but it also groups visible blocked proposals by blocker reason, for example
+  `차단 사유 프로젝트명/범용어만 일치 1건`, and shows how many proposals carry
+  risk flags. This is display-only and does not change approval, rejection, or
+  durable reviewed-item persistence.
+- Changes:
+  added `workSessionEvidenceSourceProposalsBlockerSummaryText` in
+  `src/workSummaryStatus.ts`, replaced the old two-line source-proposal count
+  display in `src/App.tsx` with the summary text, and added fixture coverage in
+  `tests/workSummaryStatus.test.ts` for mixed review-ready/blocked/risk
+  proposals.
+- Verification:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `48` tests. `npm run
+  build` passed. A focused headless Playwright smoke against local Vite
+  `127.0.0.1:5183` with mocked browser-bridge endpoints confirmed the UI sends
+  `review_state_filter: "pending_review"` and renders
+  `검토 준비 1/2 · 차단 1건 · 차단 사유 프로젝트명/범용어만 일치 1건 · 위험표시 1건
+  · matched lines 2 · durable 승인 아님` in the source-proposal panel, with
+  no console or page errors. The temporary Vite server was stopped and port
+  `5183` had no remaining listener.
+- Full check:
+  `npm run check` passed: UI tests, Vite / TypeScript build,
+  `cargo build --bin promptvault-cli`, Rust lib tests (`250` passed), CLI tests
+  (`46` passed), doc-tests, and clippy `-D warnings`.
+- QA note:
+  `npm run qa:browser-bridge` was attempted before the focused smoke but timed
+  out in the pre-existing `work status export unresolved fixture` wait before it
+  reached the source-proposal panel. The script modification attempted for that
+  assertion was reverted; this slice relies on the focused smoke plus full check.
+- Next product work:
+  use the blocker summary to guide the remaining `8` near-session pending rows:
+  improve recommended source selection/search where the blocker is generic-term
+  or instruction-only, and keep risk-flagged rows blocked unless better copied
+  source trace is found.
 - Completed implementation slice:
   session-evidence review queue now supports a separate operator decision-state
   server filter. `--row-filter` still narrows by project/day evidence shape;

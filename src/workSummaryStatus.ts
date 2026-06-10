@@ -28,6 +28,7 @@ import type {
   ProjectWorkSessionEvidenceNearbyItem,
   ProjectWorkSessionEvidenceNearbyResult,
   ProjectWorkSessionEvidenceSourceProposal,
+  ProjectWorkSessionEvidenceSourceProposalsResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
@@ -1980,6 +1981,58 @@ export function workSessionEvidenceSourceProposalBlockerText(
   }
   if (!blockerReason) return "차단 사유 없음";
   return `알 수 없는 차단 사유: ${blockerReason}`;
+}
+
+function workSessionEvidenceSourceProposalBlockerSummaryLabel(
+  blockerReason: string | null,
+): string {
+  if (blockerReason === "title_normalization_required_first") return "제목 정규화 우선";
+  if (blockerReason === "source_trace_not_copied_from_search_hit") return "trace 복사 불일치";
+  if (blockerReason === "source_hit_matches_only_project_identifier") return "프로젝트명만 일치";
+  if (blockerReason === "source_hit_matches_only_project_or_generic_terms") return "프로젝트명/범용어만 일치";
+  if (blockerReason === "source_hit_date_too_far_from_candidate") return "세션 날짜 멀음";
+  if (blockerReason === "candidate_or_source_hit_has_risk_flags") return "risk flag 있음";
+  if (blockerReason === "source_trace_is_instruction_only") return "지시문 trace";
+  if (!blockerReason) return "차단 사유 없음";
+  return blockerReason;
+}
+
+export function workSessionEvidenceSourceProposalsBlockerSummaryText(
+  result: Pick<
+    ProjectWorkSessionEvidenceSourceProposalsResult,
+    "blocked_count" | "proposals" | "returned_proposal_count" | "review_ready_count"
+  >,
+): string {
+  const blockerCounts = new Map<string | null, number>();
+  let riskProposalCount = 0;
+  for (const proposal of result.proposals) {
+    if (!proposal.review_ready) {
+      blockerCounts.set(
+        proposal.blocker_reason,
+        (blockerCounts.get(proposal.blocker_reason) ?? 0) + 1,
+      );
+    }
+    if (proposal.risk_flags.length > 0) {
+      riskProposalCount += 1;
+    }
+  }
+  const blockerSummary = [...blockerCounts.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .map(([blockerReason, count]) =>
+      `${workSessionEvidenceSourceProposalBlockerSummaryLabel(blockerReason)} ${count.toLocaleString()}건`
+    )
+    .join(", ");
+  const parts = [
+    `검토 준비 ${result.review_ready_count.toLocaleString()}/${result.returned_proposal_count.toLocaleString()}`,
+    `차단 ${result.blocked_count.toLocaleString()}건`,
+  ];
+  if (blockerSummary) {
+    parts.push(`차단 사유 ${blockerSummary}`);
+  }
+  if (riskProposalCount > 0) {
+    parts.push(`위험표시 ${riskProposalCount.toLocaleString()}건`);
+  }
+  return parts.join(" · ");
 }
 
 export function workSessionEvidenceSourceProposalStateText(

@@ -59,6 +59,7 @@ import {
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
   workSessionEvidenceSourceProposalBlockerText,
+  workSessionEvidenceSourceProposalsBlockerSummaryText,
   workSessionEvidenceSourceProposalRiskText,
   workSessionEvidenceSourceProposalStateText,
   workSessionEvidenceReviewQueueActionLabel,
@@ -998,6 +999,42 @@ function sessionEvidenceSourceProposal(
     matched_terms: ["promptvault"],
     confidence: 0.88,
     risk_flags: [],
+    ...overrides,
+  };
+}
+
+function sessionEvidenceSourceProposalsResult(
+  overrides: Partial<ProjectWorkSessionEvidenceSourceProposalsResult> = {},
+): ProjectWorkSessionEvidenceSourceProposalsResult {
+  return {
+    generated_at: "2026-06-09T00:01:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    candidate_id: "session-evidence-PromptVault-1",
+    project: "PromptVault",
+    date: "2026-06-09",
+    source_path: "/tmp/session-a.jsonl",
+    query: "PromptVault\n2026-06-09\nreview queue",
+    query_term_count: 3,
+    scanned_line_count: 24,
+    matched_line_count: 4,
+    returned_proposal_count: 3,
+    review_ready_count: 1,
+    blocked_count: 2,
+    proposals: [
+      sessionEvidenceSourceProposal(),
+      sessionEvidenceSourceProposal({
+        source_search_hit_id: "source-hit-2",
+        review_ready: false,
+        blocker_reason: "source_hit_matches_only_project_or_generic_terms",
+        risk_flags: ["source_prompt_instruction_only"],
+      }),
+      sessionEvidenceSourceProposal({
+        source_search_hit_id: "source-hit-3",
+        review_ready: false,
+        blocker_reason: "source_trace_is_instruction_only",
+      }),
+    ],
+    warnings: [],
     ...overrides,
   };
 }
@@ -2842,6 +2879,22 @@ test("work session evidence source proposal labels explain blocker states", () =
   assert.equal(
     workSessionEvidenceSourceProposalRiskText(sessionEvidenceSourceProposal()),
     null,
+  );
+});
+
+test("work session evidence source proposal summary groups blockers for operators", () => {
+  assert.equal(
+    workSessionEvidenceSourceProposalsBlockerSummaryText(sessionEvidenceSourceProposalsResult()),
+    "검토 준비 1/3 · 차단 2건 · 차단 사유 프로젝트명/범용어만 일치 1건, 지시문 trace 1건 · 위험표시 1건",
+  );
+  assert.equal(
+    workSessionEvidenceSourceProposalsBlockerSummaryText(sessionEvidenceSourceProposalsResult({
+      returned_proposal_count: 1,
+      review_ready_count: 1,
+      blocked_count: 0,
+      proposals: [sessionEvidenceSourceProposal()],
+    })),
+    "검토 준비 1/1 · 차단 0건",
   );
 });
 

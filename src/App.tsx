@@ -373,6 +373,7 @@ import {
   workSessionEvidenceProposalsActionLabel,
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
+  workSessionEvidenceSourceProposalsBlockerSummaryText,
   workSessionEvidenceSourceProposalRiskText,
   workSessionEvidenceSourceProposalStateText,
   workSessionEvidenceReviewQueueActionLabel,
@@ -6805,18 +6806,11 @@ function App() {
                                               {workSessionEvidenceSourceProposalsResult ? (
                                                 <>
                                                   <span>
-                                                    검토 준비{" "}
-                                                    {workSessionEvidenceSourceProposalsResult.review_ready_count
-                                                      .toLocaleString()} /{" "}
-                                                    {workSessionEvidenceSourceProposalsResult.returned_proposal_count
-                                                      .toLocaleString()} · durable 승인 아님
-                                                  </span>
-                                                  <span>
-                                                    blocked{" "}
-                                                    {workSessionEvidenceSourceProposalsResult.blocked_count
-                                                      .toLocaleString()} · matched lines{" "}
+                                                    {workSessionEvidenceSourceProposalsBlockerSummaryText(
+                                                      workSessionEvidenceSourceProposalsResult,
+                                                    )} · matched lines{" "}
                                                     {workSessionEvidenceSourceProposalsResult.matched_line_count
-                                                      .toLocaleString()}
+                                                      .toLocaleString()} · durable 승인 아님
                                                   </span>
                                                   {workSessionEvidenceSourceProposalsResult.warnings.map(
                                                     (warning, index) => (

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 21:06 KST
+Updated: 2026-06-10 21:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,8 +34,7 @@ Short-Term Goal:
 Current Work:
 
 - Completed implementation slice:
-  pending commit for `work-session-evidence-candidates` /
-  `work-session-evidence-proposals` row filters.
+  `773f460 fix: filter session evidence candidates`.
 - Completed behavior:
   carry the `near-session-date-hint` / `stale-session-date-hint` split from
   status export into the read-only session-evidence candidate/proposal CLI/API
@@ -54,7 +53,8 @@ Current Work:
   could incorrectly stale unrelated far candidates unless sync semantics are
   redesigned.
 - Verification status:
-  passed. Live default-vault pre-checks showed
+  committed and pushed to `origin main` as `773f460`. Live default-vault
+  pre-checks showed
   `work-status-export --row-filter near-session-date-hint --full-session-index
   --limit 20 --json` returns `9` near rows. A read/write
   `work-session-evidence-review-queue --sync-candidates --limit 20 --json`

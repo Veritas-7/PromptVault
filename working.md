@@ -1,10 +1,73 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 23:12 KST
+Updated: 2026-06-10 23:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-10 23:31 KST
+
+Long-Term Goal:
+
+- Make PromptVault the durable project/day work-management surface for local AI
+  work across real evidence sources: Codex sessions, Codex CX sessions, Claude
+  logs, Antigravity logs, and project-local progress logs such as `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every AI-assisted extraction, normalization, and session-evidence
+  decision source-traced, operator-reviewable, and resumable. Approval must
+  remain fail-closed unless copied evidence and source-review checks pass.
+- Continue improving the Work Management UI until project/day rows expose what
+  was done, what is unresolved, what was verified against real sessions, and
+  which rows require explicit operator action.
+
+Short-Term Goal:
+
+- Close the current session-evidence review gaps without auto-approving weak
+  source matches. The latest live default-vault batch audit found `8` pending
+  near-session rows and `0` `review_ready` rows, so the next safe workflow is
+  explicit reject/defer/manual-inspect handling.
+- Keep the audit panel and review queue synchronized so stale audit results are
+  not mistaken for current operator truth after a queue decision.
+
+Current Work:
+
+- Completed implementation slice:
+  added an explicit per-row `감사 판정 거절` action inside the source-audit
+  panel for audit rows that are still `pending_review` or `stale` and are not
+  `review_ready`. This lets an operator reject blocked, no-source, no-hit, or
+  source-search-error rows directly from the batch audit result while preserving
+  an explicit reason such as `source_audit_no_recommended_source`,
+  `source_audit_no_source_hits`, `source_audit_blocked:<reason>`, or
+  `source_audit_error:<outcome>`.
+- Changes:
+  `src/workSummaryStatus.ts` now owns the rejectability and reason helpers.
+  `src/App.tsx` renders the audit-panel reject button, calls the existing
+  durable session-evidence review queue update path, and clears the source-audit
+  result after any queue update so the panel cannot present stale audit truth.
+  `tests/workSummaryStatus.test.ts` covers the helper behavior, and
+  `scripts/browser-bridge-isolated-qa.mjs` now clicks the audit-panel reject
+  path and verifies the UI refreshes afterward.
+- Verification:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `50` tests.
+  `node --check scripts/browser-bridge-isolated-qa.mjs` passed.
+  `npm run qa:browser-bridge` passed end-to-end after fixing the real bug where
+  the queue update function did not clear the audit panel. Full `npm run check`
+  passed: UI tests, Vite / TypeScript build, `cargo build --bin
+  promptvault-cli`, Rust lib tests `252`, CLI tests `47`, doc-tests, and clippy
+  `-D warnings`.
+- Current unresolved rows:
+  unchanged from the live source-audit result below: `8` pending near-session
+  rows, `0` `review_ready`. Do not approve those rows from the batch audit.
+  Use the new reject action for rows the operator decides are weak/blocked, or
+  manually inspect the one no-hit source path before deciding.
+- Next product work:
+  add a safer bulk decision or review queue helper for the remaining audit
+  outcomes, but keep approval explicit and source-traced. A bulk reject/defer
+  path is acceptable only if it preserves the per-row reason and visible audit
+  basis.
 
 ## Resume Snapshot - 2026-06-10 15:43 KST
 

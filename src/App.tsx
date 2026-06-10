@@ -367,6 +367,7 @@ import {
   workLogNormalizationReviewQueueMetaText,
   canApproveWorkLogNormalizationReviewQueueItem,
   canRejectWorkLogNormalizationReviewQueueItem,
+  canRejectWorkSessionEvidenceSourceAuditItem,
   recommendedWorkSessionEvidenceSourceSearchSession,
   workSessionEvidenceNearbyQueryText,
   workSessionEvidenceCandidateReasonDiagnosticText,
@@ -377,6 +378,7 @@ import {
   workSessionEvidenceProposalsMetaText,
   workSessionEvidenceSourceAuditItemText,
   workSessionEvidenceSourceAuditMetaText,
+  workSessionEvidenceSourceAuditRejectReason,
   workSessionEvidenceSourceProposalsBlockerSummaryText,
   workSessionEvidenceSourceProposalRiskText,
   workSessionEvidenceSourceProposalStateText,
@@ -2230,6 +2232,8 @@ function App() {
       });
       setWorkSessionEvidenceReviewQueueResult(nextQueue);
       setWorkSessionEvidenceReviewQueueState("ready");
+      setWorkSessionEvidenceSourceAuditResult(null);
+      setWorkSessionEvidenceSourceAuditState("idle");
     } catch (err) {
       const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
@@ -2288,6 +2292,8 @@ function App() {
       });
       setWorkSessionEvidenceReviewQueueResult(nextQueue);
       setWorkSessionEvidenceReviewQueueState("ready");
+      setWorkSessionEvidenceSourceAuditResult(null);
+      setWorkSessionEvidenceSourceAuditState("idle");
     } catch (err) {
       const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
@@ -6660,6 +6666,26 @@ function App() {
                       {redactSensitiveDisplayText(warning)}
                     </span>
                   ))}
+                  {canRejectWorkSessionEvidenceSourceAuditItem(item) ? (
+                    <button
+                      aria-label={`${item.project} ${item.date} 감사 결과 기준 세션 근거 후보 거절`}
+                      className="inline-action compact-action"
+                      data-reject-work-session-evidence-source-audit-item={item.candidate_id}
+                      disabled={isTopLevelActionLocked}
+                      onClick={() =>
+                        void updateWorkSessionEvidenceReviewQueueItem(
+                          item.candidate_id,
+                          "rejected",
+                          workSessionEvidenceSourceAuditRejectReason(item),
+                        )}
+                      type="button"
+                    >
+                      <XCircle size={14} />
+                      {workSessionEvidenceReviewQueueUpdatingCandidateId === item.candidate_id
+                        ? "처리 중"
+                        : "감사 판정 거절"}
+                    </button>
+                  ) : null}
                 </article>
               ))}
             {workSessionEvidenceSourceAuditResult.items.length > WORK_STATUS_EXPORT_DISPLAY_LIMIT ? (

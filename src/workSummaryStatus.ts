@@ -2147,6 +2147,30 @@ export function workSessionEvidenceSourceAuditItemText(
   return parts.join(" · ");
 }
 
+export function canRejectWorkSessionEvidenceSourceAuditItem(
+  item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
+): boolean {
+  return (item.review_state === "pending_review" || item.review_state === "stale")
+    && item.outcome !== "review_ready";
+}
+
+export function workSessionEvidenceSourceAuditRejectReason(
+  item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
+): string {
+  if (item.outcome === "no_recommended_source") return "source_audit_no_recommended_source";
+  if (item.outcome === "no_source_hits") return "source_audit_no_source_hits";
+  if (item.outcome === "blocked") {
+    const primaryBlocker = item.blocker_reason_counts[0]?.text.trim();
+    return primaryBlocker
+      ? `source_audit_blocked:${primaryBlocker}`
+      : "source_audit_blocked";
+  }
+  if (item.outcome === "nearby_error" || item.outcome === "source_search_error") {
+    return `source_audit_error:${item.outcome}`;
+  }
+  return `source_audit_${item.outcome || "manual_reject"}`;
+}
+
 export function workSessionEvidenceSourceProposalStateText(
   proposal: ProjectWorkSessionEvidenceSourceProposal,
 ): string {

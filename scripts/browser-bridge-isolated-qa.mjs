@@ -638,6 +638,7 @@ async function runBrowserQa() {
   let workSessionEvidenceAntigravitySourceSearch = "";
   let workSessionEvidenceSourceAuditBridge = "";
   let workSessionEvidenceSourceAuditUiText = "";
+  let workSessionEvidenceSourceAuditRejectUiState = "";
   let workSessionEvidenceRiskSourceProposalBridge = "";
   let workSessionEvidenceNearbyMeta = "";
   let workSessionEvidenceNearbyUiText = "";
@@ -1547,6 +1548,32 @@ async function runBrowserQa() {
     workSessionEvidenceSourceAuditUiText =
       (await page.locator('[data-work-session-evidence-source-audit="true"]').textContent())
         ?.trim() ?? "";
+    const sourceAuditRejectButton = page
+      .locator('[data-reject-work-session-evidence-source-audit-item]')
+      .first();
+    await sourceAuditRejectButton.waitFor({ timeout: 90000 });
+    const sourceAuditRejectCandidateId = await sourceAuditRejectButton.getAttribute(
+      "data-reject-work-session-evidence-source-audit-item",
+    );
+    if (!sourceAuditRejectCandidateId) {
+      throw new Error("Source audit reject button did not expose candidate id");
+    }
+    const sourceAuditRejectResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/work-session-evidence-review-queue/update")
+      && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await sourceAuditRejectButton.click();
+    await sourceAuditRejectResponse;
+    await page.waitForFunction((candidateId) => {
+      const auditPanel = document.querySelector('[data-work-session-evidence-source-audit="true"]');
+      const row = document.querySelector(`[data-work-session-evidence-source-audit-item="${candidateId}"]`);
+      const queueRow = document.querySelector(`[data-work-session-evidence-review-queue-state="${candidateId}"]`);
+      const queueRowText = queueRow?.textContent ?? "";
+      return !auditPanel && !row && (!queueRow || queueRowText.includes("거절"));
+    }, sourceAuditRejectCandidateId, { timeout: 90000 });
+    workSessionEvidenceSourceAuditRejectUiState =
+      `${sourceAuditRejectCandidateId} · rejected from source audit`;
     const firstRecommendedSourceProposalsButton = page
       .locator('[data-work-session-evidence-recommended-source-proposals-action]')
       .first();
@@ -2598,6 +2625,7 @@ async function runBrowserQa() {
       workSessionEvidenceAntigravitySourceSearch,
       workSessionEvidenceSourceAuditBridge,
       workSessionEvidenceSourceAuditUiText,
+      workSessionEvidenceSourceAuditRejectUiState,
       workSessionEvidenceRiskSourceProposalBridge,
       workSessionEvidenceNearbyMeta,
       workSessionEvidenceNearbyUiText,

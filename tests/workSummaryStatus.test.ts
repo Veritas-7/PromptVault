@@ -6,6 +6,7 @@ import {
   canRejectWorkLogNormalizationReviewQueueItem,
   canApproveWorkSessionEvidenceReviewQueueItem,
   canRejectWorkSessionEvidenceReviewQueueItem,
+  canRejectWorkSessionEvidenceSourceAuditItem,
   workAiProviderHealthActionLabel,
   workAiProviderHealthFailureText,
   workAiProviderHealthMetaText,
@@ -60,6 +61,7 @@ import {
   workSessionEvidenceProposalsMetaText,
   workSessionEvidenceSourceAuditItemText,
   workSessionEvidenceSourceAuditMetaText,
+  workSessionEvidenceSourceAuditRejectReason,
   workSessionEvidenceSourceProposalBlockerText,
   workSessionEvidenceSourceProposalsBlockerSummaryText,
   workSessionEvidenceSourceProposalRiskText,
@@ -3007,6 +3009,40 @@ test("work session evidence source audit summary separates ready and blocked row
       items: [],
     })),
     "감사 1/1행 · 검토 준비 row 0개 · review-ready proposal 0개 · 차단 row 0개 · 차단 proposal 0개 · 추천 원본 없음 1개 · 원본 hit 없음 1개 · 결과 추천 원본 없음 1건 · 근처 limit 6 · source limit 5 · max lines 100,000",
+  );
+});
+
+test("work session evidence source audit reject helpers keep operator decisions explicit", () => {
+  const ready = sessionEvidenceSourceAuditResult().items[0];
+  const blocked = sessionEvidenceSourceAuditResult().items[1];
+  assert.equal(canRejectWorkSessionEvidenceSourceAuditItem(ready), false);
+  assert.equal(canRejectWorkSessionEvidenceSourceAuditItem(blocked), true);
+  assert.equal(
+    workSessionEvidenceSourceAuditRejectReason(blocked),
+    "source_audit_blocked:source_trace_is_instruction_only",
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditRejectReason({
+      ...blocked,
+      outcome: "no_recommended_source",
+      blocker_reason_counts: [],
+    }),
+    "source_audit_no_recommended_source",
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditRejectReason({
+      ...blocked,
+      outcome: "no_source_hits",
+      blocker_reason_counts: [],
+    }),
+    "source_audit_no_source_hits",
+  );
+  assert.equal(
+    canRejectWorkSessionEvidenceSourceAuditItem({
+      ...blocked,
+      review_state: "approved",
+    }),
+    false,
   );
 });
 

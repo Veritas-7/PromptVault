@@ -74,6 +74,8 @@ Tests:
 - `npm run qa:browser-bridge` passed end-to-end against an isolated database,
   including the work-log coverage path and later review/normalization/save
   flows.
+- Full `npm run check` passed: UI tests `532`, Vite / TypeScript build, Rust
+  lib tests `252`, CLI tests `47`, doc-tests, and clippy `-D warnings`.
 
 Issues:
 

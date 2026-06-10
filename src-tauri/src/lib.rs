@@ -820,6 +820,7 @@ pub struct ProjectWorkStatusExportOptions {
     pub limit: Option<usize>,
     pub offset: Option<usize>,
     pub session_limit: Option<usize>,
+    pub full_session_index: Option<bool>,
     pub database_path: Option<String>,
     pub refresh_session_index: Option<bool>,
 }
@@ -2099,6 +2100,11 @@ pub fn run_project_work_status_export(
     if matches!(options.session_limit, Some(0)) {
         return Err("work-status-export session_limit requires a positive integer".into());
     }
+    if options.full_session_index.unwrap_or(false) && options.session_limit.is_some() {
+        return Err(
+            "work-status-export full_session_index cannot be combined with session_limit".into(),
+        );
+    }
     if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
         return Err("work-status-export database path requires a non-empty value".into());
     }
@@ -2112,9 +2118,16 @@ pub fn run_project_work_status_export(
         .as_deref()
         .map(PathBuf::from)
         .unwrap_or_else(default_database_path);
+    let full_session_index = options.full_session_index.unwrap_or(false);
+    let stored_session_index_count = project_work_session_index_total_count(&database_path)?;
+    let session_limit = if full_session_index && stored_session_index_count > 0 {
+        Some(stored_session_index_count)
+    } else {
+        options.session_limit
+    };
     let report = run_project_work_report(ProjectWorkReportOptions {
         limit: None,
-        session_limit: options.session_limit,
+        session_limit,
         database_path: Some(database_path.display().to_string()),
         refresh_session_index: options.refresh_session_index,
     })?;
@@ -2125,6 +2138,12 @@ pub fn run_project_work_status_export(
         warnings.push(format!(
             "work-status-export limit capped at {MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT}"
         ));
+    }
+    if full_session_index && stored_session_index_count == 0 {
+        warnings.push(
+            "work-status-export full_session_index requested but no stored session index exists; used the default session scan limit. Run work-session-index first for full stored verification."
+                .to_string(),
+        );
     }
 
     let all_rows =
@@ -19837,6 +19856,21 @@ Status: completed as a source-only/report-only hardening slice.
         .to_string();
 
         assert!(err.contains("work-status-export limit requires a positive integer"));
+    }
+
+    #[test]
+    fn work_status_export_rejects_conflicting_full_session_limit() {
+        let err = run_project_work_status_export(ProjectWorkStatusExportOptions {
+            session_limit: Some(10),
+            full_session_index: Some(true),
+            ..Default::default()
+        })
+        .expect_err("explicit and full session limits should conflict")
+        .to_string();
+
+        assert!(err.contains(
+            "work-status-export full_session_index cannot be combined with session_limit"
+        ));
     }
 
     #[tokio::test]

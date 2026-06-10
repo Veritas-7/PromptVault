@@ -371,6 +371,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "work-status-export" => {
             let json = take_flag(&mut args, "--json");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
+            let full_session_index = take_flag(&mut args, "--full-session-index");
             let mut limit = None;
             let mut offset = None;
             let mut session_limit = None;
@@ -401,6 +402,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 limit,
                 offset,
                 session_limit,
+                full_session_index: Some(full_session_index),
                 database_path,
                 refresh_session_index: Some(refresh_session_index),
             })?;
@@ -2425,7 +2427,7 @@ fn help_text() -> String {
         "  improve [--json] [--local] --prompt TEXT\n",
         "  improve [--json] [--local] < prompt.txt\n",
         "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
-        "  work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
+        "  work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]\n",
         "  work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]\n",
         "  work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]\n",
         "  work-session-evidence-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]\n",
@@ -3410,6 +3412,17 @@ mod tests {
         assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
         assert!(response.contains("work-status-export limit requires a positive integer"));
         assert!(response.contains("Access-Control-Allow-Origin: *"));
+
+        let response = bridge_response_for(
+            "/api/work-status-export",
+            r#"{"options":{"session_limit":1,"full_session_index":true}}"#,
+        );
+
+        assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(response.contains(
+            "work-status-export full_session_index cannot be combined with session_limit"
+        ));
+        assert!(response.contains("Access-Control-Allow-Origin: *"));
     }
 
     #[test]
@@ -3848,7 +3861,7 @@ mod tests {
             "work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
         ));
         assert!(help.contains(
-            "work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
+            "work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]"
         ));
         assert!(help.contains(
             "work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]"

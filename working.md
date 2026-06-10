@@ -1,10 +1,89 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 08:48 KST
+Updated: 2026-06-10 09:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Full session-index status export flag
+
+Current Goal:
+
+- Make full stored-session verification reproducible from one CLI/API option,
+  so project/day work management can be checked against all sanitized Codex
+  session evidence without manually copying the stored session count into
+  `--session-limit`.
+
+Context:
+
+- `work-status-export` already distinguishes the bounded session subset used by
+  a fast export from the total stored sanitized session index.
+- The UI already offers a "보관 전체" helper that copies the stored count into
+  the shared session-limit input, but CLI/operator checks still required a
+  two-step read-count-then-pass-count workflow.
+- `work-session-evidence-candidates` defaults to the full stored index when no
+  session limit is passed; this slice aligns status-export verification with
+  that operator intent.
+
+Progress:
+
+- Added `full_session_index` to `ProjectWorkStatusExportOptions`.
+- Added CLI flag `work-status-export --full-session-index`.
+- `--full-session-index` now resolves the current stored sanitized session
+  index count and uses it as the report session limit.
+- Added a fail-closed validation error when `full_session_index` is combined
+  with an explicit `session_limit`, so bounded and full-index checks are not
+  silently confused.
+- Extended bridge option tests and documentation.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds the full-index option, conflict validation, and
+  test coverage for the ambiguous option combination.
+- `src-tauri/src/bin/promptvault-cli.rs`: parses `--full-session-index`, passes
+  it through the bridge/CLI options, updates help text, and extends route
+  validation tests.
+- `src/promptVaultApi.ts` and `tests/promptVaultApi.test.ts`: expose and test
+  the browser bridge option contract.
+- `README.md` and `docs/CLI.md`: document the full stored-session verification
+  command and examples.
+
+Tests:
+
+- PASS: `cargo fmt --manifest-path src-tauri/Cargo.toml`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml work_status_export_rejects_conflicting_full_session_limit --lib`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml bridge_routes_work_status_export_validation_errors --bin promptvault-cli`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules --bin promptvault-cli`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work status export"`.
+- PASS/OBSERVED: `cargo run --manifest-path src-tauri/Cargo.toml --quiet --bin promptvault-cli -- work-status-export --limit 10 --full-session-index --json`.
+- PASS/OBSERVED: `cargo run --manifest-path src-tauri/Cargo.toml --quiet --bin promptvault-cli -- work-status-export --limit 10 --session-limit 10867 --json`.
+- PASS/OBSERVED: `cargo run --manifest-path src-tauri/Cargo.toml --quiet --bin promptvault-cli -- work-status-export --limit 1 --session-limit 1 --full-session-index --json`.
+- PASS: `npm run check` (`504` UI tests, `219` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `git diff --check`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- Persistent `--full-session-index` and explicit `--session-limit 10867`
+  produced the same full-index counters: `31` projects, `26` dates, `10,073`
+  items, `882` progress-log files, `183,522` session-evidence matches,
+  `1,311` unique evidence keys, and session index `10867/10867`.
+- The conflicting `--session-limit 1 --full-session-index` command failed with
+  `work-status-export full_session_index cannot be combined with session_limit`.
+- Isolated browser bridge QA passed against temporary DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-g6eF1h/qa.sqlite`
+  and verified status export, stored full-session limit UI, unresolved
+  full-index fixture, session-evidence queues, normalization apply, and
+  approved `workingd.md` queue save.
+
+Remaining:
+
+- Run secret checks, stage only explicit changed paths, then commit and push.
+- Next useful slice remains the review-gated durable operator flow for accepted
+  AI/session-evidence decisions; full-index verification is now easier to
+  reproduce, but unresolved rows still require review/normalization.
 
 ## Completed Slice - 2026-06-10 Bounded AI HTTP timeout override
 

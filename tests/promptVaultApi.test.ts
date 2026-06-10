@@ -1047,6 +1047,38 @@ test("browser bridge work status export posts options and validates rows", async
   assert.equal(result.database_path, "/tmp/promptvault.sqlite");
 });
 
+test("browser bridge work status export posts full session index option", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkStatusExportPayload({
+      report_session_evidence_index_count: 500,
+      report_session_evidence_index_total_count: 500,
+    })), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkStatusExport({
+    limit: 12,
+    full_session_index: true,
+  });
+
+  assert.match(requestPath, /\/api\/work-status-export$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      limit: 12,
+      full_session_index: true,
+    },
+  });
+  assert.equal(result.report_session_evidence_index_count, 500);
+  assert.equal(result.report_session_evidence_index_total_count, 500);
+});
+
 test("browser bridge work status export rejects impossible index counters", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify(projectWorkStatusExportPayload({

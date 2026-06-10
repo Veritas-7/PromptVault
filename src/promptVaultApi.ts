@@ -114,6 +114,7 @@ export interface ProjectWorkStatusExportOptions {
   limit?: number;
   offset?: number;
   session_limit?: number;
+  full_session_index?: boolean;
   refresh_session_index?: boolean;
 }
 

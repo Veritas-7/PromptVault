@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 19:22 KST
+Updated: 2026-06-10 19:36 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,51 @@ Short-Term Goal:
 
 Current Work:
 
+- Active in-progress slice:
+  improve progress-log management visibility for `work-log-coverage`. Live
+  CLI checks show the app is already parsing project/day logs from real local
+  evidence, including project-local files such as `working.md` and
+  `workingd.md`, but the coverage JSON currently exposes only
+  `parsed_file_count` and `unparsed_file_count` at the top level. The next
+  implementation step is to add explicit `pointer_file_count` and
+  `unreadable_file_count` counters through the Rust result, API validation,
+  UI status text, and tests so pointer logs are visibly non-gap files and
+  unreadable logs are not confused with ordinary unparsed logs.
+- Current live management check before this slice:
+  `work-log-coverage --json` reported `parsed_file_count=909`,
+  `unparsed_file_count=0`, and no top-level `pointer_file_count` or
+  `unreadable_file_count`. `work-log-normalization-candidates --limit 3
+  --json` reported `total_candidate_count=97`; the sampled top candidates
+  included `enterprise_diagnosis_flutter` `2026-06-05` sourced from
+  `workingd.md`. `work-session-evidence-candidates --limit 40 --json`
+  reported `26` unresolved rows and included project-local progress-log
+  sources such as `workingd.md`, `WORKING_LOG.md`, `WORKLOG.md`,
+  `progress.md`, and `PROJECT_STATUS`-style rows.
+- Resume target if interrupted now:
+  the coverage counter implementation is now applied in `src-tauri/src/lib.rs`,
+  `src/types.ts`, `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`, and
+  related tests. Targeted verification passed:
+  `cargo fmt && cargo test project_progress_log_coverage --lib`,
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts
+  tests/workManagementOverview.test.ts tests/workLogCoverageFilters.test.ts`
+  (`268` tests), `cargo build --bin promptvault-cli`, and `git diff --check`.
+  Fresh rebuilt CLI output now reports `files_seen=910`,
+  `parsed_file_count=909`, `unparsed_file_count=0`,
+  `unreadable_file_count=0`, and `pointer_file_count=1`; the pointer sample is
+  `/Users/wj/Ai/System/10_Projects/CareVault/workingd.md`.
+- Full verification for active slice:
+  `npm run check` passed: UI tests `523` passed, Vite/TypeScript build passed,
+  `cargo build --bin promptvault-cli` passed, Rust lib tests `240` passed, CLI
+  tests `35` passed, doc-tests passed, and clippy `-D warnings` passed.
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-BTRScC/qa.sqlite`.
+  The QA reached source-proposals bridge/UI, review queue UI, review apply,
+  reviewed-items reload, work-log management, work-management overview,
+  work-log coverage, AI provider status/health, normalization, review apply,
+  and saved-items flows. Ports `5174` and `5177` had no remaining listeners
+  after QA cleanup.
 - Latest implementation commit:
   `c9953c4 fix: block stale source proposal dates`.
 - Latest verified behavior:
@@ -554,6 +599,8 @@ Immediate Resume Commands:
 
 - `cargo build --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
 - `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
+- `src-tauri/target/debug/promptvault-cli work-log-coverage --json`
+- `src-tauri/target/debug/promptvault-cli work-log-normalization-candidates --limit 20 --json`
 - `src-tauri/target/debug/promptvault-cli work-status-export --limit 200 --full-session-index --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-review-queue --limit 20 --sync-candidates --json`

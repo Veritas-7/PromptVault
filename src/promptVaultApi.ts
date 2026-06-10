@@ -1769,6 +1769,8 @@ function projectWorkLogCoverageFilesWithinResult(value: unknown): boolean {
     || !isNonNegativeSafeInteger(value.files_seen)
     || !isNonNegativeSafeInteger(value.parsed_file_count)
     || !isNonNegativeSafeInteger(value.unparsed_file_count)
+    || !isNonNegativeSafeInteger(value.unreadable_file_count)
+    || !isNonNegativeSafeInteger(value.pointer_file_count)
     || !isNonNegativeSafeInteger(value.project_count)
     || !isNonNegativeSafeInteger(value.work_item_count)) {
     return false;
@@ -1776,6 +1778,12 @@ function projectWorkLogCoverageFilesWithinResult(value: unknown): boolean {
   const parsedFileCount = value.files.filter((file) => isRecord(file) && file.status === "parsed").length;
   const unparsedFileCount = value.files.filter((file) =>
     isRecord(file) && ["unparsed", "unreadable"].includes(String(file.status))
+  ).length;
+  const unreadableFileCount = value.files.filter((file) =>
+    isRecord(file) && file.status === "unreadable"
+  ).length;
+  const pointerFileCount = value.files.filter((file) =>
+    isRecord(file) && file.status === "pointer"
   ).length;
   let workItemCount = 0;
   const projects = new Set<string>();
@@ -1794,7 +1802,9 @@ function projectWorkLogCoverageFilesWithinResult(value: unknown): boolean {
   return value.files_seen === value.files.length
     && value.parsed_file_count === parsedFileCount
     && value.unparsed_file_count === unparsedFileCount
-    && value.parsed_file_count + value.unparsed_file_count <= value.files_seen
+    && value.unreadable_file_count === unreadableFileCount
+    && value.pointer_file_count === pointerFileCount
+    && value.parsed_file_count + value.unparsed_file_count + value.pointer_file_count === value.files_seen
     && value.project_count === projects.size
     && value.work_item_count === workItemCount;
 }

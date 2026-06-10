@@ -753,6 +753,8 @@ function projectWorkLogCoveragePayload(overrides = {}) {
     files_seen: 2,
     parsed_file_count: 1,
     unparsed_file_count: 1,
+    unreadable_file_count: 0,
+    pointer_file_count: 0,
     project_count: 2,
     work_item_count: 3,
     files: [{
@@ -2223,6 +2225,8 @@ test("browser bridge work log coverage validates parsed and unparsed logs", asyn
   assert.equal(result.files_seen, 2);
   assert.equal(result.parsed_file_count, 1);
   assert.equal(result.unparsed_file_count, 1);
+  assert.equal(result.unreadable_file_count, 0);
+  assert.equal(result.pointer_file_count, 0);
   assert.equal(result.files[0].status, "parsed");
   assert.equal(result.files[1].project, "CareVault");
 });
@@ -2233,6 +2237,7 @@ test("browser bridge work log coverage accepts pointer logs as non-gap files", a
     files_seen: 3,
     parsed_file_count: 1,
     unparsed_file_count: 1,
+    pointer_file_count: 1,
     files: [
       ...projectWorkLogCoveragePayload().files,
       {
@@ -2256,6 +2261,8 @@ test("browser bridge work log coverage accepts pointer logs as non-gap files", a
   assert.equal(result.files_seen, 3);
   assert.equal(result.parsed_file_count, 1);
   assert.equal(result.unparsed_file_count, 1);
+  assert.equal(result.unreadable_file_count, 0);
+  assert.equal(result.pointer_file_count, 1);
   assert.equal(result.files[2].status, "pointer");
 });
 

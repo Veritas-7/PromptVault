@@ -443,6 +443,8 @@ function coverageResult(overrides: Partial<ProjectWorkLogCoverageResult> = {}): 
     files_seen: 32,
     parsed_file_count: 28,
     unparsed_file_count: 4,
+    unreadable_file_count: 0,
+    pointer_file_count: 0,
     project_count: 14,
     work_item_count: 3532,
     files: [],
@@ -1843,8 +1845,18 @@ test("work log coverage labels describe parsed and unparsed progress logs", () =
       files_seen: 32,
       parsed_file_count: 31,
       unparsed_file_count: 0,
+      pointer_file_count: 1,
     })),
     "32개 로그 · parsed 31개 · unparsed 0개 · pointer 1개 · 14개 프로젝트 · 작업 3,532개",
+  );
+  assert.equal(
+    workLogCoverageMetaText("ready", coverageResult({
+      files_seen: 32,
+      parsed_file_count: 30,
+      unparsed_file_count: 2,
+      unreadable_file_count: 1,
+    })),
+    "32개 로그 · parsed 30개 · unparsed 2개 · unreadable 1개 · 14개 프로젝트 · 작업 3,532개",
   );
   assert.equal(workLogCoverageMetaText(failed, null), "작업 로그 범위를 사용할 수 없음");
   assert.equal(

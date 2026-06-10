@@ -595,6 +595,8 @@ export interface ProjectWorkLogCoverageResult {
   files_seen: number;
   parsed_file_count: number;
   unparsed_file_count: number;
+  unreadable_file_count: number;
+  pointer_file_count: number;
   project_count: number;
   work_item_count: number;
   files: ProjectWorkLogCoverageFile[];

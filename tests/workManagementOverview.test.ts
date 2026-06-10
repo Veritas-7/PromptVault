@@ -273,6 +273,8 @@ function coverageResult(): ProjectWorkLogCoverageResult {
     files_seen: 2,
     parsed_file_count: 1,
     unparsed_file_count: 1,
+    unreadable_file_count: 0,
+    pointer_file_count: 0,
     project_count: 2,
     work_item_count: 5,
     files: [

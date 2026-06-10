@@ -399,9 +399,11 @@ export function workManagementReadinessText(
     if (coverage.unparsed_file_count > 0) {
       parts.push(`unparsed ${coverage.unparsed_file_count.toLocaleString()}개`);
     }
-    const pointerFileCount = workLogCoveragePointerFileCount(coverage);
-    if (pointerFileCount > 0) {
-      parts.push(`pointer ${pointerFileCount.toLocaleString()}개`);
+    if (coverage.unreadable_file_count > 0) {
+      parts.push(`unreadable ${coverage.unreadable_file_count.toLocaleString()}개`);
+    }
+    if (coverage.pointer_file_count > 0) {
+      parts.push(`pointer ${coverage.pointer_file_count.toLocaleString()}개`);
     }
   } else {
     parts.push("진행로그 미확인");
@@ -1030,9 +1032,11 @@ export function workLogCoverageMetaText(
     `parsed ${result.parsed_file_count.toLocaleString()}개`,
     `unparsed ${result.unparsed_file_count.toLocaleString()}개`,
   ];
-  const pointerFileCount = workLogCoveragePointerFileCount(result);
-  if (pointerFileCount > 0) {
-    parts.push(`pointer ${pointerFileCount.toLocaleString()}개`);
+  if (result.unreadable_file_count > 0) {
+    parts.push(`unreadable ${result.unreadable_file_count.toLocaleString()}개`);
+  }
+  if (result.pointer_file_count > 0) {
+    parts.push(`pointer ${result.pointer_file_count.toLocaleString()}개`);
   }
   parts.push(
     `${result.project_count.toLocaleString()}개 프로젝트`,
@@ -1044,10 +1048,6 @@ export function workLogCoverageMetaText(
 export function workLogCoverageFailureText(state: WorkLogCoverageState): string | null {
   if (state !== "failed") return null;
   return "프로젝트 작업 로그 범위를 불러오지 못했습니다. 진행 로그 경로나 브리지 상태를 확인하세요.";
-}
-
-function workLogCoveragePointerFileCount(result: ProjectWorkLogCoverageResult): number {
-  return result.files.filter((file) => file.status === "pointer").length;
 }
 
 export function workLogCandidatesActionLabel(

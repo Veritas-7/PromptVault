@@ -256,6 +256,8 @@ pub struct ProjectWorkLogCoverageResult {
     pub files_seen: usize,
     pub parsed_file_count: usize,
     pub unparsed_file_count: usize,
+    pub unreadable_file_count: usize,
+    pub pointer_file_count: usize,
     pub project_count: usize,
     pub work_item_count: usize,
     pub files: Vec<ProjectWorkLogCoverageFile>,
@@ -6035,6 +6037,11 @@ fn build_project_progress_log_coverage(
         .iter()
         .filter(|file| matches!(file.status.as_str(), "unparsed" | "unreadable"))
         .count();
+    let unreadable_file_count = files
+        .iter()
+        .filter(|file| file.status == "unreadable")
+        .count();
+    let pointer_file_count = files.iter().filter(|file| file.status == "pointer").count();
     let project_count = files
         .iter()
         .map(|file| file.project.as_str())
@@ -6048,6 +6055,8 @@ fn build_project_progress_log_coverage(
         files_seen,
         parsed_file_count,
         unparsed_file_count,
+        unreadable_file_count,
+        pointer_file_count,
         project_count,
         work_item_count,
         files,
@@ -24139,6 +24148,8 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(coverage.files_seen, 2);
         assert_eq!(coverage.parsed_file_count, 1);
         assert_eq!(coverage.unparsed_file_count, 1);
+        assert_eq!(coverage.unreadable_file_count, 0);
+        assert_eq!(coverage.pointer_file_count, 0);
         assert_eq!(coverage.project_count, 2);
         assert_eq!(coverage.work_item_count, 1);
         assert_eq!(coverage.files[0].project, "Alpha");
@@ -24182,6 +24193,8 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(coverage.files_seen, 1);
         assert_eq!(coverage.parsed_file_count, 0);
         assert_eq!(coverage.unparsed_file_count, 0);
+        assert_eq!(coverage.unreadable_file_count, 0);
+        assert_eq!(coverage.pointer_file_count, 1);
         assert_eq!(coverage.files[0].status, "pointer");
         assert_eq!(coverage.files[0].work_item_count, 0);
         assert_eq!(coverage.files[0].source_file, "workingd.md");

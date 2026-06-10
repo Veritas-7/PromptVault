@@ -480,6 +480,8 @@ async function runBrowserQa() {
   let workSessionEvidenceReviewQueueUiRows = [];
   let workSessionEvidenceReviewQueueFilterMeta = "";
   let workSessionEvidenceReviewQueueFilteredRows = [];
+  let workSessionEvidenceNearbyMeta = "";
+  let workSessionEvidenceNearbyUiText = "";
   let workSessionEvidenceReviewQueueUiStateAfterApprove = "";
   let workSessionEvidenceReviewApplyMeta = "";
   let workSessionEvidenceReviewedItemsMeta = "";
@@ -1092,6 +1094,33 @@ async function runBrowserQa() {
       .map((item) =>
         `${item.project} · ${item.date} · ${item.review_state} · ${item.latest_source_file} · ${item.latest_source_role}`
       );
+    if (workSessionEvidenceReviewQueue.items.length) {
+      step("work session evidence nearby bridge");
+      const firstQueueItem = workSessionEvidenceReviewQueue.items[0];
+      const nearby = await bridgeJson(
+        page,
+        "/api/work-session-evidence-nearby",
+        {
+          options: {
+            project: firstQueueItem.project,
+            date: firstQueueItem.date,
+            limit: 4,
+          },
+        },
+      );
+      if (
+        nearby.database_path !== DATABASE_PATH
+        || nearby.project !== firstQueueItem.project
+        || nearby.date !== firstQueueItem.date
+        || nearby.returned_item_count !== nearby.items.length
+        || nearby.returned_item_count > nearby.total_match_count
+        || !nearby.warnings.some((warning) => warning.includes("navigation hints only"))
+      ) {
+        throw new Error(`Invalid session evidence nearby response: ${JSON.stringify(nearby)}`);
+      }
+      workSessionEvidenceNearbyMeta =
+        `${nearby.project} · ${nearby.date} · nearby ${nearby.returned_item_count} / ${nearby.total_match_count}`;
+    }
     const firstApprovableItem = workSessionEvidenceReviewQueue.items.find(
       (item) => !item.needs_title_normalization,
     );
@@ -1222,6 +1251,34 @@ async function runBrowserQa() {
         ?.textContent ?? "";
       return meta.includes("필터 없음");
     }, undefined, { timeout: 30000 });
+    const firstNearbyButton = page
+      .locator('[data-work-session-evidence-nearby-action]')
+      .first();
+    await firstNearbyButton.waitFor({ timeout: 90000 });
+    const firstNearbyCandidateId = await firstNearbyButton.getAttribute(
+      "data-work-session-evidence-nearby-action",
+    );
+    if (!firstNearbyCandidateId) {
+      throw new Error("Session evidence nearby button did not expose candidate id");
+    }
+    const nearbyResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/work-session-evidence-nearby")
+      && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await firstNearbyButton.click();
+    await nearbyResponse;
+    await page.waitForFunction((candidateId) => {
+      const panel = document.querySelector(`[data-work-session-evidence-nearby="${candidateId}"]`);
+      const text = panel?.textContent ?? "";
+      return text.includes("근처 세션")
+        && text.includes("자동 proof 아님")
+        && text.includes("navigation hints only");
+    }, firstNearbyCandidateId, { timeout: 90000 });
+    workSessionEvidenceNearbyUiText =
+      (await page
+        .locator(`[data-work-session-evidence-nearby="${firstNearbyCandidateId}"]`)
+        .textContent())?.trim() ?? "";
     const firstSessionEvidenceApprove = page
       .locator('[data-approve-work-session-evidence-review-queue]')
       .first();
@@ -2120,6 +2177,8 @@ async function runBrowserQa() {
       workSessionEvidenceReviewQueueUiRows,
       workSessionEvidenceReviewQueueFilterMeta,
       workSessionEvidenceReviewQueueFilteredRows,
+      workSessionEvidenceNearbyMeta,
+      workSessionEvidenceNearbyUiText,
       workSessionEvidenceReviewQueueUiStateAfterApprove,
       workSessionEvidenceReviewApplyMeta,
       workSessionEvidenceReviewedItemsMeta,

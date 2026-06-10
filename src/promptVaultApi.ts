@@ -29,6 +29,7 @@ import type {
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
+  ProjectWorkSessionEvidenceNearbyResult,
   ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
   ProjectWorkStatusExportResult,
@@ -163,6 +164,13 @@ export interface ProjectWorkSessionEvidenceReviewedItemsOptions {
   limit?: number;
   date?: string;
   project?: string;
+}
+
+export interface ProjectWorkSessionEvidenceNearbyOptions {
+  database_path?: string;
+  project: string;
+  date: string;
+  limit?: number;
 }
 
 export interface ProjectWorkSessionIndexOptions {
@@ -485,6 +493,22 @@ export async function listProjectWorkSessionEvidenceReviewedItems(
     "/api/work-session-evidence-reviewed-items",
     { options },
     parseProjectWorkSessionEvidenceReviewedItemsResult,
+  );
+}
+
+export async function loadProjectWorkSessionEvidenceNearby(
+  options: ProjectWorkSessionEvidenceNearbyOptions,
+): Promise<ProjectWorkSessionEvidenceNearbyResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkSessionEvidenceNearbyResult>(
+      "project_work_session_evidence_nearby",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkSessionEvidenceNearbyResult>(
+    "/api/work-session-evidence-nearby",
+    { options },
+    parseProjectWorkSessionEvidenceNearbyResult,
   );
 }
 
@@ -2811,6 +2835,44 @@ function parseProjectWorkSessionEvidenceReviewedItemsResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkSessionEvidenceReviewedItemsResult;
+}
+
+function isProjectWorkSessionEvidenceNearbyItem(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.id)
+    && isNonBlankString(value.source)
+    && isNonBlankString(value.session_id)
+    && isNonBlankString(value.source_path)
+    && (value.timestamp === null || isNonBlankString(value.timestamp))
+    && isNonBlankString(value.prompt_date)
+    && (value.cwd === null || isNonBlankString(value.cwd))
+    && (value.date_distance_days === null
+      || (Number.isSafeInteger(value.date_distance_days) && Number(value.date_distance_days) >= 0))
+    && typeof value.excerpt === "string"
+    && isNonNegativeSafeInteger(value.word_count)
+    && isNonNegativeSafeInteger(value.char_count)
+    && isNonBlankStringArray(value.risk_flags);
+}
+
+function parseProjectWorkSessionEvidenceNearbyResult(
+  value: unknown,
+): ProjectWorkSessionEvidenceNearbyResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !isNonBlankString(value.project)
+    || !isNonBlankString(value.date)
+    || !isPositiveSafeInteger(value.requested_limit)
+    || !isNonNegativeSafeInteger(value.total_match_count)
+    || !isNonNegativeSafeIntegerAtMost(value.returned_item_count, value.total_match_count)
+    || !Array.isArray(value.items)
+    || value.items.length !== value.returned_item_count
+    || !value.items.every(isProjectWorkSessionEvidenceNearbyItem)
+    || !recordStringFieldValuesAreUnique(value.items, "id")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkSessionEvidenceNearbyResult;
 }
 
 function isProjectWorkSummary(value: unknown): boolean {

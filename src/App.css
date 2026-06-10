@@ -444,6 +444,34 @@ h3 {
   white-space: pre-wrap;
 }
 
+.work-session-nearby-panel {
+  background: #f8faf7;
+  border: 1px solid #dce5da;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 10px;
+}
+
+.work-session-nearby-item {
+  border-top: 1px solid #e5ece3;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 8px;
+}
+
+.work-session-nearby-item p {
+  color: #34443b;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .work-log-item-group {
   display: grid;
   gap: 8px;

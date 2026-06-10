@@ -440,6 +440,33 @@ export interface ProjectWorkSessionEvidenceReviewedItemsResult {
   warnings: string[];
 }
 
+export interface ProjectWorkSessionEvidenceNearbyItem {
+  id: string;
+  source: string;
+  session_id: string;
+  source_path: string;
+  timestamp: string | null;
+  prompt_date: string;
+  cwd: string | null;
+  date_distance_days: number | null;
+  excerpt: string;
+  word_count: number;
+  char_count: number;
+  risk_flags: string[];
+}
+
+export interface ProjectWorkSessionEvidenceNearbyResult {
+  generated_at: string;
+  database_path: string;
+  project: string;
+  date: string;
+  requested_limit: number;
+  total_match_count: number;
+  returned_item_count: number;
+  items: ProjectWorkSessionEvidenceNearbyItem[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSessionIndexSourceState {
   source_id: string;
   source_label: string;

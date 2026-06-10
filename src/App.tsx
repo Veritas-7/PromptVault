@@ -123,6 +123,7 @@ import {
   listProjectWorkLogNormalizedItems,
   loadProjectWorkLogReviewQueue,
   loadProjectWorkSessionEvidenceProposals,
+  loadProjectWorkSessionEvidenceNearby,
   loadProjectWorkSessionEvidenceReviewQueue,
   applyProjectWorkSessionEvidenceReviewRows,
   listProjectWorkLogExtractionItems,
@@ -293,8 +294,10 @@ import type {
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSessionEvidenceProposalsResult,
+  ProjectWorkSessionEvidenceNearbyResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
+  ProjectWorkSessionEvidenceReviewQueueItem,
   ProjectWorkSessionEvidenceReviewQueueResult,
   PromptRecord,
   ProjectWorkSessionIndexResult,
@@ -452,6 +455,7 @@ type ScanState = ScanRunState;
 type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionIndexState = "idle" | "loading" | "ready" | "failed";
+type WorkSessionEvidenceNearbyState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionIndexBackfillMode = "reset" | "continue" | "long-continue";
 const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
@@ -808,6 +812,8 @@ function App() {
     useState<WorkSessionEvidenceReviewApplyState>("idle");
   const [workSessionEvidenceReviewedItemsState, setWorkSessionEvidenceReviewedItemsState] =
     useState<WorkSessionEvidenceReviewedItemsState>("idle");
+  const [workSessionEvidenceNearbyState, setWorkSessionEvidenceNearbyState] =
+    useState<WorkSessionEvidenceNearbyState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
   const [workManagementFreezeState, setWorkManagementFreezeState] =
@@ -873,6 +879,8 @@ function App() {
     useState<ProjectWorkSessionEvidenceReviewApplyResult | null>(null);
   const [workSessionEvidenceReviewedItemsResult, setWorkSessionEvidenceReviewedItemsResult] =
     useState<ProjectWorkSessionEvidenceReviewedItemsResult | null>(null);
+  const [workSessionEvidenceNearbyResult, setWorkSessionEvidenceNearbyResult] =
+    useState<ProjectWorkSessionEvidenceNearbyResult | null>(null);
   const [workLogNormalizedItemsResult, setWorkLogNormalizedItemsResult] =
     useState<ProjectWorkLogNormalizedItemsResult | null>(null);
   const [
@@ -882,6 +890,10 @@ function App() {
   const [
     workSessionEvidenceReviewQueueUpdatingCandidateId,
     setWorkSessionEvidenceReviewQueueUpdatingCandidateId,
+  ] = useState<string | null>(null);
+  const [
+    workSessionEvidenceNearbyCandidateId,
+    setWorkSessionEvidenceNearbyCandidateId,
   ] = useState<string | null>(null);
   const [approvedWorkLogExtractionCandidateIds, setApprovedWorkLogExtractionCandidateIds] =
     useState<Set<string>>(() => new Set());
@@ -974,6 +986,7 @@ function App() {
     || workSessionEvidenceReviewQueueState === "loading"
     || workSessionEvidenceReviewApplyState === "loading"
     || workSessionEvidenceReviewedItemsState === "loading"
+    || workSessionEvidenceNearbyState === "loading"
     || workManagementRefreshState === "loading"
     || workManagementFreezeState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
@@ -2153,6 +2166,32 @@ function App() {
       setWorkSessionEvidenceReviewQueueState("failed");
     } finally {
       setWorkSessionEvidenceReviewQueueUpdatingCandidateId(null);
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function loadNearbyWorkSessionEvidence(
+    item: ProjectWorkSessionEvidenceReviewQueueItem,
+  ) {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSessionEvidenceNearbyState("loading");
+    setWorkSessionEvidenceNearbyCandidateId(item.candidate_id);
+    try {
+      const next = await loadProjectWorkSessionEvidenceNearby({
+        project: item.project,
+        date: item.date,
+        limit: 6,
+      });
+      setWorkSessionEvidenceNearbyResult(next);
+      setWorkSessionEvidenceNearbyState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSessionEvidenceNearbyResult(null);
+      setWorkSessionEvidenceNearbyState("failed");
+    } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
   }
@@ -6152,6 +6191,8 @@ function App() {
                 const diagnosticText = workSessionEvidenceCandidateReasonDiagnosticText(
                   item.candidate_reason,
                 );
+                const nearbyActive = workSessionEvidenceNearbyCandidateId === item.candidate_id;
+                const nearbyResult = nearbyActive ? workSessionEvidenceNearbyResult : null;
                 return (
                   <article
                     className="work-summary-row work-log-proposal-row"
@@ -6196,6 +6237,19 @@ function App() {
                           거절
                         </button>
                       ) : null}
+                      <button
+                        aria-label={`${item.project} ${item.date} 근처 같은 프로젝트 세션 보기`}
+                        className="inline-action compact-action"
+                        data-work-session-evidence-nearby-action={item.candidate_id}
+                        disabled={isTopLevelActionLocked}
+                        onClick={() => void loadNearbyWorkSessionEvidence(item)}
+                        type="button"
+                      >
+                        <Search size={14} />
+                        {nearbyActive && workSessionEvidenceNearbyState === "loading"
+                          ? "조회 중"
+                          : "근처 세션"}
+                      </button>
                     </div>
                     <p>{item.top_titles[0] ?? "제목 없는 세션 근거 후보"}</p>
                     <p className="work-log-proposal-evidence">{item.sample_evidence}</p>
@@ -6216,6 +6270,55 @@ function App() {
                       {item.latest_source_file} · seen {item.first_seen_at} / {item.last_seen_at}
                     </span>
                     <span>{item.latest_source_path}</span>
+                    {nearbyActive ? (
+                      <div
+                        className="work-session-nearby-panel"
+                        data-work-session-evidence-nearby={item.candidate_id}
+                      >
+                        {workSessionEvidenceNearbyState === "loading" ? (
+                          <span>근처 같은 프로젝트 세션 조회 중</span>
+                        ) : null}
+                        {workSessionEvidenceNearbyState === "failed" ? (
+                          <span>근처 세션 조회 실패</span>
+                        ) : null}
+                        {nearbyResult ? (
+                          <>
+                            <span>
+                              근처 세션 {nearbyResult.returned_item_count.toLocaleString()} /{" "}
+                              {nearbyResult.total_match_count.toLocaleString()} · 자동 proof 아님
+                            </span>
+                            {nearbyResult.warnings.map((warning, index) => (
+                              <span key={textListItemKey(warning, index)}>
+                                {warning}
+                              </span>
+                            ))}
+                            {nearbyResult.items.length ? (
+                              nearbyResult.items.map((session) => (
+                                <div
+                                  className="work-session-nearby-item"
+                                  key={session.id}
+                                >
+                                  <strong>
+                                    {session.prompt_date} ·{" "}
+                                    {session.date_distance_days === null
+                                      ? "거리 미상"
+                                      : `${session.date_distance_days.toLocaleString()}일 차이`}
+                                  </strong>
+                                  <span>
+                                    {session.source} · {session.session_id}
+                                  </span>
+                                  <p>{session.excerpt}</p>
+                                  <span>{session.cwd ?? "cwd 없음"}</span>
+                                  <span>{session.source_path}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <span>현재 세션 인덱스에서 같은 프로젝트 세션이 없습니다.</span>
+                            )}
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </article>
                 );
               })}

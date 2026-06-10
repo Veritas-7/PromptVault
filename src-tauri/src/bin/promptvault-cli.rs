@@ -12,8 +12,9 @@ use promptvault_lib::{
     run_project_work_log_normalization_review_queue,
     run_project_work_log_normalization_review_queue_update, run_project_work_log_review_queue,
     run_project_work_log_review_queue_update, run_project_work_report,
-    run_project_work_session_evidence_candidates, run_project_work_session_evidence_proposals,
-    run_project_work_session_evidence_review_apply, run_project_work_session_evidence_review_queue,
+    run_project_work_session_evidence_candidates, run_project_work_session_evidence_nearby,
+    run_project_work_session_evidence_proposals, run_project_work_session_evidence_review_apply,
+    run_project_work_session_evidence_review_queue,
     run_project_work_session_evidence_review_queue_update, run_project_work_session_index,
     run_project_work_status_export, run_project_work_summary, run_scan, source_specs,
     CancelScanOptions, ImportBatchOptions, ImportEventsOptions, ImportStatesOptions,
@@ -25,8 +26,8 @@ use promptvault_lib::{
     ProjectWorkLogNormalizationReviewQueueUpdateOptions, ProjectWorkLogNormalizedItemsOptions,
     ProjectWorkLogReviewQueueOptions, ProjectWorkLogReviewQueueUpdateOptions,
     ProjectWorkReportOptions, ProjectWorkSessionEvidenceCandidatesOptions,
-    ProjectWorkSessionEvidenceProposalsOptions, ProjectWorkSessionEvidenceReviewApplyOptions,
-    ProjectWorkSessionEvidenceReviewQueueOptions,
+    ProjectWorkSessionEvidenceNearbyOptions, ProjectWorkSessionEvidenceProposalsOptions,
+    ProjectWorkSessionEvidenceReviewApplyOptions, ProjectWorkSessionEvidenceReviewQueueOptions,
     ProjectWorkSessionEvidenceReviewQueueUpdateOptions,
     ProjectWorkSessionEvidenceReviewedItemsOptions, ProjectWorkSessionIndexOptions,
     ProjectWorkStatusExportOptions, ProjectWorkSummaryOptions, ProjectWorkSummarySnapshotsOptions,
@@ -831,6 +832,69 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     item.candidate_id, item.project, item.date, item.review_reason
                 );
                 println!("  {}", item.latest_source_path);
+            }
+            if !result.warnings.is_empty() {
+                println!("\nwarnings: {}", result.warnings.join("; "));
+            }
+        }
+        "work-session-evidence-nearby" => {
+            let json = take_flag(&mut args, "--json");
+            let mut limit = None;
+            let mut database_path = None;
+            let mut project = None;
+            let mut date = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?);
+                    }
+                    "--project" => {
+                        project = Some(parse_required_arg(iter.next(), "--project")?);
+                    }
+                    "--date" => {
+                        date = Some(parse_required_arg(iter.next(), "--date")?);
+                    }
+                    other => {
+                        return Err(format!(
+                            "unknown work-session-evidence-nearby argument: {other}"
+                        )
+                        .into())
+                    }
+                }
+            }
+            let result = run_project_work_session_evidence_nearby(
+                ProjectWorkSessionEvidenceNearbyOptions {
+                    database_path,
+                    project: project.ok_or("work-session-evidence-nearby requires --project")?,
+                    date: date.ok_or("work-session-evidence-nearby requires --date")?,
+                    limit,
+                },
+            )?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+            println!("PromptVault nearby session evidence");
+            println!("database: {}", result.database_path);
+            println!("project: {}", result.project);
+            println!("date: {}", result.date);
+            println!("matches: {}", result.total_match_count);
+            println!("returned: {}", result.returned_item_count);
+            for item in &result.items {
+                let distance = item
+                    .date_distance_days
+                    .map(|days| format!("{days}d"))
+                    .unwrap_or_else(|| "unknown".to_string());
+                println!(
+                    "\n{} · {} · distance {} · {}",
+                    item.prompt_date, item.source, distance, item.session_id
+                );
+                println!("- excerpt: {}", item.excerpt);
+                println!("  {}", item.source_path);
             }
             if !result.warnings.is_empty() {
                 println!("\nwarnings: {}", result.warnings.join("; "));
@@ -2547,6 +2611,7 @@ fn help_text() -> String {
         "  work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-evidence-review-apply [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-evidence-reviewed-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n",
+        "  work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
@@ -2581,6 +2646,7 @@ fn help_text() -> String {
         "  work-session-evidence-review-queue-update marks one persisted session-evidence candidate approved or rejected with an audit reason.\n",
         "  work-session-evidence-review-apply writes approved session-evidence review decisions into an idempotent durable reviewed-items audit table; it does not create session evidence links.\n",
         "  work-session-evidence-reviewed-items lists durable reviewed session-evidence audit rows by project and date without creating session evidence links.\n",
+        "  work-session-evidence-nearby lists same-project session records nearest a target project/date as navigation hints only; it does not approve or create session evidence.\n",
         "  work-log-coverage lists parsed and unparsed project progress logs by project.\n",
         "  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n",
         "  work-ai-provider-status reports OpenAI/GLM/Codex work-management provider readiness without exposing secrets.\n",
@@ -2796,6 +2862,11 @@ struct ProjectWorkLogNormalizedItemsBridgePayload {
 #[derive(serde::Deserialize)]
 struct ProjectWorkSessionEvidenceReviewedItemsBridgePayload {
     options: Option<ProjectWorkSessionEvidenceReviewedItemsOptions>,
+}
+
+#[derive(serde::Deserialize)]
+struct ProjectWorkSessionEvidenceNearbyBridgePayload {
+    options: ProjectWorkSessionEvidenceNearbyOptions,
 }
 
 #[derive(serde::Deserialize)]
@@ -3104,6 +3175,17 @@ fn handle_bridge_route(
             let result = run_list_project_work_session_evidence_reviewed_items(options)?;
             write_json_response(stream, 200, &result)
         }
+        ("POST", "/api/work-session-evidence-nearby") => {
+            let payload = serde_json::from_str::<ProjectWorkSessionEvidenceNearbyBridgePayload>(
+                &request.body,
+            )?;
+            let mut options = payload.options;
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_project_work_session_evidence_nearby(options)?;
+            write_json_response(stream, 200, &result)
+        }
         ("POST", "/api/work-summary-snapshots") => {
             let payload =
                 serde_json::from_str::<ProjectWorkSummarySnapshotsBridgePayload>(&request.body)?;
@@ -3301,6 +3383,7 @@ fn bridge_route_uses_database(method: &str, path: &str) -> bool {
             | ("POST", "/api/work-session-evidence-review-queue/update")
             | ("POST", "/api/work-session-evidence-review-apply")
             | ("POST", "/api/work-session-evidence-reviewed-items")
+            | ("POST", "/api/work-session-evidence-nearby")
             | ("POST", "/api/work-summary-snapshots")
             | ("POST", "/api/work-session-index")
             | ("POST", "/api/work-ai-provider-status")
@@ -3646,6 +3729,16 @@ mod tests {
         assert!(reviewed_items_response
             .contains("work-session-evidence reviewed item limit requires a positive integer"));
         assert!(reviewed_items_response.contains("Access-Control-Allow-Origin: *"));
+
+        let nearby_response = bridge_response_for(
+            "/api/work-session-evidence-nearby",
+            r#"{"options":{"project":"PromptVault","date":"2026-06-10","limit":0}}"#,
+        );
+
+        assert!(nearby_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(nearby_response
+            .contains("work-session-evidence-nearby limit requires a positive integer"));
+        assert!(nearby_response.contains("Access-Control-Allow-Origin: *"));
     }
 
     #[test]
@@ -3939,6 +4032,7 @@ mod tests {
             "/api/work-session-evidence-review-queue/update",
             "/api/work-session-evidence-review-apply",
             "/api/work-session-evidence-reviewed-items",
+            "/api/work-session-evidence-nearby",
             "/api/work-log-review-queue",
             "/api/work-log-review-queue/update",
             "/api/work-log-extract",
@@ -4051,6 +4145,9 @@ mod tests {
         assert!(help.contains("work-session-evidence-review-apply [--limit N>0] [--database PATH]"));
         assert!(help.contains(
             "work-session-evidence-reviewed-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME]"
+        ));
+        assert!(help.contains(
+            "work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--database PATH] [--json]"
         ));
         assert!(
             help.contains(

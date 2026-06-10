@@ -49,6 +49,8 @@ const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT: usize = 50;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEWED_ITEM_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEWED_ITEM_LIMIT: usize = 200;
+const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT: usize = 8;
+const MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT: usize = 50;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
 const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
 const PROJECT_WORK_METADATA_TAIL_TIMESTAMP_LINES: usize = 200;
@@ -1125,6 +1127,43 @@ pub struct ProjectWorkSessionEvidenceReviewedItemsResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSessionEvidenceNearbyOptions {
+    pub database_path: Option<String>,
+    pub project: String,
+    pub date: String,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceNearbyItem {
+    pub id: String,
+    pub source: String,
+    pub session_id: String,
+    pub source_path: String,
+    pub timestamp: Option<String>,
+    pub prompt_date: String,
+    pub cwd: Option<String>,
+    pub date_distance_days: Option<i64>,
+    pub excerpt: String,
+    pub word_count: usize,
+    pub char_count: usize,
+    pub risk_flags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceNearbyResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub project: String,
+    pub date: String,
+    pub requested_limit: usize,
+    pub total_match_count: usize,
+    pub returned_item_count: usize,
+    pub items: Vec<ProjectWorkSessionEvidenceNearbyItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkSessionIndexOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
@@ -1632,6 +1671,13 @@ fn project_work_session_evidence_reviewed_items(
 ) -> Result<ProjectWorkSessionEvidenceReviewedItemsResult, String> {
     run_list_project_work_session_evidence_reviewed_items(options.unwrap_or_default())
         .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_session_evidence_nearby(
+    options: ProjectWorkSessionEvidenceNearbyOptions,
+) -> Result<ProjectWorkSessionEvidenceNearbyResult, String> {
+    run_project_work_session_evidence_nearby(options).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -2688,6 +2734,66 @@ pub fn run_list_project_work_session_evidence_reviewed_items(
         available_projects: item_rows.available_projects,
         items: item_rows.items,
         warnings: Vec::new(),
+    })
+}
+
+pub fn run_project_work_session_evidence_nearby(
+    options: ProjectWorkSessionEvidenceNearbyOptions,
+) -> Result<ProjectWorkSessionEvidenceNearbyResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-session-evidence-nearby limit requires a positive integer".into());
+    }
+    let project = options.project.trim();
+    if project.is_empty() {
+        return Err("work-session-evidence-nearby project requires a non-empty value".into());
+    }
+    let date = options.date.trim();
+    if date.is_empty() {
+        return Err("work-session-evidence-nearby date requires a non-empty value".into());
+    }
+    if NaiveDate::parse_from_str(date, "%Y-%m-%d").is_err() {
+        return Err("work-session-evidence-nearby date requires YYYY-MM-DD".into());
+    }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("work-session-evidence-nearby database path requires a non-empty value".into());
+    }
+
+    let requested_limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT);
+    let limit = requested_limit.min(MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT);
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let conn = open_promptvault_database(&database_path)?;
+    let items = read_project_work_session_evidence_nearby_items(&conn, project, date, limit)?;
+    let total_match_count = count_project_work_session_evidence_for_project(&conn, project)?;
+    let mut warnings = vec![
+        "Nearby same-project sessions are navigation hints only; they do not create or approve session evidence.".to_string(),
+    ];
+    if requested_limit > MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT {
+        warnings.push(format!(
+            "work-session-evidence-nearby limit capped at {MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT}"
+        ));
+    }
+    if total_match_count == 0 {
+        warnings.push(
+            "No same-project session evidence records were found in the current session index."
+                .to_string(),
+        );
+    }
+    Ok(ProjectWorkSessionEvidenceNearbyResult {
+        generated_at: Utc::now().to_rfc3339(),
+        database_path: database_path.display().to_string(),
+        project: project.to_string(),
+        date: date.to_string(),
+        requested_limit,
+        total_match_count,
+        returned_item_count: items.len(),
+        items,
+        warnings,
     })
 }
 
@@ -8899,7 +9005,7 @@ fn project_work_session_date_counts_for_project(
     conn: &Connection,
     project: &str,
 ) -> Result<Vec<ProjectWorkSessionDateCount>, Box<dyn std::error::Error>> {
-    let pattern = format!("%/10_Projects/{}%", sqlite_like_escape(project));
+    let pattern = project_work_session_project_like_pattern(project);
     let mut stmt = conn.prepare(
         "SELECT prompt_date, COUNT(*) AS prompt_count
          FROM project_work_session_evidence
@@ -8918,6 +9024,71 @@ fn project_work_session_date_counts_for_project(
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
+}
+
+fn count_project_work_session_evidence_for_project(
+    conn: &Connection,
+    project: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let pattern = project_work_session_project_like_pattern(project);
+    let count = conn.query_row(
+        "SELECT COUNT(*)
+         FROM project_work_session_evidence
+         WHERE source_path LIKE ?1 ESCAPE '\\'
+            OR cwd LIKE ?1 ESCAPE '\\'
+            OR text LIKE ?1 ESCAPE '\\'",
+        [pattern],
+        |row| row.get::<_, i64>(0),
+    )?;
+    Ok(count as usize)
+}
+
+fn read_project_work_session_evidence_nearby_items(
+    conn: &Connection,
+    project: &str,
+    date: &str,
+    limit: usize,
+) -> Result<Vec<ProjectWorkSessionEvidenceNearbyItem>, Box<dyn std::error::Error>> {
+    let pattern = project_work_session_project_like_pattern(project);
+    let mut stmt = conn.prepare(
+        "SELECT id, source, session_id, source_path, timestamp, prompt_date, cwd, text,
+                word_count, char_count, risk_flags_json
+         FROM project_work_session_evidence
+         WHERE source_path LIKE ?1 ESCAPE '\\'
+            OR cwd LIKE ?1 ESCAPE '\\'
+            OR text LIKE ?1 ESCAPE '\\'
+         ORDER BY ABS(julianday(prompt_date) - julianday(?2)) ASC,
+                  prompt_date DESC,
+                  COALESCE(timestamp, indexed_at, '') DESC,
+                  id DESC
+         LIMIT ?3",
+    )?;
+    let rows = stmt
+        .query_map(params![pattern, date, limit as i64], |row| {
+            let prompt_date: String = row.get(5)?;
+            let text: String = row.get(7)?;
+            let risk_flags_json: String = row.get(10)?;
+            Ok(ProjectWorkSessionEvidenceNearbyItem {
+                id: row.get(0)?,
+                source: row.get(1)?,
+                session_id: row.get(2)?,
+                source_path: row.get(3)?,
+                timestamp: row.get(4)?,
+                prompt_date: prompt_date.clone(),
+                cwd: row.get(6)?,
+                date_distance_days: project_work_session_date_distance_checked(date, &prompt_date),
+                excerpt: truncate_chars(&redact_sensitive_text(&markdown_inline(&text)), 320),
+                word_count: row.get::<_, i64>(8)? as usize,
+                char_count: row.get::<_, i64>(9)? as usize,
+                risk_flags: serde_json::from_str(&risk_flags_json).unwrap_or_default(),
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn project_work_session_project_like_pattern(project: &str) -> String {
+    format!("%/10_Projects/{}%", sqlite_like_escape(project))
 }
 
 fn sqlite_like_escape(value: &str) -> String {
@@ -8955,6 +9126,15 @@ fn project_work_session_date_distance(left: &str, right: &str) -> i64 {
         return i64::MAX;
     };
     left.signed_duration_since(right).num_days().abs()
+}
+
+fn project_work_session_date_distance_checked(left: &str, right: &str) -> Option<i64> {
+    let distance = project_work_session_date_distance(left, right);
+    if distance == i64::MAX {
+        None
+    } else {
+        Some(distance)
+    }
 }
 
 fn project_work_session_evidence_reason_token<'a>(
@@ -17155,6 +17335,7 @@ pub fn run() {
             project_work_session_evidence_review_queue_update,
             project_work_session_evidence_review_apply,
             project_work_session_evidence_reviewed_items,
+            project_work_session_evidence_nearby,
             project_work_summary_snapshots,
             project_work_log_coverage,
             project_work_log_candidates,
@@ -21181,6 +21362,57 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(missing.same_project_other_session_date_count, 0);
         assert_eq!(missing.nearest_same_project_other_session_date, None);
         assert!(missing.reason.contains("no_same_project_session_dates"));
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn session_evidence_nearby_lists_same_project_sessions_by_date_distance() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-session-evidence-nearby-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let prompts = vec![
+            project_path_session_record(
+                "nearby-project-far",
+                "NearbyProject",
+                "2026-06-01T12:00:00Z",
+            ),
+            project_path_session_record(
+                "nearby-project-close",
+                "NearbyProject",
+                "2026-06-08T12:00:00Z",
+            ),
+            project_path_session_record(
+                "nearby-other-project",
+                "OtherProject",
+                "2026-06-09T12:00:00Z",
+            ),
+        ];
+        persist_project_work_session_index(&db_path, &prompts).expect("persist nearby sessions");
+
+        let result =
+            run_project_work_session_evidence_nearby(ProjectWorkSessionEvidenceNearbyOptions {
+                database_path: Some(db_path.display().to_string()),
+                project: "NearbyProject".to_string(),
+                date: "2026-06-09".to_string(),
+                limit: Some(2),
+            })
+            .expect("read nearby sessions");
+
+        assert_eq!(result.project, "NearbyProject");
+        assert_eq!(result.date, "2026-06-09");
+        assert_eq!(result.total_match_count, 2);
+        assert_eq!(result.returned_item_count, 2);
+        assert_eq!(result.items[0].prompt_date, "2026-06-08");
+        assert_eq!(result.items[0].date_distance_days, Some(1));
+        assert_eq!(result.items[1].prompt_date, "2026-06-01");
+        assert_eq!(result.items[1].date_distance_days, Some(8));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("navigation hints only")));
 
         let _ = std::fs::remove_file(db_path);
     }

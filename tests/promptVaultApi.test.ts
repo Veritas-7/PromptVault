@@ -21,6 +21,7 @@ import {
   loadStoredPrompts,
   loadProjectWorkSummary,
   loadProjectWorkSessionEvidenceCandidates,
+  loadProjectWorkSessionEvidenceNearby,
   loadProjectWorkSessionEvidenceProposals,
   loadProjectWorkSessionEvidenceReviewQueue,
   applyProjectWorkSessionEvidenceReviewRows,
@@ -557,6 +558,49 @@ function projectWorkSessionEvidenceReviewedItemsPayload(overrides = {}) {
     available_projects: ["PromptVault"],
     items: [reviewed],
     warnings: [],
+    ...overrides,
+  };
+}
+
+function projectWorkSessionEvidenceNearbyPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:04:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    project: "PromptVault",
+    date: "2026-06-09",
+    requested_limit: 6,
+    total_match_count: 2,
+    returned_item_count: 2,
+    items: [{
+      id: "session-nearby-1",
+      source: "Codex session metadata",
+      session_id: "thread-nearby-1",
+      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      timestamp: "2026-06-08T23:00:00Z",
+      prompt_date: "2026-06-09",
+      cwd: "/Users/wj/Ai/System/10_Projects/PromptVault",
+      date_distance_days: 0,
+      excerpt: "PromptVault nearby session evidence excerpt.",
+      word_count: 5,
+      char_count: 44,
+      risk_flags: [],
+    }, {
+      id: "session-nearby-2",
+      source: "Claude Code projects",
+      session_id: "thread-nearby-2",
+      source_path: "/Users/wj/.claude/projects/promptvault.jsonl",
+      timestamp: null,
+      prompt_date: "2026-06-08",
+      cwd: null,
+      date_distance_days: 1,
+      excerpt: "Older PromptVault session evidence excerpt.",
+      word_count: 5,
+      char_count: 41,
+      risk_flags: [],
+    }],
+    warnings: [
+      "Nearby same-project sessions are navigation hints only; they do not create or approve session evidence.",
+    ],
     ...overrides,
   };
 }
@@ -1526,6 +1570,65 @@ test("browser bridge work session evidence reviewed items rejects duplicate cand
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /session-evidence-PromptVault|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work session evidence nearby posts target and validates sessions", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionEvidenceNearbyPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkSessionEvidenceNearby({
+    project: "PromptVault",
+    date: "2026-06-09",
+    limit: 6,
+  });
+
+  assert.match(requestPath, /\/api\/work-session-evidence-nearby$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      project: "PromptVault",
+      date: "2026-06-09",
+      limit: 6,
+    },
+  });
+  assert.equal(result.total_match_count, 2);
+  assert.equal(result.returned_item_count, 2);
+  assert.equal(result.items[0].date_distance_days, 0);
+  assert.equal(result.items[1].cwd, null);
+  assert.match(result.warnings[0], /navigation hints only/);
+});
+
+test("browser bridge work session evidence nearby rejects duplicate session ids", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const item = projectWorkSessionEvidenceNearbyPayload().items[0];
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSessionEvidenceNearbyPayload({
+    items: [item, item],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkSessionEvidenceNearby({
+      project: "PromptVault",
+      date: "2026-06-09",
+      limit: 6,
+    }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /session-nearby-1|undefined/);
       return true;
     },
   );

@@ -94,6 +94,7 @@ For project/day work-ledger checks outside the UI, use:
 ```bash
 cd src-tauri
 cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --json
+cargo run --bin promptvault-cli -- work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --json
 cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
 cargo run --bin promptvault-cli -- work-session-evidence-review-queue --sync-candidates --limit 20 --json
 cargo run --bin promptvault-cli -- work-session-evidence-review-apply --limit 20 --json
@@ -115,6 +116,11 @@ Same-project session-date hints only affect review ordering: same-date and
 nearest other-date hints are shown before rows with no known same-project
 session dates, and title-normalization rows remain blocked from review-complete
 approval until their titles are cleaned up.
+Use `work-session-evidence-nearby` or the review-queue row's `근처 세션` action
+to inspect nearby same-project session records for one project/date. That
+drilldown is read-only navigation: it returns excerpts and source paths from
+the sanitized session index, but it does not create, approve, or attach session
+evidence.
 Status export, candidates, proposals, and the review queue also classify those
 source artifacts as handoff logs, work logs, project-status files, progress logs,
 generated reports, dated work logs, or generic progress artifacts so project/day
@@ -152,14 +158,18 @@ Recommended agent workflow:
 8. Use `cargo run --bin promptvault-cli -- work-session-evidence-candidates
    --limit 20 --json` to list project/day rows that still have no matched
    session evidence after the selected, full stored session index.
-9. Use `cargo run --bin promptvault-cli -- work-session-evidence-proposals
+9. Use `cargo run --bin promptvault-cli -- work-session-evidence-nearby
+   --project NAME --date YYYY-MM-DD --limit 8 --json` to inspect nearby
+   same-project session records for a candidate row. Treat the output as a
+   navigation hint, not proof.
+10. Use `cargo run --bin promptvault-cli -- work-session-evidence-proposals
    --limit 20 --needs-title-normalization --ai --json` to generate read-only
    OpenAI/GLM/Codex-opt-in/local proposals for title-normalization blockers,
    or omit the filter for all unresolved rows. Codex is used only when
    `PROMPTVAULT_CODEX_WORK_PROVIDER=1` is set. Accepted proposals still require
    later operator review, and review-complete queue rows do not write durable
    session evidence.
-10. Use `cargo run --bin promptvault-cli -- work-session-index --batch-files 25
+11. Use `cargo run --bin promptvault-cli -- work-session-index --batch-files 25
    --max-batches 2 --json` for short sanitized session-index backfills, and add
    `--confirm-long-run` when intentionally running above the short two-batch cap.
 
@@ -214,7 +224,7 @@ cd src-tauri
 cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 ```
 
-The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, `/api/import-events`, `/api/work-summary`, `/api/work-status-export`, `/api/work-session-evidence-candidates`, `/api/work-session-evidence-proposals`, `/api/work-session-evidence-review-queue`, `/api/work-session-evidence-review-queue/update`, `/api/work-session-evidence-review-apply`, `/api/work-session-evidence-reviewed-items`, `/api/work-ai-provider-status`, `/api/work-ai-provider-health`, `/api/work-log-normalization-candidates`, `/api/work-log-normalization-proposals`, `/api/work-log-normalization-review-queue`, `/api/work-log-normalization-review-queue/update`, `/api/work-log-normalization-apply`, `/api/work-summary-snapshots`, and `/api/work-session-index` endpoints so cmux or another in-app browser can exercise the same scan, scan cancellation, active scan progress with discovery counts, stored-prompt loading, stored facet summaries, planning, improvement, resumable import, saved cursor, import activity, project/day summaries, compact status exports, session-evidence review candidates, read-only session-evidence proposals, persisted session-evidence review decisions, durable reviewed-decision audit saves and reloads, work-management AI provider readiness, work-management AI provider live-health probes, title-focused work-log normalization, saved summary history, and sanitized session-index backfill code paths without Tauri IPC. The browser Stop control returns partial scan results for review but does not write canceled partial scans into the permanent SQLite vault; completed browser scans still persist normally.
+The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, `/api/import-events`, `/api/work-summary`, `/api/work-status-export`, `/api/work-session-evidence-candidates`, `/api/work-session-evidence-nearby`, `/api/work-session-evidence-proposals`, `/api/work-session-evidence-review-queue`, `/api/work-session-evidence-review-queue/update`, `/api/work-session-evidence-review-apply`, `/api/work-session-evidence-reviewed-items`, `/api/work-ai-provider-status`, `/api/work-ai-provider-health`, `/api/work-log-normalization-candidates`, `/api/work-log-normalization-proposals`, `/api/work-log-normalization-review-queue`, `/api/work-log-normalization-review-queue/update`, `/api/work-log-normalization-apply`, `/api/work-summary-snapshots`, and `/api/work-session-index` endpoints so cmux or another in-app browser can exercise the same scan, scan cancellation, active scan progress with discovery counts, stored-prompt loading, stored facet summaries, planning, improvement, resumable import, saved cursor, import activity, project/day summaries, compact status exports, session-evidence review candidates, read-only nearby same-project session drilldowns, read-only session-evidence proposals, persisted session-evidence review decisions, durable reviewed-decision audit saves and reloads, work-management AI provider readiness, work-management AI provider live-health probes, title-focused work-log normalization, saved summary history, and sanitized session-index backfill code paths without Tauri IPC. The browser Stop control returns partial scan results for review but does not write canceled partial scans into the permanent SQLite vault; completed browser scans still persist normally.
 Use `npm run qa:browser-bridge` or `serve --database /tmp/promptvault-browser-qa.sqlite` when validating write-capable browser flows against an isolated database.
 
 ## AI Recommendation Path

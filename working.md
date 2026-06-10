@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 13:59 KST
+Updated: 2026-06-10 14:18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-10 13:59 KST
+## Resume Snapshot - 2026-06-10 14:18 KST
 
 Long-Term Goal:
 
@@ -34,13 +34,19 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed implementation baseline before this slice:
-  `6781953 feat: show session evidence diagnostics`.
-- Current verified implementation slice: session-evidence candidates and the
+  `4231df9 feat: prioritize session evidence review`.
+- Current verified implementation slice: unresolved session-evidence review
+  rows now have a read-only nearby same-project session drilldown. The CLI,
+  Tauri command, browser bridge endpoint, and review-queue UI `근처 세션` action
+  return nearby sanitized session excerpts and paths for a project/date, sorted
+  by date distance. The drilldown is navigation only; it does not create,
+  approve, or attach session evidence.
+- Previous verified implementation slice: session-evidence candidates and the
   durable review queue are now sorted by same-project session-date diagnostics
   before truncation. Same-date unmatched rows rank first, nearest other-date
   same-project rows rank next by date distance, no-same-project-session rows
   rank after those, and title-normalization rows remain behind reviewable rows.
-- Previous verified implementation slice: human-readable session-evidence
+- Earlier verified implementation slice: human-readable session-evidence
   diagnostic labels in proposal/review queue rows. The UI renders same-date,
   same-project-other-date, nearest-date, and no-same-project-session hints as
   operator-facing text instead of requiring raw `candidate_reason` parsing.
@@ -71,10 +77,20 @@ Current Work:
   pending unresolved candidates. The returned top rows use the same priority as
   the candidate API, so operator review starts with nearest same-project session
   hints.
+- Actual default-vault nearby drilldown proof after the current slice:
+  `work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10
+  --limit 5 --json` returned `5/5` nearby same-project session records. The
+  nearest returned prompt date was `2026-06-09` with `date_distance_days=1`, and
+  the command emitted the required `navigation hints only` warning.
+- Actual browser bridge QA proof after the current slice:
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed and
+  exercised `/api/work-session-evidence-nearby` plus the review-queue UI
+  drilldown. Isolated QA DB:
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-Tl5Zip/qa.sqlite`.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
-  useful step is provider/manual search execution or a drilldown action for the
-  prioritized unresolved session-evidence rows.
+  useful step is provider/manual search execution or AI-assisted candidate
+  evaluation against the nearby drilldown output.
 
 Resume Contract:
 
@@ -105,8 +121,89 @@ Immediate Resume Commands:
 
 - `src-tauri/target/debug/promptvault-cli work-status-export --limit 200 --full-session-index --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
+- `src-tauri/target/debug/promptvault-cli work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Session-evidence nearby drilldown
+
+Current Goal:
+
+- Give operators a read-only way to inspect nearby same-project session records
+  from prioritized unresolved session-evidence rows, without treating those
+  records as proof or changing the fail-closed evidence gate.
+
+Context:
+
+- The previous slice put reviewable rows with nearest same-project session-date
+  hints first, but the operator still had to manually search session artifacts.
+- The next useful step was a safe drilldown/search action that shows candidate
+  nearby sessions while keeping evidence creation and approval separate.
+
+Progress:
+
+- Added `work-session-evidence-nearby` as a Rust runner, Tauri command, CLI
+  command, and local browser bridge route.
+- Added frontend API parsing and a review-queue row `근처 세션` action that opens
+  a row-local panel with nearby session dates, distance, excerpt, cwd, source
+  path, and warning text.
+- Added validation for project/date/database path/limit, cap warnings, duplicate
+  item rejection in the browser API parser, and positive-integer bridge errors.
+- Kept the route read-only. The warning explicitly states nearby same-project
+  sessions are navigation hints only and do not create or approve session
+  evidence.
+
+Live Default-vault Proof:
+
+- `work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10
+  --limit 5 --json` returned `total_match_count=5`,
+  `returned_item_count=5`, first prompt date `2026-06-09`, and
+  `first_distance_days=1`.
+- The result included the required warning containing `navigation hints only`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added nearby options/result structs, SQL lookup,
+  sorting by date distance, Tauri command, and Rust test coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`: added CLI command, help text, bridge
+  route, isolated DB routing, and validation coverage.
+- `src/promptVaultApi.ts`, `src/types.ts`: added typed browser/Tauri API
+  surface and strict result parsing.
+- `src/App.tsx`, `src/App.css`: added the review-queue `근처 세션` drilldown
+  action and row-local panel.
+- `tests/promptVaultApi.test.ts`: added bridge parser coverage for valid
+  nearby results and duplicate session ID rejection.
+- `scripts/browser-bridge-isolated-qa.mjs`: added bridge and UI QA coverage for
+  the nearby drilldown.
+- `README.md`, `docs/CLI.md`, `working.md`: documented the read-only nearby
+  workflow and resume proof.
+
+Tests:
+
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_nearby`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli work_session_evidence`
+  (`3` CLI bridge validation tests).
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work session evidence nearby"`
+  (`205` UI/API tests ran and passed).
+- PASS: default-vault CLI nearby proof for `RepoTutorStudio` on `2026-06-10`.
+- PASS: `npm run check`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+Issues:
+
+- Nearby session rows are still hints, not accepted evidence. A provider/manual
+  review step must still inspect target session content before any durable
+  review-complete decision.
+- The browser QA isolated DB is temporary and should be treated as proof of the
+  completed run, not as a persistent artifact.
+
+Next Steps:
+
+- Run or add provider/manual session-search evaluation against the nearby
+  drilldown output for the top unresolved rows.
+- Consider AI-assisted candidate ranking that reads nearby excerpts and returns
+  copied source traces for operator review, with the same fail-closed copied
+  evidence checks used elsewhere.
 
 ## Completed Slice - 2026-06-10 Session-evidence review priority ordering
 

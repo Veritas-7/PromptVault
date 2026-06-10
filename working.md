@@ -1,10 +1,67 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 10:35 KST
+Updated: 2026-06-10 10:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Normalized work-log durable display priority
+
+Current Goal:
+
+- Keep durable normalized work-log rows authoritative in the management UI when
+  both an immediate apply result and a later `work-log-normalized-items` reload
+  result are present.
+
+Context:
+
+- `work-log-normalized-items` already exists across CLI, bridge, Tauri IPC, and
+  UI state.
+- The UI still selected `work-log-normalization-apply` rows before durable
+  reload rows, which could show a stale or narrower apply result after a later
+  management refresh loaded the durable normalized table.
+- Hidden normalized-row overflow also used the returned row length instead of
+  durable total counts.
+
+Progress:
+
+- Added pure display helpers that prefer `ProjectWorkLogNormalizedItemsResult`
+  over `ProjectWorkLogNormalizationApplyResult`.
+- Updated the UI to use durable normalized rows first and to compute overflow
+  from `total_items` / `total_applied_item_count`.
+- Added regression coverage proving durable reload rows win over stale apply
+  rows and total counts remain accurate.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds normalized-row display and total-count
+  helpers.
+- `src/App.tsx`: uses the helpers for normalized-row rendering and overflow.
+- `tests/workSummaryStatus.test.ts`: covers durable reload priority and fallback
+  to immediate apply rows.
+
+Tests:
+
+- PASS: `npx tsc --noEmit`.
+- PASS: `npm run test:ui -- tests/workSummaryStatus.test.ts` (`511` UI tests).
+- PASS: `npm run build`.
+- PASS: `git diff --check`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- Browser bridge QA used temporary DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-kjyHvK/qa.sqlite`.
+- QA reached `work log normalization apply` and reported
+  `workLogNormalizationApplyMeta` with `적용 1개`, `저장 총 1개`, and
+  `workLogNormalizedRows` containing the approved normalized item.
+
+Remaining:
+
+- Run full check and secret checks, then stage explicit paths, commit, and push.
+- Continue project/day cleanup for rows still marked `progress-log-only`,
+  `unresolved-after-full-index`, or `needs_title_normalization`.
 
 ## Completed Slice - 2026-06-10 Durable session-evidence reviewed item reload
 

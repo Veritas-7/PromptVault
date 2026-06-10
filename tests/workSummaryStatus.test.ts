@@ -40,6 +40,8 @@ import {
   workLogNormalizationApplyActionLabel,
   workLogNormalizationApplyFailureText,
   workLogNormalizationApplyMetaText,
+  workLogNormalizedItemsForDisplay,
+  workLogNormalizedItemsTotalCount,
   workLogNormalizationReviewQueueActionLabel,
   workLogNormalizationReviewQueueFailureText,
   workLogNormalizationReviewQueueItemStateText,
@@ -144,6 +146,7 @@ import type {
   ProjectWorkLogExtractionRunsResult,
   ProjectWorkLogNormalizationCandidatesResult,
   ProjectWorkLogNormalizationApplyResult,
+  ProjectWorkLogNormalizedItemsResult,
   ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueItem,
@@ -734,6 +737,28 @@ function normalizationApplyResult(
       provider_model: null,
       provider_runtime: "local-normalization-rules",
       used_ai: false,
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function normalizedItemsResult(
+  overrides: Partial<ProjectWorkLogNormalizedItemsResult> = {},
+): ProjectWorkLogNormalizedItemsResult {
+  return {
+    generated_at: "2026-06-09T00:02:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_items: 7,
+    returned_item_count: 1,
+    available_dates: ["2026-06-09"],
+    available_projects: ["CareVault"],
+    items: [{
+      ...normalizationApplyResult().items[0],
+      candidate_id: "work-normalize-CareVault-reloaded",
+      id: 9,
+      applied_at: "2026-06-09T00:02:00Z",
+      normalized_title: "Reloaded durable normalized title",
     }],
     warnings: [],
     ...overrides,
@@ -2635,6 +2660,38 @@ test("work log normalization apply labels describe durable approved rows", () =>
     "승인된 정규화 row를 durable table에 적용하지 못했습니다. 데이터베이스 경로, 승인 큐 상태, 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogNormalizationApplyFailureText("ready"), null);
+});
+
+test("work log normalized display prefers durable reload rows and total counts", () => {
+  const applyResult = normalizationApplyResult({
+    total_applied_item_count: 6,
+    items: [{
+      ...normalizationApplyResult().items[0],
+      candidate_id: "work-normalize-apply-stale",
+      normalized_title: "Stale apply result",
+    }],
+  });
+  const reloadedResult = normalizedItemsResult({
+    total_items: 7,
+    items: [{
+      ...normalizedItemsResult().items[0],
+      candidate_id: "work-normalize-reloaded-current",
+      normalized_title: "Reloaded durable row",
+    }],
+  });
+
+  assert.deepEqual(
+    workLogNormalizedItemsForDisplay(applyResult, reloadedResult).map((item) => item.candidate_id),
+    ["work-normalize-reloaded-current"],
+  );
+  assert.equal(workLogNormalizedItemsTotalCount(applyResult, reloadedResult), 7);
+  assert.equal(
+    workLogNormalizedItemsForDisplay(applyResult, null)[0].candidate_id,
+    "work-normalize-apply-stale",
+  );
+  assert.equal(workLogNormalizedItemsTotalCount(applyResult, null), 6);
+  assert.deepEqual(workLogNormalizedItemsForDisplay(null, null), []);
+  assert.equal(workLogNormalizedItemsTotalCount(null, null), 0);
 });
 
 test("work session evidence review apply labels describe durable reviewed audit rows", () => {

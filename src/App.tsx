@@ -343,6 +343,8 @@ import {
   workLogNormalizationApplyActionLabel,
   workLogNormalizationApplyFailureText,
   workLogNormalizationApplyMetaText,
+  workLogNormalizedItemsForDisplay,
+  workLogNormalizedItemsTotalCount,
   workLogNormalizationReviewQueueActionLabel,
   workLogNormalizationReviewQueueFailureText,
   workLogNormalizationReviewQueueItemStateText,
@@ -1540,11 +1542,14 @@ function App() {
     0,
     WORK_SESSION_EVIDENCE_REVIEW_QUEUE_DISPLAY_LIMIT,
   );
-  const visibleWorkLogNormalizedItems =
-    (workLogNormalizationApplyResult?.items ?? workLogNormalizedItemsResult?.items ?? []).slice(
-      0,
-      WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT,
-    );
+  const workLogNormalizedItems = workLogNormalizedItemsForDisplay(
+    workLogNormalizationApplyResult,
+    workLogNormalizedItemsResult,
+  );
+  const visibleWorkLogNormalizedItems = workLogNormalizedItems.slice(
+    0,
+    WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT,
+  );
   const visibleWorkLogExtractionItemGroups =
     groupWorkLogExtractionItemsByProjectDate(visibleWorkLogExtractionItems);
   const hiddenWorkLogExtractionItemCount = Math.max(
@@ -1588,10 +1593,13 @@ function App() {
     0,
     workSessionEvidenceReviewedTotalCount - visibleWorkSessionEvidenceReviewedItems.length,
   );
+  const workLogNormalizedTotalCount = workLogNormalizedItemsTotalCount(
+    workLogNormalizationApplyResult,
+    workLogNormalizedItemsResult,
+  );
   const hiddenWorkLogNormalizedItemCount = Math.max(
     0,
-    ((workLogNormalizationApplyResult?.items ?? workLogNormalizedItemsResult?.items ?? []).length)
-      - WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT,
+    workLogNormalizedTotalCount - visibleWorkLogNormalizedItems.length,
   );
   const workManagementOverviewLoaded =
     workStatusExportResult !== null

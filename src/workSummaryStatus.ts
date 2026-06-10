@@ -18,6 +18,8 @@ import type {
   ProjectWorkLogNormalizationProposal,
   ProjectWorkLogNormalizationProposalsResult,
   ProjectWorkLogNormalizationApplyResult,
+  ProjectWorkLogNormalizedItem,
+  ProjectWorkLogNormalizedItemsResult,
   ProjectWorkLogNormalizationReviewQueueItem,
   ProjectWorkLogNormalizationReviewQueueResult,
   ProjectWorkLogReviewQueueResult,
@@ -1995,6 +1997,22 @@ export function workLogNormalizationApplyMetaText(
     `저장 총 ${result.total_applied_item_count.toLocaleString()}개`,
     `표시 ${result.returned_item_count.toLocaleString()}개`,
   ].join(" · ");
+}
+
+export function workLogNormalizedItemsForDisplay(
+  applyResult: ProjectWorkLogNormalizationApplyResult | null,
+  normalizedItemsResult: ProjectWorkLogNormalizedItemsResult | null,
+): ProjectWorkLogNormalizedItem[] {
+  return normalizedItemsResult?.items ?? applyResult?.items ?? [];
+}
+
+export function workLogNormalizedItemsTotalCount(
+  applyResult: ProjectWorkLogNormalizationApplyResult | null,
+  normalizedItemsResult: ProjectWorkLogNormalizedItemsResult | null,
+): number {
+  return normalizedItemsResult?.total_items
+    ?? applyResult?.total_applied_item_count
+    ?? workLogNormalizedItemsForDisplay(applyResult, normalizedItemsResult).length;
 }
 
 export function workLogNormalizationApplyFailureText(

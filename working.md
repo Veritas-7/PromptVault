@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 03:32 KST
+Updated: 2026-06-11 03:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-11 03:32 KST
+## Resume Snapshot - 2026-06-11 03:34 KST
 
 Long-Term Goal:
 
@@ -37,9 +37,9 @@ Current Goal:
 - Completed and pushed afterward: docs-only continuity correction for this
   `working.md` handoff snapshot. Use `git log -1 --oneline` for the current
   repository tip rather than treating the previous code-slice hash as HEAD.
-- Completed local implementation and verification for the approved-row
-  stale-on-sync save-path slice. Use `git log -1 --oneline` for the current
-  repository tip after the slice is committed.
+- Completed and pushed: `de677e4 fix: stale approved work log queue rows on
+  sync`. Use `git log -1 --oneline` for the latest repository tip if later
+  docs-only handoff commits are present.
 
 Context:
 
@@ -91,6 +91,8 @@ Progress:
 - Updated the isolated browser-bridge QA approved-save fixture to avoid
   re-syncing its synthetic `/tmp` row, so it still validates already-approved
   row save behavior while the backend regression validates stale-on-sync safety.
+- Committed and pushed the backend safety slice as
+  `de677e4 fix: stale approved work log queue rows on sync`.
 
 Changes:
 
@@ -153,6 +155,11 @@ Tests:
   isolated SQLite database. Output confirmed stale work-log fixture action state
   `approveButtonCount: 0`, `rejectButtonCount: 1`, and approved queue save
   persistence `accepted 제안 1개 저장`.
+- Final git/gitleaks checks for the `de677e4` slice passed: full
+  `gitleaks dir . --no-banner --redact`, staged
+  `gitleaks protect --staged --no-banner`, explicit-path commit, push to
+  `origin/main`, clean `git status --short --branch`, and matching
+  `HEAD`/`origin/main` at `de677e4718f916c463eef375009f5f56d271b4be`.
 
 Issues:
 
@@ -168,10 +175,8 @@ Research:
 
 Next Steps:
 
-- Commit and push this backend safety slice with explicit paths only after
-  git/gitleaks checks.
-- Next implementation candidate after landing: inspect progress-log ingestion
-  handling for remaining project-local log coverage gaps.
+- Next implementation candidate: inspect progress-log ingestion handling for
+  remaining project-local log coverage gaps.
 
 ## Resume Snapshot - 2026-06-11 02:45 KST
 

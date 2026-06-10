@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 22:22 KST
+Updated: 2026-06-10 22:30 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,33 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed QA reliability slice:
+  fixed the isolated browser QA timeout in the `work status export unresolved
+  fixture` path. The fixture had drifted behind the current
+  `ProjectWorkStatusExportRow` browser-bridge parser contract and was missing
+  reviewed-item audit fields plus same-project session-date hint fields.
+- Changes:
+  updated `scripts/browser-bridge-isolated-qa.mjs` so the unresolved
+  work-status export fixture includes `session_evidence_reviewed_item_count`,
+  `has_session_evidence_reviewed_item`, `same_project_same_date_session_count`,
+  `same_project_other_session_dates`,
+  `same_project_other_session_date_count`,
+  `nearest_same_project_other_session_date`, and
+  `nearest_same_project_other_session_distance_days` on both fixture rows.
+- Verification:
+  `node --check scripts/browser-bridge-isolated-qa.mjs` passed. Full
+  `npm run qa:browser-bridge` passed end-to-end after the fixture update,
+  including the previously failing `work status export unresolved fixture`,
+  session-evidence candidates/proposals/review queue/source search/source
+  proposals UI, review apply, reviewed-items reload, work-management overview,
+  normalization, approved review queue save, extraction run history, and saved
+  work-log items. The temporary Vite and bridge servers exited at the end of the
+  script, and ports `5174` / `5177` had no remaining listeners.
+- Next product work:
+  continue from the now-restored full browser-bridge QA baseline. The remaining
+  product gap is still the `8` near-session pending rows: improve recommended
+  source selection/search for generic-term or instruction-only blockers, and
+  keep risk-flagged rows blocked unless a better copied source trace is found.
 - Completed implementation slice:
   source-proposal review panels now summarize blocker distribution directly in
   the UI. The panel still shows review-ready/blocked counts and `matched lines`,

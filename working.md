@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 17:33 KST
+Updated: 2026-06-10 17:34 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,10 +33,10 @@ Short-Term Goal:
 
 Current Work:
 
-- Most recent pushed repo baseline:
-  `2849df7 docs: record recommended source proposals commit`.
 - Latest pushed implementation slice:
   `c186a2e feat: add recommended source proposals action`.
+- Current repo HEAD should be refreshed with `git log -5 --oneline` on resume;
+  docs-only baseline commits may move after this implementation slice.
 - Current implementation focus: continue reducing unresolved project/day
   session-evidence rows and provider/review reliability gaps without weakening
   the source-trace/operator-review contract.

@@ -62,11 +62,15 @@ import {
   workSessionEvidenceProposalsActionLabel,
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
+  canDeferWorkSessionEvidenceSourceAuditItem,
   workSessionEvidenceSourceAuditBulkRejectableItems,
   workSessionEvidenceSourceAuditBulkRejectableText,
+  workSessionEvidenceSourceAuditDeferReason,
   workSessionEvidenceSourceAuditFilterLabel,
   workSessionEvidenceSourceAuditFilterMetaText,
   workSessionEvidenceSourceAuditItemText,
+  workSessionEvidenceSourceAuditManualDeferableItems,
+  workSessionEvidenceSourceAuditManualDeferableText,
   workSessionEvidenceSourceAuditManualInspectItems,
   workSessionEvidenceSourceAuditManualInspectReasonText,
   workSessionEvidenceSourceAuditManualInspectText,
@@ -3171,6 +3175,26 @@ test("work session evidence source audit filters isolate manual inspect work", (
       item.candidate_id
     ),
     ["session-evidence-PromptVault-blocked-clean"],
+  );
+  assert.deepEqual(
+    workSessionEvidenceSourceAuditManualDeferableItems(mixedResult).map((item) => item.candidate_id),
+    ["session-evidence-PromptVault-blocked", "session-evidence-PromptVault-no-hit"],
+  );
+  assert.equal(canDeferWorkSessionEvidenceSourceAuditItem(mixedResult.items[1]), true);
+  assert.equal(
+    canDeferWorkSessionEvidenceSourceAuditItem({
+      ...mixedResult.items[1],
+      review_state: "deferred",
+    }),
+    false,
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditManualDeferableText(mixedResult),
+    "수동확인 일괄 보류 가능 2개",
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditDeferReason(mixedResult.items[1]),
+    "source_audit_manual_inspect:blocked",
   );
   assert.deepEqual(
     filterWorkSessionEvidenceSourceAuditItems(mixedResult.items, "review-ready").map((item) =>

@@ -640,6 +640,7 @@ async function runBrowserQa() {
   let workSessionEvidenceAntigravitySourceSearch = "";
   let workSessionEvidenceSourceAuditBridge = "";
   let workSessionEvidenceSourceAuditUiText = "";
+  let workSessionEvidenceSourceAuditDeferUiState = "";
   let workSessionEvidenceSourceAuditRejectUiState = "";
   let workSessionEvidenceRiskSourceProposalBridge = "";
   let workSessionEvidenceNearbyMeta = "";
@@ -1633,6 +1634,68 @@ async function runBrowserQa() {
             : false;
         });
     }, undefined, { timeout: 30000 });
+    const sourceAuditDeferCandidateIds = await page
+      .locator("[data-work-session-evidence-source-audit-bulk-defer-item]")
+      .evaluateAll((nodes) =>
+        nodes
+          .map((node) => node.getAttribute("data-work-session-evidence-source-audit-bulk-defer-item"))
+          .filter((candidateId) => typeof candidateId === "string" && candidateId.length > 0)
+      );
+    if (!sourceAuditDeferCandidateIds.length) {
+      throw new Error("Source audit did not expose deferable manual-inspect candidate ids");
+    }
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-session-evidence-source-audit-manual-deferable="true"]')
+        ?.textContent ?? "";
+      return text.includes("수동확인 일괄 보류 가능");
+    }, undefined, { timeout: 30000 });
+    const sourceAuditBulkDeferButton = page
+      .locator('[data-defer-work-session-evidence-source-audit-items="true"]');
+    const sourceAuditDeferResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/work-session-evidence-review-queue/update")
+      && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await sourceAuditBulkDeferButton.click();
+    await sourceAuditDeferResponse;
+    await page.waitForFunction((candidateIds) => {
+      const auditPanel = document.querySelector('[data-work-session-evidence-source-audit="true"]');
+      if (auditPanel) return false;
+      return candidateIds.every((candidateId) => {
+        const queueRow = document.querySelector(`[data-work-session-evidence-review-queue-state="${candidateId}"]`);
+        const queueRowText = queueRow?.textContent ?? "";
+        return !queueRow || queueRowText.includes("보류");
+      });
+    }, sourceAuditDeferCandidateIds, { timeout: 90000 });
+    const sessionEvidenceQueueAfterBulkDefer = await bridgeJson(
+      page,
+      "/api/work-session-evidence-review-queue",
+      { options: { limit: 200, review_state_filter: "deferred" } },
+    );
+    const deferredBulkIds = new Set(
+      sessionEvidenceQueueAfterBulkDefer.items.map((item) => item.candidate_id),
+    );
+    if (!sourceAuditDeferCandidateIds.every((candidateId) => deferredBulkIds.has(candidateId))) {
+      throw new Error(`Source audit bulk defer did not persist every candidate: ${
+        JSON.stringify({ sourceAuditDeferCandidateIds, deferred: sessionEvidenceQueueAfterBulkDefer.items })
+      }`);
+    }
+    workSessionEvidenceSourceAuditDeferUiState =
+      `${sourceAuditDeferCandidateIds.length} candidates · bulk deferred from source audit`;
+    const sourceAuditUiReloadResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/work-session-evidence-source-audit")
+      && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await page.locator('[data-work-session-evidence-source-audit-action="true"]').click();
+    await sourceAuditUiReloadResponse;
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-session-evidence-source-audit-meta="true"]')
+        ?.textContent ?? "";
+      const panel = document.querySelector('[data-work-session-evidence-source-audit="true"]')
+        ?.textContent ?? "";
+      return meta.includes("감사") && panel.includes("원본 감사 요약");
+    }, undefined, { timeout: 90000 });
     await page.locator('[data-work-session-evidence-source-audit-filter="true"]').selectOption("all");
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-session-evidence-source-audit-filter-meta="true"]')
@@ -2778,6 +2841,7 @@ async function runBrowserQa() {
       workSessionEvidenceAntigravitySourceSearch,
       workSessionEvidenceSourceAuditBridge,
       workSessionEvidenceSourceAuditUiText,
+      workSessionEvidenceSourceAuditDeferUiState,
       workSessionEvidenceSourceAuditRejectUiState,
       workSessionEvidenceRiskSourceProposalBridge,
       workSessionEvidenceNearbyMeta,

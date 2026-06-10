@@ -1,10 +1,111 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 01:28 KST
+Updated: 2026-06-11 01:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 01:48 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and `PROJECT_STATUS.md`.
+- Make every managed daily/project row source-traced, operator-reviewable, and
+  resumable from this file plus the persisted review queues. AI/SDK-assisted
+  extraction is allowed only when approval remains explicit and fail-closed.
+
+Short-Term Goal:
+
+- Make the default-vault source-audit/manual-inspect operator pass safe and
+  efficient before any live queue decisions are written.
+
+Current Goal:
+
+- Add a source-audit UI action that bulk-defers rows requiring manual
+  inspection, without approving or rejecting live default-vault data.
+
+Context:
+
+- Goal identity was rechecked for thread
+  `019ea10c-fbe8-7b60-8889-6f00b5a91a68`; persisted objective still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Live default vault remains read-only in this slice. It still has `25`
+  pending session-evidence review rows and `0` deferred, `0` approved, `0`
+  rejected rows.
+- Latest live source audit over those pending rows returned `25` items:
+  `12` `no_recommended_source`, `11` `blocked`, and `2` `no_source_hits`.
+  There are still no `review_ready` rows.
+- Source-audit blockers include date-distance, risk flags, project-identifier
+  only hits, and instruction-only traces. Risk flags include
+  `long_base64_like_token` and `possible_api_key`, so this remains a defer or
+  reject workflow, not an approval workflow.
+- Browser bridge QA used an isolated temporary database. No live default-vault
+  review decisions were written by this slice.
+
+Progress:
+
+- Added source-audit helper logic for identifying manual-inspect rows that are
+  safe to bulk defer.
+- Added a UI summary and `수동확인 일괄 보류` action for source-audit
+  manual-inspect rows.
+- Bulk defer writes only `deferred` queue state with a
+  `source_audit_manual_inspect:<outcome>` reason.
+- Extended isolated browser bridge QA to click the source-audit bulk defer
+  action, wait for the UI completion state, and verify the affected candidates
+  reload as `deferred` through the bridge API.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: manual-inspect defer eligibility, summary text,
+  and defer reason helpers.
+- `src/App.tsx`: source-audit manual-inspect bulk defer state, action button,
+  row markers, and queue update flow.
+- `tests/workSummaryStatus.test.ts`: helper coverage for manual deferable rows,
+  stale/deferred exclusion, summary text, and defer reason.
+- `scripts/browser-bridge-isolated-qa.mjs`: isolated end-to-end coverage for
+  source-audit bulk defer before the existing bulk-reject path.
+
+Tests:
+
+- `node --check scripts/browser-bridge-isolated-qa.mjs` passed.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `51` tests.
+- `npm run build` passed; Vite emitted the existing `>500 kB` chunk warning.
+- `npm run qa:browser-bridge` passed end-to-end against an isolated database,
+  including source-audit manual-inspect bulk defer, later bulk reject, work
+  management, normalization, and save flows.
+- Full `npm run check` passed: UI tests `532`, Vite / TypeScript build, Rust
+  lib tests `252`, CLI tests `47`, doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- The live default vault still needs the operator decision pass for `25`
+  pending session-evidence review rows. This code slice only added and tested
+  the safer bulk defer path.
+- Full historical session backfill is still not complete in the QA sample; the
+  bridge QA still reports remaining session files after bounded batches.
+- cmux/in-app browser testing remains excluded in this environment. Validation
+  used CLI, build/test gates, and browser bridge QA.
+
+Research:
+
+- No new external research was needed. The decision came from the live
+  source-audit counters and the isolated bridge QA behavior.
+
+Next Steps:
+
+- Run the live default-vault operator pass when authorized: bulk-defer
+  manual-inspect rows, reject confirmed no-source/no-hit rows, and approve only
+  rows with copied source-review evidence.
+- Continue full-session backfill verification until the daily/project
+  management view no longer depends on bounded QA samples.
+- Keep updating this `working.md` after each meaningful slice so a later Codex
+  session can resume from long-term goal, short-term goal, current goal, tests,
+  issues, and next steps without reconstructing context from raw sessions.
 
 ## Resume Snapshot - 2026-06-11 01:28 KST
 

@@ -368,6 +368,7 @@ import {
   workLogNormalizationReviewQueueMetaText,
   canApproveWorkLogNormalizationReviewQueueItem,
   canRejectWorkLogNormalizationReviewQueueItem,
+  canDeferWorkSessionEvidenceSourceAuditItem,
   canBulkRejectWorkSessionEvidenceSourceAuditItem,
   canRejectWorkSessionEvidenceSourceAuditItem,
   recommendedWorkSessionEvidenceSourceSearchSession,
@@ -381,9 +382,12 @@ import {
   filterWorkSessionEvidenceSourceAuditItems,
   workSessionEvidenceSourceAuditBulkRejectableItems,
   workSessionEvidenceSourceAuditBulkRejectableText,
+  workSessionEvidenceSourceAuditDeferReason,
   workSessionEvidenceSourceAuditFilterLabel,
   workSessionEvidenceSourceAuditFilterMetaText,
   workSessionEvidenceSourceAuditItemText,
+  workSessionEvidenceSourceAuditManualDeferableItems,
+  workSessionEvidenceSourceAuditManualDeferableText,
   workSessionEvidenceSourceAuditManualInspectReasonText,
   workSessionEvidenceSourceAuditManualInspectText,
   workSessionEvidenceSourceAuditMetaText,
@@ -549,6 +553,7 @@ const WORK_SESSION_EVIDENCE_PROPOSAL_MANAGEMENT_LIMIT = 40;
 const WORK_SESSION_EVIDENCE_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
 const WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT = 40;
 const WORK_SESSION_EVIDENCE_SOURCE_AUDIT_BULK_REJECT_ID = "__source_audit_bulk_reject__";
+const WORK_SESSION_EVIDENCE_SOURCE_AUDIT_BULK_DEFER_ID = "__source_audit_bulk_defer__";
 const WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT = 5;
 const WORK_LOG_NORMALIZATION_APPLY_MANAGEMENT_LIMIT = 40;
 const WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT = 6;
@@ -1401,14 +1406,20 @@ function App() {
     : null;
   const workSessionEvidenceSourceAuditBulkRejectable =
     workSessionEvidenceSourceAuditBulkRejectableItems(workSessionEvidenceSourceAuditResult);
+  const workSessionEvidenceSourceAuditManualDeferable =
+    workSessionEvidenceSourceAuditManualDeferableItems(workSessionEvidenceSourceAuditResult);
   const workSessionEvidenceSourceAuditRejectableSummary =
     workSessionEvidenceSourceAuditRejectableText(workSessionEvidenceSourceAuditResult);
   const workSessionEvidenceSourceAuditBulkRejectableSummary =
     workSessionEvidenceSourceAuditBulkRejectableText(workSessionEvidenceSourceAuditResult);
+  const workSessionEvidenceSourceAuditManualDeferableSummary =
+    workSessionEvidenceSourceAuditManualDeferableText(workSessionEvidenceSourceAuditResult);
   const workSessionEvidenceSourceAuditManualInspectSummary =
     workSessionEvidenceSourceAuditManualInspectText(workSessionEvidenceSourceAuditResult);
   const isWorkSessionEvidenceSourceAuditBulkRejecting =
     workSessionEvidenceReviewQueueUpdatingCandidateId === WORK_SESSION_EVIDENCE_SOURCE_AUDIT_BULK_REJECT_ID;
+  const isWorkSessionEvidenceSourceAuditBulkDeferring =
+    workSessionEvidenceReviewQueueUpdatingCandidateId === WORK_SESSION_EVIDENCE_SOURCE_AUDIT_BULK_DEFER_ID;
   const workManagementReadiness = workManagementReadinessText({
     coverage: workLogCoverageResult,
     sessionIndex: workSessionIndexResult,
@@ -2378,6 +2389,41 @@ function App() {
           limit: WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT,
           review_state: "rejected",
           review_reason: workSessionEvidenceSourceAuditRejectReason(item),
+        });
+      }
+      setWorkSessionEvidenceReviewQueueResult(nextQueue);
+      setWorkSessionEvidenceReviewQueueState("ready");
+      setWorkSessionEvidenceSourceAuditResult(null);
+      setWorkSessionEvidenceSourceAuditState("idle");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSessionEvidenceReviewQueueState("failed");
+    } finally {
+      setWorkSessionEvidenceReviewQueueUpdatingCandidateId(null);
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function deferWorkSessionEvidenceSourceAuditItems() {
+    const deferableItems = workSessionEvidenceSourceAuditManualDeferableItems(
+      workSessionEvidenceSourceAuditResult,
+    );
+    if (!deferableItems.length || !claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSessionEvidenceReviewQueueState("loading");
+    setWorkSessionEvidenceReviewQueueUpdatingCandidateId(
+      WORK_SESSION_EVIDENCE_SOURCE_AUDIT_BULK_DEFER_ID,
+    );
+    try {
+      let nextQueue = workSessionEvidenceReviewQueueResult;
+      for (const item of deferableItems) {
+        nextQueue = await updateProjectWorkSessionEvidenceReviewQueue({
+          candidate_id: item.candidate_id,
+          limit: WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT,
+          review_state: "deferred",
+          review_reason: workSessionEvidenceSourceAuditDeferReason(item),
         });
       }
       setWorkSessionEvidenceReviewQueueResult(nextQueue);
@@ -6727,6 +6773,9 @@ function App() {
               <span data-work-session-evidence-source-audit-bulk-rejectable="true">
                 {workSessionEvidenceSourceAuditBulkRejectableSummary}
               </span>
+              <span data-work-session-evidence-source-audit-manual-deferable="true">
+                {workSessionEvidenceSourceAuditManualDeferableSummary}
+              </span>
               <span data-work-session-evidence-source-audit-manual-inspect="true">
                 {workSessionEvidenceSourceAuditManualInspectSummary}
               </span>
@@ -6747,6 +6796,19 @@ function App() {
                 {isWorkSessionEvidenceSourceAuditBulkRejecting
                   ? "일괄 처리 중"
                   : "감사 판정 일괄 거절"}
+              </button>
+              <button
+                aria-label={`원본 감사 수동확인 후보 ${workSessionEvidenceSourceAuditManualDeferable.length.toLocaleString()}개 일괄 보류`}
+                className="inline-action compact-action"
+                data-defer-work-session-evidence-source-audit-items="true"
+                disabled={isTopLevelActionLocked || workSessionEvidenceSourceAuditManualDeferable.length === 0}
+                onClick={() => void deferWorkSessionEvidenceSourceAuditItems()}
+                type="button"
+              >
+                <StopCircle size={14} />
+                {isWorkSessionEvidenceSourceAuditBulkDeferring
+                  ? "일괄 보류 중"
+                  : "수동확인 일괄 보류"}
               </button>
             </article>
             <div
@@ -6795,6 +6857,9 @@ function App() {
                 return (
                   <article
                     className="work-summary-row work-log-proposal-row"
+                    data-work-session-evidence-source-audit-bulk-defer-item={
+                      canDeferWorkSessionEvidenceSourceAuditItem(item) ? item.candidate_id : undefined
+                    }
                     data-work-session-evidence-source-audit-bulk-reject-item={
                       canBulkRejectWorkSessionEvidenceSourceAuditItem(item) ? item.candidate_id : undefined
                     }

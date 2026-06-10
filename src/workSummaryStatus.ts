@@ -2252,6 +2252,19 @@ export function workSessionEvidenceSourceAuditManualInspectItems(
   return result.items.filter(workSessionEvidenceSourceAuditNeedsManualInspect);
 }
 
+export function canDeferWorkSessionEvidenceSourceAuditItem(
+  item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
+): boolean {
+  return workSessionEvidenceSourceAuditNeedsManualInspect(item);
+}
+
+export function workSessionEvidenceSourceAuditManualDeferableItems(
+  result: ProjectWorkSessionEvidenceSourceAuditResult | null,
+): ProjectWorkSessionEvidenceSourceAuditResult["items"] {
+  if (!result) return [];
+  return result.items.filter(canDeferWorkSessionEvidenceSourceAuditItem);
+}
+
 export function filterWorkSessionEvidenceSourceAuditItems(
   items: ProjectWorkSessionEvidenceSourceAuditResult["items"],
   filter: WorkSessionEvidenceSourceAuditFilter,
@@ -2319,6 +2332,14 @@ export function workSessionEvidenceSourceAuditManualInspectText(
   return `수동 확인 필요 ${count.toLocaleString()}개`;
 }
 
+export function workSessionEvidenceSourceAuditManualDeferableText(
+  result: ProjectWorkSessionEvidenceSourceAuditResult | null,
+): string {
+  const count = workSessionEvidenceSourceAuditManualDeferableItems(result).length;
+  if (count === 0) return "수동확인 일괄 보류 가능 row 없음";
+  return `수동확인 일괄 보류 가능 ${count.toLocaleString()}개`;
+}
+
 export function workSessionEvidenceSourceAuditRejectReason(
   item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
 ): string {
@@ -2334,6 +2355,12 @@ export function workSessionEvidenceSourceAuditRejectReason(
     return `source_audit_error:${item.outcome}`;
   }
   return `source_audit_${item.outcome || "manual_reject"}`;
+}
+
+export function workSessionEvidenceSourceAuditDeferReason(
+  item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
+): string {
+  return `source_audit_manual_inspect:${item.outcome || "unknown"}`;
 }
 
 export function workSessionEvidenceSourceProposalStateText(

@@ -1439,6 +1439,20 @@ export function workLogReviewQueueFailureText(state: WorkLogReviewQueueState): s
   return "백필큐를 동기화하지 못했습니다. 데이터베이스 경로, 진행 로그 후보, 브리지 상태를 확인하세요.";
 }
 
+export function canApproveWorkLogReviewQueueItem(
+  item: ProjectWorkLogReviewQueueItem,
+): boolean {
+  return item.review_state === "pending_ai_review" || item.review_state === "risk_blocked";
+}
+
+export function canRejectWorkLogReviewQueueItem(
+  item: ProjectWorkLogReviewQueueItem,
+): boolean {
+  return item.review_state === "pending_ai_review"
+    || item.review_state === "risk_blocked"
+    || item.review_state === "stale";
+}
+
 export function workLogReviewQueueItemStateText(item: ProjectWorkLogReviewQueueItem): string {
   const labels: Record<string, string> = {
     approved: "승인됨",

@@ -1,10 +1,102 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 02:45 KST
+Updated: 2026-06-11 03:00 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 03:00 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources and project-local progress logs.
+- Keep review/backfill queues operator-gated: AI/SDK-assisted extraction may
+  propose evidence, but durable writes and risky state transitions must remain
+  explicit, auditable operator decisions.
+- Keep stale or no-longer-live review rows safe so they can be rejected/cleaned
+  up but cannot accidentally flow into approved backfill save paths.
+
+Short-Term Goal:
+
+- Harden the work-log backfill review queue so `stale` rows cannot be approved
+  from either the UI or backend update path.
+
+Current Goal:
+
+- In progress: added frontend action helpers, UI button gating, a backend stale
+  approval guard, focused regression tests, and browser-bridge QA fixture
+  coverage for stale backfill rows. Isolated browser-bridge QA now confirms the
+  stale backfill DOM action state.
+
+Context:
+
+- Previous slice `a4a1b88` added `review_state_filter` for
+  `work-log-review-queue` and was pushed to `origin/main`.
+- The newly identified gap was asymmetric with other queues: normalization and
+  session-evidence review queues already had stale-row approval-safe helper
+  tests, but work-log backfill rows could still expose an approve action for
+  `stale` rows and the backend update function did not reject stale approvals.
+- `risk_blocked` remains approvable after explicit operator/local review; only
+  `stale` is blocked from approval because it is no longer a live candidate.
+
+Progress:
+
+- Added `canApproveWorkLogReviewQueueItem` and
+  `canRejectWorkLogReviewQueueItem`.
+- UI now renders the backfill approve/reject buttons through those helpers.
+- Backend `update_project_work_log_review_queue_state` now rejects
+  `stale -> approved` with
+  `stale work-log review queue candidates cannot be approved; sync candidates first`.
+- Added regression coverage to the existing Rust work-log review queue test.
+- Added `work log review queue actions keep stale rows approval-safe` to
+  `tests/workSummaryStatus.test.ts`.
+- Added an isolated browser-bridge stale backfill fixture that verifies DOM
+  state: approve button count `0`, reject button count `1`.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: new backfill queue action helper functions.
+- `src/App.tsx`: backfill queue row buttons now use action helpers.
+- `src-tauri/src/lib.rs`: backend guard and Rust regression assertion.
+- `tests/workSummaryStatus.test.ts`: frontend action policy regression test.
+- `scripts/browser-bridge-isolated-qa.mjs`: stale backfill queue fixture and
+  DOM action-state assertion.
+- `working.md`: this in-progress resume snapshot.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `52` tests.
+- `cargo test work_log_review_queue --lib` passed from `src-tauri` with `3`
+  tests.
+- `npm run build` passed; Vite emitted the existing `>500 kB` chunk warning.
+- `node --check scripts/browser-bridge-isolated-qa.mjs` passed.
+- `npm run qa:browser-bridge` passed end-to-end against an isolated database.
+  The output included `workLogReviewQueueStaleFixtureActionState` with
+  `approveButtonCount: 0` and `rejectButtonCount: 1`, proving the stale
+  backfill row exposes reject cleanup only.
+- Full `npm run check` passed: UI tests `534`, Vite / TypeScript build, Rust
+  CLI build, Rust lib tests `255`, CLI tests `47`, doc-tests, and clippy
+  `-D warnings`.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; isolated
+  browser bridge QA is the available substitute.
+- No live review decision was approved, rejected, synced, applied, or otherwise
+  written by this slice.
+
+Research:
+
+- No external research was needed. The change mirrors existing stale approval
+  safeguards in normalization and session-evidence review queues.
+
+Next Steps:
+
+- Review diff, run git/gitleaks checks, then commit/push with explicit paths
+  only.
 
 ## Resume Snapshot - 2026-06-11 02:45 KST
 

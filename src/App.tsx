@@ -322,6 +322,8 @@ import type {
   StoredPromptFacetsResult,
 } from "./types";
 import {
+  canApproveWorkLogReviewQueueItem,
+  canRejectWorkLogReviewQueueItem,
   workLogCandidatesActionLabel,
   workLogCandidatesFailureText,
   workLogCandidatesMetaText,
@@ -6352,34 +6354,34 @@ function App() {
                   <div>
                     <strong>{item.project}</strong>
                     <span>{item.source_file}</span>
-                    {item.review_state === "approved" || item.review_state === "rejected" ? null : (
-                      <>
-                        <button
-                          aria-label={`${item.project} 백필큐 후보 승인`}
-                          className="inline-action compact-action"
-                          data-approve-work-log-review-queue={item.candidate_id}
-                          disabled={isTopLevelActionLocked}
-                          onClick={() => void updateWorkLogReviewQueueItem(item.candidate_id, "approved")}
-                          type="button"
-                        >
-                          <CheckCircle2 size={14} />
-                          {workLogReviewQueueUpdatingCandidateId === item.candidate_id
-                            ? "처리 중"
-                            : "승인"}
-                        </button>
-                        <button
-                          aria-label={`${item.project} 백필큐 후보 거절`}
-                          className="inline-action compact-action"
-                          data-reject-work-log-review-queue={item.candidate_id}
-                          disabled={isTopLevelActionLocked}
-                          onClick={() => void updateWorkLogReviewQueueItem(item.candidate_id, "rejected")}
-                          type="button"
-                        >
-                          <XCircle size={14} />
-                          거절
-                        </button>
-                      </>
-                    )}
+                    {canApproveWorkLogReviewQueueItem(item) ? (
+                      <button
+                        aria-label={`${item.project} 백필큐 후보 승인`}
+                        className="inline-action compact-action"
+                        data-approve-work-log-review-queue={item.candidate_id}
+                        disabled={isTopLevelActionLocked}
+                        onClick={() => void updateWorkLogReviewQueueItem(item.candidate_id, "approved")}
+                        type="button"
+                      >
+                        <CheckCircle2 size={14} />
+                        {workLogReviewQueueUpdatingCandidateId === item.candidate_id
+                          ? "처리 중"
+                          : "승인"}
+                      </button>
+                    ) : null}
+                    {canRejectWorkLogReviewQueueItem(item) ? (
+                      <button
+                        aria-label={`${item.project} 백필큐 후보 거절`}
+                        className="inline-action compact-action"
+                        data-reject-work-log-review-queue={item.candidate_id}
+                        disabled={isTopLevelActionLocked}
+                        onClick={() => void updateWorkLogReviewQueueItem(item.candidate_id, "rejected")}
+                        type="button"
+                      >
+                        <XCircle size={14} />
+                        거절
+                      </button>
+                    ) : null}
                   </div>
                   <p className="work-log-candidate-excerpt">{item.excerpt}</p>
                   <span data-work-log-review-queue-state={item.candidate_id}>

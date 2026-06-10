@@ -234,6 +234,49 @@ function insertSyntheticApprovedReviewQueueRow() {
   ], { stdio: "pipe" });
 }
 
+function workLogReviewQueueStaleFixture() {
+  const now = new Date().toISOString();
+  const pending = {
+    candidate_id: "work-log-QAFixture-pending-a1",
+    first_seen_at: now,
+    last_seen_at: now,
+    review_state: "pending_ai_review",
+    review_reason: "safe_ai_candidate_ready",
+    provider_route: "ai_provider",
+    project: "QAFixture",
+    source_path: "/tmp/QAFixture/working.md",
+    source_file: "working.md",
+    candidate_reason: "missing_dated_heading",
+    excerpt: "- 2026-06-09: Pending fixture remains approvable.",
+    line_count: 1,
+    char_count: 51,
+    risk_flags: [],
+    modified_at: null,
+  };
+  const stale = {
+    ...pending,
+    candidate_id: "work-log-QAFixture-stale-a1",
+    review_state: "stale",
+    review_reason: "candidate_no_longer_live",
+    excerpt: "- 2026-06-09: Stale fixture is no longer live.",
+  };
+  return {
+    generated_at: now,
+    database_path: DATABASE_PATH,
+    synced_candidate_count: 1,
+    stale_candidate_count: 1,
+    total_items: 2,
+    returned_item_count: 2,
+    pending_ai_review_count: 1,
+    risk_blocked_count: 0,
+    stale_count: 1,
+    approved_count: 0,
+    rejected_count: 0,
+    items: [pending, stale],
+    warnings: [],
+  };
+}
+
 function normalizationReviewQueueFixtureFromItem(item) {
   const now = new Date().toISOString();
   const base = {
@@ -558,6 +601,28 @@ async function withMockedNormalizationReviewQueue(page, result, callback) {
   }
 }
 
+async function withMockedWorkLogReviewQueue(page, result, callback) {
+  const url = `http://${HOST}:${BRIDGE_PORT}/api/work-log-review-queue`;
+  let fulfilled = false;
+  await page.route(url, async (route) => {
+    if (route.request().method() !== "POST" || fulfilled) {
+      await route.continue();
+      return;
+    }
+    fulfilled = true;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(result),
+    });
+  });
+  try {
+    await callback();
+  } finally {
+    await page.unroute(url);
+  }
+}
+
 async function withMockedWorkStatusExport(page, result, callback) {
   const url = `http://${HOST}:${BRIDGE_PORT}/api/work-status-export`;
   let fulfilled = false;
@@ -685,6 +750,9 @@ async function runBrowserQa() {
   let workLogReviewQueueMeta = "";
   let approvedReviewQueueSaveDisabledWhenEmpty = null;
   let workLogReviewQueueMetaAfterSynthetic = "";
+  let workLogReviewQueueStaleFixtureMeta = "";
+  let workLogReviewQueueStaleFixtureRows = [];
+  let workLogReviewQueueStaleFixtureActionState = {};
   let workLogReviewQueueFilterMeta = "";
   let workLogReviewQueueFilteredRows = [];
   let approvedReviewQueuePersistence = "";
@@ -2692,6 +2760,43 @@ async function runBrowserQa() {
     if (!approvedReviewQueueSaveDisabledWhenEmpty) {
       throw new Error("Approved review queue save button should be disabled when approved queue count is zero");
     }
+    step("work log review queue stale fixture");
+    const staleWorkLogFixture = workLogReviewQueueStaleFixture();
+    const staleWorkLogFixtureCandidateId = "work-log-QAFixture-stale-a1";
+    await withMockedWorkLogReviewQueue(page, staleWorkLogFixture, async () => {
+      await waitForEnabled(page, '[data-sync-work-log-review-queue="true"]');
+      await page.locator('[data-sync-work-log-review-queue="true"]').click();
+      await page.waitForFunction((candidateId) => {
+        const rejectButton = document.querySelector(`[data-reject-work-log-review-queue="${candidateId}"]`);
+        const staleRow = rejectButton?.closest("article") ?? null;
+        if (!staleRow) return false;
+        const text = staleRow.textContent ?? "";
+        return text.includes("현재 후보 아님")
+          && text.includes("live 후보에서 사라짐")
+          && !staleRow.querySelector(`[data-approve-work-log-review-queue="${candidateId}"]`)
+          && Boolean(rejectButton);
+      }, staleWorkLogFixtureCandidateId, { timeout: 90000 });
+    });
+    const staleWorkLogApproveButtonCount = await page
+      .locator(`[data-approve-work-log-review-queue="${staleWorkLogFixtureCandidateId}"]`)
+      .count();
+    const staleWorkLogRejectButtonCount = await page
+      .locator(`[data-reject-work-log-review-queue="${staleWorkLogFixtureCandidateId}"]`)
+      .count();
+    if (staleWorkLogApproveButtonCount !== 0 || staleWorkLogRejectButtonCount !== 1) {
+      throw new Error(
+        `Stale work-log fixture action state mismatch: approve=${staleWorkLogApproveButtonCount}, reject=${staleWorkLogRejectButtonCount}`,
+      );
+    }
+    workLogReviewQueueStaleFixtureMeta =
+      (await page.locator('[data-work-log-review-queue-meta="true"]').textContent())?.trim() ?? "";
+    workLogReviewQueueStaleFixtureRows =
+      await page.locator('[data-work-log-review-queue="true"] article').allTextContents();
+    workLogReviewQueueStaleFixtureActionState = {
+      candidateId: staleWorkLogFixtureCandidateId,
+      approveButtonCount: staleWorkLogApproveButtonCount,
+      rejectButtonCount: staleWorkLogRejectButtonCount,
+    };
     step("work log approved review queue save");
     insertSyntheticApprovedReviewQueueRow();
     await waitForEnabled(page, '[data-sync-work-log-review-queue="true"]');
@@ -2931,6 +3036,9 @@ async function runBrowserQa() {
       workLogReviewQueueMeta,
       approvedReviewQueueSaveDisabledWhenEmpty,
       workLogReviewQueueMetaAfterSynthetic,
+      workLogReviewQueueStaleFixtureMeta,
+      workLogReviewQueueStaleFixtureRows,
+      workLogReviewQueueStaleFixtureActionState,
       workLogReviewQueueFilterMeta,
       workLogReviewQueueFilteredRows,
       approvedReviewQueuePersistence,

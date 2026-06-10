@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ActionLockState } from "../src/actionLocks.ts";
 import {
+  canApproveWorkLogReviewQueueItem,
   canApproveWorkLogNormalizationReviewQueueItem,
+  canRejectWorkLogReviewQueueItem,
   canRejectWorkLogNormalizationReviewQueueItem,
   canApproveWorkSessionEvidenceReviewQueueItem,
   canDeferWorkSessionEvidenceReviewQueueItem,
@@ -2253,6 +2255,37 @@ test("work log review queue labels describe persisted candidate state", () => {
     })),
     "거절됨 · 운영자가 백필 검토 거절",
   );
+});
+
+test("work log review queue actions keep stale rows approval-safe", () => {
+  const pending = reviewQueueItem();
+  const riskBlocked = reviewQueueItem({
+    review_state: "risk_blocked",
+    review_reason: "risk_flags_require_local_review",
+  });
+  const stale = reviewQueueItem({
+    review_state: "stale",
+    review_reason: "candidate_no_longer_live",
+  });
+  const approved = reviewQueueItem({
+    review_state: "approved",
+    review_reason: "operator_approved_for_backfill",
+  });
+  const rejected = reviewQueueItem({
+    review_state: "rejected",
+    review_reason: "operator_rejected_from_backfill",
+  });
+
+  assert.equal(canApproveWorkLogReviewQueueItem(pending), true);
+  assert.equal(canRejectWorkLogReviewQueueItem(pending), true);
+  assert.equal(canApproveWorkLogReviewQueueItem(riskBlocked), true);
+  assert.equal(canRejectWorkLogReviewQueueItem(riskBlocked), true);
+  assert.equal(canApproveWorkLogReviewQueueItem(stale), false);
+  assert.equal(canRejectWorkLogReviewQueueItem(stale), true);
+  assert.equal(canApproveWorkLogReviewQueueItem(approved), false);
+  assert.equal(canRejectWorkLogReviewQueueItem(approved), false);
+  assert.equal(canApproveWorkLogReviewQueueItem(rejected), false);
+  assert.equal(canRejectWorkLogReviewQueueItem(rejected), false);
 });
 
 test("work log extraction labels describe accepted and rejected AI proposals", () => {

@@ -15277,6 +15277,24 @@ fn update_project_work_log_review_queue_state(
     review_reason: &str,
     updated_at: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let current_review_state = conn
+        .query_row(
+            "SELECT review_state
+             FROM project_work_log_review_queue
+             WHERE candidate_id=?1",
+            params![candidate_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    let Some(current_review_state) = current_review_state else {
+        return Err("work-log review queue candidate not found".into());
+    };
+    if current_review_state == "stale" && review_state == "approved" {
+        return Err(
+            "stale work-log review queue candidates cannot be approved; sync candidates first"
+                .into(),
+        );
+    }
     let changed = conn.execute(
         "UPDATE project_work_log_review_queue
          SET review_state=?2, review_reason=?3, last_seen_at=?4
@@ -27890,6 +27908,17 @@ Status: completed as a source-only/report-only hardening slice.
                 && item.review_state == "stale"
                 && item.review_reason == "candidate_no_longer_live"
         }));
+
+        let error = update_project_work_log_review_queue_state(
+            &conn,
+            "work-log-Risky-a1b2c3d4e5",
+            "approved",
+            "operator_approved_for_backfill",
+            "2026-06-09T01:15:00Z",
+        )
+        .expect_err("stale queue row should not be approvable")
+        .to_string();
+        assert!(error.contains("stale work-log review queue candidates cannot be approved"));
 
         update_project_work_log_review_queue_state(
             &conn,

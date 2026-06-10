@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 17:20 KST
+Updated: 2026-06-10 17:29 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,12 +33,18 @@ Short-Term Goal:
 
 Current Work:
 
-- Most recent pushed baseline:
-  `3390b95 feat: add recommended source search action`.
+- Most recent pushed baseline before the current local slice:
+  `f714579 docs: record recommended source search commit`.
 - Current implementation focus: continue reducing unresolved project/day
   session-evidence rows and provider/review reliability gaps without weakening
   the source-trace/operator-review contract.
-- Latest verified implementation slice: the review queue UI now has a
+- Latest verified local implementation slice: the review queue UI now has a
+  `추천 검토 제안` action that runs the existing nearby-session lookup, bounded
+  source search, and source-proposal generation in one operator click. This
+  still stops before approval: it does not approve a queue row, create durable
+  session evidence, or attach source evidence automatically. The implementation
+  is verified locally and pending commit in this snapshot.
+- Previous verified implementation slice: the review queue UI now has a
   `추천 원본 검색` action that runs the existing nearby-session lookup and bounded
   source search in one operator click. This is still read-only navigation and
   does not approve, create, or attach durable session evidence automatically.
@@ -123,11 +129,13 @@ Current Work:
   `3f4185e fix: index codex session evidence by activity date`.
 - The earlier body-derived progress-log title cleanup slice was completed and
   pushed as `c392add fix: clear rough worklog title normalization debt`.
-- Actual default-vault verification after the current Antigravity source-search
+- Actual default-vault verification after the current recommended source-proposals
   slice:
-  `work-session-evidence-candidates --limit 5 --json` reported `97` rows,
-  `7,947` items, `32` projects, `26` days, `899` files, and a full stored
-  session index of `12,889/12,889` prompts.
+  `work-status-export --limit 200 --full-session-index --json` reported `97`
+  project/day rows, `8,051` parsed work items, `32` projects, `26` days,
+  `904` progress files, `230,016` row-level session-evidence links, `2,066`
+  unique session evidence ids, and a full stored session index of
+  `12,889/12,889` prompts.
   Session-evidence candidates remain `26`, all unresolved after the full stored
   index; title-normalization rows remain `0`.
 - Actual default-vault candidate diagnostics after the current priority slice:
@@ -268,6 +276,24 @@ Current Work:
   (`35` passed), doc tests, and clippy with `-D warnings`. The isolated QA
   stopped its temporary bridge/Vite processes, and ports `5174` and `5177` had
   no remaining listeners.
+- Current recommended source-proposals UI proof:
+  The default vault still has `48` session-evidence review queue rows, `26`
+  pending review rows, `22` stale rows, and `26` synced live candidates. The top
+  row remains `RepoTutorStudio` `2026-06-10`, with nearest same-project session
+  date `2026-06-09`.
+  Verification passed: `npm run build`; targeted UI/API tests
+  `npm run test:ui -- tests/workSummaryStatus.test.ts tests/promptVaultApi.test.ts`
+  (`522` Node tests); isolated browser bridge QA
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`; and full
+  `npm run check`, covering UI/API tests, production build, CLI build, Rust
+  library tests (`236` passed), CLI tests (`35` passed), doc tests, and clippy
+  with `-D warnings`. The isolated QA used DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-BGJWkv/qa.sqlite`,
+  clicked `추천 검토 제안`, waited for nearby/source-search/source-proposals
+  requests, verified the proposal panel remained review input only, then
+  continued through source proposal approval, review apply, reviewed item
+  reload, and broader work-management panels. Ports `5174` and `5177` had no
+  remaining listeners after QA cleanup.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is continuing unresolved project/day session-evidence review and
@@ -291,9 +317,10 @@ Resume Contract:
 Management Coverage Status:
 
 - The app does manage project/day work from real parsed artifacts: current
-  default-vault export reported `32` projects, `26` days, `903` progress files,
-  `8,022` work items, `97` project/day rows, and a full stored session index of
-  `12,889/12,889` sanitized prompts.
+  default-vault export reported `32` projects, `26` days, `904` progress files,
+  `8,051` work items, `97` project/day rows, `230,016` row-level
+  session-evidence links, `2,066` unique session evidence ids, and a full stored
+  session index of `12,889/12,889` sanitized prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
   related progress artifacts, but the remaining unresolved review queues mean the
@@ -311,6 +338,74 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Recommended source-proposals action
+
+Current Goal:
+
+- Reduce another repetitive review-queue step for unresolved session-evidence
+  rows while keeping the source-trace/operator-review contract fail-closed.
+- Implementation commit is pending in this snapshot.
+
+Context:
+
+- The previous slice added `추천 원본 검색`, which runs nearby lookup and bounded
+  source search in one click.
+- Operators still had to click `검토 제안` after the recommended source-search
+  output. That was safe but repetitive because the backend already requires
+  copied source trace and still keeps proposal generation review-only.
+
+Progress:
+
+- Added `추천 검토 제안` to each session-evidence review queue row.
+- The new action claims the same exclusive UI lock, runs query-ranked nearby
+  lookup, selects the recommended source session, runs bounded source search,
+  and then generates copied-trace source proposals when hits exist.
+- The action intentionally stops before durable writes: approval still requires
+  the existing explicit `검토 완료 반영` step.
+- Updated isolated browser bridge QA to click the new row action and wait for
+  nearby, source-search, and source-proposals requests before continuing through
+  the existing review apply/reload checks.
+
+Changes:
+
+- `src/App.tsx`: added the recommended source-proposals orchestrator and
+  review-queue row action.
+- `scripts/browser-bridge-isolated-qa.mjs`: browser QA now exercises
+  `추천 검토 제안` and verifies proposal output remains review input only.
+- `working.md`: records the long-term goal, short-term goal, current slice,
+  fresh default-vault counts, verification commands, remaining issues, and next
+  resume action.
+
+Tests:
+
+- PASS: `npm run build`.
+- PASS: `npm run test:ui -- tests/workSummaryStatus.test.ts tests/promptVaultApi.test.ts`
+  (`522` UI/API tests ran).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+  The review-queue UI clicked `추천 검토 제안`, received nearby/source-search/
+  source-proposals responses, confirmed proposals were review input only, then
+  continued through source proposal approval, review apply, reviewed item reload,
+  and work-management panels against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-BGJWkv/qa.sqlite`.
+- PASS: `npm run check`. This covered UI/API tests, production build,
+  `cargo build --bin promptvault-cli`, Rust library tests (`236` passed), CLI
+  tests (`35` passed), doc tests, and clippy with `-D warnings`.
+- PASS: `lsof -nP -iTCP:5174 -sTCP:LISTEN` and
+  `lsof -nP -iTCP:5177 -sTCP:LISTEN` returned no listeners.
+- PASS: default-vault review queue sync still reports `48` stored rows, `26`
+  pending review rows, `22` stale rows, and `26` synced candidates.
+
+Issues:
+
+- This slice reduces operator click cost, but it does not resolve the `26`
+  pending session-evidence rows. Approval remains deliberately manual.
+
+Next Steps:
+
+- Commit and push this slice, then update this section with the commit hash.
+- Continue resolving pending rows by reviewing copied-trace source proposals
+  only where the source artifact proves the project/day work item.
 
 ## Completed Slice - 2026-06-10 Recommended source-search action
 

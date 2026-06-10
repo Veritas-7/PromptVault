@@ -2299,6 +2299,82 @@ function App() {
     }
   }
 
+  async function loadRecommendedWorkSessionEvidenceSourceProposals(
+    item: ProjectWorkSessionEvidenceReviewQueueItem,
+  ) {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSessionEvidenceNearbyState("loading");
+    setWorkSessionEvidenceNearbyCandidateId(item.candidate_id);
+    setWorkSessionEvidenceSourceSearchResult(null);
+    setWorkSessionEvidenceSourceSearchSessionId(null);
+    setWorkSessionEvidenceSourceSearchState("idle");
+    setWorkSessionEvidenceSourceProposalsResult(null);
+    setWorkSessionEvidenceSourceProposalsSessionId(null);
+    setWorkSessionEvidenceSourceProposalsState("idle");
+    try {
+      const query = workSessionEvidenceNearbyQueryText(item);
+      const nearby = await loadProjectWorkSessionEvidenceNearby({
+        project: item.project,
+        date: item.date,
+        limit: 6,
+        ...(query ? { query } : {}),
+      });
+      setWorkSessionEvidenceNearbyResult(nearby);
+      setWorkSessionEvidenceNearbyState("ready");
+
+      const session = recommendedWorkSessionEvidenceSourceSearchSession(nearby);
+      if (!session) {
+        return;
+      }
+
+      setWorkSessionEvidenceSourceSearchState("loading");
+      setWorkSessionEvidenceSourceSearchSessionId(session.id);
+      const sourceQuery = workSessionEvidenceSourceSearchQueryText(nearby, session);
+      const sourceSearch = await searchProjectWorkSessionEvidenceSource({
+        source_path: session.source_path,
+        query: sourceQuery,
+        limit: 5,
+        max_lines: 100000,
+      });
+      setWorkSessionEvidenceSourceSearchResult(sourceSearch);
+      setWorkSessionEvidenceSourceSearchState("ready");
+
+      if (!sourceSearch.items.length) {
+        return;
+      }
+
+      setWorkSessionEvidenceSourceProposalsState("loading");
+      setWorkSessionEvidenceSourceProposalsSessionId(session.id);
+      const proposals = await loadProjectWorkSessionEvidenceSourceProposals({
+        candidate_id: item.candidate_id,
+        source_path: session.source_path,
+        query: sourceSearch.query,
+        limit: 5,
+        max_lines: sourceSearch.requested_max_lines,
+      });
+      setWorkSessionEvidenceSourceProposalsResult(proposals);
+      setWorkSessionEvidenceSourceProposalsState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSessionEvidenceSourceSearchResult(null);
+      setWorkSessionEvidenceSourceProposalsResult(null);
+      setWorkSessionEvidenceSourceSearchState((current) =>
+        current === "loading" ? "failed" : current,
+      );
+      setWorkSessionEvidenceSourceProposalsState((current) =>
+        current === "loading" ? "failed" : current,
+      );
+      setWorkSessionEvidenceNearbyState((current) =>
+        current === "loading" ? "failed" : current,
+      );
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
   async function loadWorkSessionEvidenceSourceSearch(
     session: ProjectWorkSessionEvidenceNearbyResult["items"][number],
     nearbyResult: ProjectWorkSessionEvidenceNearbyResult,
@@ -6362,6 +6438,12 @@ function App() {
                     workSessionEvidenceNearbyState === "loading"
                     || workSessionEvidenceSourceSearchState === "loading"
                   );
+                const recommendedSourceProposalsActive = nearbyActive
+                  && (
+                    workSessionEvidenceNearbyState === "loading"
+                    || workSessionEvidenceSourceSearchState === "loading"
+                    || workSessionEvidenceSourceProposalsState === "loading"
+                  );
                 return (
                   <article
                     className="work-summary-row work-log-proposal-row"
@@ -6429,6 +6511,17 @@ function App() {
                       >
                         <Search size={14} />
                         {recommendedSourceSearchActive ? "검색 중" : "추천 원본 검색"}
+                      </button>
+                      <button
+                        aria-label={`${item.project} ${item.date} 추천 원본 검색 결과를 검토 제안으로 변환`}
+                        className="inline-action compact-action"
+                        data-work-session-evidence-recommended-source-proposals-action={item.candidate_id}
+                        disabled={isTopLevelActionLocked}
+                        onClick={() => void loadRecommendedWorkSessionEvidenceSourceProposals(item)}
+                        type="button"
+                      >
+                        <ClipboardCheck size={14} />
+                        {recommendedSourceProposalsActive ? "제안 생성 중" : "추천 검토 제안"}
                       </button>
                     </div>
                     <p>{item.top_titles[0] ?? "제목 없는 세션 근거 후보"}</p>

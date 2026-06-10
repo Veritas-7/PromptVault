@@ -1465,15 +1465,15 @@ async function runBrowserQa() {
         ?.textContent ?? "";
       return meta.includes("필터 없음");
     }, undefined, { timeout: 30000 });
-    const firstRecommendedSourceSearchButton = page
-      .locator('[data-work-session-evidence-recommended-source-search-action]')
+    const firstRecommendedSourceProposalsButton = page
+      .locator('[data-work-session-evidence-recommended-source-proposals-action]')
       .first();
-    await firstRecommendedSourceSearchButton.waitFor({ timeout: 90000 });
-    const firstNearbyCandidateId = await firstRecommendedSourceSearchButton.getAttribute(
-      "data-work-session-evidence-recommended-source-search-action",
+    await firstRecommendedSourceProposalsButton.waitFor({ timeout: 90000 });
+    const firstNearbyCandidateId = await firstRecommendedSourceProposalsButton.getAttribute(
+      "data-work-session-evidence-recommended-source-proposals-action",
     );
     if (!firstNearbyCandidateId) {
-      throw new Error("Session evidence recommended source-search button did not expose candidate id");
+      throw new Error("Session evidence recommended source-proposals button did not expose candidate id");
     }
     const nearbyResponse = page.waitForResponse((response) =>
       response.url().includes("/api/work-session-evidence-nearby")
@@ -1485,9 +1485,15 @@ async function runBrowserQa() {
       && response.request().method() === "POST",
       { timeout: 90000 },
     );
-    await firstRecommendedSourceSearchButton.click();
+    const sourceProposalsResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/work-session-evidence-source-proposals")
+      && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await firstRecommendedSourceProposalsButton.click();
     await nearbyResponse;
     await sourceSearchResponse;
+    await sourceProposalsResponse;
     await page.waitForFunction((candidateId) => {
       const panel = document.querySelector(`[data-work-session-evidence-nearby="${candidateId}"]`);
       const text = panel?.textContent ?? "";
@@ -1513,66 +1519,53 @@ async function runBrowserQa() {
     if (!firstSourceSearchSessionId) {
       throw new Error("Session evidence recommended source search did not expose session id");
     }
-    const firstSourceProposalsButton = page
-      .locator(`[data-work-session-evidence-source-search="${firstSourceSearchSessionId}"] [data-work-session-evidence-source-proposals-action]`)
+    await page.waitForFunction((sessionId) => {
+      const panel = document.querySelector(`[data-work-session-evidence-source-proposals="${sessionId}"]`);
+      const text = panel?.textContent ?? "";
+      return text.includes("검토 준비")
+        && text.includes("durable 승인 아님")
+        && text.includes("review input only");
+    }, firstSourceSearchSessionId, { timeout: 90000 });
+    const sourceProposalApproveButton = page
+      .locator(`[data-work-session-evidence-source-proposals="${firstSourceSearchSessionId}"] [data-approve-work-session-evidence-source-proposal]`)
       .first();
-    await firstSourceProposalsButton.waitFor({ timeout: 90000 });
-    if (!(await firstSourceProposalsButton.isDisabled())) {
-      const sourceProposalsResponse = page.waitForResponse((response) =>
-        response.url().includes("/api/work-session-evidence-source-proposals")
+    if (await sourceProposalApproveButton.count()) {
+      const sourceProposalHitId = await sourceProposalApproveButton.getAttribute(
+        "data-approve-work-session-evidence-source-proposal",
+      );
+      if (!sourceProposalHitId) {
+        throw new Error("Source proposal approve button did not expose hit id");
+      }
+      const sourceProposalUpdateResponse = page.waitForResponse((response) =>
+        response.url().includes("/api/work-session-evidence-review-queue/update")
         && response.request().method() === "POST",
         { timeout: 90000 },
       );
-      await firstSourceProposalsButton.click();
-      await sourceProposalsResponse;
-      await page.waitForFunction((sessionId) => {
-        const panel = document.querySelector(`[data-work-session-evidence-source-proposals="${sessionId}"]`);
-        const text = panel?.textContent ?? "";
-        return text.includes("검토 준비")
-          && text.includes("durable 승인 아님")
-          && text.includes("review input only");
-      }, firstSourceSearchSessionId, { timeout: 90000 });
-      const sourceProposalApproveButton = page
-        .locator(`[data-work-session-evidence-source-proposals="${firstSourceSearchSessionId}"] [data-approve-work-session-evidence-source-proposal]`)
-        .first();
-      if (await sourceProposalApproveButton.count()) {
-        const sourceProposalHitId = await sourceProposalApproveButton.getAttribute(
-          "data-approve-work-session-evidence-source-proposal",
-        );
-        if (!sourceProposalHitId) {
-          throw new Error("Source proposal approve button did not expose hit id");
-        }
-        const sourceProposalUpdateResponse = page.waitForResponse((response) =>
-          response.url().includes("/api/work-session-evidence-review-queue/update")
-          && response.request().method() === "POST",
-          { timeout: 90000 },
-        );
-        await sourceProposalApproveButton.click();
-        await sourceProposalUpdateResponse;
-        const sourceProposalQueueAfterApprove = await bridgeJson(
-          page,
-          "/api/work-session-evidence-review-queue",
-          { options: { limit: 200 } },
-        );
-        const sourceProposalApprovedRow = sourceProposalQueueAfterApprove.items.find(
-          (item) => item.candidate_id === firstNearbyCandidateId,
-        );
-        const expectedReviewReason = `source_proposal_review_ready:${sourceProposalHitId}`;
-        if (
-          !sourceProposalApprovedRow
-          || sourceProposalApprovedRow.review_state !== "approved"
-          || sourceProposalApprovedRow.review_reason !== expectedReviewReason
-        ) {
-          throw new Error(`Source proposal approval did not persist review reason: ${
-            JSON.stringify(sourceProposalApprovedRow ?? null)
-          }`);
-        }
-        workSessionEvidenceSourceProposalUiStateAfterApprove =
-          `${sourceProposalApprovedRow.review_state} · ${sourceProposalApprovedRow.review_reason}`;
-      } else {
-        workSessionEvidenceSourceProposalUiStateAfterApprove =
-          "no review-ready source proposal approval button";
+      await sourceProposalApproveButton.click();
+      await sourceProposalUpdateResponse;
+      const sourceProposalQueueAfterApprove = await bridgeJson(
+        page,
+        "/api/work-session-evidence-review-queue",
+        { options: { limit: 200 } },
+      );
+      const sourceProposalApprovedRow = sourceProposalQueueAfterApprove.items.find(
+        (item) => item.candidate_id === firstNearbyCandidateId,
+      );
+      const expectedReviewReason = `source_proposal_review_ready:${sourceProposalHitId}`;
+      if (
+        !sourceProposalApprovedRow
+        || sourceProposalApprovedRow.review_state !== "approved"
+        || sourceProposalApprovedRow.review_reason !== expectedReviewReason
+      ) {
+        throw new Error(`Source proposal approval did not persist review reason: ${
+          JSON.stringify(sourceProposalApprovedRow ?? null)
+        }`);
       }
+      workSessionEvidenceSourceProposalUiStateAfterApprove =
+        `${sourceProposalApprovedRow.review_state} · ${sourceProposalApprovedRow.review_reason}`;
+    } else {
+      workSessionEvidenceSourceProposalUiStateAfterApprove =
+        "no review-ready source proposal approval button";
     }
     const firstSessionEvidenceApprove = page
       .locator('[data-approve-work-session-evidence-review-queue]')

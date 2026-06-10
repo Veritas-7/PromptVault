@@ -343,7 +343,10 @@ import {
   workLogNormalizationApplyActionLabel,
   workLogNormalizationApplyFailureText,
   workLogNormalizationApplyMetaText,
+  workLogNormalizedItemsActionLabel,
+  workLogNormalizedItemsFailureText,
   workLogNormalizedItemsForDisplay,
+  workLogNormalizedItemsMetaText,
   workLogNormalizedItemsTotalCount,
   workLogNormalizationReviewQueueActionLabel,
   workLogNormalizationReviewQueueFailureText,
@@ -427,6 +430,7 @@ import {
   type WorkLogExtractionRunsState,
   type WorkLogNormalizationCandidatesState,
   type WorkLogNormalizationApplyState,
+  type WorkLogNormalizedItemsState,
   type WorkLogNormalizationProposalsState,
   type WorkLogNormalizationReviewQueueState,
   type WorkSessionEvidenceProposalsState,
@@ -791,6 +795,8 @@ function App() {
     useState<WorkLogNormalizationReviewQueueState>("idle");
   const [workLogNormalizationApplyState, setWorkLogNormalizationApplyState] =
     useState<WorkLogNormalizationApplyState>("idle");
+  const [workLogNormalizedItemsState, setWorkLogNormalizedItemsState] =
+    useState<WorkLogNormalizedItemsState>("idle");
   const [workSessionEvidenceProposalsState, setWorkSessionEvidenceProposalsState] =
     useState<WorkSessionEvidenceProposalsState>("idle");
   const [workSessionEvidenceReviewQueueState, setWorkSessionEvidenceReviewQueueState] =
@@ -960,6 +966,7 @@ function App() {
     || workLogNormalizationProposalsState === "loading"
     || workLogNormalizationReviewQueueState === "loading"
     || workLogNormalizationApplyState === "loading"
+    || workLogNormalizedItemsState === "loading"
     || workSessionEvidenceProposalsState === "loading"
     || workSessionEvidenceReviewQueueState === "loading"
     || workSessionEvidenceReviewApplyState === "loading"
@@ -1326,6 +1333,12 @@ function App() {
   const workLogNormalizationApplyMeta = workLogNormalizationApplyMetaText(
     workLogNormalizationApplyState,
     workLogNormalizationApplyResult,
+  );
+  const workLogNormalizedItemsFailureMessage =
+    workLogNormalizedItemsFailureText(workLogNormalizedItemsState);
+  const workLogNormalizedItemsMeta = workLogNormalizedItemsMetaText(
+    workLogNormalizedItemsState,
+    workLogNormalizedItemsResult,
   );
   const workSessionEvidenceReviewApplyFailureMessage =
     workSessionEvidenceReviewApplyFailureText(workSessionEvidenceReviewApplyState);
@@ -2137,6 +2150,24 @@ function App() {
     }
   }
 
+  async function refreshWorkLogNormalizedItems() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkLogNormalizedItemsState("loading");
+    try {
+      const next = await listProjectWorkLogNormalizedItems(workLogNormalizedItemOptions());
+      setWorkLogNormalizedItemsResult(next);
+      setWorkLogNormalizedItemsState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkLogNormalizedItemsState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
   async function applyApprovedWorkLogNormalizationRows() {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
@@ -2146,14 +2177,17 @@ function App() {
         limit: WORK_LOG_NORMALIZATION_APPLY_MANAGEMENT_LIMIT,
       });
       setWorkLogNormalizationApplyResult(next);
+      setWorkLogNormalizedItemsState("loading");
       const normalizedItems = await listProjectWorkLogNormalizedItems(workLogNormalizedItemOptions());
       setWorkLogNormalizedItemsResult(normalizedItems);
+      setWorkLogNormalizedItemsState("ready");
       setWorkLogNormalizationApplyState("ready");
     } catch (err) {
       const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkLogNormalizationApplyState("failed");
+      setWorkLogNormalizedItemsState((current) => (current === "loading" ? "failed" : current));
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -2592,6 +2626,7 @@ function App() {
     setWorkLogExtractionRunMode("ai");
     setWorkLogExtractionState("loading");
     setWorkLogExtractionItemsState("loading");
+    setWorkLogNormalizedItemsState("loading");
     setWorkSessionEvidenceReviewedItemsState("loading");
     try {
       const nextStatusExport = await loadProjectWorkStatusExport({
@@ -2645,6 +2680,7 @@ function App() {
         workLogNormalizedItemOptions(),
       );
       setWorkLogNormalizedItemsResult(nextNormalizedItems);
+      setWorkLogNormalizedItemsState("ready");
 
       const nextReviewedItems = await listProjectWorkSessionEvidenceReviewedItems(
         workSessionEvidenceReviewedItemOptions(),
@@ -2666,6 +2702,7 @@ function App() {
       setWorkAiProviderStatusState((current) => (current === "loading" ? "failed" : current));
       setWorkLogExtractionState((current) => (current === "loading" ? "failed" : current));
       setWorkLogExtractionItemsState((current) => (current === "loading" ? "failed" : current));
+      setWorkLogNormalizedItemsState((current) => (current === "loading" ? "failed" : current));
       setWorkSessionEvidenceReviewedItemsState((current) => (current === "loading" ? "failed" : current));
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
@@ -3779,6 +3816,25 @@ function App() {
                   : "승인 적용"}
             </button>
             <button
+              aria-label={workLogNormalizedItemsActionLabel(
+                workLogNormalizedItemsState,
+                workLogNormalizedItemsResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-log-normalized-items="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void refreshWorkLogNormalizedItems()}
+              type="button"
+            >
+              <ClipboardList size={15} />
+              {workLogNormalizedItemsState === "loading"
+                ? "정규화 row 불러오는 중"
+                : workLogNormalizedItemsResult
+                  ? "정규화 row 다시 보기"
+                  : "정규화 row 불러오기"}
+            </button>
+            <button
               aria-label={workLogReviewQueueActionLabel(
                 workLogReviewQueueState,
                 workLogReviewQueueResult !== null,
@@ -4140,6 +4196,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workLogNormalizationApplyFailureMessage}</span>
+          </div>
+        ) : null}
+        {workLogNormalizedItemsFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-log-normalized-items-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workLogNormalizedItemsFailureMessage}</span>
           </div>
         ) : null}
         <form
@@ -6103,6 +6169,11 @@ function App() {
         {workLogNormalizationApplyResult || workLogNormalizationApplyState !== "idle" ? (
           <div className="work-summary-index" data-work-log-normalization-apply-meta="true">
             <span>{workLogNormalizationApplyMeta}</span>
+          </div>
+        ) : null}
+        {workLogNormalizedItemsResult || workLogNormalizedItemsState !== "idle" ? (
+          <div className="work-summary-index" data-work-log-normalized-items-meta="true">
+            <span>{workLogNormalizedItemsMeta}</span>
           </div>
         ) : null}
         {workSessionEvidenceReviewApplyResult || workSessionEvidenceReviewedItemsResult ? (

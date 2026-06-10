@@ -40,7 +40,10 @@ import {
   workLogNormalizationApplyActionLabel,
   workLogNormalizationApplyFailureText,
   workLogNormalizationApplyMetaText,
+  workLogNormalizedItemsActionLabel,
+  workLogNormalizedItemsFailureText,
   workLogNormalizedItemsForDisplay,
+  workLogNormalizedItemsMetaText,
   workLogNormalizedItemsTotalCount,
   workLogNormalizationReviewQueueActionLabel,
   workLogNormalizationReviewQueueFailureText,
@@ -122,6 +125,7 @@ import {
   type WorkLogExtractionRunsState,
   type WorkLogNormalizationCandidatesState,
   type WorkLogNormalizationApplyState,
+  type WorkLogNormalizedItemsState,
   type WorkLogNormalizationProposalsState,
   type WorkLogNormalizationReviewQueueState,
   type WorkSessionEvidenceProposalsState,
@@ -2692,6 +2696,43 @@ test("work log normalized display prefers durable reload rows and total counts",
   assert.equal(workLogNormalizedItemsTotalCount(applyResult, null), 6);
   assert.deepEqual(workLogNormalizedItemsForDisplay(null, null), []);
   assert.equal(workLogNormalizedItemsTotalCount(null, null), 0);
+});
+
+test("work log normalized item labels describe durable reload", () => {
+  const failed: WorkLogNormalizedItemsState = "failed";
+  assert.equal(
+    workLogNormalizedItemsActionLabel("idle", false, lockState()),
+    "저장된 정규화 row 불러오기",
+  );
+  assert.equal(
+    workLogNormalizedItemsActionLabel("ready", true, lockState()),
+    "저장된 정규화 row 다시 불러오기",
+  );
+  assert.equal(
+    workLogNormalizedItemsActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 저장된 정규화 row를 불러올 수 없습니다",
+  );
+  assert.equal(
+    workLogNormalizedItemsMetaText("idle", null),
+    "저장된 정규화 row를 아직 불러오지 않음",
+  );
+  assert.equal(
+    workLogNormalizedItemsMetaText("loading", normalizedItemsResult()),
+    "저장된 정규화 row 불러오는 중",
+  );
+  assert.equal(
+    workLogNormalizedItemsMetaText("ready", normalizedItemsResult()),
+    "저장 총 7개 · 표시 1개 · 날짜 1개 · 프로젝트 1개",
+  );
+  assert.equal(
+    workLogNormalizedItemsMetaText(failed, null),
+    "저장된 정규화 row를 사용할 수 없음",
+  );
+  assert.equal(
+    workLogNormalizedItemsFailureText(failed),
+    "저장된 정규화 row를 불러오지 못했습니다. 데이터베이스 경로와 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workLogNormalizedItemsFailureText("ready"), null);
 });
 
 test("work session evidence review apply labels describe durable reviewed audit rows", () => {

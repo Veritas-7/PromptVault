@@ -511,6 +511,7 @@ async function runBrowserQa() {
   let workLogNormalizationRejectedAiFixtureMeta = "";
   let workLogNormalizationRejectedAiFixtureRows = [];
   let workLogNormalizationApplyMeta = "";
+  let workLogNormalizedItemsMeta = "";
   let workManagementMetaAfterNormalizationApply = "";
   let workLogNormalizedRows = [];
   let workLogReviewQueueMeta = "";
@@ -1802,6 +1803,21 @@ async function runBrowserQa() {
       (await page.locator('[data-work-management-overview-meta="true"]').textContent())?.trim() ?? "";
     workLogNormalizedRows =
       await page.locator('[data-work-log-normalized-items="true"] article').allTextContents();
+    step("work log normalized items reload");
+    await waitForEnabled(page, '[data-load-work-log-normalized-items="true"]');
+    await page.locator('[data-load-work-log-normalized-items="true"]').click();
+    await page.waitForFunction((candidateId) => {
+      const meta = document.querySelector('[data-work-log-normalized-items-meta="true"]')
+        ?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-log-normalized-items="true"] article'));
+      return meta.includes("저장 총 1개")
+        && meta.includes("표시 1개")
+        && rows.some((row) => (row.textContent ?? "").includes(candidateId));
+    }, firstNormalizationCandidateId, { timeout: 90000 });
+    workLogNormalizedItemsMeta =
+      (await page.locator('[data-work-log-normalized-items-meta="true"]').textContent())?.trim() ?? "";
+    workLogNormalizedRows =
+      await page.locator('[data-work-log-normalized-items="true"] article').allTextContents();
     step("work log normalization stale fixture");
     const staleFixture = normalizationReviewQueueFixtureFromItem(approvedNormalizationRow);
     const staleFixtureCandidateId = "work-normalize-QAFixture-stale-a1";
@@ -2099,6 +2115,7 @@ async function runBrowserQa() {
       workLogNormalizationRejectedAiFixtureMeta,
       workLogNormalizationRejectedAiFixtureRows,
       workLogNormalizationApplyMeta,
+      workLogNormalizedItemsMeta,
       workManagementMetaAfterNormalizationApply,
       workLogNormalizedRows,
       workLogReviewQueueMeta,

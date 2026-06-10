@@ -53,6 +53,7 @@ export type WorkLogNormalizationCandidatesState = "idle" | "loading" | "ready" |
 export type WorkLogNormalizationProposalsState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogNormalizationReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogNormalizationApplyState = "idle" | "loading" | "ready" | "failed";
+export type WorkLogNormalizedItemsState = "idle" | "loading" | "ready" | "failed";
 export type WorkSessionEvidenceProposalsState = "idle" | "loading" | "ready" | "failed";
 export type WorkSessionEvidenceReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkSessionEvidenceReviewApplyState = "idle" | "loading" | "ready" | "failed";
@@ -2020,6 +2021,45 @@ export function workLogNormalizationApplyFailureText(
 ): string | null {
   if (state !== "failed") return null;
   return "승인된 정규화 row를 durable table에 적용하지 못했습니다. 데이터베이스 경로, 승인 큐 상태, 브리지 상태를 확인하세요.";
+}
+
+export function workLogNormalizedItemsActionLabel(
+  state: WorkLogNormalizedItemsState,
+  hasNormalizedItems: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "저장된 정규화 row 불러오는 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 저장된 정규화 row를 불러올 수 없습니다`;
+  }
+  if (hasNormalizedItems) return "저장된 정규화 row 다시 불러오기";
+  return "저장된 정규화 row 불러오기";
+}
+
+export function workLogNormalizedItemsMetaText(
+  state: WorkLogNormalizedItemsState,
+  result: ProjectWorkLogNormalizedItemsResult | null,
+): string {
+  if (state === "loading") return "저장된 정규화 row 불러오는 중";
+  if (!result) {
+    return state === "failed"
+      ? "저장된 정규화 row를 사용할 수 없음"
+      : "저장된 정규화 row를 아직 불러오지 않음";
+  }
+  return [
+    `저장 총 ${result.total_items.toLocaleString()}개`,
+    `표시 ${result.returned_item_count.toLocaleString()}개`,
+    `날짜 ${result.available_dates.length.toLocaleString()}개`,
+    `프로젝트 ${result.available_projects.length.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+export function workLogNormalizedItemsFailureText(
+  state: WorkLogNormalizedItemsState,
+): string | null {
+  if (state !== "failed") return null;
+  return "저장된 정규화 row를 불러오지 못했습니다. 데이터베이스 경로와 브리지 상태를 확인하세요.";
 }
 
 export function workSessionEvidenceReviewApplyActionLabel(

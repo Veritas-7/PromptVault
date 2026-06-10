@@ -1,10 +1,80 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 10:48 KST
+Updated: 2026-06-10 11:04 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Durable normalized work-log row reload
+
+Current Goal:
+
+- Make durable normalized work-log rows independently reloadable in the management
+  UI, matching the durable reviewed session-evidence reload flow.
+
+Context:
+
+- Project/day management is substantially functional, not final complete.
+- The app now scans project-local progress logs such as `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, `PROJECT_STATUS.md`, and
+  similar progress artifacts, then joins parsed project/day rows with sanitized
+  Codex/Codex CX session evidence.
+- Real-session verification is active, but bounded QA still reports rows that
+  need review: `progress-log-only`, `unresolved-after-full-index`, and
+  `needs_title_normalization` remain visible in the management UI.
+
+Progress:
+
+- Added an independent "정규화 row 불러오기" UI action for
+  `work-log-normalized-items`.
+- Added loading, ready, failed, locked, meta, and error copy for the durable
+  normalized-row reload state.
+- Updated approval apply and full work-management refresh flows to keep durable
+  normalized row reload state explicit.
+- Extended isolated browser QA to click the new reload button after approval
+  apply and verify the approved row is reloaded from the durable table.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds durable normalized-row reload label, meta, and
+  failure helpers.
+- `src/App.tsx`: adds normalized-row reload state, button, error notice, meta
+  display, and refresh handler.
+- `tests/workSummaryStatus.test.ts`: covers durable normalized-row reload labels
+  and meta copy.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies the independent durable
+  normalized-row reload path.
+
+Tests:
+
+- PASS: `npx tsc --noEmit`.
+- PASS: `npm run test:ui -- tests/workSummaryStatus.test.ts` (`512` UI tests).
+- PASS: `npm run build`.
+- PASS: `git diff --check`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+- PASS: `npm run check` (`512` UI tests, `221` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+
+QA Evidence:
+
+- Isolated browser QA used temporary DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-e4JHEG/qa.sqlite`.
+- QA reached `work log normalization apply`, then the new
+  `work log normalized items reload` step.
+- QA result included `workLogNormalizedItemsMeta`:
+  `저장 총 1개 · 표시 1개 · 날짜 1개 · 프로젝트 1개`.
+- The same QA run parsed live workspace progress logs and reported `31`
+  projects, `26` days, `886` progress files, `10,242` work items, `101`
+  project/day rows, and session-evidence-backed management rows.
+
+Remaining:
+
+- Run secret checks, stage explicit paths, commit, and push.
+- Continue AI/review cleanup for rows still marked `progress-log-only`,
+  `unresolved-after-full-index`, or `needs_title_normalization`; only after
+  those queues are resolved should the project/day management system be called
+  complete.
 
 ## Completed Slice - 2026-06-10 Normalized work-log durable display priority
 

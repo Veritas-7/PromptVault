@@ -1,10 +1,96 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 00:07 KST
+Updated: 2026-06-11 00:24 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 00:24 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and `PROJECT_STATUS.md`.
+- Keep extraction, normalization, and session-evidence decisions source-traced,
+  operator-reviewable, and fail-closed. Approval remains explicit and requires
+  copied evidence/source-review checks.
+
+Short-Term Goal:
+
+- Make source-audit decisions safer and clearer: obvious blocked/no-source rows
+  can be rejected in controlled bulk, but no-hit/index-mismatch/error rows must
+  stay visible as manual-inspect rows until an operator checks the source path.
+
+Current Goal:
+
+- Separate source-audit per-row rejection from bulk rejection so `no_source_hits`
+  and other ambiguous source-audit outcomes are not swept into bulk reject.
+
+Context:
+
+- Source audit is read-only and must not auto-approve session evidence.
+- `review_ready` rows remain protected from reject actions.
+- Per-row `감사 판정 거절` remains available for operator-confirmed decisions,
+  but bulk should cover only low-ambiguity rejects.
+
+Progress:
+
+- Added manual-inspect classification for `no_source_hits`,
+  `source_not_indexed_for_project`, `nearby_error`, and
+  `source_search_error`.
+- Added separate counts for total rejectable rows, bulk-rejectable rows, and
+  manual-inspect rows in the source-audit summary.
+- Changed bulk reject to target only bulk-rejectable rows. Manual-inspect rows
+  remain visible with an explicit reason and still require an individual
+  operator action.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: added manual-inspect helpers, bulk-rejectable
+  helpers, summary text, and the `source_not_indexed_for_project` label.
+- `src/App.tsx`: displays `감사 판정 일괄 거절 가능 N개`, `수동 확인 필요 N개`,
+  per-row manual-inspect notes, and a row-only bulk-reject selector.
+- `tests/workSummaryStatus.test.ts`: added a `no_source_hits` fixture row and
+  assertions that per-row rejectable count is `2`, bulk-rejectable count is `1`,
+  and manual-inspect count is `1`.
+- `scripts/browser-bridge-isolated-qa.mjs`: changed source-audit bulk QA to read
+  the row-only bulk-reject selector instead of per-row reject buttons.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `50` tests.
+- `node --check scripts/browser-bridge-isolated-qa.mjs` passed.
+- `npm run build` passed.
+- `npm run qa:browser-bridge` passed end-to-end, including source-audit UI,
+  bulk reject, session-evidence apply/reload, work-management overview,
+  normalization queues, and approved work-log queue save.
+- Full `npm run check` passed: UI tests `529`, Vite / TypeScript build,
+  `cargo build --bin promptvault-cli`, Rust lib tests `252`, CLI tests `47`,
+  doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this non-cmux environment.
+  Verification used CLI, local dev server, Playwright-style browser bridge QA,
+  and the full check suite.
+- Live default-vault audit still needs an operator decision pass; this slice
+  only improves safe handling of audit outcomes.
+
+Research:
+
+- No external research was needed. The change followed existing source-audit
+  semantics and live QA behavior from the current codebase.
+
+Next Steps:
+
+- Rerun live default-vault source audit after operator decisions are made.
+- Add a dedicated defer/filter workflow if manual-inspect rows accumulate.
+- Continue broad work-management validation against real session and
+  project-log data before claiming the long-term goal complete.
 
 ## Resume Snapshot - 2026-06-11 00:07 KST
 

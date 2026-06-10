@@ -1551,13 +1551,19 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-session-evidence-source-audit-rejectable="true"]')
         ?.textContent ?? "";
-      return text.includes("감사 판정 거절 가능");
+      const bulkText = document.querySelector('[data-work-session-evidence-source-audit-bulk-rejectable="true"]')
+        ?.textContent ?? "";
+      const manualText = document.querySelector('[data-work-session-evidence-source-audit-manual-inspect="true"]')
+        ?.textContent ?? "";
+      return text.includes("감사 판정 거절 가능")
+        && bulkText.includes("감사 판정 일괄 거절 가능")
+        && manualText.includes("수동 확인 필요");
     }, undefined, { timeout: 30000 });
     const sourceAuditRejectCandidateIds = await page
-      .locator("[data-reject-work-session-evidence-source-audit-item]")
+      .locator("[data-work-session-evidence-source-audit-bulk-reject-item]")
       .evaluateAll((nodes) =>
         nodes
-          .map((node) => node.getAttribute("data-reject-work-session-evidence-source-audit-item"))
+          .map((node) => node.getAttribute("data-work-session-evidence-source-audit-bulk-reject-item"))
           .filter((candidateId) => typeof candidateId === "string" && candidateId.length > 0)
       );
     if (!sourceAuditRejectCandidateIds.length) {

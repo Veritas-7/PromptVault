@@ -6,6 +6,7 @@ import {
   canRejectWorkLogNormalizationReviewQueueItem,
   canApproveWorkSessionEvidenceReviewQueueItem,
   canRejectWorkSessionEvidenceReviewQueueItem,
+  canBulkRejectWorkSessionEvidenceSourceAuditItem,
   canRejectWorkSessionEvidenceSourceAuditItem,
   workAiProviderHealthActionLabel,
   workAiProviderHealthFailureText,
@@ -59,7 +60,12 @@ import {
   workSessionEvidenceProposalsActionLabel,
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
+  workSessionEvidenceSourceAuditBulkRejectableItems,
+  workSessionEvidenceSourceAuditBulkRejectableText,
   workSessionEvidenceSourceAuditItemText,
+  workSessionEvidenceSourceAuditManualInspectItems,
+  workSessionEvidenceSourceAuditManualInspectReasonText,
+  workSessionEvidenceSourceAuditManualInspectText,
   workSessionEvidenceSourceAuditMetaText,
   workSessionEvidenceSourceAuditRejectableItems,
   workSessionEvidenceSourceAuditRejectableText,
@@ -1058,10 +1064,10 @@ function sessionEvidenceSourceAuditResult(
     source_limit_used: 5,
     max_lines_used: 100000,
     total_items: 8,
-    returned_item_count: 2,
-    audited_item_count: 2,
+    returned_item_count: 3,
+    audited_item_count: 3,
     no_recommended_source_count: 0,
-    no_source_hit_count: 0,
+    no_source_hit_count: 1,
     rows_with_review_ready_count: 1,
     rows_with_blocked_proposals_count: 1,
     total_review_ready_count: 1,
@@ -1069,6 +1075,7 @@ function sessionEvidenceSourceAuditResult(
     outcome_counts: [
       { text: "review_ready", count: 1 },
       { text: "blocked", count: 1 },
+      { text: "no_source_hits", count: 1 },
     ],
     blocker_reason_counts: [{ text: "source_trace_is_instruction_only", count: 1 }],
     risk_flag_counts: [{ text: "source_prompt_instruction_only", count: 1 }],
@@ -1117,6 +1124,29 @@ function sessionEvidenceSourceAuditResult(
         blocked_count: 1,
         blocker_reason_counts: [{ text: "source_trace_is_instruction_only", count: 1 }],
         risk_flag_counts: [{ text: "source_prompt_instruction_only", count: 1 }],
+        warnings: [],
+      },
+      {
+        candidate_id: "session-evidence-PromptVault-no-hit",
+        project: "PromptVault",
+        date: "2026-06-11",
+        review_state: "pending_review",
+        review_reason: "near_session_date_hint",
+        outcome: "no_source_hits",
+        recommended_source_path: "/tmp/session-c.jsonl",
+        recommended_session_id: "session-3",
+        recommended_prompt_date: "2026-06-11",
+        recommended_match_score: 2,
+        nearby_total_match_count: 1,
+        nearby_returned_item_count: 1,
+        source_search_scanned_line_count: 12,
+        source_search_matched_line_count: 0,
+        source_search_returned_item_count: 0,
+        returned_proposal_count: 0,
+        review_ready_count: 0,
+        blocked_count: 0,
+        blocker_reason_counts: [],
+        risk_flag_counts: [],
         warnings: [],
       },
     ],
@@ -2989,7 +3019,7 @@ test("work session evidence source proposal summary groups blockers for operator
 test("work session evidence source audit summary separates ready and blocked rows", () => {
   assert.equal(
     workSessionEvidenceSourceAuditMetaText(sessionEvidenceSourceAuditResult()),
-    "감사 2/2행 · 검토 준비 row 1개 · review-ready proposal 1개 · 차단 row 1개 · 차단 proposal 1개 · 결과 검토 준비 1건, 차단 1건 · 차단 사유 지시문 trace 1건 · 위험표시 source_prompt_instruction_only 1건 · 근처 limit 6 · source limit 5 · max lines 100,000",
+    "감사 3/3행 · 검토 준비 row 1개 · review-ready proposal 1개 · 차단 row 1개 · 차단 proposal 1개 · 원본 hit 없음 1개 · 결과 검토 준비 1건, 차단 1건, 원본 hit 없음 1건 · 차단 사유 지시문 trace 1건 · 위험표시 source_prompt_instruction_only 1건 · 근처 limit 6 · source limit 5 · max lines 100,000",
   );
   assert.equal(
     workSessionEvidenceSourceAuditItemText(sessionEvidenceSourceAuditResult().items[1]),
@@ -3017,17 +3047,49 @@ test("work session evidence source audit summary separates ready and blocked row
 test("work session evidence source audit reject helpers keep operator decisions explicit", () => {
   const ready = sessionEvidenceSourceAuditResult().items[0];
   const blocked = sessionEvidenceSourceAuditResult().items[1];
+  const noHit = sessionEvidenceSourceAuditResult().items[2];
   assert.equal(canRejectWorkSessionEvidenceSourceAuditItem(ready), false);
   assert.equal(canRejectWorkSessionEvidenceSourceAuditItem(blocked), true);
+  assert.equal(canRejectWorkSessionEvidenceSourceAuditItem(noHit), true);
+  assert.equal(canBulkRejectWorkSessionEvidenceSourceAuditItem(blocked), true);
+  assert.equal(canBulkRejectWorkSessionEvidenceSourceAuditItem(noHit), false);
   assert.deepEqual(
     workSessionEvidenceSourceAuditRejectableItems(sessionEvidenceSourceAuditResult()).map((item) =>
       item.candidate_id
     ),
+    ["session-evidence-PromptVault-blocked", "session-evidence-PromptVault-no-hit"],
+  );
+  assert.deepEqual(
+    workSessionEvidenceSourceAuditBulkRejectableItems(sessionEvidenceSourceAuditResult()).map((item) =>
+      item.candidate_id
+    ),
     ["session-evidence-PromptVault-blocked"],
+  );
+  assert.deepEqual(
+    workSessionEvidenceSourceAuditManualInspectItems(sessionEvidenceSourceAuditResult()).map((item) =>
+      item.candidate_id
+    ),
+    ["session-evidence-PromptVault-no-hit"],
   );
   assert.equal(
     workSessionEvidenceSourceAuditRejectableText(sessionEvidenceSourceAuditResult()),
-    "감사 판정 거절 가능 1개",
+    "감사 판정 거절 가능 2개",
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditBulkRejectableText(sessionEvidenceSourceAuditResult()),
+    "감사 판정 일괄 거절 가능 1개",
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditManualInspectText(sessionEvidenceSourceAuditResult()),
+    "수동 확인 필요 1개",
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditManualInspectReasonText(noHit),
+    "수동 확인 필요 · 추천 원본 경로는 있지만 검색 hit 없음",
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditManualInspectReasonText(blocked),
+    null,
   );
   assert.equal(
     workSessionEvidenceSourceAuditRejectReason(blocked),

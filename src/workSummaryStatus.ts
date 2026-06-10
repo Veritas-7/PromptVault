@@ -2041,10 +2041,18 @@ function workSessionEvidenceSourceAuditOutcomeLabel(outcome: string): string {
   if (outcome === "blocked") return "차단";
   if (outcome === "no_recommended_source") return "추천 원본 없음";
   if (outcome === "no_source_hits") return "원본 hit 없음";
+  if (outcome === "source_not_indexed_for_project") return "프로젝트 색인 불일치";
   if (outcome === "nearby_error") return "근처 세션 오류";
   if (outcome === "source_search_error") return "원본 검색 오류";
   return outcome;
 }
+
+const WORK_SESSION_EVIDENCE_SOURCE_AUDIT_MANUAL_INSPECT_OUTCOMES = new Set([
+  "no_source_hits",
+  "source_not_indexed_for_project",
+  "nearby_error",
+  "source_search_error",
+]);
 
 function workSessionEvidenceSourceAuditFrequencySummaryText(
   items: { text: string; count: number }[],
@@ -2154,11 +2162,58 @@ export function canRejectWorkSessionEvidenceSourceAuditItem(
     && item.outcome !== "review_ready";
 }
 
+export function workSessionEvidenceSourceAuditNeedsManualInspect(
+  item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
+): boolean {
+  return canRejectWorkSessionEvidenceSourceAuditItem(item)
+    && WORK_SESSION_EVIDENCE_SOURCE_AUDIT_MANUAL_INSPECT_OUTCOMES.has(item.outcome);
+}
+
+export function workSessionEvidenceSourceAuditManualInspectReasonText(
+  item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
+): string | null {
+  if (!workSessionEvidenceSourceAuditNeedsManualInspect(item)) return null;
+  if (item.outcome === "no_source_hits") {
+    return "수동 확인 필요 · 추천 원본 경로는 있지만 검색 hit 없음";
+  }
+  if (item.outcome === "source_not_indexed_for_project") {
+    return "수동 확인 필요 · 추천 원본 경로가 현재 프로젝트 세션 색인에 없음";
+  }
+  if (item.outcome === "nearby_error") {
+    return "수동 확인 필요 · 근처 세션 조회 실패";
+  }
+  if (item.outcome === "source_search_error") {
+    return "수동 확인 필요 · 추천 원본 검색 실패";
+  }
+  return "수동 확인 필요";
+}
+
+export function canBulkRejectWorkSessionEvidenceSourceAuditItem(
+  item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
+): boolean {
+  return canRejectWorkSessionEvidenceSourceAuditItem(item)
+    && !workSessionEvidenceSourceAuditNeedsManualInspect(item);
+}
+
 export function workSessionEvidenceSourceAuditRejectableItems(
   result: ProjectWorkSessionEvidenceSourceAuditResult | null,
 ): ProjectWorkSessionEvidenceSourceAuditResult["items"] {
   if (!result) return [];
   return result.items.filter(canRejectWorkSessionEvidenceSourceAuditItem);
+}
+
+export function workSessionEvidenceSourceAuditBulkRejectableItems(
+  result: ProjectWorkSessionEvidenceSourceAuditResult | null,
+): ProjectWorkSessionEvidenceSourceAuditResult["items"] {
+  if (!result) return [];
+  return result.items.filter(canBulkRejectWorkSessionEvidenceSourceAuditItem);
+}
+
+export function workSessionEvidenceSourceAuditManualInspectItems(
+  result: ProjectWorkSessionEvidenceSourceAuditResult | null,
+): ProjectWorkSessionEvidenceSourceAuditResult["items"] {
+  if (!result) return [];
+  return result.items.filter(workSessionEvidenceSourceAuditNeedsManualInspect);
 }
 
 export function workSessionEvidenceSourceAuditRejectableText(
@@ -2167,6 +2222,22 @@ export function workSessionEvidenceSourceAuditRejectableText(
   const count = workSessionEvidenceSourceAuditRejectableItems(result).length;
   if (count === 0) return "감사 판정 거절 가능 row 없음";
   return `감사 판정 거절 가능 ${count.toLocaleString()}개`;
+}
+
+export function workSessionEvidenceSourceAuditBulkRejectableText(
+  result: ProjectWorkSessionEvidenceSourceAuditResult | null,
+): string {
+  const count = workSessionEvidenceSourceAuditBulkRejectableItems(result).length;
+  if (count === 0) return "감사 판정 일괄 거절 가능 row 없음";
+  return `감사 판정 일괄 거절 가능 ${count.toLocaleString()}개`;
+}
+
+export function workSessionEvidenceSourceAuditManualInspectText(
+  result: ProjectWorkSessionEvidenceSourceAuditResult | null,
+): string {
+  const count = workSessionEvidenceSourceAuditManualInspectItems(result).length;
+  if (count === 0) return "수동 확인 필요 row 없음";
+  return `수동 확인 필요 ${count.toLocaleString()}개`;
 }
 
 export function workSessionEvidenceSourceAuditRejectReason(

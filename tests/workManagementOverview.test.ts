@@ -808,6 +808,16 @@ test("work management overview filters expose auditable project date rows", () =
     { count: 2, label: "핸드오프 로그 2개", value: "handoff-log" },
     { count: 1, label: "진행 로그 1개", value: "progress-log" },
   ]);
+  assert.deepEqual(workManagementOverviewSourceRoleOptions(statusOverview.rows, "project-status"), [
+    { count: 2, label: "핸드오프 로그 2개", value: "handoff-log" },
+    { count: 0, label: "프로젝트 상태 0개", value: "project-status" },
+    { count: 1, label: "진행 로그 1개", value: "progress-log" },
+  ]);
+  assert.deepEqual(workManagementOverviewSourceRoleOptions(statusOverview.rows, " custom-log "), [
+    { count: 2, label: "핸드오프 로그 2개", value: "handoff-log" },
+    { count: 1, label: "진행 로그 1개", value: "progress-log" },
+    { count: 0, label: "custom-log 0개", value: "custom-log" },
+  ]);
   assert.deepEqual(
     workManagementOverviewSourceRoleOptions(buildWorkManagementOverview({
       statusExport: {

@@ -1,10 +1,100 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 04:33 KST
+Updated: 2026-06-11 04:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 04:35 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Keep the dynamic work-management `로그 유형` select visually honest when a
+  selected source role disappears after data refresh: the selected filter should
+  remain visible as a zero-count option instead of showing an apparently blank
+  select while the filter is still active.
+
+Current Active Work:
+
+- Previous data-derived source-role option slice is complete, verified,
+  committed, and pushed as
+  `aa0648a ux: derive work source role filter options`.
+- Fresh repo check at resume showed `main...origin/main` clean with local HEAD
+  and `origin/main` both at
+  `aa0648a50750f08bb9ffe125df1b2afe9ab7cd6f`.
+- Current slice is implemented and verified locally: dynamic role options
+  preserve the selected source-role filter as a zero-count option when the
+  selected role is absent from currently loaded rows.
+
+Progress:
+
+- Confirmed goal identity still anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Memory registry had no direct PromptVault/work-management hit, so live repo
+  state remains the active source of truth.
+- Selected a narrow UI stability improvement for the dynamic role select after
+  data refresh.
+- Added selected-role fallback support to
+  `workManagementOverviewSourceRoleOptions`.
+- Wired the current `workManagementOverviewFilters.sourceRole` value into the
+  App's dynamic role option generation.
+- Re-ran browser-bridge QA. The run reached and passed the work-management
+  source-role fixture, then completed the remaining saved extraction,
+  normalization, and review-queue flows.
+- Browser QA also confirmed the broader work-management path still parses
+  project/day evidence from project progress logs: the run reported
+  PromptVault's own `working.md` row and exercised a saved review-queue flow
+  with a `workingd.md` fixture.
+
+Changes:
+
+- `working.md`: added this post-push/current-slice handoff snapshot.
+- `src/workManagementOverview.ts`: keeps a selected missing source role as a
+  count-0 option.
+- `src/App.tsx`: passes the selected role filter into dynamic option generation.
+- `tests/workManagementOverview.test.ts`: covers missing known and unknown role
+  fallback options.
+
+Tests:
+
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts`
+  (`10` tests).
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check` (UI tests, TypeScript/Vite build, Rust CLI build,
+  Rust lib tests, CLI tests, doc-tests, and clippy `-D warnings`).
+- PASS: `git diff --check`.
+- PASS: `gitleaks dir . --no-banner --redact` (`no leaks found`).
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact`
+  (`no leaks found`).
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- Work-session-index backfill remains intentionally bounded by safety caps in
+  QA and reports remaining source files with guided continuation; this is an
+  existing durability state, not a regression from this slice.
+
+Next Step:
+
+- Commit/push this selected source-role fallback slice, then verify
+  `main...origin/main` is clean at the pushed commit.
 
 ## Resume Snapshot - 2026-06-11 04:23 KST
 

@@ -420,12 +420,17 @@ export function workManagementOverviewProjectSuggestions(
 
 export function workManagementOverviewSourceRoleOptions(
   rows: readonly WorkManagementOverviewRow[],
+  selectedRole = "",
 ): WorkManagementOverviewSourceRoleOption[] {
   const counts = new Map<string, number>();
   for (const row of rows) {
     for (const role of row.source_file_roles) {
       counts.set(role.text, (counts.get(role.text) ?? 0) + role.count);
     }
+  }
+  const selected = selectedRole.trim();
+  if (selected && !counts.has(selected)) {
+    counts.set(selected, 0);
   }
   return [...counts.entries()]
     .sort(([leftRole], [rightRole]) => compareSourceRoles(leftRole, rightRole))

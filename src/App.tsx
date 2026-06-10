@@ -1882,7 +1882,10 @@ function App() {
   const workManagementOverviewProjectFilterSuggestions =
     workManagementOverviewProjectSuggestions(workManagementOverview.rows);
   const workManagementOverviewSourceRoleFilterOptions =
-    workManagementOverviewSourceRoleOptions(workManagementOverview.rows);
+    workManagementOverviewSourceRoleOptions(
+      workManagementOverview.rows,
+      workManagementOverviewFilters.sourceRole,
+    );
   const workManagementDurabilityWarning = workManagementOverviewLoaded
     ? workManagementOverviewDurabilityWarningText(workManagementOverview)
     : null;

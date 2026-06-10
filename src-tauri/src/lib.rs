@@ -839,6 +839,7 @@ pub struct ProjectWorkReportOptions {
 pub struct ProjectWorkStatusExportOptions {
     pub limit: Option<usize>,
     pub offset: Option<usize>,
+    pub row_filter: Option<String>,
     pub session_limit: Option<usize>,
     pub full_session_index: Option<bool>,
     pub database_path: Option<String>,
@@ -2378,6 +2379,8 @@ pub fn run_project_work_status_export(
             "work-status-export full_session_index cannot be combined with session_limit".into(),
         );
     }
+    let row_filter =
+        normalize_project_work_status_export_row_filter(options.row_filter.as_deref())?;
     if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
         return Err("work-status-export database path requires a non-empty value".into());
     }
@@ -2423,7 +2426,7 @@ pub fn run_project_work_status_export(
         let mut rows =
             build_project_work_status_export_rows(&report, session_evidence_index_total_count);
         annotate_project_work_status_export_row_date_hints(&database_path, &mut rows)?;
-        rows
+        filter_project_work_status_export_rows(rows, row_filter)
     };
     let (rows, total_row_count, row_offset, rows_truncated, next_row_offset) =
         paginate_project_work_status_export_rows(all_rows, limit, options.offset.unwrap_or(0));
@@ -12038,6 +12041,85 @@ fn paginate_project_work_status_export_rows(
         rows_truncated,
         next_row_offset,
     )
+}
+
+fn normalize_project_work_status_export_row_filter(
+    row_filter: Option<&str>,
+) -> Result<Option<&str>, Box<dyn std::error::Error>> {
+    let Some(row_filter) = row_filter.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    match row_filter {
+        "all"
+        | "needs-session-evidence"
+        | "bounded-session-limit"
+        | "unresolved-session-evidence"
+        | "near-session-date-hint"
+        | "stale-session-date-hint"
+        | "needs-title-normalization"
+        | "active"
+        | "session-supported"
+        | "progress-log-only" => Ok(Some(row_filter)),
+        _ => Err(format!("work-status-export unknown row_filter: {row_filter}").into()),
+    }
+}
+
+fn filter_project_work_status_export_rows(
+    rows: Vec<ProjectWorkStatusExportRow>,
+    row_filter: Option<&str>,
+) -> Vec<ProjectWorkStatusExportRow> {
+    let Some(row_filter) = row_filter else {
+        return rows;
+    };
+    if row_filter == "all" {
+        return rows;
+    }
+    rows.into_iter()
+        .filter(|row| project_work_status_export_row_matches_filter(row, row_filter))
+        .collect()
+}
+
+fn project_work_status_export_row_matches_filter(
+    row: &ProjectWorkStatusExportRow,
+    row_filter: &str,
+) -> bool {
+    match row_filter {
+        "needs-session-evidence" => row.needs_session_evidence,
+        "bounded-session-limit" => row.session_evidence_audit == "bounded-session-limit",
+        "unresolved-session-evidence" => {
+            row.session_evidence_audit == "unresolved-after-full-index"
+        }
+        "near-session-date-hint" => project_work_status_export_row_has_near_session_date_hint(row),
+        "stale-session-date-hint" => {
+            project_work_status_export_row_has_stale_session_date_hint(row)
+        }
+        "needs-title-normalization" => row.needs_title_normalization,
+        "active" | "session-supported" | "progress-log-only" => {
+            row.operational_status == row_filter
+        }
+        _ => false,
+    }
+}
+
+fn project_work_status_export_row_has_near_session_date_hint(
+    row: &ProjectWorkStatusExportRow,
+) -> bool {
+    if !row.needs_session_evidence {
+        return false;
+    }
+    row.same_project_same_date_session_count > 0
+        || row
+            .nearest_same_project_other_session_distance_days
+            .is_some_and(|distance_days| distance_days <= 1)
+}
+
+fn project_work_status_export_row_has_stale_session_date_hint(
+    row: &ProjectWorkStatusExportRow,
+) -> bool {
+    row.needs_session_evidence
+        && row
+            .nearest_same_project_other_session_distance_days
+            .is_some_and(|distance_days| distance_days > 1)
 }
 
 fn render_project_work_status_export_markdown(
@@ -22566,6 +22648,93 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(!truncated);
         assert_eq!(next, None);
         assert!(page.is_empty());
+    }
+
+    #[test]
+    fn project_work_status_export_filters_rows_before_pagination() {
+        let row = |project: &str, distance_days: Option<i64>| ProjectWorkStatusExportRow {
+            date: "2026-06-09".to_string(),
+            project: project.to_string(),
+            operational_status: "progress-log-only".to_string(),
+            source_statuses: vec![FrequencyItem {
+                text: "done".to_string(),
+                count: 1,
+            }],
+            work_item_count: 1,
+            source_file_count: 1,
+            source_files: vec!["working.md".to_string()],
+            source_file_roles: vec![FrequencyItem {
+                text: "handoff-log".to_string(),
+                count: 1,
+            }],
+            top_titles: vec!["Work".to_string()],
+            sample_evidence: "Evidence".to_string(),
+            latest_source_path: format!("/tmp/{project}/working.md"),
+            latest_source_file: "working.md".to_string(),
+            latest_source_role: "handoff-log".to_string(),
+            session_evidence_count: 0,
+            unique_session_evidence_count: 0,
+            session_sources: Vec::new(),
+            needs_session_evidence: true,
+            session_evidence_audit: "unresolved-after-full-index".to_string(),
+            needs_title_normalization: false,
+            same_project_same_date_session_count: 0,
+            same_project_other_session_dates: Vec::new(),
+            same_project_other_session_date_count: usize::from(distance_days.is_some()),
+            nearest_same_project_other_session_date: distance_days
+                .map(|_| "2026-06-08".to_string()),
+            nearest_same_project_other_session_distance_days: distance_days,
+        };
+        let mut same_date = row("SameDate", None);
+        same_date.same_project_same_date_session_count = 2;
+        let mut matched = row("Matched", Some(1));
+        matched.needs_session_evidence = false;
+        matched.session_evidence_audit = "matched".to_string();
+        matched.operational_status = "session-supported".to_string();
+
+        let rows = vec![
+            row("Near", Some(1)),
+            row("Stale", Some(31)),
+            same_date,
+            matched,
+        ];
+
+        let near = filter_project_work_status_export_rows(
+            rows.clone(),
+            normalize_project_work_status_export_row_filter(Some("near-session-date-hint"))
+                .expect("near filter"),
+        );
+        assert_eq!(
+            near.iter()
+                .map(|row| row.project.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Near", "SameDate"]
+        );
+
+        let stale = filter_project_work_status_export_rows(
+            rows,
+            normalize_project_work_status_export_row_filter(Some("stale-session-date-hint"))
+                .expect("stale filter"),
+        );
+        let (page, total, offset, truncated, next) =
+            paginate_project_work_status_export_rows(stale, 1, 0);
+        assert_eq!(total, 1);
+        assert_eq!(offset, 0);
+        assert!(!truncated);
+        assert_eq!(next, None);
+        assert_eq!(page[0].project, "Stale");
+    }
+
+    #[test]
+    fn work_status_export_rejects_unknown_row_filter_before_scan() {
+        let err = run_project_work_status_export(ProjectWorkStatusExportOptions {
+            row_filter: Some("not-a-filter".to_string()),
+            ..Default::default()
+        })
+        .expect_err("unknown row filter should fail")
+        .to_string();
+
+        assert!(err.contains("work-status-export unknown row_filter: not-a-filter"));
     }
 
     #[test]

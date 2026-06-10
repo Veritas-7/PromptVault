@@ -15,7 +15,7 @@ cargo run --bin promptvault-cli -- improve [--local] --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve [--local] --json --prompt "TEXT"
 cargo run --bin promptvault-cli -- improve [--local] < prompt.txt
 cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [--count N>0] --json
-cargo run --bin promptvault-cli -- work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]
+cargo run --bin promptvault-cli -- work-status-export [--limit N>0] [--offset N>=0] [--row-filter FILTER] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]
 cargo run --bin promptvault-cli -- work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]
 cargo run --bin promptvault-cli -- work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--query TEXT] [--database PATH] [--json]
 cargo run --bin promptvault-cli -- work-session-evidence-source-search --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--json]
@@ -67,6 +67,7 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `work-status-export --json` returns grouped rows with source files, source artifact roles, top titles, item counts, session evidence counts, and review flags without raw session bodies.
 - `work-status-export --json` separates the session index records used by the current `--session-limit` from the total sanitized records stored in SQLite, so long backfills stay visible even when the export is bounded.
 - `work-status-export --full-session-index` uses the complete stored sanitized session index as the session scan limit, so operators can reproduce full-session project/day verification without first reading the stored count and copying it into `--session-limit`.
+- `work-status-export --row-filter near-session-date-hint` or `--row-filter stale-session-date-hint` narrows project/day rows before pagination, so operators can work one-day same-project session candidates before lower-confidence distant candidates. Other filters include `all`, `needs-session-evidence`, `bounded-session-limit`, `unresolved-session-evidence`, `needs-title-normalization`, `active`, `session-supported`, and `progress-log-only`.
 - `work-status-export --offset N>=0` pages through later project/day rows when paired with `--limit`, avoiding an unbounded all-row render.
 - `work-session-evidence-candidates` lists project/day rows that still have no matched session evidence after the selected session evidence index. When `--session-limit` is omitted it uses the full stored session index count by default. Candidate JSON includes `source_file_roles` and `latest_source_role` for project-local artifacts such as `working.md`, `workingd.md`, `WORKING_LOG.md`, generated reports, and `PROJECT_STATUS.md`. It annotates same-project session-date hints and returns reviewable rows before title-cleanup rows, then prioritizes same-date and nearest other-date hints before no-same-project-session rows. Add `--needs-title-normalization` to focus only unresolved rows whose titles are too rough for review-complete decisions.
 - `work-session-evidence-nearby --project NAME --date YYYY-MM-DD` lists nearby same-project sanitized session records for one unresolved project/day row. Without `--query`, rows are sorted by date distance. With `--query`, nearby rows are locally ranked by token overlap against sanitized session metadata, source path, session ID, and cwd. It is read-only navigation for manual/provider review: returned scores, matched terms, excerpts, source paths, and warnings do not create, approve, or attach session evidence.
@@ -124,6 +125,7 @@ cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
 cargo run --bin promptvault-cli -- work-status-export --limit 8 --session-limit 200
 cargo run --bin promptvault-cli -- work-status-export --limit 8 --full-session-index
 cargo run --bin promptvault-cli -- work-status-export --limit 8 --offset 8 --session-limit 200
+cargo run --bin promptvault-cli -- work-status-export --row-filter near-session-date-hint --full-session-index --json
 cargo run --bin promptvault-cli -- work-status-export --limit 3 --session-limit 200 --json
 cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --needs-title-normalization --json
 cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json

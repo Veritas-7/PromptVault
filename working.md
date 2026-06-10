@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 20:39 KST
+Updated: 2026-06-10 20:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,13 +33,50 @@ Short-Term Goal:
 
 Current Work:
 
-- Active completed implementation slice:
-  add status-export filters for adjacent versus stale same-project session
-  hints. Real default-vault status export still has unresolved rows where
-  nearby one-day candidates and low-priority month-old candidates are mixed in
-  the same `전체 인덱스 미해결` filter, e.g. `RepoTutorStudio 2026-06-10 ->
-  2026-06-09 (1d)` and `LocalMind 2026-06-10 -> 2026-05-10 (31d)`.
+- Active verified slice, not yet committed:
+  promote the new adjacent/stale status-export filters from UI-only helper
+  state into the CLI/API export workflow. The previous slice lets the app select
+  `인접 세션 후보` and `먼 세션 후보`, but `work-status-export --help` still
+  failed and CLI users had to run custom `jq`/Node probes to get the same
+  filtered rows.
 - Completed behavior:
+  `row_filter` has been added to `ProjectWorkStatusExportOptions`, rows are
+  filtered after same-project session date hints are annotated and before
+  pagination, `--row-filter FILTER` and command-specific
+  `work-status-export --help` have been added, the TS bridge option is exposed,
+  and CLI docs/README have been updated.
+- Current verification status:
+  implementation verification is complete, but commit/push is still pending.
+  `cargo fmt` passed. `cargo test project_work_status_export --lib` passed with
+  `4` focused tests. `cargo test --bin promptvault-cli work_status_export`
+  passed with `2` focused CLI tests. `node --disable-warning=ExperimentalWarning
+  --experimental-transform-types --test tests/promptVaultApi.test.ts` passed
+  with `209` TS bridge/API tests. `cargo build --bin promptvault-cli` passed.
+  Real CLI `work-status-export --help` exits `0` and documents
+  `--row-filter FILTER`. Real default-vault
+  `--row-filter near-session-date-hint --full-session-index --limit 3 --json`
+  returned `9` filtered rows, `3` returned, `next_row_offset=3`; first rows:
+  `RepoTutorStudio 2026-06-10 -> 2026-06-09 (1d)`,
+  `ResearchFlowAI 2026-06-08 -> 2026-06-07 (1d)`, and
+  `enterprise_diagnosis_flutter 2026-06-08 -> 2026-06-09 (1d)`. Real
+  default-vault `--row-filter stale-session-date-hint --full-session-index
+  --limit 3 --json` returned `16` filtered rows, `3` returned,
+  `next_row_offset=3`; first rows: `LocalMind 2026-06-10 -> 2026-05-10 (31d)`,
+  `ResearchFlowAI 2026-06-10 -> 2026-06-07 (3d)`, and
+  `oss-favorites 2026-06-10 -> 2026-06-02 (8d)`. Invalid
+  `--row-filter not-a-filter --json` exits `1` with
+  `work-status-export unknown row_filter: not-a-filter`. `git diff --check`
+  passed. `npm run check` passed: UI tests `523` passed, Vite / TypeScript
+  build passed, Rust lib tests `244` passed, CLI tests `46` passed, doc-tests
+  passed, and clippy `-D warnings` passed. Browser-bridge QA was not rerun
+  because this slice changes CLI/API/options/docs and this environment is not
+  the cmux in-app browser.
+- Remaining commit checklist:
+  stage only the touched files, run `gitleaks protect --staged --no-banner`,
+  commit, push to `origin main`, and verify clean/upstream state.
+- Last completed implementation slice:
+  `7ca77b2 fix: filter status export by session distance`.
+- Last completed behavior:
   `src/workSummaryStatus.ts` now adds `near-session-date-hint` and
   `stale-session-date-hint` status export row filters. Near hints include rows
   that still need session evidence and have either same-date candidates or a
@@ -47,7 +84,7 @@ Current Work:
   nearest same-project session is more than 1 day away. The status export
   filter meta now reports `인접후보` and `먼후보` counts, and `src/App.tsx`
   exposes both filters in the status export select.
-- Verification for active slice:
+- Last completed verification:
   `node --disable-warning=ExperimentalWarning --experimental-transform-types
   --test tests/workSummaryStatus.test.ts` passed with `47` focused UI helper
   tests. A real default-vault helper probe against `work-status-export --limit
@@ -60,7 +97,7 @@ Current Work:
   Browser-bridge QA was not rerun because this slice changes status export
   helper filtering and select options only; this environment is not the cmux
   in-app browser.
-- Next work:
+- Next product work after current slice:
   use the new `인접 세션 후보` filter to inspect and resolve the high-priority
   one-day `unresolved-after-full-index` rows first, then handle distant
   same-project rows only after source traces prove they are valid work evidence.

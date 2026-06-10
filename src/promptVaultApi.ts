@@ -119,6 +119,7 @@ export interface ProjectWorkStatusExportOptions {
   database_path?: string;
   limit?: number;
   offset?: number;
+  row_filter?: string;
   session_limit?: number;
   full_session_index?: boolean;
   refresh_session_index?: boolean;

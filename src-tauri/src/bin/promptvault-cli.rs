@@ -377,11 +377,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "work-status-export" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_status_export_help_text());
+                return Ok(());
+            }
             let json = take_flag(&mut args, "--json");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
             let full_session_index = take_flag(&mut args, "--full-session-index");
             let mut limit = None;
             let mut offset = None;
+            let mut row_filter = None;
             let mut session_limit = None;
             let mut database_path = None;
             let mut iter = args.into_iter();
@@ -392,6 +397,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     "--offset" => {
                         offset = Some(parse_usize_arg(iter.next(), "--offset")?);
+                    }
+                    "--row-filter" => {
+                        row_filter = Some(parse_required_arg(iter.next(), "--row-filter")?);
                     }
                     "--session-limit" => {
                         session_limit =
@@ -409,6 +417,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let result = run_project_work_status_export(ProjectWorkStatusExportOptions {
                 limit,
                 offset,
+                row_filter,
                 session_limit,
                 full_session_index: Some(full_session_index),
                 database_path,
@@ -2529,6 +2538,35 @@ fn take_help_flag(args: &mut Vec<String>) -> bool {
     take_flag(args, "--help") || take_flag(args, "-h") || take_flag(args, "help")
 }
 
+fn work_status_export_help_text() -> String {
+    [
+        "PromptVault work-status-export",
+        "",
+        "Usage:",
+        "  promptvault-cli work-status-export [--limit N>0] [--offset N>=0] [--row-filter FILTER] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]",
+        "",
+        "Purpose:",
+        "  Renders compact project/day Markdown and JSON rows from progress logs plus session-evidence matching.",
+        "  Use --full-session-index to verify against the complete stored sanitized session index.",
+        "  Use --row-filter to narrow rows before pagination, so counts and offsets apply to the filtered set.",
+        "",
+        "Row filters:",
+        "  all, needs-session-evidence, bounded-session-limit, unresolved-session-evidence",
+        "  near-session-date-hint, stale-session-date-hint, needs-title-normalization",
+        "  active, session-supported, progress-log-only",
+        "",
+        "Session-date filters:",
+        "  near-session-date-hint selects rows still needing evidence with same-date or one-day same-project session hints.",
+        "  stale-session-date-hint selects rows still needing evidence whose nearest same-project session is more than one day away.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-status-export --limit 20 --full-session-index --json",
+        "  promptvault-cli work-status-export --row-filter near-session-date-hint --full-session-index --json",
+        "  promptvault-cli work-status-export --row-filter stale-session-date-hint --limit 10 --json",
+    ]
+    .join("\n")
+}
+
 fn reject_extra_args(args: &[String], command: &str) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(arg) = args.first() {
         return Err(format!("unknown {command} argument: {arg}").into());
@@ -3109,7 +3147,7 @@ fn help_text() -> String {
         "  improve [--json] [--local] --prompt TEXT\n",
         "  improve [--json] [--local] < prompt.txt\n",
         "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
-        "  work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]\n",
+        "  work-status-export [--limit N>0] [--offset N>=0] [--row-filter FILTER] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]\n",
         "  work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]\n",
         "  work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]\n",
         "  work-session-evidence-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]\n",
@@ -3146,7 +3184,7 @@ fn help_text() -> String {
         "  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n",
         "  --no-persist keeps scan results out of the PromptVault database.\n",
         "  work-report reads project progress logs and groups slice work by date and project.\n",
-        "  work-status-export renders compact project/day Markdown and JSON rows from the same progress-log plus session-evidence report.\n",
+        "  work-status-export renders compact project/day Markdown and JSON rows from the same progress-log plus session-evidence report; --row-filter narrows rows before pagination.\n",
         "  work-session-evidence-candidates lists project/day rows still missing session evidence after the selected session index; --needs-title-normalization limits rows to title-normalization blockers.\n",
         "  work-session-evidence-proposals returns read-only source-traced AI/GLM/local proposals for unresolved project/day session-evidence rows; --needs-title-normalization focuses title-first proposal work; durable writes still require later operator gates.\n",
         "  work-session-evidence-review-queue persists unresolved session-evidence candidates into an operator review queue and marks disappeared candidates stale when a full candidate sync is available.\n",
@@ -4200,6 +4238,15 @@ mod tests {
             "work-status-export full_session_index cannot be combined with session_limit"
         ));
         assert!(response.contains("Access-Control-Allow-Origin: *"));
+
+        let response = bridge_response_for(
+            "/api/work-status-export",
+            r#"{"options":{"row_filter":"not-a-filter"}}"#,
+        );
+
+        assert!(response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(response.contains("work-status-export unknown row_filter: not-a-filter"));
+        assert!(response.contains("Access-Control-Allow-Origin: *"));
     }
 
     #[test]
@@ -4691,7 +4738,7 @@ mod tests {
             "work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
         ));
         assert!(help.contains(
-            "work-status-export [--limit N>0] [--offset N>=0] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]"
+            "work-status-export [--limit N>0] [--offset N>=0] [--row-filter FILTER] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]"
         ));
         assert!(help.contains(
             "work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]"
@@ -4764,6 +4811,7 @@ mod tests {
         ));
         assert!(help.contains("work-report reads project progress logs"));
         assert!(help.contains("work-status-export renders compact project/day Markdown"));
+        assert!(help.contains("--row-filter narrows rows before pagination"));
         assert!(help.contains("work-session-evidence-candidates lists project/day rows"));
         assert!(help.contains("work-session-evidence-proposals returns read-only source-traced"));
         assert!(help.contains("work-session-evidence-review-queue persists unresolved"));
@@ -4845,6 +4893,19 @@ mod tests {
         assert!(help.contains("work-session-evidence-review-queue --sync-candidates"));
         assert!(help.contains("copied trace metadata"));
         assert!(help.contains("work-session-evidence-review-apply"));
+    }
+
+    #[test]
+    fn work_status_export_help_documents_row_filter_safety() {
+        let help = work_status_export_help_text();
+
+        assert!(help.contains("promptvault-cli work-status-export"));
+        assert!(help.contains("--row-filter FILTER"));
+        assert!(help.contains("counts and offsets apply to the filtered set"));
+        assert!(help.contains("near-session-date-hint"));
+        assert!(help.contains("stale-session-date-hint"));
+        assert!(help.contains("one-day same-project session hints"));
+        assert!(help.contains("more than one day away"));
     }
 
     #[test]

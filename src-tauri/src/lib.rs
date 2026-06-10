@@ -1024,6 +1024,7 @@ pub struct ProjectWorkSessionEvidenceProposalsResult {
 pub struct ProjectWorkSessionEvidenceReviewQueueOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
+    pub row_filter: Option<String>,
     pub sync_candidates: Option<bool>,
     pub session_limit: Option<usize>,
     pub refresh_session_index: Option<bool>,
@@ -2658,6 +2659,10 @@ pub fn run_project_work_session_evidence_review_queue(
             "work-session-evidence-review-queue database path requires a non-empty value".into(),
         );
     }
+    let row_filter = normalize_project_work_row_filter(
+        options.row_filter.as_deref(),
+        "work-session-evidence-review-queue",
+    )?;
 
     let generated_at = Utc::now().to_rfc3339();
     let database_path = options
@@ -2697,7 +2702,7 @@ pub fn run_project_work_session_evidence_review_queue(
         warnings.extend(candidates.warnings);
     }
 
-    let rows = read_project_work_session_evidence_review_queue(&conn, limit)?;
+    let rows = read_project_work_session_evidence_review_queue(&conn, limit, row_filter)?;
     Ok(ProjectWorkSessionEvidenceReviewQueueResult {
         generated_at,
         database_path: database_path.display().to_string(),
@@ -2759,7 +2764,7 @@ pub fn run_project_work_session_evidence_review_queue_update(
         options.source_review.as_ref(),
         &generated_at,
     )?;
-    let rows = read_project_work_session_evidence_review_queue(&conn, limit)?;
+    let rows = read_project_work_session_evidence_review_queue(&conn, limit, None)?;
     Ok(ProjectWorkSessionEvidenceReviewQueueResult {
         generated_at,
         database_path: database_path.display().to_string(),
@@ -11655,6 +11660,7 @@ struct ProjectWorkSessionEvidenceReviewQueueRows {
 fn read_project_work_session_evidence_review_queue(
     conn: &Connection,
     limit: usize,
+    row_filter: Option<&str>,
 ) -> Result<ProjectWorkSessionEvidenceReviewQueueRows, Box<dyn std::error::Error>> {
     let mut stmt = conn.prepare(
         "SELECT candidate_id, first_seen_at, last_seen_at, review_state, review_reason,
@@ -11689,17 +11695,6 @@ fn read_project_work_session_evidence_review_queue(
     while let Some(row) = rows.next()? {
         let review_state: String = row.get(3)?;
         let needs_title_normalization = row.get::<_, i64>(18)? != 0;
-        total_items += 1;
-        match review_state.as_str() {
-            "pending_review" => pending_review_count += 1,
-            "stale" => stale_count += 1,
-            "approved" => approved_count += 1,
-            "rejected" => rejected_count += 1,
-            _ => {}
-        }
-        if needs_title_normalization {
-            needs_title_normalization_count += 1;
-        }
         let source_statuses_json: String = row.get(8)?;
         let source_files_json: String = row.get(11)?;
         let top_titles_json: String = row.get(12)?;
@@ -11709,7 +11704,7 @@ fn read_project_work_session_evidence_review_queue(
         let source_review_json = row.get::<_, Option<String>>(23)?;
         let source_file_roles = project_work_source_file_roles(&source_files);
         let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
-        items.push(ProjectWorkSessionEvidenceReviewQueueItem {
+        let item = ProjectWorkSessionEvidenceReviewQueueItem {
             candidate_id: row.get(0)?,
             first_seen_at: row.get(1)?,
             last_seen_at: row.get(2)?,
@@ -11741,7 +11736,22 @@ fn read_project_work_session_evidence_review_queue(
                 source_review_json,
                 23,
             )?,
-        });
+        };
+        if !project_work_session_evidence_review_queue_item_matches_filter(&item, row_filter) {
+            continue;
+        }
+        total_items += 1;
+        match item.review_state.as_str() {
+            "pending_review" => pending_review_count += 1,
+            "stale" => stale_count += 1,
+            "approved" => approved_count += 1,
+            "rejected" => rejected_count += 1,
+            _ => {}
+        }
+        if needs_title_normalization {
+            needs_title_normalization_count += 1;
+        }
+        items.push(item);
     }
     sort_project_work_session_evidence_review_queue_items(&mut items);
     items.truncate(limit);
@@ -12196,6 +12206,56 @@ fn project_work_session_evidence_candidate_has_stale_session_date_hint(
         .as_deref()
         .is_some_and(|nearest_date| {
             project_work_session_date_distance(&candidate.date, nearest_date) > 1
+        })
+}
+
+fn project_work_session_evidence_review_queue_item_matches_filter(
+    item: &ProjectWorkSessionEvidenceReviewQueueItem,
+    row_filter: Option<&str>,
+) -> bool {
+    let Some(row_filter) = row_filter else {
+        return true;
+    };
+    if row_filter == "all" {
+        return true;
+    }
+    match row_filter {
+        "needs-session-evidence" | "unresolved-session-evidence" => true,
+        "bounded-session-limit" => false,
+        "near-session-date-hint" => {
+            project_work_session_evidence_review_queue_item_has_near_session_date_hint(item)
+        }
+        "stale-session-date-hint" => {
+            project_work_session_evidence_review_queue_item_has_stale_session_date_hint(item)
+        }
+        "needs-title-normalization" => item.needs_title_normalization,
+        "active" | "session-supported" | "progress-log-only" => {
+            item.operational_status == row_filter
+        }
+        _ => false,
+    }
+}
+
+fn project_work_session_evidence_review_queue_item_has_near_session_date_hint(
+    item: &ProjectWorkSessionEvidenceReviewQueueItem,
+) -> bool {
+    if item.same_project_same_date_session_count > 0 {
+        return true;
+    }
+    item.nearest_same_project_other_session_date
+        .as_deref()
+        .is_some_and(|nearest_date| {
+            project_work_session_date_distance(&item.date, nearest_date) <= 1
+        })
+}
+
+fn project_work_session_evidence_review_queue_item_has_stale_session_date_hint(
+    item: &ProjectWorkSessionEvidenceReviewQueueItem,
+) -> bool {
+    item.nearest_same_project_other_session_date
+        .as_deref()
+        .is_some_and(|nearest_date| {
+            project_work_session_date_distance(&item.date, nearest_date) > 1
         })
 }
 
@@ -24080,6 +24140,108 @@ Status: completed as a source-only/report-only hardening slice.
     }
 
     #[test]
+    fn session_evidence_review_queue_row_filters_before_truncating() {
+        let suffix = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-session-evidence-review-queue-filter-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut conn = open_promptvault_database(&db_path).expect("open db");
+
+        let mut near = session_evidence_candidate_fixture(
+            "session-evidence-NearQueue-a1b2c3d4e5",
+            "NearQueue",
+            "NearQueue has a one-day same-project session hint.",
+            false,
+        );
+        near.date = "2026-06-10".to_string();
+        near.nearest_same_project_other_session_date = Some("2026-06-09".to_string());
+        near.same_project_other_session_date_count = 1;
+
+        let mut same_date = session_evidence_candidate_fixture(
+            "session-evidence-SameDateQueue-a1b2c3d4e5",
+            "SameDateQueue",
+            "SameDateQueue has same-date same-project session hints.",
+            false,
+        );
+        same_date.same_project_same_date_session_count = 1;
+
+        let mut stale = session_evidence_candidate_fixture(
+            "session-evidence-StaleQueue-a1b2c3d4e5",
+            "StaleQueue",
+            "StaleQueue has a distant same-project session hint.",
+            false,
+        );
+        stale.date = "2026-06-10".to_string();
+        stale.nearest_same_project_other_session_date = Some("2026-05-10".to_string());
+        stale.same_project_other_session_date_count = 1;
+
+        let title = session_evidence_candidate_fixture(
+            "session-evidence-NeedsTitleQueue-a1b2c3d4e5",
+            "NeedsTitleQueue",
+            "NeedsTitleQueue needs title cleanup.",
+            true,
+        );
+
+        let result =
+            session_evidence_candidates_result_fixture(vec![near, same_date, stale, title]);
+        sync_project_work_session_evidence_review_queue(&mut conn, &result, "2026-06-09T00:00:00Z")
+            .expect("sync session evidence queue");
+
+        let near_rows = read_project_work_session_evidence_review_queue(
+            &conn,
+            1,
+            Some("near-session-date-hint"),
+        )
+        .expect("read near rows");
+        assert_eq!(near_rows.total_items, 2);
+        assert_eq!(near_rows.pending_review_count, 2);
+        assert_eq!(near_rows.items.len(), 1);
+        assert!(
+            project_work_session_evidence_review_queue_item_has_near_session_date_hint(
+                &near_rows.items[0]
+            )
+        );
+
+        let stale_rows = read_project_work_session_evidence_review_queue(
+            &conn,
+            10,
+            Some("stale-session-date-hint"),
+        )
+        .expect("read stale hint rows");
+        assert_eq!(stale_rows.total_items, 1);
+        assert_eq!(stale_rows.items[0].project, "StaleQueue");
+
+        let title_rows = read_project_work_session_evidence_review_queue(
+            &conn,
+            10,
+            Some("needs-title-normalization"),
+        )
+        .expect("read title rows");
+        assert_eq!(title_rows.total_items, 1);
+        assert_eq!(title_rows.items[0].project, "NeedsTitleQueue");
+
+        drop(conn);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
+    fn session_evidence_review_queue_rejects_unknown_row_filter_before_scan() {
+        let error = run_project_work_session_evidence_review_queue(
+            ProjectWorkSessionEvidenceReviewQueueOptions {
+                row_filter: Some("not-a-filter".to_string()),
+                ..Default::default()
+            },
+        )
+        .expect_err("unknown row filter should fail before scanning");
+
+        assert!(error
+            .to_string()
+            .contains("work-session-evidence-review-queue unknown row_filter: not-a-filter"));
+    }
+
+    #[test]
     fn local_session_evidence_proposals_are_review_only_and_source_traced() {
         let candidate = session_evidence_candidate_fixture(
             "session-evidence-PromptVault-local",
@@ -26862,7 +27024,8 @@ Status: completed as a source-only/report-only hardening slice.
         )
         .expect("sync session evidence queue");
         assert_eq!(stale_count, 0);
-        let rows = read_project_work_session_evidence_review_queue(&conn, 10).expect("read queue");
+        let rows =
+            read_project_work_session_evidence_review_queue(&conn, 10, None).expect("read queue");
         assert_eq!(rows.total_items, 3);
         assert_eq!(rows.pending_review_count, 3);
         assert_eq!(rows.needs_title_normalization_count, 1);
@@ -26920,8 +27083,8 @@ Status: completed as a source-only/report-only hardening slice.
             "2026-06-09T00:30:00Z",
         )
         .expect("approve session evidence row");
-        let rows =
-            read_project_work_session_evidence_review_queue(&conn, 10).expect("read approved");
+        let rows = read_project_work_session_evidence_review_queue(&conn, 10, None)
+            .expect("read approved");
         assert_eq!(rows.pending_review_count, 2);
         assert_eq!(rows.approved_count, 1);
 
@@ -26945,7 +27108,8 @@ Status: completed as a source-only/report-only hardening slice.
         )
         .expect("sync queue again");
         assert_eq!(stale_count, 2);
-        let rows = read_project_work_session_evidence_review_queue(&conn, 10).expect("read stale");
+        let rows =
+            read_project_work_session_evidence_review_queue(&conn, 10, None).expect("read stale");
         assert_eq!(rows.pending_review_count, 0);
         assert_eq!(rows.stale_count, 2);
         assert_eq!(rows.approved_count, 1);
@@ -26988,8 +27152,8 @@ Status: completed as a source-only/report-only hardening slice.
             "2026-06-09T01:30:00Z",
         )
         .expect("reject stale row");
-        let rows =
-            read_project_work_session_evidence_review_queue(&conn, 10).expect("read rejected");
+        let rows = read_project_work_session_evidence_review_queue(&conn, 10, None)
+            .expect("read rejected");
         assert_eq!(rows.stale_count, 1);
         assert_eq!(rows.rejected_count, 1);
 

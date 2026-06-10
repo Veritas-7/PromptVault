@@ -1531,6 +1531,7 @@ test("browser bridge work session evidence review queue posts sync options and v
 
   const result = await loadProjectWorkSessionEvidenceReviewQueue({
     limit: 10,
+    row_filter: "near-session-date-hint",
     session_limit: 500,
     sync_candidates: true,
     refresh_session_index: true,
@@ -1540,6 +1541,7 @@ test("browser bridge work session evidence review queue posts sync options and v
   assert.deepEqual(JSON.parse(requestBody), {
     options: {
       limit: 10,
+      row_filter: "near-session-date-hint",
       session_limit: 500,
       sync_candidates: true,
       refresh_session_index: true,

@@ -147,6 +147,7 @@ export interface ProjectWorkSessionEvidenceProposalsOptions {
 export interface ProjectWorkSessionEvidenceReviewQueueOptions {
   database_path?: string;
   limit?: number;
+  row_filter?: string;
   sync_candidates?: boolean;
   session_limit?: number;
   refresh_session_index?: boolean;

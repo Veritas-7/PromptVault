@@ -636,6 +636,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let sync_candidates = take_flag(&mut args, "--sync-candidates");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
             let mut limit = None;
+            let mut row_filter = None;
             let mut session_limit = None;
             let mut database_path = None;
             let mut iter = args.into_iter();
@@ -647,6 +648,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     "--session-limit" => {
                         session_limit =
                             Some(parse_positive_usize_arg(iter.next(), "--session-limit")?);
+                    }
+                    "--row-filter" => {
+                        row_filter = Some(parse_required_arg(iter.next(), "--row-filter")?);
                     }
                     "--database" => {
                         database_path = Some(parse_required_arg(iter.next(), "--database")?);
@@ -664,6 +668,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 ProjectWorkSessionEvidenceReviewQueueOptions {
                     database_path,
                     limit,
+                    row_filter: row_filter.clone(),
                     sync_candidates: Some(sync_candidates),
                     session_limit,
                     refresh_session_index: Some(refresh_session_index),
@@ -675,6 +680,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("PromptVault session evidence review queue");
             println!("database: {}", result.database_path);
+            if let Some(row_filter) = &row_filter {
+                println!("row_filter: {row_filter}");
+            }
             println!("total_items: {}", result.total_items);
             println!("returned_items: {}", result.returned_item_count);
             println!("synced_candidates: {}", result.synced_candidate_count);
@@ -3065,11 +3073,12 @@ fn work_session_evidence_review_queue_help_text() -> String {
         "PromptVault work-session-evidence-review-queue",
         "",
         "Usage:",
-        "  promptvault-cli work-session-evidence-review-queue [--sync-candidates] [--refresh-session-index] [--limit N>0] [--session-limit N>0] [--database PATH] [--json]",
+        "  promptvault-cli work-session-evidence-review-queue [--sync-candidates] [--refresh-session-index] [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--json]",
         "",
         "Purpose:",
         "  Lists persisted session-evidence review queue rows for unresolved project/day candidates.",
         "  Use --sync-candidates to refresh the queue from current unresolved candidates without approving or applying rows.",
+        "  Use --row-filter near-session-date-hint or stale-session-date-hint to inspect persisted queue buckets without changing sync behavior.",
         "  Shows pending, stale, approved, rejected, and title-normalization blocked counts for operator review.",
         "",
         "Review safety:",
@@ -3079,6 +3088,7 @@ fn work_session_evidence_review_queue_help_text() -> String {
         "",
         "Examples:",
         "  promptvault-cli work-session-evidence-review-queue --sync-candidates --json",
+        "  promptvault-cli work-session-evidence-review-queue --row-filter near-session-date-hint --json",
         "  promptvault-cli work-session-evidence-review-queue --limit 20 --json",
     ]
     .join("\n")
@@ -3170,7 +3180,7 @@ fn help_text() -> String {
         "  work-status-export [--limit N>0] [--offset N>=0] [--row-filter FILTER] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]\n",
         "  work-session-evidence-candidates [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]\n",
         "  work-session-evidence-proposals [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]\n",
-        "  work-session-evidence-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]\n",
+        "  work-session-evidence-review-queue [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]\n",
         "  work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--source-review-json JSON|--source-review-file PATH] [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-evidence-review-apply [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-evidence-reviewed-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n",
@@ -3207,7 +3217,7 @@ fn help_text() -> String {
         "  work-status-export renders compact project/day Markdown and JSON rows from the same progress-log plus session-evidence report; --row-filter narrows rows before pagination.\n",
         "  work-session-evidence-candidates lists project/day rows still missing session evidence after the selected session index; --row-filter narrows read-only candidate rows before pagination; --needs-title-normalization limits rows to title-normalization blockers.\n",
         "  work-session-evidence-proposals returns read-only source-traced AI/GLM/local proposals for unresolved project/day session-evidence rows; --row-filter narrows the candidate pool first; --needs-title-normalization focuses title-first proposal work; durable writes still require later operator gates.\n",
-        "  work-session-evidence-review-queue persists unresolved session-evidence candidates into an operator review queue and marks disappeared candidates stale when a full candidate sync is available.\n",
+        "  work-session-evidence-review-queue persists unresolved session-evidence candidates into an operator review queue and marks disappeared candidates stale when a full candidate sync is available; --row-filter narrows read-only queue views without changing sync behavior.\n",
         "  work-session-evidence-review-queue-update marks one persisted session-evidence candidate approved or rejected with an audit reason; source-proposal approvals can pass copied trace metadata with --source-review-json or --source-review-file.\n",
         "  work-session-evidence-review-apply writes approved session-evidence review decisions into an idempotent durable reviewed-items audit table; it does not create session evidence links.\n",
         "  work-session-evidence-reviewed-items lists durable reviewed session-evidence audit rows by project and date without creating session evidence links.\n",
@@ -4329,6 +4339,16 @@ mod tests {
             .contains("work-session-evidence-review-queue limit requires a positive integer"));
         assert!(response.contains("Access-Control-Allow-Origin: *"));
 
+        let row_filter_response = bridge_response_for(
+            "/api/work-session-evidence-review-queue",
+            r#"{"options":{"row_filter":"not-a-filter"}}"#,
+        );
+
+        assert!(row_filter_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(row_filter_response
+            .contains("work-session-evidence-review-queue unknown row_filter: not-a-filter"));
+        assert!(row_filter_response.contains("Access-Control-Allow-Origin: *"));
+
         let update_response = bridge_response_for(
             "/api/work-session-evidence-review-queue/update",
             r#"{"options":{"candidate_id":"","review_state":"approved"}}"#,
@@ -4787,7 +4807,7 @@ mod tests {
             "work-session-evidence-proposals [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]"
         ));
         assert!(help.contains(
-            "work-session-evidence-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]"
+            "work-session-evidence-review-queue [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]"
         ));
         assert!(help.contains(
             "work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected"
@@ -5028,7 +5048,10 @@ mod tests {
         let help = work_session_evidence_review_queue_help_text();
 
         assert!(help.contains("promptvault-cli work-session-evidence-review-queue"));
+        assert!(help.contains("--row-filter FILTER"));
+        assert!(help.contains("near-session-date-hint"));
         assert!(help.contains("--sync-candidates"));
+        assert!(help.contains("without changing sync behavior"));
         assert!(help.contains("without approving or applying rows"));
         assert!(help.contains("pending, stale, approved, rejected"));
         assert!(help.contains("does not create durable session evidence links"));

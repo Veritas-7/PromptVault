@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 21:07 KST
+Updated: 2026-06-10 21:20 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,56 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed implementation slice:
+  pending commit for safe read-only `work-session-evidence-review-queue`
+  `row_filter`.
+- Completed behavior:
+  add a safe read-only `row_filter` to
+  `work-session-evidence-review-queue` so operators can inspect the same
+  `near-session-date-hint` and `stale-session-date-hint` buckets in the
+  persisted review queue without running a filtered sync.
+- Scope boundary:
+  Live inspection showed queue rows already persist
+  `same_project_same_date_session_count`,
+  `same_project_other_session_dates`, and
+  `nearest_same_project_other_session_date`, so filtering can be applied after
+  reading queue rows and before `limit` truncation. Keep
+  `--sync-candidates` unfiltered in this slice; the filter must be view-only so
+  it cannot mark unrelated candidates stale.
+- Verification status:
+  passed; commit is pending. Default-vault read-only pre-check against
+  `work-session-evidence-review-queue --limit 60 --json` showed `48` total
+  queue rows, `26` pending, `22` stale-state rows, `9` pending near hints, and
+  `16` pending stale hints. `cargo fmt` passed. `cargo test
+  session_evidence_review_queue --lib` passed with `3` focused backend tests.
+  `cargo test --bin promptvault-cli work_session_evidence_review_queue` passed
+  with `3` focused CLI/help/bridge tests. `cargo test --bin promptvault-cli
+  bridge_routes_work_session_evidence_review_queue_validation_errors` passed
+  with `1` focused bridge validation test. `cargo test --bin promptvault-cli
+  help_text_documents_cli_validation_rules` passed with `1` focused exact-help
+  test. `node --disable-warning=ExperimentalWarning
+  --experimental-transform-types --test tests/promptVaultApi.test.ts` passed
+  with `209` TS bridge/API tests. `cargo build --bin promptvault-cli` passed.
+  Real default-vault
+  `work-session-evidence-review-queue --row-filter near-session-date-hint
+  --json` returned `9` total and `9` returned pending rows with
+  `synced_candidate_count=0`. Real default-vault
+  `work-session-evidence-review-queue --row-filter stale-session-date-hint
+  --limit 5 --json` returned `16` total pending rows and `5` returned rows
+  with `synced_candidate_count=0`. Invalid row filter exits `1` with
+  `work-session-evidence-review-queue unknown row_filter: not-a-filter`. Help
+  output documents `--row-filter FILTER`, `near-session-date-hint`, and the
+  unchanged sync behavior. `git diff --check` passed. `npm run check` passed:
+  UI tests `523` passed, Vite / TypeScript build passed, `cargo build --bin
+  promptvault-cli` passed, Rust lib tests `248` passed, CLI tests `46` passed,
+  doc-tests passed, and clippy `-D warnings` passed. Browser/cmux QA was not
+  rerun because this slice changes read-only CLI/API/options/docs and this
+  environment is not the cmux in-app browser.
+- Next product work:
+  use the filtered review-queue view to inspect the `9` near pending rows with
+  `work-session-evidence-nearby`, `work-session-evidence-source-search`, and
+  `work-session-evidence-source-proposals`, then approve only rows with copied
+  source trace metadata.
 - Completed implementation slice:
   `773f460 fix: filter session evidence candidates`.
 - Completed behavior:

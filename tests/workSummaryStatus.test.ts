@@ -61,6 +61,8 @@ import {
   workSessionEvidenceProposalsMetaText,
   workSessionEvidenceSourceAuditItemText,
   workSessionEvidenceSourceAuditMetaText,
+  workSessionEvidenceSourceAuditRejectableItems,
+  workSessionEvidenceSourceAuditRejectableText,
   workSessionEvidenceSourceAuditRejectReason,
   workSessionEvidenceSourceProposalBlockerText,
   workSessionEvidenceSourceProposalsBlockerSummaryText,
@@ -3017,6 +3019,16 @@ test("work session evidence source audit reject helpers keep operator decisions 
   const blocked = sessionEvidenceSourceAuditResult().items[1];
   assert.equal(canRejectWorkSessionEvidenceSourceAuditItem(ready), false);
   assert.equal(canRejectWorkSessionEvidenceSourceAuditItem(blocked), true);
+  assert.deepEqual(
+    workSessionEvidenceSourceAuditRejectableItems(sessionEvidenceSourceAuditResult()).map((item) =>
+      item.candidate_id
+    ),
+    ["session-evidence-PromptVault-blocked"],
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditRejectableText(sessionEvidenceSourceAuditResult()),
+    "감사 판정 거절 가능 1개",
+  );
   assert.equal(
     workSessionEvidenceSourceAuditRejectReason(blocked),
     "source_audit_blocked:source_trace_is_instruction_only",
@@ -3043,6 +3055,15 @@ test("work session evidence source audit reject helpers keep operator decisions 
       review_state: "approved",
     }),
     false,
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditRejectableText(sessionEvidenceSourceAuditResult({
+      items: [{
+        ...ready,
+        review_state: "approved",
+      }],
+    })),
+    "감사 판정 거절 가능 row 없음",
   );
 });
 

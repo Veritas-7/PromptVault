@@ -2154,6 +2154,21 @@ export function canRejectWorkSessionEvidenceSourceAuditItem(
     && item.outcome !== "review_ready";
 }
 
+export function workSessionEvidenceSourceAuditRejectableItems(
+  result: ProjectWorkSessionEvidenceSourceAuditResult | null,
+): ProjectWorkSessionEvidenceSourceAuditResult["items"] {
+  if (!result) return [];
+  return result.items.filter(canRejectWorkSessionEvidenceSourceAuditItem);
+}
+
+export function workSessionEvidenceSourceAuditRejectableText(
+  result: ProjectWorkSessionEvidenceSourceAuditResult | null,
+): string {
+  const count = workSessionEvidenceSourceAuditRejectableItems(result).length;
+  if (count === 0) return "감사 판정 거절 가능 row 없음";
+  return `감사 판정 거절 가능 ${count.toLocaleString()}개`;
+}
+
 export function workSessionEvidenceSourceAuditRejectReason(
   item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
 ): string {

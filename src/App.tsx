@@ -378,6 +378,8 @@ import {
   workSessionEvidenceProposalsMetaText,
   workSessionEvidenceSourceAuditItemText,
   workSessionEvidenceSourceAuditMetaText,
+  workSessionEvidenceSourceAuditRejectableItems,
+  workSessionEvidenceSourceAuditRejectableText,
   workSessionEvidenceSourceAuditRejectReason,
   workSessionEvidenceSourceProposalsBlockerSummaryText,
   workSessionEvidenceSourceProposalRiskText,
@@ -530,6 +532,7 @@ const WORK_SESSION_EVIDENCE_PROPOSAL_DISPLAY_LIMIT = 5;
 const WORK_SESSION_EVIDENCE_PROPOSAL_MANAGEMENT_LIMIT = 40;
 const WORK_SESSION_EVIDENCE_REVIEW_QUEUE_DISPLAY_LIMIT = 5;
 const WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT = 40;
+const WORK_SESSION_EVIDENCE_SOURCE_AUDIT_BULK_REJECT_ID = "__source_audit_bulk_reject__";
 const WORK_LOG_NORMALIZATION_APPLY_DISPLAY_LIMIT = 5;
 const WORK_LOG_NORMALIZATION_APPLY_MANAGEMENT_LIMIT = 40;
 const WORK_MANAGEMENT_OVERVIEW_DISPLAY_LIMIT = 6;
@@ -1375,6 +1378,12 @@ function App() {
   const workSessionEvidenceSourceAuditMeta = workSessionEvidenceSourceAuditResult
     ? workSessionEvidenceSourceAuditMetaText(workSessionEvidenceSourceAuditResult)
     : null;
+  const workSessionEvidenceSourceAuditRejectable =
+    workSessionEvidenceSourceAuditRejectableItems(workSessionEvidenceSourceAuditResult);
+  const workSessionEvidenceSourceAuditRejectableSummary =
+    workSessionEvidenceSourceAuditRejectableText(workSessionEvidenceSourceAuditResult);
+  const isWorkSessionEvidenceSourceAuditBulkRejecting =
+    workSessionEvidenceReviewQueueUpdatingCandidateId === WORK_SESSION_EVIDENCE_SOURCE_AUDIT_BULK_REJECT_ID;
   const workManagementReadiness = workManagementReadinessText({
     coverage: workLogCoverageResult,
     sessionIndex: workSessionIndexResult,
@@ -2290,6 +2299,41 @@ function App() {
         review_reason: reviewReason,
         ...(sourceReview ? { source_review: sourceReview } : {}),
       });
+      setWorkSessionEvidenceReviewQueueResult(nextQueue);
+      setWorkSessionEvidenceReviewQueueState("ready");
+      setWorkSessionEvidenceSourceAuditResult(null);
+      setWorkSessionEvidenceSourceAuditState("idle");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSessionEvidenceReviewQueueState("failed");
+    } finally {
+      setWorkSessionEvidenceReviewQueueUpdatingCandidateId(null);
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function rejectWorkSessionEvidenceSourceAuditItems() {
+    const rejectableItems = workSessionEvidenceSourceAuditRejectableItems(
+      workSessionEvidenceSourceAuditResult,
+    );
+    if (!rejectableItems.length || !claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSessionEvidenceReviewQueueState("loading");
+    setWorkSessionEvidenceReviewQueueUpdatingCandidateId(
+      WORK_SESSION_EVIDENCE_SOURCE_AUDIT_BULK_REJECT_ID,
+    );
+    try {
+      let nextQueue = workSessionEvidenceReviewQueueResult;
+      for (const item of rejectableItems) {
+        nextQueue = await updateProjectWorkSessionEvidenceReviewQueue({
+          candidate_id: item.candidate_id,
+          limit: WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT,
+          review_state: "rejected",
+          review_reason: workSessionEvidenceSourceAuditRejectReason(item),
+        });
+      }
       setWorkSessionEvidenceReviewQueueResult(nextQueue);
       setWorkSessionEvidenceReviewQueueState("ready");
       setWorkSessionEvidenceSourceAuditResult(null);
@@ -6630,11 +6674,27 @@ function App() {
                 database {workSessionEvidenceSourceAuditResult.database_path} · generated{" "}
                 {workSessionEvidenceSourceAuditResult.generated_at}
               </span>
+              <span data-work-session-evidence-source-audit-rejectable="true">
+                {workSessionEvidenceSourceAuditRejectableSummary}
+              </span>
               {workSessionEvidenceSourceAuditResult.warnings.map((warning, index) => (
                 <span key={textListItemKey(warning, index)}>
                   {redactSensitiveDisplayText(warning)}
                 </span>
               ))}
+              <button
+                aria-label={`원본 감사 결과 기준 세션 근거 후보 ${workSessionEvidenceSourceAuditRejectable.length.toLocaleString()}개 일괄 거절`}
+                className="inline-action compact-action"
+                data-reject-work-session-evidence-source-audit-items="true"
+                disabled={isTopLevelActionLocked || workSessionEvidenceSourceAuditRejectable.length === 0}
+                onClick={() => void rejectWorkSessionEvidenceSourceAuditItems()}
+                type="button"
+              >
+                <XCircle size={14} />
+                {isWorkSessionEvidenceSourceAuditBulkRejecting
+                  ? "일괄 처리 중"
+                  : "감사 판정 일괄 거절"}
+              </button>
             </article>
             {workSessionEvidenceSourceAuditResult.items
               .slice(0, WORK_STATUS_EXPORT_DISPLAY_LIMIT)

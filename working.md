@@ -1,10 +1,65 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 23:31 KST
+Updated: 2026-06-11 00:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 00:07 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and `PROJECT_STATUS.md`.
+- Keep extraction, normalization, and session-evidence decisions source-traced,
+  operator-reviewable, and fail-closed. Approval remains explicit and requires
+  copied evidence/source-review checks.
+
+Short-Term Goal:
+
+- Reduce remaining session-evidence review queue friction without adding unsafe
+  auto-approval. Rows that the source audit marks as blocked/no-source/no-hit
+  can now be rejected explicitly, individually or in a controlled bulk action,
+  with a per-row reason preserved.
+
+Current Work:
+
+- Completed implementation slice:
+  added a source-audit bulk reject helper for non-`review_ready` audit rows.
+  The audit summary now shows `감사 판정 거절 가능 N개` and exposes
+  `감사 판정 일괄 거절` when at least one displayed audit row is rejectable.
+  The bulk path reuses the durable session-evidence review queue update API
+  once per row and writes the same explicit source-audit reject reasons used by
+  the per-row button. It still never approves audit rows automatically.
+- Changes:
+  `src/workSummaryStatus.ts` adds rejectable-item and summary-text helpers.
+  `src/App.tsx` adds the bulk reject button and sequential update function,
+  clearing the source-audit panel after successful queue updates so stale audit
+  results are not shown. `tests/workSummaryStatus.test.ts` covers the helper
+  behavior. `scripts/browser-bridge-isolated-qa.mjs` now clicks the bulk reject
+  path and accepts the resulting no-pending-session-review overview state.
+- Verification:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `50` tests.
+  `node --check scripts/browser-bridge-isolated-qa.mjs` passed. `npm run build`
+  passed. `npm run qa:browser-bridge` passed end-to-end, including source audit
+  bulk reject, session-evidence apply/reload, work-management overview,
+  normalization queues, and approved work-log queue save. Full `npm run check`
+  passed: UI tests, Vite / TypeScript build, `cargo build --bin
+  promptvault-cli`, Rust lib tests `252`, CLI tests `47`, doc-tests, and clippy
+  `-D warnings`.
+- Issues:
+  while updating QA, the bulk reject path exposed several overly rigid test
+  assumptions: the old fixture expected a remaining UI approve button and
+  session review blockers after audit decisions. Those were corrected in the QA
+  script to treat zero pending session review rows as a valid state.
+- Next Steps:
+  rerun the live default-vault source audit after operator decisions are made,
+  then decide whether to add a defer state/filter or a clearer manual-inspect
+  workflow for no-hit source paths. Keep approval explicit and source-traced.
 
 ## Resume Snapshot - 2026-06-10 23:31 KST
 

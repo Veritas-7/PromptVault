@@ -1,10 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 05:17 KST
+Updated: 2026-06-11 05:29 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 05:21 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Improve session-evidence review-queue visibility for rows blocked by title
+  normalization: the queue should make it obvious that these rows must go
+  through title cleanup before durable session-evidence review can be completed.
+
+Current Active Work:
+
+- Previous title-normalization next-action slice is complete, verified,
+  committed, and pushed as
+  `542cf92 ux: prioritize title cleanup in work actions`.
+- Documentation completion snapshot is pushed as
+  `ca49dae docs: record title action slice completion`.
+- Fresh repo check at resume showed `main...origin/main` clean.
+- Current slice is in progress: make session-evidence review queue summaries and
+  row state text say title-normalization rows are priority cleanup and
+  review-complete blocked.
+
+Progress:
+
+- Confirmed goal identity still anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed there is no project-local `AGENTS.md` or `design.md`; the project
+  root `working.md` remains the active continuation surface.
+- Inspected `workSessionEvidenceReviewQueueMetaText`,
+  `workSessionEvidenceReviewQueueItemStateText`, and the review queue UI.
+  Current behavior hides the approve button for `needs_title_normalization`
+  rows, but the visible state only said `제목 정규화 필요`.
+- Added a RED expectation that queue meta should say `제목정규화 우선` and
+  title-blocked item state should include `검토완료 차단`.
+- Updated `workSummaryStatus.ts` to expose those labels.
+- Updated browser-bridge QA so visible title-normalization queue rows must show
+  `검토완료 차단`, have no approve button, retain reject action, and the queue
+  meta must include `제목정규화 우선`.
+- Re-ran the targeted helper test after implementation. It passed.
+- Ran isolated browser-bridge QA. It passed through the session-evidence review
+  queue UI assertion that title-normalization rows show `검토완료 차단`, expose
+  no approve button, retain reject action, and queue meta says
+  `제목정규화 우선`.
+- Ran the full repository check and whole-tree secret scan after the browser QA.
+  Both passed.
+- Staged only the four intended paths and ran staged whitespace and secret
+  gates. Both passed.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: clarifies title-normalization review queue rows as
+  review-complete blocked and changes the queue count label to
+  `제목정규화 우선`.
+- `tests/workSummaryStatus.test.ts`: locks the new queue meta and row state
+  wording.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies the new blocker wording
+  through the DOM.
+- `working.md`: records this new slice and verification plan.
+
+Tests:
+
+- RED as expected:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before the helper implementation because the old queue meta still said
+  `제목정규화 12개`.
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  (`52` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `git diff --check`.
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check` (UI tests, TypeScript/Vite build, Rust CLI build,
+  Rust lib tests, CLI tests, doc-tests, and clippy `-D warnings`).
+- PASS: `gitleaks dir . --no-banner --redact` (`no leaks found`).
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact` (`no leaks found`).
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- This slice changes operator-facing labels only; it does not approve, reject,
+  defer, or apply session evidence.
+
+Next Step:
+
+- Commit and push the verified review-queue blocker visibility slice.
 
 ## Resume Snapshot - 2026-06-11 05:04 KST
 

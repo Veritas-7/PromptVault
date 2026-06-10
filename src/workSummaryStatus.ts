@@ -2575,7 +2575,7 @@ export function workSessionEvidenceReviewQueueMetaText(
     `보류 ${result.deferred_count.toLocaleString()}개`,
     `검토완료 ${result.approved_count.toLocaleString()}개`,
     `거절 ${result.rejected_count.toLocaleString()}개`,
-    `제목정규화 ${result.needs_title_normalization_count.toLocaleString()}개`,
+    `제목정규화 우선 ${result.needs_title_normalization_count.toLocaleString()}개`,
   ];
   if (result.warnings.length > 0) {
     parts.push(`경고 ${result.warnings.length.toLocaleString()}개`);
@@ -2622,7 +2622,9 @@ export function workSessionEvidenceReviewQueueItemStateText(
       : item.review_state === "approved"
         ? "검토 완료"
         : "거절됨";
-  const titleText = item.needs_title_normalization ? "제목 정규화 필요" : "제목 확인됨";
+  const titleText = item.needs_title_normalization
+    ? "제목 정규화 필요 · 검토완료 차단"
+    : "제목 확인됨";
   return [
     stateText,
     item.review_reason,

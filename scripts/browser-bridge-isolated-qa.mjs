@@ -1573,13 +1573,15 @@ async function runBrowserQa() {
       const rows = Array.from(document.querySelectorAll('[data-work-session-evidence-review-queue="true"] article'));
       const titleRows = rows.filter((row) => (row.textContent ?? "").includes("제목 정규화 필요"));
       const titleRowsAreApprovalBlocked = titleRows.every((row) =>
-        !row.querySelector("[data-approve-work-session-evidence-review-queue]")
+        (row.textContent ?? "").includes("검토완료 차단")
+          && !row.querySelector("[data-approve-work-session-evidence-review-queue]")
           && row.querySelector("[data-reject-work-session-evidence-review-queue]")
       );
       const titleRowsSafeWhenVisible = titleRows.length === 0 || titleRowsAreApprovalBlocked;
       return text.includes("세션근거 큐 저장")
         && text.includes("표시")
         && text.includes("검토")
+        && text.includes("제목정규화 우선")
         && rows.some((row) => {
           const rowText = row.textContent ?? "";
           return rowText.includes("unresolved-after-full-index") && rowText.includes("로그 유형");

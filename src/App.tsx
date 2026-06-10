@@ -265,6 +265,7 @@ import {
   type WorkManagementOverviewSort,
   type WorkManagementOverviewSource,
 } from "./workManagementOverview";
+import { workSourceFileRoleLabel } from "./workSourceFileRoles";
 import {
   storedFacetSummaryText,
   storedFacetsFailureText,
@@ -743,6 +744,20 @@ const WORK_MANAGEMENT_SOURCE_OPTIONS: Array<{
   { label: "정규화", value: "normalized_row" },
   { label: "상태Export", value: "status_export" },
   { label: "진행로그", value: "progress_log" },
+];
+
+const WORK_MANAGEMENT_SOURCE_ROLE_OPTIONS: Array<{
+  label: string;
+  value: string;
+}> = [
+  { label: "전체 로그 유형", value: "" },
+  { label: workSourceFileRoleLabel("handoff-log"), value: "handoff-log" },
+  { label: workSourceFileRoleLabel("work-log"), value: "work-log" },
+  { label: workSourceFileRoleLabel("project-status"), value: "project-status" },
+  { label: workSourceFileRoleLabel("progress-log"), value: "progress-log" },
+  { label: workSourceFileRoleLabel("generated-report"), value: "generated-report" },
+  { label: workSourceFileRoleLabel("dated-work-log"), value: "dated-work-log" },
+  { label: workSourceFileRoleLabel("progress-artifact"), value: "progress-artifact" },
 ];
 
 const WORK_MANAGEMENT_PERSISTENCE_OPTIONS: Array<{
@@ -5242,6 +5257,26 @@ function App() {
               value={workManagementOverviewFilters.source}
             >
               {WORK_MANAGEMENT_SOURCE_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>로그 유형</span>
+            <select
+              aria-label="프로젝트 일자 관리 감사 로그 유형 필터"
+              data-work-management-source-role-filter="true"
+              disabled={isTopLevelActionLocked}
+              onChange={(event) =>
+                setWorkManagementOverviewFilters((current) => ({
+                  ...current,
+                  sourceRole: event.target.value,
+                }))}
+              value={workManagementOverviewFilters.sourceRole}
+            >
+              {WORK_MANAGEMENT_SOURCE_ROLE_OPTIONS.map((option) => (
                 <option key={option.value || "all"} value={option.value}>
                   {option.label}
                 </option>

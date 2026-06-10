@@ -34,6 +34,7 @@ export interface WorkManagementOverviewFilters {
   minConfidence: string;
   project: string;
   source: "" | WorkManagementOverviewSource;
+  sourceRole: string;
   persistence: "" | WorkManagementOverviewPersistenceState;
 }
 
@@ -115,6 +116,7 @@ export function emptyWorkManagementOverviewFilters(): WorkManagementOverviewFilt
     persistence: "",
     project: "",
     source: "",
+    sourceRole: "",
   };
 }
 
@@ -127,6 +129,7 @@ export function activeWorkManagementOverviewFilterCount(
     filters.persistence,
     filters.project,
     filters.source,
+    filters.sourceRole,
   ].filter((value) => value.trim()).length;
 }
 
@@ -341,11 +344,13 @@ export function filterWorkManagementOverviewRows(
   const minConfidence = normalizedConfidenceFilter(filters.minConfidence);
   const project = filters.project.trim();
   const source = filters.source.trim();
+  const sourceRole = filters.sourceRole.trim();
   const persistence = filters.persistence.trim();
   return rows.filter((row) => {
     if (date && row.date !== date) return false;
     if (project && row.project !== project) return false;
     if (source && !row.sources.includes(source as WorkManagementOverviewSource)) return false;
+    if (sourceRole && !row.source_file_roles.some((role) => role.text === sourceRole)) return false;
     if (persistence && row.persistence_state !== persistence) return false;
     if (minConfidence !== null) {
       if (row.min_confidence === null || row.min_confidence < minConfidence) return false;

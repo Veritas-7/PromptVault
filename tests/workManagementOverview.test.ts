@@ -721,6 +721,7 @@ test("work management overview filters expose auditable project date rows", () =
     persistence: "",
     project: "",
     source: "",
+    sourceRole: "",
   });
   assert.equal(activeWorkManagementOverviewFilterCount({
     date: "2026-06-09",
@@ -728,7 +729,8 @@ test("work management overview filters expose auditable project date rows", () =
     persistence: "persisted",
     project: " PromptVault ",
     source: "saved_extraction",
-  }), 5);
+    sourceRole: " progress-log ",
+  }), 6);
 
   assert.deepEqual(
     filterWorkManagementOverviewRows(overview.rows, {
@@ -737,6 +739,7 @@ test("work management overview filters expose auditable project date rows", () =
       persistence: "persisted",
       project: "PromptVault",
       source: "saved_extraction",
+      sourceRole: "",
     }).map((row) => row.key),
     ["2026-06-09::PromptVault"],
   );
@@ -747,6 +750,7 @@ test("work management overview filters expose auditable project date rows", () =
       persistence: "",
       project: "",
       source: "extraction_proposal",
+      sourceRole: "",
     }).map((row) => row.key),
     [],
   );
@@ -757,6 +761,7 @@ test("work management overview filters expose auditable project date rows", () =
       persistence: "",
       project: "",
       source: "extraction_proposal",
+      sourceRole: "",
     }).map((row) => row.key),
     ["2026-06-08::CareVault"],
   );
@@ -767,8 +772,36 @@ test("work management overview filters expose auditable project date rows", () =
       persistence: "live_only",
       project: "",
       source: "",
+      sourceRole: "",
     }),
     [],
+  );
+
+  const statusOverview = buildWorkManagementOverview({
+    coverage: coverageResult(),
+    statusExport: statusExportResult(),
+  });
+  assert.deepEqual(
+    filterWorkManagementOverviewRows(statusOverview.rows, {
+      date: "",
+      minConfidence: "",
+      persistence: "",
+      project: "",
+      source: "",
+      sourceRole: "progress-log",
+    }).map((row) => row.key),
+    ["2026-06-09::PromptVault"],
+  );
+  assert.deepEqual(
+    filterWorkManagementOverviewRows(statusOverview.rows, {
+      date: "",
+      minConfidence: "",
+      persistence: "",
+      project: "",
+      source: "status_export",
+      sourceRole: "handoff-log",
+    }).map((row) => row.key),
+    ["2026-06-09::PromptVault", "2026-06-08::CareVault"],
   );
   assert.deepEqual(workManagementOverviewDateSuggestions(overview.rows), [
     "2026-06-04",

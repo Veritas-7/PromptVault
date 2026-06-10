@@ -1,10 +1,98 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 04:08 KST
+Updated: 2026-06-11 04:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 04:12 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Add a work-management `로그 유형` filter so project/day rows can be isolated
+  by source-file role, for example `progress-log` or `handoff-log`, not only by
+  the coarser source bucket such as `status_export`.
+
+Current Active Work:
+
+- The previous browser-bridge source-role DOM QA slice is complete and pushed:
+  `bf7f648 test: cover work management source role UI`.
+- Fresh repo check at resume showed `main...origin/main` clean with local HEAD
+  and `origin/main` both at `bf7f648d52f119bc3c86d556cfd8fd05ef8e1fe3`.
+- Next implementation slice is implemented and verified locally: overview
+  filters, UI, unit tests, and browser-bridge QA now cover filtering rendered
+  management rows by `progress-log`/`handoff-log` source role.
+
+Progress:
+
+- Confirmed goal identity still anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed `working.md` already tracks long-term goal, short-term goal,
+  current active work, progress, changes, tests, issues, research, and next
+  steps, but the immediately previous top snapshot still had a stale next step
+  saying the QA slice needed commit/push.
+- Selected the next thin vertical slice: source-role filtering in the management
+  overview.
+- Added `sourceRole` to the management overview filter contract and wired the
+  UI to a new `로그 유형` select.
+- Extended the browser-bridge source-role fixture flow to choose `진행 로그`
+  and expect two active filters: project plus source role.
+- Verified the rendered management overview source-role filter through
+  `npm run qa:browser-bridge`; the flow reached
+  `work management source roles fixture`, selected `progress-log`, confirmed
+  `관리 감사 필터 2개`, then continued through the remaining management,
+  coverage, normalization, review queue, and saved item checks.
+
+Changes:
+
+- `src/workManagementOverview.ts`: added source-role filter state, active count,
+  and row matching by `source_file_roles`.
+- `src/App.tsx`: added the `로그 유형` management filter select using the
+  shared source-role labels.
+- `tests/workManagementOverview.test.ts`: added default/count assertions and
+  `progress-log`/`handoff-log` filter coverage for status-export rows.
+- `scripts/browser-bridge-isolated-qa.mjs`: selects `progress-log` in the
+  rendered management overview source-role fixture flow.
+- `working.md`: added this fresh handoff snapshot before touching code so later
+  sessions do not confuse the already-pushed QA slice with the new filter slice.
+
+Tests:
+
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts`
+  (`10` tests).
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check` (UI tests, TypeScript/Vite build, Rust CLI build, Rust
+  lib tests, CLI tests, doc-tests, and clippy `-D warnings`).
+- PASS: `git diff --check`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `gitleaks dir . --no-banner --redact` (`no leaks found`).
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact` (`no leaks found`).
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+
+Next Step:
+
+- Commit and push this source-role filter slice, then verify `main...origin/main`
+  is clean at the pushed commit.
 
 ## Resume Snapshot - 2026-06-11 04:08 KST
 

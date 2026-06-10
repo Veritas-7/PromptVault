@@ -2340,13 +2340,15 @@ async function runBrowserQa() {
     });
     await waitForEnabled(page, '[data-work-management-project-filter="true"]');
     await page.locator('[data-work-management-project-filter="true"]').fill("QASupported");
+    await waitForEnabled(page, '[data-work-management-source-role-filter="true"]');
+    await page.locator('[data-work-management-source-role-filter="true"]').selectOption("progress-log");
     await page.locator('[data-apply-work-management-filters="true"]').click();
     await page.waitForFunction(() => {
       const filterText = document.querySelector('[data-work-management-filter-meta="true"]')?.textContent ?? "";
       const rows = [...document.querySelectorAll('[data-work-management-overview="true"] article')];
       const sourceRoleRows = [...document.querySelectorAll('[data-work-management-row-source-roles="true"]')]
         .map((element) => element.textContent ?? "");
-      return filterText.includes("관리 감사 필터 1개")
+      return filterText.includes("관리 감사 필터 2개")
         && rows.length === 1
         && (rows[0]?.textContent ?? "").includes("QASupported")
         && sourceRoleRows.some((text) =>

@@ -35,9 +35,10 @@ Current Active Work:
 - Documentation completion snapshot is pushed as
   `4535352 docs: record review blocker slice completion`.
 - Fresh repo check at resume showed `main...origin/main` clean.
-- Current slice is in progress: make common review queue filter meta include
-  active date/project/state/reason values and verify the DOM reflects project
-  filter conditions.
+- Current saved review queue filter summary slice is complete, verified,
+  committed, and pushed as
+  `7d82fae ux: show review queue filter conditions`.
+- Fresh post-push repo check showed `main...origin/main` clean.
 
 Progress:
 
@@ -65,6 +66,7 @@ Progress:
   passed.
 - Staged only the intended five files and ran staged whitespace and secret
   gates. Both passed.
+- Committed and pushed the verified filter-summary UX slice to `origin/main`.
 
 Changes:
 
@@ -92,7 +94,7 @@ Tests:
 - PASS: `gitleaks dir . --no-banner --redact` (`no leaks found`).
 - PASS: `git diff --cached --check`.
 - PASS: `gitleaks protect --staged --no-banner --redact` (`no leaks found`).
-- Pending: commit/push if green.
+- PASS: `git push origin main` (`4535352..7d82fae main -> main`).
 
 Issues:
 
@@ -103,7 +105,11 @@ Issues:
 
 Next Step:
 
-- Commit and push this verified filter-summary UX slice.
+- Continue from clean `main...origin/main` and choose the next small
+  work-management durability or UX slice. Good candidates are tightening
+  source-audit manual-inspect affordances, improving bounded
+  work-session-index backfill comparison, or expanding project-local progress
+  log coverage without changing durable write policy.
 
 ## Resume Snapshot - 2026-06-11 05:21 KST
 

@@ -94,7 +94,7 @@ For project/day work-ledger checks outside the UI, use:
 ```bash
 cd src-tauri
 cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --json
-cargo run --bin promptvault-cli -- work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --json
+cargo run --bin promptvault-cli -- work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --query "RepoTutorStudio 2026-06-10" --json
 cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
 cargo run --bin promptvault-cli -- work-session-evidence-review-queue --sync-candidates --limit 20 --json
 cargo run --bin promptvault-cli -- work-session-evidence-review-apply --limit 20 --json
@@ -118,9 +118,9 @@ session dates, and title-normalization rows remain blocked from review-complete
 approval until their titles are cleaned up.
 Use `work-session-evidence-nearby` or the review-queue row's `근처 세션` action
 to inspect nearby same-project session records for one project/date. That
-drilldown is read-only navigation: it returns excerpts and source paths from
-the sanitized session index, but it does not create, approve, or attach session
-evidence.
+drilldown is read-only navigation: it returns sanitized excerpts, source paths,
+optional query overlap scores, and matched terms, but it does not create,
+approve, or attach session evidence.
 Status export, candidates, proposals, and the review queue also classify those
 source artifacts as handoff logs, work logs, project-status files, progress logs,
 generated reports, dated work logs, or generic progress artifacts so project/day
@@ -159,9 +159,9 @@ Recommended agent workflow:
    --limit 20 --json` to list project/day rows that still have no matched
    session evidence after the selected, full stored session index.
 9. Use `cargo run --bin promptvault-cli -- work-session-evidence-nearby
-   --project NAME --date YYYY-MM-DD --limit 8 --json` to inspect nearby
-   same-project session records for a candidate row. Treat the output as a
-   navigation hint, not proof.
+   --project NAME --date YYYY-MM-DD --limit 8 --query "PROJECT YYYY-MM-DD"
+   --json` to inspect and locally rank nearby same-project session records for
+   a candidate row. Treat the output as a navigation hint, not proof.
 10. Use `cargo run --bin promptvault-cli -- work-session-evidence-proposals
    --limit 20 --needs-title-normalization --ai --json` to generate read-only
    OpenAI/GLM/Codex-opt-in/local proposals for title-normalization blockers,

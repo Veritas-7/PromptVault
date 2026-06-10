@@ -568,6 +568,8 @@ function projectWorkSessionEvidenceNearbyPayload(overrides = {}) {
     database_path: "/tmp/promptvault.sqlite",
     project: "PromptVault",
     date: "2026-06-09",
+    query: "PromptVault nearby evidence",
+    query_term_count: 3,
     requested_limit: 6,
     total_match_count: 2,
     returned_item_count: 2,
@@ -580,6 +582,8 @@ function projectWorkSessionEvidenceNearbyPayload(overrides = {}) {
       prompt_date: "2026-06-09",
       cwd: "/Users/wj/Ai/System/10_Projects/PromptVault",
       date_distance_days: 0,
+      match_score: 3,
+      matched_terms: ["evidence", "nearby", "promptvault"],
       excerpt: "PromptVault nearby session evidence excerpt.",
       word_count: 5,
       char_count: 44,
@@ -593,6 +597,8 @@ function projectWorkSessionEvidenceNearbyPayload(overrides = {}) {
       prompt_date: "2026-06-08",
       cwd: null,
       date_distance_days: 1,
+      match_score: 2,
+      matched_terms: ["evidence", "promptvault"],
       excerpt: "Older PromptVault session evidence excerpt.",
       word_count: 5,
       char_count: 41,
@@ -1592,6 +1598,7 @@ test("browser bridge work session evidence nearby posts target and validates ses
     project: "PromptVault",
     date: "2026-06-09",
     limit: 6,
+    query: "PromptVault nearby evidence",
   });
 
   assert.match(requestPath, /\/api\/work-session-evidence-nearby$/);
@@ -1600,10 +1607,14 @@ test("browser bridge work session evidence nearby posts target and validates ses
       project: "PromptVault",
       date: "2026-06-09",
       limit: 6,
+      query: "PromptVault nearby evidence",
     },
   });
   assert.equal(result.total_match_count, 2);
   assert.equal(result.returned_item_count, 2);
+  assert.equal(result.query_term_count, 3);
+  assert.equal(result.items[0].match_score, 3);
+  assert.deepEqual(result.items[0].matched_terms, ["evidence", "nearby", "promptvault"]);
   assert.equal(result.items[0].date_distance_days, 0);
   assert.equal(result.items[1].cwd, null);
   assert.match(result.warnings[0], /navigation hints only/);

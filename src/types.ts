@@ -449,6 +449,8 @@ export interface ProjectWorkSessionEvidenceNearbyItem {
   prompt_date: string;
   cwd: string | null;
   date_distance_days: number | null;
+  match_score: number;
+  matched_terms: string[];
   excerpt: string;
   word_count: number;
   char_count: number;
@@ -460,6 +462,8 @@ export interface ProjectWorkSessionEvidenceNearbyResult {
   database_path: string;
   project: string;
   date: string;
+  query: string | null;
+  query_term_count: number;
   requested_limit: number;
   total_match_count: number;
   returned_item_count: number;

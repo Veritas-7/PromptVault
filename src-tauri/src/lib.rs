@@ -51,6 +51,8 @@ const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEWED_ITEM_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEWED_ITEM_LIMIT: usize = 200;
 const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT: usize = 8;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT: usize = 50;
+const PROJECT_WORK_SESSION_EVIDENCE_NEARBY_QUERY_TERM_LIMIT: usize = 24;
+const PROJECT_WORK_SESSION_EVIDENCE_NEARBY_MATCHED_TERM_LIMIT: usize = 12;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
 const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
 const PROJECT_WORK_METADATA_TAIL_TIMESTAMP_LINES: usize = 200;
@@ -1132,6 +1134,7 @@ pub struct ProjectWorkSessionEvidenceNearbyOptions {
     pub project: String,
     pub date: String,
     pub limit: Option<usize>,
+    pub query: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1144,6 +1147,8 @@ pub struct ProjectWorkSessionEvidenceNearbyItem {
     pub prompt_date: String,
     pub cwd: Option<String>,
     pub date_distance_days: Option<i64>,
+    pub match_score: usize,
+    pub matched_terms: Vec<String>,
     pub excerpt: String,
     pub word_count: usize,
     pub char_count: usize,
@@ -1156,6 +1161,8 @@ pub struct ProjectWorkSessionEvidenceNearbyResult {
     pub database_path: String,
     pub project: String,
     pub date: String,
+    pub query: Option<String>,
+    pub query_term_count: usize,
     pub requested_limit: usize,
     pub total_match_count: usize,
     pub returned_item_count: usize,
@@ -2757,6 +2764,11 @@ pub fn run_project_work_session_evidence_nearby(
     if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
         return Err("work-session-evidence-nearby database path requires a non-empty value".into());
     }
+    let query = normalized_optional_filter(
+        options.query.as_deref(),
+        "work-session-evidence-nearby query requires a non-empty value",
+    )?;
+    let query_terms = project_work_session_evidence_nearby_query_terms(query.as_deref());
 
     let requested_limit = options
         .limit
@@ -2768,11 +2780,32 @@ pub fn run_project_work_session_evidence_nearby(
         .map(PathBuf::from)
         .unwrap_or_else(default_database_path);
     let conn = open_promptvault_database(&database_path)?;
-    let items = read_project_work_session_evidence_nearby_items(&conn, project, date, limit)?;
+    let read_limit = if query_terms.is_empty() {
+        limit
+    } else {
+        MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT
+    };
+    let mut items = read_project_work_session_evidence_nearby_items(
+        &conn,
+        project,
+        date,
+        read_limit,
+        &query_terms,
+    )?;
+    if !query_terms.is_empty() {
+        sort_project_work_session_evidence_nearby_items_for_query(&mut items);
+        items.truncate(limit);
+    }
     let total_match_count = count_project_work_session_evidence_for_project(&conn, project)?;
     let mut warnings = vec![
         "Nearby same-project sessions are navigation hints only; they do not create or approve session evidence.".to_string(),
     ];
+    if query.is_some() && query_terms.is_empty() {
+        warnings.push(
+            "Nearby query did not contain searchable terms after redaction and stop-word filtering."
+                .to_string(),
+        );
+    }
     if requested_limit > MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT {
         warnings.push(format!(
             "work-session-evidence-nearby limit capped at {MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT}"
@@ -2789,6 +2822,8 @@ pub fn run_project_work_session_evidence_nearby(
         database_path: database_path.display().to_string(),
         project: project.to_string(),
         date: date.to_string(),
+        query,
+        query_term_count: query_terms.len(),
         requested_limit,
         total_match_count,
         returned_item_count: items.len(),
@@ -9048,6 +9083,7 @@ fn read_project_work_session_evidence_nearby_items(
     project: &str,
     date: &str,
     limit: usize,
+    query_terms: &[String],
 ) -> Result<Vec<ProjectWorkSessionEvidenceNearbyItem>, Box<dyn std::error::Error>> {
     let pattern = project_work_session_project_like_pattern(project);
     let mut stmt = conn.prepare(
@@ -9065,18 +9101,32 @@ fn read_project_work_session_evidence_nearby_items(
     )?;
     let rows = stmt
         .query_map(params![pattern, date, limit as i64], |row| {
+            let session_id: String = row.get(2)?;
+            let source_path: String = row.get(3)?;
             let prompt_date: String = row.get(5)?;
+            let cwd: Option<String> = row.get(6)?;
             let text: String = row.get(7)?;
             let risk_flags_json: String = row.get(10)?;
+            let searchable = format!(
+                "{}\n{}\n{}\n{}",
+                source_path,
+                session_id,
+                cwd.as_deref().unwrap_or(""),
+                text
+            );
+            let (match_score, matched_terms) =
+                project_work_session_evidence_nearby_match(query_terms, &searchable);
             Ok(ProjectWorkSessionEvidenceNearbyItem {
                 id: row.get(0)?,
                 source: row.get(1)?,
-                session_id: row.get(2)?,
-                source_path: row.get(3)?,
+                session_id,
+                source_path,
                 timestamp: row.get(4)?,
                 prompt_date: prompt_date.clone(),
-                cwd: row.get(6)?,
+                cwd,
                 date_distance_days: project_work_session_date_distance_checked(date, &prompt_date),
+                match_score,
+                matched_terms,
                 excerpt: truncate_chars(&redact_sensitive_text(&markdown_inline(&text)), 320),
                 word_count: row.get::<_, i64>(8)? as usize,
                 char_count: row.get::<_, i64>(9)? as usize,
@@ -9085,6 +9135,69 @@ fn read_project_work_session_evidence_nearby_items(
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
+}
+
+fn project_work_session_evidence_nearby_query_terms(query: Option<&str>) -> Vec<String> {
+    let Some(query) = query else {
+        return Vec::new();
+    };
+    let stop = stop_words();
+    let mut counts = HashMap::<String, usize>::new();
+    let safe_query = frequency_safe_prompt_text(query);
+    for mat in word_regex().find_iter(&safe_query) {
+        let token = mat
+            .as_str()
+            .trim_matches(|ch: char| ch == '_' || ch == '-')
+            .to_string();
+        if token.chars().count() < 3 || stop.contains(token.as_str()) {
+            continue;
+        }
+        *counts.entry(token).or_default() += 1;
+    }
+    rank_counts(
+        counts,
+        PROJECT_WORK_SESSION_EVIDENCE_NEARBY_QUERY_TERM_LIMIT,
+    )
+    .into_iter()
+    .map(|item| item.text)
+    .collect()
+}
+
+fn project_work_session_evidence_nearby_match(
+    query_terms: &[String],
+    text: &str,
+) -> (usize, Vec<String>) {
+    if query_terms.is_empty() {
+        return (0, Vec::new());
+    }
+    let safe_text = frequency_safe_prompt_text(text);
+    let mut matched_terms = query_terms
+        .iter()
+        .filter(|term| safe_text.contains(term.as_str()))
+        .take(PROJECT_WORK_SESSION_EVIDENCE_NEARBY_MATCHED_TERM_LIMIT)
+        .cloned()
+        .collect::<Vec<_>>();
+    matched_terms.sort();
+    matched_terms.dedup();
+    (matched_terms.len(), matched_terms)
+}
+
+fn sort_project_work_session_evidence_nearby_items_for_query(
+    items: &mut [ProjectWorkSessionEvidenceNearbyItem],
+) {
+    items.sort_by(|left, right| {
+        right
+            .match_score
+            .cmp(&left.match_score)
+            .then_with(|| {
+                left.date_distance_days
+                    .unwrap_or(i64::MAX)
+                    .cmp(&right.date_distance_days.unwrap_or(i64::MAX))
+            })
+            .then_with(|| right.prompt_date.cmp(&left.prompt_date))
+            .then_with(|| right.timestamp.cmp(&left.timestamp))
+            .then_with(|| left.session_id.cmp(&right.session_id))
+    });
 }
 
 fn project_work_session_project_like_pattern(project: &str) -> String {
@@ -21373,17 +21486,27 @@ Status: completed as a source-only/report-only hardening slice.
             std::process::id()
         ));
         let _ = std::fs::remove_file(&db_path);
+        let mut far = project_path_session_record(
+            "nearby-project-far",
+            "NearbyProject",
+            "2026-06-01T12:00:00Z",
+        );
+        far.text.push_str(" fallback maintenance note");
+        far.word_count = count_words(&far.text);
+        far.char_count = far.text.chars().count();
+        far.hash = hash_text(&far.text);
+        let mut close = project_path_session_record(
+            "nearby-project-close",
+            "NearbyProject",
+            "2026-06-08T12:00:00Z",
+        );
+        close.text.push_str(" drilldown evidence overlap");
+        close.word_count = count_words(&close.text);
+        close.char_count = close.text.chars().count();
+        close.hash = hash_text(&close.text);
         let prompts = vec![
-            project_path_session_record(
-                "nearby-project-far",
-                "NearbyProject",
-                "2026-06-01T12:00:00Z",
-            ),
-            project_path_session_record(
-                "nearby-project-close",
-                "NearbyProject",
-                "2026-06-08T12:00:00Z",
-            ),
+            far,
+            close,
             project_path_session_record(
                 "nearby-other-project",
                 "OtherProject",
@@ -21398,6 +21521,7 @@ Status: completed as a source-only/report-only hardening slice.
                 project: "NearbyProject".to_string(),
                 date: "2026-06-09".to_string(),
                 limit: Some(2),
+                query: Some("NearbyProject close".to_string()),
             })
             .expect("read nearby sessions");
 
@@ -21405,10 +21529,18 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(result.date, "2026-06-09");
         assert_eq!(result.total_match_count, 2);
         assert_eq!(result.returned_item_count, 2);
+        assert_eq!(result.query.as_deref(), Some("NearbyProject close"));
+        assert_eq!(result.query_term_count, 2);
         assert_eq!(result.items[0].prompt_date, "2026-06-08");
         assert_eq!(result.items[0].date_distance_days, Some(1));
+        assert_eq!(result.items[0].match_score, 2);
+        assert_eq!(
+            result.items[0].matched_terms,
+            vec!["close".to_string(), "nearbyproject".to_string()]
+        );
         assert_eq!(result.items[1].prompt_date, "2026-06-01");
         assert_eq!(result.items[1].date_distance_days, Some(8));
+        assert_eq!(result.items[1].match_score, 1);
         assert!(result
             .warnings
             .iter()

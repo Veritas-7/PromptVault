@@ -2178,10 +2178,15 @@ function App() {
     setWorkSessionEvidenceNearbyState("loading");
     setWorkSessionEvidenceNearbyCandidateId(item.candidate_id);
     try {
+      const query = [item.project, item.date, ...item.top_titles, item.sample_evidence]
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join("\n");
       const next = await loadProjectWorkSessionEvidenceNearby({
         project: item.project,
         date: item.date,
         limit: 6,
+        ...(query ? { query } : {}),
       });
       setWorkSessionEvidenceNearbyResult(next);
       setWorkSessionEvidenceNearbyState("ready");
@@ -6286,6 +6291,9 @@ function App() {
                             <span>
                               근처 세션 {nearbyResult.returned_item_count.toLocaleString()} /{" "}
                               {nearbyResult.total_match_count.toLocaleString()} · 자동 proof 아님
+                              {nearbyResult.query_term_count
+                                ? ` · 검색어 ${nearbyResult.query_term_count.toLocaleString()}개`
+                                : ""}
                             </span>
                             {nearbyResult.warnings.map((warning, index) => (
                               <span key={textListItemKey(warning, index)}>
@@ -6306,6 +6314,12 @@ function App() {
                                   </strong>
                                   <span>
                                     {session.source} · {session.session_id}
+                                  </span>
+                                  <span>
+                                    match score {session.match_score.toLocaleString()}
+                                    {session.matched_terms.length
+                                      ? ` · ${session.matched_terms.join(", ")}`
+                                      : " · 일치어 없음"}
                                   </span>
                                   <p>{session.excerpt}</p>
                                   <span>{session.cwd ?? "cwd 없음"}</span>

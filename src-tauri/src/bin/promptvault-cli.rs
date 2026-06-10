@@ -843,6 +843,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let mut database_path = None;
             let mut project = None;
             let mut date = None;
+            let mut query = None;
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
@@ -858,6 +859,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     "--date" => {
                         date = Some(parse_required_arg(iter.next(), "--date")?);
                     }
+                    "--query" => {
+                        query = Some(parse_required_arg(iter.next(), "--query")?);
+                    }
                     other => {
                         return Err(format!(
                             "unknown work-session-evidence-nearby argument: {other}"
@@ -872,6 +876,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     project: project.ok_or("work-session-evidence-nearby requires --project")?,
                     date: date.ok_or("work-session-evidence-nearby requires --date")?,
                     limit,
+                    query,
                 },
             )?;
             if json {
@@ -882,6 +887,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("database: {}", result.database_path);
             println!("project: {}", result.project);
             println!("date: {}", result.date);
+            if let Some(query) = result.query.as_deref() {
+                println!("query_terms: {} · {}", result.query_term_count, query);
+            }
             println!("matches: {}", result.total_match_count);
             println!("returned: {}", result.returned_item_count);
             for item in &result.items {
@@ -890,9 +898,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .map(|days| format!("{days}d"))
                     .unwrap_or_else(|| "unknown".to_string());
                 println!(
-                    "\n{} · {} · distance {} · {}",
-                    item.prompt_date, item.source, distance, item.session_id
+                    "\n{} · {} · distance {} · score {} · {}",
+                    item.prompt_date, item.source, distance, item.match_score, item.session_id
                 );
+                if !item.matched_terms.is_empty() {
+                    println!("  matched: {}", item.matched_terms.join(", "));
+                }
                 println!("- excerpt: {}", item.excerpt);
                 println!("  {}", item.source_path);
             }
@@ -2611,7 +2622,7 @@ fn help_text() -> String {
         "  work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-evidence-review-apply [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-evidence-reviewed-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n",
-        "  work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--database PATH] [--json]\n",
+        "  work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--query TEXT] [--database PATH] [--json]\n",
         "  work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
@@ -2646,7 +2657,7 @@ fn help_text() -> String {
         "  work-session-evidence-review-queue-update marks one persisted session-evidence candidate approved or rejected with an audit reason.\n",
         "  work-session-evidence-review-apply writes approved session-evidence review decisions into an idempotent durable reviewed-items audit table; it does not create session evidence links.\n",
         "  work-session-evidence-reviewed-items lists durable reviewed session-evidence audit rows by project and date without creating session evidence links.\n",
-        "  work-session-evidence-nearby lists same-project session records nearest a target project/date as navigation hints only; it does not approve or create session evidence.\n",
+        "  work-session-evidence-nearby lists same-project session records nearest a target project/date as navigation hints only; optional --query ranks nearby rows by local token overlap but does not approve or create session evidence.\n",
         "  work-log-coverage lists parsed and unparsed project progress logs by project.\n",
         "  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n",
         "  work-ai-provider-status reports OpenAI/GLM/Codex work-management provider readiness without exposing secrets.\n",
@@ -4147,7 +4158,7 @@ mod tests {
             "work-session-evidence-reviewed-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME]"
         ));
         assert!(help.contains(
-            "work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--database PATH] [--json]"
+            "work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--query TEXT] [--database PATH] [--json]"
         ));
         assert!(
             help.contains(

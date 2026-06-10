@@ -1273,6 +1273,7 @@ async function runBrowserQa() {
       const text = panel?.textContent ?? "";
       return text.includes("근처 세션")
         && text.includes("자동 proof 아님")
+        && text.includes("match score")
         && text.includes("navigation hints only");
     }, firstNearbyCandidateId, { timeout: 90000 });
     workSessionEvidenceNearbyUiText =

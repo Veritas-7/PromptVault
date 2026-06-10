@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 14:18 KST
+Updated: 2026-06-10 14:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-10 14:18 KST
+## Resume Snapshot - 2026-06-10 14:35 KST
 
 Long-Term Goal:
 
@@ -34,8 +34,14 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed implementation baseline before this slice:
-  `4231df9 feat: prioritize session evidence review`.
-- Current verified implementation slice: unresolved session-evidence review
+  `ece56ab feat: add session evidence nearby drilldown`.
+- Current verified implementation slice: nearby same-project session drilldown
+  now accepts an optional query and returns local `match_score` plus
+  `matched_terms`. The review-queue UI sends project/date/title/sample evidence
+  as query material so operators can see which nearby sanitized session locator
+  rows are the best manual-search starting points. The score is still navigation
+  only and does not create, approve, or attach session evidence.
+- Previous verified implementation slice: unresolved session-evidence review
   rows now have a read-only nearby same-project session drilldown. The CLI,
   Tauri command, browser bridge endpoint, and review-queue UI `근처 세션` action
   return nearby sanitized session excerpts and paths for a project/date, sorted
@@ -82,11 +88,17 @@ Current Work:
   --limit 5 --json` returned `5/5` nearby same-project session records. The
   nearest returned prompt date was `2026-06-09` with `date_distance_days=1`, and
   the command emitted the required `navigation hints only` warning.
+- Actual default-vault query-ranked nearby proof after the current slice:
+  `work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10
+  --limit 5 --query "RepoTutorStudio 2026-06-10" --json` returned
+  `query_term_count=2`, `total_match_count=5`, `returned_item_count=5`, first
+  prompt date `2026-06-09`, `date_distance_days=1`, `match_score=1`, and matched
+  term `repotutorstudio`.
 - Actual browser bridge QA proof after the current slice:
   `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed and
   exercised `/api/work-session-evidence-nearby` plus the review-queue UI
   drilldown. Isolated QA DB:
-  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-Tl5Zip/qa.sqlite`.
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-hNUJ1k/qa.sqlite`.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is provider/manual search execution or AI-assisted candidate
@@ -121,9 +133,81 @@ Immediate Resume Commands:
 
 - `src-tauri/target/debug/promptvault-cli work-status-export --limit 200 --full-session-index --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
-- `src-tauri/target/debug/promptvault-cli work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --json`
+- `src-tauri/target/debug/promptvault-cli work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --query "RepoTutorStudio 2026-06-10" --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Query-ranked nearby session hints
+
+Current Goal:
+
+- Connect nearby same-project session drilldowns to the target review row's
+  project/date/title/evidence so operators get a ranked manual-search starting
+  point without treating nearby hints as proof.
+
+Context:
+
+- The previous nearby drilldown returned session locator rows by date distance.
+- Session index storage is intentionally sanitized: raw session prompt bodies are
+  not persisted in `project_work_session_evidence`. Therefore query ranking must
+  be based on sanitized metadata, source path, session ID, cwd, and sanitized
+  excerpt, not raw session content.
+
+Progress:
+
+- Added optional `query` to `work-session-evidence-nearby`.
+- Added `query_term_count`, per-row `match_score`, and `matched_terms` to the
+  nearby response.
+- When a query is present, the runner reads a wider nearby window, scores rows
+  locally, sorts by score first and date distance second, then truncates to the
+  requested limit.
+- The review-queue UI now sends project, date, top titles, and sample evidence
+  as the nearby query and displays match score/matched terms in the row-local
+  panel.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added query term extraction, local metadata overlap
+  scoring, scored sorting, result fields, and Rust coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`: added `--query` parsing, help text,
+  and score/matched-term text output.
+- `src/promptVaultApi.ts`, `src/types.ts`: added strict query/scoring result
+  validation.
+- `src/App.tsx`: sends row context as query and displays score/matched terms.
+- `tests/promptVaultApi.test.ts`: updated nearby bridge fixture and parser
+  assertions.
+- `README.md`, `docs/CLI.md`, `working.md`: documented query-ranked nearby
+  usage and limits.
+
+Tests:
+
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_nearby`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli work_session_evidence`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work session evidence nearby"`
+  (`205` UI/API tests ran and passed).
+- PASS: default-vault query-ranked nearby proof for `RepoTutorStudio` on
+  `2026-06-10`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  exercised `/api/work-session-evidence-nearby`, the review-queue UI drilldown,
+  and the `match score` assertion. Isolated QA DB:
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-hNUJ1k/qa.sqlite`.
+
+Issues:
+
+- Query ranking does not inspect raw session bodies. It ranks safe locator
+  metadata only, because raw session bodies are not stored in the session
+  evidence table.
+- The next stronger step is a bounded, redacted, read-only raw source-file search
+  or provider-assisted proposal that validates copied source traces without
+  persisting raw session text.
+
+Next Steps:
+
+- Extend the manual session-search flow to optionally inspect the selected raw
+  local session file in a bounded/redacted way, or let Codex/GLM rank nearby
+  candidates while enforcing copied-evidence validation.
+- Keep approval separate from evidence creation; reviewed rows still must not
+  become matched session evidence automatically.
 
 ## Completed Slice - 2026-06-10 Session-evidence nearby drilldown
 

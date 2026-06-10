@@ -171,6 +171,7 @@ export interface ProjectWorkSessionEvidenceNearbyOptions {
   project: string;
   date: string;
   limit?: number;
+  query?: string;
 }
 
 export interface ProjectWorkSessionIndexOptions {
@@ -2848,6 +2849,10 @@ function isProjectWorkSessionEvidenceNearbyItem(value: unknown): boolean {
     && (value.cwd === null || isNonBlankString(value.cwd))
     && (value.date_distance_days === null
       || (Number.isSafeInteger(value.date_distance_days) && Number(value.date_distance_days) >= 0))
+    && isNonNegativeSafeInteger(value.match_score)
+    && Array.isArray(value.matched_terms)
+    && isNonBlankStringArray(value.matched_terms)
+    && Number(value.match_score) >= value.matched_terms.length
     && typeof value.excerpt === "string"
     && isNonNegativeSafeInteger(value.word_count)
     && isNonNegativeSafeInteger(value.char_count)
@@ -2862,6 +2867,9 @@ function parseProjectWorkSessionEvidenceNearbyResult(
     || !isNonBlankString(value.database_path)
     || !isNonBlankString(value.project)
     || !isNonBlankString(value.date)
+    || !(value.query === null || isNonBlankString(value.query))
+    || !isNonNegativeSafeInteger(value.query_term_count)
+    || (value.query === null && value.query_term_count !== 0)
     || !isPositiveSafeInteger(value.requested_limit)
     || !isNonNegativeSafeInteger(value.total_match_count)
     || !isNonNegativeSafeIntegerAtMost(value.returned_item_count, value.total_match_count)

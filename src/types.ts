@@ -389,6 +389,42 @@ export interface ProjectWorkSessionEvidenceReviewQueueResult {
   warnings: string[];
 }
 
+export interface ProjectWorkSessionEvidenceReviewedItem {
+  id: number;
+  applied_at: string;
+  candidate_id: string;
+  review_reason: string;
+  project: string;
+  date: string;
+  operational_status: string;
+  source_statuses: FrequencyItem[];
+  work_item_count: number;
+  source_file_count: number;
+  source_files: string[];
+  source_file_roles: FrequencyItem[];
+  top_titles: string[];
+  sample_evidence: string;
+  latest_source_path: string;
+  latest_source_file: string;
+  latest_source_role: string;
+  candidate_reason: string;
+  session_evidence_audit: string;
+  needs_title_normalization: boolean;
+}
+
+export interface ProjectWorkSessionEvidenceReviewApplyResult {
+  generated_at: string;
+  database_path: string;
+  approved_queue_count: number;
+  processed_queue_count: number;
+  applied_item_count: number;
+  skipped_existing_count: number;
+  total_reviewed_item_count: number;
+  returned_item_count: number;
+  items: ProjectWorkSessionEvidenceReviewedItem[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSessionIndexSourceState {
   source_id: string;
   source_label: string;

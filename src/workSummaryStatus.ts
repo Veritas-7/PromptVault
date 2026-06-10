@@ -23,6 +23,7 @@ import type {
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSessionEvidenceProposal,
   ProjectWorkSessionEvidenceProposalsResult,
+  ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
   ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
@@ -51,6 +52,7 @@ export type WorkLogNormalizationReviewQueueState = "idle" | "loading" | "ready" 
 export type WorkLogNormalizationApplyState = "idle" | "loading" | "ready" | "failed";
 export type WorkSessionEvidenceProposalsState = "idle" | "loading" | "ready" | "failed";
 export type WorkSessionEvidenceReviewQueueState = "idle" | "loading" | "ready" | "failed";
+export type WorkSessionEvidenceReviewApplyState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementFreezeState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunMode = "ai" | "local";
@@ -1950,7 +1952,7 @@ export function workSessionEvidenceReviewQueueItemStateText(
 }
 
 export function workSessionEvidenceReviewQueueSourceRolesText(
-  item: ProjectWorkSessionEvidenceReviewQueueItem,
+  item: Pick<ProjectWorkSessionEvidenceReviewQueueItem, "latest_source_role" | "source_file_roles">,
 ): string {
   if (!item.source_file_roles.length) return "로그 유형 없음";
   return [
@@ -1998,6 +2000,47 @@ export function workLogNormalizationApplyFailureText(
 ): string | null {
   if (state !== "failed") return null;
   return "승인된 정규화 row를 durable table에 적용하지 못했습니다. 데이터베이스 경로, 승인 큐 상태, 브리지 상태를 확인하세요.";
+}
+
+export function workSessionEvidenceReviewApplyActionLabel(
+  state: WorkSessionEvidenceReviewApplyState,
+  hasApprovedRows: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "승인된 세션근거 검토결과 저장 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 승인된 세션근거 검토결과를 저장할 수 없습니다`;
+  }
+  if (!hasApprovedRows) return "승인된 세션근거 검토 row가 없어 저장할 수 없습니다";
+  return "승인된 세션근거 검토결과를 durable audit table에 저장";
+}
+
+export function workSessionEvidenceReviewApplyMetaText(
+  state: WorkSessionEvidenceReviewApplyState,
+  result: ProjectWorkSessionEvidenceReviewApplyResult | null,
+): string {
+  if (state === "loading") return "승인된 세션근거 검토결과 저장 중";
+  if (!result) {
+    return state === "failed"
+      ? "세션근거 검토결과 저장 결과를 사용할 수 없음"
+      : "아직 저장한 승인 세션근거 검토 row 없음";
+  }
+  return [
+    `승인 큐 ${result.approved_queue_count.toLocaleString()}개`,
+    `처리 ${result.processed_queue_count.toLocaleString()}개`,
+    `저장 ${result.applied_item_count.toLocaleString()}개`,
+    `중복 ${result.skipped_existing_count.toLocaleString()}개`,
+    `감사 총 ${result.total_reviewed_item_count.toLocaleString()}개`,
+    `표시 ${result.returned_item_count.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+export function workSessionEvidenceReviewApplyFailureText(
+  state: WorkSessionEvidenceReviewApplyState,
+): string | null {
+  if (state !== "failed") return null;
+  return "승인된 세션근거 검토결과를 durable audit table에 저장하지 못했습니다. 데이터베이스 경로, 승인 큐 상태, 브리지 상태를 확인하세요.";
 }
 
 export function workSummarySnapshotVisibleSummaries(

@@ -23,6 +23,7 @@ import {
   loadProjectWorkSessionEvidenceCandidates,
   loadProjectWorkSessionEvidenceProposals,
   loadProjectWorkSessionEvidenceReviewQueue,
+  applyProjectWorkSessionEvidenceReviewRows,
   loadProjectWorkStatusExport,
   runProjectWorkSessionIndex,
   listProjectWorkSummarySnapshots,
@@ -506,6 +507,31 @@ function projectWorkSessionEvidenceReviewQueuePayload(overrides = {}) {
       review_state: "pending_review",
       review_reason: "session_evidence_candidate_needs_title_normalization",
       candidate_reason: candidate.reason,
+    }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function projectWorkSessionEvidenceReviewApplyPayload(overrides = {}) {
+  const approvedItem = {
+    ...projectWorkSessionEvidenceReviewQueuePayload().items[0],
+    review_state: "approved",
+    review_reason: "operator_approved_session_evidence_review",
+  };
+  return {
+    generated_at: "2026-06-09T00:01:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    approved_queue_count: 1,
+    processed_queue_count: 1,
+    applied_item_count: 1,
+    skipped_existing_count: 0,
+    total_reviewed_item_count: 1,
+    returned_item_count: 1,
+    items: [{
+      ...approvedItem,
+      id: 4,
+      applied_at: "2026-06-09T00:02:00Z",
     }],
     warnings: [],
     ...overrides,
@@ -1323,6 +1349,55 @@ test("browser bridge work session evidence review queue update posts decision op
   assert.equal(result.pending_review_count, 0);
   assert.equal(result.approved_count, 1);
   assert.equal(result.items[0].review_state, "approved");
+});
+
+test("browser bridge work session evidence review apply posts options and validates rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionEvidenceReviewApplyPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await applyProjectWorkSessionEvidenceReviewRows({ limit: 5 });
+
+  assert.match(requestPath, /\/api\/work-session-evidence-review-apply$/);
+  assert.deepEqual(JSON.parse(requestBody), { options: { limit: 5 } });
+  assert.equal(result.approved_queue_count, 1);
+  assert.equal(result.processed_queue_count, 1);
+  assert.equal(result.applied_item_count, 1);
+  assert.equal(result.skipped_existing_count, 0);
+  assert.equal(result.total_reviewed_item_count, 1);
+  assert.equal(result.items[0].candidate_id, "session-evidence-PromptVault-a1b2c3d4e5");
+  assert.equal(result.items[0].review_reason, "operator_approved_session_evidence_review");
+  assert.equal(result.items[0].source_files[1], "workingd.md");
+});
+
+test("browser bridge work session evidence review apply rejects impossible counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSessionEvidenceReviewApplyPayload({
+    processed_queue_count: 2,
+    applied_item_count: 1,
+    skipped_existing_count: 0,
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => applyProjectWorkSessionEvidenceReviewRows({ limit: 5 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /session-evidence-PromptVault|workingd\.md|undefined/);
+      return true;
+    },
+  );
 });
 
 test("browser bridge work session evidence review queue rejects inconsistent counters", async (t) => {

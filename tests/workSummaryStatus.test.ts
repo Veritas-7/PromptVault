@@ -49,6 +49,9 @@ import {
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
   workSessionEvidenceReviewQueueActionLabel,
+  workSessionEvidenceReviewApplyActionLabel,
+  workSessionEvidenceReviewApplyFailureText,
+  workSessionEvidenceReviewApplyMetaText,
   workSessionEvidenceReviewQueueFailureText,
   workSessionEvidenceReviewQueueItemStateText,
   workSessionEvidenceReviewQueueMetaText,
@@ -117,6 +120,7 @@ import {
   type WorkLogNormalizationProposalsState,
   type WorkLogNormalizationReviewQueueState,
   type WorkSessionEvidenceProposalsState,
+  type WorkSessionEvidenceReviewApplyState,
   type WorkSessionEvidenceReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
@@ -142,6 +146,7 @@ import type {
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSessionEvidenceProposal,
   ProjectWorkSessionEvidenceProposalsResult,
+  ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
   ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
@@ -775,6 +780,32 @@ function sessionEvidenceReviewQueueResult(
     rejected_count: 2,
     needs_title_normalization_count: 12,
     items: [sessionEvidenceReviewQueueItem()],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function sessionEvidenceReviewApplyResult(
+  overrides: Partial<ProjectWorkSessionEvidenceReviewApplyResult> = {},
+): ProjectWorkSessionEvidenceReviewApplyResult {
+  return {
+    generated_at: "2026-06-09T00:02:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    approved_queue_count: 3,
+    processed_queue_count: 3,
+    applied_item_count: 2,
+    skipped_existing_count: 1,
+    total_reviewed_item_count: 9,
+    returned_item_count: 4,
+    items: [{
+      ...sessionEvidenceReviewQueueItem({
+        review_state: "approved",
+        review_reason: "operator_approved_session_evidence_review",
+        needs_title_normalization: false,
+      }),
+      id: 4,
+      applied_at: "2026-06-09T00:03:00Z",
+    }],
     warnings: [],
     ...overrides,
   };
@@ -2583,6 +2614,43 @@ test("work log normalization apply labels describe durable approved rows", () =>
     "승인된 정규화 row를 durable table에 적용하지 못했습니다. 데이터베이스 경로, 승인 큐 상태, 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogNormalizationApplyFailureText("ready"), null);
+});
+
+test("work session evidence review apply labels describe durable reviewed audit rows", () => {
+  const failed: WorkSessionEvidenceReviewApplyState = "failed";
+  assert.equal(
+    workSessionEvidenceReviewApplyActionLabel("idle", false, lockState()),
+    "승인된 세션근거 검토 row가 없어 저장할 수 없습니다",
+  );
+  assert.equal(
+    workSessionEvidenceReviewApplyActionLabel("ready", true, lockState()),
+    "승인된 세션근거 검토결과를 durable audit table에 저장",
+  );
+  assert.equal(
+    workSessionEvidenceReviewApplyActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 승인된 세션근거 검토결과를 저장할 수 없습니다",
+  );
+  assert.equal(
+    workSessionEvidenceReviewApplyMetaText("idle", null),
+    "아직 저장한 승인 세션근거 검토 row 없음",
+  );
+  assert.equal(
+    workSessionEvidenceReviewApplyMetaText("loading", sessionEvidenceReviewApplyResult()),
+    "승인된 세션근거 검토결과 저장 중",
+  );
+  assert.equal(
+    workSessionEvidenceReviewApplyMetaText("ready", sessionEvidenceReviewApplyResult()),
+    "승인 큐 3개 · 처리 3개 · 저장 2개 · 중복 1개 · 감사 총 9개 · 표시 4개",
+  );
+  assert.equal(
+    workSessionEvidenceReviewApplyMetaText(failed, null),
+    "세션근거 검토결과 저장 결과를 사용할 수 없음",
+  );
+  assert.equal(
+    workSessionEvidenceReviewApplyFailureText(failed),
+    "승인된 세션근거 검토결과를 durable audit table에 저장하지 못했습니다. 데이터베이스 경로, 승인 큐 상태, 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workSessionEvidenceReviewApplyFailureText("ready"), null);
 });
 
 test("work log extraction save state excludes already managed rows", () => {

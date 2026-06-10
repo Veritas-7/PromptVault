@@ -1,10 +1,91 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 09:07 KST
+Updated: 2026-06-10 09:40 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Durable session-evidence review audit apply
+
+Current Goal:
+
+- Make approved session-evidence review decisions durable and reviewable without
+  claiming that PromptVault created matched session evidence links.
+
+Context:
+
+- `work-session-evidence-review-queue` already stores unresolved full-index
+  project/day candidates and lets an operator mark rows approved or rejected.
+- In this model, `approved` means "operator reviewed this unresolved
+  full-index candidate"; it must not be confused with a real session evidence
+  match.
+- The analogous normalization flow already uses an idempotent apply command to
+  copy approved rows into a durable SQLite audit table.
+
+Progress:
+
+- Added `project_work_session_evidence_reviewed_items`, a durable audit table
+  for approved session-evidence review decisions.
+- Added `work-session-evidence-review-apply` CLI, Tauri command, and browser
+  bridge endpoint `/api/work-session-evidence-review-apply`.
+- Added TypeScript API/result parsing with count consistency validation.
+- Added a UI "검토결과 저장" action that is enabled only when approved
+  session-evidence review rows exist.
+- Added a reviewed-items UI list showing project, date, source log, sample
+  evidence, audit reason, and latest source path.
+- Updated isolated browser QA to click the new apply button and verify the
+  durable reviewed row against the same temporary SQLite database.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds reviewed item structs, apply runner, schema,
+  idempotent persistence helpers, Tauri command, and unit coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds CLI parsing, help text, bridge
+  payload/route, database-route locking, and route validation coverage.
+- `src/promptVaultApi.ts`, `src/types.ts`: expose and validate the new apply
+  contract.
+- `src/App.tsx`, `src/workSummaryStatus.ts`: add button state, labels, meta,
+  failure text, and reviewed row rendering.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`: cover the
+  bridge parser and UI copy semantics.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies the new endpoint and UI
+  apply flow in the isolated browser bridge run.
+- `README.md`, `docs/CLI.md`: document the command, endpoint, and review-only
+  semantics.
+
+Tests:
+
+- PASS: `cargo fmt --manifest-path src-tauri/Cargo.toml`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_evidence_review_apply_persists_approved_rows_once --lib`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml bridge_routes_work_session_evidence_review_queue_validation_errors --bin promptvault-cli`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml help_text_documents_cli_validation_rules --bin promptvault-cli`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml bridge_serializes_database_backed_routes_only --bin promptvault-cli`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "session evidence review"`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts --test-name-pattern "session evidence review apply"`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run check` (`505` UI tests, `220` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- Isolated browser bridge QA used temporary DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-SVPDG3/qa.sqlite`.
+- The QA clicked a session-evidence review approval, then clicked
+  "검토결과 저장".
+- The apply response used the isolated DB, had at least one approved queue row,
+  and returned a reviewed item matching the approved candidate id.
+- The UI rendered `data-work-session-evidence-review-apply-meta="true"` and
+  `data-work-session-evidence-reviewed-items="true"` rows before continuing to
+  the rest of work-management QA.
+
+Remaining:
+
+- Run final diff/secret checks, stage explicit changed paths, commit, and push.
+- Next useful slice: decide whether reviewed session-evidence audit rows should
+  feed an aggregate management counter/history view separate from real matched
+  session evidence.
 
 ## Completed Slice - 2026-06-10 Full session-index status export flag
 

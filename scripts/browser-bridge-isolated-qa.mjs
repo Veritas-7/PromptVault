@@ -480,6 +480,8 @@ async function runBrowserQa() {
   let workSessionEvidenceReviewQueueFilterMeta = "";
   let workSessionEvidenceReviewQueueFilteredRows = [];
   let workSessionEvidenceReviewQueueUiStateAfterApprove = "";
+  let workSessionEvidenceReviewApplyMeta = "";
+  let workSessionEvidenceReviewedRows = [];
   let workStatusExportMarkdown = "";
   let workSummaryIndex = "";
   let workSessionIndexBackfill = null;
@@ -1241,6 +1243,56 @@ async function runBrowserQa() {
     }
     workSessionEvidenceReviewQueueUiStateAfterApprove =
       `${approvedSessionEvidenceRow.review_state} · ${approvedSessionEvidenceRow.review_reason}`;
+    step("work session evidence review apply");
+    await waitForEnabled(page, '[data-apply-work-session-evidence-review-queue="true"]');
+    const sessionEvidenceApplyResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/work-session-evidence-review-apply")
+      && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await page.locator('[data-apply-work-session-evidence-review-queue="true"]').click();
+    const sessionEvidenceApplyPayload = await (await sessionEvidenceApplyResponse).json();
+    if (
+      sessionEvidenceApplyPayload.database_path !== DATABASE_PATH
+      || sessionEvidenceApplyPayload.approved_queue_count < 1
+      || sessionEvidenceApplyPayload.processed_queue_count < 1
+      || sessionEvidenceApplyPayload.total_reviewed_item_count < 1
+      || !sessionEvidenceApplyPayload.items.some((item) => item.candidate_id === firstSessionEvidenceCandidateId)
+    ) {
+      throw new Error(`Invalid session evidence review apply payload: ${
+        JSON.stringify(sessionEvidenceApplyPayload)
+      }`);
+    }
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-session-evidence-review-apply-meta="true"]')
+        ?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-session-evidence-reviewed-items="true"] article'));
+      const error = document.querySelector('[data-work-session-evidence-review-apply-error="true"]')
+        ?.textContent ?? "";
+      return (meta.includes("감사 총") && rows.length > 0) || error.trim().length > 0;
+    }, undefined, { timeout: 90000 });
+    workSessionEvidenceReviewApplyMeta =
+      (await page.locator('[data-work-session-evidence-review-apply-meta="true"]').textContent())?.trim() ?? "";
+    workSessionEvidenceReviewedRows =
+      await page.locator('[data-work-session-evidence-reviewed-items="true"] article').allTextContents();
+    const sessionEvidenceReviewApplyErrorLocator =
+      page.locator('[data-work-session-evidence-review-apply-error="true"]');
+    const workSessionEvidenceReviewApplyError = await sessionEvidenceReviewApplyErrorLocator.count()
+      ? ((await sessionEvidenceReviewApplyErrorLocator.textContent())?.trim() ?? "")
+      : "";
+    if (
+      workSessionEvidenceReviewApplyError
+      || !workSessionEvidenceReviewApplyMeta.includes("감사 총")
+      || !workSessionEvidenceReviewedRows.some((row) => row.includes(firstSessionEvidenceCandidateId))
+    ) {
+      throw new Error(`Session evidence review apply UI did not render reviewed rows: ${
+        JSON.stringify({
+          workSessionEvidenceReviewApplyMeta,
+          workSessionEvidenceReviewedRows,
+          workSessionEvidenceReviewApplyError,
+        })
+      }`);
+    }
     await page.locator('[data-save-work-summary-snapshot="true"]').click();
     await page.waitForFunction((databasePath) => {
       const text = document.querySelector('[data-work-summary-persistence="true"]')?.textContent ?? "";
@@ -1948,6 +2000,8 @@ async function runBrowserQa() {
       workSessionEvidenceReviewQueueFilterMeta,
       workSessionEvidenceReviewQueueFilteredRows,
       workSessionEvidenceReviewQueueUiStateAfterApprove,
+      workSessionEvidenceReviewApplyMeta,
+      workSessionEvidenceReviewedRows,
       workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,
       workManagementReadiness,

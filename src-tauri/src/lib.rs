@@ -46,6 +46,8 @@ const PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_PROVIDER_PROMPT_MAX_CHARS: usize = 
 const PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_MIN_ACCEPTED_CONFIDENCE: f64 = 0.80;
 const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT: usize = 50;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEW_QUEUE_LIMIT: usize = 200;
+const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEWED_ITEM_LIMIT: usize = 20;
+const MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEWED_ITEM_LIMIT: usize = 200;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
 const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
 const PROJECT_WORK_METADATA_TAIL_TIMESTAMP_LINES: usize = 200;
@@ -1006,6 +1008,12 @@ pub struct ProjectWorkSessionEvidenceReviewQueueUpdateOptions {
     pub review_reason: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSessionEvidenceReviewApplyOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkSessionEvidenceReviewQueueItem {
     pub candidate_id: String,
@@ -1045,6 +1053,44 @@ pub struct ProjectWorkSessionEvidenceReviewQueueResult {
     pub rejected_count: usize,
     pub needs_title_normalization_count: usize,
     pub items: Vec<ProjectWorkSessionEvidenceReviewQueueItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceReviewedItem {
+    pub id: i64,
+    pub applied_at: String,
+    pub candidate_id: String,
+    pub review_reason: String,
+    pub project: String,
+    pub date: String,
+    pub operational_status: String,
+    pub source_statuses: Vec<FrequencyItem>,
+    pub work_item_count: usize,
+    pub source_file_count: usize,
+    pub source_files: Vec<String>,
+    pub source_file_roles: Vec<FrequencyItem>,
+    pub top_titles: Vec<String>,
+    pub sample_evidence: String,
+    pub latest_source_path: String,
+    pub latest_source_file: String,
+    pub latest_source_role: String,
+    pub candidate_reason: String,
+    pub session_evidence_audit: String,
+    pub needs_title_normalization: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceReviewApplyResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub approved_queue_count: usize,
+    pub processed_queue_count: usize,
+    pub applied_item_count: usize,
+    pub skipped_existing_count: usize,
+    pub total_reviewed_item_count: usize,
+    pub returned_item_count: usize,
+    pub items: Vec<ProjectWorkSessionEvidenceReviewedItem>,
     pub warnings: Vec<String>,
 }
 
@@ -1540,6 +1586,14 @@ fn project_work_session_evidence_review_queue_update(
     options: ProjectWorkSessionEvidenceReviewQueueUpdateOptions,
 ) -> Result<ProjectWorkSessionEvidenceReviewQueueResult, String> {
     run_project_work_session_evidence_review_queue_update(options).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_session_evidence_review_apply(
+    options: Option<ProjectWorkSessionEvidenceReviewApplyOptions>,
+) -> Result<ProjectWorkSessionEvidenceReviewApplyResult, String> {
+    run_project_work_session_evidence_review_apply(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -2485,6 +2539,65 @@ pub fn run_project_work_session_evidence_review_queue_update(
         needs_title_normalization_count: rows.needs_title_normalization_count,
         items: rows.items,
         warnings: Vec::new(),
+    })
+}
+
+pub fn run_project_work_session_evidence_review_apply(
+    options: ProjectWorkSessionEvidenceReviewApplyOptions,
+) -> Result<ProjectWorkSessionEvidenceReviewApplyResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err(
+            "work-session-evidence-review-apply database path requires a non-empty value".into(),
+        );
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-session-evidence-review-apply limit requires a positive integer".into());
+    }
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEWED_ITEM_LIMIT)
+        .min(MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEWED_ITEM_LIMIT);
+    let mut conn = open_promptvault_database(&database_path)?;
+    let approved_queue_count =
+        count_project_work_session_evidence_review_queue_state(&conn, "approved")?;
+    let approved_rows =
+        read_project_work_session_evidence_review_queue_items_by_state(&conn, "approved", limit)?;
+    let processed_queue_count = approved_rows.len();
+    let applied_item_count = persist_project_work_session_evidence_reviewed_items(
+        &mut conn,
+        &approved_rows,
+        &generated_at,
+    )?;
+    let skipped_existing_count = processed_queue_count.saturating_sub(applied_item_count);
+    let reviewed_rows = read_project_work_session_evidence_reviewed_items(&conn, limit)?;
+    let mut warnings = Vec::new();
+    if approved_queue_count == 0 {
+        warnings.push(
+            "승인된 세션근거 검토 row가 없어 durable reviewed row를 저장하지 않았습니다."
+                .to_string(),
+        );
+    } else if processed_queue_count < approved_queue_count {
+        warnings.push(format!(
+            "승인된 세션근거 검토 row {approved_queue_count}개 중 {processed_queue_count}개만 이번 실행에서 처리했습니다."
+        ));
+    }
+    Ok(ProjectWorkSessionEvidenceReviewApplyResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        approved_queue_count,
+        processed_queue_count,
+        applied_item_count,
+        skipped_existing_count,
+        total_reviewed_item_count: reviewed_rows.total_items,
+        returned_item_count: reviewed_rows.items.len(),
+        items: reviewed_rows.items,
+        warnings,
     })
 }
 
@@ -9625,6 +9738,194 @@ fn read_project_work_session_evidence_review_queue(
     })
 }
 
+fn count_project_work_session_evidence_review_queue_state(
+    conn: &Connection,
+    review_state: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM project_work_session_evidence_review_queue WHERE review_state=?1",
+        params![review_state],
+        |row| row.get(0),
+    )?;
+    Ok(count as usize)
+}
+
+fn read_project_work_session_evidence_review_queue_items_by_state(
+    conn: &Connection,
+    review_state: &str,
+    limit: usize,
+) -> Result<Vec<ProjectWorkSessionEvidenceReviewQueueItem>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT candidate_id, first_seen_at, last_seen_at, review_state, review_reason,
+            project, proposal_date, operational_status, source_statuses_json,
+            work_item_count, source_file_count, source_files_json, top_titles_json,
+            sample_evidence, latest_source_path, latest_source_file, candidate_reason,
+            session_evidence_audit, needs_title_normalization
+         FROM project_work_session_evidence_review_queue
+         WHERE review_state=?1
+         ORDER BY last_seen_at DESC
+         LIMIT ?2",
+    )?;
+    let rows = stmt.query_map(params![review_state, limit as i64], |row| {
+        let source_statuses_json: String = row.get(8)?;
+        let source_statuses = serde_json::from_str(&source_statuses_json).map_err(|err| {
+            rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(err))
+        })?;
+        let source_files_json: String = row.get(11)?;
+        let source_files: Vec<String> =
+            serde_json::from_str(&source_files_json).map_err(|err| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    11,
+                    rusqlite::types::Type::Text,
+                    Box::new(err),
+                )
+            })?;
+        let top_titles_json: String = row.get(12)?;
+        let top_titles = serde_json::from_str(&top_titles_json).map_err(|err| {
+            rusqlite::Error::FromSqlConversionFailure(
+                12,
+                rusqlite::types::Type::Text,
+                Box::new(err),
+            )
+        })?;
+        let latest_source_file = row.get::<_, String>(15)?;
+        let source_file_roles = project_work_source_file_roles(&source_files);
+        let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
+        Ok(ProjectWorkSessionEvidenceReviewQueueItem {
+            candidate_id: row.get(0)?,
+            first_seen_at: row.get(1)?,
+            last_seen_at: row.get(2)?,
+            review_state: row.get(3)?,
+            review_reason: row.get(4)?,
+            project: row.get(5)?,
+            date: row.get(6)?,
+            operational_status: row.get(7)?,
+            source_statuses,
+            work_item_count: row.get::<_, i64>(9)? as usize,
+            source_file_count: row.get::<_, i64>(10)? as usize,
+            source_files,
+            source_file_roles,
+            top_titles,
+            sample_evidence: row.get(13)?,
+            latest_source_path: row.get(14)?,
+            latest_source_file,
+            latest_source_role,
+            candidate_reason: row.get(16)?,
+            session_evidence_audit: row.get(17)?,
+            needs_title_normalization: row.get::<_, i64>(18)? != 0,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|err| err.into())
+}
+
+fn persist_project_work_session_evidence_reviewed_items(
+    conn: &mut Connection,
+    rows: &[ProjectWorkSessionEvidenceReviewQueueItem],
+    applied_at: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let tx = conn.transaction()?;
+    let mut applied_item_count = 0usize;
+    for row in rows {
+        let source_statuses_json = serde_json::to_string(&row.source_statuses)?;
+        let source_files_json = serde_json::to_string(&row.source_files)?;
+        let top_titles_json = serde_json::to_string(&row.top_titles)?;
+        let changed = tx.execute(
+            "INSERT OR IGNORE INTO project_work_session_evidence_reviewed_items (
+                applied_at, candidate_id, review_reason, project, proposal_date,
+                operational_status, source_statuses_json, work_item_count, source_file_count,
+                source_files_json, top_titles_json, sample_evidence, latest_source_path,
+                latest_source_file, candidate_reason, session_evidence_audit,
+                needs_title_normalization
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
+                ?15, ?16, ?17
+            )",
+            params![
+                applied_at,
+                &row.candidate_id,
+                &row.review_reason,
+                &row.project,
+                &row.date,
+                &row.operational_status,
+                &source_statuses_json,
+                row.work_item_count as i64,
+                row.source_file_count as i64,
+                &source_files_json,
+                &top_titles_json,
+                &row.sample_evidence,
+                &row.latest_source_path,
+                &row.latest_source_file,
+                &row.candidate_reason,
+                &row.session_evidence_audit,
+                row.needs_title_normalization as i64,
+            ],
+        )?;
+        applied_item_count += changed;
+    }
+    tx.commit()?;
+    Ok(applied_item_count)
+}
+
+struct ProjectWorkSessionEvidenceReviewedItemRows {
+    total_items: usize,
+    items: Vec<ProjectWorkSessionEvidenceReviewedItem>,
+}
+
+fn read_project_work_session_evidence_reviewed_items(
+    conn: &Connection,
+    limit: usize,
+) -> Result<ProjectWorkSessionEvidenceReviewedItemRows, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, applied_at, candidate_id, review_reason, project, proposal_date,
+            operational_status, source_statuses_json, work_item_count, source_file_count,
+            source_files_json, top_titles_json, sample_evidence, latest_source_path,
+            latest_source_file, candidate_reason, session_evidence_audit,
+            needs_title_normalization
+         FROM project_work_session_evidence_reviewed_items
+         ORDER BY applied_at DESC, id DESC",
+    )?;
+    let mut rows = stmt.query([])?;
+    let mut total_items = 0usize;
+    let mut items = Vec::new();
+    while let Some(row) = rows.next()? {
+        total_items += 1;
+        if items.len() >= limit {
+            continue;
+        }
+        let source_statuses_json: String = row.get(7)?;
+        let source_files_json: String = row.get(10)?;
+        let top_titles_json: String = row.get(11)?;
+        let source_files = serde_json::from_str::<Vec<String>>(&source_files_json)?;
+        let latest_source_file = row.get::<_, String>(14)?;
+        let source_file_roles = project_work_source_file_roles(&source_files);
+        let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
+        items.push(ProjectWorkSessionEvidenceReviewedItem {
+            id: row.get(0)?,
+            applied_at: row.get(1)?,
+            candidate_id: row.get(2)?,
+            review_reason: row.get(3)?,
+            project: row.get(4)?,
+            date: row.get(5)?,
+            operational_status: row.get(6)?,
+            source_statuses: serde_json::from_str(&source_statuses_json)?,
+            work_item_count: row.get::<_, i64>(8)? as usize,
+            source_file_count: row.get::<_, i64>(9)? as usize,
+            source_files,
+            source_file_roles,
+            top_titles: serde_json::from_str(&top_titles_json)?,
+            sample_evidence: row.get(12)?,
+            latest_source_path: row.get(13)?,
+            latest_source_file,
+            latest_source_role,
+            candidate_reason: row.get(15)?,
+            session_evidence_audit: row.get(16)?,
+            needs_title_normalization: row.get::<_, i64>(17)? != 0,
+        });
+    }
+    Ok(ProjectWorkSessionEvidenceReviewedItemRows { total_items, items })
+}
+
 fn paginate_project_work_status_export_rows(
     all_rows: Vec<ProjectWorkStatusExportRow>,
     limit: usize,
@@ -11322,6 +11623,30 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             ON project_work_session_evidence_review_queue(review_state, last_seen_at DESC);
         CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_review_queue_project_date
             ON project_work_session_evidence_review_queue(project, proposal_date);
+        CREATE TABLE IF NOT EXISTS project_work_session_evidence_reviewed_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            applied_at TEXT NOT NULL,
+            candidate_id TEXT NOT NULL UNIQUE,
+            review_reason TEXT NOT NULL,
+            project TEXT NOT NULL,
+            proposal_date TEXT NOT NULL,
+            operational_status TEXT NOT NULL,
+            source_statuses_json TEXT NOT NULL,
+            work_item_count INTEGER NOT NULL,
+            source_file_count INTEGER NOT NULL,
+            source_files_json TEXT NOT NULL,
+            top_titles_json TEXT NOT NULL,
+            sample_evidence TEXT NOT NULL,
+            latest_source_path TEXT NOT NULL,
+            latest_source_file TEXT NOT NULL,
+            candidate_reason TEXT NOT NULL,
+            session_evidence_audit TEXT NOT NULL,
+            needs_title_normalization INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_reviewed_items_applied_at
+            ON project_work_session_evidence_reviewed_items(applied_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_reviewed_items_project_date
+            ON project_work_session_evidence_reviewed_items(project, proposal_date);
         CREATE TABLE IF NOT EXISTS project_work_log_review_queue (
             candidate_id TEXT PRIMARY KEY,
             first_seen_at TEXT NOT NULL,
@@ -16108,6 +16433,7 @@ pub fn run() {
             project_work_session_evidence_proposals,
             project_work_session_evidence_review_queue,
             project_work_session_evidence_review_queue_update,
+            project_work_session_evidence_review_apply,
             project_work_summary_snapshots,
             project_work_log_coverage,
             project_work_log_candidates,
@@ -22412,6 +22738,151 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(rows.rejected_count, 1);
 
         drop(conn);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
+    fn project_work_session_evidence_review_apply_persists_approved_rows_once() {
+        let suffix = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-project-work-session-evidence-review-apply-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut conn = open_promptvault_database(&db_path).expect("open db");
+        let approved = ProjectWorkSessionEvidenceCandidate {
+            candidate_id: "session-evidence-SafeProject-apply-a1b2c3d4e5".to_string(),
+            date: "2026-06-09".to_string(),
+            project: "SafeProject".to_string(),
+            operational_status: "progress-log-only".to_string(),
+            source_statuses: vec![FrequencyItem {
+                text: "done".to_string(),
+                count: 1,
+            }],
+            work_item_count: 1,
+            source_file_count: 1,
+            source_files: vec!["working.md".to_string()],
+            source_file_roles: vec![FrequencyItem {
+                text: "handoff-log".to_string(),
+                count: 1,
+            }],
+            top_titles: vec!["Safe durable review".to_string()],
+            sample_evidence: "2026-06-09: Safe durable review".to_string(),
+            latest_source_path: "/tmp/SafeProject/working.md".to_string(),
+            latest_source_file: "working.md".to_string(),
+            latest_source_role: "handoff-log".to_string(),
+            reason: "unresolved_after_full_index,no_session_evidence".to_string(),
+            session_evidence_audit: "unresolved-after-full-index".to_string(),
+            needs_title_normalization: false,
+        };
+        let rejected = ProjectWorkSessionEvidenceCandidate {
+            candidate_id: "session-evidence-SafeProject-apply-rejected-b1b2c3d4e5".to_string(),
+            date: "2026-06-08".to_string(),
+            project: "SafeProject".to_string(),
+            operational_status: "progress-log-only".to_string(),
+            source_statuses: vec![FrequencyItem {
+                text: "current".to_string(),
+                count: 1,
+            }],
+            work_item_count: 1,
+            source_file_count: 1,
+            source_files: vec!["workingd.md".to_string()],
+            source_file_roles: vec![FrequencyItem {
+                text: "handoff-log".to_string(),
+                count: 1,
+            }],
+            top_titles: vec!["Rejected durable review".to_string()],
+            sample_evidence: "2026-06-08: Rejected durable review".to_string(),
+            latest_source_path: "/tmp/SafeProject/workingd.md".to_string(),
+            latest_source_file: "workingd.md".to_string(),
+            latest_source_role: "handoff-log".to_string(),
+            reason: "unresolved_after_full_index,no_session_evidence".to_string(),
+            session_evidence_audit: "unresolved-after-full-index".to_string(),
+            needs_title_normalization: false,
+        };
+        let result = ProjectWorkSessionEvidenceCandidatesResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            database_path: db_path.display().to_string(),
+            requested_limit: 20,
+            session_limit_used: 100,
+            total_candidate_count: 2,
+            returned_candidate_count: 2,
+            report_total_rows: 2,
+            report_total_items: 2,
+            report_project_count: 1,
+            report_date_count: 2,
+            report_files_seen: 2,
+            report_session_scan_prompt_count: 0,
+            report_session_evidence_count: 0,
+            report_unique_session_evidence_count: 0,
+            report_session_evidence_index_used: true,
+            report_session_evidence_index_updated: false,
+            report_session_evidence_index_count: 100,
+            report_session_evidence_index_total_count: 100,
+            report_session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
+            bounded_session_limit_count: 0,
+            unresolved_after_full_index_count: 2,
+            needs_title_normalization_count: 0,
+            candidates: vec![approved, rejected],
+            warnings: Vec::new(),
+        };
+        sync_project_work_session_evidence_review_queue(&mut conn, &result, "2026-06-09T00:00:00Z")
+            .expect("sync session evidence queue");
+        update_project_work_session_evidence_review_queue_state(
+            &conn,
+            "session-evidence-SafeProject-apply-a1b2c3d4e5",
+            "approved",
+            "operator_approved_session_evidence_review",
+            "2026-06-09T00:10:00Z",
+        )
+        .expect("approve session evidence review row");
+        update_project_work_session_evidence_review_queue_state(
+            &conn,
+            "session-evidence-SafeProject-apply-rejected-b1b2c3d4e5",
+            "rejected",
+            "operator_rejected_session_evidence_review",
+            "2026-06-09T00:10:00Z",
+        )
+        .expect("reject session evidence review row");
+        drop(conn);
+
+        let first = run_project_work_session_evidence_review_apply(
+            ProjectWorkSessionEvidenceReviewApplyOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(10),
+            },
+        )
+        .expect("apply approved session evidence review");
+        assert_eq!(first.approved_queue_count, 1);
+        assert_eq!(first.processed_queue_count, 1);
+        assert_eq!(first.applied_item_count, 1);
+        assert_eq!(first.skipped_existing_count, 0);
+        assert_eq!(first.total_reviewed_item_count, 1);
+        assert_eq!(first.returned_item_count, 1);
+        assert_eq!(
+            first.items[0].candidate_id,
+            "session-evidence-SafeProject-apply-a1b2c3d4e5"
+        );
+        assert_eq!(first.items[0].latest_source_file, "working.md");
+        assert_eq!(
+            first.items[0].session_evidence_audit,
+            "unresolved-after-full-index"
+        );
+
+        let second = run_project_work_session_evidence_review_apply(
+            ProjectWorkSessionEvidenceReviewApplyOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(10),
+            },
+        )
+        .expect("apply approved session evidence review again");
+        assert_eq!(second.approved_queue_count, 1);
+        assert_eq!(second.processed_queue_count, 1);
+        assert_eq!(second.applied_item_count, 0);
+        assert_eq!(second.skipped_existing_count, 1);
+        assert_eq!(second.total_reviewed_item_count, 1);
+        assert_eq!(second.returned_item_count, 1);
+
         let _ = std::fs::remove_file(&db_path);
     }
 

@@ -1886,6 +1886,14 @@ fn project_work_session_evidence_source_proposals(
 }
 
 #[tauri::command]
+fn project_work_session_evidence_source_audit(
+    options: Option<ProjectWorkSessionEvidenceSourceAuditOptions>,
+) -> Result<ProjectWorkSessionEvidenceSourceAuditResult, String> {
+    run_project_work_session_evidence_source_audit(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
 fn project_work_summary_snapshots(
     options: Option<ProjectWorkSummarySnapshotsOptions>,
 ) -> Result<ProjectWorkSummarySnapshotsResult, String> {
@@ -19655,6 +19663,7 @@ pub fn run() {
             project_work_session_evidence_nearby,
             project_work_session_evidence_source_search,
             project_work_session_evidence_source_proposals,
+            project_work_session_evidence_source_audit,
             project_work_summary_snapshots,
             project_work_log_coverage,
             project_work_log_candidates,

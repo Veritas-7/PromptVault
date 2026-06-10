@@ -556,6 +556,53 @@ export interface ProjectWorkSessionEvidenceSourceProposalsResult {
   warnings: string[];
 }
 
+export interface ProjectWorkSessionEvidenceSourceAuditItem {
+  candidate_id: string;
+  project: string;
+  date: string;
+  review_state: string;
+  review_reason: string;
+  outcome: string;
+  recommended_source_path: string | null;
+  recommended_session_id: string | null;
+  recommended_prompt_date: string | null;
+  recommended_match_score: number | null;
+  nearby_total_match_count: number;
+  nearby_returned_item_count: number;
+  source_search_scanned_line_count: number;
+  source_search_matched_line_count: number;
+  source_search_returned_item_count: number;
+  returned_proposal_count: number;
+  review_ready_count: number;
+  blocked_count: number;
+  blocker_reason_counts: FrequencyItem[];
+  risk_flag_counts: FrequencyItem[];
+  warnings: string[];
+}
+
+export interface ProjectWorkSessionEvidenceSourceAuditResult {
+  generated_at: string;
+  database_path: string;
+  requested_limit: number;
+  nearby_limit_used: number;
+  source_limit_used: number;
+  max_lines_used: number;
+  total_items: number;
+  returned_item_count: number;
+  audited_item_count: number;
+  no_recommended_source_count: number;
+  no_source_hit_count: number;
+  rows_with_review_ready_count: number;
+  rows_with_blocked_proposals_count: number;
+  total_review_ready_count: number;
+  total_blocked_count: number;
+  outcome_counts: FrequencyItem[];
+  blocker_reason_counts: FrequencyItem[];
+  risk_flag_counts: FrequencyItem[];
+  items: ProjectWorkSessionEvidenceSourceAuditItem[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSessionIndexSourceState {
   source_id: string;
   source_label: string;

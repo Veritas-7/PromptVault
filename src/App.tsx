@@ -125,6 +125,7 @@ import {
   loadProjectWorkLogReviewQueue,
   loadProjectWorkSessionEvidenceProposals,
   loadProjectWorkSessionEvidenceNearby,
+  loadProjectWorkSessionEvidenceSourceAudit,
   loadProjectWorkSessionEvidenceSourceProposals,
   searchProjectWorkSessionEvidenceSource,
   loadProjectWorkSessionEvidenceReviewQueue,
@@ -299,6 +300,7 @@ import type {
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceNearbyResult,
+  ProjectWorkSessionEvidenceSourceAuditResult,
   ProjectWorkSessionEvidenceSourceProposal,
   ProjectWorkSessionEvidenceSourceProposalsResult,
   ProjectWorkSessionEvidenceSourceSearchResult,
@@ -373,6 +375,8 @@ import {
   workSessionEvidenceProposalsActionLabel,
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
+  workSessionEvidenceSourceAuditItemText,
+  workSessionEvidenceSourceAuditMetaText,
   workSessionEvidenceSourceProposalsBlockerSummaryText,
   workSessionEvidenceSourceProposalRiskText,
   workSessionEvidenceSourceProposalStateText,
@@ -472,6 +476,7 @@ type WorkSessionIndexState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionEvidenceNearbyState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionEvidenceSourceSearchState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionEvidenceSourceProposalsState = "idle" | "loading" | "ready" | "failed";
+type WorkSessionEvidenceSourceAuditState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionIndexBackfillMode = "reset" | "continue" | "long-continue";
 const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
@@ -848,6 +853,8 @@ function App() {
     useState<WorkSessionEvidenceSourceSearchState>("idle");
   const [workSessionEvidenceSourceProposalsState, setWorkSessionEvidenceSourceProposalsState] =
     useState<WorkSessionEvidenceSourceProposalsState>("idle");
+  const [workSessionEvidenceSourceAuditState, setWorkSessionEvidenceSourceAuditState] =
+    useState<WorkSessionEvidenceSourceAuditState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
   const [workManagementFreezeState, setWorkManagementFreezeState] =
@@ -919,6 +926,8 @@ function App() {
     useState<ProjectWorkSessionEvidenceSourceSearchResult | null>(null);
   const [workSessionEvidenceSourceProposalsResult, setWorkSessionEvidenceSourceProposalsResult] =
     useState<ProjectWorkSessionEvidenceSourceProposalsResult | null>(null);
+  const [workSessionEvidenceSourceAuditResult, setWorkSessionEvidenceSourceAuditResult] =
+    useState<ProjectWorkSessionEvidenceSourceAuditResult | null>(null);
   const [workLogNormalizedItemsResult, setWorkLogNormalizedItemsResult] =
     useState<ProjectWorkLogNormalizedItemsResult | null>(null);
   const [
@@ -1043,6 +1052,7 @@ function App() {
     || workSessionEvidenceNearbyState === "loading"
     || workSessionEvidenceSourceSearchState === "loading"
     || workSessionEvidenceSourceProposalsState === "loading"
+    || workSessionEvidenceSourceAuditState === "loading"
     || workManagementRefreshState === "loading"
     || workManagementFreezeState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
@@ -1360,6 +1370,9 @@ function App() {
     workSessionEvidenceReviewQueueState,
     workSessionEvidenceReviewQueueResult,
   );
+  const workSessionEvidenceSourceAuditMeta = workSessionEvidenceSourceAuditResult
+    ? workSessionEvidenceSourceAuditMetaText(workSessionEvidenceSourceAuditResult)
+    : null;
   const workManagementReadiness = workManagementReadinessText({
     coverage: workLogCoverageResult,
     sessionIndex: workSessionIndexResult,
@@ -2209,6 +2222,8 @@ function App() {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
     setWorkSessionEvidenceReviewQueueState("loading");
+    setWorkSessionEvidenceSourceAuditResult(null);
+    setWorkSessionEvidenceSourceAuditState("idle");
     try {
       const nextQueue = await loadProjectWorkSessionEvidenceReviewQueue({
         ...workSessionEvidenceReviewQueueOptions({ syncCandidates: true }),
@@ -2220,6 +2235,30 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkSessionEvidenceReviewQueueState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function loadWorkSessionEvidenceSourceAudit() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSessionEvidenceSourceAuditState("loading");
+    try {
+      const next = await loadProjectWorkSessionEvidenceSourceAudit({
+        ...workSessionEvidenceReviewQueueOptions({ syncCandidates: true }),
+        nearby_limit: 6,
+        source_limit: 5,
+        max_lines: 100000,
+      });
+      setWorkSessionEvidenceSourceAuditResult(next);
+      setWorkSessionEvidenceSourceAuditState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSessionEvidenceSourceAuditResult(null);
+      setWorkSessionEvidenceSourceAuditState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -4095,6 +4134,8 @@ function App() {
                   );
                   setWorkSessionEvidenceReviewQueueResult(null);
                   setWorkSessionEvidenceReviewQueueState("idle");
+                  setWorkSessionEvidenceSourceAuditResult(null);
+                  setWorkSessionEvidenceSourceAuditState("idle");
                 }}
                 value={workSessionEvidenceReviewQueueRowFilter}
               >
@@ -4117,6 +4158,8 @@ function App() {
                   );
                   setWorkSessionEvidenceReviewQueueResult(null);
                   setWorkSessionEvidenceReviewQueueState("idle");
+                  setWorkSessionEvidenceSourceAuditResult(null);
+                  setWorkSessionEvidenceSourceAuditState("idle");
                 }}
                 value={workSessionEvidenceReviewQueueReviewStateFilter}
               >
@@ -4145,6 +4188,21 @@ function App() {
                 : workSessionEvidenceReviewQueueResult
                   ? "세션근거 큐 새로고침"
                   : "세션근거 큐"}
+            </button>
+            <button
+              aria-label="현재 세션 근거 검토 큐의 원본 후보를 일괄 감사"
+              className="inline-action"
+              data-work-session-evidence-source-audit-action="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void loadWorkSessionEvidenceSourceAudit()}
+              type="button"
+            >
+              <ClipboardCheck size={15} />
+              {workSessionEvidenceSourceAuditState === "loading"
+                ? "원본 감사 중"
+                : workSessionEvidenceSourceAuditResult
+                  ? "원본 감사 다시 실행"
+                  : "원본 감사 요약"}
             </button>
             <button
               aria-label={workSessionEvidenceReviewApplyActionLabel(
@@ -5735,6 +5793,16 @@ function App() {
             <span>{workSessionEvidenceReviewQueueMeta}</span>
           </div>
         ) : null}
+        {workSessionEvidenceSourceAuditResult || workSessionEvidenceSourceAuditState !== "idle" ? (
+          <div className="work-summary-index" data-work-session-evidence-source-audit-meta="true">
+            <ClipboardCheck size={15} />
+            <span>
+              {workSessionEvidenceSourceAuditState === "loading"
+                ? "세션 근거 원본 감사 실행 중"
+                : workSessionEvidenceSourceAuditMeta ?? "세션 근거 원본 감사 실패"}
+            </span>
+          </div>
+        ) : null}
         {workSessionEvidenceReviewApplyResult || workSessionEvidenceReviewApplyState !== "idle" ? (
           <div className="work-summary-index" data-work-session-evidence-review-apply-meta="true">
             <CheckCircle2 size={15} />
@@ -6543,6 +6611,65 @@ function App() {
               생성된 세션근거 제안 없음
             </div>
           )
+        ) : null}
+        {workSessionEvidenceSourceAuditResult ? (
+          <div className="work-summary-list" data-work-session-evidence-source-audit="true">
+            <article className="work-summary-row work-log-proposal-row">
+              <div>
+                <strong>원본 감사 요약</strong>
+                <span>읽기 전용</span>
+              </div>
+              <p>{workSessionEvidenceSourceAuditMeta}</p>
+              <span>
+                database {workSessionEvidenceSourceAuditResult.database_path} · generated{" "}
+                {workSessionEvidenceSourceAuditResult.generated_at}
+              </span>
+              {workSessionEvidenceSourceAuditResult.warnings.map((warning, index) => (
+                <span key={textListItemKey(warning, index)}>
+                  {redactSensitiveDisplayText(warning)}
+                </span>
+              ))}
+            </article>
+            {workSessionEvidenceSourceAuditResult.items
+              .slice(0, WORK_STATUS_EXPORT_DISPLAY_LIMIT)
+              .map((item) => (
+                <article
+                  className="work-summary-row work-log-proposal-row"
+                  data-work-session-evidence-source-audit-item={item.candidate_id}
+                  key={item.candidate_id}
+                >
+                  <div>
+                    <strong>{item.project}</strong>
+                    <span>{item.date}</span>
+                  </div>
+                  <p>{workSessionEvidenceSourceAuditItemText(item)}</p>
+                  <span>
+                    {item.review_state} · {item.review_reason || "review reason 없음"}
+                  </span>
+                  {item.recommended_source_path ? (
+                    <span>
+                      추천 원본 {item.recommended_prompt_date ?? "날짜 미상"} ·{" "}
+                      {item.recommended_session_id ?? "session id 없음"}
+                    </span>
+                  ) : null}
+                  {item.recommended_source_path ? (
+                    <span>{item.recommended_source_path}</span>
+                  ) : null}
+                  {item.warnings.map((warning, index) => (
+                    <span key={textListItemKey(warning, index)}>
+                      {redactSensitiveDisplayText(warning)}
+                    </span>
+                  ))}
+                </article>
+              ))}
+            {workSessionEvidenceSourceAuditResult.items.length > WORK_STATUS_EXPORT_DISPLAY_LIMIT ? (
+              <div className="work-summary-overflow">
+                그 외 원본 감사 row{" "}
+                {(workSessionEvidenceSourceAuditResult.items.length - WORK_STATUS_EXPORT_DISPLAY_LIMIT)
+                  .toLocaleString()}개
+              </div>
+            ) : null}
+          </div>
         ) : null}
         {workSessionEvidenceReviewQueueResult ? (
           visibleWorkSessionEvidenceReviewQueueItems.length ? (

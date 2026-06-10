@@ -27,6 +27,7 @@ import type {
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceNearbyItem,
   ProjectWorkSessionEvidenceNearbyResult,
+  ProjectWorkSessionEvidenceSourceAuditResult,
   ProjectWorkSessionEvidenceSourceProposal,
   ProjectWorkSessionEvidenceSourceProposalsResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
@@ -2031,6 +2032,117 @@ export function workSessionEvidenceSourceProposalsBlockerSummaryText(
   }
   if (riskProposalCount > 0) {
     parts.push(`위험표시 ${riskProposalCount.toLocaleString()}건`);
+  }
+  return parts.join(" · ");
+}
+
+function workSessionEvidenceSourceAuditOutcomeLabel(outcome: string): string {
+  if (outcome === "review_ready") return "검토 준비";
+  if (outcome === "blocked") return "차단";
+  if (outcome === "no_recommended_source") return "추천 원본 없음";
+  if (outcome === "no_source_hits") return "원본 hit 없음";
+  if (outcome === "nearby_error") return "근처 세션 오류";
+  if (outcome === "source_search_error") return "원본 검색 오류";
+  return outcome;
+}
+
+function workSessionEvidenceSourceAuditFrequencySummaryText(
+  items: { text: string; count: number }[],
+  label: (text: string) => string,
+): string {
+  return items
+    .map((item) => `${label(item.text)} ${item.count.toLocaleString()}건`)
+    .join(", ");
+}
+
+export function workSessionEvidenceSourceAuditMetaText(
+  result: Pick<
+    ProjectWorkSessionEvidenceSourceAuditResult,
+    | "audited_item_count"
+    | "blocker_reason_counts"
+    | "max_lines_used"
+    | "nearby_limit_used"
+    | "no_recommended_source_count"
+    | "no_source_hit_count"
+    | "outcome_counts"
+    | "returned_item_count"
+    | "risk_flag_counts"
+    | "rows_with_blocked_proposals_count"
+    | "rows_with_review_ready_count"
+    | "source_limit_used"
+    | "total_blocked_count"
+    | "total_review_ready_count"
+  >,
+): string {
+  const outcomeSummary = workSessionEvidenceSourceAuditFrequencySummaryText(
+    result.outcome_counts,
+    workSessionEvidenceSourceAuditOutcomeLabel,
+  );
+  const blockerSummary = workSessionEvidenceSourceAuditFrequencySummaryText(
+    result.blocker_reason_counts,
+    workSessionEvidenceSourceProposalBlockerSummaryLabel,
+  );
+  const riskSummary = workSessionEvidenceSourceAuditFrequencySummaryText(
+    result.risk_flag_counts,
+    riskFlagLabel,
+  );
+  const parts = [
+    `감사 ${result.audited_item_count.toLocaleString()}/${result.returned_item_count.toLocaleString()}행`,
+    `검토 준비 row ${result.rows_with_review_ready_count.toLocaleString()}개`,
+    `review-ready proposal ${result.total_review_ready_count.toLocaleString()}개`,
+    `차단 row ${result.rows_with_blocked_proposals_count.toLocaleString()}개`,
+    `차단 proposal ${result.total_blocked_count.toLocaleString()}개`,
+  ];
+  if (result.no_recommended_source_count > 0) {
+    parts.push(`추천 원본 없음 ${result.no_recommended_source_count.toLocaleString()}개`);
+  }
+  if (result.no_source_hit_count > 0) {
+    parts.push(`원본 hit 없음 ${result.no_source_hit_count.toLocaleString()}개`);
+  }
+  if (outcomeSummary) {
+    parts.push(`결과 ${outcomeSummary}`);
+  }
+  if (blockerSummary) {
+    parts.push(`차단 사유 ${blockerSummary}`);
+  }
+  if (riskSummary) {
+    parts.push(`위험표시 ${riskSummary}`);
+  }
+  parts.push(
+    `근처 limit ${result.nearby_limit_used.toLocaleString()} · source limit ${result.source_limit_used.toLocaleString()} · max lines ${result.max_lines_used.toLocaleString()}`,
+  );
+  return parts.join(" · ");
+}
+
+export function workSessionEvidenceSourceAuditItemText(
+  item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
+): string {
+  const parts = [
+    workSessionEvidenceSourceAuditOutcomeLabel(item.outcome),
+    `근처 ${item.nearby_returned_item_count.toLocaleString()}/${item.nearby_total_match_count.toLocaleString()}`,
+    `source hit ${item.source_search_returned_item_count.toLocaleString()}/${item.source_search_matched_line_count.toLocaleString()}`,
+    `검토 준비 ${item.review_ready_count.toLocaleString()}개`,
+    `차단 ${item.blocked_count.toLocaleString()}개`,
+  ];
+  const blockerSummary = workSessionEvidenceSourceAuditFrequencySummaryText(
+    item.blocker_reason_counts,
+    workSessionEvidenceSourceProposalBlockerSummaryLabel,
+  );
+  const riskSummary = workSessionEvidenceSourceAuditFrequencySummaryText(
+    item.risk_flag_counts,
+    riskFlagLabel,
+  );
+  if (item.recommended_prompt_date) {
+    parts.push(`추천일 ${item.recommended_prompt_date}`);
+  }
+  if (item.recommended_match_score !== null) {
+    parts.push(`match ${item.recommended_match_score.toLocaleString()}`);
+  }
+  if (blockerSummary) {
+    parts.push(`차단 사유 ${blockerSummary}`);
+  }
+  if (riskSummary) {
+    parts.push(`위험표시 ${riskSummary}`);
   }
   return parts.join(" · ");
 }

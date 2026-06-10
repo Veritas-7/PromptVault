@@ -3630,6 +3630,11 @@ struct ProjectWorkSessionEvidenceSourceProposalsBridgePayload {
 }
 
 #[derive(serde::Deserialize)]
+struct ProjectWorkSessionEvidenceSourceAuditBridgePayload {
+    options: Option<ProjectWorkSessionEvidenceSourceAuditOptions>,
+}
+
+#[derive(serde::Deserialize)]
 struct ProjectWorkSessionIndexBridgePayload {
     options: Option<ProjectWorkSessionIndexOptions>,
 }
@@ -3964,6 +3969,17 @@ fn handle_bridge_route(
             let result = run_project_work_session_evidence_source_proposals(options)?;
             write_json_response(stream, 200, &result)
         }
+        ("POST", "/api/work-session-evidence-source-audit") => {
+            let payload = serde_json::from_str::<ProjectWorkSessionEvidenceSourceAuditBridgePayload>(
+                &request.body,
+            )?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_project_work_session_evidence_source_audit(options)?;
+            write_json_response(stream, 200, &result)
+        }
         ("POST", "/api/work-summary-snapshots") => {
             let payload =
                 serde_json::from_str::<ProjectWorkSummarySnapshotsBridgePayload>(&request.body)?;
@@ -4164,6 +4180,7 @@ fn bridge_route_uses_database(method: &str, path: &str) -> bool {
             | ("POST", "/api/work-session-evidence-nearby")
             | ("POST", "/api/work-session-evidence-source-search")
             | ("POST", "/api/work-session-evidence-source-proposals")
+            | ("POST", "/api/work-session-evidence-source-audit")
             | ("POST", "/api/work-summary-snapshots")
             | ("POST", "/api/work-session-index")
             | ("POST", "/api/work-ai-provider-status")
@@ -4582,6 +4599,16 @@ mod tests {
         assert!(source_proposals_response
             .contains("work-session-evidence-source-proposals limit requires a positive integer"));
         assert!(source_proposals_response.contains("Access-Control-Allow-Origin: *"));
+
+        let source_audit_response = bridge_response_for(
+            "/api/work-session-evidence-source-audit",
+            r#"{"options":{"limit":0}}"#,
+        );
+
+        assert!(source_audit_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(source_audit_response
+            .contains("work-session-evidence-source-audit limit requires a positive integer"));
+        assert!(source_audit_response.contains("Access-Control-Allow-Origin: *"));
     }
 
     #[test]

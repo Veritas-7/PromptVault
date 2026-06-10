@@ -30,6 +30,7 @@ import type {
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceNearbyResult,
+  ProjectWorkSessionEvidenceSourceAuditResult,
   ProjectWorkSessionEvidenceSourceProposal,
   ProjectWorkSessionEvidenceSourceProposalsResult,
   ProjectWorkSessionEvidenceSourceSearchResult,
@@ -196,6 +197,19 @@ export interface ProjectWorkSessionEvidenceSourceProposalsOptions {
   source_path: string;
   query: string;
   limit?: number;
+  max_lines?: number;
+}
+
+export interface ProjectWorkSessionEvidenceSourceAuditOptions {
+  database_path?: string;
+  limit?: number;
+  row_filter?: string;
+  review_state_filter?: string;
+  sync_candidates?: boolean;
+  session_limit?: number;
+  refresh_session_index?: boolean;
+  nearby_limit?: number;
+  source_limit?: number;
   max_lines?: number;
 }
 
@@ -567,6 +581,22 @@ export async function loadProjectWorkSessionEvidenceSourceProposals(
     "/api/work-session-evidence-source-proposals",
     { options },
     parseProjectWorkSessionEvidenceSourceProposalsResult,
+  );
+}
+
+export async function loadProjectWorkSessionEvidenceSourceAudit(
+  options: ProjectWorkSessionEvidenceSourceAuditOptions = {},
+): Promise<ProjectWorkSessionEvidenceSourceAuditResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkSessionEvidenceSourceAuditResult>(
+      "project_work_session_evidence_source_audit",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkSessionEvidenceSourceAuditResult>(
+    "/api/work-session-evidence-source-audit",
+    { options },
+    parseProjectWorkSessionEvidenceSourceAuditResult,
   );
 }
 
@@ -3085,6 +3115,93 @@ function parseProjectWorkSessionEvidenceSourceProposalsResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkSessionEvidenceSourceProposalsResult;
+}
+
+function isProjectWorkSessionEvidenceSourceAuditItem(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.candidate_id)
+    && isNonBlankString(value.project)
+    && isNonBlankString(value.date)
+    && isNonBlankString(value.review_state)
+    && typeof value.review_reason === "string"
+    && isNonBlankString(value.outcome)
+    && (value.recommended_source_path === null || isNonBlankString(value.recommended_source_path))
+    && (value.recommended_session_id === null || isNonBlankString(value.recommended_session_id))
+    && (value.recommended_prompt_date === null || isNonBlankString(value.recommended_prompt_date))
+    && (
+      value.recommended_match_score === null
+      || isNonNegativeSafeInteger(value.recommended_match_score)
+    )
+    && isNonNegativeSafeInteger(value.nearby_total_match_count)
+    && isNonNegativeSafeIntegerAtMost(
+      value.nearby_returned_item_count,
+      value.nearby_total_match_count,
+    )
+    && isNonNegativeSafeInteger(value.source_search_scanned_line_count)
+    && isNonNegativeSafeInteger(value.source_search_matched_line_count)
+    && isNonNegativeSafeIntegerAtMost(
+      value.source_search_returned_item_count,
+      value.source_search_matched_line_count,
+    )
+    && isNonNegativeSafeInteger(value.returned_proposal_count)
+    && isNonNegativeSafeIntegerAtMost(value.review_ready_count, value.returned_proposal_count)
+    && isNonNegativeSafeIntegerAtMost(value.blocked_count, value.returned_proposal_count)
+    && Number(value.review_ready_count) + Number(value.blocked_count)
+      === value.returned_proposal_count
+    && isFrequencyItemsWithinTotal(value.blocker_reason_counts, value.blocked_count)
+    && Array.isArray(value.risk_flag_counts)
+    && value.risk_flag_counts.every(isFrequencyItem)
+    && !(
+      value.recommended_source_path === null
+      && (
+        value.recommended_session_id !== null
+        || value.recommended_prompt_date !== null
+        || value.recommended_match_score !== null
+      )
+    )
+    && isNonBlankStringArray(value.warnings);
+}
+
+function parseProjectWorkSessionEvidenceSourceAuditResult(
+  value: unknown,
+): ProjectWorkSessionEvidenceSourceAuditResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !isPositiveSafeInteger(value.requested_limit)
+    || !isPositiveSafeInteger(value.nearby_limit_used)
+    || !isPositiveSafeInteger(value.source_limit_used)
+    || !isPositiveSafeInteger(value.max_lines_used)
+    || !isNonNegativeSafeInteger(value.total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.returned_item_count, value.total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.audited_item_count, value.returned_item_count)
+    || !isNonNegativeSafeIntegerAtMost(
+      value.no_recommended_source_count,
+      value.audited_item_count,
+    )
+    || !isNonNegativeSafeIntegerAtMost(value.no_source_hit_count, value.audited_item_count)
+    || !isNonNegativeSafeIntegerAtMost(
+      value.rows_with_review_ready_count,
+      value.audited_item_count,
+    )
+    || !isNonNegativeSafeIntegerAtMost(
+      value.rows_with_blocked_proposals_count,
+      value.audited_item_count,
+    )
+    || !isNonNegativeSafeInteger(value.total_review_ready_count)
+    || !isNonNegativeSafeInteger(value.total_blocked_count)
+    || !frequencyItemCountsSumTo(value.outcome_counts, value.audited_item_count)
+    || !isFrequencyItemsWithinTotal(value.blocker_reason_counts, value.total_blocked_count)
+    || !Array.isArray(value.risk_flag_counts)
+    || !value.risk_flag_counts.every(isFrequencyItem)
+    || !Array.isArray(value.items)
+    || value.items.length !== value.audited_item_count
+    || !value.items.every(isProjectWorkSessionEvidenceSourceAuditItem)
+    || !recordStringFieldValuesAreUnique(value.items, "candidate_id")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkSessionEvidenceSourceAuditResult;
 }
 
 function isProjectWorkSummary(value: unknown): boolean {

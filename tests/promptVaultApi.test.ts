@@ -22,6 +22,7 @@ import {
   loadProjectWorkSummary,
   loadProjectWorkSessionEvidenceCandidates,
   loadProjectWorkSessionEvidenceNearby,
+  loadProjectWorkSessionEvidenceSourceAudit,
   loadProjectWorkSessionEvidenceSourceProposals,
   searchProjectWorkSessionEvidenceSource,
   loadProjectWorkSessionEvidenceProposals,
@@ -718,6 +719,74 @@ function projectWorkSessionEvidenceSourceProposalsPayload(overrides = {}) {
     }],
     warnings: [
       "Source-search proposals are copied-trace review input only; they do not approve or create durable session evidence.",
+    ],
+    ...overrides,
+  };
+}
+
+function projectWorkSessionEvidenceSourceAuditItem(overrides = {}) {
+  return {
+    candidate_id: "session-evidence-PromptVault-source-audit-ready",
+    project: "PromptVault",
+    date: "2026-06-10",
+    review_state: "pending_review",
+    review_reason: "near_session_date_hint",
+    outcome: "review_ready",
+    recommended_source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    recommended_session_id: "turn-source-hit-1",
+    recommended_prompt_date: "2026-06-09",
+    recommended_match_score: 3,
+    nearby_total_match_count: 2,
+    nearby_returned_item_count: 1,
+    source_search_scanned_line_count: 42,
+    source_search_matched_line_count: 1,
+    source_search_returned_item_count: 1,
+    returned_proposal_count: 1,
+    review_ready_count: 1,
+    blocked_count: 0,
+    blocker_reason_counts: [],
+    risk_flag_counts: [],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function projectWorkSessionEvidenceSourceAuditPayload(overrides = {}) {
+  const readyItem = projectWorkSessionEvidenceSourceAuditItem();
+  const blockedItem = projectWorkSessionEvidenceSourceAuditItem({
+    candidate_id: "session-evidence-PromptVault-source-audit-blocked",
+    outcome: "blocked",
+    returned_proposal_count: 1,
+    review_ready_count: 0,
+    blocked_count: 1,
+    blocker_reason_counts: [{ text: "source_trace_is_instruction_only", count: 1 }],
+    risk_flag_counts: [{ text: "source_prompt_instruction_only", count: 1 }],
+  });
+  return {
+    generated_at: "2026-06-09T00:07:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    requested_limit: 50,
+    nearby_limit_used: 6,
+    source_limit_used: 5,
+    max_lines_used: 100000,
+    total_items: 8,
+    returned_item_count: 2,
+    audited_item_count: 2,
+    no_recommended_source_count: 0,
+    no_source_hit_count: 0,
+    rows_with_review_ready_count: 1,
+    rows_with_blocked_proposals_count: 1,
+    total_review_ready_count: 1,
+    total_blocked_count: 1,
+    outcome_counts: [
+      { text: "review_ready", count: 1 },
+      { text: "blocked", count: 1 },
+    ],
+    blocker_reason_counts: [{ text: "source_trace_is_instruction_only", count: 1 }],
+    risk_flag_counts: [{ text: "source_prompt_instruction_only", count: 1 }],
+    items: [readyItem, blockedItem],
+    warnings: [
+      "Source audit is read-only; it does not approve, reject, apply, or create session evidence.",
     ],
     ...overrides,
   };
@@ -1947,6 +2016,77 @@ test("browser bridge work session evidence source proposals reject duplicate hit
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /source-hit-1|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work session evidence source audit posts filters and validates summary", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionEvidenceSourceAuditPayload()), {
+      status: 200,
+    });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkSessionEvidenceSourceAudit({
+    row_filter: "near-session-date-hint",
+    review_state_filter: "pending_review",
+    sync_candidates: true,
+    nearby_limit: 6,
+    source_limit: 5,
+    max_lines: 100000,
+  });
+
+  assert.match(requestPath, /\/api\/work-session-evidence-source-audit$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      row_filter: "near-session-date-hint",
+      review_state_filter: "pending_review",
+      sync_candidates: true,
+      nearby_limit: 6,
+      source_limit: 5,
+      max_lines: 100000,
+    },
+  });
+  assert.equal(result.audited_item_count, 2);
+  assert.equal(result.rows_with_review_ready_count, 1);
+  assert.equal(result.rows_with_blocked_proposals_count, 1);
+  assert.equal(result.total_review_ready_count, 1);
+  assert.equal(result.total_blocked_count, 1);
+  assert.equal(result.items[0].outcome, "review_ready");
+  assert.equal(result.items[1].blocker_reason_counts[0].text, "source_trace_is_instruction_only");
+  assert.match(result.warnings[0], /read-only/);
+});
+
+test("browser bridge work session evidence source audit rejects duplicate candidate ids", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const item = projectWorkSessionEvidenceSourceAuditItem();
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSessionEvidenceSourceAuditPayload({
+    rows_with_review_ready_count: 2,
+    total_review_ready_count: 2,
+    outcome_counts: [{ text: "review_ready", count: 2 }],
+    blocker_reason_counts: [],
+    risk_flag_counts: [],
+    items: [item, item],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkSessionEvidenceSourceAudit(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /source-audit-ready|undefined/);
       return true;
     },
   );

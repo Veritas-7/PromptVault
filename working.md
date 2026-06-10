@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 22:54 KST
+Updated: 2026-06-10 23:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,61 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed implementation slice:
+  exposed the read-only batch source-audit workflow through both app surfaces:
+  the Tauri command `project_work_session_evidence_source_audit` and browser
+  bridge route `/api/work-session-evidence-source-audit`. The Work Management
+  UI now has a `원본 감사 요약` action beside the session-evidence review queue.
+  It uses the current row/review-state filters, syncs candidates, runs the
+  audit with `nearby_limit=6`, `source_limit=5`, and `max_lines=100000`, then
+  renders a read-only summary plus per-row outcomes before any operator
+  approval path.
+- Changes:
+  `src/types.ts` and `src/promptVaultApi.ts` now define and validate
+  `ProjectWorkSessionEvidenceSourceAuditResult`, including counter
+  consistency, unique `candidate_id` rows, outcome counts, blocker counts, and
+  risk flag counts. `src/workSummaryStatus.ts` adds tested UI text helpers for
+  audit summaries and per-row audit outcomes. `src/App.tsx` adds audit loading
+  state, the queue-level audit button, metadata display, and an audit detail
+  panel. `scripts/browser-bridge-isolated-qa.mjs` now checks the new bridge
+  route and clicks the UI audit action in the isolated headless QA flow.
+- Verification:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts` passed
+  with `261` tests. `cargo fmt --manifest-path src-tauri/Cargo.toml --check`
+  passed. `cargo test --manifest-path src-tauri/Cargo.toml --bin
+  promptvault-cli bridge_routes_work_session_evidence_review_queue_validation_errors`
+  passed. `cargo test --manifest-path src-tauri/Cargo.toml
+  session_evidence_source_audit` passed, including lib and CLI help coverage.
+  `npm run build` passed. `npm run qa:browser-bridge` passed end-to-end; it
+  included the new `work session evidence source audit bridge` step and the UI
+  audit panel click/selector check. Full `npm run check` passed: UI tests
+  `528`, Vite / TypeScript build, `cargo build --bin promptvault-cli`, Rust lib
+  tests `252`, CLI tests `47`, doc-tests, and clippy `-D warnings`.
+- Live default-vault verification:
+  reran `src-tauri/target/debug/promptvault-cli
+  work-session-evidence-source-audit --row-filter near-session-date-hint
+  --review-state pending_review --nearby-limit 6 --source-limit 5 --max-lines
+  100000 --json` against the real default database. Result remains fail-closed:
+  `8` audited rows, `0` rows review-ready, `3` rows blocked by proposal
+  validation, `4` rows with no recommended source after metadata/project-only
+  skip, and `1` row with a recommended source but no source-search hits.
+  Blockers: `source_trace_is_instruction_only` `2`,
+  `candidate_or_source_hit_has_risk_flags` `1`; risk flags:
+  `long_base64_like_token` `1`.
+- Current unresolved rows:
+  `ResearchFlowAI:2026-06-08`, `autoresearch-skill-system:2026-06-06`,
+  `ResearchFlowAI:2026-06-04`, and `CareVault:2026-06-03` are
+  `no_recommended_source`; `CareVault:2026-06-05` is `no_source_hits`;
+  `enterprise_diagnosis_flutter:2026-06-08` is blocked by risk flags;
+  `oss-favorites:2026-05-31` and `pdf-a4-rebuilder:2026-05-31` are blocked as
+  instruction-only traces. Do not approve these `8` rows from the batch audit;
+  no `review_ready` source trace was found.
+- Next product work:
+  use the new UI audit panel to drive explicit operator choices for the `8`
+  unresolved rows: reject/defer weak metadata-only rows, inspect the CareVault
+  no-hit source path manually, or add a review-safe bulk decision workflow that
+  still keeps approval/rejection explicit and source-traced.
 - Completed implementation slice:
   added a read-only batch source-audit workflow for persisted session-evidence
   review queue rows. Operators can now audit a filtered queue page without

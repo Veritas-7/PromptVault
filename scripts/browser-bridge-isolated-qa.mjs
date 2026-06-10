@@ -636,6 +636,8 @@ async function runBrowserQa() {
   let workSessionEvidenceReviewQueueFilterMeta = "";
   let workSessionEvidenceReviewQueueFilteredRows = [];
   let workSessionEvidenceAntigravitySourceSearch = "";
+  let workSessionEvidenceSourceAuditBridge = "";
+  let workSessionEvidenceSourceAuditUiText = "";
   let workSessionEvidenceRiskSourceProposalBridge = "";
   let workSessionEvidenceNearbyMeta = "";
   let workSessionEvidenceNearbyUiText = "";
@@ -1296,7 +1298,7 @@ async function runBrowserQa() {
       if (!nearbySourceItem) {
         throw new Error(`DB-backed Antigravity source row was not returned by nearby bridge: ${JSON.stringify(nearby.items)}`);
       }
-      if (nearbySourceItem.source_path.endsWith(".db")) {
+    if (nearbySourceItem.source_path.endsWith(".db")) {
         step("work session evidence source search bridge");
         const sourceSearch = await bridgeJson(
           page,
@@ -1365,6 +1367,35 @@ async function runBrowserQa() {
         }
       }
     }
+    step("work session evidence source audit bridge");
+    const sourceAudit = await bridgeJson(
+      page,
+      "/api/work-session-evidence-source-audit",
+      {
+        options: {
+          row_filter: "near-session-date-hint",
+          review_state_filter: "pending_review",
+          sync_candidates: true,
+          limit: 50,
+          nearby_limit: 6,
+          source_limit: 5,
+          max_lines: 100000,
+        },
+      },
+    );
+    if (
+      sourceAudit.database_path !== DATABASE_PATH
+      || sourceAudit.audited_item_count !== sourceAudit.items.length
+      || sourceAudit.audited_item_count > sourceAudit.returned_item_count
+      || sourceAudit.returned_item_count > sourceAudit.total_items
+      || sourceAudit.rows_with_review_ready_count > sourceAudit.audited_item_count
+      || sourceAudit.rows_with_blocked_proposals_count > sourceAudit.audited_item_count
+      || !sourceAudit.warnings.some((warning) => warning.includes("read-only"))
+    ) {
+      throw new Error(`Invalid session evidence source audit response: ${JSON.stringify(sourceAudit)}`);
+    }
+    workSessionEvidenceSourceAuditBridge =
+      `audited ${sourceAudit.audited_item_count} / ${sourceAudit.returned_item_count} · review-ready ${sourceAudit.total_review_ready_count} · blocked ${sourceAudit.total_blocked_count}`;
     const firstApprovableItem = workSessionEvidenceReviewQueue.items.find(
       (item, index) => index > 0 && !item.needs_title_normalization,
     ) ?? workSessionEvidenceReviewQueue.items.find((item) => !item.needs_title_normalization);
@@ -1495,6 +1526,27 @@ async function runBrowserQa() {
         ?.textContent ?? "";
       return meta.includes("필터 없음");
     }, undefined, { timeout: 30000 });
+    const sourceAuditUiResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/work-session-evidence-source-audit")
+      && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await page.locator('[data-work-session-evidence-source-audit-action="true"]').click();
+    await sourceAuditUiResponse;
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-session-evidence-source-audit-meta="true"]')
+        ?.textContent ?? "";
+      const panel = document.querySelector('[data-work-session-evidence-source-audit="true"]')
+        ?.textContent ?? "";
+      return meta.includes("감사")
+        && meta.includes("review-ready proposal")
+        && panel.includes("원본 감사 요약")
+        && panel.includes("읽기 전용")
+        && panel.includes("read-only");
+    }, undefined, { timeout: 90000 });
+    workSessionEvidenceSourceAuditUiText =
+      (await page.locator('[data-work-session-evidence-source-audit="true"]').textContent())
+        ?.trim() ?? "";
     const firstRecommendedSourceProposalsButton = page
       .locator('[data-work-session-evidence-recommended-source-proposals-action]')
       .first();
@@ -2544,6 +2596,8 @@ async function runBrowserQa() {
       workSessionEvidenceReviewQueueFilterMeta,
       workSessionEvidenceReviewQueueFilteredRows,
       workSessionEvidenceAntigravitySourceSearch,
+      workSessionEvidenceSourceAuditBridge,
+      workSessionEvidenceSourceAuditUiText,
       workSessionEvidenceRiskSourceProposalBridge,
       workSessionEvidenceNearbyMeta,
       workSessionEvidenceNearbyUiText,

@@ -58,6 +58,8 @@ import {
   workSessionEvidenceProposalsActionLabel,
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
+  workSessionEvidenceSourceAuditItemText,
+  workSessionEvidenceSourceAuditMetaText,
   workSessionEvidenceSourceProposalBlockerText,
   workSessionEvidenceSourceProposalsBlockerSummaryText,
   workSessionEvidenceSourceProposalRiskText,
@@ -170,7 +172,9 @@ import type {
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceNearbyItem,
   ProjectWorkSessionEvidenceNearbyResult,
+  ProjectWorkSessionEvidenceSourceAuditResult,
   ProjectWorkSessionEvidenceSourceProposal,
+  ProjectWorkSessionEvidenceSourceProposalsResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
@@ -1035,6 +1039,86 @@ function sessionEvidenceSourceProposalsResult(
       }),
     ],
     warnings: [],
+    ...overrides,
+  };
+}
+
+function sessionEvidenceSourceAuditResult(
+  overrides: Partial<ProjectWorkSessionEvidenceSourceAuditResult> = {},
+): ProjectWorkSessionEvidenceSourceAuditResult {
+  return {
+    generated_at: "2026-06-09T00:02:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    requested_limit: 50,
+    nearby_limit_used: 6,
+    source_limit_used: 5,
+    max_lines_used: 100000,
+    total_items: 8,
+    returned_item_count: 2,
+    audited_item_count: 2,
+    no_recommended_source_count: 0,
+    no_source_hit_count: 0,
+    rows_with_review_ready_count: 1,
+    rows_with_blocked_proposals_count: 1,
+    total_review_ready_count: 1,
+    total_blocked_count: 1,
+    outcome_counts: [
+      { text: "review_ready", count: 1 },
+      { text: "blocked", count: 1 },
+    ],
+    blocker_reason_counts: [{ text: "source_trace_is_instruction_only", count: 1 }],
+    risk_flag_counts: [{ text: "source_prompt_instruction_only", count: 1 }],
+    items: [
+      {
+        candidate_id: "session-evidence-PromptVault-ready",
+        project: "PromptVault",
+        date: "2026-06-09",
+        review_state: "pending_review",
+        review_reason: "near_session_date_hint",
+        outcome: "review_ready",
+        recommended_source_path: "/tmp/session-a.jsonl",
+        recommended_session_id: "session-1",
+        recommended_prompt_date: "2026-06-09",
+        recommended_match_score: 4,
+        nearby_total_match_count: 2,
+        nearby_returned_item_count: 1,
+        source_search_scanned_line_count: 24,
+        source_search_matched_line_count: 1,
+        source_search_returned_item_count: 1,
+        returned_proposal_count: 1,
+        review_ready_count: 1,
+        blocked_count: 0,
+        blocker_reason_counts: [],
+        risk_flag_counts: [],
+        warnings: [],
+      },
+      {
+        candidate_id: "session-evidence-PromptVault-blocked",
+        project: "PromptVault",
+        date: "2026-06-10",
+        review_state: "pending_review",
+        review_reason: "near_session_date_hint",
+        outcome: "blocked",
+        recommended_source_path: "/tmp/session-b.jsonl",
+        recommended_session_id: "session-2",
+        recommended_prompt_date: "2026-06-10",
+        recommended_match_score: 3,
+        nearby_total_match_count: 2,
+        nearby_returned_item_count: 1,
+        source_search_scanned_line_count: 42,
+        source_search_matched_line_count: 1,
+        source_search_returned_item_count: 1,
+        returned_proposal_count: 1,
+        review_ready_count: 0,
+        blocked_count: 1,
+        blocker_reason_counts: [{ text: "source_trace_is_instruction_only", count: 1 }],
+        risk_flag_counts: [{ text: "source_prompt_instruction_only", count: 1 }],
+        warnings: [],
+      },
+    ],
+    warnings: [
+      "Source audit is read-only; it does not approve, reject, apply, or create session evidence.",
+    ],
     ...overrides,
   };
 }
@@ -2895,6 +2979,34 @@ test("work session evidence source proposal summary groups blockers for operator
       proposals: [sessionEvidenceSourceProposal()],
     })),
     "검토 준비 1/1 · 차단 0건",
+  );
+});
+
+test("work session evidence source audit summary separates ready and blocked rows", () => {
+  assert.equal(
+    workSessionEvidenceSourceAuditMetaText(sessionEvidenceSourceAuditResult()),
+    "감사 2/2행 · 검토 준비 row 1개 · review-ready proposal 1개 · 차단 row 1개 · 차단 proposal 1개 · 결과 검토 준비 1건, 차단 1건 · 차단 사유 지시문 trace 1건 · 위험표시 source_prompt_instruction_only 1건 · 근처 limit 6 · source limit 5 · max lines 100,000",
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditItemText(sessionEvidenceSourceAuditResult().items[1]),
+    "차단 · 근처 1/2 · source hit 1/1 · 검토 준비 0개 · 차단 1개 · 추천일 2026-06-10 · match 3 · 차단 사유 지시문 trace 1건 · 위험표시 source_prompt_instruction_only 1건",
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditMetaText(sessionEvidenceSourceAuditResult({
+      audited_item_count: 1,
+      returned_item_count: 1,
+      no_recommended_source_count: 1,
+      no_source_hit_count: 1,
+      rows_with_review_ready_count: 0,
+      rows_with_blocked_proposals_count: 0,
+      total_review_ready_count: 0,
+      total_blocked_count: 0,
+      outcome_counts: [{ text: "no_recommended_source", count: 1 }],
+      blocker_reason_counts: [],
+      risk_flag_counts: [],
+      items: [],
+    })),
+    "감사 1/1행 · 검토 준비 row 0개 · review-ready proposal 0개 · 차단 row 0개 · 차단 proposal 0개 · 추천 원본 없음 1개 · 원본 hit 없음 1개 · 결과 추천 원본 없음 1건 · 근처 limit 6 · source limit 5 · max lines 100,000",
   );
 });
 

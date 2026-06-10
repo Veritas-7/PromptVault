@@ -2729,6 +2729,10 @@ test("work session evidence source proposal labels explain blocker states", () =
     "프로젝트명과 범용 git/status 용어만 일치해 durable 승인 불가",
   );
   assert.equal(
+    workSessionEvidenceSourceProposalBlockerText("source_hit_date_too_far_from_candidate"),
+    "원본 세션 날짜가 작업일과 멀어 durable 승인 불가",
+  );
+  assert.equal(
     workSessionEvidenceSourceProposalBlockerText("source_trace_is_instruction_only"),
     "원본 trace가 지시문뿐이라 완료 근거로 승인 불가",
   );

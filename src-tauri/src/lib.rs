@@ -58,6 +58,7 @@ const MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_LIMIT: usize = 20;
 const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES: usize = 100_000;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES: usize = 300_000;
 const PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_EXCERPT_CHARS: usize = 480;
+const PROJECT_WORK_SESSION_EVIDENCE_SOURCE_PROPOSAL_MAX_DATE_DISTANCE_DAYS: i64 = 1;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
 const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
 const PROJECT_WORK_METADATA_TAIL_TIMESTAMP_LINES: usize = 200;
@@ -9892,6 +9893,7 @@ fn project_work_session_evidence_source_proposal_from_hit(
     risk_flags.dedup();
     let source_hit_evidence_blocker =
         project_work_session_source_hit_evidence_blocker(candidate, hit);
+    let source_hit_date_blocker = project_work_session_source_hit_date_blocker(candidate, hit);
     let blocker_reason = if candidate.needs_title_normalization {
         Some("title_normalization_required_first".to_string())
     } else if !trace_validated {
@@ -9903,7 +9905,7 @@ fn project_work_session_evidence_source_proposal_from_hit(
     } else if project_work_session_source_trace_is_instruction_only(&source_trace) {
         Some("source_trace_is_instruction_only".to_string())
     } else {
-        None
+        source_hit_date_blocker.map(|blocker| blocker.to_string())
     };
     let proposal_kind = if candidate.needs_title_normalization {
         "title_normalization_first"
@@ -9978,6 +9980,19 @@ fn project_work_session_source_hit_evidence_blocker(
 
 fn project_work_session_source_match_term_is_generic(term: &str) -> bool {
     matches!(term, "git" | "main" | "origin" | "status")
+}
+
+fn project_work_session_source_hit_date_blocker(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+    hit: &ProjectWorkSessionEvidenceSourceSearchItem,
+) -> Option<&'static str> {
+    let source_date = prompt_date(hit.timestamp.as_deref());
+    let distance = project_work_session_date_distance_checked(&candidate.date, &source_date)?;
+    if distance > PROJECT_WORK_SESSION_EVIDENCE_SOURCE_PROPOSAL_MAX_DATE_DISTANCE_DAYS {
+        Some("source_hit_date_too_far_from_candidate")
+    } else {
+        None
+    }
 }
 
 fn project_work_session_source_trace_is_instruction_only(trace: &str) -> bool {
@@ -23133,6 +23148,70 @@ Status: completed as a source-only/report-only hardening slice.
             Some("source_hit_matches_only_project_or_generic_terms")
         );
         assert_eq!(proposal.match_score, 4);
+    }
+
+    #[test]
+    fn session_evidence_source_proposals_block_far_source_dates() {
+        let candidate = session_evidence_candidate_fixture(
+            "session-evidence-oss-favorites-far-source-proposal",
+            "oss-favorites",
+            "2026-06-10: favorite metadata API work still needs reviewed session evidence.",
+            false,
+        );
+        let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
+            generated_at: "2026-06-10T00:00:00Z".to_string(),
+            source_path: "/Users/wj/.codex/sessions/2026/06/01/rollout.jsonl".to_string(),
+            query: "oss-favorites 2026-06-10 autoresearch favorite metadata API".to_string(),
+            query_term_count: 6,
+            requested_limit: 5,
+            requested_max_lines: 100_000,
+            scanned_line_count: 12,
+            matched_line_count: 1,
+            returned_item_count: 1,
+            items: vec![ProjectWorkSessionEvidenceSourceSearchItem {
+                id: "source-hit-far-date".to_string(),
+                line_number: 7,
+                session_id: Some("turn-source-hit-far-date".to_string()),
+                timestamp: Some("2026-06-01T04:50:38.585Z".to_string()),
+                cwd: Some("/Users/wj/Documents/Codex/2026-06-01/autoresearch-red-codex-http-127-0".to_string()),
+                match_score: 5,
+                matched_terms: vec![
+                    "api".to_string(),
+                    "autoresearch".to_string(),
+                    "favorite".to_string(),
+                    "metadata".to_string(),
+                    "oss-favorites".to_string(),
+                ],
+                excerpt:
+                    "진행했습니다. 이번 autoresearch 반복에서 favorite metadata API red를 고쳤습니다."
+                        .to_string(),
+                word_count: 9,
+                char_count: 61,
+                risk_flags: Vec::new(),
+            }],
+            warnings: vec![
+                "Raw source search is read-only and redacted; returned snippets do not create or approve session evidence."
+                    .to_string(),
+            ],
+        };
+
+        let result = project_work_session_evidence_source_proposals_from_search(
+            Path::new("/tmp/promptvault.sqlite"),
+            &candidate,
+            source_search,
+        );
+
+        assert_eq!(result.returned_proposal_count, 1);
+        assert_eq!(result.review_ready_count, 0);
+        assert_eq!(result.blocked_count, 1);
+        let proposal = &result.proposals[0];
+        assert!(proposal.trace_validated);
+        assert!(!proposal.review_ready);
+        assert_eq!(
+            proposal.blocker_reason.as_deref(),
+            Some("source_hit_date_too_far_from_candidate")
+        );
+        assert_eq!(proposal.match_score, 5);
     }
 
     #[test]

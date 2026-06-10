@@ -128,6 +128,7 @@ export interface ProjectWorkStatusExportOptions {
 export interface ProjectWorkSessionEvidenceCandidatesOptions {
   database_path?: string;
   limit?: number;
+  row_filter?: string;
   session_limit?: number;
   refresh_session_index?: boolean;
   needs_title_normalization?: boolean;
@@ -136,6 +137,7 @@ export interface ProjectWorkSessionEvidenceCandidatesOptions {
 export interface ProjectWorkSessionEvidenceProposalsOptions {
   database_path?: string;
   limit?: number;
+  row_filter?: string;
   session_limit?: number;
   refresh_session_index?: boolean;
   ai?: boolean;

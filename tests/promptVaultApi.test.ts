@@ -1376,6 +1376,7 @@ test("browser bridge work session evidence candidates posts options and validate
 
   const result = await loadProjectWorkSessionEvidenceCandidates({
     limit: 10,
+    row_filter: "near-session-date-hint",
     session_limit: 500,
     refresh_session_index: true,
     needs_title_normalization: true,
@@ -1385,6 +1386,7 @@ test("browser bridge work session evidence candidates posts options and validate
   assert.deepEqual(JSON.parse(requestBody), {
     options: {
       limit: 10,
+      row_filter: "near-session-date-hint",
       session_limit: 500,
       refresh_session_index: true,
       needs_title_normalization: true,
@@ -1442,6 +1444,7 @@ test("browser bridge work session evidence proposals posts options and validates
 
   const result = await loadProjectWorkSessionEvidenceProposals({
     limit: 10,
+    row_filter: "near-session-date-hint",
     session_limit: 500,
     refresh_session_index: true,
     ai: true,
@@ -1452,6 +1455,7 @@ test("browser bridge work session evidence proposals posts options and validates
   assert.deepEqual(JSON.parse(requestBody), {
     options: {
       limit: 10,
+      row_filter: "near-session-date-hint",
       session_limit: 500,
       refresh_session_index: true,
       ai: true,

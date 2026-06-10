@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 20:51 KST
+Updated: 2026-06-10 21:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,65 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed implementation slice:
+  pending commit for `work-session-evidence-candidates` /
+  `work-session-evidence-proposals` row filters.
+- Completed behavior:
+  carry the `near-session-date-hint` / `stale-session-date-hint` split from
+  status export into the read-only session-evidence candidate/proposal CLI/API
+  workflow. `row_filter` has been added to
+  `ProjectWorkSessionEvidenceCandidatesOptions`,
+  `ProjectWorkSessionEvidenceProposalsOptions`, CLI parsing/help, TS bridge
+  types/tests, README, and CLI docs. Candidate filtering runs after same-project
+  session date hints are annotated and before review sorting/truncation, so
+  `total_candidate_count` reports the narrowed candidate pool. Proposal
+  generation passes the same filter into its read-only candidate lookup.
+- Scope boundary:
+  filtered sync was intentionally not added to
+  `work-session-evidence-review-queue` in this slice. Live inspection showed
+  `sync_project_work_session_evidence_review_queue` marks missing candidates
+  stale when the returned candidate count equals total count, so filtered sync
+  could incorrectly stale unrelated far candidates unless sync semantics are
+  redesigned.
+- Verification status:
+  passed. Live default-vault pre-checks showed
+  `work-status-export --row-filter near-session-date-hint --full-session-index
+  --limit 20 --json` returns `9` near rows. A read/write
+  `work-session-evidence-review-queue --sync-candidates --limit 20 --json`
+  refreshed the review queue to `48` total rows with `26` pending and `22`
+  stale; `work-session-evidence-reviewed-items --limit 20 --json` still showed
+  no durable reviewed items/session evidence links. `cargo fmt` passed.
+  `cargo test session_evidence_candidates --lib` passed with `5` focused Rust
+  tests. `cargo test --bin promptvault-cli work_session_evidence` passed with
+  `12` focused CLI tests. `cargo test --bin promptvault-cli
+  bridge_routes_work_session_evidence` passed with `3` focused bridge tests.
+  `cargo test --bin promptvault-cli help_text_documents_cli_validation_rules`
+  passed with `1` focused help test.
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts` passed with `209` TS bridge/API tests.
+  `cargo build --bin promptvault-cli` passed. Real default-vault
+  `work-session-evidence-candidates --row-filter near-session-date-hint --json`
+  returned `9` filtered rows, `9` returned, `total_sanitized_session_count`
+  `12889`, all with distance `1`. Real default-vault
+  `work-session-evidence-candidates --row-filter stale-session-date-hint
+  --limit 5 --json` returned `16` filtered rows and `5` rows. Real
+  default-vault `work-session-evidence-proposals --row-filter
+  near-session-date-hint --limit 5 --json` returned `9` filtered candidate rows,
+  `5` proposals, `0` accepted, and `5` local fallback review-required
+  proposals. Invalid row filters exit `1` with command-specific
+  `unknown row_filter` errors for both commands. Both command help pages exit
+  `0` and document `--row-filter FILTER`. `git diff --check` passed.
+  `npm run check` passed: UI tests `523` passed, Vite / TypeScript build
+  passed, Rust lib tests `246` passed, CLI tests `46` passed, doc-tests
+  passed, and clippy `-D warnings` passed. Browser/cmux QA was not rerun
+  because this slice changes read-only CLI/API/options/docs and this
+  environment is not the cmux in-app browser.
+- Next product work:
+  design safe filtered review-queue view/sync semantics, or inspect and resolve
+  the `9` near candidates with `work-session-evidence-nearby`,
+  `work-session-evidence-source-search`, and
+  `work-session-evidence-source-proposals` before approving durable session
+  evidence links.
 - Completed implementation slice:
   `d3199e5 fix: filter status export in cli`.
 - Completed behavior:

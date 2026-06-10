@@ -904,6 +904,7 @@ pub struct ProjectWorkStatusExportResult {
 pub struct ProjectWorkSessionEvidenceCandidatesOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
+    pub row_filter: Option<String>,
     pub session_limit: Option<usize>,
     pub refresh_session_index: Option<bool>,
     pub needs_title_normalization: Option<bool>,
@@ -966,6 +967,7 @@ pub struct ProjectWorkSessionEvidenceCandidatesResult {
 pub struct ProjectWorkSessionEvidenceProposalsOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
+    pub row_filter: Option<String>,
     pub session_limit: Option<usize>,
     pub refresh_session_index: Option<bool>,
     pub ai: Option<bool>,
@@ -2498,6 +2500,10 @@ pub fn run_project_work_session_evidence_candidates(
             "work-session-evidence-candidates database path requires a non-empty value".into(),
         );
     }
+    let row_filter = normalize_project_work_row_filter(
+        options.row_filter.as_deref(),
+        "work-session-evidence-candidates",
+    )?;
 
     let requested_limit = options
         .limit
@@ -2552,17 +2558,10 @@ pub fn run_project_work_session_evidence_candidates(
         options.needs_title_normalization,
     );
     annotate_project_work_session_evidence_candidate_date_hints(&database_path, &mut candidates)?;
+    let mut candidates = filter_project_work_session_evidence_candidates(candidates, row_filter);
     sort_project_work_session_evidence_candidates_for_review(&mut candidates);
+    let total_candidate_count = candidates.len();
     candidates.truncate(limit);
-    let total_candidate_count = all_rows
-        .iter()
-        .filter(|row| row.session_evidence_audit == "unresolved-after-full-index")
-        .filter(|row| {
-            options
-                .needs_title_normalization
-                .is_none_or(|needs_title| row.needs_title_normalization == needs_title)
-        })
-        .count();
 
     Ok(ProjectWorkSessionEvidenceCandidatesResult {
         generated_at: report.generated_at.clone(),
@@ -2608,6 +2607,10 @@ pub async fn run_project_work_session_evidence_proposals(
             "work-session-evidence-proposals database path requires a non-empty value".into(),
         );
     }
+    normalize_project_work_row_filter(
+        options.row_filter.as_deref(),
+        "work-session-evidence-proposals",
+    )?;
 
     let database_path = options
         .database_path
@@ -2622,6 +2625,7 @@ pub async fn run_project_work_session_evidence_proposals(
         ProjectWorkSessionEvidenceCandidatesOptions {
             database_path: Some(database_path.display().to_string()),
             limit: Some(limit),
+            row_filter: options.row_filter,
             session_limit: options.session_limit,
             refresh_session_index: options.refresh_session_index,
             needs_title_normalization: options.needs_title_normalization,
@@ -2675,6 +2679,7 @@ pub fn run_project_work_session_evidence_review_queue(
             ProjectWorkSessionEvidenceCandidatesOptions {
                 database_path: Some(database_path.display().to_string()),
                 limit: Some(MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT),
+                row_filter: None,
                 session_limit: options.session_limit,
                 refresh_session_index: options.refresh_session_index,
                 needs_title_normalization: None,
@@ -3107,6 +3112,7 @@ pub fn run_project_work_session_evidence_source_proposals(
         ProjectWorkSessionEvidenceCandidatesOptions {
             database_path: Some(database_path.display().to_string()),
             limit: Some(MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT),
+            row_filter: None,
             session_limit: None,
             refresh_session_index: None,
             needs_title_normalization: None,
@@ -12046,6 +12052,13 @@ fn paginate_project_work_status_export_rows(
 fn normalize_project_work_status_export_row_filter(
     row_filter: Option<&str>,
 ) -> Result<Option<&str>, Box<dyn std::error::Error>> {
+    normalize_project_work_row_filter(row_filter, "work-status-export")
+}
+
+fn normalize_project_work_row_filter<'a>(
+    row_filter: Option<&'a str>,
+    command: &str,
+) -> Result<Option<&'a str>, Box<dyn std::error::Error>> {
     let Some(row_filter) = row_filter.map(str::trim).filter(|value| !value.is_empty()) else {
         return Ok(None);
     };
@@ -12060,7 +12073,7 @@ fn normalize_project_work_status_export_row_filter(
         | "active"
         | "session-supported"
         | "progress-log-only" => Ok(Some(row_filter)),
-        _ => Err(format!("work-status-export unknown row_filter: {row_filter}").into()),
+        _ => Err(format!("{command} unknown row_filter: {row_filter}").into()),
     }
 }
 
@@ -12120,6 +12133,70 @@ fn project_work_status_export_row_has_stale_session_date_hint(
         && row
             .nearest_same_project_other_session_distance_days
             .is_some_and(|distance_days| distance_days > 1)
+}
+
+fn filter_project_work_session_evidence_candidates(
+    candidates: Vec<ProjectWorkSessionEvidenceCandidate>,
+    row_filter: Option<&str>,
+) -> Vec<ProjectWorkSessionEvidenceCandidate> {
+    let Some(row_filter) = row_filter else {
+        return candidates;
+    };
+    if row_filter == "all" {
+        return candidates;
+    }
+    candidates
+        .into_iter()
+        .filter(|candidate| {
+            project_work_session_evidence_candidate_matches_filter(candidate, row_filter)
+        })
+        .collect()
+}
+
+fn project_work_session_evidence_candidate_matches_filter(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+    row_filter: &str,
+) -> bool {
+    match row_filter {
+        "needs-session-evidence" | "unresolved-session-evidence" => true,
+        "bounded-session-limit" => false,
+        "near-session-date-hint" => {
+            project_work_session_evidence_candidate_has_near_session_date_hint(candidate)
+        }
+        "stale-session-date-hint" => {
+            project_work_session_evidence_candidate_has_stale_session_date_hint(candidate)
+        }
+        "needs-title-normalization" => candidate.needs_title_normalization,
+        "active" | "session-supported" | "progress-log-only" => {
+            candidate.operational_status == row_filter
+        }
+        _ => false,
+    }
+}
+
+fn project_work_session_evidence_candidate_has_near_session_date_hint(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+) -> bool {
+    if candidate.same_project_same_date_session_count > 0 {
+        return true;
+    }
+    candidate
+        .nearest_same_project_other_session_date
+        .as_deref()
+        .is_some_and(|nearest_date| {
+            project_work_session_date_distance(&candidate.date, nearest_date) <= 1
+        })
+}
+
+fn project_work_session_evidence_candidate_has_stale_session_date_hint(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+) -> bool {
+    candidate
+        .nearest_same_project_other_session_date
+        .as_deref()
+        .is_some_and(|nearest_date| {
+            project_work_session_date_distance(&candidate.date, nearest_date) > 1
+        })
 }
 
 fn render_project_work_status_export_markdown(
@@ -23867,6 +23944,105 @@ Status: completed as a source-only/report-only hardening slice.
             candidates[0].candidate_id,
             "session-evidence-OlderNear-a1b2c3d4e5"
         );
+    }
+
+    #[test]
+    fn session_evidence_candidates_row_filters_before_truncating() {
+        let mut near = session_evidence_candidate_fixture(
+            "session-evidence-Near-a1b2c3d4e5",
+            "Near",
+            "Near has a one-day same-project session hint.",
+            false,
+        );
+        near.date = "2026-06-10".to_string();
+        near.nearest_same_project_other_session_date = Some("2026-06-09".to_string());
+        near.same_project_other_session_date_count = 1;
+
+        let mut same_date = session_evidence_candidate_fixture(
+            "session-evidence-SameDate-a1b2c3d4e5",
+            "SameDate",
+            "SameDate has same-date same-project session hints.",
+            false,
+        );
+        same_date.same_project_same_date_session_count = 2;
+
+        let mut stale = session_evidence_candidate_fixture(
+            "session-evidence-Stale-a1b2c3d4e5",
+            "Stale",
+            "Stale has a distant same-project session hint.",
+            false,
+        );
+        stale.date = "2026-06-10".to_string();
+        stale.nearest_same_project_other_session_date = Some("2026-05-10".to_string());
+        stale.same_project_other_session_date_count = 1;
+
+        let mut needs_title = session_evidence_candidate_fixture(
+            "session-evidence-NeedsTitle-a1b2c3d4e5",
+            "NeedsTitle",
+            "NeedsTitle needs title cleanup.",
+            true,
+        );
+        needs_title.operational_status = "active".to_string();
+
+        let candidates = vec![
+            near.clone(),
+            same_date.clone(),
+            stale.clone(),
+            needs_title.clone(),
+        ];
+
+        assert_eq!(
+            filter_project_work_session_evidence_candidates(
+                candidates.clone(),
+                Some("near-session-date-hint")
+            )
+            .into_iter()
+            .map(|candidate| candidate.project)
+            .collect::<Vec<_>>(),
+            vec!["Near", "SameDate"]
+        );
+        assert_eq!(
+            filter_project_work_session_evidence_candidates(
+                candidates.clone(),
+                Some("stale-session-date-hint")
+            )
+            .into_iter()
+            .map(|candidate| candidate.project)
+            .collect::<Vec<_>>(),
+            vec!["Stale"]
+        );
+        assert_eq!(
+            filter_project_work_session_evidence_candidates(
+                candidates.clone(),
+                Some("needs-title-normalization")
+            )
+            .into_iter()
+            .map(|candidate| candidate.project)
+            .collect::<Vec<_>>(),
+            vec!["NeedsTitle"]
+        );
+        assert_eq!(
+            filter_project_work_session_evidence_candidates(candidates, Some("active"))
+                .into_iter()
+                .map(|candidate| candidate.project)
+                .collect::<Vec<_>>(),
+            vec!["NeedsTitle"]
+        );
+    }
+
+    #[test]
+    fn session_evidence_candidates_reject_unknown_row_filter_before_scan() {
+        let error = run_project_work_session_evidence_candidates(
+            ProjectWorkSessionEvidenceCandidatesOptions {
+                row_filter: Some("not-a-filter".to_string()),
+                ..Default::default()
+            },
+        )
+        .expect_err("unknown row filter should fail before scanning");
+
+        assert!(error
+            .to_string()
+            .contains("work-session-evidence-candidates unknown row_filter: not-a-filter"));
     }
 
     fn session_evidence_candidates_result_fixture(

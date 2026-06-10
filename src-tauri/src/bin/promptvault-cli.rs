@@ -438,6 +438,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
             let needs_title_normalization = take_flag(&mut args, "--needs-title-normalization");
             let mut limit = None;
+            let mut row_filter = None;
             let mut session_limit = None;
             let mut database_path = None;
             let mut iter = args.into_iter();
@@ -449,6 +450,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     "--session-limit" => {
                         session_limit =
                             Some(parse_positive_usize_arg(iter.next(), "--session-limit")?);
+                    }
+                    "--row-filter" => {
+                        row_filter = Some(parse_required_arg(iter.next(), "--row-filter")?);
                     }
                     "--database" => {
                         database_path = Some(parse_required_arg(iter.next(), "--database")?);
@@ -466,6 +470,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 ProjectWorkSessionEvidenceCandidatesOptions {
                     database_path,
                     limit,
+                    row_filter: row_filter.clone(),
                     session_limit,
                     refresh_session_index: Some(refresh_session_index),
                     needs_title_normalization: needs_title_normalization.then_some(true),
@@ -497,6 +502,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("returned: {}", result.returned_candidate_count);
             if needs_title_normalization {
                 println!("filter: needs_title_normalization");
+            }
+            if let Some(row_filter) = &row_filter {
+                println!("row_filter: {row_filter}");
             }
             if !result.warnings.is_empty() {
                 println!("warnings:");
@@ -532,6 +540,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
             let needs_title_normalization = take_flag(&mut args, "--needs-title-normalization");
             let mut limit = None;
+            let mut row_filter = None;
             let mut session_limit = None;
             let mut database_path = None;
             let mut iter = args.into_iter();
@@ -543,6 +552,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     "--session-limit" => {
                         session_limit =
                             Some(parse_positive_usize_arg(iter.next(), "--session-limit")?);
+                    }
+                    "--row-filter" => {
+                        row_filter = Some(parse_required_arg(iter.next(), "--row-filter")?);
                     }
                     "--database" => {
                         database_path = Some(parse_required_arg(iter.next(), "--database")?);
@@ -560,6 +572,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 ProjectWorkSessionEvidenceProposalsOptions {
                     database_path,
                     limit,
+                    row_filter: row_filter.clone(),
                     session_limit,
                     refresh_session_index: Some(refresh_session_index),
                     ai: Some(ai),
@@ -580,6 +593,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("returned: {}", result.returned_proposal_count);
             if needs_title_normalization {
                 println!("filter: needs_title_normalization");
+            }
+            if let Some(row_filter) = &row_filter {
+                println!("row_filter: {row_filter}");
             }
             println!("accepted: {}", result.accepted_count);
             println!("rejected: {}", result.rejected_count);
@@ -2901,11 +2917,12 @@ fn work_session_evidence_candidates_help_text() -> String {
         "PromptVault work-session-evidence-candidates",
         "",
         "Usage:",
-        "  promptvault-cli work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]",
+        "  promptvault-cli work-session-evidence-candidates [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]",
         "",
         "Purpose:",
         "  Lists project/day rows still missing session evidence after the current session index is considered.",
         "  Use --refresh-session-index to rescan raw sessions before computing unresolved rows.",
+        "  Use --row-filter near-session-date-hint to focus one-day same-project session hints before stale candidates.",
         "  Use --needs-title-normalization to focus rows blocked by title cleanup before evidence review.",
         "",
         "Review safety:",
@@ -2915,6 +2932,7 @@ fn work_session_evidence_candidates_help_text() -> String {
         "",
         "Examples:",
         "  promptvault-cli work-session-evidence-candidates --limit 20 --json",
+        "  promptvault-cli work-session-evidence-candidates --row-filter near-session-date-hint --json",
         "  promptvault-cli work-session-evidence-candidates --refresh-session-index --session-limit 500 --json",
     ]
     .join("\n")
@@ -2925,12 +2943,13 @@ fn work_session_evidence_proposals_help_text() -> String {
         "PromptVault work-session-evidence-proposals",
         "",
         "Usage:",
-        "  promptvault-cli work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]",
+        "  promptvault-cli work-session-evidence-proposals [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]",
         "",
         "Purpose:",
         "  Generates read-only source-traced proposals for project/day rows still missing session evidence.",
         "  Without --ai, returns local fallback proposals that require operator review.",
         "  With --ai, attempts configured OpenAI/GLM providers and falls back to local review-only proposals on provider failure.",
+        "  Use --row-filter near-session-date-hint to generate proposals for high-priority nearby session candidates first.",
         "  Use --needs-title-normalization to focus rows blocked by title cleanup before evidence review.",
         "",
         "Review safety:",
@@ -2941,6 +2960,7 @@ fn work_session_evidence_proposals_help_text() -> String {
         "",
         "Examples:",
         "  promptvault-cli work-session-evidence-proposals --limit 5 --json",
+        "  promptvault-cli work-session-evidence-proposals --row-filter near-session-date-hint --limit 5 --json",
         "  promptvault-cli work-session-evidence-proposals --limit 5 --ai --json",
         "  promptvault-cli work-session-evidence-proposals --needs-title-normalization --ai --json",
     ]
@@ -3148,8 +3168,8 @@ fn help_text() -> String {
         "  improve [--json] [--local] < prompt.txt\n",
         "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
         "  work-status-export [--limit N>0] [--offset N>=0] [--row-filter FILTER] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]\n",
-        "  work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]\n",
-        "  work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]\n",
+        "  work-session-evidence-candidates [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]\n",
+        "  work-session-evidence-proposals [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]\n",
         "  work-session-evidence-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]\n",
         "  work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--source-review-json JSON|--source-review-file PATH] [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-evidence-review-apply [--limit N>0] [--database PATH] [--json]\n",
@@ -3185,8 +3205,8 @@ fn help_text() -> String {
         "  --no-persist keeps scan results out of the PromptVault database.\n",
         "  work-report reads project progress logs and groups slice work by date and project.\n",
         "  work-status-export renders compact project/day Markdown and JSON rows from the same progress-log plus session-evidence report; --row-filter narrows rows before pagination.\n",
-        "  work-session-evidence-candidates lists project/day rows still missing session evidence after the selected session index; --needs-title-normalization limits rows to title-normalization blockers.\n",
-        "  work-session-evidence-proposals returns read-only source-traced AI/GLM/local proposals for unresolved project/day session-evidence rows; --needs-title-normalization focuses title-first proposal work; durable writes still require later operator gates.\n",
+        "  work-session-evidence-candidates lists project/day rows still missing session evidence after the selected session index; --row-filter narrows read-only candidate rows before pagination; --needs-title-normalization limits rows to title-normalization blockers.\n",
+        "  work-session-evidence-proposals returns read-only source-traced AI/GLM/local proposals for unresolved project/day session-evidence rows; --row-filter narrows the candidate pool first; --needs-title-normalization focuses title-first proposal work; durable writes still require later operator gates.\n",
         "  work-session-evidence-review-queue persists unresolved session-evidence candidates into an operator review queue and marks disappeared candidates stale when a full candidate sync is available.\n",
         "  work-session-evidence-review-queue-update marks one persisted session-evidence candidate approved or rejected with an audit reason; source-proposal approvals can pass copied trace metadata with --source-review-json or --source-review-file.\n",
         "  work-session-evidence-review-apply writes approved session-evidence review decisions into an idempotent durable reviewed-items audit table; it does not create session evidence links.\n",
@@ -4261,6 +4281,16 @@ mod tests {
             response.contains("work-session-evidence-candidates limit requires a positive integer")
         );
         assert!(response.contains("Access-Control-Allow-Origin: *"));
+
+        let row_filter_response = bridge_response_for(
+            "/api/work-session-evidence-candidates",
+            r#"{"options":{"row_filter":"not-a-filter"}}"#,
+        );
+
+        assert!(row_filter_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(row_filter_response
+            .contains("work-session-evidence-candidates unknown row_filter: not-a-filter"));
+        assert!(row_filter_response.contains("Access-Control-Allow-Origin: *"));
     }
 
     #[test]
@@ -4275,6 +4305,16 @@ mod tests {
             response.contains("work-session-evidence-proposals limit requires a positive integer")
         );
         assert!(response.contains("Access-Control-Allow-Origin: *"));
+
+        let row_filter_response = bridge_response_for(
+            "/api/work-session-evidence-proposals",
+            r#"{"options":{"row_filter":"not-a-filter"}}"#,
+        );
+
+        assert!(row_filter_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(row_filter_response
+            .contains("work-session-evidence-proposals unknown row_filter: not-a-filter"));
+        assert!(row_filter_response.contains("Access-Control-Allow-Origin: *"));
     }
 
     #[test]
@@ -4741,10 +4781,10 @@ mod tests {
             "work-status-export [--limit N>0] [--offset N>=0] [--row-filter FILTER] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]"
         ));
         assert!(help.contains(
-            "work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]"
+            "work-session-evidence-candidates [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]"
         ));
         assert!(help.contains(
-            "work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]"
+            "work-session-evidence-proposals [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]"
         ));
         assert!(help.contains(
             "work-session-evidence-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]"
@@ -4813,7 +4853,9 @@ mod tests {
         assert!(help.contains("work-status-export renders compact project/day Markdown"));
         assert!(help.contains("--row-filter narrows rows before pagination"));
         assert!(help.contains("work-session-evidence-candidates lists project/day rows"));
+        assert!(help.contains("--row-filter narrows read-only candidate rows"));
         assert!(help.contains("work-session-evidence-proposals returns read-only source-traced"));
+        assert!(help.contains("--row-filter narrows the candidate pool first"));
         assert!(help.contains("work-session-evidence-review-queue persists unresolved"));
         assert!(help.contains("work-session-evidence-review-queue-update marks one persisted"));
         assert!(help.contains(
@@ -4886,6 +4928,8 @@ mod tests {
         let help = work_session_evidence_proposals_help_text();
 
         assert!(help.contains("promptvault-cli work-session-evidence-proposals [--limit N>0]"));
+        assert!(help.contains("--row-filter FILTER"));
+        assert!(help.contains("near-session-date-hint"));
         assert!(help.contains("read-only source-traced proposals"));
         assert!(help.contains("Without --ai, returns local fallback proposals"));
         assert!(help.contains("With --ai, attempts configured OpenAI/GLM providers"));
@@ -4913,6 +4957,8 @@ mod tests {
         let help = work_session_evidence_candidates_help_text();
 
         assert!(help.contains("promptvault-cli work-session-evidence-candidates"));
+        assert!(help.contains("--row-filter FILTER"));
+        assert!(help.contains("near-session-date-hint"));
         assert!(help.contains("--refresh-session-index"));
         assert!(help.contains("--needs-title-normalization"));
         assert!(help.contains("missing session evidence"));

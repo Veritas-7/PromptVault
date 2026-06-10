@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 16:33 KST
+Updated: 2026-06-10 16:37 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,8 +34,11 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed baseline before this slice:
-  `9028c03 docs: update antigravity proposal handoff`.
-- Current implementation slice: source-proposal review approvals now preserve
+  `f0d1803 docs: record source review trace commit`.
+- Current implementation slice: the full `npm run check` gate now rebuilds the
+  `promptvault-cli` debug binary before Rust tests/clippy so resume commands that
+  call `src-tauri/target/debug/promptvault-cli` do not run stale schema code.
+- Previous verified implementation slice: source-proposal review approvals now preserve
   copied source trace metadata through review queue update, durable review
   apply, reviewed-items reload, API validation, and UI display. Pushed as
   `9b36dc3 fix: persist source review trace metadata`.
@@ -234,6 +237,7 @@ Management Coverage Status:
 
 Immediate Resume Commands:
 
+- `cargo build --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
 - `src-tauri/target/debug/promptvault-cli work-status-export --limit 200 --full-session-index --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --query "RepoTutorStudio 2026-06-10" --json`
@@ -241,6 +245,60 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Stale CLI resume gate hardening
+
+Current Goal:
+
+- Make the standard project verification gate refresh the debug CLI binary used
+  by resume commands, so schema migrations and default-vault review commands do
+  not accidentally run stale code.
+
+Context:
+
+- A live `src-tauri/target/debug/promptvault-cli work-session-evidence-review-queue --limit 20 --json`
+  attempt initially failed with `duplicate column name: source_review_json`.
+- The default SQLite DB already had the `source_review_json` columns, and the
+  current Rust source had idempotent `sqlite_table_has_column` checks. Running
+  the current code path with `cargo run` succeeded, which narrowed the failure to
+  a stale debug CLI binary rather than a schema contract issue.
+- `npm run check` previously ran UI tests, production build, Rust tests, and
+  clippy, but did not guarantee `src-tauri/target/debug/promptvault-cli` was
+  refreshed for resume commands.
+
+Progress:
+
+- Added `cargo build --bin promptvault-cli` to the `npm run check` pipeline
+  before Rust tests and clippy.
+- Added an explicit CLI build step to the top `Immediate Resume Commands` block.
+- Re-ran the default-vault review queue with the debug binary and confirmed it
+  now reads the live DB without the duplicate-column failure.
+
+Changes:
+
+- `package.json`: `check` now builds the `promptvault-cli` debug binary before
+  Rust tests/clippy.
+- `working.md`: current slice, resume commands, and verification notes updated.
+
+Tests:
+
+- PASS: `npm run check`. This covered `520` UI/API tests, production build,
+  `cargo build --bin promptvault-cli`, Rust library tests (`236` passed), CLI
+  tests (`34` passed), doc tests, and clippy with `-D warnings`.
+- PASS: `src-tauri/target/debug/promptvault-cli work-session-evidence-review-queue --limit 5 --json`
+  against `/Users/wj/Documents/PromptVault/promptvault.sqlite`. It returned
+  `48` total rows, `26` pending review rows, `22` stale rows, and no
+  duplicate-column error.
+
+Issues:
+
+- Broader goal remains active: `26` default-vault session-evidence candidates
+  still need review/closure.
+
+Next Steps:
+
+- Continue reducing unresolved project/day session-evidence rows without
+  weakening source-trace/operator-review requirements.
 
 ## Completed Slice - 2026-06-10 Source proposal trace durability
 

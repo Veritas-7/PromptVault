@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "test:ui": "node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/*.test.ts",
     "qa:browser-bridge": "node scripts/browser-bridge-isolated-qa.mjs",
-    "check": "npm run test:ui && npm run build && cd src-tauri && cargo test && cargo clippy --all-targets --all-features -- -D warnings",
+    "check": "npm run test:ui && npm run build && cd src-tauri && cargo build --bin promptvault-cli && cargo test && cargo clippy --all-targets --all-features -- -D warnings",
     "preview": "vite preview",
     "tauri": "tauri"
   },

@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 07:39 KST
+Updated: 2026-06-11 07:41 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-11 07:39 KST
+## Resume Snapshot - 2026-06-11 07:41 KST
 
 Long-Term Goal:
 
@@ -23,9 +23,11 @@ Long-Term Goal:
 
 Short-Term Goal:
 
-- Make the work-log coverage filter meta condition-aware so the UI states which
-  project, latest date, status, and file kind are active, not just the number
-  of active filters.
+- Stop after completing the work already in progress, preserve the completed
+  state in this file, and create the external resume pointer at
+  `/Users/wj/Downloads/working.md/PromptVault.txt`.
+- On the next restart, resume from this file instead of adding more feature
+  scope automatically.
 
 Current Active Work:
 
@@ -37,10 +39,13 @@ Current Active Work:
 - Fresh repo check showed `main...origin/main` clean and
   `HEAD == origin/main` at
   `09a365e75c084ea56850808dc752ab8ac37f5ee7`.
-- Current condition-aware coverage filter meta slice is complete locally and
-  ready for final staged safety checks, commit, and push.
-- This slice improved work-log coverage filter meta copy without changing
-  filtering semantics, parsing, extraction, AI proposals, or durable writes.
+- Condition-aware coverage filter meta slice is complete, verified, committed,
+  and pushed as `c65a6e1 ux: show work log coverage filter conditions`.
+- Post-push verification showed `main...origin/main` clean and
+  `HEAD == origin/main` at
+  `c65a6e12fc10ae0a30c7bc2e6951caa18acc43a7`.
+- Current user-directed wrap-up is to preserve this restart state and create
+  the external project pointer file.
 
 Progress:
 
@@ -52,6 +57,10 @@ Progress:
   file filters.
 - Extended the isolated browser-bridge QA assertions so the browser run proves
   the rendered meta includes the active condition labels.
+- Staged only the five intended files for the feature commit and pushed the
+  completed slice to `origin/main`.
+- Confirmed `/Users/wj/Downloads/working.md` exists as a directory for
+  project-specific resume pointer txt files.
 
 Changes:
 
@@ -86,6 +95,19 @@ Tests:
 - PASS: `npm run qa:browser-bridge`; it passed the status/date/source-file
   condition-label assertions and exited 0.
 - PASS: `npm run check`.
+- PASS: `git diff --check`.
+- PASS: `gitleaks dir . --no-banner --redact`.
+- PASS: `git diff --cached --name-only` showed only
+  `scripts/browser-bridge-isolated-qa.mjs`, `src/App.tsx`,
+  `src/workLogCoverageFilters.ts`, `tests/workLogCoverageFilters.test.ts`,
+  and `working.md`.
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact`.
+- PASS: `git push origin main`.
+- PASS: post-push `git status --short --branch` reported
+  `## main...origin/main`.
+- PASS: post-push `git rev-parse HEAD origin/main` matched
+  `c65a6e12fc10ae0a30c7bc2e6951caa18acc43a7`.
 
 Issues:
 
@@ -96,8 +118,10 @@ Issues:
 
 Next Step:
 
-- Run final diff/secret/staged safety checks, then commit and push the
-  condition-aware coverage filter meta slice.
+- Finish this wrap-up by committing and pushing the docs-only `working.md`
+  resume update after creating `/Users/wj/Downloads/working.md/PromptVault.txt`.
+- Next development session should read this file, verify `HEAD == origin/main`,
+  then choose one small PromptVault work-management improvement from live state.
 
 ## Resume Snapshot - 2026-06-11 07:26 KST
 

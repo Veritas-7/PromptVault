@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 22:03 KST
+Updated: 2026-06-10 22:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -70,6 +70,29 @@ Current Work:
   --review-state pending_review --json` as the default operator starting point
   for the remaining `8` near-session pending rows, then improve source
   selection/search or reject unsafe rows.
+- Follow-up live triage:
+  ran read-only recommended-source verification for all `8` remaining
+  near-session pending rows using the same UI query path:
+  review queue item -> `work-session-evidence-nearby` -> selected recommended
+  session -> `work-session-evidence-source-search` ->
+  `work-session-evidence-source-proposals`. No row returned
+  `review_ready_count > 0`.
+- Follow-up blocker summary:
+  blockers were `source_hit_matches_only_project_or_generic_terms` for
+  `ResearchFlowAI:2026-06-08`,
+  `autoresearch-skill-system:2026-06-06`, and
+  `ResearchFlowAI:2026-06-04`; `source_trace_is_instruction_only` for
+  `CareVault:2026-06-03`, `oss-favorites:2026-05-31`, and
+  `pdf-a4-rebuilder:2026-05-31`;
+  `candidate_or_source_hit_has_risk_flags` for
+  `enterprise_diagnosis_flutter:2026-06-08`; and no source-search hits for
+  `CareVault:2026-06-05`.
+- Decision:
+  did not approve or reject these `8` rows. A single recommended source check is
+  enough to block approval, but not enough to permanently reject rows that may
+  need better query/source selection. Next code/product slice should improve
+  recommended source selection or add a batch blocker-summary workflow before
+  queue decisions are applied.
 - Completed implementation slice:
   work status export now surfaces durable reviewed session-evidence audit rows
   for project/date rows. This is an audit hint, not a synthetic session match:

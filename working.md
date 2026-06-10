@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 12:58 KST
+Updated: 2026-06-10 13:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,16 +33,20 @@ Short-Term Goal:
 
 Current Work:
 
-- Current uncommitted implementation slice: expand durable full-session indexing
-  beyond Codex/Codex CX to sanitized Claude Code and Antigravity session
-  sources.
 - Latest completed and pushed implementation slice:
-  `3f4185e fix: index codex session evidence by activity date`.
+  `74bcce5 fix: index non-codex session evidence sources`.
+- Current uncommitted implementation slice: reduce noisy session-evidence
+  candidate rows where the source is only a `PROJECT_STATUS.md` status snapshot.
+  These rows should remain visible as managed project/day status rows, but
+  should not be treated as missing session-evidence proof when their role is
+  only a status snapshot.
 - Latest pushed handoff-only documentation refresh:
   `cc2f412 docs: refresh worklog handoff state`.
+- Previous session-index implementation slice:
+  `3f4185e fix: index codex session evidence by activity date`.
 - The earlier body-derived progress-log title cleanup slice was completed and
   pushed as `c392add fix: clear rough worklog title normalization debt`.
-- Actual default-vault verification after the current uncommitted slice:
+- Actual default-vault verification after `74bcce5`:
   stored sanitized session evidence increased from `11,417` to `12,889`;
   unresolved session-evidence candidates dropped from `31` to `30`;
   title-normalization rows remain `0`.
@@ -55,15 +59,80 @@ Current Work:
 Management Coverage Status:
 
 - The app does manage project/day work from real parsed artifacts: current
-  default-vault export reported `32` projects, `26` days, `890` progress files,
-  `7,777` work items, `97` project/day rows, and a full stored session index of
-  `11,417` prompts.
+  default-vault export reported `32` projects, `26` days, `892` progress files,
+  `7,812` work items, `97` project/day rows, and a full stored session index of
+  `12,889` sanitized prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
   related progress artifacts, but the remaining unresolved review queues mean the
   whole management system is not yet complete.
 
-## Current Slice - 2026-06-10 Session-source coverage gap
+## Current Slice - 2026-06-10 Project-status session-evidence noise reduction
+
+Current Goal:
+
+- Reduce the remaining `30` session-evidence candidates by excluding pure
+  `PROJECT_STATUS.md` status snapshot rows from the session-evidence-required
+  queue, while keeping those rows visible in project/day management.
+
+Context:
+
+- After `74bcce5`, real default-vault full indexing covers Codex, Codex CX,
+  Claude Code, Claude transcripts, Claude prompt history, Antigravity
+  transcripts, and Antigravity conversation DB sources.
+- Remaining candidate inspection shows `4` rows whose latest source file is
+  `PROJECT_STATUS.md` and whose role is `project-status`.
+- Existing code already distinguishes `PROJECT_STATUS.md` snapshot rows for
+  title-normalization purposes. The next slice should reuse that concept for
+  session-evidence candidate filtering, not invent cross-date session matches.
+
+Progress:
+
+- Verified thread identity still points to PromptVault at
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Verified working tree was clean after `74bcce5`.
+- Confirmed remaining session-evidence candidates are `30`; source role
+  distribution includes `4` `project-status` rows from `PROJECT_STATUS.md`.
+- Confirmed same-date session evidence is genuinely absent for many remaining
+  rows; near-date evidence exists for some projects but should not be attached
+  without same-date/project proof.
+
+Changes:
+
+- `working.md`: refreshed the top-level long-term/short-term/current-work
+  handoff so future sessions can resume from the latest pushed state.
+
+Tests:
+
+- PASS: goal identity guard via
+  `codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`.
+- PASS: `git status --short --branch` shows `## main...origin/main`.
+- PASS: `git log --oneline -5` shows latest pushed implementation commit
+  `74bcce5 fix: index non-codex session evidence sources`.
+
+Issues:
+
+- This slice has not yet changed backend behavior. The expected next result is
+  likely `30 -> 26` session-evidence candidates if the four pure
+  `PROJECT_STATUS.md` status snapshot rows are correctly excluded.
+- Do not hide real work-log rows such as `working.md`, `workingd.md`,
+  `WORKING_LOG.md`, `WORKLOG.md`, or `progress.md`; only pure status snapshots
+  should be exempted from session-evidence-required review.
+
+Research:
+
+- No external research used for this handoff refresh.
+
+Next Steps:
+
+- Add a focused backend helper/test that marks project-status-only snapshot rows
+  as not requiring session evidence.
+- Verify `work-session-evidence-candidates --limit 80 --json` drops from `30`
+  to the expected lower count without removing non-status worklog rows.
+- Run targeted Rust tests, then `npm run check`, browser-bridge QA if API/UI
+  contract changes, diff checks, and secret scans before commit/push.
+
+## Completed Slice - 2026-06-10 Session-source coverage gap
 
 Current Goal:
 

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 11:27 KST
+Updated: 2026-06-10 11:40 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -24,9 +24,8 @@ Long-Term Goal:
 
 Short-Term Goal:
 
-- Finish the current provider-warning slice, then continue closing management
-  rows marked `progress-log-only`, `unresolved-after-full-index`, or
-  `needs_title_normalization`.
+- Continue closing management rows marked `progress-log-only`,
+  `unresolved-after-full-index`, or `needs_title_normalization`.
 - Improve provider reliability and operator visibility for work-log
   normalization and session-evidence proposals. GLM is configured but timed out
   in limited live proposal checks; Codex proposal generation is intentionally
@@ -34,28 +33,104 @@ Short-Term Goal:
 
 Current Work:
 
-- Current uncommitted slice: resume snapshot timestamp heading normalization.
-- Actual default-vault export after adding this resume snapshot showed the
-  PromptVault row title as `11:20 KST` and `needs_title_normalization=true`;
-  this proved the progress-log heading parser treated a timestamp-only suffix as
-  the work title.
-- Parser now keeps the heading prefix when a dated heading suffix is only
-  time/timezone, so `Resume Snapshot - 2026-06-10 11:20 KST` becomes
-  `Resume Snapshot` instead of `11:20 KST`.
-- Targeted parser tests, a default-vault CLI export, and full `npm run check`
-  passed. Remaining before handoff is diff/secret checks, explicit-path staging,
-  commit, push, and status confirmation.
+- Current uncommitted slice: project-status snapshot title-normalization
+  false-positive cleanup.
+- The previous timestamp-heading parser slice was committed and pushed as
+  `b955982 fix: normalize timestamp-only worklog headings`.
+- This slice makes `PROJECT_STATUS.md` fallback rows titled
+  `Project status snapshot updated` count as valid project-status snapshots
+  rather than rough titles requiring AI cleanup, while preserving actual rough
+  `PROJECT_STATUS.md` titles such as `)`.
+- Targeted Rust tests, actual default-vault CLI checks, full `npm run check`,
+  and isolated browser-bridge QA passed. Remaining before handoff is
+  diff/secret checks, explicit-path staging, commit, push, and status
+  confirmation.
 
 Management Coverage Status:
 
 - The app does manage project/day work from real parsed artifacts: current
   default-vault export reported `32` projects, `26` days, `889` progress files,
-  `7,729` work items, `97` project/day rows, and a full stored session index of
+  `7,746` work items, `97` project/day rows, and a full stored session index of
   `10,599` prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
   related progress artifacts, but the remaining unresolved review queues mean the
   whole management system is not yet complete.
+
+## Completed Slice - 2026-06-10 Project-status snapshot title-normalization cleanup
+
+Current Goal:
+
+- Remove false-positive title-normalization flags from intentional
+  `PROJECT_STATUS.md` snapshot fallback rows without hiding genuinely rough
+  project-status headings.
+
+Context:
+
+- After the timestamp-heading parser fix, real default-vault export still showed
+  `27` project/day rows with `needs_title_normalization=true`.
+- `work-log-normalization-candidates --needs-title-normalization` returned `22`
+  candidate groups; many were `PROJECT_STATUS.md` rows whose only title was the
+  intentional fallback `Project status snapshot updated`.
+- That fallback is coarse but valid for a project-status snapshot. It should not
+  block session-evidence review as title-normalization debt.
+
+Progress:
+
+- Added source-aware title-normalization checks for `ProjectWorkItem` rows.
+- Added normalization group logic that treats a pure `PROJECT_STATUS.md`
+  `Project status snapshot updated` group as non-generic.
+- Preserved rough title detection for `PROJECT_STATUS.md` rows like `)`; the
+  default-vault check still reports `novel-source-collector` as a project-status
+  row needing cleanup.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds source-aware project-status snapshot helpers and
+  applies them to status export rows and normalization candidate grouping.
+- `working.md`: records the current slice, real default-vault before/after
+  counts, and remaining management gaps.
+
+Tests:
+
+- PASS: `cargo test project_work_status_export`
+  (`3` status-export tests).
+- PASS: `cargo test normalization_candidates`
+  (`4` normalization-candidate tests).
+- PASS: default-vault `work-log-normalization-candidates
+  --needs-title-normalization` check: candidate groups dropped from `22` to
+  `11`; the only remaining `PROJECT_STATUS.md` title-cleanup candidate is the
+  genuine rough `novel-source-collector` row with title `)`.
+- PASS: default-vault `work-status-export --limit 200 --full-session-index`
+  check: `needs_title_normalization` rows dropped from `27` to `16`, and
+  `PROJECT_STATUS.md` title-normalization rows dropped to `1`.
+- PASS: fresh default-vault management snapshot still shows real coverage:
+  `7,746` work items, `32` projects, `26` days, `889` progress files, `97`
+  project/day rows, and `10,599` scanned stored prompts.
+- PASS: `npm run check` (`512` UI tests, `224` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+  Verified the project/day status UI, title-normalization filter, provider
+  warning notices, normalization proposal queue, and approval persistence flow.
+  The isolated QA DB was
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-RmOtsY/qa.sqlite`.
+- One status-export jq verification command failed because of a jq syntax error;
+  the follow-up command used the corrected jq expression and passed.
+
+Issues:
+
+- Remaining title-normalization debt is real parser/operator cleanup, not just
+  project-status snapshot false positives: `16` status rows still need title
+  normalization, and `11` normalization candidate groups remain.
+- Full stored session index still leaves `44` rows unresolved after current
+  session-evidence matching.
+
+Next Steps:
+
+- Run diff checks and secret checks.
+- Stage only `src-tauri/src/lib.rs` and `working.md`, then commit and push.
+- Continue with actual rough title patterns such as `Untitled work`, `)`, and
+  old Korean time-only headings.
 
 ## Completed Slice - 2026-06-10 Resume snapshot timestamp heading normalization
 

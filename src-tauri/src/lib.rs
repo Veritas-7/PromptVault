@@ -8445,7 +8445,7 @@ fn build_project_work_status_export_rows(
                 if item.status == "current" {
                     has_current = true;
                 }
-                if project_work_log_title_is_generic_or_rough(&item.title) {
+                if project_work_item_needs_title_normalization(item) {
                     needs_title_normalization = true;
                 }
             }
@@ -13247,7 +13247,7 @@ fn project_work_log_normalization_candidate_from_group(
     if group.session_evidence_count == 0 {
         reasons.push("no_session_evidence");
     }
-    if project_work_log_titles_are_generic(&group.titles) {
+    if project_work_log_normalization_group_titles_are_generic(group) {
         reasons.push("generic_title");
     }
     if reasons.is_empty() {
@@ -13298,6 +13298,37 @@ fn project_work_log_titles_are_generic(titles: &[String]) -> bool {
         .all(|title| project_work_log_title_is_generic_or_rough(title))
 }
 
+fn project_work_item_needs_title_normalization(item: &ProjectWorkItem) -> bool {
+    if project_work_item_is_project_status_snapshot(item) {
+        return false;
+    }
+    project_work_log_title_is_generic_or_rough(&item.title)
+}
+
+fn project_work_item_is_project_status_snapshot(item: &ProjectWorkItem) -> bool {
+    item.source_file.eq_ignore_ascii_case("PROJECT_STATUS.md")
+        && item
+            .title
+            .trim()
+            .eq_ignore_ascii_case("Project status snapshot updated")
+}
+
+fn project_work_log_normalization_group_titles_are_generic(
+    group: &ProjectWorkLogNormalizationGroup,
+) -> bool {
+    if group.source_file.eq_ignore_ascii_case("PROJECT_STATUS.md")
+        && !group.titles.is_empty()
+        && group.titles.iter().all(|title| {
+            title
+                .trim()
+                .eq_ignore_ascii_case("Project status snapshot updated")
+        })
+    {
+        return false;
+    }
+    project_work_log_titles_are_generic(&group.titles)
+}
+
 fn project_work_log_title_is_generic_or_rough(title: &str) -> bool {
     let trimmed = title.trim();
     if trimmed.is_empty() {
@@ -13330,7 +13361,7 @@ fn project_work_log_title_is_generic_or_rough(title: &str) -> bool {
 }
 
 fn project_work_log_normalization_title(group: &ProjectWorkLogNormalizationGroup) -> String {
-    if project_work_log_titles_are_generic(&group.titles) {
+    if project_work_log_normalization_group_titles_are_generic(group) {
         return truncate_chars(
             &format!("{} {} parsed work rows", group.project, group.date),
             180,
@@ -19973,6 +20004,70 @@ Status: completed as a source-only/report-only hardening slice.
     }
 
     #[test]
+    fn project_work_status_export_does_not_title_flag_project_status_snapshots() {
+        let report = ProjectWorkReport {
+            generated_at: "2026-06-09T01:00:00Z".to_string(),
+            total_items: 2,
+            project_count: 2,
+            date_count: 1,
+            files_seen: 2,
+            items_by_date: Vec::new(),
+            items_by_project: Vec::new(),
+            session_scan_prompt_count: 0,
+            session_scan_sources: Vec::new(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_unique_count: 0,
+            session_evidence_unique_sources: Vec::new(),
+            session_evidence_index_used: true,
+            session_evidence_index_updated: false,
+            session_evidence_index_count: 0,
+            session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
+            items: vec![
+                ProjectWorkItem {
+                    date: "2026-05-03".to_string(),
+                    project: "SnapshotProject".to_string(),
+                    title: "Project status snapshot updated".to_string(),
+                    status: "logged".to_string(),
+                    source_path: "/tmp/SnapshotProject/PROJECT_STATUS.md".to_string(),
+                    source_file: "PROJECT_STATUS.md".to_string(),
+                    evidence: "last_updated: 2026-05-03\nSnapshotProject — Project Status"
+                        .to_string(),
+                    session_evidence_count: 0,
+                    session_sources: Vec::new(),
+                    session_evidence_keys: Vec::new(),
+                },
+                ProjectWorkItem {
+                    date: "2026-05-03".to_string(),
+                    project: "RoughProject".to_string(),
+                    title: ")".to_string(),
+                    status: "logged".to_string(),
+                    source_path: "/tmp/RoughProject/PROJECT_STATUS.md".to_string(),
+                    source_file: "PROJECT_STATUS.md".to_string(),
+                    evidence: "1. **Dashboard**: Real-time progress".to_string(),
+                    session_evidence_count: 0,
+                    session_sources: Vec::new(),
+                    session_evidence_keys: Vec::new(),
+                },
+            ],
+            warnings: Vec::new(),
+        };
+
+        let rows = build_project_work_status_export_rows(&report, 0);
+        let snapshot = rows
+            .iter()
+            .find(|row| row.project == "SnapshotProject")
+            .expect("snapshot row");
+        let rough = rows
+            .iter()
+            .find(|row| row.project == "RoughProject")
+            .expect("rough row");
+
+        assert!(!snapshot.needs_title_normalization);
+        assert!(rough.needs_title_normalization);
+    }
+
+    #[test]
     fn project_work_status_export_paginates_rows() {
         let row = |project: &str| ProjectWorkStatusExportRow {
             date: "2026-06-09".to_string(),
@@ -21539,6 +21634,81 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(non_title.total_candidate_count, 1);
         assert_eq!(non_title.candidates[0].project, "ClearTitleProject");
         assert!(!non_title.candidates[0].reason.contains("generic_title"));
+    }
+
+    #[test]
+    fn normalization_candidates_do_not_title_flag_project_status_snapshots() {
+        let report = ProjectWorkReport {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            total_items: 2,
+            project_count: 2,
+            date_count: 1,
+            files_seen: 2,
+            items_by_date: Vec::new(),
+            items_by_project: Vec::new(),
+            session_scan_prompt_count: 0,
+            session_scan_sources: Vec::new(),
+            session_evidence_count: 0,
+            session_sources: Vec::new(),
+            session_evidence_unique_count: 0,
+            session_evidence_unique_sources: Vec::new(),
+            session_evidence_index_used: false,
+            session_evidence_index_updated: false,
+            session_evidence_index_count: 0,
+            session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
+            items: vec![
+                ProjectWorkItem {
+                    date: "2026-05-03".to_string(),
+                    project: "SnapshotProject".to_string(),
+                    title: "Project status snapshot updated".to_string(),
+                    status: "logged".to_string(),
+                    source_path: "/tmp/SnapshotProject/PROJECT_STATUS.md".to_string(),
+                    source_file: "PROJECT_STATUS.md".to_string(),
+                    evidence: "last_updated: 2026-05-03\nSnapshotProject — Project Status"
+                        .to_string(),
+                    session_evidence_count: 0,
+                    session_sources: Vec::new(),
+                    session_evidence_keys: Vec::new(),
+                },
+                ProjectWorkItem {
+                    date: "2026-05-03".to_string(),
+                    project: "RoughProject".to_string(),
+                    title: ")".to_string(),
+                    status: "logged".to_string(),
+                    source_path: "/tmp/RoughProject/PROJECT_STATUS.md".to_string(),
+                    source_file: "PROJECT_STATUS.md".to_string(),
+                    evidence: "1. **Dashboard**: Real-time progress".to_string(),
+                    session_evidence_count: 0,
+                    session_sources: Vec::new(),
+                    session_evidence_keys: Vec::new(),
+                },
+            ],
+            warnings: Vec::new(),
+        };
+
+        let title_only = build_project_work_log_normalization_candidates_from_report(
+            &report,
+            &HashMap::new(),
+            10,
+            Some(true),
+        );
+        let non_title = build_project_work_log_normalization_candidates_from_report(
+            &report,
+            &HashMap::new(),
+            10,
+            Some(false),
+        );
+
+        assert_eq!(title_only.total_candidate_count, 1);
+        assert_eq!(title_only.candidates[0].project, "RoughProject");
+        assert!(title_only.candidates[0].reason.contains("generic_title"));
+        let snapshot = non_title
+            .candidates
+            .iter()
+            .find(|candidate| candidate.project == "SnapshotProject")
+            .expect("snapshot candidate");
+        assert!(!snapshot.reason.contains("generic_title"));
+        assert_eq!(snapshot.title, "Project status snapshot updated");
     }
 
     #[test]

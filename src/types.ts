@@ -471,6 +471,34 @@ export interface ProjectWorkSessionEvidenceNearbyResult {
   warnings: string[];
 }
 
+export interface ProjectWorkSessionEvidenceSourceSearchItem {
+  id: string;
+  line_number: number;
+  session_id: string | null;
+  timestamp: string | null;
+  cwd: string | null;
+  match_score: number;
+  matched_terms: string[];
+  excerpt: string;
+  word_count: number;
+  char_count: number;
+  risk_flags: string[];
+}
+
+export interface ProjectWorkSessionEvidenceSourceSearchResult {
+  generated_at: string;
+  source_path: string;
+  query: string;
+  query_term_count: number;
+  requested_limit: number;
+  requested_max_lines: number;
+  scanned_line_count: number;
+  matched_line_count: number;
+  returned_item_count: number;
+  items: ProjectWorkSessionEvidenceSourceSearchItem[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSessionIndexSourceState {
   source_id: string;
   source_label: string;

@@ -124,6 +124,7 @@ import {
   loadProjectWorkLogReviewQueue,
   loadProjectWorkSessionEvidenceProposals,
   loadProjectWorkSessionEvidenceNearby,
+  searchProjectWorkSessionEvidenceSource,
   loadProjectWorkSessionEvidenceReviewQueue,
   applyProjectWorkSessionEvidenceReviewRows,
   listProjectWorkLogExtractionItems,
@@ -295,6 +296,7 @@ import type {
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceNearbyResult,
+  ProjectWorkSessionEvidenceSourceSearchResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
@@ -456,6 +458,7 @@ type ImportStatesState = "idle" | "loading" | "ready" | "failed";
 type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionIndexState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionEvidenceNearbyState = "idle" | "loading" | "ready" | "failed";
+type WorkSessionEvidenceSourceSearchState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionIndexBackfillMode = "reset" | "continue" | "long-continue";
 const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
@@ -814,6 +817,8 @@ function App() {
     useState<WorkSessionEvidenceReviewedItemsState>("idle");
   const [workSessionEvidenceNearbyState, setWorkSessionEvidenceNearbyState] =
     useState<WorkSessionEvidenceNearbyState>("idle");
+  const [workSessionEvidenceSourceSearchState, setWorkSessionEvidenceSourceSearchState] =
+    useState<WorkSessionEvidenceSourceSearchState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
   const [workManagementFreezeState, setWorkManagementFreezeState] =
@@ -881,6 +886,8 @@ function App() {
     useState<ProjectWorkSessionEvidenceReviewedItemsResult | null>(null);
   const [workSessionEvidenceNearbyResult, setWorkSessionEvidenceNearbyResult] =
     useState<ProjectWorkSessionEvidenceNearbyResult | null>(null);
+  const [workSessionEvidenceSourceSearchResult, setWorkSessionEvidenceSourceSearchResult] =
+    useState<ProjectWorkSessionEvidenceSourceSearchResult | null>(null);
   const [workLogNormalizedItemsResult, setWorkLogNormalizedItemsResult] =
     useState<ProjectWorkLogNormalizedItemsResult | null>(null);
   const [
@@ -894,6 +901,10 @@ function App() {
   const [
     workSessionEvidenceNearbyCandidateId,
     setWorkSessionEvidenceNearbyCandidateId,
+  ] = useState<string | null>(null);
+  const [
+    workSessionEvidenceSourceSearchSessionId,
+    setWorkSessionEvidenceSourceSearchSessionId,
   ] = useState<string | null>(null);
   const [approvedWorkLogExtractionCandidateIds, setApprovedWorkLogExtractionCandidateIds] =
     useState<Set<string>>(() => new Set());
@@ -987,6 +998,7 @@ function App() {
     || workSessionEvidenceReviewApplyState === "loading"
     || workSessionEvidenceReviewedItemsState === "loading"
     || workSessionEvidenceNearbyState === "loading"
+    || workSessionEvidenceSourceSearchState === "loading"
     || workManagementRefreshState === "loading"
     || workManagementFreezeState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
@@ -2177,6 +2189,9 @@ function App() {
     setError(null);
     setWorkSessionEvidenceNearbyState("loading");
     setWorkSessionEvidenceNearbyCandidateId(item.candidate_id);
+    setWorkSessionEvidenceSourceSearchResult(null);
+    setWorkSessionEvidenceSourceSearchSessionId(null);
+    setWorkSessionEvidenceSourceSearchState("idle");
     try {
       const query = [item.project, item.date, ...item.top_titles, item.sample_evidence]
         .map((part) => part.trim())
@@ -2195,7 +2210,47 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkSessionEvidenceNearbyResult(null);
+      setWorkSessionEvidenceSourceSearchResult(null);
+      setWorkSessionEvidenceSourceSearchSessionId(null);
       setWorkSessionEvidenceNearbyState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function loadWorkSessionEvidenceSourceSearch(
+    session: ProjectWorkSessionEvidenceNearbyResult["items"][number],
+    nearbyResult: ProjectWorkSessionEvidenceNearbyResult,
+  ) {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSessionEvidenceSourceSearchState("loading");
+    setWorkSessionEvidenceSourceSearchSessionId(session.id);
+    try {
+      const query = [
+        nearbyResult.project,
+        nearbyResult.date,
+        nearbyResult.query ?? "",
+        session.matched_terms.join(" "),
+        session.excerpt,
+      ]
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join("\n");
+      const next = await searchProjectWorkSessionEvidenceSource({
+        source_path: session.source_path,
+        query,
+        limit: 5,
+        max_lines: 100000,
+      });
+      setWorkSessionEvidenceSourceSearchResult(next);
+      setWorkSessionEvidenceSourceSearchState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSessionEvidenceSourceSearchResult(null);
+      setWorkSessionEvidenceSourceSearchState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -6324,6 +6379,81 @@ function App() {
                                   <p>{session.excerpt}</p>
                                   <span>{session.cwd ?? "cwd 없음"}</span>
                                   <span>{session.source_path}</span>
+                                  <button
+                                    aria-label={`${session.prompt_date} 원본 세션 파일에서 검색`}
+                                    className="inline-action compact-action"
+                                    data-work-session-evidence-source-search-action={session.id}
+                                    disabled={isTopLevelActionLocked}
+                                    onClick={() =>
+                                      void loadWorkSessionEvidenceSourceSearch(session, nearbyResult)}
+                                    type="button"
+                                  >
+                                    <Search size={14} />
+                                    {workSessionEvidenceSourceSearchSessionId === session.id
+                                      && workSessionEvidenceSourceSearchState === "loading"
+                                      ? "검색 중"
+                                      : "원본 검색"}
+                                  </button>
+                                  {workSessionEvidenceSourceSearchSessionId === session.id ? (
+                                    <div
+                                      className="work-session-nearby-panel"
+                                      data-work-session-evidence-source-search={session.id}
+                                    >
+                                      {workSessionEvidenceSourceSearchState === "loading" ? (
+                                        <span>원본 세션 파일 제한 검색 중</span>
+                                      ) : null}
+                                      {workSessionEvidenceSourceSearchState === "failed" ? (
+                                        <span>원본 세션 검색 실패</span>
+                                      ) : null}
+                                      {workSessionEvidenceSourceSearchResult ? (
+                                        <>
+                                          <span>
+                                            원본 검색{" "}
+                                            {workSessionEvidenceSourceSearchResult.returned_item_count
+                                              .toLocaleString()} /{" "}
+                                            {workSessionEvidenceSourceSearchResult.matched_line_count
+                                              .toLocaleString()} · 자동 proof 아님
+                                          </span>
+                                          <span>
+                                            scan{" "}
+                                            {workSessionEvidenceSourceSearchResult.scanned_line_count
+                                              .toLocaleString()} lines · 검색어{" "}
+                                            {workSessionEvidenceSourceSearchResult.query_term_count
+                                              .toLocaleString()}개
+                                          </span>
+                                          {workSessionEvidenceSourceSearchResult.warnings.map(
+                                            (warning, index) => (
+                                              <span key={textListItemKey(warning, index)}>
+                                                {warning}
+                                              </span>
+                                            ),
+                                          )}
+                                          {workSessionEvidenceSourceSearchResult.items.length ? (
+                                            workSessionEvidenceSourceSearchResult.items.map((hit) => (
+                                              <div
+                                                className="work-session-nearby-item"
+                                                key={hit.id}
+                                              >
+                                                <strong>
+                                                  line {hit.line_number.toLocaleString()} · score{" "}
+                                                  {hit.match_score.toLocaleString()}
+                                                </strong>
+                                                <span>
+                                                  {hit.matched_terms.length
+                                                    ? hit.matched_terms.join(", ")
+                                                    : "일치어 없음"}
+                                                </span>
+                                                <p>{hit.excerpt}</p>
+                                                <span>{hit.cwd ?? "cwd 없음"}</span>
+                                              </div>
+                                            ))
+                                          ) : (
+                                            <span>제한 범위 안에서 일치하는 user prompt 없음</span>
+                                          )}
+                                        </>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
                                 </div>
                               ))
                             ) : (

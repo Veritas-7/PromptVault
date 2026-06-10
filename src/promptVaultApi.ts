@@ -30,6 +30,7 @@ import type {
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceNearbyResult,
+  ProjectWorkSessionEvidenceSourceSearchResult,
   ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
   ProjectWorkStatusExportResult,
@@ -172,6 +173,13 @@ export interface ProjectWorkSessionEvidenceNearbyOptions {
   date: string;
   limit?: number;
   query?: string;
+}
+
+export interface ProjectWorkSessionEvidenceSourceSearchOptions {
+  source_path: string;
+  query: string;
+  limit?: number;
+  max_lines?: number;
 }
 
 export interface ProjectWorkSessionIndexOptions {
@@ -510,6 +518,22 @@ export async function loadProjectWorkSessionEvidenceNearby(
     "/api/work-session-evidence-nearby",
     { options },
     parseProjectWorkSessionEvidenceNearbyResult,
+  );
+}
+
+export async function searchProjectWorkSessionEvidenceSource(
+  options: ProjectWorkSessionEvidenceSourceSearchOptions,
+): Promise<ProjectWorkSessionEvidenceSourceSearchResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkSessionEvidenceSourceSearchResult>(
+      "project_work_session_evidence_source_search",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkSessionEvidenceSourceSearchResult>(
+    "/api/work-session-evidence-source-search",
+    { options },
+    parseProjectWorkSessionEvidenceSourceSearchResult,
   );
 }
 
@@ -2881,6 +2905,46 @@ function parseProjectWorkSessionEvidenceNearbyResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkSessionEvidenceNearbyResult;
+}
+
+function isProjectWorkSessionEvidenceSourceSearchItem(value: unknown): boolean {
+  return isRecord(value)
+    && isNonBlankString(value.id)
+    && isPositiveSafeInteger(value.line_number)
+    && (value.session_id === null || isNonBlankString(value.session_id))
+    && (value.timestamp === null || isNonBlankString(value.timestamp))
+    && (value.cwd === null || isNonBlankString(value.cwd))
+    && isNonNegativeSafeInteger(value.match_score)
+    && Array.isArray(value.matched_terms)
+    && isNonBlankStringArray(value.matched_terms)
+    && Number(value.match_score) >= value.matched_terms.length
+    && typeof value.excerpt === "string"
+    && isNonNegativeSafeInteger(value.word_count)
+    && isNonNegativeSafeInteger(value.char_count)
+    && isNonBlankStringArray(value.risk_flags);
+}
+
+function parseProjectWorkSessionEvidenceSourceSearchResult(
+  value: unknown,
+): ProjectWorkSessionEvidenceSourceSearchResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.source_path)
+    || !isNonBlankString(value.query)
+    || !isNonNegativeSafeInteger(value.query_term_count)
+    || !isPositiveSafeInteger(value.requested_limit)
+    || !isPositiveSafeInteger(value.requested_max_lines)
+    || !isNonNegativeSafeInteger(value.scanned_line_count)
+    || !isNonNegativeSafeInteger(value.matched_line_count)
+    || !isNonNegativeSafeIntegerAtMost(value.returned_item_count, value.matched_line_count)
+    || !Array.isArray(value.items)
+    || value.items.length !== value.returned_item_count
+    || !value.items.every(isProjectWorkSessionEvidenceSourceSearchItem)
+    || !recordStringFieldValuesAreUnique(value.items, "id")
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkSessionEvidenceSourceSearchResult;
 }
 
 function isProjectWorkSummary(value: unknown): boolean {

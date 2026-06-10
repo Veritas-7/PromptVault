@@ -1120,6 +1120,29 @@ async function runBrowserQa() {
       }
       workSessionEvidenceNearbyMeta =
         `${nearby.project} · ${nearby.date} · nearby ${nearby.returned_item_count} / ${nearby.total_match_count}`;
+      if (nearby.items.length && nearby.items[0].source_path.endsWith(".jsonl")) {
+        step("work session evidence source search bridge");
+        const sourceSearch = await bridgeJson(
+          page,
+          "/api/work-session-evidence-source-search",
+          {
+            options: {
+              source_path: nearby.items[0].source_path,
+              query: [nearby.project, nearby.date, nearby.items[0].excerpt].join("\n"),
+              limit: 3,
+              max_lines: 100000,
+            },
+          },
+        );
+        if (
+          sourceSearch.source_path !== nearby.items[0].source_path
+          || sourceSearch.returned_item_count !== sourceSearch.items.length
+          || sourceSearch.returned_item_count > sourceSearch.matched_line_count
+          || !sourceSearch.warnings.some((warning) => warning.includes("read-only"))
+        ) {
+          throw new Error(`Invalid session evidence source search response: ${JSON.stringify(sourceSearch)}`);
+        }
+      }
     }
     const firstApprovableItem = workSessionEvidenceReviewQueue.items.find(
       (item) => !item.needs_title_normalization,
@@ -1280,6 +1303,30 @@ async function runBrowserQa() {
       (await page
         .locator(`[data-work-session-evidence-nearby="${firstNearbyCandidateId}"]`)
         .textContent())?.trim() ?? "";
+    const firstSourceSearchButton = page
+      .locator(`[data-work-session-evidence-nearby="${firstNearbyCandidateId}"] [data-work-session-evidence-source-search-action]`)
+      .first();
+    await firstSourceSearchButton.waitFor({ timeout: 90000 });
+    const firstSourceSearchSessionId = await firstSourceSearchButton.getAttribute(
+      "data-work-session-evidence-source-search-action",
+    );
+    if (!firstSourceSearchSessionId) {
+      throw new Error("Session evidence source search button did not expose session id");
+    }
+    const sourceSearchResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/work-session-evidence-source-search")
+      && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await firstSourceSearchButton.click();
+    await sourceSearchResponse;
+    await page.waitForFunction((sessionId) => {
+      const panel = document.querySelector(`[data-work-session-evidence-source-search="${sessionId}"]`);
+      const text = panel?.textContent ?? "";
+      return text.includes("원본 검색")
+        && text.includes("자동 proof 아님")
+        && text.includes("read-only");
+    }, firstSourceSearchSessionId, { timeout: 90000 });
     const firstSessionEvidenceApprove = page
       .locator('[data-approve-work-session-evidence-review-queue]')
       .first();

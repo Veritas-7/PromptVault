@@ -53,6 +53,11 @@ const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT: usize = 8;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_NEARBY_LIMIT: usize = 50;
 const PROJECT_WORK_SESSION_EVIDENCE_NEARBY_QUERY_TERM_LIMIT: usize = 24;
 const PROJECT_WORK_SESSION_EVIDENCE_NEARBY_MATCHED_TERM_LIMIT: usize = 12;
+const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_LIMIT: usize = 5;
+const MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_LIMIT: usize = 20;
+const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES: usize = 100_000;
+const MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES: usize = 300_000;
+const PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_EXCERPT_CHARS: usize = 480;
 const PROJECT_WORK_METADATA_MAX_SCAN_LINES: usize = 600;
 const PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH: usize = 20;
 const PROJECT_WORK_METADATA_TAIL_TIMESTAMP_LINES: usize = 200;
@@ -1171,6 +1176,44 @@ pub struct ProjectWorkSessionEvidenceNearbyResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSessionEvidenceSourceSearchOptions {
+    pub source_path: String,
+    pub query: String,
+    pub limit: Option<usize>,
+    pub max_lines: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceSourceSearchItem {
+    pub id: String,
+    pub line_number: usize,
+    pub session_id: Option<String>,
+    pub timestamp: Option<String>,
+    pub cwd: Option<String>,
+    pub match_score: usize,
+    pub matched_terms: Vec<String>,
+    pub excerpt: String,
+    pub word_count: usize,
+    pub char_count: usize,
+    pub risk_flags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceSourceSearchResult {
+    pub generated_at: String,
+    pub source_path: String,
+    pub query: String,
+    pub query_term_count: usize,
+    pub requested_limit: usize,
+    pub requested_max_lines: usize,
+    pub scanned_line_count: usize,
+    pub matched_line_count: usize,
+    pub returned_item_count: usize,
+    pub items: Vec<ProjectWorkSessionEvidenceSourceSearchItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectWorkSessionIndexOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
@@ -1685,6 +1728,13 @@ fn project_work_session_evidence_nearby(
     options: ProjectWorkSessionEvidenceNearbyOptions,
 ) -> Result<ProjectWorkSessionEvidenceNearbyResult, String> {
     run_project_work_session_evidence_nearby(options).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_session_evidence_source_search(
+    options: ProjectWorkSessionEvidenceSourceSearchOptions,
+) -> Result<ProjectWorkSessionEvidenceSourceSearchResult, String> {
+    run_project_work_session_evidence_source_search(options).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -2826,6 +2876,111 @@ pub fn run_project_work_session_evidence_nearby(
         query_term_count: query_terms.len(),
         requested_limit,
         total_match_count,
+        returned_item_count: items.len(),
+        items,
+        warnings,
+    })
+}
+
+pub fn run_project_work_session_evidence_source_search(
+    options: ProjectWorkSessionEvidenceSourceSearchOptions,
+) -> Result<ProjectWorkSessionEvidenceSourceSearchResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err("work-session-evidence-source-search limit requires a positive integer".into());
+    }
+    if matches!(options.max_lines, Some(0)) {
+        return Err(
+            "work-session-evidence-source-search max-lines requires a positive integer".into(),
+        );
+    }
+    let source_path = options.source_path.trim();
+    if source_path.is_empty() {
+        return Err(
+            "work-session-evidence-source-search source-path requires a non-empty value".into(),
+        );
+    }
+    let query = options.query.trim();
+    if query.is_empty() {
+        return Err("work-session-evidence-source-search query requires a non-empty value".into());
+    }
+    let requested_limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_LIMIT);
+    let limit = requested_limit.min(MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_LIMIT);
+    let requested_max_lines = options
+        .max_lines
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES);
+    let max_lines =
+        requested_max_lines.min(MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES);
+    let path = PathBuf::from(source_path);
+    let canonical_path = path.canonicalize().map_err(|err| {
+        format!("work-session-evidence-source-search source-path is not readable: {err}")
+    })?;
+    if !canonical_path.is_file() {
+        return Err("work-session-evidence-source-search source-path must be a file".into());
+    }
+    if !project_work_session_evidence_source_search_path_allowed(&canonical_path) {
+        return Err(
+            "work-session-evidence-source-search source-path must be under a known session source root"
+                .into(),
+        );
+    }
+    if canonical_path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+        return Err(
+            "work-session-evidence-source-search currently supports JSONL session files only"
+                .into(),
+        );
+    }
+
+    let query_terms = project_work_session_evidence_nearby_query_terms(Some(query));
+    let mut warnings = vec![
+        "Raw source search is read-only and redacted; returned snippets do not create or approve session evidence."
+            .to_string(),
+    ];
+    if requested_limit > MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_LIMIT {
+        warnings.push(format!(
+            "work-session-evidence-source-search limit capped at {MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_LIMIT}"
+        ));
+    }
+    if requested_max_lines > MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES {
+        warnings.push(format!(
+            "work-session-evidence-source-search max-lines capped at {MAX_PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_MAX_LINES}"
+        ));
+    }
+    let mut scanned_line_count = 0;
+    let mut matched_line_count = 0;
+    let mut items = Vec::new();
+    if query_terms.is_empty() {
+        warnings.push(
+            "Source search query did not contain searchable terms after redaction and stop-word filtering."
+                .to_string(),
+        );
+    } else {
+        let search = read_project_work_session_evidence_source_search_items(
+            &canonical_path,
+            &query_terms,
+            limit,
+            max_lines,
+        )?;
+        scanned_line_count = search.scanned_line_count;
+        matched_line_count = search.matched_line_count;
+        items = search.items;
+        if search.hit_max_lines {
+            warnings.push(format!(
+                "Source search stopped after {max_lines} lines; increase --max-lines for a wider bounded search."
+            ));
+        }
+    }
+
+    Ok(ProjectWorkSessionEvidenceSourceSearchResult {
+        generated_at: Utc::now().to_rfc3339(),
+        source_path: canonical_path.display().to_string(),
+        query: query.to_string(),
+        query_term_count: query_terms.len(),
+        requested_limit,
+        requested_max_lines,
+        scanned_line_count,
+        matched_line_count,
         returned_item_count: items.len(),
         items,
         warnings,
@@ -9198,6 +9353,194 @@ fn sort_project_work_session_evidence_nearby_items_for_query(
             .then_with(|| right.timestamp.cmp(&left.timestamp))
             .then_with(|| left.session_id.cmp(&right.session_id))
     });
+}
+
+struct ProjectWorkSessionEvidenceSourceSearchRead {
+    scanned_line_count: usize,
+    matched_line_count: usize,
+    hit_max_lines: bool,
+    items: Vec<ProjectWorkSessionEvidenceSourceSearchItem>,
+}
+
+struct ProjectWorkSessionEvidenceSourceSearchPrompt {
+    session_id: Option<String>,
+    timestamp: Option<String>,
+    cwd: Option<String>,
+    text: String,
+}
+
+fn read_project_work_session_evidence_source_search_items(
+    path: &Path,
+    query_terms: &[String],
+    limit: usize,
+    max_lines: usize,
+) -> Result<ProjectWorkSessionEvidenceSourceSearchRead, Box<dyn std::error::Error>> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+    let mut cwd: Option<String> = None;
+    let mut scanned_line_count = 0;
+    let mut matched_line_count = 0;
+    let mut items = Vec::new();
+    let mut hit_max_lines = false;
+
+    for (index, line) in reader.lines().enumerate() {
+        if index >= max_lines {
+            hit_max_lines = true;
+            break;
+        }
+        scanned_line_count += 1;
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let Some(prompt) =
+            project_work_session_evidence_source_search_prompt(path, &value, &mut cwd)
+        else {
+            continue;
+        };
+        let searchable = format!(
+            "{}\n{}\n{}",
+            prompt.session_id.as_deref().unwrap_or(""),
+            prompt.cwd.as_deref().unwrap_or(""),
+            prompt.text
+        );
+        let (match_score, matched_terms) =
+            project_work_session_evidence_nearby_match(query_terms, &searchable);
+        if match_score == 0 {
+            continue;
+        }
+        matched_line_count += 1;
+        if items.len() >= limit {
+            continue;
+        }
+        let risk_flags = detect_risks(&prompt.text);
+        items.push(ProjectWorkSessionEvidenceSourceSearchItem {
+            id: hash_text(&format!("{}:{}:{}", path.display(), index + 1, prompt.text))
+                .chars()
+                .take(16)
+                .collect(),
+            line_number: index + 1,
+            session_id: prompt.session_id,
+            timestamp: prompt.timestamp,
+            cwd: prompt.cwd,
+            match_score,
+            matched_terms,
+            excerpt: truncate_chars(
+                &redact_sensitive_text(&markdown_inline(&prompt.text)),
+                PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_EXCERPT_CHARS,
+            ),
+            word_count: count_words(&prompt.text),
+            char_count: prompt.text.chars().count(),
+            risk_flags,
+        });
+    }
+
+    Ok(ProjectWorkSessionEvidenceSourceSearchRead {
+        scanned_line_count,
+        matched_line_count,
+        hit_max_lines,
+        items,
+    })
+}
+
+fn project_work_session_evidence_source_search_prompt(
+    path: &Path,
+    value: &Value,
+    cwd: &mut Option<String>,
+) -> Option<ProjectWorkSessionEvidenceSourceSearchPrompt> {
+    if value.get("type").and_then(Value::as_str) == Some("turn_context") {
+        *cwd = value
+            .pointer("/payload/cwd")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        return None;
+    }
+
+    let text = if value.get("type").and_then(Value::as_str) == Some("response_item")
+        && value.pointer("/payload/role").and_then(Value::as_str) == Some("user")
+    {
+        text_from_value(value.pointer("/payload/content"))
+    } else if value.get("type").and_then(Value::as_str) == Some("user") {
+        text_from_value(
+            value
+                .get("message")
+                .or_else(|| value.get("content"))
+                .or_else(|| value.get("display")),
+        )
+    } else if value.get("role").and_then(Value::as_str) == Some("user")
+        || value.pointer("/message/role").and_then(Value::as_str) == Some("user")
+    {
+        text_from_value(
+            value
+                .get("content")
+                .or_else(|| value.pointer("/message/content"))
+                .or_else(|| value.get("message")),
+        )
+    } else {
+        String::new()
+    };
+
+    let text = normalize_prompt_text(&strip_injected_context(&text));
+    if text.is_empty() {
+        return None;
+    }
+    let session_id = extract_session_id(value).or_else(|| {
+        path.file_stem()
+            .and_then(|name| name.to_str())
+            .map(str::to_string)
+    });
+    let record_cwd = value
+        .pointer("/payload/cwd")
+        .and_then(Value::as_str)
+        .or_else(|| value.get("workspace").and_then(Value::as_str))
+        .map(str::to_string)
+        .or_else(|| cwd.clone());
+    Some(ProjectWorkSessionEvidenceSourceSearchPrompt {
+        session_id,
+        timestamp: extract_timestamp(value),
+        cwd: record_cwd,
+        text,
+    })
+}
+
+fn project_work_session_evidence_source_search_path_allowed(path: &Path) -> bool {
+    if source_specs().into_iter().any(|source| {
+        if !matches!(
+            source.kind,
+            SourceKind::CodexJsonl
+                | SourceKind::ClaudeProjectJsonl
+                | SourceKind::ClaudeTranscriptJsonl
+                | SourceKind::ClaudeHistoryJsonl
+                | SourceKind::AntigravityTranscriptJsonl
+                | SourceKind::AntigravityHistoryJsonl
+        ) {
+            return false;
+        }
+        let Ok(root) = source.root.canonicalize() else {
+            return false;
+        };
+        if root.is_file() {
+            path == root
+        } else {
+            path.starts_with(root)
+        }
+    }) {
+        return true;
+    }
+
+    #[cfg(test)]
+    {
+        if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
+            if path.starts_with(temp_dir) {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 fn project_work_session_project_like_pattern(project: &str) -> String {
@@ -17449,6 +17792,7 @@ pub fn run() {
             project_work_session_evidence_review_apply,
             project_work_session_evidence_reviewed_items,
             project_work_session_evidence_nearby,
+            project_work_session_evidence_source_search,
             project_work_summary_snapshots,
             project_work_log_coverage,
             project_work_log_candidates,
@@ -17473,6 +17817,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     #[test]
     fn open_promptvault_database_sets_busy_timeout() {
@@ -21547,6 +21892,89 @@ Status: completed as a source-only/report-only hardening slice.
             .any(|warning| warning.contains("navigation hints only")));
 
         let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn session_evidence_source_search_reads_bounded_redacted_jsonl_matches() {
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-session-source-search-{}.jsonl",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let mut file = std::fs::File::create(&path).expect("create source search fixture");
+        writeln!(
+            file,
+            "{}",
+            serde_json::json!({
+                "type": "turn_context",
+                "payload": {
+                    "cwd": "/Users/wj/Ai/System/10_Projects/NearbyProject"
+                }
+            })
+        )
+        .expect("write turn context");
+        writeln!(
+            file,
+            "{}",
+            serde_json::json!({
+                "type": "response_item",
+                "payload": {
+                    "role": "user",
+                    "turn_id": "turn-source-search-1",
+                    "content": "NearbyProject raw evidence includes openai_api_key=short-secret-value"
+                },
+                "timestamp": "2026-06-09T12:00:00Z"
+            })
+        )
+        .expect("write matching prompt");
+        writeln!(
+            file,
+            "{}",
+            serde_json::json!({
+                "type": "response_item",
+                "payload": {
+                    "role": "assistant",
+                    "content": "assistant output is ignored"
+                }
+            })
+        )
+        .expect("write ignored assistant");
+
+        let result = run_project_work_session_evidence_source_search(
+            ProjectWorkSessionEvidenceSourceSearchOptions {
+                source_path: path.display().to_string(),
+                query: "NearbyProject raw evidence".to_string(),
+                limit: Some(5),
+                max_lines: Some(10),
+            },
+        )
+        .expect("search source fixture");
+
+        assert_eq!(result.query_term_count, 3);
+        assert_eq!(result.scanned_line_count, 3);
+        assert_eq!(result.matched_line_count, 1);
+        assert_eq!(result.returned_item_count, 1);
+        assert_eq!(result.items[0].line_number, 2);
+        assert_eq!(
+            result.items[0].matched_terms,
+            vec![
+                "evidence".to_string(),
+                "nearbyproject".to_string(),
+                "raw".to_string()
+            ]
+        );
+        assert_eq!(
+            result.items[0].cwd.as_deref(),
+            Some("/Users/wj/Ai/System/10_Projects/NearbyProject")
+        );
+        assert!(result.items[0].excerpt.contains("[REDACTED_"));
+        assert!(!result.items[0].excerpt.contains("short-secret-value"));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("read-only")));
+
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

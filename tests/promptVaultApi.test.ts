@@ -22,6 +22,7 @@ import {
   loadProjectWorkSummary,
   loadProjectWorkSessionEvidenceCandidates,
   loadProjectWorkSessionEvidenceNearby,
+  searchProjectWorkSessionEvidenceSource,
   loadProjectWorkSessionEvidenceProposals,
   loadProjectWorkSessionEvidenceReviewQueue,
   applyProjectWorkSessionEvidenceReviewRows,
@@ -606,6 +607,37 @@ function projectWorkSessionEvidenceNearbyPayload(overrides = {}) {
     }],
     warnings: [
       "Nearby same-project sessions are navigation hints only; they do not create or approve session evidence.",
+    ],
+    ...overrides,
+  };
+}
+
+function projectWorkSessionEvidenceSourceSearchPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:05:00Z",
+    source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    query: "PromptVault nearby evidence",
+    query_term_count: 3,
+    requested_limit: 5,
+    requested_max_lines: 100000,
+    scanned_line_count: 42,
+    matched_line_count: 1,
+    returned_item_count: 1,
+    items: [{
+      id: "source-hit-1",
+      line_number: 12,
+      session_id: "turn-source-hit-1",
+      timestamp: "2026-06-09T01:00:00Z",
+      cwd: "/Users/wj/Ai/System/10_Projects/PromptVault",
+      match_score: 3,
+      matched_terms: ["evidence", "nearby", "promptvault"],
+      excerpt: "PromptVault nearby evidence source hit.",
+      word_count: 5,
+      char_count: 39,
+      risk_flags: [],
+    }],
+    warnings: [
+      "Raw source search is read-only and redacted; returned snippets do not create or approve session evidence.",
     ],
     ...overrides,
   };
@@ -1640,6 +1672,73 @@ test("browser bridge work session evidence nearby rejects duplicate session ids"
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /session-nearby-1|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work session evidence source search posts target and validates hits", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionEvidenceSourceSearchPayload()), {
+      status: 200,
+    });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await searchProjectWorkSessionEvidenceSource({
+    source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    query: "PromptVault nearby evidence",
+    limit: 5,
+    max_lines: 100000,
+  });
+
+  assert.match(requestPath, /\/api\/work-session-evidence-source-search$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      query: "PromptVault nearby evidence",
+      limit: 5,
+      max_lines: 100000,
+    },
+  });
+  assert.equal(result.scanned_line_count, 42);
+  assert.equal(result.matched_line_count, 1);
+  assert.equal(result.returned_item_count, 1);
+  assert.equal(result.items[0].line_number, 12);
+  assert.equal(result.items[0].match_score, 3);
+  assert.deepEqual(result.items[0].matched_terms, ["evidence", "nearby", "promptvault"]);
+  assert.match(result.warnings[0], /read-only and redacted/);
+});
+
+test("browser bridge work session evidence source search rejects duplicate hit ids", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const item = projectWorkSessionEvidenceSourceSearchPayload().items[0];
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSessionEvidenceSourceSearchPayload({
+    returned_item_count: 2,
+    matched_line_count: 2,
+    items: [item, item],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => searchProjectWorkSessionEvidenceSource({
+      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      query: "PromptVault nearby evidence",
+      limit: 5,
+    }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /source-hit-1|undefined/);
       return true;
     },
   );

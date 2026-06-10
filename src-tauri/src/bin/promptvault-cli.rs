@@ -15,7 +15,8 @@ use promptvault_lib::{
     run_project_work_session_evidence_candidates, run_project_work_session_evidence_nearby,
     run_project_work_session_evidence_proposals, run_project_work_session_evidence_review_apply,
     run_project_work_session_evidence_review_queue,
-    run_project_work_session_evidence_review_queue_update, run_project_work_session_index,
+    run_project_work_session_evidence_review_queue_update,
+    run_project_work_session_evidence_source_search, run_project_work_session_index,
     run_project_work_status_export, run_project_work_summary, run_scan, source_specs,
     CancelScanOptions, ImportBatchOptions, ImportEventsOptions, ImportStatesOptions,
     ImproveRequest, ProjectWorkLogExtractionCandidatesOptions,
@@ -29,10 +30,10 @@ use promptvault_lib::{
     ProjectWorkSessionEvidenceNearbyOptions, ProjectWorkSessionEvidenceProposalsOptions,
     ProjectWorkSessionEvidenceReviewApplyOptions, ProjectWorkSessionEvidenceReviewQueueOptions,
     ProjectWorkSessionEvidenceReviewQueueUpdateOptions,
-    ProjectWorkSessionEvidenceReviewedItemsOptions, ProjectWorkSessionIndexOptions,
-    ProjectWorkStatusExportOptions, ProjectWorkSummaryOptions, ProjectWorkSummarySnapshotsOptions,
-    PromptRecord, ScanOptions, ScanPlanOptions, ScanProgressOptions, StoredPromptFacetsOptions,
-    StoredPromptsOptions,
+    ProjectWorkSessionEvidenceReviewedItemsOptions, ProjectWorkSessionEvidenceSourceSearchOptions,
+    ProjectWorkSessionIndexOptions, ProjectWorkStatusExportOptions, ProjectWorkSummaryOptions,
+    ProjectWorkSummarySnapshotsOptions, PromptRecord, ScanOptions, ScanPlanOptions,
+    ScanProgressOptions, StoredPromptFacetsOptions, StoredPromptsOptions,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -906,6 +907,79 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 println!("- excerpt: {}", item.excerpt);
                 println!("  {}", item.source_path);
+            }
+            if !result.warnings.is_empty() {
+                println!("\nwarnings: {}", result.warnings.join("; "));
+            }
+        }
+        "work-session-evidence-source-search" => {
+            let json = take_flag(&mut args, "--json");
+            let mut limit = None;
+            let mut max_lines = None;
+            let mut source_path = None;
+            let mut query = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--limit" => {
+                        limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--max-lines" => {
+                        max_lines = Some(parse_positive_usize_arg(iter.next(), "--max-lines")?);
+                    }
+                    "--source-path" => {
+                        source_path = Some(parse_required_arg(iter.next(), "--source-path")?);
+                    }
+                    "--query" => {
+                        query = Some(parse_required_arg(iter.next(), "--query")?);
+                    }
+                    other => {
+                        return Err(format!(
+                            "unknown work-session-evidence-source-search argument: {other}"
+                        )
+                        .into())
+                    }
+                }
+            }
+            let result = run_project_work_session_evidence_source_search(
+                ProjectWorkSessionEvidenceSourceSearchOptions {
+                    source_path: source_path
+                        .ok_or("work-session-evidence-source-search requires --source-path")?,
+                    query: query.ok_or("work-session-evidence-source-search requires --query")?,
+                    limit,
+                    max_lines,
+                },
+            )?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+            println!("PromptVault source session evidence search");
+            println!("source: {}", result.source_path);
+            println!(
+                "query_terms: {} · {}",
+                result.query_term_count, result.query
+            );
+            println!("scanned_lines: {}", result.scanned_line_count);
+            println!("matches: {}", result.matched_line_count);
+            println!("returned: {}", result.returned_item_count);
+            for item in &result.items {
+                println!(
+                    "\nline {} · score {} · {}",
+                    item.line_number,
+                    item.match_score,
+                    item.session_id.as_deref().unwrap_or("unknown-session")
+                );
+                if !item.matched_terms.is_empty() {
+                    println!("  matched: {}", item.matched_terms.join(", "));
+                }
+                if let Some(timestamp) = item.timestamp.as_deref() {
+                    println!("  timestamp: {timestamp}");
+                }
+                if let Some(cwd) = item.cwd.as_deref() {
+                    println!("  cwd: {cwd}");
+                }
+                println!("- excerpt: {}", item.excerpt);
             }
             if !result.warnings.is_empty() {
                 println!("\nwarnings: {}", result.warnings.join("; "));
@@ -2623,6 +2697,7 @@ fn help_text() -> String {
         "  work-session-evidence-review-apply [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-evidence-reviewed-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n",
         "  work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--query TEXT] [--database PATH] [--json]\n",
+        "  work-session-evidence-source-search --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--json]\n",
         "  work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]\n",
         "  work-log-coverage [--json]\n",
         "  work-log-candidates [--limit N>0] [--json]\n",
@@ -2658,6 +2733,7 @@ fn help_text() -> String {
         "  work-session-evidence-review-apply writes approved session-evidence review decisions into an idempotent durable reviewed-items audit table; it does not create session evidence links.\n",
         "  work-session-evidence-reviewed-items lists durable reviewed session-evidence audit rows by project and date without creating session evidence links.\n",
         "  work-session-evidence-nearby lists same-project session records nearest a target project/date as navigation hints only; optional --query ranks nearby rows by local token overlap but does not approve or create session evidence.\n",
+        "  work-session-evidence-source-search reads one known JSONL session source in a bounded, redacted, read-only way and returns query-matched user prompt snippets; it does not approve or create session evidence.\n",
         "  work-log-coverage lists parsed and unparsed project progress logs by project.\n",
         "  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n",
         "  work-ai-provider-status reports OpenAI/GLM/Codex work-management provider readiness without exposing secrets.\n",
@@ -2878,6 +2954,11 @@ struct ProjectWorkSessionEvidenceReviewedItemsBridgePayload {
 #[derive(serde::Deserialize)]
 struct ProjectWorkSessionEvidenceNearbyBridgePayload {
     options: ProjectWorkSessionEvidenceNearbyOptions,
+}
+
+#[derive(serde::Deserialize)]
+struct ProjectWorkSessionEvidenceSourceSearchBridgePayload {
+    options: ProjectWorkSessionEvidenceSourceSearchOptions,
 }
 
 #[derive(serde::Deserialize)]
@@ -3195,6 +3276,13 @@ fn handle_bridge_route(
                 .database_path
                 .get_or_insert_with(|| bridge_database_path(database_path));
             let result = run_project_work_session_evidence_nearby(options)?;
+            write_json_response(stream, 200, &result)
+        }
+        ("POST", "/api/work-session-evidence-source-search") => {
+            let payload = serde_json::from_str::<
+                ProjectWorkSessionEvidenceSourceSearchBridgePayload,
+            >(&request.body)?;
+            let result = run_project_work_session_evidence_source_search(payload.options)?;
             write_json_response(stream, 200, &result)
         }
         ("POST", "/api/work-summary-snapshots") => {
@@ -3750,6 +3838,16 @@ mod tests {
         assert!(nearby_response
             .contains("work-session-evidence-nearby limit requires a positive integer"));
         assert!(nearby_response.contains("Access-Control-Allow-Origin: *"));
+
+        let source_search_response = bridge_response_for(
+            "/api/work-session-evidence-source-search",
+            r#"{"options":{"source_path":"/tmp/session.jsonl","query":"PromptVault","limit":0}}"#,
+        );
+
+        assert!(source_search_response.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(source_search_response
+            .contains("work-session-evidence-source-search limit requires a positive integer"));
+        assert!(source_search_response.contains("Access-Control-Allow-Origin: *"));
     }
 
     #[test]
@@ -4159,6 +4257,9 @@ mod tests {
         ));
         assert!(help.contains(
             "work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--query TEXT] [--database PATH] [--json]"
+        ));
+        assert!(help.contains(
+            "work-session-evidence-source-search --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--json]"
         ));
         assert!(
             help.contains(

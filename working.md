@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 16:31 KST
+Updated: 2026-06-10 16:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -37,7 +37,8 @@ Current Work:
   `9028c03 docs: update antigravity proposal handoff`.
 - Current implementation slice: source-proposal review approvals now preserve
   copied source trace metadata through review queue update, durable review
-  apply, reviewed-items reload, API validation, and UI display. Commit pending.
+  apply, reviewed-items reload, API validation, and UI display. Pushed as
+  `9b36dc3 fix: persist source review trace metadata`.
 - Previous verified implementation slice: non-browser Rust coverage verifies that an
   actual Antigravity SQLite source-search hit can be converted into a
   copied-trace source proposal with `review_ready=true`.
@@ -304,14 +305,11 @@ Tests:
 
 Issues:
 
-- Commit is still pending for this slice.
 - Broader goal remains active: default-vault unresolved session-evidence
   candidates still need review/closure, and provider reliability work remains.
 
 Next Steps:
 
-- Commit and push the source-review trace durability slice after staged diff and
-  secret checks pass.
 - Continue reducing unresolved project/day session-evidence rows without
   weakening source-trace/operator-review requirements.
 

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 18:39 KST
+Updated: 2026-06-10 18:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,7 +33,33 @@ Short-Term Goal:
 
 Current Work:
 
-- Latest pushed implementation slice:
+- Latest implementation commit:
+  `835fe31 fix: block instruction-only source proposals`.
+- Latest verified behavior:
+  after rebuilding `promptvault-cli`, the real default-vault `CareVault`
+  `2026-06-03` and `oss-favorites` `2026-05-31` source proposals that previously
+  returned `review_ready=1` now return `review_ready_count=0`,
+  `blocked_count=1`, and `blocker_reason=source_trace_is_instruction_only`.
+  No durable approval/apply command was run.
+- Tests run for latest slice:
+  `cargo test session_evidence_source_proposals --lib` passed with `4` tests;
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `47` tests. An earlier
+  direct `node --test --import tsx tests/workSummaryStatus.test.ts` command
+  failed because this repo does not use `tsx`; the correct project test command
+  above passed.
+- Full verification for latest slice:
+  `npm run check` passed: UI tests `523` passed, Vite/TypeScript build passed,
+  `cargo build --bin promptvault-cli` passed, Rust lib tests `238` passed, CLI
+  tests `35` passed, doc-tests passed, and clippy `-D warnings` passed.
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-T1Lqsv/qa.sqlite`.
+  It reached source-proposals bridge/UI, review queue UI, review apply,
+  reviewed-items reload, work-log management, normalization, and saved-items
+  flows. Temporary Vite/bridge processes exited during cleanup; ports `5174`
+  and `5177` had no remaining listeners afterward.
+- Previous pushed implementation slice:
   `1914b08 test: cover risky source proposal bridge`.
 - Latest verified behavior:
   isolated browser bridge QA now includes a separate risky Antigravity DB source

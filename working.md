@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 16:48 KST
+Updated: 2026-06-10 16:52 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,12 +33,16 @@ Short-Term Goal:
 
 Current Work:
 
-- Most recent pushed baseline before this slice:
-  `94826c6 fix: build cli during project check`.
-- Current implementation slice: CLI source-proposal review approvals can pass
-  copied source trace metadata through `--source-review-json` or
+- Most recent pushed baseline:
+  `9c9efd6 feat: accept source review metadata in cli`.
+- Current implementation focus: continue reducing unresolved project/day
+  session-evidence rows and provider/review reliability gaps without weakening
+  the source-trace/operator-review contract.
+- Latest verified implementation slice: CLI source-proposal review approvals
+  can pass copied source trace metadata through `--source-review-json` or
   `--source-review-file`, matching the existing UI/API `source_review` contract
-  instead of hard-coding CLI updates to `source_review: None`.
+  instead of hard-coding CLI updates to `source_review: None`. Pushed as
+  `9c9efd6 feat: accept source review metadata in cli`.
 - Previous verified implementation slice: the full `npm run check` gate now
   rebuilds the `promptvault-cli` debug binary before Rust tests/clippy so resume
   commands that call `src-tauri/target/debug/promptvault-cli` do not run stale
@@ -219,9 +223,11 @@ Current Work:
   candidate. Full `npm run check` also passed for this slice, covering UI/API
   tests, production build, CLI build, Rust library tests (`236` passed), CLI
   tests (`35` passed), doc tests, and clippy with `-D warnings`. Staged
-  diff/secret scan, commit, and push were the next required publication gates
-  after this log update. On resume, trust fresh `git status`, `git log`, and
-  upstream divergence checks over this timestamped snapshot.
+  diff/secret scan and `gitleaks protect --staged --redact` passed, then the
+  slice was committed and pushed as
+  `9c9efd6 feat: accept source review metadata in cli`. Post-push verification
+  reported `git status --short --branch` clean on `main...origin/main`,
+  divergence `0 0`, and latest log `9c9efd6`.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is continuing unresolved project/day session-evidence review and
@@ -265,7 +271,7 @@ Immediate Resume Commands:
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
 
-## Current Slice - 2026-06-10 CLI source review approval input
+## Completed Slice - 2026-06-10 CLI source review approval input
 
 Current Goal:
 
@@ -273,6 +279,8 @@ Current Goal:
   queue rows without losing copied source trace metadata. The CLI should accept
   the same source proposal object that the UI/API already pass as
   `source_review`.
+- Pushed implementation commit:
+  `9c9efd6 feat: accept source review metadata in cli`.
 
 Context:
 
@@ -316,17 +324,15 @@ Tests:
 
 Issues:
 
-- Publication state is timestamp-sensitive. At this snapshot, staged
-  diff/secret scan, commit, and push were the next required gates; on resume,
-  refresh `git status --short --branch` and `git rev-list --left-right --count
-  @{u}...HEAD`.
 - Broader goal remains active: `26` default-vault session-evidence candidates
   still need review/closure.
 
 Next Steps:
 
-- If this slice is not already clean and synced, stage only the explicit changed
-  files, run staged diff/secret checks, then commit and push.
+- Continue the default-vault review queue and candidate inspection. Start by
+  refreshing `work-session-evidence-candidates --limit 80 --json` and
+  `work-session-evidence-review-queue --limit 20 --sync-candidates --json`,
+  then pick the next narrow reliability or review-flow improvement.
 
 ## Completed Slice - 2026-06-10 Stale CLI resume gate hardening
 

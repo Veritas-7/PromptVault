@@ -1918,6 +1918,9 @@ export function workSessionEvidenceSourceProposalBlockerText(
   if (blockerReason === "source_hit_matches_only_project_identifier") {
     return "프로젝트명만 일치해 durable 승인 불가";
   }
+  if (blockerReason === "source_hit_matches_only_project_or_generic_terms") {
+    return "프로젝트명과 범용 git/status 용어만 일치해 durable 승인 불가";
+  }
   if (blockerReason === "candidate_or_source_hit_has_risk_flags") {
     return "후보 또는 원본 hit에 risk flag 있음";
   }

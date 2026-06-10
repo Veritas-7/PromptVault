@@ -9890,14 +9890,14 @@ fn project_work_session_evidence_source_proposal_from_hit(
     .collect::<Vec<_>>();
     risk_flags.sort();
     risk_flags.dedup();
-    let source_hit_has_evidence_match =
-        project_work_session_source_hit_has_evidence_match(candidate, hit);
+    let source_hit_evidence_blocker =
+        project_work_session_source_hit_evidence_blocker(candidate, hit);
     let blocker_reason = if candidate.needs_title_normalization {
         Some("title_normalization_required_first".to_string())
     } else if !trace_validated {
         Some("source_trace_not_copied_from_search_hit".to_string())
-    } else if !source_hit_has_evidence_match {
-        Some("source_hit_matches_only_project_identifier".to_string())
+    } else if let Some(blocker) = source_hit_evidence_blocker {
+        Some(blocker.to_string())
     } else if !risk_flags.is_empty() {
         Some("candidate_or_source_hit_has_risk_flags".to_string())
     } else if project_work_session_source_trace_is_instruction_only(&source_trace) {
@@ -9948,17 +9948,36 @@ fn project_work_session_evidence_source_hit_confidence(match_score: usize) -> f6
     (0.55 + (match_score.min(4) as f64 * 0.1)).min(0.95)
 }
 
-fn project_work_session_source_hit_has_evidence_match(
+fn project_work_session_source_hit_evidence_blocker(
     candidate: &ProjectWorkSessionEvidenceCandidate,
     hit: &ProjectWorkSessionEvidenceSourceSearchItem,
-) -> bool {
+) -> Option<&'static str> {
     if hit.matched_terms.is_empty() {
-        return false;
+        return Some("source_hit_matches_only_project_identifier");
     }
     let project_terms = project_work_session_project_identifier_terms(&candidate.project);
-    hit.matched_terms
+
+    let has_non_project_match = hit
+        .matched_terms
         .iter()
-        .any(|term| !project_terms.contains(term.as_str()))
+        .any(|term| !project_terms.contains(term.as_str()));
+    if !has_non_project_match {
+        return Some("source_hit_matches_only_project_identifier");
+    }
+
+    let has_specific_evidence_match = hit.matched_terms.iter().any(|term| {
+        !project_terms.contains(term.as_str())
+            && !project_work_session_source_match_term_is_generic(term)
+    });
+    if !has_specific_evidence_match {
+        return Some("source_hit_matches_only_project_or_generic_terms");
+    }
+
+    None
+}
+
+fn project_work_session_source_match_term_is_generic(term: &str) -> bool {
+    matches!(term, "git" | "main" | "origin" | "status")
 }
 
 fn project_work_session_source_trace_is_instruction_only(trace: &str) -> bool {
@@ -23053,6 +23072,67 @@ Status: completed as a source-only/report-only hardening slice.
                 "studio".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn session_evidence_source_proposals_block_project_plus_generic_git_terms() {
+        let candidate = session_evidence_candidate_fixture(
+            "session-evidence-oss-favorites-generic-source-proposal",
+            "oss-favorites",
+            "2026-06-04: 시작 기준: `git status -sb` reported `## main...origin/main`.",
+            false,
+        );
+        let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
+            generated_at: "2026-06-04T00:00:00Z".to_string(),
+            source_path: "/Users/wj/.codex/sessions/2026/06/01/rollout.jsonl".to_string(),
+            query: "oss-favorites 2026-06-04 git status main origin".to_string(),
+            query_term_count: 6,
+            requested_limit: 5,
+            requested_max_lines: 100_000,
+            scanned_line_count: 12,
+            matched_line_count: 1,
+            returned_item_count: 1,
+            items: vec![ProjectWorkSessionEvidenceSourceSearchItem {
+                id: "source-hit-project-git-generic".to_string(),
+                line_number: 7,
+                session_id: Some("turn-source-hit-project-git-generic".to_string()),
+                timestamp: Some("2026-06-01T04:50:38Z".to_string()),
+                cwd: Some("/Users/wj/Ai/System/10_Projects/oss-favorites".to_string()),
+                match_score: 4,
+                matched_terms: vec![
+                    "git".to_string(),
+                    "main".to_string(),
+                    "origin".to_string(),
+                    "oss-favorites".to_string(),
+                ],
+                excerpt: "진행했습니다. 이번 autoresearch 반복에서 실제 red를 하나 잡고 고쳤습니다. 현재 상태: 커밋/푸시 완료.".to_string(),
+                word_count: 12,
+                char_count: 79,
+                risk_flags: Vec::new(),
+            }],
+            warnings: vec![
+                "Raw source search is read-only and redacted; returned snippets do not create or approve session evidence."
+                    .to_string(),
+            ],
+        };
+
+        let result = project_work_session_evidence_source_proposals_from_search(
+            Path::new("/tmp/promptvault.sqlite"),
+            &candidate,
+            source_search,
+        );
+
+        assert_eq!(result.returned_proposal_count, 1);
+        assert_eq!(result.review_ready_count, 0);
+        assert_eq!(result.blocked_count, 1);
+        let proposal = &result.proposals[0];
+        assert!(proposal.trace_validated);
+        assert!(!proposal.review_ready);
+        assert_eq!(
+            proposal.blocker_reason.as_deref(),
+            Some("source_hit_matches_only_project_or_generic_terms")
+        );
+        assert_eq!(proposal.match_score, 4);
     }
 
     #[test]

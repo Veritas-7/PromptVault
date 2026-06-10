@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 20:50 KST
+Updated: 2026-06-10 20:51 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,20 +33,21 @@ Short-Term Goal:
 
 Current Work:
 
-- Active verified slice, not yet committed:
+- Completed implementation slice:
+  `d3199e5 fix: filter status export in cli`.
+- Completed behavior:
   promote the new adjacent/stale status-export filters from UI-only helper
   state into the CLI/API export workflow. The previous slice lets the app select
   `인접 세션 후보` and `먼 세션 후보`, but `work-status-export --help` still
   failed and CLI users had to run custom `jq`/Node probes to get the same
   filtered rows.
-- Completed behavior:
   `row_filter` has been added to `ProjectWorkStatusExportOptions`, rows are
   filtered after same-project session date hints are annotated and before
   pagination, `--row-filter FILTER` and command-specific
   `work-status-export --help` have been added, the TS bridge option is exposed,
   and CLI docs/README have been updated.
-- Current verification status:
-  implementation verification is complete, but commit/push is still pending.
+- Verification and publication status:
+  committed and pushed to `origin main` as `d3199e5`.
   `cargo fmt` passed. `cargo test project_work_status_export --lib` passed with
   `4` focused tests. `cargo test --bin promptvault-cli work_status_export`
   passed with `2` focused CLI tests. `node --disable-warning=ExperimentalWarning
@@ -71,10 +72,7 @@ Current Work:
   passed, and clippy `-D warnings` passed. Browser-bridge QA was not rerun
   because this slice changes CLI/API/options/docs and this environment is not
   the cmux in-app browser.
-- Remaining commit checklist:
-  stage only the touched files, run `gitleaks protect --staged --no-banner`,
-  commit, push to `origin main`, and verify clean/upstream state.
-- Last completed implementation slice:
+- Previous completed implementation slice:
   `7ca77b2 fix: filter status export by session distance`.
 - Last completed behavior:
   `src/workSummaryStatus.ts` now adds `near-session-date-hint` and

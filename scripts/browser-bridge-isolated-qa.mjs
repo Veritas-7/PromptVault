@@ -1142,6 +1142,44 @@ async function runBrowserQa() {
         ) {
           throw new Error(`Invalid session evidence source search response: ${JSON.stringify(sourceSearch)}`);
         }
+        if (sourceSearch.items.length) {
+          step("work session evidence source proposals bridge");
+          const sourceProposals = await bridgeJson(
+            page,
+            "/api/work-session-evidence-source-proposals",
+            {
+              options: {
+                candidate_id: firstQueueItem.candidate_id,
+                source_path: nearby.items[0].source_path,
+                query: sourceSearch.query,
+                limit: 3,
+                max_lines: sourceSearch.requested_max_lines,
+              },
+            },
+          );
+          if (
+            sourceProposals.database_path !== DATABASE_PATH
+            || sourceProposals.candidate_id !== firstQueueItem.candidate_id
+            || sourceProposals.source_path !== sourceSearch.source_path
+            || sourceProposals.returned_proposal_count !== sourceProposals.proposals.length
+            || sourceProposals.returned_proposal_count > sourceProposals.matched_line_count
+            || sourceProposals.review_ready_count + sourceProposals.blocked_count
+              !== sourceProposals.returned_proposal_count
+            || !sourceProposals.warnings.some((warning) => warning.includes("review input only"))
+          ) {
+            throw new Error(`Invalid session evidence source proposals response: ${JSON.stringify(sourceProposals)}`);
+          }
+          if (
+            sourceProposals.proposals.some((proposal) =>
+              !proposal.source_trace.trim()
+              || !proposal.trace_validated
+              || (proposal.review_ready && proposal.blocker_reason !== null)
+              || (!proposal.review_ready && proposal.blocker_reason === null)
+            )
+          ) {
+            throw new Error(`Invalid session evidence source proposal rows: ${JSON.stringify(sourceProposals.proposals)}`);
+          }
+        }
       }
     }
     const firstApprovableItem = workSessionEvidenceReviewQueue.items.find(
@@ -1327,6 +1365,26 @@ async function runBrowserQa() {
         && text.includes("자동 proof 아님")
         && text.includes("read-only");
     }, firstSourceSearchSessionId, { timeout: 90000 });
+    const firstSourceProposalsButton = page
+      .locator(`[data-work-session-evidence-source-search="${firstSourceSearchSessionId}"] [data-work-session-evidence-source-proposals-action]`)
+      .first();
+    await firstSourceProposalsButton.waitFor({ timeout: 90000 });
+    if (!(await firstSourceProposalsButton.isDisabled())) {
+      const sourceProposalsResponse = page.waitForResponse((response) =>
+        response.url().includes("/api/work-session-evidence-source-proposals")
+        && response.request().method() === "POST",
+        { timeout: 90000 },
+      );
+      await firstSourceProposalsButton.click();
+      await sourceProposalsResponse;
+      await page.waitForFunction((sessionId) => {
+        const panel = document.querySelector(`[data-work-session-evidence-source-proposals="${sessionId}"]`);
+        const text = panel?.textContent ?? "";
+        return text.includes("검토 준비")
+          && text.includes("durable 승인 아님")
+          && text.includes("review input only");
+      }, firstSourceSearchSessionId, { timeout: 90000 });
+    }
     const firstSessionEvidenceApprove = page
       .locator('[data-approve-work-session-evidence-review-queue]')
       .first();

@@ -499,6 +499,46 @@ export interface ProjectWorkSessionEvidenceSourceSearchResult {
   warnings: string[];
 }
 
+export interface ProjectWorkSessionEvidenceSourceProposal {
+  candidate_id: string;
+  project: string;
+  date: string;
+  source_path: string;
+  source_line_number: number;
+  source_session_id: string | null;
+  source_timestamp: string | null;
+  source_cwd: string | null;
+  source_search_hit_id: string;
+  proposal_kind: string;
+  proposed_action: string;
+  source_trace: string;
+  trace_validated: boolean;
+  review_ready: boolean;
+  blocker_reason: string | null;
+  match_score: number;
+  matched_terms: string[];
+  confidence: number;
+  risk_flags: string[];
+}
+
+export interface ProjectWorkSessionEvidenceSourceProposalsResult {
+  generated_at: string;
+  database_path: string;
+  candidate_id: string;
+  project: string;
+  date: string;
+  source_path: string;
+  query: string;
+  query_term_count: number;
+  scanned_line_count: number;
+  matched_line_count: number;
+  returned_proposal_count: number;
+  review_ready_count: number;
+  blocked_count: number;
+  proposals: ProjectWorkSessionEvidenceSourceProposal[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSessionIndexSourceState {
   source_id: string;
   source_label: string;

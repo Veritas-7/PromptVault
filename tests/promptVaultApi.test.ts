@@ -22,6 +22,7 @@ import {
   loadProjectWorkSummary,
   loadProjectWorkSessionEvidenceCandidates,
   loadProjectWorkSessionEvidenceNearby,
+  loadProjectWorkSessionEvidenceSourceProposals,
   searchProjectWorkSessionEvidenceSource,
   loadProjectWorkSessionEvidenceProposals,
   loadProjectWorkSessionEvidenceReviewQueue,
@@ -638,6 +639,49 @@ function projectWorkSessionEvidenceSourceSearchPayload(overrides = {}) {
     }],
     warnings: [
       "Raw source search is read-only and redacted; returned snippets do not create or approve session evidence.",
+    ],
+    ...overrides,
+  };
+}
+
+function projectWorkSessionEvidenceSourceProposalsPayload(overrides = {}) {
+  return {
+    generated_at: "2026-06-09T00:06:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    candidate_id: "session-evidence-PromptVault-source-proposal",
+    project: "PromptVault",
+    date: "2026-06-10",
+    source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    query: "PromptVault nearby evidence",
+    query_term_count: 3,
+    scanned_line_count: 42,
+    matched_line_count: 1,
+    returned_proposal_count: 1,
+    review_ready_count: 1,
+    blocked_count: 0,
+    proposals: [{
+      candidate_id: "session-evidence-PromptVault-source-proposal",
+      project: "PromptVault",
+      date: "2026-06-10",
+      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      source_line_number: 12,
+      source_session_id: "turn-source-hit-1",
+      source_timestamp: "2026-06-09T01:00:00Z",
+      source_cwd: "/Users/wj/Ai/System/10_Projects/PromptVault",
+      source_search_hit_id: "source-hit-1",
+      proposal_kind: "manual_session_search",
+      proposed_action: "Review copied source-search trace from line 12 before approving any durable session-evidence record.",
+      source_trace: "PromptVault nearby evidence source hit.",
+      trace_validated: true,
+      review_ready: true,
+      blocker_reason: null,
+      match_score: 3,
+      matched_terms: ["evidence", "nearby", "promptvault"],
+      confidence: 0.85,
+      risk_flags: [],
+    }],
+    warnings: [
+      "Source-search proposals are copied-trace review input only; they do not approve or create durable session evidence.",
     ],
     ...overrides,
   };
@@ -1731,6 +1775,77 @@ test("browser bridge work session evidence source search rejects duplicate hit i
 
   await assert.rejects(
     () => searchProjectWorkSessionEvidenceSource({
+      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      query: "PromptVault nearby evidence",
+      limit: 5,
+    }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /source-hit-1|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work session evidence source proposals posts target and validates review hits", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionEvidenceSourceProposalsPayload()), {
+      status: 200,
+    });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkSessionEvidenceSourceProposals({
+    candidate_id: "session-evidence-PromptVault-source-proposal",
+    source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    query: "PromptVault nearby evidence",
+    limit: 5,
+    max_lines: 100000,
+  });
+
+  assert.match(requestPath, /\/api\/work-session-evidence-source-proposals$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      candidate_id: "session-evidence-PromptVault-source-proposal",
+      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      query: "PromptVault nearby evidence",
+      limit: 5,
+      max_lines: 100000,
+    },
+  });
+  assert.equal(result.review_ready_count, 1);
+  assert.equal(result.blocked_count, 0);
+  assert.equal(result.returned_proposal_count, 1);
+  assert.equal(result.proposals[0].trace_validated, true);
+  assert.equal(result.proposals[0].review_ready, true);
+  assert.equal(result.proposals[0].blocker_reason, null);
+  assert.equal(result.proposals[0].source_line_number, 12);
+  assert.match(result.warnings[0], /review input only/);
+});
+
+test("browser bridge work session evidence source proposals reject duplicate hit ids", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const proposal = projectWorkSessionEvidenceSourceProposalsPayload().proposals[0];
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSessionEvidenceSourceProposalsPayload({
+    returned_proposal_count: 2,
+    review_ready_count: 2,
+    proposals: [proposal, proposal],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkSessionEvidenceSourceProposals({
+      candidate_id: "session-evidence-PromptVault-source-proposal",
       source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
       query: "PromptVault nearby evidence",
       limit: 5,

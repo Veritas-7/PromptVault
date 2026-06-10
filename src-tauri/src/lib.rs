@@ -1183,6 +1183,16 @@ pub struct ProjectWorkSessionEvidenceSourceSearchOptions {
     pub max_lines: Option<usize>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSessionEvidenceSourceProposalsOptions {
+    pub database_path: Option<String>,
+    pub candidate_id: String,
+    pub source_path: String,
+    pub query: String,
+    pub limit: Option<usize>,
+    pub max_lines: Option<usize>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkSessionEvidenceSourceSearchItem {
     pub id: String,
@@ -1210,6 +1220,48 @@ pub struct ProjectWorkSessionEvidenceSourceSearchResult {
     pub matched_line_count: usize,
     pub returned_item_count: usize,
     pub items: Vec<ProjectWorkSessionEvidenceSourceSearchItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceSourceProposal {
+    pub candidate_id: String,
+    pub project: String,
+    pub date: String,
+    pub source_path: String,
+    pub source_line_number: usize,
+    pub source_session_id: Option<String>,
+    pub source_timestamp: Option<String>,
+    pub source_cwd: Option<String>,
+    pub source_search_hit_id: String,
+    pub proposal_kind: String,
+    pub proposed_action: String,
+    pub source_trace: String,
+    pub trace_validated: bool,
+    pub review_ready: bool,
+    pub blocker_reason: Option<String>,
+    pub match_score: usize,
+    pub matched_terms: Vec<String>,
+    pub confidence: f64,
+    pub risk_flags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceSourceProposalsResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub candidate_id: String,
+    pub project: String,
+    pub date: String,
+    pub source_path: String,
+    pub query: String,
+    pub query_term_count: usize,
+    pub scanned_line_count: usize,
+    pub matched_line_count: usize,
+    pub returned_proposal_count: usize,
+    pub review_ready_count: usize,
+    pub blocked_count: usize,
+    pub proposals: Vec<ProjectWorkSessionEvidenceSourceProposal>,
     pub warnings: Vec<String>,
 }
 
@@ -1735,6 +1787,13 @@ fn project_work_session_evidence_source_search(
     options: ProjectWorkSessionEvidenceSourceSearchOptions,
 ) -> Result<ProjectWorkSessionEvidenceSourceSearchResult, String> {
     run_project_work_session_evidence_source_search(options).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_session_evidence_source_proposals(
+    options: ProjectWorkSessionEvidenceSourceProposalsOptions,
+) -> Result<ProjectWorkSessionEvidenceSourceProposalsResult, String> {
+    run_project_work_session_evidence_source_proposals(options).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -2985,6 +3044,78 @@ pub fn run_project_work_session_evidence_source_search(
         items,
         warnings,
     })
+}
+
+pub fn run_project_work_session_evidence_source_proposals(
+    options: ProjectWorkSessionEvidenceSourceProposalsOptions,
+) -> Result<ProjectWorkSessionEvidenceSourceProposalsResult, Box<dyn std::error::Error>> {
+    if matches!(options.limit, Some(0)) {
+        return Err(
+            "work-session-evidence-source-proposals limit requires a positive integer".into(),
+        );
+    }
+    if matches!(options.max_lines, Some(0)) {
+        return Err(
+            "work-session-evidence-source-proposals max-lines requires a positive integer".into(),
+        );
+    }
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err(
+            "work-session-evidence-source-proposals database path requires a non-empty value"
+                .into(),
+        );
+    }
+    let candidate_id = options.candidate_id.trim();
+    if candidate_id.is_empty() {
+        return Err(
+            "work-session-evidence-source-proposals candidate-id requires a non-empty value".into(),
+        );
+    }
+
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let candidates = run_project_work_session_evidence_candidates(
+        ProjectWorkSessionEvidenceCandidatesOptions {
+            database_path: Some(database_path.display().to_string()),
+            limit: Some(MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT),
+            session_limit: None,
+            refresh_session_index: None,
+            needs_title_normalization: None,
+        },
+    )?;
+    let candidate = candidates
+        .candidates
+        .iter()
+        .find(|candidate| candidate.candidate_id == candidate_id)
+        .ok_or("work-session-evidence-source-proposals candidate-id was not found in current unresolved session-evidence candidates")?;
+    let source_search = run_project_work_session_evidence_source_search(
+        ProjectWorkSessionEvidenceSourceSearchOptions {
+            source_path: options.source_path,
+            query: options.query,
+            limit: options.limit,
+            max_lines: options.max_lines,
+        },
+    )?;
+    let conn = open_promptvault_database(&database_path)?;
+    if !project_work_session_source_path_indexed_for_project(
+        &conn,
+        &candidate.project,
+        &source_search.source_path,
+    )? {
+        return Err(
+            "work-session-evidence-source-proposals source-path is not indexed as a same-project session hint for the candidate"
+                .into(),
+        );
+    }
+
+    Ok(project_work_session_evidence_source_proposals_from_search(
+        &database_path,
+        candidate,
+        source_search,
+    ))
 }
 
 pub fn run_project_work_session_index(
@@ -9233,6 +9364,27 @@ fn count_project_work_session_evidence_for_project(
     Ok(count as usize)
 }
 
+fn project_work_session_source_path_indexed_for_project(
+    conn: &Connection,
+    project: &str,
+    source_path: &str,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let pattern = project_work_session_project_like_pattern(project);
+    let count = conn.query_row(
+        "SELECT COUNT(*)
+         FROM project_work_session_evidence
+         WHERE source_path = ?2
+           AND (
+                source_path LIKE ?1 ESCAPE '\\'
+             OR cwd LIKE ?1 ESCAPE '\\'
+             OR text LIKE ?1 ESCAPE '\\'
+           )",
+        params![pattern, source_path],
+        |row| row.get::<_, i64>(0),
+    )?;
+    Ok(count > 0)
+}
+
 fn read_project_work_session_evidence_nearby_items(
     conn: &Connection,
     project: &str,
@@ -9541,6 +9693,114 @@ fn project_work_session_evidence_source_search_path_allowed(path: &Path) -> bool
     }
 
     false
+}
+
+fn project_work_session_evidence_source_proposals_from_search(
+    database_path: &Path,
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+    source_search: ProjectWorkSessionEvidenceSourceSearchResult,
+) -> ProjectWorkSessionEvidenceSourceProposalsResult {
+    let mut warnings = source_search.warnings.clone();
+    warnings.push(
+        "Source-search proposals are copied-trace review input only; they do not approve or create durable session evidence."
+            .to_string(),
+    );
+    let proposals = source_search
+        .items
+        .iter()
+        .map(|hit| {
+            project_work_session_evidence_source_proposal_from_hit(candidate, &source_search, hit)
+        })
+        .collect::<Vec<_>>();
+    let review_ready_count = proposals
+        .iter()
+        .filter(|proposal| proposal.review_ready)
+        .count();
+    let blocked_count = proposals.len().saturating_sub(review_ready_count);
+    ProjectWorkSessionEvidenceSourceProposalsResult {
+        generated_at: Utc::now().to_rfc3339(),
+        database_path: database_path.display().to_string(),
+        candidate_id: candidate.candidate_id.clone(),
+        project: candidate.project.clone(),
+        date: candidate.date.clone(),
+        source_path: source_search.source_path,
+        query: source_search.query,
+        query_term_count: source_search.query_term_count,
+        scanned_line_count: source_search.scanned_line_count,
+        matched_line_count: source_search.matched_line_count,
+        returned_proposal_count: proposals.len(),
+        review_ready_count,
+        blocked_count,
+        proposals,
+        warnings,
+    }
+}
+
+fn project_work_session_evidence_source_proposal_from_hit(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+    source_search: &ProjectWorkSessionEvidenceSourceSearchResult,
+    hit: &ProjectWorkSessionEvidenceSourceSearchItem,
+) -> ProjectWorkSessionEvidenceSourceProposal {
+    let source_trace = hit.excerpt.trim().to_string();
+    let trace_validated = !source_trace.is_empty() && source_trace == hit.excerpt.trim();
+    let mut risk_flags = detect_risks(&project_work_session_evidence_candidate_source_material(
+        candidate,
+    ))
+    .into_iter()
+    .chain(hit.risk_flags.iter().cloned())
+    .collect::<Vec<_>>();
+    risk_flags.sort();
+    risk_flags.dedup();
+    let blocker_reason = if candidate.needs_title_normalization {
+        Some("title_normalization_required_first".to_string())
+    } else if !trace_validated {
+        Some("source_trace_not_copied_from_search_hit".to_string())
+    } else if !risk_flags.is_empty() {
+        Some("candidate_or_source_hit_has_risk_flags".to_string())
+    } else {
+        None
+    };
+    let proposal_kind = if candidate.needs_title_normalization {
+        "title_normalization_first"
+    } else {
+        "manual_session_search"
+    };
+    let proposed_action = if candidate.needs_title_normalization {
+        format!(
+            "Normalize the project/day title before reviewing source line {} for any durable session-evidence decision.",
+            hit.line_number
+        )
+    } else {
+        format!(
+            "Review copied source-search trace from line {} before approving any durable session-evidence record.",
+            hit.line_number
+        )
+    };
+    ProjectWorkSessionEvidenceSourceProposal {
+        candidate_id: candidate.candidate_id.clone(),
+        project: candidate.project.clone(),
+        date: candidate.date.clone(),
+        source_path: source_search.source_path.clone(),
+        source_line_number: hit.line_number,
+        source_session_id: hit.session_id.clone(),
+        source_timestamp: hit.timestamp.clone(),
+        source_cwd: hit.cwd.clone(),
+        source_search_hit_id: hit.id.clone(),
+        proposal_kind: proposal_kind.to_string(),
+        proposed_action,
+        source_trace,
+        trace_validated,
+        review_ready: blocker_reason.is_none(),
+        blocker_reason,
+        match_score: hit.match_score,
+        matched_terms: hit.matched_terms.clone(),
+        confidence: project_work_session_evidence_source_hit_confidence(hit.match_score),
+        risk_flags,
+    }
+}
+
+fn project_work_session_evidence_source_hit_confidence(match_score: usize) -> f64 {
+    (0.55 + (match_score.min(4) as f64 * 0.1)).min(0.95)
 }
 
 fn project_work_session_project_like_pattern(project: &str) -> String {
@@ -17793,6 +18053,7 @@ pub fn run() {
             project_work_session_evidence_reviewed_items,
             project_work_session_evidence_nearby,
             project_work_session_evidence_source_search,
+            project_work_session_evidence_source_proposals,
             project_work_summary_snapshots,
             project_work_log_coverage,
             project_work_log_candidates,
@@ -21975,6 +22236,76 @@ Status: completed as a source-only/report-only hardening slice.
             .any(|warning| warning.contains("read-only")));
 
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn session_evidence_source_proposals_are_copied_trace_review_input() {
+        let candidate = session_evidence_candidate_fixture(
+            "session-evidence-NearbyProject-source-proposal",
+            "NearbyProject",
+            "2026-06-09: NearbyProject still needs reviewed session evidence.",
+            false,
+        );
+        let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
+            generated_at: "2026-06-09T00:00:00Z".to_string(),
+            source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl".to_string(),
+            query: "NearbyProject reviewed evidence".to_string(),
+            query_term_count: 3,
+            requested_limit: 5,
+            requested_max_lines: 100_000,
+            scanned_line_count: 12,
+            matched_line_count: 1,
+            returned_item_count: 1,
+            items: vec![ProjectWorkSessionEvidenceSourceSearchItem {
+                id: "source-hit-ready".to_string(),
+                line_number: 7,
+                session_id: Some("turn-source-hit-ready".to_string()),
+                timestamp: Some("2026-06-09T12:00:00Z".to_string()),
+                cwd: Some("/Users/wj/Ai/System/10_Projects/NearbyProject".to_string()),
+                match_score: 3,
+                matched_terms: vec![
+                    "evidence".to_string(),
+                    "nearbyproject".to_string(),
+                    "reviewed".to_string(),
+                ],
+                excerpt: "NearbyProject reviewed evidence source hit.".to_string(),
+                word_count: 5,
+                char_count: 43,
+                risk_flags: Vec::new(),
+            }],
+            warnings: vec![
+                "Raw source search is read-only and redacted; returned snippets do not create or approve session evidence."
+                    .to_string(),
+            ],
+        };
+
+        let result = project_work_session_evidence_source_proposals_from_search(
+            Path::new("/tmp/promptvault.sqlite"),
+            &candidate,
+            source_search,
+        );
+
+        assert_eq!(result.candidate_id, candidate.candidate_id);
+        assert_eq!(result.returned_proposal_count, 1);
+        assert_eq!(result.review_ready_count, 1);
+        assert_eq!(result.blocked_count, 0);
+        let proposal = &result.proposals[0];
+        assert_eq!(proposal.source_search_hit_id, "source-hit-ready");
+        assert_eq!(proposal.proposal_kind, "manual_session_search");
+        assert!(proposal.trace_validated);
+        assert!(proposal.review_ready);
+        assert_eq!(proposal.blocker_reason, None);
+        assert_eq!(
+            proposal.source_trace,
+            "NearbyProject reviewed evidence source hit."
+        );
+        assert!(proposal
+            .proposed_action
+            .contains("line 7 before approving any durable session-evidence"));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("review input only")));
     }
 
     #[test]

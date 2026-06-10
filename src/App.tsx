@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
+  ClipboardCheck,
   ClipboardList,
   Database,
   FileText,
@@ -124,6 +125,7 @@ import {
   loadProjectWorkLogReviewQueue,
   loadProjectWorkSessionEvidenceProposals,
   loadProjectWorkSessionEvidenceNearby,
+  loadProjectWorkSessionEvidenceSourceProposals,
   searchProjectWorkSessionEvidenceSource,
   loadProjectWorkSessionEvidenceReviewQueue,
   applyProjectWorkSessionEvidenceReviewRows,
@@ -296,6 +298,7 @@ import type {
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceNearbyResult,
+  ProjectWorkSessionEvidenceSourceProposalsResult,
   ProjectWorkSessionEvidenceSourceSearchResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
@@ -459,6 +462,7 @@ type ImportEventsState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionIndexState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionEvidenceNearbyState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionEvidenceSourceSearchState = "idle" | "loading" | "ready" | "failed";
+type WorkSessionEvidenceSourceProposalsState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionIndexBackfillMode = "reset" | "continue" | "long-continue";
 const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
@@ -819,6 +823,8 @@ function App() {
     useState<WorkSessionEvidenceNearbyState>("idle");
   const [workSessionEvidenceSourceSearchState, setWorkSessionEvidenceSourceSearchState] =
     useState<WorkSessionEvidenceSourceSearchState>("idle");
+  const [workSessionEvidenceSourceProposalsState, setWorkSessionEvidenceSourceProposalsState] =
+    useState<WorkSessionEvidenceSourceProposalsState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
   const [workManagementFreezeState, setWorkManagementFreezeState] =
@@ -888,6 +894,8 @@ function App() {
     useState<ProjectWorkSessionEvidenceNearbyResult | null>(null);
   const [workSessionEvidenceSourceSearchResult, setWorkSessionEvidenceSourceSearchResult] =
     useState<ProjectWorkSessionEvidenceSourceSearchResult | null>(null);
+  const [workSessionEvidenceSourceProposalsResult, setWorkSessionEvidenceSourceProposalsResult] =
+    useState<ProjectWorkSessionEvidenceSourceProposalsResult | null>(null);
   const [workLogNormalizedItemsResult, setWorkLogNormalizedItemsResult] =
     useState<ProjectWorkLogNormalizedItemsResult | null>(null);
   const [
@@ -905,6 +913,10 @@ function App() {
   const [
     workSessionEvidenceSourceSearchSessionId,
     setWorkSessionEvidenceSourceSearchSessionId,
+  ] = useState<string | null>(null);
+  const [
+    workSessionEvidenceSourceProposalsSessionId,
+    setWorkSessionEvidenceSourceProposalsSessionId,
   ] = useState<string | null>(null);
   const [approvedWorkLogExtractionCandidateIds, setApprovedWorkLogExtractionCandidateIds] =
     useState<Set<string>>(() => new Set());
@@ -999,6 +1011,7 @@ function App() {
     || workSessionEvidenceReviewedItemsState === "loading"
     || workSessionEvidenceNearbyState === "loading"
     || workSessionEvidenceSourceSearchState === "loading"
+    || workSessionEvidenceSourceProposalsState === "loading"
     || workManagementRefreshState === "loading"
     || workManagementFreezeState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
@@ -2192,6 +2205,9 @@ function App() {
     setWorkSessionEvidenceSourceSearchResult(null);
     setWorkSessionEvidenceSourceSearchSessionId(null);
     setWorkSessionEvidenceSourceSearchState("idle");
+    setWorkSessionEvidenceSourceProposalsResult(null);
+    setWorkSessionEvidenceSourceProposalsSessionId(null);
+    setWorkSessionEvidenceSourceProposalsState("idle");
     try {
       const query = [item.project, item.date, ...item.top_titles, item.sample_evidence]
         .map((part) => part.trim())
@@ -2212,6 +2228,8 @@ function App() {
       setWorkSessionEvidenceNearbyResult(null);
       setWorkSessionEvidenceSourceSearchResult(null);
       setWorkSessionEvidenceSourceSearchSessionId(null);
+      setWorkSessionEvidenceSourceProposalsResult(null);
+      setWorkSessionEvidenceSourceProposalsSessionId(null);
       setWorkSessionEvidenceNearbyState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
@@ -2226,6 +2244,9 @@ function App() {
     setError(null);
     setWorkSessionEvidenceSourceSearchState("loading");
     setWorkSessionEvidenceSourceSearchSessionId(session.id);
+    setWorkSessionEvidenceSourceProposalsResult(null);
+    setWorkSessionEvidenceSourceProposalsSessionId(null);
+    setWorkSessionEvidenceSourceProposalsState("idle");
     try {
       const query = [
         nearbyResult.project,
@@ -2250,7 +2271,38 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkSessionEvidenceSourceSearchResult(null);
+      setWorkSessionEvidenceSourceProposalsResult(null);
       setWorkSessionEvidenceSourceSearchState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function loadWorkSessionEvidenceSourceProposals(
+    item: ProjectWorkSessionEvidenceReviewQueueItem,
+    session: ProjectWorkSessionEvidenceNearbyResult["items"][number],
+    sourceSearchResult: ProjectWorkSessionEvidenceSourceSearchResult,
+  ) {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSessionEvidenceSourceProposalsState("loading");
+    setWorkSessionEvidenceSourceProposalsSessionId(session.id);
+    try {
+      const next = await loadProjectWorkSessionEvidenceSourceProposals({
+        candidate_id: item.candidate_id,
+        source_path: session.source_path,
+        query: sourceSearchResult.query,
+        limit: 5,
+        max_lines: sourceSearchResult.requested_max_lines,
+      });
+      setWorkSessionEvidenceSourceProposalsResult(next);
+      setWorkSessionEvidenceSourceProposalsState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSessionEvidenceSourceProposalsResult(null);
+      setWorkSessionEvidenceSourceProposalsState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -6428,6 +6480,95 @@ function App() {
                                               </span>
                                             ),
                                           )}
+                                          <button
+                                            aria-label={`${item.project} ${item.date} 원본 검색 결과를 검토 제안으로 변환`}
+                                            className="inline-action compact-action"
+                                            data-work-session-evidence-source-proposals-action={session.id}
+                                            disabled={
+                                              isTopLevelActionLocked
+                                              || workSessionEvidenceSourceSearchResult.items.length === 0
+                                            }
+                                            onClick={() =>
+                                              void loadWorkSessionEvidenceSourceProposals(
+                                                item,
+                                                session,
+                                                workSessionEvidenceSourceSearchResult,
+                                              )}
+                                            type="button"
+                                          >
+                                            <ClipboardCheck size={14} />
+                                            {workSessionEvidenceSourceProposalsSessionId === session.id
+                                              && workSessionEvidenceSourceProposalsState === "loading"
+                                              ? "제안 생성 중"
+                                              : "검토 제안"}
+                                          </button>
+                                          {workSessionEvidenceSourceProposalsSessionId === session.id ? (
+                                            <div
+                                              className="work-session-nearby-panel"
+                                              data-work-session-evidence-source-proposals={session.id}
+                                            >
+                                              {workSessionEvidenceSourceProposalsState === "loading" ? (
+                                                <span>복사 trace 검증 중</span>
+                                              ) : null}
+                                              {workSessionEvidenceSourceProposalsState === "failed" ? (
+                                                <span>검토 제안 생성 실패</span>
+                                              ) : null}
+                                              {workSessionEvidenceSourceProposalsResult ? (
+                                                <>
+                                                  <span>
+                                                    검토 준비{" "}
+                                                    {workSessionEvidenceSourceProposalsResult.review_ready_count
+                                                      .toLocaleString()} /{" "}
+                                                    {workSessionEvidenceSourceProposalsResult.returned_proposal_count
+                                                      .toLocaleString()} · durable 승인 아님
+                                                  </span>
+                                                  <span>
+                                                    blocked{" "}
+                                                    {workSessionEvidenceSourceProposalsResult.blocked_count
+                                                      .toLocaleString()} · matched lines{" "}
+                                                    {workSessionEvidenceSourceProposalsResult.matched_line_count
+                                                      .toLocaleString()}
+                                                  </span>
+                                                  {workSessionEvidenceSourceProposalsResult.warnings.map(
+                                                    (warning, index) => (
+                                                      <span key={textListItemKey(warning, index)}>
+                                                        {warning}
+                                                      </span>
+                                                    ),
+                                                  )}
+                                                  {workSessionEvidenceSourceProposalsResult.proposals.length ? (
+                                                    workSessionEvidenceSourceProposalsResult.proposals.map(
+                                                      (proposal) => (
+                                                        <div
+                                                          className="work-session-nearby-item"
+                                                          key={proposal.source_search_hit_id}
+                                                        >
+                                                          <strong>
+                                                            line{" "}
+                                                            {proposal.source_line_number
+                                                              .toLocaleString()} ·{" "}
+                                                            {proposal.review_ready
+                                                              ? "review-ready"
+                                                              : "blocked"}
+                                                          </strong>
+                                                          <span>
+                                                            {proposal.proposal_kind} · confidence{" "}
+                                                            {proposal.confidence.toFixed(2)}
+                                                          </span>
+                                                          <p>{proposal.source_trace}</p>
+                                                          {proposal.blocker_reason ? (
+                                                            <span>{proposal.blocker_reason}</span>
+                                                          ) : null}
+                                                        </div>
+                                                      ),
+                                                    )
+                                                  ) : (
+                                                    <span>검토 제안으로 변환할 source hit 없음</span>
+                                                  )}
+                                                </>
+                                              ) : null}
+                                            </div>
+                                          ) : null}
                                           {workSessionEvidenceSourceSearchResult.items.length ? (
                                             workSessionEvidenceSourceSearchResult.items.map((hit) => (
                                               <div

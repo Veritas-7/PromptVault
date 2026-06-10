@@ -785,6 +785,17 @@ function projectWorkSessionEvidenceSourceAuditPayload(overrides = {}) {
     ],
     blocker_reason_counts: [{ text: "source_trace_is_instruction_only", count: 1 }],
     risk_flag_counts: [{ text: "source_prompt_instruction_only", count: 1 }],
+    operator_plan: {
+      review_ready_count: 1,
+      manual_defer_count: 1,
+      bulk_reject_count: 0,
+      manual_inspect_count: 1,
+      approval_requires_source_review_count: 1,
+      review_ready_candidate_ids: [readyItem.candidate_id],
+      manual_defer_candidate_ids: [blockedItem.candidate_id],
+      bulk_reject_candidate_ids: [],
+      manual_inspect_candidate_ids: [blockedItem.candidate_id],
+    },
     items: [readyItem, blockedItem],
     warnings: [
       "Source audit is read-only; it does not approve, reject, apply, or create session evidence.",
@@ -2107,6 +2118,11 @@ test("browser bridge work session evidence source audit posts filters and valida
   assert.equal(result.rows_with_blocked_proposals_count, 1);
   assert.equal(result.total_review_ready_count, 1);
   assert.equal(result.total_blocked_count, 1);
+  assert.equal(result.operator_plan.review_ready_count, 1);
+  assert.equal(result.operator_plan.manual_defer_count, 1);
+  assert.deepEqual(result.operator_plan.review_ready_candidate_ids, [
+    "session-evidence-PromptVault-source-audit-ready",
+  ]);
   assert.equal(result.items[0].outcome, "review_ready");
   assert.equal(result.items[1].blocker_reason_counts[0].text, "source_trace_is_instruction_only");
   assert.match(result.warnings[0], /read-only/);

@@ -1332,6 +1332,19 @@ pub struct ProjectWorkSessionEvidenceSourceAuditItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceSourceAuditOperatorPlan {
+    pub review_ready_count: usize,
+    pub manual_defer_count: usize,
+    pub bulk_reject_count: usize,
+    pub manual_inspect_count: usize,
+    pub approval_requires_source_review_count: usize,
+    pub review_ready_candidate_ids: Vec<String>,
+    pub manual_defer_candidate_ids: Vec<String>,
+    pub bulk_reject_candidate_ids: Vec<String>,
+    pub manual_inspect_candidate_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkSessionEvidenceSourceAuditResult {
     pub generated_at: String,
     pub database_path: String,
@@ -1351,6 +1364,7 @@ pub struct ProjectWorkSessionEvidenceSourceAuditResult {
     pub outcome_counts: Vec<FrequencyItem>,
     pub blocker_reason_counts: Vec<FrequencyItem>,
     pub risk_flag_counts: Vec<FrequencyItem>,
+    pub operator_plan: ProjectWorkSessionEvidenceSourceAuditOperatorPlan,
     pub items: Vec<ProjectWorkSessionEvidenceSourceAuditItem>,
     pub warnings: Vec<String>,
 }
@@ -3386,6 +3400,7 @@ pub fn run_project_work_session_evidence_source_audit(
             .flat_map(|item| item.risk_flag_counts.iter().cloned())
             .collect::<Vec<_>>(),
     );
+    let operator_plan = project_work_session_evidence_source_audit_operator_plan(&items);
 
     Ok(ProjectWorkSessionEvidenceSourceAuditResult {
         generated_at: Utc::now().to_rfc3339(),
@@ -3406,6 +3421,7 @@ pub fn run_project_work_session_evidence_source_audit(
         outcome_counts,
         blocker_reason_counts,
         risk_flag_counts,
+        operator_plan,
         items,
         warnings,
     })
@@ -10463,6 +10479,74 @@ fn project_work_session_evidence_source_audit_item(
         blocker_reason_counts,
         risk_flag_counts,
         warnings,
+    }
+}
+
+fn project_work_session_evidence_source_audit_can_reject(
+    item: &ProjectWorkSessionEvidenceSourceAuditItem,
+) -> bool {
+    matches!(item.review_state.as_str(), "pending_review" | "stale")
+        && item.outcome != "review_ready"
+}
+
+fn project_work_session_evidence_source_audit_has_risk_flags(
+    item: &ProjectWorkSessionEvidenceSourceAuditItem,
+) -> bool {
+    item.risk_flag_counts
+        .iter()
+        .any(|risk_flag| risk_flag.count > 0)
+}
+
+fn project_work_session_evidence_source_audit_needs_manual_inspect(
+    item: &ProjectWorkSessionEvidenceSourceAuditItem,
+) -> bool {
+    project_work_session_evidence_source_audit_can_reject(item)
+        && (matches!(
+            item.outcome.as_str(),
+            "no_source_hits"
+                | "source_not_indexed_for_project"
+                | "nearby_error"
+                | "source_search_error"
+        ) || (item.outcome == "blocked"
+            && project_work_session_evidence_source_audit_has_risk_flags(item)))
+}
+
+fn project_work_session_evidence_source_audit_can_bulk_reject(
+    item: &ProjectWorkSessionEvidenceSourceAuditItem,
+) -> bool {
+    project_work_session_evidence_source_audit_can_reject(item)
+        && !project_work_session_evidence_source_audit_needs_manual_inspect(item)
+}
+
+fn project_work_session_evidence_source_audit_operator_plan(
+    items: &[ProjectWorkSessionEvidenceSourceAuditItem],
+) -> ProjectWorkSessionEvidenceSourceAuditOperatorPlan {
+    let review_ready_candidate_ids = items
+        .iter()
+        .filter(|item| item.outcome == "review_ready")
+        .map(|item| item.candidate_id.clone())
+        .collect::<Vec<_>>();
+    let manual_defer_candidate_ids = items
+        .iter()
+        .filter(|item| project_work_session_evidence_source_audit_needs_manual_inspect(item))
+        .map(|item| item.candidate_id.clone())
+        .collect::<Vec<_>>();
+    let bulk_reject_candidate_ids = items
+        .iter()
+        .filter(|item| project_work_session_evidence_source_audit_can_bulk_reject(item))
+        .map(|item| item.candidate_id.clone())
+        .collect::<Vec<_>>();
+    let manual_inspect_candidate_ids = manual_defer_candidate_ids.clone();
+    ProjectWorkSessionEvidenceSourceAuditOperatorPlan {
+        review_ready_count: review_ready_candidate_ids.len(),
+        manual_defer_count: manual_defer_candidate_ids.len(),
+        bulk_reject_count: bulk_reject_candidate_ids.len(),
+        manual_inspect_count: manual_inspect_candidate_ids.len(),
+        approval_requires_source_review_count: review_ready_candidate_ids.len(),
+        review_ready_candidate_ids,
+        manual_defer_candidate_ids,
+        bulk_reject_candidate_ids,
+        manual_inspect_candidate_ids,
     }
 }
 
@@ -24882,6 +24966,11 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(audit.audited_item_count, 2);
         assert_eq!(audit.rows_with_review_ready_count, 1);
         assert_eq!(audit.no_recommended_source_count, 1);
+        assert_eq!(audit.operator_plan.review_ready_count, 1);
+        assert_eq!(audit.operator_plan.manual_defer_count, 0);
+        assert_eq!(audit.operator_plan.bulk_reject_count, 1);
+        assert_eq!(audit.operator_plan.manual_inspect_count, 0);
+        assert_eq!(audit.operator_plan.approval_requires_source_review_count, 1);
         assert_eq!(
             audit
                 .outcome_counts
@@ -24907,6 +24996,10 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(ready_item.review_ready_count, 1);
         assert_eq!(ready_item.source_search_returned_item_count, 1);
         assert_eq!(
+            audit.operator_plan.review_ready_candidate_ids,
+            vec![ready_item.candidate_id.clone()]
+        );
+        assert_eq!(
             ready_item.recommended_source_path.as_deref(),
             Some(source_path.to_str().expect("utf8 source path"))
         );
@@ -24917,6 +25010,10 @@ Status: completed as a source-only/report-only hardening slice.
             .expect("metadata-only audit item");
         assert_eq!(metadata_item.outcome, "no_recommended_source");
         assert_eq!(metadata_item.source_search_returned_item_count, 0);
+        assert_eq!(
+            audit.operator_plan.bulk_reject_candidate_ids,
+            vec![metadata_item.candidate_id.clone()]
+        );
         assert!(metadata_item
             .warnings
             .iter()

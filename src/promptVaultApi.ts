@@ -3164,6 +3164,42 @@ function isProjectWorkSessionEvidenceSourceAuditItem(value: unknown): boolean {
     && isNonBlankStringArray(value.warnings);
 }
 
+function sourceAuditPlanIdsAreKnown(
+  candidateIds: unknown,
+  knownCandidateIds: Set<string>,
+): boolean {
+  return isUniqueNonBlankStringArray(candidateIds)
+    && candidateIds.every((candidateId) => knownCandidateIds.has(candidateId));
+}
+
+function sourceAuditPlanCountMatches(candidateIds: unknown, count: unknown): boolean {
+  return Array.isArray(candidateIds)
+    && isNonNegativeSafeInteger(count)
+    && candidateIds.length === count;
+}
+
+function isProjectWorkSessionEvidenceSourceAuditOperatorPlan(
+  value: unknown,
+  items: ProjectWorkSessionEvidenceSourceAuditResult["items"],
+): boolean {
+  if (!isRecord(value)) return false;
+  const knownCandidateIds = new Set(items.map((item) => item.candidate_id));
+  return isNonNegativeSafeInteger(value.review_ready_count)
+    && isNonNegativeSafeInteger(value.manual_defer_count)
+    && isNonNegativeSafeInteger(value.bulk_reject_count)
+    && isNonNegativeSafeInteger(value.manual_inspect_count)
+    && isNonNegativeSafeInteger(value.approval_requires_source_review_count)
+    && sourceAuditPlanIdsAreKnown(value.review_ready_candidate_ids, knownCandidateIds)
+    && sourceAuditPlanIdsAreKnown(value.manual_defer_candidate_ids, knownCandidateIds)
+    && sourceAuditPlanIdsAreKnown(value.bulk_reject_candidate_ids, knownCandidateIds)
+    && sourceAuditPlanIdsAreKnown(value.manual_inspect_candidate_ids, knownCandidateIds)
+    && sourceAuditPlanCountMatches(value.review_ready_candidate_ids, value.review_ready_count)
+    && sourceAuditPlanCountMatches(value.manual_defer_candidate_ids, value.manual_defer_count)
+    && sourceAuditPlanCountMatches(value.bulk_reject_candidate_ids, value.bulk_reject_count)
+    && sourceAuditPlanCountMatches(value.manual_inspect_candidate_ids, value.manual_inspect_count)
+    && value.approval_requires_source_review_count === value.review_ready_count;
+}
+
 function parseProjectWorkSessionEvidenceSourceAuditResult(
   value: unknown,
 ): ProjectWorkSessionEvidenceSourceAuditResult {
@@ -3200,6 +3236,10 @@ function parseProjectWorkSessionEvidenceSourceAuditResult(
     || value.items.length !== value.audited_item_count
     || !value.items.every(isProjectWorkSessionEvidenceSourceAuditItem)
     || !recordStringFieldValuesAreUnique(value.items, "candidate_id")
+    || !isProjectWorkSessionEvidenceSourceAuditOperatorPlan(
+      value.operator_plan,
+      value.items as ProjectWorkSessionEvidenceSourceAuditResult["items"],
+    )
     || !isNonBlankStringArray(value.warnings)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }

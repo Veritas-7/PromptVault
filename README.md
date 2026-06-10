@@ -244,6 +244,12 @@ Run `plan` before an unrestricted scan on large stores. It inventories matching 
 
 The Tauri UI runs full exports but receives only a latest-prompt preview over IPC, so the large Markdown file remains on disk instead of being serialized into the frontend.
 
+`work-session-evidence-source-audit --json` returns a read-only
+`operator_plan` with `review_ready`, `manual_defer`, `bulk_reject`, and
+`manual_inspect` candidate-id buckets. Use it as planning evidence before a live
+operator pass; it does not approve, defer, reject, apply, or create session
+evidence.
+
 For source-proposal review approvals, `work-session-evidence-review-queue-update`
 requires copied trace metadata through exactly one of `--source-review-json` or
 `--source-review-file` when the audit reason starts with

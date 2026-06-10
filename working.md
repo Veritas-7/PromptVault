@@ -1,10 +1,121 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 01:48 KST
+Updated: 2026-06-11 01:56 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 01:56 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and `PROJECT_STATUS.md`.
+- Ensure session-evidence decisions are source-traced, operator-reviewable,
+  resumable, and fail-closed. AI/SDK-assisted extraction may propose or group
+  work, but live decisions must stay explicit and auditable.
+
+Short-Term Goal:
+
+- Make the default-vault source-audit/manual-inspect operator pass safely
+  actionable before writing any live queue decisions.
+
+Current Goal:
+
+- Add read-only `operator_plan` evidence to session-evidence source audit so
+  the next operator pass can see review-ready, manual-defer, bulk-reject, and
+  manual-inspect candidate ID buckets from one CLI/API result.
+
+Context:
+
+- Goal identity was rechecked for thread
+  `019ea10c-fbe8-7b60-8889-6f00b5a91a68`; persisted objective still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- The previous UI slice added source-audit bulk defer. This slice does not
+  repeat that work; it adds a read-only planning layer for the same operator
+  pass.
+- Live default vault was audited read-only with:
+  `cargo run --quiet --bin promptvault-cli -- work-session-evidence-source-audit
+  --limit 100 --review-state pending_review --nearby-limit 6 --source-limit 5
+  --max-lines 100000 --json`.
+- Live result: `25` pending rows audited, outcomes `12`
+  `no_recommended_source`, `11` `blocked`, `2` `no_source_hits`.
+- Live `operator_plan`: `review_ready_count=0`, `manual_defer_count=5`,
+  `bulk_reject_count=20`, `manual_inspect_count=5`,
+  `approval_requires_source_review_count=0`.
+- No live queue update/apply/sync decision was written by this slice.
+
+Progress:
+
+- Added backend `ProjectWorkSessionEvidenceSourceAuditOperatorPlan` and
+  attached it to every source-audit result.
+- Mirrored the UI helper rules in Rust for review-ready, manual-defer,
+  bulk-reject, and manual-inspect candidate buckets.
+- Added strict bridge parsing so the frontend rejects malformed operator plans,
+  unknown candidate IDs, duplicate IDs, or mismatched counts.
+- Added human CLI output for `operator_plan` and documented that it is planning
+  evidence only.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: source-audit operator plan struct, classification
+  helpers, result field, and backend test assertions.
+- `src-tauri/src/bin/promptvault-cli.rs`: human output summary and help text
+  documenting operator-plan safety.
+- `src/types.ts`, `src/promptVaultApi.ts`: frontend type and bridge parser
+  validation for operator plans.
+- `tests/promptVaultApi.test.ts`, `tests/workSummaryStatus.test.ts`: updated
+  fixtures and parser/status coverage for the new field.
+- `docs/CLI.md`, `README.md`: documented read-only `operator_plan` usage.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts` passed
+  with `264` tests.
+- `cargo test session_evidence_source_audit_summarizes_review_ready_and_metadata_only_rows --lib`
+  passed.
+- `cargo test --bin promptvault-cli
+  work_session_evidence_source_audit_help_documents_batch_review_safety`
+  passed.
+- `cargo run --quiet --bin promptvault-cli -- work-session-evidence-source-audit
+  --limit 100 --review-state pending_review --nearby-limit 6 --source-limit 5
+  --max-lines 100000 --json` passed live read-only and returned the operator
+  plan counts above.
+- `cargo run --quiet --bin promptvault-cli -- work-session-evidence-source-audit
+  --limit 5 --review-state pending_review --nearby-limit 6 --source-limit 5
+  --max-lines 100000` passed live read-only and showed the human
+  `operator_plan` summary.
+- Full `npm run check` passed: UI tests `532`, Vite / TypeScript build, Rust
+  lib tests `252`, CLI tests `47`, doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- Live default vault still has the `25` pending rows. This slice only makes the
+  operator pass safer to plan; it does not defer or reject live rows.
+- There are still no live `review_ready` rows, so approval remains out of scope
+  until copied source-review evidence exists.
+- Full historical session backfill is still incomplete in QA samples.
+- cmux/in-app browser testing remains excluded in this environment.
+
+Research:
+
+- No external research was needed. The classification rules are derived from
+  the existing source-audit UI helper behavior and verified against live
+  default-vault audit output.
+
+Next Steps:
+
+- Use the live read-only `operator_plan` to run a deliberate operator pass:
+  defer the `5` manual-inspect rows, reject the `20` bulk-reject rows only if
+  the operator accepts that plan, and approve nothing until source-review JSON
+  exists.
+- Continue full-session backfill verification after the review queue is no
+  longer blocking the project/day management readiness text.
+- Keep updating this `working.md` after each meaningful slice.
 
 ## Resume Snapshot - 2026-06-11 01:48 KST
 

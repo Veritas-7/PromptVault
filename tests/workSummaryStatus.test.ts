@@ -1088,6 +1088,23 @@ function sessionEvidenceSourceAuditResult(
     ],
     blocker_reason_counts: [{ text: "source_trace_is_instruction_only", count: 1 }],
     risk_flag_counts: [{ text: "source_prompt_instruction_only", count: 1 }],
+    operator_plan: {
+      review_ready_count: 1,
+      manual_defer_count: 2,
+      bulk_reject_count: 0,
+      manual_inspect_count: 2,
+      approval_requires_source_review_count: 1,
+      review_ready_candidate_ids: ["session-evidence-PromptVault-ready"],
+      manual_defer_candidate_ids: [
+        "session-evidence-PromptVault-blocked",
+        "session-evidence-PromptVault-no-hit",
+      ],
+      bulk_reject_candidate_ids: [],
+      manual_inspect_candidate_ids: [
+        "session-evidence-PromptVault-blocked",
+        "session-evidence-PromptVault-no-hit",
+      ],
+    },
     items: [
       {
         candidate_id: "session-evidence-PromptVault-ready",

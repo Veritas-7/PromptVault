@@ -1254,6 +1254,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 "proposal_counts: review_ready {} · blocked {}",
                 result.total_review_ready_count, result.total_blocked_count
             );
+            println!(
+                "operator_plan: review_ready {} · manual_defer {} · bulk_reject {} · manual_inspect {} · approval_requires_source_review {}",
+                result.operator_plan.review_ready_count,
+                result.operator_plan.manual_defer_count,
+                result.operator_plan.bulk_reject_count,
+                result.operator_plan.manual_inspect_count,
+                result.operator_plan.approval_requires_source_review_count
+            );
             if !result.blocker_reason_counts.is_empty() {
                 println!(
                     "blockers: {}",
@@ -3203,9 +3211,11 @@ fn work_session_evidence_source_audit_help_text() -> String {
         "Purpose:",
         "  Audits persisted session-evidence review queue rows by chaining nearby session hints, bounded source search, and source proposal validation.",
         "  Summarizes per-row outcomes and blocker/risk counts so operators can triage pending rows without probing each row manually.",
+        "  The JSON result includes a read-only operator_plan with review-ready, manual-defer, bulk-reject, and manual-inspect candidate id buckets.",
         "",
         "Review safety:",
         "  This command is read-only and does not approve, reject, apply, or create session evidence.",
+        "  operator_plan is planning evidence only; approvals still require copied source review metadata through work-session-evidence-review-queue-update.",
         "  Weak metadata-only/project-only nearby hints are skipped as automatic recommended sources.",
         "  Use review queue update/apply commands only after manually reviewing copied source traces.",
         "",
@@ -5247,7 +5257,10 @@ mod tests {
         assert!(help.contains("--review-state pending_review|stale|deferred|approved|rejected|all"));
         assert!(help.contains("nearby session hints"));
         assert!(help.contains("blocker/risk counts"));
+        assert!(help.contains("operator_plan"));
+        assert!(help.contains("manual-defer"));
         assert!(help.contains("read-only and does not approve, reject, apply"));
+        assert!(help.contains("approvals still require copied source review metadata"));
         assert!(help.contains("Weak metadata-only/project-only nearby hints are skipped"));
         assert!(
             help.contains("work-session-evidence-source-audit --row-filter near-session-date-hint")

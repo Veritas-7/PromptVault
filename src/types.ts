@@ -581,6 +581,18 @@ export interface ProjectWorkSessionEvidenceSourceAuditItem {
   warnings: string[];
 }
 
+export interface ProjectWorkSessionEvidenceSourceAuditOperatorPlan {
+  review_ready_count: number;
+  manual_defer_count: number;
+  bulk_reject_count: number;
+  manual_inspect_count: number;
+  approval_requires_source_review_count: number;
+  review_ready_candidate_ids: string[];
+  manual_defer_candidate_ids: string[];
+  bulk_reject_candidate_ids: string[];
+  manual_inspect_candidate_ids: string[];
+}
+
 export interface ProjectWorkSessionEvidenceSourceAuditResult {
   generated_at: string;
   database_path: string;
@@ -600,6 +612,7 @@ export interface ProjectWorkSessionEvidenceSourceAuditResult {
   outcome_counts: FrequencyItem[];
   blocker_reason_counts: FrequencyItem[];
   risk_flag_counts: FrequencyItem[];
+  operator_plan: ProjectWorkSessionEvidenceSourceAuditOperatorPlan;
   items: ProjectWorkSessionEvidenceSourceAuditItem[];
   warnings: string[];
 }

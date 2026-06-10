@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 18:35 KST
+Updated: 2026-06-10 18:36 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,13 +34,15 @@ Short-Term Goal:
 Current Work:
 
 - Latest pushed implementation slice:
-  `af6a6dc fix: show source proposal risk flags`.
-- Latest verified local implementation slice, pending commit:
+  `1914b08 test: cover risky source proposal bridge`.
+- Latest verified behavior:
   isolated browser bridge QA now includes a separate risky Antigravity DB source
   proposal fixture and verifies the blocked
   `candidate_or_source_hit_has_risk_flags` / `long_base64_like_token` bridge
   path without disrupting the existing review-ready source-proposal UI approval
   flow.
+- Previous pushed implementation slice:
+  `af6a6dc fix: show source proposal risk flags`.
 - Previous verified behavior:
   source proposal risk flag details are now visible in the review queue source
   proposal panel. This was driven by a real default-vault
@@ -470,7 +472,7 @@ Current Goal:
 - Make isolated browser bridge QA directly cover the blocked source-proposal
   risk-flag path that supports the source proposal risk-detail UI.
 - Pushed implementation commit:
-  pending.
+  `1914b08 test: cover risky source proposal bridge`.
 
 Context:
 
@@ -521,8 +523,8 @@ Issues:
 
 Next Steps:
 
-- Commit this QA fixture slice, then continue probing default-vault pending
-  review rows for non-risky copied source traces with non-project evidence.
+- Continue probing default-vault pending review rows for non-risky copied source
+  traces with non-project evidence.
 
 ## Completed Slice - 2026-06-10 Source proposal risk flag details
 

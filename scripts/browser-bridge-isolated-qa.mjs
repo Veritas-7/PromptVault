@@ -415,6 +415,7 @@ function unresolvedWorkStatusExportFixture() {
       "## Project/Day Rows",
       "",
       "- QAFixture · 2026-06-09 · full-index unresolved session evidence",
+      "- QASupported · 2026-06-09 · mixed handoff/progress source roles",
     ].join("\n"),
     total_row_count: 2,
     row_offset: 0,
@@ -424,7 +425,7 @@ function unresolvedWorkStatusExportFixture() {
     report_total_items: 4,
     report_project_count: 2,
     report_date_count: 1,
-    report_files_seen: 2,
+    report_files_seen: 3,
     report_session_scan_prompt_count: 10867,
     report_session_evidence_count: 12,
     report_unique_session_evidence_count: 3,
@@ -466,14 +467,17 @@ function unresolvedWorkStatusExportFixture() {
       operational_status: "session-supported",
       source_statuses: [{ text: "done", count: 2 }],
       work_item_count: 2,
-      source_file_count: 1,
-      source_files: ["working.md"],
-      source_file_roles: [{ text: "handoff-log", count: 1 }],
+      source_file_count: 2,
+      source_files: ["working.md", "PROGRESS_LOG.md"],
+      source_file_roles: [
+        { text: "handoff-log", count: 1 },
+        { text: "progress-log", count: 1 },
+      ],
       top_titles: ["Session supported fixture"],
       sample_evidence: "2026-06-09: Supported fixture evidence.",
-      latest_source_path: "/tmp/QASupported/working.md",
-      latest_source_file: "working.md",
-      latest_source_role: "handoff-log",
+      latest_source_path: "/tmp/QASupported/PROGRESS_LOG.md",
+      latest_source_file: "PROGRESS_LOG.md",
+      latest_source_role: "progress-log",
       session_evidence_count: 12,
       unique_session_evidence_count: 3,
       session_evidence_reviewed_item_count: 0,
@@ -654,6 +658,7 @@ async function runBrowserQa() {
   let workManagementMetaAfterFreeze = "";
   let workManagementFilterMeta = "";
   let workManagementFilteredRows = [];
+  let workManagementSourceRoleRows = [];
   let workManagementReviewActionRows = [];
   let workManagementMissingConfidenceRows = [];
   let workManagementPersistenceRows = [];
@@ -2323,6 +2328,51 @@ async function runBrowserQa() {
     }, undefined, { timeout: 120000 });
     workManagementReviewActionRows =
       await page.locator('[data-work-management-overview="true"] article').allTextContents();
+    step("work management source roles fixture");
+    await withMockedWorkStatusExport(page, unresolvedWorkStatusExportFixture(), async () => {
+      await page.locator('[data-refresh-work-management-overview="true"]').click();
+      await page.waitForFunction(() => {
+        const text = document.querySelector('[data-work-management-overview-meta="true"]')?.textContent ?? "";
+        return text.includes("상태행 2/2")
+          && text.includes("세션매칭")
+          && text.includes("세션미해결");
+      }, undefined, { timeout: 120000 });
+    });
+    await waitForEnabled(page, '[data-work-management-project-filter="true"]');
+    await page.locator('[data-work-management-project-filter="true"]').fill("QASupported");
+    await page.locator('[data-apply-work-management-filters="true"]').click();
+    await page.waitForFunction(() => {
+      const filterText = document.querySelector('[data-work-management-filter-meta="true"]')?.textContent ?? "";
+      const rows = [...document.querySelectorAll('[data-work-management-overview="true"] article')];
+      const sourceRoleRows = [...document.querySelectorAll('[data-work-management-row-source-roles="true"]')]
+        .map((element) => element.textContent ?? "");
+      return filterText.includes("관리 감사 필터 1개")
+        && rows.length === 1
+        && (rows[0]?.textContent ?? "").includes("QASupported")
+        && sourceRoleRows.some((text) =>
+          text.includes("로그 유형")
+          && text.includes("핸드오프 로그 1개")
+          && text.includes("진행 로그 1개")
+          && text.includes("최근 진행 로그")
+        );
+    }, undefined, { timeout: 30000 });
+    workManagementSourceRoleRows =
+      await page.locator('[data-work-management-row-source-roles="true"]').allTextContents();
+    await page.locator('[data-clear-work-management-filters="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-management-filter-meta="true"]')?.textContent ?? "";
+      return text.includes("관리 감사 필터 없음");
+    }, undefined, { timeout: 30000 });
+    await page.locator('[data-refresh-work-management-overview="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-management-overview-meta="true"]')?.textContent ?? "";
+      return text.includes("저장관리")
+        && text.includes("라이브만")
+        && text.includes("상태행")
+        && text.includes("세션매칭")
+        && text.includes("세션미해결")
+        && text.includes("제목정규화");
+    }, undefined, { timeout: 120000 });
     step("work management missing confidence sort");
     await waitForEnabled(page, '[data-work-management-sort="true"]');
     await page.locator('[data-work-management-sort="true"]').selectOption("missing_confidence_first");
@@ -2999,6 +3049,7 @@ async function runBrowserQa() {
       workLogFreezePersistence,
       workManagementFilterMeta,
       workManagementFilteredRows,
+      workManagementSourceRoleRows,
       workManagementReviewActionRows,
       workManagementMissingConfidenceRows,
       workManagementPersistenceRows,

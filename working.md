@@ -1,10 +1,84 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 03:53 KST
+Updated: 2026-06-11 04:08 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 04:08 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, active work, completed slices, verification evidence, known
+  exclusions, and the next concrete continuation step.
+- Maintain browser-bridge/DOM-level QA coverage for user-visible management
+  flows when cmux/in-app-browser testing is unavailable in this environment.
+
+Short-Term Goal:
+
+- Back the newly added work-management source-role overview UI with
+  browser-bridge DOM QA so mixed `handoff-log`/`progress-log` rows are verified
+  in a real rendered management overview, not only unit helpers.
+
+Current Active Work:
+
+- Completed the browser-bridge QA coverage slice for
+  `data-work-management-row-source-roles`.
+- The QA fixture now loads a mixed source-role status-export row for
+  `QASupported` with `working.md` plus `PROGRESS_LOG.md`, then refreshes the
+  management overview under a mocked status-export response, filters to that
+  project, and verifies the rendered row includes:
+  `로그 유형`, `핸드오프 로그 1개`, `진행 로그 1개`, and `최근 진행 로그`.
+- First QA run failed at the new DOM assertion because
+  `refreshWorkManagementOverview()` reloads status export and overwrote the
+  earlier mocked fixture with real data. The fix wraps the management overview
+  refresh itself with `withMockedWorkStatusExport(...)`, verifies the fixture,
+  clears filters, and refreshes real data again before the remaining QA flow.
+
+Progress:
+
+- Extended `unresolvedWorkStatusExportFixture()` with a mixed role
+  `QASupported` row using `PROGRESS_LOG.md` as the latest source.
+- Added `workManagementSourceRoleRows` to the browser QA result payload.
+- Added a DOM assertion for `data-work-management-row-source-roles`.
+- Restored the real management overview after the mocked source-role check so
+  the existing missing-confidence, freeze, saved-extraction, and later queue
+  checks continue against real isolated-DB data.
+
+Changes:
+
+- `scripts/browser-bridge-isolated-qa.mjs`: mixed source-role fixture and
+  rendered management overview source-role assertion.
+- `working.md`: this handoff update.
+
+Tests:
+
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- FAIL then fixed: first `npm run qa:browser-bridge` timed out at the new
+  source-role fixture wait because the management overview refresh reloaded
+  real status export data.
+- PASS after fix: `npm run qa:browser-bridge`; this exercised the isolated DB,
+  Vite app, browser bridge, Playwright-rendered UI, mocked status-export
+  source-role fixture, and the rest of the existing browser QA flow.
+- PASS: `npm run check` (UI tests, TypeScript/Vite build, Rust CLI build, Rust
+  lib tests, CLI tests, doc-tests, and clippy `-D warnings`).
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; this slice
+  used the repository's isolated Playwright/browser-bridge QA path instead.
+- No external research was needed; the issue was local state-flow behavior.
+
+Next Step:
+
+- Commit and push this QA coverage slice after diff and secret gates.
 
 ## Resume Snapshot - 2026-06-11 03:53 KST
 

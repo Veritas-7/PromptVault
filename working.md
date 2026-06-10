@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 15:43 KST
+Updated: 2026-06-10 16:07 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,8 +34,13 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed implementation baseline before this slice:
-  `1c45652 feat: link source proposals to review decisions`.
-- Current implementation slice: `work-session-evidence-source-search` now
+  `efe4e86 feat: support antigravity source search`.
+- Current implementation slice: isolated browser bridge QA now creates a
+  temporary Antigravity SQLite conversation DB under the known source root,
+  seeds it as a same-project other-date nearby session hint for a live review
+  candidate, and clicks the review-queue UI through DB-backed nearby
+  `원본 검색`, source proposals, and source-proposal approval.
+- Previous verified implementation slice: `work-session-evidence-source-search` now
   supports known Antigravity SQLite conversation DB files in addition to JSONL
   session files. It uses the existing Antigravity protobuf prompt extraction
   heuristic, keeps max-row bounds, returns redacted user-prompt snippets, and
@@ -144,11 +149,21 @@ Current Work:
   scanned `1` bounded DB user row, matched `1`, returned `1`, and returned
   `cwd=/Users/wj/Ai/System/10_Projects/notebooklm-llm-wiki-flow` with a redacted
   read-only warning.
-- Verification proof after the current slice: Rust `session_evidence_source_search`
+- Verification proof after the Antigravity source-search reader slice: Rust `session_evidence_source_search`
   tests passed (`2`), API bridge tests passed (`209` Node tests ran), CLI
   work-session-evidence bridge validation tests passed (`3`), `cargo fmt --check`
   passed, `npm run build` passed, full `npm run check` passed after this
   `working.md` update, and isolated browser bridge QA passed.
+- Verification proof after the current DB-backed QA slice:
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-Cw5jS0/qa.sqlite`.
+  The QA flow passed the direct bridge DB-backed nearby/source-search/source-proposals
+  checks and the review-queue UI path that selects the Antigravity DB-backed
+  nearby row, runs `원본 검색`, creates `검토 제안`, persists the
+  `source_proposal_review_ready:<hit>` review reason, then revalidates review
+  apply/reload plus the broader work-management panels. Full `npm run check`
+  also passed after this `working.md` update.
 - Current UI decision-link proof: `npm run build` passed, targeted API bridge
   tests passed (`209` Node tests ran), and
   `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed against
@@ -159,8 +174,8 @@ Current Work:
   Full `npm run check` also passed after the `working.md` update.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
-  useful step is adding UI/browser QA coverage for selecting a DB-backed nearby
-  source row when the review queue fixture can represent that source path.
+  useful step is adding a narrower CLI/Rust regression for DB-backed
+  source-proposals so the non-browser test suite also covers the same contract.
 
 Resume Contract:
 
@@ -196,6 +211,76 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 DB-backed source row browser QA
+
+Current Goal:
+
+- Prove the review-queue UI can select an Antigravity SQLite DB-backed nearby
+  source row and drive it through the same read-only source-search and copied
+  source-proposal review path as JSONL rows.
+
+Context:
+
+- The previous implementation made Antigravity DB source-search work at the
+  CLI/Rust layer, but the isolated browser bridge QA still selected only the
+  JSONL-backed nearby row.
+- Source proposals rerun candidate lookup and require the chosen `source_path`
+  to be indexed as same-project evidence for the candidate. The QA fixture
+  therefore has to seed a DB-backed session hint for a live review candidate
+  instead of using a detached fake queue row.
+
+Progress:
+
+- The browser bridge QA now creates a temporary Antigravity conversation DB
+  under `~/.gemini/antigravity-cli/conversations`, writes a minimal protobuf
+  user-step payload, and removes that file after the run.
+- The QA seeds the isolated PromptVault DB with a same-project other-date
+  `project_work_session_evidence` row for the first live review-queue
+  candidate. This keeps the candidate unresolved while making the DB path a
+  valid nearby/source-proposal input.
+- Direct bridge QA now requires that the DB-backed nearby row is returned, runs
+  `/api/work-session-evidence-source-search`, then runs
+  `/api/work-session-evidence-source-proposals` against that DB path.
+- UI QA now waits for the DB-backed nearby row, clicks that row's `원본 검색`,
+  clicks `검토 제안`, and verifies the source-proposal approval stores a
+  `source_proposal_review_ready:<hit>` review reason.
+
+Changes:
+
+- `scripts/browser-bridge-isolated-qa.mjs`: added a minimal protobuf encoder,
+  temporary Antigravity DB fixture creation/cleanup, DB-backed session evidence
+  seeding, direct bridge assertions, and UI row selection for the DB-backed
+  source path.
+- `working.md`: recorded the new QA proof and the next narrower regression
+  target.
+
+Tests:
+
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`;
+  it passed against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-Cw5jS0/qa.sqlite`
+  and completed the DB-backed nearby/source-search/source-proposals UI flow,
+  review apply/reload, work-log management, normalization, and saved-item
+  panels.
+- PASS: cleanup check found no `promptvault-qa-antigravity*` fixture DB left in
+  `~/.gemini/antigravity-cli/conversations`.
+- PASS: `npm run check` after this `working.md` update. This covered UI tests,
+  production build, Rust library tests (`235` passed), CLI tests (`34` passed),
+  doc tests, and clippy with `-D warnings`.
+
+Issues:
+
+- This slice strengthens browser bridge QA only. Add a smaller Rust/CLI
+  regression for DB-backed source proposals so `npm run check` can cover the
+  same contract without the full browser workflow.
+
+Next Steps:
+
+- Add targeted non-browser coverage for DB-backed `work-session-evidence-source-proposals`.
+- Continue toward closing unresolved project/day session-evidence rows without
+  weakening the manual-review/source-trace contract.
 
 ## Completed Slice - 2026-06-10 Antigravity DB source-search reader
 
@@ -264,9 +349,9 @@ Tests:
 
 Issues:
 
-- Browser QA still exercises the JSONL-backed source-search row because the
-  isolated fixture currently has a JSONL source. Add DB-backed fixture coverage
-  later if the UI needs an explicit Antigravity row path.
+- The original browser QA still exercised the JSONL-backed source-search row.
+  The later DB-backed source row browser QA slice above now covers the
+  Antigravity row path explicitly.
 - Source-search results are still manual-review context only; durable reviewed
   decisions and matched session-evidence links remain separate.
 

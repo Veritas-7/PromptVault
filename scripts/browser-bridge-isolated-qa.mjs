@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync, spawn } from "node:child_process";
@@ -17,6 +17,16 @@ const DATABASE_PATH = process.env.PROMPTVAULT_QA_DATABASE
 const SECRET_ENV_DIR = mkdtempSync(join(tmpdir(), "promptvault-browser-qa-env-"));
 const SECRET_ENV_PATH = join(SECRET_ENV_DIR, "secrets.env");
 const START_TIMEOUT_MS = Number.parseInt(process.env.PROMPTVAULT_QA_START_TIMEOUT_MS ?? "90000", 10);
+const ANTIGRAVITY_QA_CONVERSATION_ROOT = join(
+  process.env.HOME ?? "/Users/wj",
+  ".gemini",
+  "antigravity-cli",
+  "conversations",
+);
+const ANTIGRAVITY_QA_SOURCE_PATH = join(
+  ANTIGRAVITY_QA_CONVERSATION_ROOT,
+  `promptvault-qa-antigravity-${process.pid}-${Date.now()}.db`,
+);
 writeFileSync(SECRET_ENV_PATH, "");
 
 function step(label) {
@@ -64,6 +74,128 @@ function bridgeQaEnv() {
     GLM_API_KEY: "",
     GLM_API_KEY_2: "",
   };
+}
+
+function pbVarint(value) {
+  const out = [];
+  let current = BigInt(value);
+  while (current >= 0x80n) {
+    out.push(Number((current & 0x7fn) | 0x80n));
+    current >>= 7n;
+  }
+  out.push(Number(current));
+  return Buffer.from(out);
+}
+
+function pbKey(field, wire) {
+  return pbVarint((BigInt(field) << 3n) | BigInt(wire));
+}
+
+function pbString(field, value) {
+  const data = Buffer.from(value, "utf8");
+  return Buffer.concat([pbKey(field, 2), pbVarint(data.length), data]);
+}
+
+function pbMessage(field, value) {
+  return Buffer.concat([pbKey(field, 2), pbVarint(value.length), value]);
+}
+
+function sqlString(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function qaIdSegment(value) {
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48) || "project";
+}
+
+function previousIsoDate(value) {
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function createAntigravityConversationDbFixture({ cwd, promptText }) {
+  mkdirSync(ANTIGRAVITY_QA_CONVERSATION_ROOT, { recursive: true });
+  rmSync(ANTIGRAVITY_QA_SOURCE_PATH, { force: true });
+  execFileSync("sqlite3", [
+    ANTIGRAVITY_QA_SOURCE_PATH,
+    `CREATE TABLE steps (
+        idx integer,
+        step_type integer NOT NULL DEFAULT 0,
+        status integer NOT NULL DEFAULT 0,
+        has_subtrajectory numeric NOT NULL DEFAULT false,
+        metadata blob,
+        error_details blob,
+        permissions blob,
+        task_details blob,
+        render_info blob,
+        step_payload blob,
+        step_format integer NOT NULL DEFAULT 0,
+        PRIMARY KEY (idx)
+      );`,
+  ], { stdio: "pipe" });
+  const userPayload = pbMessage(
+    19,
+    Buffer.concat([
+      pbString(1, "promptvault-qa-antigravity-session"),
+      pbString(2, promptText),
+      pbString(11, cwd),
+    ]),
+  );
+  execFileSync("sqlite3", [
+    ANTIGRAVITY_QA_SOURCE_PATH,
+    `INSERT INTO steps (idx, step_type, status, step_payload) VALUES (0, 14, 3, x'${userPayload.toString("hex")}');`,
+  ], { stdio: "pipe" });
+}
+
+function insertAntigravitySessionEvidenceFixture(queueItem) {
+  const project = queueItem.project;
+  const evidenceDate = previousIsoDate(queueItem.date);
+  const cwd = `/Users/wj/Ai/System/10_Projects/${project}`;
+  const sourceMaterial = [
+    "promptvaultqaantigravity",
+    project,
+    queueItem.date,
+    ...queueItem.top_titles,
+    queueItem.sample_evidence,
+    "Validate DB backed nearby session evidence review flow.",
+  ].join(" ");
+  const promptText = `PromptVault QA Antigravity DB source-search fixture. ${sourceMaterial}`;
+  createAntigravityConversationDbFixture({ cwd, promptText });
+  const now = new Date().toISOString();
+  const text = `Antigravity CLI conversation DB indexed session project targets: ${cwd}. ${sourceMaterial}`;
+  const idSegment = qaIdSegment(project);
+  execFileSync("sqlite3", [
+    DATABASE_PATH,
+    `INSERT OR REPLACE INTO project_work_session_evidence (
+        id, hash, source, session_id, source_path, timestamp, prompt_date, cwd,
+        text, word_count, char_count, risk_flags_json, quality_json,
+        quality_score, quality_band, indexed_at
+      ) VALUES (
+        ${sqlString(`qa-antigravity-session-evidence-${idSegment}`)},
+        ${sqlString(`qa-antigravity-session-evidence-hash-${idSegment}`)},
+        'Antigravity CLI conversation DB',
+        'promptvault-qa-antigravity-session',
+        ${sqlString(ANTIGRAVITY_QA_SOURCE_PATH)},
+        ${sqlString(`${evidenceDate}T12:00:00Z`)},
+        ${sqlString(evidenceDate)},
+        ${sqlString(cwd)},
+        ${sqlString(text)},
+        22,
+        ${text.length},
+        '[]',
+        '{"score":80,"band":"good","missing":[],"suggestions":[]}',
+        80,
+        'good',
+        ${sqlString(now)}
+      );`,
+  ], { stdio: "pipe" });
+  return ANTIGRAVITY_QA_SOURCE_PATH;
 }
 
 function insertSyntheticApprovedReviewQueueRow() {
@@ -480,6 +612,7 @@ async function runBrowserQa() {
   let workSessionEvidenceReviewQueueUiRows = [];
   let workSessionEvidenceReviewQueueFilterMeta = "";
   let workSessionEvidenceReviewQueueFilteredRows = [];
+  let workSessionEvidenceAntigravitySourceSearch = "";
   let workSessionEvidenceNearbyMeta = "";
   let workSessionEvidenceNearbyUiText = "";
   let workSessionEvidenceSourceProposalUiStateAfterApprove = "";
@@ -1098,6 +1231,7 @@ async function runBrowserQa() {
     if (workSessionEvidenceReviewQueue.items.length) {
       step("work session evidence nearby bridge");
       const firstQueueItem = workSessionEvidenceReviewQueue.items[0];
+      const antigravityQaSourcePath = insertAntigravitySessionEvidenceFixture(firstQueueItem);
       const nearby = await bridgeJson(
         page,
         "/api/work-session-evidence-nearby",
@@ -1106,6 +1240,13 @@ async function runBrowserQa() {
             project: firstQueueItem.project,
             date: firstQueueItem.date,
             limit: 4,
+            query: [
+              "promptvaultqaantigravity",
+              firstQueueItem.project,
+              firstQueueItem.date,
+              ...firstQueueItem.top_titles,
+              firstQueueItem.sample_evidence,
+            ].join("\n"),
           },
         },
       );
@@ -1121,28 +1262,39 @@ async function runBrowserQa() {
       }
       workSessionEvidenceNearbyMeta =
         `${nearby.project} · ${nearby.date} · nearby ${nearby.returned_item_count} / ${nearby.total_match_count}`;
-      if (nearby.items.length && nearby.items[0].source_path.endsWith(".jsonl")) {
+      const nearbySourceItem = nearby.items.find((item) => item.source_path === antigravityQaSourcePath);
+      if (!nearbySourceItem) {
+        throw new Error(`DB-backed Antigravity source row was not returned by nearby bridge: ${JSON.stringify(nearby.items)}`);
+      }
+      if (nearbySourceItem.source_path.endsWith(".db")) {
         step("work session evidence source search bridge");
         const sourceSearch = await bridgeJson(
           page,
           "/api/work-session-evidence-source-search",
           {
             options: {
-              source_path: nearby.items[0].source_path,
-              query: [nearby.project, nearby.date, nearby.items[0].excerpt].join("\n"),
+              source_path: nearbySourceItem.source_path,
+              query: [
+                "promptvaultqaantigravity",
+                nearby.project,
+                nearby.date,
+                nearbySourceItem.excerpt,
+              ].join("\n"),
               limit: 3,
               max_lines: 100000,
             },
           },
         );
         if (
-          sourceSearch.source_path !== nearby.items[0].source_path
+          sourceSearch.source_path !== nearbySourceItem.source_path
           || sourceSearch.returned_item_count !== sourceSearch.items.length
           || sourceSearch.returned_item_count > sourceSearch.matched_line_count
           || !sourceSearch.warnings.some((warning) => warning.includes("read-only"))
         ) {
           throw new Error(`Invalid session evidence source search response: ${JSON.stringify(sourceSearch)}`);
         }
+        workSessionEvidenceAntigravitySourceSearch =
+          `${sourceSearch.source_path} · returned ${sourceSearch.returned_item_count} / ${sourceSearch.matched_line_count}`;
         if (sourceSearch.items.length) {
           step("work session evidence source proposals bridge");
           const sourceProposals = await bridgeJson(
@@ -1151,7 +1303,7 @@ async function runBrowserQa() {
             {
               options: {
                 candidate_id: firstQueueItem.candidate_id,
-                source_path: nearby.items[0].source_path,
+                source_path: nearbySourceItem.source_path,
                 query: sourceSearch.query,
                 limit: 3,
                 max_lines: sourceSearch.requested_max_lines,
@@ -1336,14 +1488,18 @@ async function runBrowserQa() {
       return text.includes("근처 세션")
         && text.includes("자동 proof 아님")
         && text.includes("match score")
-        && text.includes("navigation hints only");
+        && text.includes("navigation hints only")
+        && text.includes("promptvault-qa-antigravity");
     }, firstNearbyCandidateId, { timeout: 90000 });
     workSessionEvidenceNearbyUiText =
       (await page
         .locator(`[data-work-session-evidence-nearby="${firstNearbyCandidateId}"]`)
         .textContent())?.trim() ?? "";
     const firstSourceSearchButton = page
-      .locator(`[data-work-session-evidence-nearby="${firstNearbyCandidateId}"] [data-work-session-evidence-source-search-action]`)
+      .locator(`[data-work-session-evidence-nearby="${firstNearbyCandidateId}"] .work-session-nearby-item`, {
+        hasText: ANTIGRAVITY_QA_SOURCE_PATH,
+      })
+      .locator("[data-work-session-evidence-source-search-action]")
       .first();
     await firstSourceSearchButton.waitFor({ timeout: 90000 });
     const firstSourceSearchSessionId = await firstSourceSearchButton.getAttribute(
@@ -2325,6 +2481,7 @@ async function runBrowserQa() {
       workSessionEvidenceReviewQueueUiRows,
       workSessionEvidenceReviewQueueFilterMeta,
       workSessionEvidenceReviewQueueFilteredRows,
+      workSessionEvidenceAntigravitySourceSearch,
       workSessionEvidenceNearbyMeta,
       workSessionEvidenceNearbyUiText,
       workSessionEvidenceSourceProposalUiStateAfterApprove,
@@ -2430,5 +2587,6 @@ try {
   if (!process.env.PROMPTVAULT_QA_DATABASE) {
     rmSync(DATABASE_PATH, { force: true });
   }
+  rmSync(ANTIGRAVITY_QA_SOURCE_PATH, { force: true });
   rmSync(SECRET_ENV_DIR, { force: true, recursive: true });
 }

@@ -7787,10 +7787,9 @@ fn project_work_codex_metadata_prompts_from_sources(
             match candidate {
                 Ok(candidate) => {
                     let modified_at = timestamp_millis_to_rfc3339(candidate.modified_ms);
-                    match parse_codex_project_metadata_prompt(source, &candidate.path, modified_at)
+                    match parse_codex_project_metadata_prompts(source, &candidate.path, modified_at)
                     {
-                        Ok(Some(prompt)) => prompts.push(prompt),
-                        Ok(None) => {}
+                        Ok(mut records) => prompts.append(&mut records),
                         Err(err) => warnings.push(format!(
                             "Session evidence metadata: {}: {err}",
                             candidate.path.display()
@@ -7915,12 +7914,11 @@ fn checkpointed_project_work_session_prompts_from_sources(
         let mut matched_in_batch = 0;
         for candidate in &candidates[start_index..end_index] {
             let modified_at = timestamp_millis_to_rfc3339(candidate.modified_ms);
-            match parse_codex_project_metadata_prompt(source, &candidate.path, modified_at) {
-                Ok(Some(prompt)) => {
-                    matched_in_batch += 1;
-                    prompts.push(prompt);
+            match parse_codex_project_metadata_prompts(source, &candidate.path, modified_at) {
+                Ok(mut records) => {
+                    matched_in_batch += records.len();
+                    prompts.append(&mut records);
                 }
-                Ok(None) => {}
                 Err(err) => warnings.push(format!(
                     "Session evidence checkpoint {}: {}: {err}",
                     source.label,
@@ -8181,11 +8179,24 @@ fn sanitized_project_work_session_prompt(prompt: &PromptRecord) -> Option<Prompt
     })
 }
 
+#[cfg(test)]
 fn parse_codex_project_metadata_prompt(
     source: &SourceSpec,
     path: &Path,
     modified_timestamp: Option<String>,
 ) -> Result<Option<PromptRecord>, Box<dyn std::error::Error>> {
+    Ok(
+        parse_codex_project_metadata_prompts(source, path, modified_timestamp)?
+            .into_iter()
+            .next(),
+    )
+}
+
+fn parse_codex_project_metadata_prompts(
+    source: &SourceSpec,
+    path: &Path,
+    modified_timestamp: Option<String>,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
     let mut project_paths = BTreeSet::new();
     let mut session_id = path
         .file_stem()
@@ -8197,6 +8208,7 @@ fn parse_codex_project_metadata_prompt(
     let mut lines_after_project_path = None;
     let lines = jsonl_lines(path)?;
     let latest_timestamp = latest_jsonl_tail_timestamp(&lines);
+    let activity_timestamps = jsonl_activity_timestamps(&lines);
 
     for (line_index, line) in lines.iter().enumerate() {
         let value: Value = serde_json::from_str(line)?;
@@ -8255,7 +8267,7 @@ fn parse_codex_project_metadata_prompt(
     }
 
     if project_paths.is_empty() {
-        return Ok(None);
+        return Ok(Vec::new());
     }
 
     let text = format!(
@@ -8263,25 +8275,39 @@ fn parse_codex_project_metadata_prompt(
         source.label,
         project_paths.into_iter().collect::<Vec<_>>().join(", ")
     );
-    let timestamp = latest_timestamp.or(last_timestamp).or(modified_timestamp);
-    let hash = hash_text(&format!("{}:{}:{}", source.id, session_id, text));
-    let risk_flags = detect_risks(&text);
-    let quality = assess_prompt_quality(&text, &risk_flags);
-
-    Ok(Some(PromptRecord {
-        id: hash.chars().take(16).collect(),
-        source: format!("{} session metadata", source.label),
-        session_id,
-        path: path.display().to_string(),
-        timestamp,
-        cwd,
-        word_count: count_words(&text),
-        char_count: text.chars().count(),
-        text,
-        hash,
-        risk_flags,
-        quality,
-    }))
+    let timestamps = project_work_metadata_record_timestamps(
+        activity_timestamps,
+        latest_timestamp,
+        last_timestamp,
+        modified_timestamp,
+    );
+    let mut records = Vec::new();
+    for timestamp in timestamps {
+        let hash = hash_text(&format!(
+            "{}:{}:{}:{}",
+            source.id,
+            session_id,
+            timestamp.as_deref().unwrap_or("unknown-date"),
+            text
+        ));
+        let risk_flags = detect_risks(&text);
+        let quality = assess_prompt_quality(&text, &risk_flags);
+        records.push(PromptRecord {
+            id: hash.chars().take(16).collect(),
+            source: format!("{} session metadata", source.label),
+            session_id: session_id.clone(),
+            path: path.display().to_string(),
+            timestamp,
+            cwd: cwd.clone(),
+            word_count: count_words(&text),
+            char_count: text.chars().count(),
+            text: text.clone(),
+            hash,
+            risk_flags,
+            quality,
+        });
+    }
+    Ok(records)
 }
 
 fn project_paths_from_text(text: &str) -> Vec<String> {
@@ -8303,6 +8329,63 @@ fn latest_jsonl_tail_timestamp(lines: &[String]) -> Option<String> {
                 .ok()
                 .and_then(|value| extract_timestamp(&value))
         })
+}
+
+fn jsonl_activity_timestamps(lines: &[String]) -> Vec<String> {
+    lines
+        .iter()
+        .filter_map(|line| {
+            json_timestamp_property_regex()
+                .captures(line)
+                .and_then(|captures| captures.get(1))
+                .map(|matched| matched.as_str().to_string())
+        })
+        .collect()
+}
+
+fn project_work_metadata_record_timestamps(
+    activity_timestamps: Vec<String>,
+    latest_timestamp: Option<String>,
+    last_timestamp: Option<String>,
+    modified_timestamp: Option<String>,
+) -> Vec<Option<String>> {
+    let mut timestamps = activity_timestamps;
+    if timestamps.is_empty() {
+        timestamps.extend(latest_timestamp);
+        timestamps.extend(last_timestamp);
+    }
+    if timestamps.is_empty() {
+        timestamps.extend(modified_timestamp);
+    }
+
+    let mut latest_by_date = BTreeMap::<String, String>::new();
+    for timestamp in timestamps {
+        let date = prompt_date(Some(&timestamp));
+        if date == "unknown-date" {
+            continue;
+        }
+        latest_by_date
+            .entry(date)
+            .and_modify(|stored| {
+                if timestamp > *stored {
+                    *stored = timestamp.clone();
+                }
+            })
+            .or_insert(timestamp);
+    }
+
+    let mut timestamps = latest_by_date.into_values().map(Some).collect::<Vec<_>>();
+    timestamps.sort_by(|left, right| {
+        right
+            .as_deref()
+            .unwrap_or("")
+            .cmp(left.as_deref().unwrap_or(""))
+    });
+    if timestamps.is_empty() {
+        vec![None]
+    } else {
+        timestamps
+    }
 }
 
 fn normalize_project_path_match(text: &str) -> Option<String> {
@@ -15553,6 +15636,14 @@ fn project_path_regex() -> &'static Regex {
     })
 }
 
+fn json_timestamp_property_regex() -> &'static Regex {
+    static JSON_TIMESTAMP_PROPERTY_REGEX: OnceLock<Regex> = OnceLock::new();
+    JSON_TIMESTAMP_PROPERTY_REGEX.get_or_init(|| {
+        Regex::new(r#""(?:timestamp|created_at|time|started_at)"\s*:\s*"([^"]+)""#)
+            .expect("json timestamp property regex")
+    })
+}
+
 fn quoted_curl_sensitive_header_regex() -> &'static Regex {
     static QUOTED_CURL_SENSITIVE_HEADER_REGEX: OnceLock<Regex> = OnceLock::new();
     QUOTED_CURL_SENSITIVE_HEADER_REGEX.get_or_init(|| {
@@ -19450,6 +19541,77 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].date, "2026-06-09");
         assert_eq!(items[0].session_evidence_count, 1);
+
+        std::fs::remove_dir_all(root).expect("remove metadata root");
+    }
+
+    #[test]
+    fn codex_session_metadata_prompts_emit_daily_records_for_long_sessions() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-codex-metadata-daily-records-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create metadata root");
+        let path = root.join("rollout-daily-records.jsonl");
+        std::fs::write(
+            &path,
+            r#"{"timestamp":"2026-06-08T01:00:00.000Z","type":"session_meta","payload":{"id":"session-daily","cwd":"/Users/wj"}}
+{"timestamp":"2026-06-08T01:01:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject."}]}}
+{"timestamp":"2026-06-09T03:00:00.000Z","type":"turn_context","payload":{"cwd":"/Users/wj"}}
+{"timestamp":"2026-06-10T04:00:00.000Z","type":"turn_context","payload":{"cwd":"/Users/wj"}}
+"#,
+        )
+        .expect("write metadata jsonl");
+        let source = SourceSpec {
+            id: "codex",
+            label: "Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let records = parse_codex_project_metadata_prompts(
+            &source,
+            &path,
+            Some("2026-06-10T13:11:25Z".to_string()),
+        )
+        .expect("parse metadata prompts");
+        let dates = records
+            .iter()
+            .map(|record| prompt_date(record.timestamp.as_deref()))
+            .collect::<Vec<_>>();
+
+        assert_eq!(dates, vec!["2026-06-10", "2026-06-09", "2026-06-08"]);
+        assert_eq!(
+            records
+                .iter()
+                .map(|record| record.id.clone())
+                .collect::<BTreeSet<_>>()
+                .len(),
+            3
+        );
+
+        let mut items = project_progress_work_items_from_text_for_project(
+            &PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md"),
+            r#"## Current Slice - 2026-06-08 First day
+
+- Work from first day.
+
+## Current Slice - 2026-06-09 Second day
+
+- Work from second day.
+"#,
+            "ExampleProject",
+        );
+        attach_session_evidence(&mut items, &records);
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].date, "2026-06-08");
+        assert_eq!(items[0].session_evidence_count, 1);
+        assert_eq!(items[1].date, "2026-06-09");
+        assert_eq!(items[1].session_evidence_count, 1);
 
         std::fs::remove_dir_all(root).expect("remove metadata root");
     }

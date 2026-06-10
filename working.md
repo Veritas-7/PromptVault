@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 12:03 KST
+Updated: 2026-06-10 12:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,32 +33,122 @@ Short-Term Goal:
 
 Current Work:
 
-- Current uncommitted slice: body-derived progress-log title cleanup.
-- The previous project-status snapshot title-normalization slice was committed
-  and pushed as
-  `1521d5d fix: exclude project status snapshots from title cleanup`.
-- This slice promotes safe body/heading text into titles when parsed progress
-  headings are placeholders such as `Untitled work`, `)`, or
-  `Progress log updated`, and fixes normalization candidates so hidden rough
-  titles beyond the first representative titles are still surfaced.
-- Targeted Rust parser and normalization-candidate tests, `npm run check`, and
-  isolated browser-bridge QA passed. Real default-vault checks now report `0`
-  `needs_title_normalization` rows and `0` title-only normalization candidates.
-  Remaining before handoff is diff/secret checks, explicit-path staging,
-  commit, push, and status confirmation.
+- Current uncommitted slice: long Codex session daily metadata evidence.
+- The previous body-derived progress-log title cleanup slice was committed and
+  pushed as `c392add fix: clear rough worklog title normalization debt`.
+- This slice expands Codex/Codex CX session metadata evidence from one
+  latest-activity record per session into one source-traced record per KST
+  activity date. This preserves source trace while letting multi-day Codex
+  threads support project/day worklog rows on their actual work dates.
+- Targeted metadata/session-evidence tests passed. Actual default-vault
+  reindex increased stored session evidence from `10,599` to `11,417` rows and
+  dropped unresolved session-evidence candidates from `44` to `31`. Remaining
+  before handoff is diff/secret checks, explicit-path staging, commit, push,
+  and status confirmation.
 
 Management Coverage Status:
 
 - The app does manage project/day work from real parsed artifacts: current
-  default-vault export reported `32` projects, `26` days, `889` progress files,
-  `7,754` work items, `97` project/day rows, and a full stored session index of
-  `10,599` prompts.
+  default-vault export reported `32` projects, `26` days, `890` progress files,
+  `7,777` work items, `97` project/day rows, and a full stored session index of
+  `11,417` prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
   related progress artifacts, but the remaining unresolved review queues mean the
   whole management system is not yet complete.
 
-## Current Slice - 2026-06-10 Body-derived progress-log title cleanup
+## Current Slice - 2026-06-10 Long Codex session daily metadata evidence
+
+Current Goal:
+
+- Reduce false `unresolved-after-full-index` rows caused by long-running Codex
+  sessions being indexed only on their latest activity date.
+
+Context:
+
+- After `c392add`, live default-vault status export still had `44` project/day
+  rows needing session evidence, all with reason
+  `unresolved_after_full_index,no_session_evidence`.
+- SQLite inspection showed the active PromptVault Codex thread was stored only
+  on `2026-06-10`, even though the same source JSONL contained activity across
+  earlier KST dates and project/day worklog rows existed for `2026-06-08` and
+  `2026-06-09`.
+- The session metadata parser already collected project paths from Codex JSONL,
+  but returned only one `PromptRecord` per session using the latest session
+  activity timestamp.
+
+Progress:
+
+- Added daily Codex metadata expansion: one source-traced metadata
+  `PromptRecord` is emitted for each distinct KST activity date in a session
+  JSONL file.
+- Kept the old single-record parser wrapper for tests only, so existing tests
+  can still assert the latest-record behavior without keeping dead production
+  code.
+- Preserved safe fallback behavior: file modified time is used only when the
+  JSONL has no usable line timestamps.
+- Rebuilt the real default-vault session index with
+  `work-session-index --batch-files 500 --until-complete --reset
+  --confirm-long-run --json`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds multi-record Codex metadata parsing,
+  JSON timestamp extraction, per-date timestamp selection, and daily
+  session-evidence regression coverage.
+- `working.md`: records the new live default-vault index and remaining
+  unresolved queue counts.
+
+Tests:
+
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml
+  codex_session_metadata_prompt` (`5` metadata tests).
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_items_attach_session_evidence` (`3` attach tests).
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_session` (`20` session-index/review/provider tests).
+- PASS: actual default-vault `work-session-index --batch-files 500
+  --until-complete --reset --confirm-long-run --json`: completed all Codex and
+  Codex CX sources, scanned/stored `11,417` sanitized session-evidence records,
+  with no warnings.
+- PASS: actual default-vault `work-status-export --limit 200
+  --full-session-index --json`: session-evidence-needed rows dropped from `44`
+  to `31`; title-normalization rows remain `0`.
+- PASS: actual default-vault `work-session-evidence-candidates --limit 80
+  --json`: unresolved candidates dropped from `44` to `31`.
+- INFO: actual default-vault `work-log-normalization-candidates --limit 120
+  --json`: full normalization queue remains `97`; returned `no_session_evidence`
+  reasons dropped to `61`.
+- PASS: `npm run check` (UI tests, build, `228` Rust library tests, `34` CLI
+  tests, doc tests, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+  Verified session-index backfill UI, status export, session-evidence
+  candidates/proposals/review/apply/reload, work-management overview,
+  normalization candidates/proposals/review/apply/reload, stale/rejected AI
+  fixtures, approved review queue save, and saved items. The isolated QA DB was
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-6FmpS8/qa.sqlite`.
+
+Issues:
+
+- Remaining `31` session-evidence rows appear to lack same-date project-path
+  evidence in the current stored session index. Examples include recent
+  `ResearchFlowAI`, `LocalMind`, and `oss-favorites` rows where SQLite has no
+  matching project metadata on the row date.
+- This slice intentionally does not invent links across unrelated dates or
+  projects; remaining rows should stay in review/provider queues unless a later
+  verified matcher can prove stronger evidence.
+
+Research:
+
+- No external research used. The change came from live default-vault candidates,
+  SQLite session-index inspection, and focused Rust regression tests.
+
+Next Steps:
+
+- Run diff/secret checks, stage only `src-tauri/src/lib.rs` and `working.md`,
+  then commit and push if all gates pass.
+
+## Completed Slice - 2026-06-10 Body-derived progress-log title cleanup
 
 Current Goal:
 

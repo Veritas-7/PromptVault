@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 18:50 KST
+Updated: 2026-06-10 18:51 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -61,25 +61,28 @@ Current Work:
   and `5177` had no remaining listeners afterward.
 - Previous pushed implementation slice:
   `1914b08 test: cover risky source proposal bridge`.
-- Latest verified behavior:
+- Previous verified behavior:
   isolated browser bridge QA now includes a separate risky Antigravity DB source
   proposal fixture and verifies the blocked
   `candidate_or_source_hit_has_risk_flags` / `long_base64_like_token` bridge
   path without disrupting the existing review-ready source-proposal UI approval
   flow.
-- Latest read-only default-vault source-proposal probe after commit `6cf794c`:
+- Historical pre-fix read-only default-vault source-proposal probe after commit
+  `6cf794c`:
   sampled the top 8 `work-session-evidence-candidates` against real nearby
   Codex JSONL source files. The current gates correctly blocked weak
   `RepoTutorStudio`, `ResearchFlowAI`, and `enterprise_diagnosis_flutter`
-  proposals for project-identifier-only or long-base64 risk reasons. Two rows
-  still returned `review_ready=1` and need manual/code review before any
-  approval: `CareVault` `2026-06-03` and `oss-favorites` `2026-05-31`.
-  Their traces look like role/task instruction prompts (`read-only sidecar QA`,
-  `Do not edit files`, `Inspect...`) rather than completed-work evidence.
-- Immediate next implementation question:
-  inspect those two ready proposals and decide whether the backend should add a
-  blocker for instruction-only source traces that lack completion/action
-  evidence. Do not approve either row until this is resolved.
+  proposals for project-identifier-only or long-base64 risk reasons. Before
+  commit `835fe31`, two rows still returned `review_ready=1`:
+  `CareVault` `2026-06-03` and `oss-favorites` `2026-05-31`. Those traces looked
+  like role/task instruction prompts (`read-only sidecar QA`, `Do not edit
+  files`, `Inspect...`) rather than completed-work evidence; they are now
+  blocked by `source_trace_is_instruction_only`.
+- Immediate next implementation focus:
+  continue sampling the remaining unresolved project/day session-evidence rows
+  against real nearby source traces, looking for either safely reviewable
+  completed-work evidence or the next concrete false-positive blocker to add.
+  Keep all approvals manual and source-traced.
 - Previous pushed implementation slice:
   `af6a6dc fix: show source proposal risk flags`.
 - Previous verified behavior:

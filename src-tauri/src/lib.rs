@@ -10671,13 +10671,18 @@ fn parse_project_work_heading(line: &str) -> Option<(String, String, String)> {
 
     let date_start = find_iso_date_start(rest)?;
     let date = rest[date_start..date_start + 10].to_string();
-    let title = rest[date_start + 10..]
+    let title_after_date = rest[date_start + 10..]
         .trim_start_matches(|ch: char| ch == '-' || ch == ':' || ch.is_whitespace())
         .trim();
-    let title = if title.is_empty() {
-        rest[..date_start].trim()
+    let title_before_date = rest[..date_start]
+        .trim_end_matches(|ch: char| ch == '-' || ch == ':' || ch.is_whitespace())
+        .trim();
+    let title = if title_after_date.is_empty()
+        || project_work_heading_title_is_timestamp_only(title_after_date)
+    {
+        title_before_date
     } else {
-        title
+        title_after_date
     };
     let title = if title.is_empty() {
         "Untitled work"
@@ -10685,6 +10690,46 @@ fn parse_project_work_heading(line: &str) -> Option<(String, String, String)> {
         title
     };
     Some((date, status.to_string(), truncate_chars(title, 160)))
+}
+
+fn project_work_heading_title_is_timestamp_only(title: &str) -> bool {
+    let normalized = title.trim().trim_matches(['(', ')', '[', ']']).trim();
+    let mut parts = normalized.split_whitespace();
+    let Some(time_token) = parts.next() else {
+        return false;
+    };
+    if !project_work_heading_token_is_time(time_token) {
+        return false;
+    }
+    match (parts.next(), parts.next()) {
+        (None, None) => true,
+        (Some(zone), None) => project_work_heading_token_is_timezone(zone),
+        _ => false,
+    }
+}
+
+fn project_work_heading_token_is_time(token: &str) -> bool {
+    let mut token = token
+        .trim_matches(['`', '\'', '"', ',', ';'])
+        .trim_start_matches('T')
+        .trim_end_matches('Z');
+    if let Some((prefix, _)) = token.split_once('+') {
+        token = prefix;
+    } else if let Some((prefix, _)) = token.split_once('-') {
+        token = prefix;
+    }
+    let parts = token.split(':').collect::<Vec<_>>();
+    if !(parts.len() == 2 || parts.len() == 3) {
+        return false;
+    }
+    parts.iter().all(|part| {
+        (part.len() == 2 || part.len() == 1) && part.chars().all(|ch| ch.is_ascii_digit())
+    })
+}
+
+fn project_work_heading_token_is_timezone(token: &str) -> bool {
+    let token = token.trim_matches(['`', '\'', '"', ',', ';', '(', ')']);
+    matches!(token, "KST" | "UTC" | "GMT") || token.starts_with('+') || token.starts_with('-')
 }
 
 fn find_iso_date_start(text: &str) -> Option<usize> {
@@ -18845,6 +18890,31 @@ Progress:
             "Timestamp: 2026-06-06\nReport Recertification Status Summary Surface Worklog"
         );
         assert!(detect_risks(&timestamp_items[0].evidence).is_empty());
+    }
+
+    #[test]
+    fn project_progress_work_items_use_heading_prefix_for_timestamp_only_titles() {
+        let path = PathBuf::from("/tmp/PromptVault/working.md");
+        let text = r#"# PromptVault Working Log
+
+## Resume Snapshot - 2026-06-10 11:20 KST
+
+Long-Term Goal:
+
+- Make PromptVault a reliable project/day work-management surface.
+"#;
+
+        let items = project_progress_work_items_from_text_for_project(&path, text, "PromptVault");
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].date, "2026-06-10");
+        assert_eq!(items[0].project, "PromptVault");
+        assert_eq!(items[0].status, "logged");
+        assert_eq!(items[0].title, "Resume Snapshot");
+        assert_ne!(items[0].title, "11:20 KST");
+        assert!(items[0].evidence.contains("Make PromptVault a reliable"));
+        assert!(detect_risks(&items[0].title).is_empty());
+        assert!(detect_risks(&items[0].evidence).is_empty());
     }
 
     #[test]

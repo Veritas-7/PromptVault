@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 11:20 KST
+Updated: 2026-06-10 11:27 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,24 +34,86 @@ Short-Term Goal:
 
 Current Work:
 
-- Current uncommitted slice: proposal provider warning visibility.
-- Implemented UI warning notices for work-log normalization proposals and
-  session-evidence proposals so provider timeout, missing-provider, fallback,
-  and Codex opt-in warnings are visible instead of only appearing as
-  `경고 N개`.
-- Verification already passed for TypeScript, UI tests, build, isolated browser
-  bridge QA, and full `npm run check`. Remaining before handoff is explicit-path
-  staging, staged diff/secret checks, commit, push, and status confirmation.
+- Current uncommitted slice: resume snapshot timestamp heading normalization.
+- Actual default-vault export after adding this resume snapshot showed the
+  PromptVault row title as `11:20 KST` and `needs_title_normalization=true`;
+  this proved the progress-log heading parser treated a timestamp-only suffix as
+  the work title.
+- Parser now keeps the heading prefix when a dated heading suffix is only
+  time/timezone, so `Resume Snapshot - 2026-06-10 11:20 KST` becomes
+  `Resume Snapshot` instead of `11:20 KST`.
+- Targeted parser tests, a default-vault CLI export, and full `npm run check`
+  passed. Remaining before handoff is diff/secret checks, explicit-path staging,
+  commit, push, and status confirmation.
 
 Management Coverage Status:
 
-- The app does manage project/day work from real parsed artifacts: bounded QA
-  reached `31` projects, `26` days, `886` progress files, more than `10,000`
-  work items, and durable project/day rows from an isolated QA database.
+- The app does manage project/day work from real parsed artifacts: current
+  default-vault export reported `32` projects, `26` days, `889` progress files,
+  `7,729` work items, `97` project/day rows, and a full stored session index of
+  `10,599` prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
   related progress artifacts, but the remaining unresolved review queues mean the
   whole management system is not yet complete.
+
+## Completed Slice - 2026-06-10 Resume snapshot timestamp heading normalization
+
+Current Goal:
+
+- Prevent dated progress-log headings with timestamp-only suffixes from creating
+  rough time-only project/day titles such as `11:20 KST`.
+
+Context:
+
+- The previous slice added a top-level `Resume Snapshot - 2026-06-10 11:20 KST`
+  section to this file so later sessions can see long-term, short-term, and
+  current work at a glance.
+- A real default-vault `work-status-export --full-session-index` then showed
+  the PromptVault row with top title `11:20 KST` and
+  `needs_title_normalization=true`, proving the parser still mishandled this
+  heading shape.
+
+Progress:
+
+- Added a regression test for `Resume Snapshot - YYYY-MM-DD HH:MM KST`.
+- Updated `parse_project_work_heading()` so date suffixes that contain only
+  time/timezone fall back to the heading prefix.
+- Re-ran the actual default-vault status export and confirmed PromptVault no
+  longer appears with `needs_title_normalization=true` in the first page.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds timestamp-only heading suffix detection and a
+  regression test for resume snapshot headings.
+- `working.md`: updates the resume snapshot to point at the current parser
+  slice and records the actual default-vault evidence.
+
+Tests:
+
+- PASS: `cargo test project_progress_work_items_` (`6` parser-related tests).
+- PASS: `cargo run --bin promptvault-cli -- work-status-export --limit 10
+  --full-session-index --json | jq '.rows[] | select(.project == "PromptVault")
+  | {top_titles, needs_title_normalization, sample_evidence}'`.
+- PASS: `npm run check` (`512` UI tests, `222` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- The first attempted targeted cargo command with multiple test-name arguments
+  failed due Cargo CLI argument syntax, not code behavior; it was replaced by
+  the common-prefix test filter above.
+
+Issues:
+
+- Remaining default-vault gap before the whole work-management system can be
+  considered complete: `44` rows are still unresolved after the full stored
+  session index, and `33` work-log normalization candidate groups still need AI
+  or operator cleanup.
+
+Next Steps:
+
+- Run diff checks and secret checks, then stage only `src-tauri/src/lib.rs` and
+  `working.md`, commit, and push.
+- Continue the next cleanup slice against remaining `progress-log-only`,
+  `unresolved-after-full-index`, and `needs_title_normalization` rows.
 
 ## Completed Slice - 2026-06-10 Proposal provider warning visibility
 

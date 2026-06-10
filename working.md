@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 21:20 KST
+Updated: 2026-06-10 21:21 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,8 +34,7 @@ Short-Term Goal:
 Current Work:
 
 - Completed implementation slice:
-  pending commit for safe read-only `work-session-evidence-review-queue`
-  `row_filter`.
+  `dac55ad fix: filter session evidence review queue`.
 - Completed behavior:
   add a safe read-only `row_filter` to
   `work-session-evidence-review-queue` so operators can inspect the same
@@ -50,7 +49,8 @@ Current Work:
   `--sync-candidates` unfiltered in this slice; the filter must be view-only so
   it cannot mark unrelated candidates stale.
 - Verification status:
-  passed; commit is pending. Default-vault read-only pre-check against
+  committed and pushed to `origin main` as `dac55ad`. Default-vault read-only
+  pre-check against
   `work-session-evidence-review-queue --limit 60 --json` showed `48` total
   queue rows, `26` pending, `22` stale-state rows, `9` pending near hints, and
   `16` pending stale hints. `cargo fmt` passed. `cargo test

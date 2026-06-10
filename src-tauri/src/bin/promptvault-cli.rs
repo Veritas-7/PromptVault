@@ -31,7 +31,7 @@ use promptvault_lib::{
     ProjectWorkSessionEvidenceNearbyOptions, ProjectWorkSessionEvidenceProposalsOptions,
     ProjectWorkSessionEvidenceReviewApplyOptions, ProjectWorkSessionEvidenceReviewQueueOptions,
     ProjectWorkSessionEvidenceReviewQueueUpdateOptions,
-    ProjectWorkSessionEvidenceReviewedItemsOptions,
+    ProjectWorkSessionEvidenceReviewedItemsOptions, ProjectWorkSessionEvidenceSourceProposal,
     ProjectWorkSessionEvidenceSourceProposalsOptions,
     ProjectWorkSessionEvidenceSourceSearchOptions, ProjectWorkSessionIndexOptions,
     ProjectWorkStatusExportOptions, ProjectWorkSummaryOptions, ProjectWorkSummarySnapshotsOptions,
@@ -676,6 +676,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let mut candidate_id = None;
             let mut review_state = None;
             let mut review_reason = None;
+            let mut source_review_json = None;
+            let mut source_review_file = None;
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
@@ -693,6 +695,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     "--reason" => {
                         review_reason = Some(parse_required_arg(iter.next(), "--reason")?);
+                    }
+                    "--source-review-json" => {
+                        source_review_json =
+                            Some(parse_required_arg(iter.next(), "--source-review-json")?);
+                    }
+                    "--source-review-file" => {
+                        source_review_file =
+                            Some(parse_required_arg(iter.next(), "--source-review-file")?);
                     }
                     other => {
                         return Err(format!(
@@ -712,7 +722,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     review_state: review_state
                         .ok_or("work-session-evidence-review-queue-update requires --state")?,
                     review_reason,
-                    source_review: None,
+                    source_review: parse_source_review_arg(source_review_json, source_review_file)?,
                 },
             )?;
             if json {
@@ -2650,6 +2660,43 @@ fn parse_preview_sort_arg(value: Option<String>) -> Result<String, Box<dyn std::
     }
 }
 
+fn parse_source_review_arg(
+    source_review_json: Option<String>,
+    source_review_file: Option<String>,
+) -> Result<Option<ProjectWorkSessionEvidenceSourceProposal>, Box<dyn std::error::Error>> {
+    let Some(raw) = (match (source_review_json, source_review_file) {
+        (Some(_), Some(_)) => {
+            return Err(
+                "work-session-evidence-review-queue-update accepts only one source review input"
+                    .into(),
+            );
+        }
+        (Some(raw), None) => Some(raw),
+        (None, Some(path)) => Some(std::fs::read_to_string(&path).map_err(|err| {
+            format!(
+                "work-session-evidence-review-queue-update could not read --source-review-file {path}: {err}"
+            )
+        })?),
+        (None, None) => None,
+    }) else {
+        return Ok(None);
+    };
+    if raw.trim().is_empty() {
+        return Err(
+            "work-session-evidence-review-queue-update source review JSON requires a non-empty value"
+                .into(),
+        );
+    }
+    serde_json::from_str::<ProjectWorkSessionEvidenceSourceProposal>(&raw)
+        .map(Some)
+        .map_err(|err| {
+            format!(
+                "work-session-evidence-review-queue-update source review JSON is invalid: {err}"
+            )
+            .into()
+        })
+}
+
 fn validate_scan_output_options(
     output_path: &Option<String>,
     no_export: bool,
@@ -2782,7 +2829,7 @@ fn help_text() -> String {
         "  work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]\n",
         "  work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]\n",
         "  work-session-evidence-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]\n",
-        "  work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n",
+        "  work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--source-review-json JSON|--source-review-file PATH] [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-evidence-review-apply [--limit N>0] [--database PATH] [--json]\n",
         "  work-session-evidence-reviewed-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n",
         "  work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--query TEXT] [--database PATH] [--json]\n",
@@ -2819,7 +2866,7 @@ fn help_text() -> String {
         "  work-session-evidence-candidates lists project/day rows still missing session evidence after the selected session index; --needs-title-normalization limits rows to title-normalization blockers.\n",
         "  work-session-evidence-proposals returns read-only source-traced AI/GLM/local proposals for unresolved project/day session-evidence rows; --needs-title-normalization focuses title-first proposal work; durable writes still require later operator gates.\n",
         "  work-session-evidence-review-queue persists unresolved session-evidence candidates into an operator review queue and marks disappeared candidates stale when a full candidate sync is available.\n",
-        "  work-session-evidence-review-queue-update marks one persisted session-evidence candidate approved or rejected with an audit reason.\n",
+        "  work-session-evidence-review-queue-update marks one persisted session-evidence candidate approved or rejected with an audit reason; source-proposal approvals can pass copied trace metadata with --source-review-json or --source-review-file.\n",
         "  work-session-evidence-review-apply writes approved session-evidence review decisions into an idempotent durable reviewed-items audit table; it does not create session evidence links.\n",
         "  work-session-evidence-reviewed-items lists durable reviewed session-evidence audit rows by project and date without creating session evidence links.\n",
         "  work-session-evidence-nearby lists same-project session records nearest a target project/date as navigation hints only; optional --query ranks nearby rows by local token overlap but does not approve or create session evidence.\n",
@@ -4370,6 +4417,7 @@ mod tests {
         assert!(help.contains(
             "work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected"
         ));
+        assert!(help.contains("--source-review-json JSON|--source-review-file PATH"));
         assert!(help.contains("work-session-evidence-review-apply [--limit N>0] [--database PATH]"));
         assert!(help.contains(
             "work-session-evidence-reviewed-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME]"
@@ -4579,6 +4627,63 @@ mod tests {
         assert!(parse_required_arg(None, "--output").is_err());
         assert!(parse_required_arg(Some("".to_string()), "--output").is_err());
         assert!(parse_required_arg(Some("--limit".to_string()), "--output").is_err());
+    }
+
+    #[test]
+    fn parse_source_review_arg_accepts_json_or_file_once() {
+        let payload = serde_json::json!({
+            "candidate_id": "session-evidence-PromptVault-source-proposal",
+            "project": "PromptVault",
+            "date": "2026-06-10",
+            "source_path": "/Users/wj/.codex/sessions/2026/06/10/rollout-promptvault.jsonl",
+            "source_line_number": 12,
+            "source_session_id": "turn-promptvault-source",
+            "source_timestamp": "2026-06-10T00:05:00Z",
+            "source_cwd": "/Users/wj/Ai/System/10_Projects/PromptVault",
+            "source_search_hit_id": "source-hit-1",
+            "proposal_kind": "manual_session_search",
+            "proposed_action": "Review copied source-search trace before approving.",
+            "source_trace": "PromptVault nearby evidence source hit.",
+            "trace_validated": true,
+            "review_ready": true,
+            "blocker_reason": null,
+            "match_score": 3,
+            "matched_terms": ["promptvault", "source"],
+            "confidence": 0.85,
+            "risk_flags": []
+        })
+        .to_string();
+        let parsed = parse_source_review_arg(Some(payload.clone()), None)
+            .expect("parse source review json")
+            .expect("source review");
+        assert_eq!(parsed.source_search_hit_id, "source-hit-1");
+        assert!(parsed.review_ready);
+        assert!(parsed.trace_validated);
+
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-source-review-{}.json",
+            std::process::id()
+        ));
+        std::fs::write(&path, &payload).expect("write source review fixture");
+        let from_file = parse_source_review_arg(None, Some(path.display().to_string()))
+            .expect("parse source review file")
+            .expect("source review from file");
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(
+            from_file.source_trace,
+            "PromptVault nearby evidence source hit."
+        );
+
+        assert!(
+            parse_source_review_arg(Some(payload.clone()), Some(path.display().to_string()))
+                .expect_err("reject duplicate source review inputs")
+                .to_string()
+                .contains("accepts only one source review input")
+        );
+        assert!(parse_source_review_arg(Some("{}".to_string()), None)
+            .expect_err("reject incomplete source review")
+            .to_string()
+            .contains("source review JSON is invalid"));
     }
 
     #[test]

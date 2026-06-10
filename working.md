@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 16:37 KST
+Updated: 2026-06-10 16:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,10 +34,15 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed baseline before this slice:
-  `f0d1803 docs: record source review trace commit`.
-- Current implementation slice: the full `npm run check` gate now rebuilds the
-  `promptvault-cli` debug binary before Rust tests/clippy so resume commands that
-  call `src-tauri/target/debug/promptvault-cli` do not run stale schema code.
+  `94826c6 fix: build cli during project check`.
+- Current implementation slice: CLI source-proposal review approvals can pass
+  copied source trace metadata through `--source-review-json` or
+  `--source-review-file`, matching the existing UI/API `source_review` contract
+  instead of hard-coding CLI updates to `source_review: None`.
+- Previous verified implementation slice: the full `npm run check` gate now
+  rebuilds the `promptvault-cli` debug binary before Rust tests/clippy so resume
+  commands that call `src-tauri/target/debug/promptvault-cli` do not run stale
+  schema code. Pushed as `94826c6 fix: build cli during project check`.
 - Previous verified implementation slice: source-proposal review approvals now preserve
   copied source trace metadata through review queue update, durable review
   apply, reviewed-items reload, API validation, and UI display. Pushed as
@@ -204,6 +209,19 @@ Current Work:
   That QA now clicks the source-proposal approval action and verifies the
   persisted review reason starts with `source_proposal_review_ready:`.
   Full `npm run check` also passed after the `working.md` update.
+- Current CLI source-review input proof so far:
+  `cargo fmt --check --manifest-path src-tauri/Cargo.toml` passed;
+  `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
+  passed (`35` CLI tests); a bad `{}` `--source-review-json` smoke failed
+  fail-closed with missing source-review fields; and a valid
+  `--source-review-file` smoke parsed successfully and reached the backend
+  candidate lookup, failing only because the temporary isolated DB had no such
+  candidate. Full `npm run check` also passed for this slice, covering UI/API
+  tests, production build, CLI build, Rust library tests (`236` passed), CLI
+  tests (`35` passed), doc tests, and clippy with `-D warnings`. Staged
+  diff/secret scan, commit, and push were the next required publication gates
+  after this log update. On resume, trust fresh `git status`, `git log`, and
+  upstream divergence checks over this timestamped snapshot.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is continuing unresolved project/day session-evidence review and
@@ -238,6 +256,7 @@ Management Coverage Status:
 Immediate Resume Commands:
 
 - `cargo build --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
+- `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
 - `src-tauri/target/debug/promptvault-cli work-status-export --limit 200 --full-session-index --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --query "RepoTutorStudio 2026-06-10" --json`
@@ -245,6 +264,69 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Current Slice - 2026-06-10 CLI source review approval input
+
+Current Goal:
+
+- Let terminal operators approve `source_proposal_review_ready:<hit>` review
+  queue rows without losing copied source trace metadata. The CLI should accept
+  the same source proposal object that the UI/API already pass as
+  `source_review`.
+
+Context:
+
+- The source-review trace durability slice made UI/API approvals preserve source
+  path, line number, hit id, and copied trace metadata.
+- The CLI still constructed `ProjectWorkSessionEvidenceReviewQueueUpdateOptions`
+  with `source_review: None`, so CLI approval of source proposals could not
+  satisfy the backend's fail-closed source-review requirement.
+
+Progress:
+
+- Added `--source-review-json` and `--source-review-file` to
+  `work-session-evidence-review-queue-update`.
+- Added JSON/file parsing into `ProjectWorkSessionEvidenceSourceProposal`, with
+  explicit duplicate-input, blank-input, unreadable-file, and invalid-schema
+  errors.
+- Updated CLI help, `docs/CLI.md`, and `README.md` so future operators know that
+  source-proposal approvals require exactly one copied source-review input.
+
+Changes:
+
+- `src-tauri/src/bin/promptvault-cli.rs`: CLI flags, parser helper, help text,
+  and parser unit coverage.
+- `docs/CLI.md`: command usage and review-queue update contract.
+- `README.md`: source-proposal approval metadata note.
+- `working.md`: long-term/short-term/current resume state for this slice.
+
+Tests:
+
+- PASS: `cargo fmt --check --manifest-path src-tauri/Cargo.toml`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
+  (`35` CLI tests passed).
+- PASS: invalid `--source-review-json '{}'` smoke failed fail-closed with
+  `missing field candidate_id`.
+- PASS: valid `--source-review-file` smoke parsed successfully and reached
+  backend candidate lookup, failing only with `work-session-evidence-review-queue
+  candidate not found` in a temporary isolated DB.
+- PASS: `npm run check`. This covered UI/API tests, production build,
+  `cargo build --bin promptvault-cli`, Rust library tests (`236` passed), CLI
+  tests (`35` passed), doc tests, and clippy with `-D warnings`.
+
+Issues:
+
+- Publication state is timestamp-sensitive. At this snapshot, staged
+  diff/secret scan, commit, and push were the next required gates; on resume,
+  refresh `git status --short --branch` and `git rev-list --left-right --count
+  @{u}...HEAD`.
+- Broader goal remains active: `26` default-vault session-evidence candidates
+  still need review/closure.
+
+Next Steps:
+
+- If this slice is not already clean and synced, stage only the explicit changed
+  files, run staged diff/secret checks, then commit and push.
 
 ## Completed Slice - 2026-06-10 Stale CLI resume gate hardening
 

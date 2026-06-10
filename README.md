@@ -238,6 +238,12 @@ Run `plan` before an unrestricted scan on large stores. It inventories matching 
 
 The Tauri UI runs full exports but receives only a latest-prompt preview over IPC, so the large Markdown file remains on disk instead of being serialized into the frontend.
 
+For source-proposal review approvals, `work-session-evidence-review-queue-update`
+requires copied trace metadata through exactly one of `--source-review-json` or
+`--source-review-file` when the audit reason starts with
+`source_proposal_review_ready:`. This keeps source path, line, hit id, and trace
+context available in durable reviewed-item reloads.
+
 For browser-only QA, run the local bridge alongside Vite:
 
 ```bash

@@ -31,7 +31,7 @@ Current Active Work:
 
 - Previous file-kind coverage filter slice is complete, verified, committed,
   and pushed as `63e1b2c ux: filter work log coverage by file kind`.
-- Latest documentation snapshot is pushed as
+- Starting documentation snapshot before this slice was pushed as
   `bf51762 docs: record latest working snapshot head`.
 - Fresh repo check showed `main...origin/main` clean and
   `HEAD == origin/main` at

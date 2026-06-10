@@ -81,15 +81,28 @@ export function workLogCoverageSourceFileSuggestions(
   return storedFilterSuggestionValues(files.map((file) => file.source_file));
 }
 
+export function workLogCoverageFilterConditionText(filters: WorkLogCoverageFilters): string {
+  const conditions = [];
+  const project = filters.project.trim();
+  if (project) conditions.push(`프로젝트 ${project}`);
+  const latestDate = filters.latestDate.trim();
+  if (latestDate) conditions.push(`날짜 ${latestDate}`);
+  if (filters.status) conditions.push(`상태 ${workLogCoverageStatusLabel(filters.status)}`);
+  const sourceFile = filters.sourceFile.trim();
+  if (sourceFile) conditions.push(`파일 ${sourceFile}`);
+  return conditions.length ? ` · 조건 ${conditions.join(" · ")}` : "";
+}
+
 export function workLogCoverageFilterMetaText(
   filteredCount: number,
   totalCount: number,
-  activeFilterCount: number,
+  filters: WorkLogCoverageFilters,
 ): string {
+  const activeFilterCount = activeWorkLogCoverageFilterCount(filters);
   const filterText = activeFilterCount === 0
     ? "필터 없음"
     : `필터 ${activeFilterCount.toLocaleString()}개`;
-  return `작업로그 필터 · ${filterText} · 결과 ${filteredCount.toLocaleString()} / ${
+  return `작업로그 필터 · ${filterText}${workLogCoverageFilterConditionText(filters)} · 결과 ${filteredCount.toLocaleString()} / ${
     totalCount.toLocaleString()
   }개`;
 }

@@ -1,10 +1,103 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 07:26 KST
+Updated: 2026-06-11 07:39 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 07:39 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Make the work-log coverage filter meta condition-aware so the UI states which
+  project, latest date, status, and file kind are active, not just the number
+  of active filters.
+
+Current Active Work:
+
+- Previous latest-date coverage filter slice is complete, verified, committed,
+  and pushed as `9f3077e ux: filter work log coverage by latest date`.
+- Documentation completion snapshots after that slice are pushed as
+  `c7215aa docs: record coverage date filter completion` and
+  `09a365e docs: clarify coverage date snapshot baseline`.
+- Fresh repo check showed `main...origin/main` clean and
+  `HEAD == origin/main` at
+  `09a365e75c084ea56850808dc752ab8ac37f5ee7`.
+- Current condition-aware coverage filter meta slice is complete locally and
+  ready for final staged safety checks, commit, and push.
+- This slice improved work-log coverage filter meta copy without changing
+  filtering semantics, parsing, extraction, AI proposals, or durable writes.
+
+Progress:
+
+- Chose the next small work-management improvement from the live app state.
+- Identified a UX gap: coverage filter meta currently shows only filter count
+  and result count, so operators cannot tell whether the active filter is
+  project/date/status/file-kind without reading each input.
+- Added condition-aware meta copy for project, latest date, status, and source
+  file filters.
+- Extended the isolated browser-bridge QA assertions so the browser run proves
+  the rendered meta includes the active condition labels.
+
+Changes:
+
+- `src/workLogCoverageFilters.ts`: adds condition-text generation and changes
+  `workLogCoverageFilterMetaText` to derive active filter count from the full
+  filter object.
+- `src/App.tsx`: passes the full work-log coverage filter object into the meta
+  helper.
+- `tests/workLogCoverageFilters.test.ts`: covers condition-aware meta text for
+  project/status, no-filter, latest-date, and source-file filter cases.
+- `scripts/browser-bridge-isolated-qa.mjs`: asserts status/date/source-file
+  condition labels in the rendered work-log coverage meta.
+- `working.md`: records this continuation state.
+
+Tests:
+
+- Baseline: `git status --short --branch` reported `## main...origin/main`.
+- Baseline: `git rev-parse HEAD origin/main` matched
+  `09a365e75c084ea56850808dc752ab8ac37f5ee7`.
+- RED as expected:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts`
+  failed before implementation because the helper still treated the filter
+  object as an active-count value.
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts`
+  (`5` tests).
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts tests/workSummaryStatus.test.ts`
+  (`57` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- PASS: `npm run qa:browser-bridge`; it passed the status/date/source-file
+  condition-label assertions and exited 0.
+- PASS: `npm run check`.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- This slice must stay read-only and must not alter filtering behavior beyond
+  the displayed meta text.
+
+Next Step:
+
+- Run final diff/secret/staged safety checks, then commit and push the
+  condition-aware coverage filter meta slice.
 
 ## Resume Snapshot - 2026-06-11 07:26 KST
 

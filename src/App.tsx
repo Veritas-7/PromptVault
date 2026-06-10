@@ -1563,7 +1563,7 @@ function App() {
     ? workLogCoverageFilterMetaText(
         filteredWorkLogCoverageFiles.length,
         workLogCoverageResult.files.length,
-        workLogCoverageFilterCount,
+        workLogCoverageFilters,
       )
     : null;
   const workLogCoverageProjectFilterSuggestions =

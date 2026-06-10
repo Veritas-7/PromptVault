@@ -2522,6 +2522,7 @@ async function runBrowserQa() {
       });
       return metaText.includes("작업로그 필터")
         && metaText.includes("필터 1개")
+        && metaText.includes("조건 상태 문제 로그")
         && (rowsAreGapLogs || emptyText.includes("필터에 맞는 프로젝트 작업 로그 없음"));
     }, undefined, { timeout: 90000 });
     coverageFilterMeta =
@@ -2547,6 +2548,7 @@ async function runBrowserQa() {
       const rows = Array.from(document.querySelectorAll('[data-work-log-coverage="true"] article'));
       return metaText.includes("작업로그 필터")
         && metaText.includes("필터 1개")
+        && metaText.includes(`조건 날짜 ${expectedDate}`)
         && rows.length > 0
         && rows.every((row) => (row.textContent ?? "").includes(expectedDate));
     }, coverageDateFilterValue, { timeout: 90000 });
@@ -2566,6 +2568,7 @@ async function runBrowserQa() {
       const rows = Array.from(document.querySelectorAll('[data-work-log-coverage="true"] article'));
       return metaText.includes("작업로그 필터")
         && metaText.includes("필터 1개")
+        && metaText.includes("조건 파일 workingd.md")
         && rows.length > 0
         && rows.every((row) => (row.textContent ?? "").includes("workingd.md"));
     }, undefined, { timeout: 90000 });

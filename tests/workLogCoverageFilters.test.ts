@@ -62,8 +62,8 @@ test("work log coverage filters narrow gap logs by status group and project", ()
     ["workingd.md"],
   );
   assert.equal(
-    workLogCoverageFilterMetaText(1, files.length, activeWorkLogCoverageFilterCount(filters)),
-    "작업로그 필터 · 필터 2개 · 결과 1 / 3개",
+    workLogCoverageFilterMetaText(1, files.length, filters),
+    "작업로그 필터 · 필터 2개 · 조건 프로젝트 PromptVault · 상태 문제 로그 · 결과 1 / 3개",
   );
 });
 
@@ -76,7 +76,10 @@ test("work log coverage filters expose project suggestions and empty state", () 
 
   assert.deepEqual(workLogCoverageProjectSuggestions(files), ["CareVault", "PromptVault"]);
   assert.deepEqual(filterWorkLogCoverageFiles(files, emptyWorkLogCoverageFilters()), files);
-  assert.equal(workLogCoverageFilterMetaText(files.length, files.length, 0), "작업로그 필터 · 필터 없음 · 결과 3 / 3개");
+  assert.equal(
+    workLogCoverageFilterMetaText(files.length, files.length, emptyWorkLogCoverageFilters()),
+    "작업로그 필터 · 필터 없음 · 결과 3 / 3개",
+  );
 });
 
 test("work log coverage filters narrow parsed rows by latest date", () => {
@@ -117,6 +120,10 @@ test("work log coverage filters narrow parsed rows by latest date", () => {
     "2026-06-09",
     "2026-06-10",
   ]);
+  assert.equal(
+    workLogCoverageFilterMetaText(1, files.length, filters),
+    "작업로그 필터 · 필터 1개 · 조건 날짜 2026-06-10 · 결과 1 / 3개",
+  );
 });
 
 test("work log coverage filters narrow by source file kind", () => {
@@ -153,6 +160,10 @@ test("work log coverage filters narrow by source file kind", () => {
     "working.md",
     "workingd.md",
   ]);
+  assert.equal(
+    workLogCoverageFilterMetaText(1, files.length, filters),
+    "작업로그 필터 · 필터 1개 · 조건 파일 workingd.md · 결과 1 / 3개",
+  );
 });
 
 test("work log coverage status labels use operator-facing Korean copy", () => {

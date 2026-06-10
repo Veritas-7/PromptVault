@@ -2059,6 +2059,15 @@ const WORK_SESSION_EVIDENCE_SOURCE_AUDIT_MANUAL_INSPECT_OUTCOMES = new Set([
   "source_search_error",
 ]);
 
+function workSessionEvidenceSourceAuditRiskFlagLabels(
+  item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
+): string[] {
+  return item.risk_flag_counts
+    .filter((riskFlag) => riskFlag.count > 0)
+    .map((riskFlag) => riskFlagLabel(riskFlag.text))
+    .filter((label) => label !== "알 수 없음");
+}
+
 function workSessionEvidenceSourceAuditFrequencySummaryText(
   items: { text: string; count: number }[],
   label: (text: string) => string,
@@ -2171,7 +2180,10 @@ export function workSessionEvidenceSourceAuditNeedsManualInspect(
   item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
 ): boolean {
   return canRejectWorkSessionEvidenceSourceAuditItem(item)
-    && WORK_SESSION_EVIDENCE_SOURCE_AUDIT_MANUAL_INSPECT_OUTCOMES.has(item.outcome);
+    && (
+      WORK_SESSION_EVIDENCE_SOURCE_AUDIT_MANUAL_INSPECT_OUTCOMES.has(item.outcome)
+      || (item.outcome === "blocked" && workSessionEvidenceSourceAuditRiskFlagLabels(item).length > 0)
+    );
 }
 
 export function workSessionEvidenceSourceAuditManualInspectReasonText(
@@ -2189,6 +2201,12 @@ export function workSessionEvidenceSourceAuditManualInspectReasonText(
   }
   if (item.outcome === "source_search_error") {
     return "수동 확인 필요 · 추천 원본 검색 실패";
+  }
+  if (item.outcome === "blocked") {
+    const riskFlags = workSessionEvidenceSourceAuditRiskFlagLabels(item);
+    if (riskFlags.length) {
+      return `수동 확인 필요 · 차단 row에 위험표시 ${riskFlags.join(", ")}`;
+    }
   }
   return "수동 확인 필요";
 }

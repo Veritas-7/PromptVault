@@ -3051,40 +3051,54 @@ test("work session evidence source audit reject helpers keep operator decisions 
   const ready = sessionEvidenceSourceAuditResult().items[0];
   const blocked = sessionEvidenceSourceAuditResult().items[1];
   const noHit = sessionEvidenceSourceAuditResult().items[2];
+  const cleanBlocked = {
+    ...blocked,
+    candidate_id: "session-evidence-PromptVault-blocked-clean",
+    risk_flag_counts: [],
+  };
+  const mixedResult = sessionEvidenceSourceAuditResult({
+    items: [ready, blocked, cleanBlocked, noHit],
+  });
   assert.equal(canRejectWorkSessionEvidenceSourceAuditItem(ready), false);
   assert.equal(canRejectWorkSessionEvidenceSourceAuditItem(blocked), true);
+  assert.equal(canRejectWorkSessionEvidenceSourceAuditItem(cleanBlocked), true);
   assert.equal(canRejectWorkSessionEvidenceSourceAuditItem(noHit), true);
-  assert.equal(canBulkRejectWorkSessionEvidenceSourceAuditItem(blocked), true);
+  assert.equal(canBulkRejectWorkSessionEvidenceSourceAuditItem(blocked), false);
+  assert.equal(canBulkRejectWorkSessionEvidenceSourceAuditItem(cleanBlocked), true);
   assert.equal(canBulkRejectWorkSessionEvidenceSourceAuditItem(noHit), false);
   assert.deepEqual(
-    workSessionEvidenceSourceAuditRejectableItems(sessionEvidenceSourceAuditResult()).map((item) =>
+    workSessionEvidenceSourceAuditRejectableItems(mixedResult).map((item) =>
+      item.candidate_id
+    ),
+    [
+      "session-evidence-PromptVault-blocked",
+      "session-evidence-PromptVault-blocked-clean",
+      "session-evidence-PromptVault-no-hit",
+    ],
+  );
+  assert.deepEqual(
+    workSessionEvidenceSourceAuditBulkRejectableItems(mixedResult).map((item) =>
+      item.candidate_id
+    ),
+    ["session-evidence-PromptVault-blocked-clean"],
+  );
+  assert.deepEqual(
+    workSessionEvidenceSourceAuditManualInspectItems(mixedResult).map((item) =>
       item.candidate_id
     ),
     ["session-evidence-PromptVault-blocked", "session-evidence-PromptVault-no-hit"],
   );
-  assert.deepEqual(
-    workSessionEvidenceSourceAuditBulkRejectableItems(sessionEvidenceSourceAuditResult()).map((item) =>
-      item.candidate_id
-    ),
-    ["session-evidence-PromptVault-blocked"],
-  );
-  assert.deepEqual(
-    workSessionEvidenceSourceAuditManualInspectItems(sessionEvidenceSourceAuditResult()).map((item) =>
-      item.candidate_id
-    ),
-    ["session-evidence-PromptVault-no-hit"],
+  assert.equal(
+    workSessionEvidenceSourceAuditRejectableText(mixedResult),
+    "감사 판정 거절 가능 3개",
   );
   assert.equal(
-    workSessionEvidenceSourceAuditRejectableText(sessionEvidenceSourceAuditResult()),
-    "감사 판정 거절 가능 2개",
-  );
-  assert.equal(
-    workSessionEvidenceSourceAuditBulkRejectableText(sessionEvidenceSourceAuditResult()),
+    workSessionEvidenceSourceAuditBulkRejectableText(mixedResult),
     "감사 판정 일괄 거절 가능 1개",
   );
   assert.equal(
-    workSessionEvidenceSourceAuditManualInspectText(sessionEvidenceSourceAuditResult()),
-    "수동 확인 필요 1개",
+    workSessionEvidenceSourceAuditManualInspectText(mixedResult),
+    "수동 확인 필요 2개",
   );
   assert.equal(
     workSessionEvidenceSourceAuditManualInspectReasonText(noHit),
@@ -3092,8 +3106,9 @@ test("work session evidence source audit reject helpers keep operator decisions 
   );
   assert.equal(
     workSessionEvidenceSourceAuditManualInspectReasonText(blocked),
-    null,
+    "수동 확인 필요 · 차단 row에 위험표시 source_prompt_instruction_only",
   );
+  assert.equal(workSessionEvidenceSourceAuditManualInspectReasonText(cleanBlocked), null);
   assert.equal(
     workSessionEvidenceSourceAuditRejectReason(blocked),
     "source_audit_blocked:source_trace_is_instruction_only",
@@ -3134,21 +3149,29 @@ test("work session evidence source audit reject helpers keep operator decisions 
 
 test("work session evidence source audit filters isolate manual inspect work", () => {
   const result = sessionEvidenceSourceAuditResult();
+  const cleanBlocked = {
+    ...result.items[1],
+    candidate_id: "session-evidence-PromptVault-blocked-clean",
+    risk_flag_counts: [],
+  };
+  const mixedResult = sessionEvidenceSourceAuditResult({
+    items: [result.items[0], result.items[1], cleanBlocked, result.items[2]],
+  });
   assert.equal(workSessionEvidenceSourceAuditFilterLabel("manual-inspect"), "수동 확인 필요");
   assert.deepEqual(
-    filterWorkSessionEvidenceSourceAuditItems(result.items, "manual-inspect").map((item) =>
+    filterWorkSessionEvidenceSourceAuditItems(mixedResult.items, "manual-inspect").map((item) =>
       item.candidate_id
     ),
-    ["session-evidence-PromptVault-no-hit"],
+    ["session-evidence-PromptVault-blocked", "session-evidence-PromptVault-no-hit"],
   );
   assert.deepEqual(
-    filterWorkSessionEvidenceSourceAuditItems(result.items, "bulk-rejectable").map((item) =>
+    filterWorkSessionEvidenceSourceAuditItems(mixedResult.items, "bulk-rejectable").map((item) =>
       item.candidate_id
     ),
-    ["session-evidence-PromptVault-blocked"],
+    ["session-evidence-PromptVault-blocked-clean"],
   );
   assert.deepEqual(
-    filterWorkSessionEvidenceSourceAuditItems(result.items, "review-ready").map((item) =>
+    filterWorkSessionEvidenceSourceAuditItems(mixedResult.items, "review-ready").map((item) =>
       item.candidate_id
     ),
     ["session-evidence-PromptVault-ready"],
@@ -3156,10 +3179,10 @@ test("work session evidence source audit filters isolate manual inspect work", (
   assert.equal(
     workSessionEvidenceSourceAuditFilterMetaText(
       "manual-inspect",
-      result.items,
-      filterWorkSessionEvidenceSourceAuditItems(result.items, "manual-inspect"),
+      mixedResult.items,
+      filterWorkSessionEvidenceSourceAuditItems(mixedResult.items, "manual-inspect"),
     ),
-    "원본 감사 필터 수동 확인 필요 · 결과 1 / 3행 · 수동확인 1행 · 일괄거절 1행 · 검토준비 1행",
+    "원본 감사 필터 수동 확인 필요 · 결과 2 / 4행 · 수동확인 2행 · 일괄거절 1행 · 검토준비 1행",
   );
 });
 

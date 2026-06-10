@@ -1,10 +1,107 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 00:33 KST
+Updated: 2026-06-11 00:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 00:43 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and `PROJECT_STATUS.md`.
+- Keep extraction, normalization, and session-evidence decisions source-traced,
+  operator-reviewable, and fail-closed. Approval remains explicit and requires
+  copied evidence/source-review checks.
+
+Short-Term Goal:
+
+- Make source-audit review safer on real default-vault rows: low-ambiguity rows
+  can stay bulk-rejectable, but blocked rows with source/candidate risk flags
+  must require manual inspection instead of being swept into a bulk action.
+
+Current Goal:
+
+- Reclassify risk-flagged source-audit blocked rows as manual-inspect rows and
+  prove the browser QA flow still supports source-audit filtering and bulk
+  rejection for the remaining safe rows.
+
+Context:
+
+- Ran live default-vault read-only source audit against
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- Current live pending session-evidence review queue: `25` pending rows.
+- Current live audit result: `25` audited rows, `0` review-ready rows,
+  `12` `no_recommended_source`, `11` `blocked`, `2` `no_source_hits`.
+- Live risk flags appeared inside blocked rows:
+  `long_base64_like_token` `9` times and `possible_api_key` `2` times.
+- No live default-vault decisions were applied. The live audit was read-only.
+
+Progress:
+
+- Updated source-audit manual-inspect classification so blocked rows with any
+  positive `risk_flag_counts` entry are treated as manual-inspect.
+- Kept clean blocked rows bulk-rejectable when they have no risk flags.
+- Added manual-inspect copy that names the visible risk labels for risk-flagged
+  blocked rows.
+- Updated unit fixtures to include both a clean blocked row and a risk-flagged
+  blocked row, proving only the clean blocked row remains bulk-rejectable.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: added risk-flag label extraction for source-audit
+  rows and changed manual-inspect classification for risk-flagged blocked rows.
+- `tests/workSummaryStatus.test.ts`: updated source-audit reject/filter tests
+  so risk-flagged blocked rows are manual-inspect while clean blocked rows stay
+  bulk-rejectable.
+
+Tests:
+
+- `./src-tauri/target/debug/promptvault-cli work-session-evidence-review-queue
+  --limit 50 --review-state pending_review --json` passed against the default
+  vault and showed `25` pending review rows.
+- `./src-tauri/target/debug/promptvault-cli work-session-evidence-source-audit
+  --limit 50 --review-state pending_review --nearby-limit 6 --source-limit 5
+  --max-lines 100000 --json` passed read-only against the default vault and
+  showed `0` review-ready rows plus mixed blocked/manual outcomes.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `51` tests.
+- `node --check scripts/browser-bridge-isolated-qa.mjs` passed.
+- `npm run build` passed.
+- `npm run qa:browser-bridge` passed end-to-end, including source-audit bridge,
+  source-audit UI filtering, bulk reject, reviewed item reload, work-management
+  overview, normalization queues, and approved work-log queue save.
+- Full `npm run check` passed: UI tests `530`, Vite / TypeScript build,
+  `cargo build --bin promptvault-cli`, Rust lib tests `252`, CLI tests `47`,
+  doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- The default vault still has `25` pending session-evidence review rows. This
+  slice did not reject or approve live data.
+- Live audit still has no `review_ready` rows; the next practical work remains
+  operator-decision ergonomics for no-source, blocked, no-hit, and risk-flagged
+  rows.
+- cmux/in-app browser testing remains excluded in this non-cmux environment;
+  validation used CLI, local dev server, and browser bridge QA.
+
+Research:
+
+- No external research was needed. The improvement came from live default-vault
+  source-audit evidence.
+
+Next Steps:
+
+- Commit/push this risk-sensitive manual-inspect classification after final
+  diff, whitespace, and staged secret checks.
+- Consider a durable defer/manual-inspect decision state if live risk-flagged
+  rows remain common after operator review.
+- Continue default-vault validation before claiming project/day work management
+  completion.
 
 ## Resume Snapshot - 2026-06-11 00:33 KST
 

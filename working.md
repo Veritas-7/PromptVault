@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 21:21 KST
+Updated: 2026-06-10 21:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,37 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed local slice, commit pending:
+  expose the safe read-only session-evidence review queue `row_filter` in the
+  app UI so operators can choose `near-session-date-hint` or
+  `stale-session-date-hint` before refreshing the persisted queue view.
+- Current implementation status:
+  implemented and fully verified locally; staging/commit/push are pending. The
+  backend/CLI/API row-filter slice is committed as `dac55ad`. This UI slice
+  passes the selected filter into
+  `loadProjectWorkSessionEvidenceReviewQueue` without changing
+  `--sync-candidates` semantics. Changing the UI filter clears the previous
+  queue result so the UI does not silently show stale rows from another queue
+  scope.
+- Verification status for current slice:
+  focused and full checks passed. `npm run build` passed. `node
+  --disable-warning=ExperimentalWarning --experimental-transform-types --test
+  tests/reviewQueueFilters.test.ts tests/workSummaryStatus.test.ts
+  tests/promptVaultApi.test.ts` passed with `260` tests. Headless Playwright
+  against the local Vite dev server with mocked bridge health/review-queue
+  routes confirmed the new select renders options `전체`, `인접 세션 후보`,
+  `먼 세션 후보`, `제목 정규화 필요`, and `진행로그만 있음`; selecting
+  `near-session-date-hint` and clicking the session-evidence queue button sends
+  `{ limit: 40, row_filter: "near-session-date-hint", sync_candidates: true }`,
+  shows `세션근거 큐 조회 범위 · 인접 세션 후보`, and logs no console errors.
+  `git diff --check` passed. Full `npm run check` passed: UI tests `523`
+  passed, Vite / TypeScript build passed, `cargo build --bin promptvault-cli`
+  passed, Rust lib tests `248` passed, CLI tests `46` passed, doc-tests passed,
+  and clippy `-D warnings` passed.
+- Next verification checklist:
+  stage explicit files only (`src/App.tsx`, `working.md`), run cached diff
+  checks and `gitleaks protect --staged --no-banner`, commit, push, then update
+  this log with the final commit hash.
 - Completed implementation slice:
   `dac55ad fix: filter session evidence review queue`.
 - Completed behavior:

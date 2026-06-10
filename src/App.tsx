@@ -146,6 +146,7 @@ import {
   scanPrompts,
   type ProjectWorkLogExtractionItemsOptions,
   type ProjectWorkLogNormalizedItemsOptions,
+  type ProjectWorkSessionEvidenceReviewQueueOptions,
   type ProjectWorkSessionEvidenceReviewedItemsOptions,
   type ProjectWorkSummarySnapshotsOptions,
   updateProjectWorkLogNormalizationReviewQueueItem,
@@ -485,6 +486,13 @@ const WORK_STATUS_EXPORT_ROW_FILTER_OPTIONS: WorkStatusExportRowFilter[] = [
   "needs-title-normalization",
   "active",
   "session-supported",
+  "progress-log-only",
+];
+const WORK_SESSION_EVIDENCE_REVIEW_QUEUE_ROW_FILTER_OPTIONS: WorkStatusExportRowFilter[] = [
+  "all",
+  "near-session-date-hint",
+  "stale-session-date-hint",
+  "needs-title-normalization",
   "progress-log-only",
 ];
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
@@ -959,6 +967,10 @@ function App() {
   );
   const [workStatusExportRowFilter, setWorkStatusExportRowFilter] =
     useState<WorkStatusExportRowFilter>("all");
+  const [
+    workSessionEvidenceReviewQueueRowFilter,
+    setWorkSessionEvidenceReviewQueueRowFilter,
+  ] = useState<WorkStatusExportRowFilter>("all");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [resultOrigin, setResultOrigin] = useState<PromptResultOrigin | null>(null);
   const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
@@ -1509,6 +1521,12 @@ function App() {
     workReviewQueueProjectSuggestions(workSessionEvidenceReviewQueueResult?.items ?? []);
   const workSessionEvidenceReviewQueueReasonFilterSuggestions =
     workReviewQueueReasonSuggestions(workSessionEvidenceReviewQueueResult?.items ?? []);
+  const workSessionEvidenceReviewQueueRowFilterMeta =
+    workSessionEvidenceReviewQueueRowFilter === "all"
+      ? null
+      : `세션근거 큐 조회 범위 · ${workStatusExportRowFilterLabel(
+          workSessionEvidenceReviewQueueRowFilter,
+        )}`;
   const visibleWorkSummaries = workSummaryResult?.summaries.slice(0, WORK_SUMMARY_DISPLAY_LIMIT) ?? [];
   const filteredWorkStatusExportRows = useMemo(() => {
     return filterWorkStatusExportRows(workStatusExportResult?.rows ?? [], workStatusExportRowFilter);
@@ -1925,6 +1943,22 @@ function App() {
     return { limit };
   }
 
+  function workSessionEvidenceReviewQueueOptions({
+    limit = WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT,
+    syncCandidates = false,
+  }: {
+    limit?: number;
+    syncCandidates?: boolean;
+  } = {}): ProjectWorkSessionEvidenceReviewQueueOptions {
+    return {
+      limit,
+      ...(workSessionEvidenceReviewQueueRowFilter === "all"
+        ? {}
+        : { row_filter: workSessionEvidenceReviewQueueRowFilter }),
+      ...(syncCandidates ? { sync_candidates: true } : {}),
+    };
+  }
+
   async function refreshWorkSummarySnapshots(options = workSummarySnapshotOptions()) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
@@ -2158,8 +2192,7 @@ function App() {
     setWorkSessionEvidenceReviewQueueState("loading");
     try {
       const nextQueue = await loadProjectWorkSessionEvidenceReviewQueue({
-        limit: WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT,
-        sync_candidates: true,
+        ...workSessionEvidenceReviewQueueOptions({ syncCandidates: true }),
       });
       setWorkSessionEvidenceReviewQueueResult(nextQueue);
       setWorkSessionEvidenceReviewQueueState("ready");
@@ -2494,9 +2527,9 @@ function App() {
         limit: WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT,
       });
       setWorkSessionEvidenceReviewApplyResult(next);
-      const nextQueue = await loadProjectWorkSessionEvidenceReviewQueue({
-        limit: WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT,
-      });
+      const nextQueue = await loadProjectWorkSessionEvidenceReviewQueue(
+        workSessionEvidenceReviewQueueOptions(),
+      );
       setWorkSessionEvidenceReviewQueueResult(nextQueue);
       setWorkSessionEvidenceReviewedItemsState("loading");
       const reviewedItems = await listProjectWorkSessionEvidenceReviewedItems(
@@ -4030,6 +4063,28 @@ function App() {
                 type="checkbox"
               />
               <span>제목정규화만</span>
+            </label>
+            <label className="local-recommendation-toggle">
+              <span>큐 범위</span>
+              <select
+                aria-label="세션 근거 검토 큐 서버 row 필터"
+                data-work-session-evidence-review-queue-row-filter="true"
+                disabled={isTopLevelActionLocked}
+                onChange={(event) => {
+                  setWorkSessionEvidenceReviewQueueRowFilter(
+                    event.target.value as WorkStatusExportRowFilter,
+                  );
+                  setWorkSessionEvidenceReviewQueueResult(null);
+                  setWorkSessionEvidenceReviewQueueState("idle");
+                }}
+                value={workSessionEvidenceReviewQueueRowFilter}
+              >
+                {WORK_SESSION_EVIDENCE_REVIEW_QUEUE_ROW_FILTER_OPTIONS.map((filter) => (
+                  <option key={filter} value={filter}>
+                    {workStatusExportRowFilterLabel(filter)}
+                  </option>
+                ))}
+              </select>
             </label>
             <button
               aria-label={workSessionEvidenceReviewQueueActionLabel(
@@ -5658,6 +5713,15 @@ function App() {
           >
             <Search size={15} />
             <span>{workSessionEvidenceReviewQueueFilterMeta}</span>
+          </div>
+        ) : null}
+        {workSessionEvidenceReviewQueueRowFilterMeta ? (
+          <div
+            className="work-summary-index"
+            data-work-session-evidence-review-queue-row-filter-meta="true"
+          >
+            <Search size={15} />
+            <span>{workSessionEvidenceReviewQueueRowFilterMeta}</span>
           </div>
         ) : null}
         {workManagementReviewDecisions ? (

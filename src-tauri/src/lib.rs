@@ -9768,9 +9768,7 @@ fn read_project_work_session_evidence_source_search_jsonl_items(
             query_terms,
         ) {
             matched_line_count += 1;
-            if items.len() < limit {
-                items.push(item);
-            }
+            retain_ranked_project_work_session_evidence_source_search_item(&mut items, item, limit);
         }
     }
 
@@ -9832,9 +9830,7 @@ fn read_project_work_session_evidence_source_search_antigravity_sqlite_items(
             query_terms,
         ) {
             matched_line_count += 1;
-            if items.len() < limit {
-                items.push(item);
-            }
+            retain_ranked_project_work_session_evidence_source_search_item(&mut items, item, limit);
         }
     }
 
@@ -9844,6 +9840,46 @@ fn read_project_work_session_evidence_source_search_antigravity_sqlite_items(
         hit_max_lines,
         items,
     })
+}
+
+fn retain_ranked_project_work_session_evidence_source_search_item(
+    items: &mut Vec<ProjectWorkSessionEvidenceSourceSearchItem>,
+    item: ProjectWorkSessionEvidenceSourceSearchItem,
+    limit: usize,
+) {
+    if limit == 0 {
+        return;
+    }
+    items.push(item);
+    sort_project_work_session_evidence_source_search_items(items);
+    if items.len() > limit {
+        items.truncate(limit);
+    }
+}
+
+fn sort_project_work_session_evidence_source_search_items(
+    items: &mut [ProjectWorkSessionEvidenceSourceSearchItem],
+) {
+    items.sort_by(|left, right| {
+        right
+            .match_score
+            .cmp(&left.match_score)
+            .then_with(|| {
+                project_work_session_evidence_source_search_specific_match_count(right)
+                    .cmp(&project_work_session_evidence_source_search_specific_match_count(left))
+            })
+            .then_with(|| left.risk_flags.len().cmp(&right.risk_flags.len()))
+            .then_with(|| left.line_number.cmp(&right.line_number))
+    });
+}
+
+fn project_work_session_evidence_source_search_specific_match_count(
+    item: &ProjectWorkSessionEvidenceSourceSearchItem,
+) -> usize {
+    item.matched_terms
+        .iter()
+        .filter(|term| !project_work_session_source_match_term_is_generic(term))
+        .count()
 }
 
 fn project_work_session_evidence_source_search_item_from_prompt(
@@ -23494,6 +23530,84 @@ Status: completed as a source-only/report-only hardening slice.
             .warnings
             .iter()
             .any(|warning| warning.contains("read-only")));
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn session_evidence_source_search_ranks_more_specific_jsonl_matches() {
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-session-source-search-ranked-{}.jsonl",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let mut file = std::fs::File::create(&path).expect("create ranked search fixture");
+        writeln!(
+            file,
+            "{}",
+            serde_json::json!({
+                "type": "turn_context",
+                "payload": {
+                    "cwd": "/Users/wj/Ai/System/10_Projects/PromptVault"
+                }
+            })
+        )
+        .expect("write turn context");
+        writeln!(
+            file,
+            "{}",
+            serde_json::json!({
+                "type": "response_item",
+                "payload": {
+                    "role": "user",
+                    "turn_id": "turn-source-search-weak",
+                    "content": "PromptVault"
+                },
+                "timestamp": "2026-06-09T11:00:00Z"
+            })
+        )
+        .expect("write weak matching prompt");
+        writeln!(
+            file,
+            "{}",
+            serde_json::json!({
+                "type": "response_item",
+                "payload": {
+                    "role": "user",
+                    "turn_id": "turn-source-search-specific",
+                    "content": "PromptVault reviewed source evidence confirms queue trace selection"
+                },
+                "timestamp": "2026-06-09T12:00:00Z"
+            })
+        )
+        .expect("write specific matching prompt");
+
+        let result = run_project_work_session_evidence_source_search(
+            ProjectWorkSessionEvidenceSourceSearchOptions {
+                source_path: path.display().to_string(),
+                query: "PromptVault reviewed source evidence queue trace".to_string(),
+                limit: Some(1),
+                max_lines: Some(10),
+            },
+        )
+        .expect("search ranked source fixture");
+
+        assert_eq!(result.scanned_line_count, 3);
+        assert_eq!(result.matched_line_count, 2);
+        assert_eq!(result.returned_item_count, 1);
+        assert_eq!(result.items[0].line_number, 3);
+        assert_eq!(result.items[0].match_score, 6);
+        assert_eq!(
+            result.items[0].matched_terms,
+            vec![
+                "evidence".to_string(),
+                "promptvault".to_string(),
+                "queue".to_string(),
+                "reviewed".to_string(),
+                "source".to_string(),
+                "trace".to_string(),
+            ]
+        );
 
         let _ = std::fs::remove_file(path);
     }

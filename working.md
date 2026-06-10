@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 22:39 KST
+Updated: 2026-06-10 22:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,35 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed implementation slice:
+  source-search results are now ranked by match quality before truncating to the
+  requested limit. This fixes the earlier behavior where a source file's first
+  weak project-name match could hide a later, more specific copied evidence
+  line when operators requested only the top few source-search hits.
+- Changes:
+  `src-tauri/src/lib.rs` now retains a bounded ranked set of source-search hits
+  for both JSONL sessions and Antigravity conversation DB sources while still
+  scanning all bounded lines and preserving the exact `matched_line_count`.
+  Ranking prefers higher `match_score`, more non-generic matched terms, fewer
+  risk flags, and then earlier source line numbers.
+- Verification:
+  added a RED/GREEN Rust regression,
+  `session_evidence_source_search_ranks_more_specific_jsonl_matches`, where
+  line `2` matched only `PromptVault` and line `3` matched the full review
+  evidence query. Before the implementation the test failed because line `2`
+  was returned for `limit=1`; after the change it passes and returns line `3`.
+  `cargo fmt --manifest-path src-tauri/Cargo.toml --check` passed.
+  `cargo test --manifest-path src-tauri/Cargo.toml
+  session_evidence_source_search --lib` passed with `3` tests, and
+  `cargo test --manifest-path src-tauri/Cargo.toml
+  session_evidence_source_proposals --lib` passed with `8` tests.
+  Full `npm run check` passed: UI tests `525`, Vite / TypeScript build,
+  `cargo build --bin promptvault-cli`, Rust lib tests `251`, CLI tests `46`,
+  doc-tests, and clippy `-D warnings`.
+- Next product work:
+  continue reducing the remaining `8` near-session pending rows. If rows still
+  have no usable recommended source, build a batch blocker-summary workflow so
+  operators can decide reject/defer actions without row-by-row probing.
 - Completed implementation slice:
   weak metadata-only nearby session hints are no longer used as the automatic
   recommended source-search target. This keeps the review queue fail-closed

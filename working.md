@@ -47,6 +47,8 @@ Progress:
   the coverage filter with Korean labels.
 - Replaced coverage row raw status text with Korean labels, so pointer rows read
   as `주 로그 참조`.
+- Committed and pushed this slice to `origin/main` as
+  `01113c3 ux: clarify work log coverage states`.
 
 Changes:
 
@@ -84,8 +86,6 @@ Issues:
 
 Next Steps:
 
-- Commit/push this work-log coverage label slice after diff, staged secret, and
-  status checks.
 - Continue the default-vault operator pass for session-evidence review
   decisions.
 - Continue bounded full-session backfill verification before declaring the

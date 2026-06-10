@@ -1940,6 +1940,14 @@ export function workSessionEvidenceSourceProposalStateText(
   ].join(" · ");
 }
 
+export function workSessionEvidenceSourceProposalRiskText(
+  proposal: ProjectWorkSessionEvidenceSourceProposal,
+): string | null {
+  if (!proposal.risk_flags.length) return null;
+  const riskFlags = proposal.risk_flags.map(riskFlagLabel).filter((label) => label !== "알 수 없음");
+  return `위험표시 ${riskFlags.length ? riskFlags.join(", ") : "알 수 없음"}`;
+}
+
 export function workSessionEvidenceCandidateReasonDiagnosticText(
   reason: string,
 ): string | null {

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 18:16 KST
+Updated: 2026-06-10 18:25 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -35,7 +35,14 @@ Current Work:
 
 - Latest pushed implementation slice:
   `7783e05 fix: block split project source matches`.
-- Latest verified behavior:
+- Latest verified local implementation slice, pending commit:
+  source proposal risk flag details are now visible in the review queue source
+  proposal panel. This was driven by a real default-vault
+  `enterprise_diagnosis_flutter` source proposal blocked with
+  `candidate_or_source_hit_has_risk_flags` and `long_base64_like_token`; the UI
+  now shows the localized risk label instead of only saying the proposal was
+  blocked.
+- Previous verified behavior:
   split project-token source proposal gate. The backend now treats
   CamelCase/separator-derived project-name parts such as `repotutor` and
   `studio` as project identifier terms, so a source hit that only matches
@@ -364,6 +371,25 @@ Current Work:
   isolated DB
   `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-C431v3/qa.sqlite`.
   Ports `5174` and `5177` had no remaining listeners after QA cleanup.
+- Current source proposal risk-detail UI proof:
+  Default-vault probing of `enterprise_diagnosis_flutter` `2026-06-08`
+  (`session-evidence-enterprise_diagnosis_flutter-3d3c2c2081`) found a
+  source proposal from a real Codex source path whose copied trace was blocked
+  with `candidate_or_source_hit_has_risk_flags` and risk flag
+  `long_base64_like_token`. The source proposal panel now renders localized risk
+  detail text such as `위험표시 긴 토큰 형식 문자열` below the copied trace, so the
+  operator can see why the proposal is blocked without decoding internal risk
+  flag names. Verification passed: targeted UI test
+  `npm run test:ui -- tests/workSummaryStatus.test.ts --test-name-pattern "work session evidence source proposal labels"`
+  (`523` tests passed); `npm run build`; full `npm run check` with UI tests
+  (`523` passed), production build, Rust library tests (`237` passed), CLI
+  tests (`35` passed), doc tests, and clippy with `-D warnings`; and
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` against
+  isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-IUvkvm/qa.sqlite`.
+  The QA crossed source-proposals bridge, source-proposals UI, review queue UI,
+  review apply, reviewed-items reload, and broader work-management panels.
+  Ports `5174` and `5177` had no remaining listeners after QA cleanup.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is continuing unresolved project/day session-evidence review and
@@ -411,6 +437,74 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10 Resume Snapshot RepoTutor Studio must help a vibe-coding learner provide a GitHub repository" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Source proposal risk flag details
+
+Current Goal:
+
+- Make blocked source proposals explain the specific risk flags that caused the
+  fail-closed state in the review queue UI.
+- Pushed implementation commit:
+  pending.
+
+Context:
+
+- A real default-vault probe for `enterprise_diagnosis_flutter` `2026-06-08`
+  produced a copied-trace source proposal that was correctly blocked by
+  `candidate_or_source_hit_has_risk_flags`.
+- The proposal carried `risk_flags=["long_base64_like_token"]`, but the source
+  proposal panel only showed the generic blocked state; operators had to infer
+  the concrete risk from raw backend data.
+
+Progress:
+
+- Added a source proposal risk-detail display helper that localizes risk flags
+  using the existing `riskFlagLabel` mapping.
+- Rendered the risk-detail text directly below copied source traces in the
+  source proposal panel.
+- Added coverage for the `long_base64_like_token` display case and the no-risk
+  null state.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: added
+  `workSessionEvidenceSourceProposalRiskText`.
+- `src/App.tsx`: renders source proposal risk details in the review queue source
+  proposal panel.
+- `tests/workSummaryStatus.test.ts`: covers risk-detail text for source
+  proposals.
+- `working.md`: records the real blocked proposal probe, verification commands,
+  QA database, and remaining queue status.
+
+Tests:
+
+- PASS: default-vault source-proposal probe for
+  `session-evidence-enterprise_diagnosis_flutter-3d3c2c2081` returned
+  `review_ready_count=0`, `blocked_count=1`, blocker
+  `candidate_or_source_hit_has_risk_flags`, and risk flag
+  `long_base64_like_token`.
+- PASS: `npm run test:ui -- tests/workSummaryStatus.test.ts --test-name-pattern "work session evidence source proposal labels"`
+  (`523` UI/API tests passed).
+- PASS: `npm run build`.
+- PASS: `git diff --check`.
+- PASS: `npm run check`. This covered UI/API tests (`523` passed), production
+  build, `cargo build --bin promptvault-cli`, Rust library tests (`237` passed),
+  CLI tests (`35` passed), doc tests, and clippy with `-D warnings`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-IUvkvm/qa.sqlite`.
+- PASS: `lsof -nP -iTCP:5174 -sTCP:LISTEN` and
+  `lsof -nP -iTCP:5177 -sTCP:LISTEN` returned no listeners after QA cleanup.
+
+Issues:
+
+- This slice improves operator visibility only. It does not reduce the default
+  vault pending review count.
+
+Next Steps:
+
+- Commit this UI visibility slice, then continue probing pending review rows for
+  source traces that contain non-project evidence and no risk flags.
 
 ## Completed Slice - 2026-06-10 Split project-token source gate
 

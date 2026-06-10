@@ -372,6 +372,7 @@ import {
   workSessionEvidenceProposalsActionLabel,
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
+  workSessionEvidenceSourceProposalRiskText,
   workSessionEvidenceSourceProposalStateText,
   workSessionEvidenceReviewQueueActionLabel,
   workSessionEvidenceReviewQueueDateDiagnosticText,
@@ -6723,6 +6724,12 @@ function App() {
                                                             {workSessionEvidenceSourceProposalStateText(proposal)}
                                                           </strong>
                                                           <p>{proposal.source_trace}</p>
+                                                          {workSessionEvidenceSourceProposalRiskText(proposal)
+                                                            ? (
+                                                              <span>
+                                                                {workSessionEvidenceSourceProposalRiskText(proposal)}
+                                                              </span>
+                                                            ) : null}
                                                           {proposal.review_ready
                                                             && canApproveWorkSessionEvidenceReviewQueueItem(item)
                                                             ? (

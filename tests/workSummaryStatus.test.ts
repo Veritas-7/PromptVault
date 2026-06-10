@@ -59,6 +59,7 @@ import {
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
   workSessionEvidenceSourceProposalBlockerText,
+  workSessionEvidenceSourceProposalRiskText,
   workSessionEvidenceSourceProposalStateText,
   workSessionEvidenceReviewQueueActionLabel,
   workSessionEvidenceReviewApplyActionLabel,
@@ -2726,6 +2727,16 @@ test("work session evidence source proposal labels explain blocker states", () =
   assert.equal(
     workSessionEvidenceSourceProposalBlockerText("unexpected_blocker"),
     "알 수 없는 차단 사유: unexpected_blocker",
+  );
+  assert.equal(
+    workSessionEvidenceSourceProposalRiskText(sessionEvidenceSourceProposal({
+      risk_flags: ["long_base64_like_token"],
+    })),
+    "위험표시 긴 토큰 형식 문자열",
+  );
+  assert.equal(
+    workSessionEvidenceSourceProposalRiskText(sessionEvidenceSourceProposal()),
+    null,
   );
 });
 

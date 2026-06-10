@@ -37,8 +37,8 @@ Current Active Work:
   matching `origin/main`.
 - Current same-date filter slice is complete, verified, committed, and pushed as
   `d23a560 ux: split same-date session filters`.
-- Fresh post-push verification showed `main...origin/main` clean and HEAD
-  matching `origin/main` at
+- Feature-commit post-push verification before this completion snapshot showed
+  `main...origin/main` clean and `HEAD == origin/main` at
   `d23a56078ea7e1623421f07358ae81ea410d845a`.
 
 Progress:
@@ -99,9 +99,9 @@ Tests:
 - PASS: `git diff --cached --check`.
 - PASS: `gitleaks protect --staged --no-banner --redact`.
 - PASS: `git push origin main`.
-- PASS: post-push `git status --short --branch` reported
+- PASS: feature-commit post-push `git status --short --branch` reported
   `## main...origin/main`.
-- PASS: post-push `git rev-parse HEAD origin/main` matched
+- PASS: feature-commit post-push `git rev-parse HEAD origin/main` matched
   `d23a56078ea7e1623421f07358ae81ea410d845a`.
 - Pending: choose the next bounded work-management improvement slice.
 

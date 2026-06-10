@@ -106,6 +106,7 @@ export interface ProjectWorkSummaryOptions {
   database_path?: string;
   limit?: number;
   session_limit?: number;
+  full_session_index?: boolean;
   summary_limit?: number;
   refresh_session_index?: boolean;
   save_snapshot?: boolean;
@@ -1724,6 +1725,7 @@ function nativeProjectWorkSummaryOptions(options: ProjectWorkSummaryOptions) {
     report: {
       limit: options.limit,
       session_limit: options.session_limit,
+      full_session_index: options.full_session_index,
       database_path: options.database_path,
       refresh_session_index: options.refresh_session_index,
     },

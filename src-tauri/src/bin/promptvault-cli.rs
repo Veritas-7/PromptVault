@@ -285,6 +285,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "work-report" => {
             let json = take_flag(&mut args, "--json");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
+            let full_session_index = take_flag(&mut args, "--full-session-index");
             let mut limit = None;
             let mut session_limit = None;
             let mut database_path = None;
@@ -308,6 +309,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let report = run_project_work_report(ProjectWorkReportOptions {
                 limit,
                 session_limit,
+                full_session_index: Some(full_session_index),
                 database_path,
                 refresh_session_index: Some(refresh_session_index),
             })?;
@@ -2426,6 +2428,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let include_saved_extractions = take_flag(&mut args, "--include-saved-extractions");
             let extraction_ai = take_flag(&mut args, "--extraction-ai");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
+            let full_session_index = take_flag(&mut args, "--full-session-index");
             let save_snapshot = take_flag(&mut args, "--save-snapshot");
             let mut limit = None;
             let mut session_limit = None;
@@ -2461,6 +2464,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 report: ProjectWorkReportOptions {
                     limit,
                     session_limit,
+                    full_session_index: Some(full_session_index),
                     database_path,
                     refresh_session_index: Some(refresh_session_index),
                 },
@@ -3358,7 +3362,7 @@ fn help_text() -> String {
         "  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n",
         "  improve [--json] [--local] --prompt TEXT\n",
         "  improve [--json] [--local] < prompt.txt\n",
-        "  work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]\n",
+        "  work-report [--limit N>0] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]\n",
         "  work-status-export [--limit N>0] [--offset N>=0] [--row-filter FILTER] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]\n",
         "  work-session-evidence-candidates [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]\n",
         "  work-session-evidence-proposals [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]\n",
@@ -3387,7 +3391,7 @@ fn help_text() -> String {
         "  work-log-normalization-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n",
         "  work-log-normalization-apply [--limit N>0] [--database PATH] [--json]\n",
         "  work-log-normalized-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n",
-        "  work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]\n",
+        "  work-summary [--limit N>0] [--session-limit N>0|--full-session-index] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]\n",
         "  work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]\n",
         "  repair [--json] [--source ID[,ID...]] [--limit N>0] [--count N>0]\n",
         "  serve [--addr 127.0.0.1:5174] [--database PATH]\n\n",
@@ -3426,7 +3430,7 @@ fn help_text() -> String {
         "  work-log-normalized-items lists durable normalized project/day rows by project and date without applying queue changes.\n",
         "  work-session-index scans real session evidence and upserts sanitized project-target records; --batch-files resumes from per-source file cursors, --max-batches repeats checkpoint batches in one call, --until-complete keeps running bounded checkpoint batches until completion or the max-batches/default safety cap, --confirm-long-run is required above the short-run batch cap, and --reset rebuilds explicitly.\n",
         "  work-report stores only sanitized session evidence in a local index; use --refresh-session-index to rescan raw sessions.\n",
-        "  work-report session evidence is bounded by --session-limit.\n",
+        "  work-report session evidence is bounded by --session-limit unless --full-session-index uses the complete stored sanitized index.\n",
         "  work-summary builds project/date summaries with citation IDs; --include-extractions merges accepted AI work-log proposals into the summary preview; --include-saved-extractions merges stored accepted AI extraction rows without rereading raw progress logs; --save-snapshot stores the generated summary in SQLite; --ai uses configured OpenAI/GLM providers with local fallback.\n",
         "  work-summary-snapshots lists saved daily/project summary snapshots without raw session bodies.\n",
         "  work-summary-snapshots --date and --project filter saved rows by nested summary evidence.\n",
@@ -3509,6 +3513,7 @@ struct ImproveBridgePayload {
 struct ProjectWorkSummaryBridgeOptions {
     limit: Option<usize>,
     session_limit: Option<usize>,
+    full_session_index: Option<bool>,
     database_path: Option<String>,
     refresh_session_index: Option<bool>,
     summary_limit: Option<usize>,
@@ -3669,6 +3674,7 @@ impl ProjectWorkSummaryBridgeOptions {
             report: ProjectWorkReportOptions {
                 limit: self.limit,
                 session_limit: self.session_limit,
+                full_session_index: self.full_session_index,
                 database_path: Some(
                     self.database_path
                         .unwrap_or_else(|| bridge_database_path(database_path)),
@@ -5006,7 +5012,7 @@ mod tests {
         assert!(help.contains("import-batch --source ID [--files N>0]"));
         assert!(help.contains("import-batch persists one resumable source slice"));
         assert!(help.contains(
-            "work-report [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--json]"
+            "work-report [--limit N>0] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]"
         ));
         assert!(help.contains(
             "work-status-export [--limit N>0] [--offset N>=0] [--row-filter FILTER] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]"
@@ -5078,7 +5084,7 @@ mod tests {
             "work-log-normalized-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME]"
         ));
         assert!(help.contains(
-            "work-summary [--limit N>0] [--session-limit N>0] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]"
+            "work-summary [--limit N>0] [--session-limit N>0|--full-session-index] [--summary-limit N>0] [--database PATH] [--refresh-session-index] [--save-snapshot] [--include-extractions] [--include-saved-extractions] [--extraction-limit N>0] [--extraction-ai] [--ai] [--json]"
         ));
         assert!(help.contains(
             "work-summary-snapshots [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]"

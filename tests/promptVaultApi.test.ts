@@ -1300,6 +1300,36 @@ test("browser bridge work summary posts options and validates citation payloads"
   assert.equal(result.report.session_evidence_index_used, true);
 });
 
+test("browser bridge work summary can request full stored session index", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSummaryPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkSummary({
+    limit: 80,
+    full_session_index: true,
+    summary_limit: 5,
+  });
+
+  assert.match(requestPath, /\/api\/work-summary$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      limit: 80,
+      full_session_index: true,
+      summary_limit: 5,
+    },
+  });
+  assert.equal(result.report.session_evidence_index_used, true);
+});
+
 test("browser bridge work status export posts options and validates rows", async (t) => {
   const originalFetch = globalThis.fetch;
   let requestPath = "";

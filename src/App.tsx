@@ -498,6 +498,10 @@ type WorkSessionEvidenceSourceSearchState = "idle" | "loading" | "ready" | "fail
 type WorkSessionEvidenceSourceProposalsState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionEvidenceSourceAuditState = "idle" | "loading" | "ready" | "failed";
 type WorkSessionIndexBackfillMode = "reset" | "continue" | "long-continue";
+type WorkManagementSessionScopeOptions = {
+  session_limit?: number;
+  full_session_index?: boolean;
+};
 const PREVIEW_LIMIT = 1000;
 const WORK_SUMMARY_LIMIT = 80;
 const WORK_SUMMARY_DISPLAY_LIMIT = 5;
@@ -1297,6 +1301,11 @@ function App() {
     workStatusExportResult?.report_session_evidence_index_total_count ?? 0;
   const canUseStoredSessionIndexLimit =
     storedSessionIndexLimit > 0 && storedSessionIndexLimit <= WORK_SUMMARY_MAX_SESSION_LIMIT;
+  function workManagementSessionScopeOptions(sessionLimit: number): WorkManagementSessionScopeOptions {
+    return canUseStoredSessionIndexLimit && sessionLimit === storedSessionIndexLimit
+      ? { full_session_index: true }
+      : { session_limit: sessionLimit };
+  }
   const workSummaryMeta = workSummaryMetaText(workSummaryState, workSummaryResult);
   const workSessionIndexMeta = workSessionIndexMetaText(
     workSessionIndexState,
@@ -3066,7 +3075,7 @@ function App() {
     try {
       const next = await loadProjectWorkSummary({
         limit: WORK_SUMMARY_LIMIT,
-        session_limit: sessionLimit,
+        ...workManagementSessionScopeOptions(sessionLimit),
         summary_limit: WORK_SUMMARY_DISPLAY_LIMIT,
         refresh_session_index: refreshSessionIndex,
         save_snapshot: saveSnapshot,
@@ -3114,7 +3123,7 @@ function App() {
       const next = await loadProjectWorkStatusExport({
         limit: statusExportLimit,
         offset,
-        session_limit: sessionLimit,
+        ...workManagementSessionScopeOptions(sessionLimit),
         refresh_session_index: refreshSessionIndex,
       });
       setWorkStatusExportResult(next);
@@ -3167,7 +3176,7 @@ function App() {
       const nextStatusExport = await loadProjectWorkStatusExport({
         limit: statusExportLimit,
         offset: 0,
-        session_limit: sessionLimit,
+        ...workManagementSessionScopeOptions(sessionLimit),
       });
       setWorkStatusExportResult(nextStatusExport);
       setWorkStatusExportOffset(nextStatusExport.row_offset);
@@ -3176,7 +3185,7 @@ function App() {
 
       const nextSummary = await loadProjectWorkSummary({
         limit: WORK_SUMMARY_LIMIT,
-        session_limit: sessionLimit,
+        ...workManagementSessionScopeOptions(sessionLimit),
         summary_limit: WORK_SUMMARY_DISPLAY_LIMIT,
         include_saved_extractions: true,
       });

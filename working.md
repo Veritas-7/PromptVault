@@ -1,10 +1,131 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 02:20 KST
+Updated: 2026-06-11 02:37 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 02:37 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep project/day summaries and status export aligned with the same stored
+  sanitized session index so operators do not have to infer whether a view is
+  using a bounded raw scan or the full indexed evidence set.
+- Keep AI/SDK-assisted extraction and grouping as proposal evidence only until
+  source-reviewed, operator-approved, and auditable.
+
+Short-Term Goal:
+
+- Make work-report/work-summary use the full stored session index directly,
+  matching the existing work-status-export full-index verification path.
+
+Current Goal:
+
+- Completed this slice: added `--full-session-index` support to `work-report`
+  and `work-summary`, wired the browser bridge and frontend summary/status
+  refresh options, and fixed the no-match warning so it says stored index was
+  checked when the report uses indexed evidence.
+
+Context:
+
+- Goal identity was rechecked earlier in this work block for thread
+  `019ea10c-fbe8-7b60-8889-6f00b5a91a68`; persisted objective still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Previous live verification showed the default vault session index completed
+  for all configured real session sources with `stored_prompt_count=12904`.
+- Live progress-log coverage showed `files_seen=930`,
+  `parsed_file_count=929`, `pointer_file_count=1`,
+  `unparsed_file_count=0`, `unreadable_file_count=0`,
+  `project_count=32`, and `work_item_count=8371`.
+- The remaining session-evidence no-match warning is about the selected latest
+  project/date rows having no matched session evidence, not about a bounded
+  session scan.
+
+Progress:
+
+- Added `ProjectWorkReportOptions.full_session_index`.
+- `work-report --full-session-index` now uses the complete stored sanitized
+  session index count when available and rejects ambiguous
+  `--session-limit ... --full-session-index` combinations.
+- `work-summary --full-session-index` now flows through the same report option.
+- Browser bridge `work-summary` payloads now accept and forward
+  `full_session_index`.
+- Frontend summary/status refresh now sends `full_session_index=true` when the
+  current session scope equals the stored index total selected via the
+  `보관 전체` path.
+- The no-match warning now distinguishes stored index checks from raw session
+  scans: `Session evidence: checked the stored session index, but none matched
+  the selected project/date work items.`
+
+Changes:
+
+- `src-tauri/src/lib.rs`: report full-index option, conflict guard, stored-index
+  warning wording, and unit test.
+- `src-tauri/src/bin/promptvault-cli.rs`: CLI flags/help and bridge option
+  plumbing for report/summary full-index requests.
+- `src/promptVaultApi.ts`: frontend API option for summary full-index requests.
+- `src/App.tsx`: summary/status refreshes use full-index requests when the
+  stored index total is selected.
+- `tests/promptVaultApi.test.ts`: bridge request coverage for summary
+  `full_session_index`.
+- `working.md`: this resume snapshot and verification record.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts` passed with `214` tests.
+- `cargo test work_report_rejects_conflicting_full_session_limit` passed.
+- `cargo test help_text_documents_cli_validation_rules --bin promptvault-cli`
+  passed.
+- `cargo run --quiet --bin promptvault-cli -- work-report --limit 20
+  --full-session-index --json` passed against the live default vault. Summary:
+  `session_scan_prompt_count=12904`, `session_evidence_index_used=true`,
+  `session_evidence_index_count=12904`.
+- `cargo run --quiet --bin promptvault-cli -- work-summary --limit 20
+  --summary-limit 5 --full-session-index --include-saved-extractions --json`
+  passed against the live default vault. Summary:
+  `session_scan_prompt_count=12904`, `session_evidence_index_used=true`,
+  `session_evidence_index_count=12904`, `summary_count=5`.
+- `npm run build` passed; Vite emitted the existing `>500 kB` chunk warning.
+- `cargo test --lib` passed with `253` tests.
+- `cargo test --bin promptvault-cli` passed with `47` tests.
+- `npm run qa:browser-bridge` passed end-to-end against an isolated database.
+- Full `npm run check` passed: UI tests `533`, Vite / TypeScript build, Rust
+  CLI build, Rust lib tests `253`, CLI tests `47`, doc-tests, and clippy
+  `-D warnings`.
+
+Issues:
+
+- Live default vault still has `25` pending session-evidence review rows from
+  the prior audit path; this slice did not write review decisions.
+- The selected latest project/day rows in live `work-report --full-session-index`
+  and `work-summary --full-session-index` still had `0` matched session evidence,
+  but the warning now correctly says the stored index was checked.
+- cmux/in-app browser testing remains excluded in this environment.
+
+Research:
+
+- No external research was needed. The change follows the existing
+  `work-status-export --full-session-index` pattern.
+
+Next Steps:
+
+- Keep using `--full-session-index` or the UI `보관 전체` path when evaluating
+  project/day status, so bounded session scans are not mistaken for full-index
+  truth.
+- Continue with operator-gated session-evidence review decisions only when
+  explicitly authorized.
+- Continue improving project/day management coverage and normalization review
+  ergonomics now that both real session index and progress-log coverage have
+  live verification.
+- Keep updating this `working.md` after each meaningful slice.
 
 ## Resume Snapshot - 2026-06-11 02:20 KST
 

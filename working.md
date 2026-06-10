@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 14:49 KST
+Updated: 2026-06-10 15:01 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -135,9 +135,9 @@ Resume Contract:
 Management Coverage Status:
 
 - The app does manage project/day work from real parsed artifacts: current
-  default-vault export reported `32` projects, `26` days, `892` progress files,
-  `7,843` work items, `97` project/day rows, and a full stored session index of
-  `12,889` sanitized prompts.
+  default-vault export reported `32` projects, `26` days, `896` progress files,
+  `7,911` work items, `97` project/day rows, and a full stored session index of
+  `12,889/12,889` sanitized prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
   related progress artifacts, but the remaining unresolved review queues mean the

@@ -142,13 +142,39 @@ export function workReviewQueueFilterMetaText(
   filteredCount: number,
   totalCount: number,
   activeFilterCount: number,
+  filters?: WorkReviewQueueFilters,
 ): string {
   const filterText = activeFilterCount === 0
     ? "필터 없음"
     : `필터 ${activeFilterCount.toLocaleString()}개`;
-  return `${label} 필터 · ${filterText} · 결과 ${filteredCount.toLocaleString()} / ${
+  const conditionText = filters && activeFilterCount > 0
+    ? ` · 조건 ${workReviewQueueFilterConditionText(filters)}`
+    : "";
+  return `${label} 필터 · ${filterText}${conditionText} · 결과 ${filteredCount.toLocaleString()} / ${
     totalCount.toLocaleString()
   }개`;
+}
+
+function workReviewQueueFilterConditionText(filters: WorkReviewQueueFilters): string {
+  return [
+    filters.date.trim() ? `날짜 ${filters.date.trim()}` : null,
+    filters.project.trim() ? `프로젝트 ${filters.project.trim()}` : null,
+    filters.state ? `상태 ${workReviewQueueStateFilterText(filters.state)}` : null,
+    filters.reason.trim() ? `사유 ${filters.reason.trim()}` : null,
+  ].filter((part): part is string => part !== null).join(", ");
+}
+
+function workReviewQueueStateFilterText(filter: WorkReviewQueueStateFilter): string {
+  const labels: Record<Exclude<WorkReviewQueueStateFilter, "">, string> = {
+    pending_ai_review: "AI 검토 대기",
+    pending_review: "검토 대기",
+    risk_blocked: "위험 차단",
+    stale: "stale",
+    deferred: "보류/수동확인",
+    approved: "승인/완료",
+    rejected: "거절",
+  };
+  return filter ? labels[filter] : "전체 상태";
 }
 
 function matchesCommonReviewQueueFilters(

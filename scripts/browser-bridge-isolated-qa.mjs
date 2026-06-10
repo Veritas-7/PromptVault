@@ -1610,6 +1610,7 @@ async function runBrowserQa() {
       const rows = Array.from(document.querySelectorAll('[data-work-session-evidence-review-queue="true"] article'));
       return meta.includes("세션근거 큐 필터")
         && meta.includes("필터 1개")
+        && meta.includes(`조건 프로젝트 ${project}`)
         && rows.length > 0
         && rows.every((row) => row.querySelector("strong")?.textContent?.trim() === project);
     }, firstSessionEvidenceQueueProject, { timeout: 30000 });
@@ -2665,6 +2666,7 @@ async function runBrowserQa() {
       const rows = Array.from(document.querySelectorAll('[data-work-log-normalization-review-queue="true"] article'));
       return meta.includes("정규화 큐 필터")
         && meta.includes("필터 1개")
+        && meta.includes(`조건 프로젝트 ${project}`)
         && rows.length > 0
         && rows.every((row) => row.querySelector("strong")?.textContent?.trim() === project);
     }, firstNormalizationQueueProject, { timeout: 30000 });
@@ -2892,6 +2894,7 @@ async function runBrowserQa() {
       const rows = Array.from(document.querySelectorAll('[data-work-log-review-queue="true"] article'));
       return metaText.includes("백필큐 필터")
         && metaText.includes("필터 1개")
+        && metaText.includes(`조건 프로젝트 ${project}`)
         && rows.length > 0
         && rows.every((row) => row.querySelector("strong")?.textContent?.trim() === project);
     }, workLogReviewQueueProject, { timeout: 90000 });

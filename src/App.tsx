@@ -1577,11 +1577,12 @@ function App() {
     workLogReviewQueueFilters,
   );
   const workLogReviewQueueFilterMeta = workLogReviewQueueResult
-    ? workReviewQueueFilterMetaText(
+      ? workReviewQueueFilterMetaText(
         "백필큐",
         filteredWorkLogReviewQueueItems.length,
         workLogReviewQueueResult.items.length,
         workLogReviewQueueFilterCount,
+        workLogReviewQueueFilters,
       )
     : null;
   const workLogReviewQueueProjectFilterSuggestions =
@@ -1596,11 +1597,12 @@ function App() {
     workLogNormalizationReviewQueueFilters,
   );
   const workLogNormalizationReviewQueueFilterMeta = workLogNormalizationReviewQueueResult
-    ? workReviewQueueFilterMetaText(
+      ? workReviewQueueFilterMetaText(
         "정규화 큐",
         filteredWorkLogNormalizationReviewQueueItems.length,
         workLogNormalizationReviewQueueResult.items.length,
         workLogNormalizationReviewQueueFilterCount,
+        workLogNormalizationReviewQueueFilters,
       )
     : null;
   const workLogNormalizationReviewQueueDateFilterSuggestions =
@@ -1617,11 +1619,12 @@ function App() {
     workSessionEvidenceReviewQueueFilters,
   );
   const workSessionEvidenceReviewQueueFilterMeta = workSessionEvidenceReviewQueueResult
-    ? workReviewQueueFilterMetaText(
+      ? workReviewQueueFilterMetaText(
         "세션근거 큐",
         filteredWorkSessionEvidenceReviewQueueItems.length,
         workSessionEvidenceReviewQueueResult.items.length,
         workSessionEvidenceReviewQueueFilterCount,
+        workSessionEvidenceReviewQueueFilters,
       )
     : null;
   const workSessionEvidenceReviewQueueDateFilterSuggestions =

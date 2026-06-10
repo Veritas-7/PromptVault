@@ -1,10 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 05:30 KST
+Updated: 2026-06-11 05:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 05:33 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Improve saved review queue filter summaries so operators can see the actual
+  active filter values, not just the count of active filters, after narrowing
+  backfill, normalization, or session-evidence review queues.
+
+Current Active Work:
+
+- Previous review-queue blocker visibility slice is complete, verified,
+  committed, and pushed as
+  `c59500f ux: clarify title-blocked review rows`.
+- Documentation completion snapshot is pushed as
+  `4535352 docs: record review blocker slice completion`.
+- Fresh repo check at resume showed `main...origin/main` clean.
+- Current slice is in progress: make common review queue filter meta include
+  active date/project/state/reason values and verify the DOM reflects project
+  filter conditions.
+
+Progress:
+
+- Confirmed goal identity still anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Memory registry had no direct PromptVault hit, so live repo state remains the
+  active source of truth.
+- Confirmed there is no project-local `AGENTS.md` or `design.md`; the project
+  root `working.md` remains the active continuation surface.
+- Inspected `src/reviewQueueFilters.ts`, `tests/reviewQueueFilters.test.ts`,
+  and the three review queue filter meta call sites in `src/App.tsx`.
+- Added RED expectations that filter meta should include active filter values,
+  such as `조건 프로젝트 PromptVault, 상태 AI 검토 대기, 사유 safe_ai`.
+- Updated the common review queue filter meta helper to accept optional filters
+  and append active date/project/state/reason conditions while preserving the
+  existing `필터 N개` and result counts.
+- Updated the App call sites for backfill, normalization, and session-evidence
+  review queues to pass the active filters.
+- Updated browser-bridge QA so each queue's project-filter flow must show
+  `조건 프로젝트 <project>` in the DOM.
+- Ran the script syntax check, whitespace gate, and isolated browser-bridge QA.
+  The browser QA confirmed the project-condition text in session-evidence,
+  normalization, and backfill review queue filter DOM.
+- Ran the full repo check and whole-tree secret scan after browser QA. Both
+  passed.
+- Staged only the intended five files and ran staged whitespace and secret
+  gates. Both passed.
+
+Changes:
+
+- `src/reviewQueueFilters.ts`: adds condition text to review queue filter meta.
+- `src/App.tsx`: passes active filters into the common queue meta helper.
+- `tests/reviewQueueFilters.test.ts`: locks condition text for normalization and
+  backfill review queue filters.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies project condition text in
+  backfill, normalization, and session-evidence review queue filter DOM.
+- `working.md`: records this new slice and verification plan.
+
+Tests:
+
+- RED as expected:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/reviewQueueFilters.test.ts`
+  failed before helper implementation because meta only showed `필터 N개`.
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/reviewQueueFilters.test.ts`
+  (`4` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `git diff --check`.
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check` (UI tests, TypeScript/Vite build, Rust CLI build,
+  Rust lib tests, CLI tests, doc-tests, and clippy `-D warnings`).
+- PASS: `gitleaks dir . --no-banner --redact` (`no leaks found`).
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact` (`no leaks found`).
+- Pending: commit/push if green.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- This slice changes display text only; it does not change queue filtering,
+  review decisions, or durable write behavior.
+
+Next Step:
+
+- Commit and push this verified filter-summary UX slice.
 
 ## Resume Snapshot - 2026-06-11 05:21 KST
 

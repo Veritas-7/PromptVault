@@ -136,8 +136,8 @@ test("review queue filters narrow normalization rows by project date state and r
     ["normalization-PromptVault-a1"],
   );
   assert.equal(
-    workReviewQueueFilterMetaText("정규화 큐", 1, rows.length, activeWorkReviewQueueFilterCount(filters)),
-    "정규화 큐 필터 · 필터 4개 · 결과 1 / 2개",
+    workReviewQueueFilterMetaText("정규화 큐", 1, rows.length, activeWorkReviewQueueFilterCount(filters), filters),
+    "정규화 큐 필터 · 필터 4개 · 조건 날짜 2026-06-09, 프로젝트 PromptVault, 상태 검토 대기, 사유 generic · 결과 1 / 2개",
   );
 });
 
@@ -166,8 +166,8 @@ test("review queue filters narrow backfill queue rows by project state and reaso
     ["work-log-review-PromptVault-a1"],
   );
   assert.equal(
-    workReviewQueueFilterMetaText("백필큐", 1, rows.length, activeWorkReviewQueueFilterCount(filters)),
-    "백필큐 필터 · 필터 3개 · 결과 1 / 2개",
+    workReviewQueueFilterMetaText("백필큐", 1, rows.length, activeWorkReviewQueueFilterCount(filters), filters),
+    "백필큐 필터 · 필터 3개 · 조건 프로젝트 PromptVault, 상태 AI 검토 대기, 사유 safe_ai · 결과 1 / 2개",
   );
 });
 

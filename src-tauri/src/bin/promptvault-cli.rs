@@ -599,6 +599,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "work-session-evidence-review-queue" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_session_evidence_review_queue_help_text());
+                return Ok(());
+            }
             let json = take_flag(&mut args, "--json");
             let sync_candidates = take_flag(&mut args, "--sync-candidates");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
@@ -674,6 +678,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "work-session-evidence-review-queue-update" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_session_evidence_review_queue_update_help_text());
+                return Ok(());
+            }
             let json = take_flag(&mut args, "--json");
             let mut limit = None;
             let mut database_path = None;
@@ -747,6 +755,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "work-session-evidence-review-apply" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_session_evidence_review_apply_help_text());
+                return Ok(());
+            }
             let json = take_flag(&mut args, "--json");
             let mut limit = None;
             let mut database_path = None;
@@ -2909,6 +2921,77 @@ fn work_session_evidence_source_proposals_help_text() -> String {
     .join("\n")
 }
 
+fn work_session_evidence_review_queue_help_text() -> String {
+    [
+        "PromptVault work-session-evidence-review-queue",
+        "",
+        "Usage:",
+        "  promptvault-cli work-session-evidence-review-queue [--sync-candidates] [--refresh-session-index] [--limit N>0] [--session-limit N>0] [--database PATH] [--json]",
+        "",
+        "Purpose:",
+        "  Lists persisted session-evidence review queue rows for unresolved project/day candidates.",
+        "  Use --sync-candidates to refresh the queue from current unresolved candidates without approving or applying rows.",
+        "  Shows pending, stale, approved, rejected, and title-normalization blocked counts for operator review.",
+        "",
+        "Review safety:",
+        "  Syncing candidates does not create durable session evidence links.",
+        "  Stale rows stay visible and cannot be approved until candidates are resynced.",
+        "  Approve or reject one row with work-session-evidence-review-queue-update.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-session-evidence-review-queue --sync-candidates --json",
+        "  promptvault-cli work-session-evidence-review-queue --limit 20 --json",
+    ]
+    .join("\n")
+}
+
+fn work_session_evidence_review_queue_update_help_text() -> String {
+    [
+        "PromptVault work-session-evidence-review-queue-update",
+        "",
+        "Usage:",
+        "  promptvault-cli work-session-evidence-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--source-review-json JSON|--source-review-file PATH] [--limit N>0] [--database PATH] [--json]",
+        "",
+        "Purpose:",
+        "  Marks one persisted session-evidence review queue row approved or rejected with an audit reason.",
+        "  Use source review metadata when approving a source-proposal row copied from work-session-evidence-source-proposals.",
+        "",
+        "Review safety:",
+        "  This command updates the review queue only; it does not apply durable session evidence.",
+        "  Source-proposal approvals require copied source review metadata.",
+        "  Pass either --source-review-json or --source-review-file, never both.",
+        "  Apply only approved rows with work-session-evidence-review-apply.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-session-evidence-review-queue-update --candidate-id session-evidence-Example-123 --state rejected --reason weak_trace --json",
+        "  promptvault-cli work-session-evidence-review-queue-update --candidate-id session-evidence-Example-123 --state approved --source-review-file /tmp/source-review.json --json",
+    ]
+    .join("\n")
+}
+
+fn work_session_evidence_review_apply_help_text() -> String {
+    [
+        "PromptVault work-session-evidence-review-apply",
+        "",
+        "Usage:",
+        "  promptvault-cli work-session-evidence-review-apply [--limit N>0] [--database PATH] [--json]",
+        "",
+        "Purpose:",
+        "  Applies operator-approved session-evidence review queue rows into durable reviewed items.",
+        "  Skips already-applied rows and reports processed, applied, skipped, and total reviewed counts.",
+        "",
+        "Review safety:",
+        "  This command only processes rows already marked approved in the review queue.",
+        "  Run work-session-evidence-review-queue first to inspect pending, stale, approved, and rejected rows.",
+        "  Source-backed approvals must already include copied source review metadata before apply.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-session-evidence-review-apply --limit 20 --json",
+        "  promptvault-cli work-session-evidence-review-apply --database /tmp/promptvault.sqlite --json",
+    ]
+    .join("\n")
+}
+
 fn work_log_normalization_proposals_help_text() -> String {
     [
         "PromptVault work-log-normalization-proposals",
@@ -4713,6 +4796,44 @@ mod tests {
         assert!(help.contains("work-session-evidence-review-queue-update"));
         assert!(help.contains("copied source review metadata"));
         assert!(help.contains("work-session-evidence-review-apply"));
+    }
+
+    #[test]
+    fn work_session_evidence_review_queue_help_documents_sync_review_safety() {
+        let help = work_session_evidence_review_queue_help_text();
+
+        assert!(help.contains("promptvault-cli work-session-evidence-review-queue"));
+        assert!(help.contains("--sync-candidates"));
+        assert!(help.contains("without approving or applying rows"));
+        assert!(help.contains("pending, stale, approved, rejected"));
+        assert!(help.contains("does not create durable session evidence links"));
+        assert!(help.contains("cannot be approved until candidates are resynced"));
+        assert!(help.contains("work-session-evidence-review-queue-update"));
+    }
+
+    #[test]
+    fn work_session_evidence_review_queue_update_help_documents_source_review_safety() {
+        let help = work_session_evidence_review_queue_update_help_text();
+
+        assert!(help.contains("--candidate-id ID --state approved|rejected"));
+        assert!(help.contains("--source-review-json JSON|--source-review-file PATH"));
+        assert!(help.contains("approved or rejected with an audit reason"));
+        assert!(help.contains("updates the review queue only"));
+        assert!(help.contains("Source-proposal approvals require copied source review metadata"));
+        assert!(help.contains("never both"));
+        assert!(help.contains("work-session-evidence-review-apply"));
+    }
+
+    #[test]
+    fn work_session_evidence_review_apply_help_documents_apply_safety() {
+        let help = work_session_evidence_review_apply_help_text();
+
+        assert!(help.contains("promptvault-cli work-session-evidence-review-apply"));
+        assert!(help.contains("operator-approved session-evidence review queue rows"));
+        assert!(help.contains("processed, applied, skipped, and total reviewed counts"));
+        assert!(help.contains("only processes rows already marked approved"));
+        assert!(help.contains("work-session-evidence-review-queue first"));
+        assert!(help.contains("copied source review metadata before apply"));
     }
 
     #[test]

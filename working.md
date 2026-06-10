@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 19:53 KST
+Updated: 2026-06-10 19:58 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,36 +33,54 @@ Short-Term Goal:
 
 Current Work:
 
-- Latest completed implementation slice:
-  `fix: document source evidence cli help`.
-- Completed behavior:
-  improve source-trace command discoverability for the remaining unresolved
-  project/day session-evidence rows. Live CLI checks still show `26` candidates
-  with `unresolved_after_full_index_count=26`. The next operator path is
-  `work-session-evidence-source-search` followed by
-  `work-session-evidence-source-proposals`, but both commands currently exit
-  `1` on `--help` with `unknown ... argument: --help`, even though they are the
-  core read-only source-trace inspection commands for the unresolved rows.
+- Active completed implementation slice:
+  improve review queue/apply command discoverability for the manual
+  session-evidence approval path. Live CLI checks showed
+  `work-session-evidence-review-queue --help`,
+  `work-session-evidence-review-queue-update --help`, and
+  `work-session-evidence-review-apply --help` all exit `1` with
+  `unknown ... argument: --help`, even though the source-proposal workflow now
+  points operators to these commands for queue sync, approval/rejection, copied
+  source review metadata, and final apply.
 - Current implementation status:
-  `src-tauri/src/bin/promptvault-cli.rs` now adds
-  `work-session-evidence-source-search --help` / `-h` / `help` and
-  `work-session-evidence-source-proposals --help` / `-h` / `help` handling.
-  The new help text documents bounded redacted JSONL/Antigravity DB source
-  reads, same-project source hints, copied source-search snippets, weak-trace
-  blockers, manual review, no automatic approval/link creation,
-  `work-session-evidence-review-queue-update`, copied source review metadata,
-  and `work-session-evidence-review-apply`. Unit tests for both help bodies
-  have been added.
+  `src-tauri/src/bin/promptvault-cli.rs` now adds command-specific `--help` /
+  `-h` / `help` handling for `work-session-evidence-review-queue`,
+  `work-session-evidence-review-queue-update`, and
+  `work-session-evidence-review-apply`. The help text documents
+  `--sync-candidates`, stale-row safety, approved/rejected states,
+  `--source-review-json` / `--source-review-file`, queue-only update semantics,
+  approved-row-only apply behavior, and copied source review metadata before
+  apply. Unit tests for all three help bodies have been added.
 - Verification for active slice:
+  `cargo fmt && cargo test --bin promptvault-cli help` passed with `9` tests.
+  `cargo build --bin promptvault-cli` passed. The rebuilt commands
+  `src-tauri/target/debug/promptvault-cli work-session-evidence-review-queue
+  --help`, `src-tauri/target/debug/promptvault-cli
+  work-session-evidence-review-queue-update --help`, and
+  `src-tauri/target/debug/promptvault-cli work-session-evidence-review-apply
+  --help` now all exit `0`; queue/update print `18` lines and apply prints
+  `17` lines. `git diff --check` passed. `npm run check` passed: UI tests
+  `523` passed, Vite/TypeScript build passed, Rust lib tests `240` passed, CLI
+  tests `42` passed, doc-tests passed, and clippy `-D warnings` passed.
+  Browser-bridge QA was not rerun for this CLI-only help slice because no
+  bridge/API/UI behavior changed.
+- Previous completed implementation slice:
+  `8eb5ca4 fix: document source evidence cli help`.
+- Previous working.md label:
+  `fix: document source evidence cli help`.
+- Previous completed behavior:
+  source-trace command discoverability for the remaining unresolved project/day
+  session-evidence rows was improved.
+- Verification for previous slice:
   `cargo fmt && cargo test --bin promptvault-cli help` passed with `6` tests.
   `cargo build --bin promptvault-cli` passed. The rebuilt commands
   `src-tauri/target/debug/promptvault-cli work-session-evidence-source-search
   --help` and `src-tauri/target/debug/promptvault-cli
-  work-session-evidence-source-proposals --help` now both exit `0` and print
+  work-session-evidence-source-proposals --help` both exited `0` and printed
   `18` lines. `git diff --check` passed. `npm run check` passed: UI tests
   `523` passed, Vite/TypeScript build passed, Rust lib tests `240` passed, CLI
   tests `39` passed, doc-tests passed, and clippy `-D warnings` passed.
-  Browser-bridge QA was not rerun for this CLI-only help slice because no
+  Browser-bridge QA was not rerun for that CLI-only help slice because no
   bridge/API/UI behavior changed.
 - Previous completed implementation slice:
   `3b6fc6a fix: document session evidence proposal help`.

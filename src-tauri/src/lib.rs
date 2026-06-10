@@ -9900,6 +9900,8 @@ fn project_work_session_evidence_source_proposal_from_hit(
         Some("source_hit_matches_only_project_identifier".to_string())
     } else if !risk_flags.is_empty() {
         Some("candidate_or_source_hit_has_risk_flags".to_string())
+    } else if project_work_session_source_trace_is_instruction_only(&source_trace) {
+        Some("source_trace_is_instruction_only".to_string())
     } else {
         None
     };
@@ -9957,6 +9959,50 @@ fn project_work_session_source_hit_has_evidence_match(
     hit.matched_terms
         .iter()
         .any(|term| !project_terms.contains(term.as_str()))
+}
+
+fn project_work_session_source_trace_is_instruction_only(trace: &str) -> bool {
+    let normalized = frequency_safe_prompt_text(trace);
+    let has_instruction_marker = [
+        "do not ask user",
+        "do not edit",
+        "do not run git",
+        "focusing on",
+        "inspect ",
+        "read-only",
+        "return concise",
+        "workdir:",
+        "you are a",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker));
+    if !has_instruction_marker {
+        return false;
+    }
+
+    ![
+        "completed",
+        "committed",
+        "exit code 0",
+        "fixed",
+        "implemented",
+        "npm run check",
+        "pushed",
+        "qa passed",
+        "resolved",
+        "test passed",
+        "tests passed",
+        "verified",
+        "verification",
+        "검증",
+        "구현",
+        "수정",
+        "완료",
+        "통과",
+        "푸시",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
 }
 
 fn project_work_session_project_identifier_terms(project: &str) -> HashSet<String> {
@@ -23007,6 +23053,68 @@ Status: completed as a source-only/report-only hardening slice.
                 "studio".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn session_evidence_source_proposals_block_instruction_only_traces() {
+        let candidate = session_evidence_candidate_fixture(
+            "session-evidence-CareVault-instruction-source-proposal",
+            "CareVault",
+            "2026-06-03: CareVault still needs reviewed session evidence.",
+            false,
+        );
+        let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
+            generated_at: "2026-06-04T00:00:00Z".to_string(),
+            source_path: "/Users/wj/.codex/sessions/2026/06/04/rollout.jsonl".to_string(),
+            query: "CareVault 2026-06-03 Correct app root".to_string(),
+            query_term_count: 4,
+            requested_limit: 5,
+            requested_max_lines: 100_000,
+            scanned_line_count: 12,
+            matched_line_count: 1,
+            returned_item_count: 1,
+            items: vec![ProjectWorkSessionEvidenceSourceSearchItem {
+                id: "source-hit-instruction-only".to_string(),
+                line_number: 6,
+                session_id: Some("turn-source-hit-instruction-only".to_string()),
+                timestamp: Some("2026-06-04T01:36:46Z".to_string()),
+                cwd: Some("/Users/wj/Ai/System/10_Projects/CareVault".to_string()),
+                match_score: 5,
+                matched_terms: vec![
+                    "10_projects".to_string(),
+                    "app".to_string(),
+                    "carevault".to_string(),
+                    "system".to_string(),
+                    "users".to_string(),
+                ],
+                excerpt: "CareVault read-only sidecar QA. Workdir: /Users/wj/Ai/System/10_Projects/CareVault. Do not edit files. Do not run git writes. Inspect src/App.tsx only, focusing on user-triggered state-changing handlers. Return concise findings with handler names, UI labels if clear, and line references. Do not ask user questions.".to_string(),
+                word_count: 41,
+                char_count: 326,
+                risk_flags: Vec::new(),
+            }],
+            warnings: vec![
+                "Raw source search is read-only and redacted; returned snippets do not create or approve session evidence."
+                    .to_string(),
+            ],
+        };
+
+        let result = project_work_session_evidence_source_proposals_from_search(
+            Path::new("/tmp/promptvault.sqlite"),
+            &candidate,
+            source_search,
+        );
+
+        assert_eq!(result.returned_proposal_count, 1);
+        assert_eq!(result.review_ready_count, 0);
+        assert_eq!(result.blocked_count, 1);
+        let proposal = &result.proposals[0];
+        assert!(proposal.trace_validated);
+        assert!(!proposal.review_ready);
+        assert_eq!(
+            proposal.blocker_reason.as_deref(),
+            Some("source_trace_is_instruction_only")
+        );
+        assert_eq!(proposal.match_score, 5);
     }
 
     #[test]

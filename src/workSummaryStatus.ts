@@ -1921,6 +1921,9 @@ export function workSessionEvidenceSourceProposalBlockerText(
   if (blockerReason === "candidate_or_source_hit_has_risk_flags") {
     return "후보 또는 원본 hit에 risk flag 있음";
   }
+  if (blockerReason === "source_trace_is_instruction_only") {
+    return "원본 trace가 지시문뿐이라 완료 근거로 승인 불가";
+  }
   if (!blockerReason) return "차단 사유 없음";
   return `알 수 없는 차단 사유: ${blockerReason}`;
 }

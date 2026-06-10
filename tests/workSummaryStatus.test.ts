@@ -2725,6 +2725,10 @@ test("work session evidence source proposal labels explain blocker states", () =
     "원본 hit에서 복사된 trace가 아님",
   );
   assert.equal(
+    workSessionEvidenceSourceProposalBlockerText("source_trace_is_instruction_only"),
+    "원본 trace가 지시문뿐이라 완료 근거로 승인 불가",
+  );
+  assert.equal(
     workSessionEvidenceSourceProposalBlockerText("unexpected_blocker"),
     "알 수 없는 차단 사유: unexpected_blocker",
   );

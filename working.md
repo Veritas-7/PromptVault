@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 19:36 KST
+Updated: 2026-06-10 19:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,39 +34,34 @@ Short-Term Goal:
 Current Work:
 
 - Active in-progress slice:
-  improve progress-log management visibility for `work-log-coverage`. Live
-  CLI checks show the app is already parsing project/day logs from real local
-  evidence, including project-local files such as `working.md` and
-  `workingd.md`, but the coverage JSON currently exposes only
-  `parsed_file_count` and `unparsed_file_count` at the top level. The next
-  implementation step is to add explicit `pointer_file_count` and
-  `unreadable_file_count` counters through the Rust result, API validation,
-  UI status text, and tests so pointer logs are visibly non-gap files and
-  unreadable logs are not confused with ordinary unparsed logs.
-- Current live management check before this slice:
-  `work-log-coverage --json` reported `parsed_file_count=909`,
-  `unparsed_file_count=0`, and no top-level `pointer_file_count` or
-  `unreadable_file_count`. `work-log-normalization-candidates --limit 3
-  --json` reported `total_candidate_count=97`; the sampled top candidates
-  included `enterprise_diagnosis_flutter` `2026-06-05` sourced from
-  `workingd.md`. `work-session-evidence-candidates --limit 40 --json`
-  reported `26` unresolved rows and included project-local progress-log
-  sources such as `workingd.md`, `WORKING_LOG.md`, `WORKLOG.md`,
-  `progress.md`, and `PROJECT_STATUS`-style rows.
-- Resume target if interrupted now:
-  the coverage counter implementation is now applied in `src-tauri/src/lib.rs`,
-  `src/types.ts`, `src/promptVaultApi.ts`, `src/workSummaryStatus.ts`, and
-  related tests. Targeted verification passed:
-  `cargo fmt && cargo test project_progress_log_coverage --lib`,
-  `node --disable-warning=ExperimentalWarning --experimental-transform-types
-  --test tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts
-  tests/workManagementOverview.test.ts tests/workLogCoverageFilters.test.ts`
-  (`268` tests), `cargo build --bin promptvault-cli`, and `git diff --check`.
-  Fresh rebuilt CLI output now reports `files_seen=910`,
-  `parsed_file_count=909`, `unparsed_file_count=0`,
-  `unreadable_file_count=0`, and `pointer_file_count=1`; the pointer sample is
-  `/Users/wj/Ai/System/10_Projects/CareVault/workingd.md`.
-- Full verification for active slice:
+  improve AI normalization proposal discoverability. Live CLI checks show
+  `work-log-normalization-candidates --limit 12 --json` still has
+  `total_candidate_count=97`, while `work-log-normalization-proposals --limit
+  2 --ai --json` attempted GLM but timed out and safely fell back to local
+  review-only proposals. The command supports `--ai`, but
+  `work-log-normalization-proposals --help` currently fails as an unknown
+  argument, making the OpenAI/GLM path and review-only safety contract harder
+  to discover.
+- Current implementation status:
+  `src-tauri/src/bin/promptvault-cli.rs` now adds
+  `work-log-normalization-proposals --help` / `-h` / `help` handling plus an
+  explicit help body documenting `--ai`, OpenAI/GLM fallback, non-writing
+  review safety, `work-log-normalization-review-queue --sync-proposals`, and
+  `work-log-normalization-apply`. Unit tests for the help flag and help body
+  have been added.
+- Verification for active slice:
+  `cargo fmt && cargo test --bin promptvault-cli help` passed with `3` tests.
+  `cargo build --bin promptvault-cli` passed. The rebuilt command
+  `src-tauri/target/debug/promptvault-cli work-log-normalization-proposals
+  --help` now exits `0` and prints `19` lines documenting usage, `--ai`, local
+  fallback, and review-safety flow. `git diff --check` passed. `npm run check`
+  passed: UI tests `523` passed, Vite/TypeScript build passed, Rust lib tests
+  `240` passed, CLI tests `36` passed, doc-tests passed, and clippy
+  `-D warnings` passed. Browser-bridge QA was not rerun for this CLI-only help
+  slice because no bridge/API/UI behavior changed.
+- Previous completed implementation slice:
+  `c8c7a71 feat: expose work log coverage file counts`.
+- Full verification for previous slice:
   `npm run check` passed: UI tests `523` passed, Vite/TypeScript build passed,
   `cargo build --bin promptvault-cli` passed, Rust lib tests `240` passed, CLI
   tests `35` passed, doc-tests passed, and clippy `-D warnings` passed.

@@ -1824,6 +1824,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "work-log-normalization-proposals" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_log_normalization_proposals_help_text());
+                return Ok(());
+            }
             let json = take_flag(&mut args, "--json");
             let ai = take_flag(&mut args, "--ai");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
@@ -2485,6 +2489,10 @@ fn is_help_command(command: &str) -> bool {
     matches!(command, "help" | "-h" | "--help")
 }
 
+fn take_help_flag(args: &mut Vec<String>) -> bool {
+    take_flag(args, "--help") || take_flag(args, "-h") || take_flag(args, "help")
+}
+
 fn reject_extra_args(args: &[String], command: &str) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(arg) = args.first() {
         return Err(format!("unknown {command} argument: {arg}").into());
@@ -2812,6 +2820,31 @@ fn bounded_count(requested: usize, max: usize, label: &str, warnings: &mut Vec<S
 
 fn print_help() {
     println!("{}", help_text());
+}
+
+fn work_log_normalization_proposals_help_text() -> String {
+    [
+        "PromptVault work-log-normalization-proposals",
+        "",
+        "Usage:",
+        "  promptvault-cli work-log-normalization-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]",
+        "",
+        "Purpose:",
+        "  Generates review-only title/status normalization proposals for parsed project/day work-log rows.",
+        "  Without --ai, returns local fallback proposals that require operator review.",
+        "  With --ai, attempts configured OpenAI/GLM providers and falls back to local review-only proposals on provider failure.",
+        "",
+        "Review safety:",
+        "  This command does not write durable normalized rows.",
+        "  Persist proposals with work-log-normalization-review-queue --sync-proposals.",
+        "  Apply only operator-approved rows with work-log-normalization-apply.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-log-normalization-proposals --limit 5 --json",
+        "  promptvault-cli work-log-normalization-proposals --limit 5 --ai --json",
+        "  promptvault-cli work-log-normalization-proposals --needs-title-normalization --ai --json",
+    ]
+    .join("\n")
 }
 
 fn help_text() -> String {
@@ -3868,6 +3901,10 @@ mod tests {
         assert!(is_help_command("-h"));
         assert!(is_help_command("--help"));
         assert!(!is_help_command("scna"));
+
+        let mut args = vec!["--json".to_string(), "--help".to_string()];
+        assert!(take_help_flag(&mut args));
+        assert_eq!(args, vec!["--json".to_string()]);
     }
 
     #[test]
@@ -4531,6 +4568,18 @@ mod tests {
         assert!(help.contains("serve [--addr 127.0.0.1:5174] [--database PATH]"));
         assert!(help.contains("browser-bridge endpoints"));
         assert!(help.contains("serve --database PATH isolates browser-bridge persistence"));
+    }
+
+    #[test]
+    fn work_log_normalization_proposals_help_documents_ai_review_safety() {
+        let help = work_log_normalization_proposals_help_text();
+
+        assert!(help.contains("promptvault-cli work-log-normalization-proposals [--limit N>0]"));
+        assert!(help.contains("Without --ai, returns local fallback proposals"));
+        assert!(help.contains("With --ai, attempts configured OpenAI/GLM providers"));
+        assert!(help.contains("does not write durable normalized rows"));
+        assert!(help.contains("work-log-normalization-review-queue --sync-proposals"));
+        assert!(help.contains("work-log-normalization-apply"));
     }
 
     #[test]

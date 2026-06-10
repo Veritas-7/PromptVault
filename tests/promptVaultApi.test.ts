@@ -390,6 +390,11 @@ function projectWorkStatusExportPayload(overrides = {}) {
       needs_session_evidence: false,
       session_evidence_audit: "matched",
       needs_title_normalization: false,
+      same_project_same_date_session_count: 0,
+      same_project_other_session_dates: [],
+      same_project_other_session_date_count: 0,
+      nearest_same_project_other_session_date: null,
+      nearest_same_project_other_session_distance_days: null,
     }],
     warnings: [],
     ...overrides,
@@ -1281,6 +1286,11 @@ test("browser bridge work status export accepts status snapshot audit rows", asy
       needs_session_evidence: false,
       session_evidence_audit: "status-snapshot",
       needs_title_normalization: false,
+      same_project_same_date_session_count: 0,
+      same_project_other_session_dates: [],
+      same_project_other_session_date_count: 0,
+      nearest_same_project_other_session_date: null,
+      nearest_same_project_other_session_distance_days: null,
     }],
   })), { status: 200 });
   t.after(() => {

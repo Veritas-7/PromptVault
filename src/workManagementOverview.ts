@@ -66,6 +66,11 @@ export interface WorkManagementOverviewRow {
   needs_session_evidence: boolean;
   needs_title_normalization: boolean;
   session_evidence_audit: string | null;
+  same_project_same_date_session_count: number;
+  same_project_other_session_dates: { text: string; count: number }[];
+  same_project_other_session_date_count: number;
+  nearest_same_project_other_session_date: string | null;
+  nearest_same_project_other_session_distance_days: number | null;
   confidence_count: number;
   min_confidence: number | null;
   max_confidence: number | null;
@@ -221,6 +226,22 @@ export function buildWorkManagementOverview(
     row.needs_session_evidence = row.needs_session_evidence || item.needs_session_evidence;
     row.needs_title_normalization = row.needs_title_normalization || item.needs_title_normalization;
     row.session_evidence_audit ??= item.session_evidence_audit;
+    row.same_project_same_date_session_count = Math.max(
+      row.same_project_same_date_session_count,
+      item.same_project_same_date_session_count,
+    );
+    if (item.same_project_other_session_date_count > row.same_project_other_session_date_count) {
+      row.same_project_other_session_dates = item.same_project_other_session_dates;
+      row.same_project_other_session_date_count = item.same_project_other_session_date_count;
+    }
+    if (item.nearest_same_project_other_session_date
+      && (row.nearest_same_project_other_session_distance_days === null
+        || item.nearest_same_project_other_session_distance_days === null
+        || item.nearest_same_project_other_session_distance_days < row.nearest_same_project_other_session_distance_days)) {
+      row.nearest_same_project_other_session_date = item.nearest_same_project_other_session_date;
+      row.nearest_same_project_other_session_distance_days =
+        item.nearest_same_project_other_session_distance_days;
+    }
     row.sourceSet.add("status_export");
   }
 
@@ -423,6 +444,10 @@ export function workManagementOverviewSessionText(row: WorkManagementOverviewRow
         ? "전체 인덱스 미해결"
         : "근거 limit 영향",
     );
+    const sessionHint = workManagementOverviewSessionHintText(row);
+    if (sessionHint) {
+      parts.push(sessionHint);
+    }
   } else {
     parts.push("세션 매칭");
   }
@@ -437,9 +462,23 @@ export function workManagementOverviewNextActionText(row: WorkManagementOverview
     return "다음 조치 · 상태 Export 로드로 세션 검증";
   }
   if (row.needs_session_evidence) {
-    return row.session_evidence_audit === "unresolved-after-full-index"
-      ? "다음 조치 · 세션근거 큐 검토 · 전체 인덱스 미해결"
-      : "다음 조치 · 세션 백필 후 재검증 · 근거 limit 영향";
+    if (row.session_evidence_audit !== "unresolved-after-full-index") {
+      return "다음 조치 · 세션 백필 후 재검증 · 근거 limit 영향";
+    }
+    if (row.same_project_same_date_session_count > 0) {
+      return `다음 조치 · 같은 날짜 세션 후보 ${row.same_project_same_date_session_count.toLocaleString()}건 수동 연결 검토`;
+    }
+    if (row.nearest_same_project_other_session_date) {
+      const distanceText = row.nearest_same_project_other_session_distance_days === null
+        ? ""
+        : ` · ${row.nearest_same_project_other_session_distance_days.toLocaleString()}일 차이`;
+      const priorityText = row.nearest_same_project_other_session_distance_days !== null
+          && row.nearest_same_project_other_session_distance_days <= 1
+        ? "인접 날짜 세션 후보 검토"
+        : "먼 날짜 세션 후보 낮은 우선순위 검토";
+      return `다음 조치 · ${priorityText} · ${row.nearest_same_project_other_session_date}${distanceText}`;
+    }
+    return "다음 조치 · 세션근거 큐 검토 · 전체 인덱스 미해결";
   }
   if (row.needs_title_normalization) {
     return "다음 조치 · 제목 정규화 큐 검토";
@@ -459,6 +498,19 @@ export function workManagementOverviewNextActionText(row: WorkManagementOverview
     return "다음 조치 · AI 제목 정규화 검토";
   }
   return "다음 조치 · 관리 완료 · 정기 재검증";
+}
+
+function workManagementOverviewSessionHintText(row: WorkManagementOverviewRow): string | null {
+  if (row.same_project_same_date_session_count > 0) {
+    return `같은 날짜 후보 ${row.same_project_same_date_session_count.toLocaleString()}건`;
+  }
+  if (!row.nearest_same_project_other_session_date) {
+    return null;
+  }
+  const distanceText = row.nearest_same_project_other_session_distance_days === null
+    ? ""
+    : ` · ${row.nearest_same_project_other_session_distance_days.toLocaleString()}일 차이`;
+  return `가장 가까운 같은 프로젝트 세션 ${row.nearest_same_project_other_session_date}${distanceText}`;
 }
 
 export function workManagementOverviewDurabilityWarningText(
@@ -501,6 +553,11 @@ function upsertRow(
     needs_session_evidence: false,
     needs_title_normalization: false,
     session_evidence_audit: null,
+    same_project_same_date_session_count: 0,
+    same_project_other_session_dates: [],
+    same_project_other_session_date_count: 0,
+    nearest_same_project_other_session_date: null,
+    nearest_same_project_other_session_distance_days: null,
     confidence_count: 0,
     min_confidence: null,
     max_confidence: null,

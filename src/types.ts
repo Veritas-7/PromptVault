@@ -231,6 +231,11 @@ export interface ProjectWorkStatusExportRow {
   needs_session_evidence: boolean;
   session_evidence_audit: string;
   needs_title_normalization: boolean;
+  same_project_same_date_session_count: number;
+  same_project_other_session_dates: FrequencyItem[];
+  same_project_other_session_date_count: number;
+  nearest_same_project_other_session_date: string | null;
+  nearest_same_project_other_session_distance_days: number | null;
 }
 
 export interface ProjectWorkStatusExportResult {

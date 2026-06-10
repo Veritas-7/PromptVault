@@ -396,6 +396,11 @@ function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = 
       needs_session_evidence: true,
       session_evidence_audit: "bounded-session-limit",
       needs_title_normalization: true,
+      same_project_same_date_session_count: 0,
+      same_project_other_session_dates: [],
+      same_project_other_session_date_count: 0,
+      nearest_same_project_other_session_date: null,
+      nearest_same_project_other_session_distance_days: null,
     }, {
       date: "2026-06-08",
       project: "CareVault",
@@ -416,6 +421,11 @@ function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = 
       needs_session_evidence: false,
       session_evidence_audit: "matched",
       needs_title_normalization: false,
+      same_project_same_date_session_count: 0,
+      same_project_other_session_dates: [],
+      same_project_other_session_date_count: 0,
+      nearest_same_project_other_session_date: null,
+      nearest_same_project_other_session_distance_days: null,
     }],
     warnings: [],
     ...overrides,
@@ -1665,8 +1675,19 @@ test("work status export text exposes project day evidence coverage", () => {
     workStatusExportRowSessionSourcesText({
       ...result.rows[0],
       session_evidence_audit: "unresolved-after-full-index",
+      same_project_other_session_dates: [{ text: "2026-06-09", count: 2 }],
+      same_project_other_session_date_count: 1,
+      nearest_same_project_other_session_date: "2026-06-09",
+      nearest_same_project_other_session_distance_days: 1,
     }),
-    "매칭된 세션 근거 없음 · 전체 인덱스에서도 미해결",
+    "매칭된 세션 근거 없음 · 전체 인덱스에서도 미해결 · 가장 가까운 같은 프로젝트 세션 2026-06-09 · 1일 차이",
+  );
+  assert.equal(
+    workStatusExportRowSessionSourcesText({
+      ...result.rows[0],
+      same_project_same_date_session_count: 3,
+    }),
+    "매칭된 세션 근거 없음 · 제한된 근거만 사용 중 · 같은 날짜 후보 3건",
   );
   assert.equal(
     workStatusExportRowSessionSourcesText({

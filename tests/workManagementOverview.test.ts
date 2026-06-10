@@ -346,6 +346,11 @@ function statusExportResult(): ProjectWorkStatusExportResult {
         needs_session_evidence: false,
         session_evidence_audit: "matched",
         needs_title_normalization: false,
+        same_project_same_date_session_count: 0,
+        same_project_other_session_dates: [],
+        same_project_other_session_date_count: 0,
+        nearest_same_project_other_session_date: null,
+        nearest_same_project_other_session_distance_days: null,
       },
       {
         date: "2026-06-08",
@@ -367,6 +372,11 @@ function statusExportResult(): ProjectWorkStatusExportResult {
         needs_session_evidence: true,
         session_evidence_audit: "unresolved-after-full-index",
         needs_title_normalization: true,
+        same_project_same_date_session_count: 0,
+        same_project_other_session_dates: [{ text: "2026-06-09", count: 2 }],
+        same_project_other_session_date_count: 1,
+        nearest_same_project_other_session_date: "2026-06-09",
+        nearest_same_project_other_session_distance_days: 1,
       },
     ],
     warnings: [],
@@ -467,7 +477,7 @@ test("work management overview exposes status export session coverage", () => {
   assert.equal(careVault.session_evidence_audit, "unresolved-after-full-index");
   assert.equal(
     workManagementOverviewSessionText(careVault),
-    "세션 근거 0건 · 전체 인덱스 미해결 · 제목 정규화 필요",
+    "세션 근거 0건 · 전체 인덱스 미해결 · 가장 가까운 같은 프로젝트 세션 2026-06-09 · 1일 차이 · 제목 정규화 필요",
   );
 });
 
@@ -603,7 +613,7 @@ test("work management overview next action prioritizes daily task management gap
   assert.ok(careVault);
   assert.equal(
     workManagementOverviewNextActionText(careVault),
-    "다음 조치 · 세션근거 큐 검토 · 전체 인덱스 미해결",
+    "다음 조치 · 인접 날짜 세션 후보 검토 · 2026-06-09 · 1일 차이",
   );
 
   const titleOnly = buildWorkManagementOverview({

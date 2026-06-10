@@ -866,6 +866,11 @@ pub struct ProjectWorkStatusExportRow {
     pub needs_session_evidence: bool,
     pub session_evidence_audit: String,
     pub needs_title_normalization: bool,
+    pub same_project_same_date_session_count: usize,
+    pub same_project_other_session_dates: Vec<FrequencyItem>,
+    pub same_project_other_session_date_count: usize,
+    pub nearest_same_project_other_session_date: Option<String>,
+    pub nearest_same_project_other_session_distance_days: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2414,8 +2419,12 @@ pub fn run_project_work_status_export(
         );
     }
 
-    let all_rows =
-        build_project_work_status_export_rows(&report, session_evidence_index_total_count);
+    let all_rows = {
+        let mut rows =
+            build_project_work_status_export_rows(&report, session_evidence_index_total_count);
+        annotate_project_work_status_export_row_date_hints(&database_path, &mut rows)?;
+        rows
+    };
     let (rows, total_row_count, row_offset, rows_truncated, next_row_offset) =
         paginate_project_work_status_export_rows(all_rows, limit, options.offset.unwrap_or(0));
     let markdown = render_project_work_status_export_markdown(
@@ -9097,6 +9106,11 @@ fn build_project_work_status_export_rows(
                     session_evidence_index_total_count,
                 ),
                 needs_title_normalization,
+                same_project_same_date_session_count: 0,
+                same_project_other_session_dates: Vec::new(),
+                same_project_other_session_date_count: 0,
+                nearest_same_project_other_session_date: None,
+                nearest_same_project_other_session_distance_days: None,
             }
         })
         .collect::<Vec<_>>();
@@ -9271,6 +9285,91 @@ struct ProjectWorkSessionDateCount {
     count: usize,
 }
 
+#[derive(Debug, Clone)]
+struct ProjectWorkSameProjectSessionDateHint {
+    same_date_count: usize,
+    other_dates: Vec<ProjectWorkSessionDateCount>,
+    nearest_other_date: Option<String>,
+    nearest_other_date_distance_days: Option<i64>,
+}
+
+fn project_work_same_project_session_date_hint(
+    date: &str,
+    date_counts: Vec<ProjectWorkSessionDateCount>,
+) -> ProjectWorkSameProjectSessionDateHint {
+    let same_date_count = date_counts
+        .iter()
+        .find(|item| item.date == date)
+        .map(|item| item.count)
+        .unwrap_or(0);
+    let other_dates = date_counts
+        .into_iter()
+        .filter(|item| item.date != date)
+        .collect::<Vec<_>>();
+    let nearest_other_date = nearest_project_work_session_date(date, &other_dates)
+        .or_else(|| other_dates.first().map(|item| item.date.clone()));
+    let nearest_other_date_distance_days = nearest_other_date
+        .as_deref()
+        .and_then(|nearest_date| project_work_session_date_distance_checked(date, nearest_date));
+
+    ProjectWorkSameProjectSessionDateHint {
+        same_date_count,
+        other_dates,
+        nearest_other_date,
+        nearest_other_date_distance_days,
+    }
+}
+
+fn project_work_session_date_hints_to_frequency_items(
+    date_counts: &[ProjectWorkSessionDateCount],
+) -> Vec<FrequencyItem> {
+    date_counts
+        .iter()
+        .take(PROJECT_WORK_SESSION_EVIDENCE_DATE_HINT_LIMIT)
+        .map(|item| FrequencyItem {
+            text: item.date.clone(),
+            count: item.count,
+        })
+        .collect()
+}
+
+fn annotate_project_work_status_export_row_date_hints(
+    database_path: &Path,
+    rows: &mut [ProjectWorkStatusExportRow],
+) -> Result<(), Box<dyn std::error::Error>> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let conn = open_promptvault_database(database_path)?;
+    let projects = rows
+        .iter()
+        .map(|row| row.project.clone())
+        .collect::<BTreeSet<_>>();
+    let mut dates_by_project = BTreeMap::new();
+    for project in projects {
+        let date_counts = project_work_session_date_counts_for_project(&conn, &project)?;
+        dates_by_project.insert(project, date_counts);
+    }
+
+    for row in rows {
+        let hint = project_work_same_project_session_date_hint(
+            &row.date,
+            dates_by_project
+                .get(&row.project)
+                .cloned()
+                .unwrap_or_default(),
+        );
+        row.same_project_same_date_session_count = hint.same_date_count;
+        row.same_project_other_session_date_count = hint.other_dates.len();
+        row.nearest_same_project_other_session_date = hint.nearest_other_date;
+        row.nearest_same_project_other_session_distance_days =
+            hint.nearest_other_date_distance_days;
+        row.same_project_other_session_dates =
+            project_work_session_date_hints_to_frequency_items(&hint.other_dates);
+    }
+    Ok(())
+}
+
 fn annotate_project_work_session_evidence_candidate_date_hints(
     database_path: &Path,
     candidates: &mut [ProjectWorkSessionEvidenceCandidate],
@@ -9290,41 +9389,27 @@ fn annotate_project_work_session_evidence_candidate_date_hints(
     }
 
     for candidate in candidates {
-        let date_counts = dates_by_project
-            .get(&candidate.project)
-            .cloned()
-            .unwrap_or_default();
-        let same_date_count = date_counts
-            .iter()
-            .find(|item| item.date == candidate.date)
-            .map(|item| item.count)
-            .unwrap_or(0);
-        let other_dates = date_counts
-            .into_iter()
-            .filter(|item| item.date != candidate.date)
-            .collect::<Vec<_>>();
-        let nearest_other_date = nearest_project_work_session_date(&candidate.date, &other_dates)
-            .or_else(|| other_dates.first().map(|item| item.date.clone()));
+        let hint = project_work_same_project_session_date_hint(
+            &candidate.date,
+            dates_by_project
+                .get(&candidate.project)
+                .cloned()
+                .unwrap_or_default(),
+        );
 
-        candidate.same_project_same_date_session_count = same_date_count;
-        candidate.same_project_other_session_date_count = other_dates.len();
-        candidate.nearest_same_project_other_session_date = nearest_other_date.clone();
-        candidate.same_project_other_session_dates = other_dates
-            .iter()
-            .take(PROJECT_WORK_SESSION_EVIDENCE_DATE_HINT_LIMIT)
-            .map(|item| FrequencyItem {
-                text: item.date.clone(),
-                count: item.count,
-            })
-            .collect();
+        candidate.same_project_same_date_session_count = hint.same_date_count;
+        candidate.same_project_other_session_date_count = hint.other_dates.len();
+        candidate.nearest_same_project_other_session_date = hint.nearest_other_date.clone();
+        candidate.same_project_other_session_dates =
+            project_work_session_date_hints_to_frequency_items(&hint.other_dates);
 
-        if same_date_count > 0 {
+        if hint.same_date_count > 0 {
             append_project_work_candidate_reason(
                 &mut candidate.reason,
                 "same_project_session_same_date_unmatched",
             );
         }
-        if let Some(nearest_date) = nearest_other_date {
+        if let Some(nearest_date) = hint.nearest_other_date {
             append_project_work_candidate_reason(
                 &mut candidate.reason,
                 "same_project_session_other_dates",
@@ -9333,9 +9418,7 @@ fn annotate_project_work_session_evidence_candidate_date_hints(
                 &mut candidate.reason,
                 &format!("nearest_same_project_session_date={nearest_date}"),
             );
-            if let Some(distance_days) =
-                project_work_session_date_distance_checked(&candidate.date, &nearest_date)
-            {
+            if let Some(distance_days) = hint.nearest_other_date_distance_days {
                 append_project_work_candidate_reason(
                     &mut candidate.reason,
                     &format!("nearest_same_project_session_distance_days={distance_days}"),
@@ -12006,7 +12089,25 @@ fn render_project_work_status_export_markdown(
     out.push_str("|---|---|---:|---:|---:|---|---|---|\n");
     for row in rows {
         let session_summary = if row.session_sources.is_empty() {
-            "none".to_string()
+            if row.same_project_same_date_session_count > 0 {
+                format!(
+                    "none; same-date same-project candidates {}",
+                    row.same_project_same_date_session_count
+                )
+            } else if let Some(nearest_date) =
+                row.nearest_same_project_other_session_date.as_deref()
+            {
+                match row.nearest_same_project_other_session_distance_days {
+                    Some(distance_days) => format!(
+                        "none; nearest same-project session {nearest_date} ({distance_days}d)"
+                    ),
+                    None => {
+                        format!("none; nearest same-project session {nearest_date}")
+                    }
+                }
+            } else {
+                "none".to_string()
+            }
         } else {
             row.session_sources
                 .iter()
@@ -22440,6 +22541,11 @@ Status: completed as a source-only/report-only hardening slice.
             needs_session_evidence: false,
             session_evidence_audit: "matched".to_string(),
             needs_title_normalization: false,
+            same_project_same_date_session_count: 0,
+            same_project_other_session_dates: Vec::new(),
+            same_project_other_session_date_count: 0,
+            nearest_same_project_other_session_date: None,
+            nearest_same_project_other_session_distance_days: None,
         };
 
         let (page, total, offset, truncated, next) =
@@ -22572,6 +22678,11 @@ Status: completed as a source-only/report-only hardening slice.
                 needs_session_evidence: session_evidence_count == 0,
                 session_evidence_audit: audit.to_string(),
                 needs_title_normalization: project == "NeedsTitle",
+                same_project_same_date_session_count: 0,
+                same_project_other_session_dates: Vec::new(),
+                same_project_other_session_date_count: 0,
+                nearest_same_project_other_session_date: None,
+                nearest_same_project_other_session_distance_days: None,
             }
         };
         let rows = vec![

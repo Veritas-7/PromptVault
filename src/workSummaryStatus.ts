@@ -922,12 +922,29 @@ export function workStatusExportRowSourceStatusesText(row: ProjectWorkStatusExpo
 
 export function workStatusExportRowSessionSourcesText(row: ProjectWorkStatusExportRow): string {
   if (row.session_evidence_count <= 0 || !row.session_sources.length) {
-    return `매칭된 세션 근거 없음 · ${workStatusExportRowSessionEvidenceAuditText(row)}`;
+    return [
+      "매칭된 세션 근거 없음",
+      workStatusExportRowSessionEvidenceAuditText(row),
+      workStatusExportRowSessionDateHintText(row),
+    ].filter((part): part is string => part !== null).join(" · ");
   }
   return [
     `세션 소스 · ${frequencyItemsInlineText(row.session_sources)}`,
     `고유 ${row.unique_session_evidence_count.toLocaleString()}건`,
   ].join(" · ");
+}
+
+function workStatusExportRowSessionDateHintText(row: ProjectWorkStatusExportRow): string | null {
+  if (row.same_project_same_date_session_count > 0) {
+    return `같은 날짜 후보 ${row.same_project_same_date_session_count.toLocaleString()}건`;
+  }
+  if (!row.nearest_same_project_other_session_date) {
+    return null;
+  }
+  const distanceText = row.nearest_same_project_other_session_distance_days === null
+    ? ""
+    : ` · ${row.nearest_same_project_other_session_distance_days.toLocaleString()}일 차이`;
+  return `가장 가까운 같은 프로젝트 세션 ${row.nearest_same_project_other_session_date}${distanceText}`;
 }
 
 export function workStatusExportRowSessionEvidenceAuditText(row: ProjectWorkStatusExportRow): string {

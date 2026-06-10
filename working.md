@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 20:21 KST
+Updated: 2026-06-10 20:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,6 +34,46 @@ Short-Term Goal:
 Current Work:
 
 - Active completed implementation slice:
+  promote same-project session distance hints into the project/day management
+  overview. The previous slice added distance hints to session-evidence
+  candidate reasons, but the main overview still says only
+  `전체 인덱스 미해결`, so operators cannot see from the project/day row whether
+  the nearest same-project session is 1 day away or weeks/months away.
+- Completed behavior:
+  `src-tauri/src/lib.rs` now adds structured same-project session date/count
+  and nearest-distance fields to `ProjectWorkStatusExportRow`, annotates status
+  export rows from the stored session index before pagination/markdown
+  rendering, and includes nearest-session hints in markdown export rows when no
+  session evidence is matched. `src/workManagementOverview.ts` now shows
+  same-date, adjacent-date, and stale-distance priorities in the project/day
+  overview session text and next-action text. `src/workSummaryStatus.ts` now
+  exposes the same hint in status export row copy, so the status export UI does
+  not stop at `매칭된 세션 근거 없음`.
+- Verification for active slice:
+  `cargo fmt && cargo test project_work_status_export --lib` passed with `3`
+  focused Rust tests. `node --disable-warning=ExperimentalWarning
+  --experimental-transform-types --test tests/workManagementOverview.test.ts
+  tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts` passed with
+  `266` UI/API helper tests. `cargo build --bin promptvault-cli` passed. Real
+  default-vault `work-status-export --limit 30 --full-session-index --json`
+  now exposes unresolved near/far same-project session distances, including
+  `RepoTutorStudio 2026-06-10 -> 2026-06-09 (1d)`,
+  `ResearchFlowAI 2026-06-08 -> 2026-06-07 (1d)`,
+  `enterprise_diagnosis_flutter 2026-06-08 -> 2026-06-09 (1d)`, and
+  `LocalMind 2026-06-10 -> 2026-05-10 (31d)`. `git diff --check` passed.
+  `npm run check` passed: UI tests `523` passed, Vite / TypeScript build
+  passed, Rust lib tests `242` passed, CLI tests `45` passed, doc-tests
+  passed, and clippy `-D warnings` passed. Browser-bridge QA was not rerun
+  because this slice changes backend/status-export data and helper copy only,
+  not bridge routes or interactive app flows.
+- Next work:
+  continue resolving the remaining `progress-log-only` /
+  `unresolved-after-full-index` rows. Prioritize unresolved rows whose nearest
+  same-project session is 1 day away before lower-confidence rows whose nearest
+  session is weeks or months away.
+- Previous completed implementation slice:
+  `935d6db fix: show session evidence date distance`.
+- Previous completed behavior:
   expose nearest same-project session date distance in unresolved
   session-evidence diagnostics. After the false-positive blocker fix, all `26`
   remaining candidates are still `progress-log-only` /

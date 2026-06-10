@@ -2520,7 +2520,21 @@ function isProjectWorkStatusExportRow(value: unknown): boolean {
     && ["matched", "bounded-session-limit", "unresolved-after-full-index", "no-session-index", "status-snapshot"].includes(
       String(value.session_evidence_audit),
     )
-    && typeof value.needs_title_normalization === "boolean";
+    && typeof value.needs_title_normalization === "boolean"
+    && isNonNegativeSafeInteger(value.same_project_same_date_session_count)
+    && isNonNegativeSafeInteger(value.same_project_other_session_date_count)
+    && isFrequencyDateHintsWithinDateCount(
+      value.same_project_other_session_dates,
+      value.same_project_other_session_date_count,
+    )
+    && (value.nearest_same_project_other_session_date === null
+      || isNonBlankString(value.nearest_same_project_other_session_date))
+    && (value.nearest_same_project_other_session_distance_days === null
+      || isNonNegativeSafeInteger(value.nearest_same_project_other_session_distance_days))
+    && (value.same_project_other_session_date_count > 0
+      || value.nearest_same_project_other_session_date === null)
+    && (value.nearest_same_project_other_session_date !== null
+      || value.nearest_same_project_other_session_distance_days === null);
 }
 
 function projectWorkStatusExportRowsWithinResult(value: unknown): boolean {

@@ -2799,8 +2799,8 @@ async function runBrowserQa() {
     };
     step("work log approved review queue save");
     insertSyntheticApprovedReviewQueueRow();
-    await waitForEnabled(page, '[data-sync-work-log-review-queue="true"]');
-    await page.locator('[data-sync-work-log-review-queue="true"]').click();
+    await waitForEnabled(page, '[data-apply-work-log-review-queue-filters="true"]');
+    await page.locator('[data-apply-work-log-review-queue-filters="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-log-review-queue-meta="true"]')?.textContent ?? "";
       return text.includes("큐 저장") && text.includes("승인 1개");

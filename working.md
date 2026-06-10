@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 03:13 KST
+Updated: 2026-06-11 03:32 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-11 03:13 KST
+## Resume Snapshot - 2026-06-11 03:32 KST
 
 Long-Term Goal:
 
@@ -26,10 +26,9 @@ Long-Term Goal:
 
 Short-Term Goal:
 
-- Continue autonomous QA/improvement from a clean pushed tree after landing the
-  stale work-log backfill review-row safety slice. Next candidate area is to
-  inspect review queue apply/save and progress-log ingestion surfaces for any
-  similar stale-state or operator-gate gaps.
+- Harden the work-log approved review queue save path so a row that was approved
+  earlier but disappears from the next live candidate sync is downgraded to
+  `stale` before it can feed `work-log-extract --approved-review-queue --save`.
 
 Current Goal:
 
@@ -38,9 +37,9 @@ Current Goal:
 - Completed and pushed afterward: docs-only continuity correction for this
   `working.md` handoff snapshot. Use `git log -1 --oneline` for the current
   repository tip rather than treating the previous code-slice hash as HEAD.
-- Current active follow-up: keep this handoff accurate, then pick the next
-  small QA/improvement slice without approving, rejecting, syncing, applying, or
-  otherwise writing live review decisions unless explicitly requested.
+- Completed local implementation and verification for the approved-row
+  stale-on-sync save-path slice. Use `git log -1 --oneline` for the current
+  repository tip after the slice is committed.
 
 Context:
 
@@ -51,6 +50,16 @@ Context:
 - The latest docs-only handoff correction records that PromptVault should manage
   both model/session-derived evidence and project-local progress logs such as
   `workingd.md`.
+- New gap found in the next apply/save path: an approved work-log review queue
+  row stayed `approved` if it disappeared from the next live candidate sync,
+  because sync only marked `pending_ai_review` and `risk_blocked` rows stale.
+  That meant stale approved rows could still feed
+  `work-log-extract --approved-review-queue --save`.
+- Browser QA fixture issue found after the backend fix: the existing approved
+  save fixture inserted a synthetic approved row under `/tmp/QAProject` and then
+  clicked sync. Under the new safety rule that row correctly became stale, so
+  the fixture now reloads the already-approved queue without sync for the save
+  path and leaves live-sync stale behavior to the Rust regression.
 - The newly identified gap was asymmetric with other queues: normalization and
   session-evidence review queues already had stale-row approval-safe helper
   tests, but work-log backfill rows could still expose an approve action for
@@ -74,6 +83,14 @@ Progress:
 - Ran post-push identity checks: the active goal, persisted objective, and
   first rollout objective still target
   `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Added `approved_work_log_review_queue_rows_must_still_be_live_before_save`:
+  the test first failed because stale count stayed `0`, proving approved rows
+  were not downgraded when no longer live.
+- Updated `sync_project_work_log_review_queue` to mark disappeared `approved`
+  rows as `stale` with `candidate_no_longer_live`.
+- Updated the isolated browser-bridge QA approved-save fixture to avoid
+  re-syncing its synthetic `/tmp` row, so it still validates already-approved
+  row save behavior while the backend regression validates stale-on-sync safety.
 
 Changes:
 
@@ -83,6 +100,10 @@ Changes:
 - `tests/workSummaryStatus.test.ts`: frontend action policy regression test.
 - `scripts/browser-bridge-isolated-qa.mjs`: stale backfill queue fixture and
   DOM action-state assertion.
+- `src-tauri/src/lib.rs`: approved review queue rows now become stale when the
+  next live candidate sync no longer contains them; added save-path regression.
+- `scripts/browser-bridge-isolated-qa.mjs`: approved review queue save fixture
+  now reloads the queue without sync after inserting a synthetic approved row.
 - `working.md`: corrected this resume snapshot from in-progress/commit-pending
   to completed/pushed, and made project-local progress-log management explicit
   in the long-term goal.
@@ -108,6 +129,30 @@ Tests:
 - Handoff correction checks passed: `git diff --check -- working.md`, full
   `gitleaks dir . --no-banner --redact`, and staged `gitleaks protect --staged
   --no-banner`.
+- RED baseline: `cargo test approved_work_log_review_queue_rows_must_still_be_live_before_save --lib`
+  failed before the fix because `stale_count` was `0` instead of `1`.
+- GREEN focused check: `cargo test approved_work_log_review_queue_rows_must_still_be_live_before_save --lib`
+  passed after the sync fix.
+- Broader queue check: `cargo test work_log_review_queue --lib` passed with `4`
+  tests.
+- Adjacent extraction checks passed: `cargo test project_work_log_extraction
+  --lib` with `11` tests and `cargo test approved_review_queue --lib` with `1`
+  test.
+- Work-log-wide Rust checks passed: `cargo test work_log --lib` with `27`
+  tests.
+- `cargo fmt --check` and `git diff --check` passed.
+- First full `npm run check` found a clippy-only style issue in the new test
+  (`clone` to slice); after replacing it with `std::slice::from_ref`,
+  `npm run check` passed: UI tests `534`, Vite / TypeScript build, Rust CLI
+  build, Rust lib tests `256`, CLI tests `47`, doc-tests, and clippy
+  `-D warnings`.
+- `node --check scripts/browser-bridge-isolated-qa.mjs` passed.
+- First `npm run qa:browser-bridge` run failed at the approved-save fixture with
+  timeout after the synthetic approved row was correctly made stale by sync.
+  After the fixture split, `npm run qa:browser-bridge` passed against an
+  isolated SQLite database. Output confirmed stale work-log fixture action state
+  `approveButtonCount: 0`, `rejectButtonCount: 1`, and approved queue save
+  persistence `accepted 제안 1개 저장`.
 
 Issues:
 
@@ -123,9 +168,10 @@ Research:
 
 Next Steps:
 
-- Next implementation candidate: inspect review queue apply/save paths and
-  progress-log ingestion handling for stale-state or operator-gate asymmetries,
-  using isolated QA/default-vault read checks before any durable writes.
+- Commit and push this backend safety slice with explicit paths only after
+  git/gitleaks checks.
+- Next implementation candidate after landing: inspect progress-log ingestion
+  handling for remaining project-local log coverage gaps.
 
 ## Resume Snapshot - 2026-06-11 02:45 KST
 

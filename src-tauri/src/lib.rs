@@ -15234,7 +15234,7 @@ fn sync_project_work_log_review_queue(
     let stale_candidate_count = tx.execute(
         "UPDATE project_work_log_review_queue
          SET review_state='stale', review_reason='candidate_no_longer_live', last_seen_at=?1
-         WHERE review_state IN ('pending_ai_review', 'risk_blocked')
+         WHERE review_state IN ('pending_ai_review', 'risk_blocked', 'approved')
             AND last_seen_at <> ?1",
         params![sync_at],
     )?;
@@ -25615,9 +25615,9 @@ Status: completed as a source-only/report-only hardening slice.
         .expect_err("explicit and full report session limits should conflict")
         .to_string();
 
-        assert!(err.contains(
-            "work-report full_session_index cannot be combined with session_limit"
-        ));
+        assert!(
+            err.contains("work-report full_session_index cannot be combined with session_limit")
+        );
     }
 
     #[test]
@@ -27928,7 +27928,8 @@ Status: completed as a source-only/report-only hardening slice.
             "2026-06-09T01:30:00Z",
         )
         .expect("reject stale risky queue row");
-        let rows = read_project_work_log_review_queue(&conn, 10, None).expect("read rejected queue");
+        let rows =
+            read_project_work_log_review_queue(&conn, 10, None).expect("read rejected queue");
         assert_eq!(rows.stale_count, 0);
         assert_eq!(rows.rejected_count, 1);
         assert!(rows.items.iter().any(|item| {
@@ -27971,12 +27972,8 @@ Status: completed as a source-only/report-only hardening slice.
             risk_flags: vec!["possible_api_key".to_string()],
             modified_at: None,
         };
-        sync_project_work_log_review_queue(
-            &mut conn,
-            &[safe, risky],
-            "2026-06-09T00:00:00Z",
-        )
-        .expect("sync queue");
+        sync_project_work_log_review_queue(&mut conn, &[safe, risky], "2026-06-09T00:00:00Z")
+            .expect("sync queue");
 
         let result = run_project_work_log_review_queue(ProjectWorkLogReviewQueueOptions {
             database_path: Some(db_path.display().to_string()),
@@ -29180,6 +29177,88 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(run.error_message, None);
 
         std::fs::remove_file(db_path).expect("remove approved queue extraction db");
+    }
+
+    #[tokio::test]
+    async fn approved_work_log_review_queue_rows_must_still_be_live_before_save() {
+        let suffix = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-approved-review-queue-stale-save-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut conn = open_promptvault_database(&db_path).expect("open db");
+        let approved = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-CareVault-stale-approved-a1b2c3d4e5".to_string(),
+            project: "CareVault".to_string(),
+            source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md".to_string(),
+            source_file: "workingd.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt: "- 2026-06-04: Backfilled older work notes".to_string(),
+            line_count: 1,
+            char_count: 43,
+            risk_flags: Vec::new(),
+            modified_at: None,
+        };
+        sync_project_work_log_review_queue(
+            &mut conn,
+            std::slice::from_ref(&approved),
+            "2026-06-09T00:00:00Z",
+        )
+        .expect("sync review queue");
+        update_project_work_log_review_queue_state(
+            &conn,
+            &approved.candidate_id,
+            "approved",
+            "operator_approved_for_backfill",
+            "2026-06-09T00:05:00Z",
+        )
+        .expect("approve one queue row");
+
+        let stale_count =
+            sync_project_work_log_review_queue(&mut conn, &[], "2026-06-09T01:00:00Z")
+                .expect("sync empty live candidate set");
+        assert_eq!(stale_count, 1);
+        let rows = read_project_work_log_review_queue(&conn, 10, None).expect("read queue");
+        assert_eq!(rows.approved_count, 0);
+        assert_eq!(rows.stale_count, 1);
+        assert!(rows.items.iter().any(|item| {
+            item.candidate_id == approved.candidate_id
+                && item.review_state == "stale"
+                && item.review_reason == "candidate_no_longer_live"
+        }));
+        drop(conn);
+
+        let result =
+            run_project_work_log_extraction_proposals(ProjectWorkLogExtractionProposalsOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(10),
+                ai: Some(false),
+                save: Some(true),
+                approved_candidate_ids: None,
+                approved_review_queue_only: Some(true),
+            })
+            .await
+            .expect("extract approved queue rows");
+
+        assert_eq!(result.candidate_count, 0);
+        assert_eq!(result.accepted_count, 0);
+        assert_eq!(
+            result.persistence.as_ref().map(|p| p.saved_item_count),
+            Some(0)
+        );
+
+        let conn = Connection::open(&db_path).expect("open extraction db");
+        let saved_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM project_work_log_extraction_items",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read saved extraction count");
+        assert_eq!(saved_count, 0);
+
+        std::fs::remove_file(db_path).expect("remove approved queue stale save db");
     }
 
     #[test]

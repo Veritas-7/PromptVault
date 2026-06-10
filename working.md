@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 13:02 KST
+Updated: 2026-06-10 13:12 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,15 +33,15 @@ Short-Term Goal:
 
 Current Work:
 
-- Latest completed and pushed implementation slice:
+- Most recent pushed implementation baseline before the current slice:
   `74bcce5 fix: index non-codex session evidence sources`.
-- Current uncommitted implementation slice: reduce noisy session-evidence
-  candidate rows where the source is only a `PROJECT_STATUS.md` status snapshot.
-  These rows should remain visible as managed project/day status rows, but
-  should not be treated as missing session-evidence proof when their role is
-  only a status snapshot.
+- Current verified implementation slice: reduce noisy session-evidence
+  candidate rows where the source is only a `PROJECT_STATUS.md` status
+  snapshot. These rows remain visible as managed project/day status rows, but
+  are no longer treated as missing session-evidence proof when their only role
+  is `project-status`.
 - Latest pushed handoff-only documentation refresh:
-  `cc2f412 docs: refresh worklog handoff state`.
+  `3b91db9 docs: refresh working handoff state`.
 - Previous session-index implementation slice:
   `3f4185e fix: index codex session evidence by activity date`.
 - The earlier body-derived progress-log title cleanup slice was completed and
@@ -60,7 +60,7 @@ Management Coverage Status:
 
 - The app does manage project/day work from real parsed artifacts: current
   default-vault export reported `32` projects, `26` days, `892` progress files,
-  `7,812` work items, `97` project/day rows, and a full stored session index of
+  `7,825` work items, `97` project/day rows, and a full stored session index of
   `12,889` sanitized prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
@@ -96,11 +96,33 @@ Progress:
 - Confirmed same-date session evidence is genuinely absent for many remaining
   rows; near-date evidence exists for some projects but should not be attached
   without same-date/project proof.
+- Implemented `status-snapshot` audit classification for project/day rows whose
+  source-file roles are only `project-status`.
+- Actual default-vault status export now reports `26` rows needing session
+  evidence, `4` `status-snapshot` rows, `26` `unresolved-after-full-index`
+  rows, and `67` matched rows.
+- Actual default-vault session-evidence candidates now report
+  `total_candidate_count=26`, `returned_candidate_count=26`, and no remaining
+  `PROJECT_STATUS.md` candidate rows. Candidate roles are now only
+  `handoff-log`, `progress-log`, and `work-log`.
 
 Changes:
 
-- `working.md`: refreshed the top-level long-term/short-term/current-work
-  handoff so future sessions can resume from the latest pushed state.
+- `src-tauri/src/lib.rs`: marks project-status-only status rows as
+  `status-snapshot`, sets `needs_session_evidence=false` for them, and keeps
+  mixed rows containing real handoff/work/progress logs in the unresolved
+  session-evidence path.
+- `src-tauri/src/lib.rs`: added Rust regression coverage for status snapshots,
+  mixed project-status plus `working.md` rows, audit explanation, and candidate
+  filtering.
+- `src/promptVaultApi.ts`: accepts `status-snapshot` only for status export
+  rows; session-evidence candidates/proposals/review queues still require
+  `unresolved-after-full-index`.
+- `src/workSummaryStatus.ts`: displays the new audit label as
+  `프로젝트 상태 스냅샷`.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`: cover
+  bridge parsing and UI text for `status-snapshot`.
+- `working.md`: records the verified slice and live default-vault result.
 
 Tests:
 
@@ -109,15 +131,45 @@ Tests:
 - PASS: `git status --short --branch` shows `## main...origin/main`.
 - PASS: `git log --oneline -5` shows latest pushed implementation commit
   `74bcce5 fix: index non-codex session evidence sources`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_status`
+  (`4` tests).
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml
+  session_evidence_candidates_keep_only_full_index_unresolved_rows`.
+- PASS: `node --disable-warning=ExperimentalWarning
+  --experimental-transform-types --test tests/promptVaultApi.test.ts
+  tests/workSummaryStatus.test.ts` (`246` tests).
+- PASS: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`.
+- PASS: `git diff --check`.
+- PASS: actual default-vault `cargo run --manifest-path src-tauri/Cargo.toml
+  --bin promptvault-cli -- work-status-export --limit 200
+  --full-session-index --json`: `97` rows, `7,825` items, `32` projects,
+  `26` days, `892` files, `12,889/12,889` indexed prompts,
+  `needs_session_evidence=26`, `status_snapshot=4`, `unresolved=26`,
+  `matched=67`.
+- PASS: actual default-vault `cargo run --manifest-path src-tauri/Cargo.toml
+  --bin promptvault-cli -- work-session-evidence-candidates --limit 80
+  --json`: `total_candidate_count=26`, `returned_candidate_count=26`,
+  `bounded_session_limit_count=0`, `unresolved_after_full_index_count=26`,
+  `needs_title_normalization_count=0`, `12,889/12,889` indexed prompts.
+- PASS: `npm run check` (UI tests, build, `229` Rust library tests, `34`
+  CLI tests, doc tests, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+  Isolated QA DB:
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-3MrtlX/qa.sqlite`.
+  Verified status export, session-evidence candidates/proposals/review/apply,
+  reviewed-item reload, work management overview, work-log normalization/apply,
+  approved review queue save, run history, and saved item flows.
 
 Issues:
 
-- This slice has not yet changed backend behavior. The expected next result is
-  likely `30 -> 26` session-evidence candidates if the four pure
-  `PROJECT_STATUS.md` status snapshot rows are correctly excluded.
-- Do not hide real work-log rows such as `working.md`, `workingd.md`,
-  `WORKING_LOG.md`, `WORKLOG.md`, or `progress.md`; only pure status snapshots
-  should be exempted from session-evidence-required review.
+- Remaining `26` candidates still lack same-date project session evidence in
+  the full `12,889` prompt index. These now come only from handoff/progress/work
+  logs and need either provider-assisted review or stronger same-date evidence.
+- Project-status-only rows are no longer session-evidence-required rows, but
+  they still appear in status export as managed status snapshots.
+- Do not infer cross-date or near-date session evidence for rows such as
+  `RepoTutorStudio` or `LocalMind` unless a source artifact proves that target
+  project/date.
 
 Research:
 
@@ -125,12 +177,13 @@ Research:
 
 Next Steps:
 
-- Add a focused backend helper/test that marks project-status-only snapshot rows
-  as not requiring session evidence.
-- Verify `work-session-evidence-candidates --limit 80 --json` drops from `30`
-  to the expected lower count without removing non-status worklog rows.
-- Run targeted Rust tests, then `npm run check`, browser-bridge QA if API/UI
-  contract changes, diff checks, and secret scans before commit/push.
+- Commit and push this verified slice after staged secret checks.
+- Next implementation slice should inspect the remaining `26` candidates by
+  project/date and decide whether the right next move is provider-assisted
+  proposal generation, manual review queue UX, or another parser/indexing gap.
+- Keep `PROJECT_STATUS.md` rows visible in status export, but do not re-add them
+  to the session-evidence candidate queue unless they are mixed with actual
+  handoff/work/progress logs.
 
 ## Completed Slice - 2026-06-10 Session-source coverage gap
 

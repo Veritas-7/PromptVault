@@ -8600,6 +8600,8 @@ fn build_project_work_status_export_rows(
             let source_files = source_files.into_iter().collect::<Vec<_>>();
             let source_file_roles = project_work_source_file_roles(&source_files);
             let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
+            let is_project_status_snapshot =
+                project_work_status_row_is_project_status_snapshot(&source_file_roles);
             let session_evidence_count = items
                 .iter()
                 .map(|item| item.session_evidence_count)
@@ -8630,9 +8632,10 @@ fn build_project_work_status_export_rows(
                 session_evidence_count,
                 unique_session_evidence_count: unique_session_keys.len(),
                 session_sources: rank_counts(session_source_counts, usize::MAX),
-                needs_session_evidence: session_evidence_count == 0,
+                needs_session_evidence: session_evidence_count == 0 && !is_project_status_snapshot,
                 session_evidence_audit: project_work_status_session_evidence_audit(
                     session_evidence_count,
+                    is_project_status_snapshot,
                     report.session_evidence_index_used || report.session_evidence_index_updated,
                     report.session_evidence_index_count,
                     session_evidence_index_total_count,
@@ -8653,12 +8656,16 @@ fn build_project_work_status_export_rows(
 
 fn project_work_status_session_evidence_audit(
     session_evidence_count: usize,
+    is_project_status_snapshot: bool,
     session_index_available: bool,
     session_evidence_index_count: usize,
     session_evidence_index_total_count: usize,
 ) -> String {
     if session_evidence_count > 0 {
         return "matched".to_string();
+    }
+    if is_project_status_snapshot {
+        return "status-snapshot".to_string();
     }
     if !session_index_available || session_evidence_index_count == 0 {
         return "no-session-index".to_string();
@@ -8667,6 +8674,13 @@ fn project_work_status_session_evidence_audit(
         return "bounded-session-limit".to_string();
     }
     "unresolved-after-full-index".to_string()
+}
+
+fn project_work_status_row_is_project_status_snapshot(source_file_roles: &[FrequencyItem]) -> bool {
+    !source_file_roles.is_empty()
+        && source_file_roles
+            .iter()
+            .all(|role| role.text == "project-status")
 }
 
 fn project_work_source_file_roles(source_files: &[String]) -> Vec<FrequencyItem> {
@@ -20461,10 +20475,10 @@ Status: completed as a source-only/report-only hardening slice.
     fn project_work_status_export_does_not_title_flag_project_status_snapshots() {
         let report = ProjectWorkReport {
             generated_at: "2026-06-09T01:00:00Z".to_string(),
-            total_items: 2,
-            project_count: 2,
+            total_items: 4,
+            project_count: 3,
             date_count: 1,
-            files_seen: 2,
+            files_seen: 4,
             items_by_date: Vec::new(),
             items_by_project: Vec::new(),
             session_scan_prompt_count: 0,
@@ -20475,7 +20489,7 @@ Status: completed as a source-only/report-only hardening slice.
             session_evidence_unique_sources: Vec::new(),
             session_evidence_index_used: true,
             session_evidence_index_updated: false,
-            session_evidence_index_count: 0,
+            session_evidence_index_count: 10,
             session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
             items: vec![
                 ProjectWorkItem {
@@ -20503,11 +20517,35 @@ Status: completed as a source-only/report-only hardening slice.
                     session_sources: Vec::new(),
                     session_evidence_keys: Vec::new(),
                 },
+                ProjectWorkItem {
+                    date: "2026-05-03".to_string(),
+                    project: "MixedProject".to_string(),
+                    title: "Project status snapshot updated".to_string(),
+                    status: "logged".to_string(),
+                    source_path: "/tmp/MixedProject/PROJECT_STATUS.md".to_string(),
+                    source_file: "PROJECT_STATUS.md".to_string(),
+                    evidence: "last_updated: 2026-05-03\nMixedProject — Project Status".to_string(),
+                    session_evidence_count: 0,
+                    session_sources: Vec::new(),
+                    session_evidence_keys: Vec::new(),
+                },
+                ProjectWorkItem {
+                    date: "2026-05-03".to_string(),
+                    project: "MixedProject".to_string(),
+                    title: "Feature implementation".to_string(),
+                    status: "done".to_string(),
+                    source_path: "/tmp/MixedProject/working.md".to_string(),
+                    source_file: "working.md".to_string(),
+                    evidence: "Implemented feature from working log".to_string(),
+                    session_evidence_count: 0,
+                    session_sources: Vec::new(),
+                    session_evidence_keys: Vec::new(),
+                },
             ],
             warnings: Vec::new(),
         };
 
-        let rows = build_project_work_status_export_rows(&report, 0);
+        let rows = build_project_work_status_export_rows(&report, 10);
         let snapshot = rows
             .iter()
             .find(|row| row.project == "SnapshotProject")
@@ -20516,9 +20554,19 @@ Status: completed as a source-only/report-only hardening slice.
             .iter()
             .find(|row| row.project == "RoughProject")
             .expect("rough row");
+        let mixed = rows
+            .iter()
+            .find(|row| row.project == "MixedProject")
+            .expect("mixed row");
 
         assert!(!snapshot.needs_title_normalization);
+        assert!(!snapshot.needs_session_evidence);
+        assert_eq!(snapshot.session_evidence_audit, "status-snapshot");
         assert!(rough.needs_title_normalization);
+        assert!(!rough.needs_session_evidence);
+        assert_eq!(rough.session_evidence_audit, "status-snapshot");
+        assert!(mixed.needs_session_evidence);
+        assert_eq!(mixed.session_evidence_audit, "unresolved-after-full-index");
     }
 
     #[test]
@@ -20630,19 +20678,23 @@ Status: completed as a source-only/report-only hardening slice.
     #[test]
     fn project_work_status_session_evidence_audit_explains_gap_source() {
         assert_eq!(
-            project_work_status_session_evidence_audit(2, true, 200, 500),
+            project_work_status_session_evidence_audit(2, false, true, 200, 500),
             "matched"
         );
         assert_eq!(
-            project_work_status_session_evidence_audit(0, true, 200, 500),
+            project_work_status_session_evidence_audit(0, true, true, 500, 500),
+            "status-snapshot"
+        );
+        assert_eq!(
+            project_work_status_session_evidence_audit(0, false, true, 200, 500),
             "bounded-session-limit"
         );
         assert_eq!(
-            project_work_status_session_evidence_audit(0, true, 500, 500),
+            project_work_status_session_evidence_audit(0, false, true, 500, 500),
             "unresolved-after-full-index"
         );
         assert_eq!(
-            project_work_status_session_evidence_audit(0, false, 0, 0),
+            project_work_status_session_evidence_audit(0, false, false, 0, 0),
             "no-session-index"
         );
     }
@@ -20685,6 +20737,7 @@ Status: completed as a source-only/report-only hardening slice.
         let rows = vec![
             row("Matched", "matched", 1),
             row("Bounded", "bounded-session-limit", 0),
+            row("StatusSnapshot", "status-snapshot", 0),
             row("NeedsTitle", "unresolved-after-full-index", 0),
             row("Ready", "unresolved-after-full-index", 0),
         ];

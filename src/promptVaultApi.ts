@@ -2422,7 +2422,7 @@ function isProjectWorkStatusExportRow(value: unknown): boolean {
     && isFrequencyItemsWithinTotal(value.source_statuses, value.work_item_count)
     && isFrequencyItemsWithinTotal(value.session_sources, value.session_evidence_count)
     && typeof value.needs_session_evidence === "boolean"
-    && ["matched", "bounded-session-limit", "unresolved-after-full-index", "no-session-index"].includes(
+    && ["matched", "bounded-session-limit", "unresolved-after-full-index", "no-session-index", "status-snapshot"].includes(
       String(value.session_evidence_audit),
     )
     && typeof value.needs_title_normalization === "boolean";

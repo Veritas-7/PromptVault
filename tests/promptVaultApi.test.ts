@@ -1089,6 +1089,49 @@ test("browser bridge work status export posts options and validates rows", async
   assert.equal(result.database_path, "/tmp/promptvault.sqlite");
 });
 
+test("browser bridge work status export accepts status snapshot audit rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkStatusExportPayload({
+    total_row_count: 1,
+    row_offset: 0,
+    returned_row_count: 1,
+    report_session_evidence_count: 0,
+    report_unique_session_evidence_count: 0,
+    rows: [{
+      date: "2026-05-03",
+      project: "SnapshotProject",
+      operational_status: "progress-log-only",
+      source_statuses: [{ text: "logged", count: 1 }],
+      work_item_count: 1,
+      source_file_count: 1,
+      source_files: ["PROJECT_STATUS.md"],
+      source_file_roles: [{ text: "project-status", count: 1 }],
+      top_titles: ["Project status snapshot updated"],
+      sample_evidence: "SnapshotProject — Project Status",
+      latest_source_path: "/Users/wj/Ai/System/10_Projects/SnapshotProject/PROJECT_STATUS.md",
+      latest_source_file: "PROJECT_STATUS.md",
+      latest_source_role: "project-status",
+      session_evidence_count: 0,
+      unique_session_evidence_count: 0,
+      session_sources: [],
+      needs_session_evidence: false,
+      session_evidence_audit: "status-snapshot",
+      needs_title_normalization: false,
+    }],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await loadProjectWorkStatusExport({ limit: 12 });
+
+  assert.equal(result.returned_row_count, 1);
+  assert.equal(result.rows[0].project, "SnapshotProject");
+  assert.equal(result.rows[0].needs_session_evidence, false);
+  assert.equal(result.rows[0].session_evidence_audit, "status-snapshot");
+  assert.equal(result.rows[0].source_file_roles[0].text, "project-status");
+});
+
 test("browser bridge work status export posts full session index option", async (t) => {
   const originalFetch = globalThis.fetch;
   let requestPath = "";

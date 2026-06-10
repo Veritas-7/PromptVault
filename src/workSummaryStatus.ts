@@ -931,6 +931,7 @@ export function workStatusExportRowSessionEvidenceAuditText(row: ProjectWorkStat
     "bounded-session-limit": "제한된 근거만 사용 중",
     "unresolved-after-full-index": "전체 인덱스에서도 미해결",
     "no-session-index": "세션 인덱스 없음",
+    "status-snapshot": "프로젝트 상태 스냅샷",
   };
   return labels[row.session_evidence_audit] ?? `알 수 없는 세션 감사 상태 ${row.session_evidence_audit}`;
 }

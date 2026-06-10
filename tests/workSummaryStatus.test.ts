@@ -1571,6 +1571,14 @@ test("work status export text exposes project day evidence coverage", () => {
     }),
     "매칭된 세션 근거 없음 · 전체 인덱스에서도 미해결",
   );
+  assert.equal(
+    workStatusExportRowSessionSourcesText({
+      ...result.rows[0],
+      needs_session_evidence: false,
+      session_evidence_audit: "status-snapshot",
+    }),
+    "매칭된 세션 근거 없음 · 프로젝트 상태 스냅샷",
+  );
   assert.equal(workStatusExportRowFilterLabel("needs-session-evidence"), "세션 근거 필요");
   assert.equal(workStatusExportRowFilterLabel("bounded-session-limit"), "근거 limit 영향");
   assert.equal(workStatusExportRowFilterLabel("unresolved-session-evidence"), "전체 인덱스 미해결");

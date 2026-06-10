@@ -826,6 +826,8 @@ async function runBrowserQa() {
       const warning = document.querySelector('[data-work-session-index-warning="true"]')?.textContent ?? "";
       const remaining = document.querySelector('[data-work-session-index-remaining="true"]')?.textContent ?? "";
       const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
+      const comparison = document.querySelector('[data-work-session-index-backfill-comparison="true"]')
+        ?.textContent ?? "";
       const guidance = document.querySelector('[data-work-session-index-checkpoint-guidance="true"]')?.textContent ?? "";
       const sourceStates = Array.from(document.querySelectorAll('[data-work-session-index-source-state="true"]'))
         .map((row) => row.textContent ?? "");
@@ -842,6 +844,10 @@ async function runBrowserQa() {
         && planned.includes("현재 입력 기준")
         && planned.includes("이어 백필 예상")
         && planned.includes("긴 이어 백필 예상")
+        && comparison.includes("백필 비교")
+        && comparison.includes("표준")
+        && comparison.includes("긴")
+        && comparison.includes("권장 긴 이어 백필")
         && guidance.includes("체크포인트 계획")
         && guidance.includes("권장 다음 실행 긴 이어 백필")
         && guidance.includes("각 실행 후 상태 Export/큐 재확인")
@@ -854,6 +860,8 @@ async function runBrowserQa() {
         warning: (await page.locator('[data-work-session-index-warning="true"]').textContent())?.trim() ?? "",
         remaining: (await page.locator('[data-work-session-index-remaining="true"]').textContent())?.trim() ?? "",
         planned: (await page.locator('[data-work-session-index-planned-remaining="true"]').textContent())?.trim() ?? "",
+        comparison: (await page.locator('[data-work-session-index-backfill-comparison="true"]').textContent())
+          ?.trim() ?? "",
         guidance: (await page.locator('[data-work-session-index-checkpoint-guidance="true"]').textContent())?.trim() ?? "",
         sourceStates: await page.locator('[data-work-session-index-source-state="true"]').allTextContents(),
       },
@@ -873,6 +881,8 @@ async function runBrowserQa() {
       const warning = document.querySelector('[data-work-session-index-warning="true"]')?.textContent ?? "";
       const remaining = document.querySelector('[data-work-session-index-remaining="true"]')?.textContent ?? "";
       const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
+      const comparison = document.querySelector('[data-work-session-index-backfill-comparison="true"]')
+        ?.textContent ?? "";
       const guidance = document.querySelector('[data-work-session-index-checkpoint-guidance="true"]')?.textContent ?? "";
       const sourceStates = Array.from(document.querySelectorAll('[data-work-session-index-source-state="true"]'))
         .map((row) => row.textContent ?? "");
@@ -887,6 +897,9 @@ async function runBrowserQa() {
         && remaining.includes("클릭당 소스별 최대 250개")
         && planned.includes("현재 입력 기준")
         && planned.includes("긴 이어 백필 예상")
+        && comparison.includes("백필 비교")
+        && comparison.includes("긴 백필이")
+        && comparison.includes("회 절감")
         && guidance.includes("체크포인트 계획")
         && guidance.includes("source당 최대 250개")
         && processedFiles > previousCodexProcessedFiles;
@@ -896,6 +909,8 @@ async function runBrowserQa() {
       warning: (await page.locator('[data-work-session-index-warning="true"]').textContent())?.trim() ?? "",
       remaining: (await page.locator('[data-work-session-index-remaining="true"]').textContent())?.trim() ?? "",
       planned: (await page.locator('[data-work-session-index-planned-remaining="true"]').textContent())?.trim() ?? "",
+      comparison: (await page.locator('[data-work-session-index-backfill-comparison="true"]').textContent())
+        ?.trim() ?? "",
       guidance: (await page.locator('[data-work-session-index-checkpoint-guidance="true"]').textContent())?.trim() ?? "",
       sourceStates: await page.locator('[data-work-session-index-source-state="true"]').allTextContents(),
     };
@@ -907,6 +922,8 @@ async function runBrowserQa() {
       const confirmValue = confirmInput instanceof HTMLInputElement ? confirmInput.value : "";
       const longStatus = document.querySelector('[data-work-session-index-long-confirm-meta="true"]')?.textContent ?? "";
       const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
+      const comparison = document.querySelector('[data-work-session-index-backfill-comparison="true"]')
+        ?.textContent ?? "";
       const guidance = document.querySelector('[data-work-session-index-checkpoint-guidance="true"]')?.textContent ?? "";
       const impact = document.querySelector('[data-work-session-index-next-run-impact="true"]')?.textContent ?? "";
       const completionPlan = document.querySelector('[data-work-session-index-completion-plan="true"]')
@@ -923,6 +940,8 @@ async function runBrowserQa() {
         && standardRuns <= 26
         && longRuns > 0
         && longRuns <= 6
+        && comparison.includes("백필 비교")
+        && comparison.includes("권장 긴 이어 백필")
         && guidance.includes("source당 최대 5,000개")
         && guidance.includes("예상")
         && impact.includes("다음 실행 효과")
@@ -936,6 +955,8 @@ async function runBrowserQa() {
     }, undefined, { timeout: 60000 });
     workSessionIndexBackfill.plannedAfterBatch500 =
       (await page.locator('[data-work-session-index-planned-remaining="true"]').textContent())?.trim() ?? "";
+    workSessionIndexBackfill.comparisonAfterBatch500 =
+      (await page.locator('[data-work-session-index-backfill-comparison="true"]').textContent())?.trim() ?? "";
     workSessionIndexBackfill.guidanceAfterBatch500 =
       (await page.locator('[data-work-session-index-checkpoint-guidance="true"]').textContent())?.trim() ?? "";
     workSessionIndexBackfill.impactAfterBatch500 =
@@ -951,6 +972,8 @@ async function runBrowserQa() {
       const maxBatches = Number.parseInt(maxBatchesValue, 10);
       const longStatus = document.querySelector('[data-work-session-index-long-confirm-meta="true"]')?.textContent ?? "";
       const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
+      const comparison = document.querySelector('[data-work-session-index-backfill-comparison="true"]')
+        ?.textContent ?? "";
       const impact = document.querySelector('[data-work-session-index-next-run-impact="true"]')?.textContent ?? "";
       const completionPlan = document.querySelector('[data-work-session-index-completion-plan="true"]')
         ?.textContent ?? "";
@@ -959,6 +982,8 @@ async function runBrowserQa() {
         && maxBatches > 10
         && longStatus.includes(`반복 ${maxBatches.toLocaleString()}배치`)
         && planned.includes("긴 이어 백필 예상 1회")
+        && comparison.includes("긴 백필이")
+        && comparison.includes("회 절감")
         && impact.includes("이번 클릭 후 완료 예상")
         && completionPlan.includes("완료 계획")
         && completionPlan.includes(`긴 반복 ${maxBatches.toLocaleString()}배치`)

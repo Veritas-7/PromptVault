@@ -1,10 +1,101 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 05:55 KST
+Updated: 2026-06-11 06:06 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 05:57 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Improve bounded work-session-index backfill comparison so operators can see
+  how much a confirmed long backfill reduces the remaining run count compared
+  with the standard continue action.
+
+Current Active Work:
+
+- Previous source-audit manual-inspect affordance slice is complete, verified,
+  committed, and pushed as
+  `230136c ux: clarify source audit manual actions`.
+- Documentation completion snapshot is pushed as
+  `30d425d docs: record source audit action slice completion`.
+- Fresh repo check at resume showed `main...origin/main` clean.
+- Current slice is in progress: add a compact comparison line for standard vs
+  long work-session-index backfill without changing backfill execution policy.
+- Current slice implementation, full verification, and staged pre-commit gates
+  are complete; commit/push remains.
+
+Progress:
+
+- Confirmed goal identity still anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Memory registry had no direct PromptVault hit, so live repo state remains the
+  active source of truth.
+- Confirmed there is no project-local `AGENTS.md` or `design.md`; the project
+  root `working.md` remains the active continuation surface.
+- Inspected existing work-session-index helper tests, helper functions, App
+  rendering, and browser-bridge assertions.
+- Chose a small TDD slice: add one derived comparison helper and one DOM row,
+  reusing the existing remaining-file calculations.
+- Added RED expectations for a `백필 비교` line that compares standard vs long
+  remaining run counts and states the saved run count.
+- Added the comparison helper, rendered it in the work-session-index status
+  area, and strengthened browser-bridge QA to require the comparison row during
+  continue, long-continue, large-batch, and completion-plan flows.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds `workSessionIndexBackfillComparisonText`.
+- `src/App.tsx`: renders the comparison row next to planned remaining backfill
+  text.
+- `tests/workSummaryStatus.test.ts`: locks standard-vs-long comparison text.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies the comparison row through
+  DOM assertions.
+- `working.md`: records this bounded backfill comparison slice.
+
+Tests:
+
+- RED as expected:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before implementation because `workSessionIndexBackfillComparisonText`
+  was not exported yet.
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  (`52` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check`.
+- PASS: `git diff --check`.
+- PASS: `gitleaks dir . --no-banner --redact`.
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact`.
+- Pending: commit, push, and post-push verification.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- This slice should change display guidance only. It must not run additional
+  backfill, change limits, or alter durable write policy.
+
+Next Step:
+
+- Commit, push, and post-push verify the bounded backfill comparison slice.
 
 ## Resume Snapshot - 2026-06-11 05:45 KST
 

@@ -330,6 +330,40 @@ export function workSessionIndexPlannedRemainingText(
   ].join(" · ");
 }
 
+export function workSessionIndexBackfillComparisonText(
+  result: ProjectWorkSessionIndexResult | null,
+  effectiveBatchFiles: number | null,
+  standardMaxBatches: number,
+  longMaxBatches: number,
+): string | null {
+  if (!result?.source_states.length || effectiveBatchFiles === null) return null;
+  if (effectiveBatchFiles <= 0 || standardMaxBatches <= 0 || longMaxBatches <= 0) return null;
+  const remainingBySource = result.source_states.map((source) =>
+    Math.max(0, source.total_files - source.processed_files)
+  );
+  const remainingFiles = remainingBySource.reduce((sum, remaining) => sum + remaining, 0);
+  if (remainingFiles === 0) return null;
+  const estimatedRuns = (maxBatches: number): number => {
+    const filesPerSourceRun = effectiveBatchFiles * maxBatches;
+    return Math.max(...remainingBySource.map((remaining) => Math.ceil(remaining / filesPerSourceRun)));
+  };
+  const standardRuns = estimatedRuns(standardMaxBatches);
+  const longRuns = estimatedRuns(longMaxBatches);
+  if (longRuns >= standardRuns) {
+    return [
+      "백필 비교",
+      `표준 ${standardRuns.toLocaleString()}회 vs 긴 ${longRuns.toLocaleString()}회`,
+      "표준 이어 백필로 충분",
+    ].join(" · ");
+  }
+  return [
+    "백필 비교",
+    `표준 ${standardRuns.toLocaleString()}회 vs 긴 ${longRuns.toLocaleString()}회`,
+    `긴 백필이 ${(standardRuns - longRuns).toLocaleString()}회 절감`,
+    "권장 긴 이어 백필",
+  ].join(" · ");
+}
+
 export function workSessionIndexCheckpointGuidanceText(
   result: ProjectWorkSessionIndexResult | null,
   effectiveBatchFiles: number | null,

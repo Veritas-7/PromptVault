@@ -120,6 +120,7 @@ import {
   workSummaryActionLabel,
   workSummaryFailureText,
   workSummaryIndexStatusText,
+  workSessionIndexBackfillComparisonText,
   workSessionIndexCheckpointGuidanceText,
   workSessionIndexCompletionPlanText,
   workSessionIndexNextRunImpactText,
@@ -1436,6 +1437,10 @@ test("work session index planned remaining text follows current batch controls",
     "현재 입력 기준 · 이어 백필 예상 496회 · 긴 이어 백필 예상 100회",
   );
   assert.equal(
+    workSessionIndexBackfillComparisonText(result, 25, 2, 10),
+    "백필 비교 · 표준 496회 vs 긴 100회 · 긴 백필이 396회 절감 · 권장 긴 이어 백필",
+  );
+  assert.equal(
     workSessionIndexCheckpointGuidanceText(result, 25, 2, 10),
     "체크포인트 계획 · 권장 다음 실행 긴 이어 백필 · source당 최대 250개 · 남은 파일 24,800개 · 예상 100회 · 각 실행 후 상태 Export/큐 재확인",
   );
@@ -1450,6 +1455,10 @@ test("work session index planned remaining text follows current batch controls",
   assert.equal(
     workSessionIndexPlannedRemainingText(result, 500, 2, 10),
     "현재 입력 기준 · 이어 백필 예상 25회 · 긴 이어 백필 예상 5회",
+  );
+  assert.equal(
+    workSessionIndexBackfillComparisonText(result, 500, 2, 10),
+    "백필 비교 · 표준 25회 vs 긴 5회 · 긴 백필이 20회 절감 · 권장 긴 이어 백필",
   );
   assert.equal(
     workSessionIndexCheckpointGuidanceText(result, 500, 2, 10),
@@ -1484,12 +1493,26 @@ test("work session index planned remaining text follows current batch controls",
     "완료 계획 · source당 500개 · 긴 반복 10배치 · 클릭당 source별 최대 5,000개 · 남은 파일 24,800→19,800개 · 이번 긴 이어 백필 후 19,800개 남음 · 긴 백필 확인됨",
   );
   assert.equal(workSessionIndexPlannedRemainingText(result, null, 2, 10), null);
+  assert.equal(workSessionIndexBackfillComparisonText(result, null, 2, 10), null);
   assert.equal(workSessionIndexCheckpointGuidanceText(result, null, 2, 10), null);
   assert.equal(workSessionIndexNextRunImpactText(result, null, 2, 10, true), null);
   assert.equal(workSessionIndexCompletionPlanText(result, 500, null, true), null);
   assert.equal(workSessionIndexPartialBackfillWarningText(null), null);
   assert.equal(
     workSessionIndexPlannedRemainingText({
+      ...result,
+      all_sources_completed: true,
+      source_states: result.source_states.map((source) => ({
+        ...source,
+        processed_files: source.total_files,
+        next_file_index: source.total_files,
+        completed: true,
+      })),
+    }, 25, 2, 10),
+    null,
+  );
+  assert.equal(
+    workSessionIndexBackfillComparisonText({
       ...result,
       all_sources_completed: true,
       source_states: result.source_states.map((source) => ({

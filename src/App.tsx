@@ -440,6 +440,7 @@ import {
   workSummaryActionLabel,
   workSummaryFailureText,
   workSummaryIndexStatusText,
+  workSessionIndexBackfillComparisonText,
   workSessionIndexCheckpointGuidanceText,
   workSessionIndexCompletionPlanText,
   workSessionIndexNextRunImpactText,
@@ -1335,6 +1336,12 @@ function App() {
   const workSessionIndexWarning = workSessionIndexWarningText(workSessionIndexResult);
   const workSessionIndexRemaining = workSessionIndexRemainingText(workSessionIndexResult);
   const workSessionIndexPlannedRemaining = workSessionIndexPlannedRemainingText(
+    workSessionIndexResult,
+    workSessionIndexEffectiveBatchFiles,
+    WORK_SESSION_INDEX_MAX_BATCHES,
+    workSessionIndexEffectiveLongMaxBatches ?? 0,
+  );
+  const workSessionIndexBackfillComparison = workSessionIndexBackfillComparisonText(
     workSessionIndexResult,
     workSessionIndexEffectiveBatchFiles,
     WORK_SESSION_INDEX_MAX_BATCHES,
@@ -5757,6 +5764,12 @@ function App() {
           <div className="work-summary-index" data-work-session-index-planned-remaining="true">
             <History size={15} />
             <span>{workSessionIndexPlannedRemaining}</span>
+          </div>
+        ) : null}
+        {workSessionIndexBackfillComparison ? (
+          <div className="work-summary-index" data-work-session-index-backfill-comparison="true">
+            <History size={15} />
+            <span>{workSessionIndexBackfillComparison}</span>
           </div>
         ) : null}
         {workSessionIndexCheckpointGuidance ? (

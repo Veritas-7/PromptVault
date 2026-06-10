@@ -86,6 +86,12 @@ export interface WorkManagementOverviewRow {
   latest_source_role: string | null;
 }
 
+export interface WorkManagementOverviewSourceRoleOption {
+  label: string;
+  value: string;
+  count: number;
+}
+
 export interface WorkManagementOverview {
   row_count: number;
   project_count: number;
@@ -152,6 +158,16 @@ const SOURCE_LABELS: Record<WorkManagementOverviewSource, string> = {
   snapshot: "스냅샷",
   status_export: "상태Export",
 };
+
+const SOURCE_ROLE_ORDER = [
+  "handoff-log",
+  "work-log",
+  "project-status",
+  "progress-log",
+  "generated-report",
+  "dated-work-log",
+  "progress-artifact",
+];
 
 interface MutableWorkManagementOverviewRow extends WorkManagementOverviewRow {
   sourceSet: Set<WorkManagementOverviewSource>;
@@ -402,6 +418,24 @@ export function workManagementOverviewProjectSuggestions(
   return storedFilterSuggestionValues(rows.map((row) => row.project));
 }
 
+export function workManagementOverviewSourceRoleOptions(
+  rows: readonly WorkManagementOverviewRow[],
+): WorkManagementOverviewSourceRoleOption[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    for (const role of row.source_file_roles) {
+      counts.set(role.text, (counts.get(role.text) ?? 0) + role.count);
+    }
+  }
+  return [...counts.entries()]
+    .sort(([leftRole], [rightRole]) => compareSourceRoles(leftRole, rightRole))
+    .map(([role, count]) => ({
+      count,
+      label: `${workSourceFileRoleLabel(role)} ${count.toLocaleString()}개`,
+      value: role,
+    }));
+}
+
 export function workManagementOverviewFilterMetaText(
   resultCount: number,
   totalCount: number,
@@ -639,6 +673,17 @@ function compareWorkManagementRowsByDate(
   const dateOrder = right.date.localeCompare(left.date);
   if (dateOrder !== 0) return dateOrder;
   return left.project.localeCompare(right.project);
+}
+
+function compareSourceRoles(left: string, right: string): number {
+  const leftIndex = SOURCE_ROLE_ORDER.indexOf(left);
+  const rightIndex = SOURCE_ROLE_ORDER.indexOf(right);
+  if (leftIndex !== -1 || rightIndex !== -1) {
+    if (leftIndex === -1) return 1;
+    if (rightIndex === -1) return -1;
+    return leftIndex - rightIndex;
+  }
+  return workSourceFileRoleLabel(left).localeCompare(workSourceFileRoleLabel(right));
 }
 
 function persistenceSortValue(row: WorkManagementOverviewRow): number {

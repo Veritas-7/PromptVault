@@ -15,6 +15,7 @@ import {
   workManagementOverviewPersistenceText,
   workManagementOverviewProjectSuggestions,
   workManagementOverviewSessionText,
+  workManagementOverviewSourceRoleOptions,
   workManagementOverviewSourceRoleText,
   workManagementOverviewSourceText,
 } from "../src/workManagementOverview.ts";
@@ -802,6 +803,24 @@ test("work management overview filters expose auditable project date rows", () =
       sourceRole: "handoff-log",
     }).map((row) => row.key),
     ["2026-06-09::PromptVault", "2026-06-08::CareVault"],
+  );
+  assert.deepEqual(workManagementOverviewSourceRoleOptions(statusOverview.rows), [
+    { count: 2, label: "핸드오프 로그 2개", value: "handoff-log" },
+    { count: 1, label: "진행 로그 1개", value: "progress-log" },
+  ]);
+  assert.deepEqual(
+    workManagementOverviewSourceRoleOptions(buildWorkManagementOverview({
+      statusExport: {
+        ...statusExportResult(),
+        rows: [
+          {
+            ...statusExportResult().rows[0],
+            source_file_roles: [{ text: "custom-log", count: 3 }],
+          },
+        ],
+      },
+    }).rows),
+    [{ count: 3, label: "custom-log 3개", value: "custom-log" }],
   );
   assert.deepEqual(workManagementOverviewDateSuggestions(overview.rows), [
     "2026-06-04",

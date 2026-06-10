@@ -2339,6 +2339,13 @@ async function runBrowserQa() {
       }, undefined, { timeout: 120000 });
     });
     await waitForEnabled(page, '[data-work-management-project-filter="true"]');
+    await page.waitForFunction(() => {
+      const options = [...document.querySelectorAll('[data-work-management-source-role-filter="true"] option')]
+        .map((option) => option.textContent ?? "");
+      return options.includes("전체 로그 유형")
+        && options.includes("핸드오프 로그 2개")
+        && options.includes("진행 로그 1개");
+    }, undefined, { timeout: 30000 });
     await page.locator('[data-work-management-project-filter="true"]').fill("QASupported");
     await waitForEnabled(page, '[data-work-management-source-role-filter="true"]');
     await page.locator('[data-work-management-source-role-filter="true"]').selectOption("progress-log");

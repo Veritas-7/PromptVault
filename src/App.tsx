@@ -258,6 +258,7 @@ import {
   workManagementOverviewPersistenceText,
   workManagementOverviewProjectSuggestions,
   workManagementOverviewSessionText,
+  workManagementOverviewSourceRoleOptions,
   workManagementOverviewSourceRoleText,
   workManagementOverviewSourceText,
   type WorkManagementOverviewFilters,
@@ -265,7 +266,6 @@ import {
   type WorkManagementOverviewSort,
   type WorkManagementOverviewSource,
 } from "./workManagementOverview";
-import { workSourceFileRoleLabel } from "./workSourceFileRoles";
 import {
   storedFacetSummaryText,
   storedFacetsFailureText,
@@ -744,20 +744,6 @@ const WORK_MANAGEMENT_SOURCE_OPTIONS: Array<{
   { label: "정규화", value: "normalized_row" },
   { label: "상태Export", value: "status_export" },
   { label: "진행로그", value: "progress_log" },
-];
-
-const WORK_MANAGEMENT_SOURCE_ROLE_OPTIONS: Array<{
-  label: string;
-  value: string;
-}> = [
-  { label: "전체 로그 유형", value: "" },
-  { label: workSourceFileRoleLabel("handoff-log"), value: "handoff-log" },
-  { label: workSourceFileRoleLabel("work-log"), value: "work-log" },
-  { label: workSourceFileRoleLabel("project-status"), value: "project-status" },
-  { label: workSourceFileRoleLabel("progress-log"), value: "progress-log" },
-  { label: workSourceFileRoleLabel("generated-report"), value: "generated-report" },
-  { label: workSourceFileRoleLabel("dated-work-log"), value: "dated-work-log" },
-  { label: workSourceFileRoleLabel("progress-artifact"), value: "progress-artifact" },
 ];
 
 const WORK_MANAGEMENT_PERSISTENCE_OPTIONS: Array<{
@@ -1895,6 +1881,8 @@ function App() {
     workManagementOverviewDateSuggestions(workManagementOverview.rows);
   const workManagementOverviewProjectFilterSuggestions =
     workManagementOverviewProjectSuggestions(workManagementOverview.rows);
+  const workManagementOverviewSourceRoleFilterOptions =
+    workManagementOverviewSourceRoleOptions(workManagementOverview.rows);
   const workManagementDurabilityWarning = workManagementOverviewLoaded
     ? workManagementOverviewDurabilityWarningText(workManagementOverview)
     : null;
@@ -5276,8 +5264,9 @@ function App() {
                 }))}
               value={workManagementOverviewFilters.sourceRole}
             >
-              {WORK_MANAGEMENT_SOURCE_ROLE_OPTIONS.map((option) => (
-                <option key={option.value || "all"} value={option.value}>
+              <option value="">전체 로그 유형</option>
+              {workManagementOverviewSourceRoleFilterOptions.map((option) => (
+                <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}

@@ -1,10 +1,96 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 04:22 KST
+Updated: 2026-06-11 04:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 04:23 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Make the work-management `로그 유형` filter data-derived so the select shows
+  only source roles present in the loaded project/day rows, with counts, while
+  still supporting unknown future role strings from parsed evidence.
+
+Current Active Work:
+
+- Previous source-role filter slice is complete, verified, committed, and
+  pushed as `539b92d feat: filter work management by source role`.
+- Fresh repo check at resume showed `main...origin/main` clean with local HEAD
+  and `origin/main` both at
+  `539b92d0ac3c649fb189e3f03fd0d61aaf8a1580`.
+- Current slice is implemented and verified locally: fixed role filter options
+  are replaced with role/count options derived from
+  `WorkManagementOverviewRow.source_file_roles`.
+
+Progress:
+
+- Confirmed goal identity still anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed there is no project-local `AGENTS.md` or `design.md`; the project
+  root has `working.md` as the continuation surface.
+- Selected a narrow UI quality improvement: the role filter should reflect the
+  actual loaded evidence and expose counts, not a fixed role list detached from
+  the current data.
+- Added a `workManagementOverviewSourceRoleOptions` helper that aggregates
+  source role counts across loaded rows, keeps known roles in stable order, and
+  still exposes unknown future roles by their raw label.
+- Wired the `로그 유형` select to those data-derived options.
+- Extended browser-bridge QA expectations so the mocked source-role fixture must
+  render `핸드오프 로그 2개` and `진행 로그 1개` as option labels.
+- Verified the rendered management overview through `npm run qa:browser-bridge`;
+  the source-role fixture reached the data-derived option count check, then
+  selected `progress-log`, confirmed the filtered row, and continued through
+  the rest of the management/coverage/normalization/review queue flow.
+
+Changes:
+
+- `working.md`: added this post-push/current-slice handoff snapshot.
+- `src/workManagementOverview.ts`: added source-role filter option generation.
+- `src/App.tsx`: uses data-derived source-role options in the management filter.
+- `tests/workManagementOverview.test.ts`: covers role option counts, ordering,
+  and unknown-role fallback labels.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies rendered source-role option
+  labels include fixture-derived counts.
+
+Tests:
+
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts`
+  (`10` tests).
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check` (UI tests, TypeScript/Vite build, Rust CLI build, Rust
+  lib tests, CLI tests, doc-tests, and clippy `-D warnings`).
+- PASS: `git diff --check`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `gitleaks dir . --no-banner --redact` (`no leaks found`).
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact` (`no leaks found`).
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+
+Next Step:
+
+- Commit/push this source-role option count slice, then verify
+  `main...origin/main` is clean at the pushed commit.
 
 ## Resume Snapshot - 2026-06-11 04:12 KST
 

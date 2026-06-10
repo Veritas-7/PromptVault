@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 13:12 KST
+Updated: 2026-06-10 13:18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-10 11:20 KST
+## Resume Snapshot - 2026-06-10 13:18 KST
 
 Long-Term Goal:
 
@@ -33,28 +33,48 @@ Short-Term Goal:
 
 Current Work:
 
-- Most recent pushed implementation baseline before the current slice:
-  `74bcce5 fix: index non-codex session evidence sources`.
-- Current verified implementation slice: reduce noisy session-evidence
+- Most recent pushed implementation baseline:
+  `caf2e1e fix: exempt status snapshots from session evidence`.
+- Most recent verified implementation slice: reduce noisy session-evidence
   candidate rows where the source is only a `PROJECT_STATUS.md` status
   snapshot. These rows remain visible as managed project/day status rows, but
   are no longer treated as missing session-evidence proof when their only role
   is `project-status`.
+- Current active slice: make the remaining `26` session-evidence candidates
+  easier to review without inventing evidence. The next likely implementation
+  is operator-visible diagnostics for whether the same project has session
+  evidence on nearby or other dates. These diagnostics must not auto-attach
+  cross-date proof.
 - Latest pushed handoff-only documentation refresh:
   `3b91db9 docs: refresh working handoff state`.
 - Previous session-index implementation slice:
   `3f4185e fix: index codex session evidence by activity date`.
 - The earlier body-derived progress-log title cleanup slice was completed and
   pushed as `c392add fix: clear rough worklog title normalization debt`.
-- Actual default-vault verification after `74bcce5`:
-  stored sanitized session evidence increased from `11,417` to `12,889`;
-  unresolved session-evidence candidates dropped from `31` to `30`;
-  title-normalization rows remain `0`.
+- Actual default-vault verification after `caf2e1e`:
+  status export reported `97` rows, `7,825` items, `32` projects, `26` days,
+  `892` files, and a full stored session index of `12,889/12,889` prompts.
+  Rows needing session evidence are now `26`; `4` pure status snapshots are
+  classified as `status-snapshot`; title-normalization rows remain `0`.
 - The next change should stay source-traced and reviewable. Do not infer
   cross-date or cross-project evidence unless the target session artifact proves
   it. If durable non-Codex indexing is too broad for the next slice, add an
   operator-visible diagnostic that clearly states which session sources are
   fully indexed and which are still raw-fallback/proposal-only.
+
+Resume Contract:
+
+- On any future resume, re-read this file first, then refresh live truth with
+  `git status --short --branch`, `git rev-list --left-right --count @{u}...HEAD`,
+  and the work-management CLI commands below. Treat fresh command output as
+  authoritative over this snapshot.
+- Keep `working.md` updated after meaningful implementation or verification
+  steps. It should always name the long-term goal, short-term goal, active
+  slice, changed files, verification commands, unresolved issues, and exact next
+  action.
+- Do not mark the broader PromptVault goal complete until project/day work
+  management, session evidence, work-log parsing, provider review, and browser
+  QA are all verified end to end.
 
 Management Coverage Status:
 
@@ -67,7 +87,14 @@ Management Coverage Status:
   related progress artifacts, but the remaining unresolved review queues mean the
   whole management system is not yet complete.
 
-## Current Slice - 2026-06-10 Project-status session-evidence noise reduction
+Immediate Resume Commands:
+
+- `src-tauri/target/debug/promptvault-cli work-status-export --limit 200 --full-session-index --json`
+- `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
+- `npm run check`
+- `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Project-status session-evidence noise reduction
 
 Current Goal:
 
@@ -130,7 +157,7 @@ Tests:
   `codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`.
 - PASS: `git status --short --branch` shows `## main...origin/main`.
 - PASS: `git log --oneline -5` shows latest pushed implementation commit
-  `74bcce5 fix: index non-codex session evidence sources`.
+  `caf2e1e fix: exempt status snapshots from session evidence`.
 - PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_status`
   (`4` tests).
 - PASS: `cargo test --manifest-path src-tauri/Cargo.toml
@@ -177,10 +204,14 @@ Research:
 
 Next Steps:
 
-- Commit and push this verified slice after staged secret checks.
 - Next implementation slice should inspect the remaining `26` candidates by
-  project/date and decide whether the right next move is provider-assisted
-  proposal generation, manual review queue UX, or another parser/indexing gap.
+  project/date and add review-safe diagnostics for whether same-project session
+  evidence exists on other dates. This should help distinguish "same project has
+  nearby sessions" from "no known session evidence" without auto-linking
+  cross-date proof.
+- After diagnostics are visible, decide whether the next move is
+  provider-assisted proposal generation, manual review queue UX, or another
+  parser/indexing gap.
 - Keep `PROJECT_STATUS.md` rows visible in status export, but do not re-add them
   to the session-evidence candidate queue unless they are mixed with actual
   handoff/work/progress logs.

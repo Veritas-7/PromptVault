@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 20:33 KST
+Updated: 2026-06-10 20:39 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,6 +34,39 @@ Short-Term Goal:
 Current Work:
 
 - Active completed implementation slice:
+  add status-export filters for adjacent versus stale same-project session
+  hints. Real default-vault status export still has unresolved rows where
+  nearby one-day candidates and low-priority month-old candidates are mixed in
+  the same `전체 인덱스 미해결` filter, e.g. `RepoTutorStudio 2026-06-10 ->
+  2026-06-09 (1d)` and `LocalMind 2026-06-10 -> 2026-05-10 (31d)`.
+- Completed behavior:
+  `src/workSummaryStatus.ts` now adds `near-session-date-hint` and
+  `stale-session-date-hint` status export row filters. Near hints include rows
+  that still need session evidence and have either same-date candidates or a
+  nearest same-project session within 1 day; stale hints include rows whose
+  nearest same-project session is more than 1 day away. The status export
+  filter meta now reports `인접후보` and `먼후보` counts, and `src/App.tsx`
+  exposes both filters in the status export select.
+- Verification for active slice:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `47` focused UI helper
+  tests. A real default-vault helper probe against `work-status-export --limit
+  60 --full-session-index --json` split unresolved rows into `인접 세션 후보`
+  `7 / 60` rows and `먼 세션 후보` `11 / 60` rows, with near samples including
+  `RepoTutorStudio 2026-06-10 -> 2026-06-09 (1d)` and stale samples including
+  `LocalMind 2026-06-10 -> 2026-05-10 (31d)`. `npm run check` passed: UI tests
+  `523` passed, Vite / TypeScript build passed, Rust lib tests `242` passed,
+  CLI tests `45` passed, doc-tests passed, and clippy `-D warnings` passed.
+  Browser-bridge QA was not rerun because this slice changes status export
+  helper filtering and select options only; this environment is not the cmux
+  in-app browser.
+- Next work:
+  use the new `인접 세션 후보` filter to inspect and resolve the high-priority
+  one-day `unresolved-after-full-index` rows first, then handle distant
+  same-project rows only after source traces prove they are valid work evidence.
+- Previous completed implementation slice:
+  `af2afc2 fix: surface session distance in work overview`.
+- Previous completed implementation slice:
   promote same-project session distance hints into the project/day management
   overview. The previous slice added distance hints to session-evidence
   candidate reasons, but the main overview still says only

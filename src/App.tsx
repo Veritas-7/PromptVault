@@ -480,6 +480,8 @@ const WORK_STATUS_EXPORT_ROW_FILTER_OPTIONS: WorkStatusExportRowFilter[] = [
   "needs-session-evidence",
   "bounded-session-limit",
   "unresolved-session-evidence",
+  "near-session-date-hint",
+  "stale-session-date-hint",
   "needs-title-normalization",
   "active",
   "session-supported",

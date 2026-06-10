@@ -69,6 +69,8 @@ export type WorkStatusExportRowFilter =
   | "needs-session-evidence"
   | "bounded-session-limit"
   | "unresolved-session-evidence"
+  | "near-session-date-hint"
+  | "stale-session-date-hint"
   | "needs-title-normalization"
   | "active"
   | "session-supported"
@@ -216,6 +218,8 @@ export function filterWorkStatusExportRows(
     if (filter === "unresolved-session-evidence") {
       return row.session_evidence_audit === "unresolved-after-full-index";
     }
+    if (filter === "near-session-date-hint") return workStatusExportRowHasNearSessionDateHint(row);
+    if (filter === "stale-session-date-hint") return workStatusExportRowHasStaleSessionDateHint(row);
     if (filter === "needs-title-normalization") return row.needs_title_normalization;
     return row.operational_status === filter;
   });
@@ -227,6 +231,8 @@ export function workStatusExportRowFilterLabel(filter: WorkStatusExportRowFilter
     "needs-session-evidence": "세션 근거 필요",
     "bounded-session-limit": "근거 limit 영향",
     "unresolved-session-evidence": "전체 인덱스 미해결",
+    "near-session-date-hint": "인접 세션 후보",
+    "stale-session-date-hint": "먼 세션 후보",
     "needs-title-normalization": "제목 정규화 필요",
     active: "현재 진행",
     "session-supported": "세션 근거 있음",
@@ -245,6 +251,8 @@ export function workStatusExportFilterMetaText(
   const unresolvedSessionEvidenceCount = rows.filter(
     (row) => row.session_evidence_audit === "unresolved-after-full-index",
   ).length;
+  const nearSessionDateHintCount = rows.filter(workStatusExportRowHasNearSessionDateHint).length;
+  const staleSessionDateHintCount = rows.filter(workStatusExportRowHasStaleSessionDateHint).length;
   const needsTitleNormalizationCount = rows.filter((row) => row.needs_title_normalization).length;
   return [
     `필터 ${workStatusExportRowFilterLabel(filter)}`,
@@ -252,8 +260,23 @@ export function workStatusExportFilterMetaText(
     `세션근거 필요 ${needsSessionEvidenceCount.toLocaleString()}행`,
     `근거limit ${boundedSessionLimitCount.toLocaleString()}행`,
     `전체미해결 ${unresolvedSessionEvidenceCount.toLocaleString()}행`,
+    `인접후보 ${nearSessionDateHintCount.toLocaleString()}행`,
+    `먼후보 ${staleSessionDateHintCount.toLocaleString()}행`,
     `제목정규화 필요 ${needsTitleNormalizationCount.toLocaleString()}행`,
   ].join(" · ");
+}
+
+function workStatusExportRowHasNearSessionDateHint(row: ProjectWorkStatusExportRow): boolean {
+  if (!row.needs_session_evidence) return false;
+  if (row.same_project_same_date_session_count > 0) return true;
+  return row.nearest_same_project_other_session_distance_days !== null
+    && row.nearest_same_project_other_session_distance_days <= 1;
+}
+
+function workStatusExportRowHasStaleSessionDateHint(row: ProjectWorkStatusExportRow): boolean {
+  if (!row.needs_session_evidence) return false;
+  return row.nearest_same_project_other_session_distance_days !== null
+    && row.nearest_same_project_other_session_distance_days > 1;
 }
 
 export function workSummaryIndexStatusText(result: ProjectWorkSummaryResult): string {

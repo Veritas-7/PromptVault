@@ -224,6 +224,7 @@ import {
   filterWorkLogCoverageFiles,
   workLogCoverageFilterMetaText,
   workLogCoverageProjectSuggestions,
+  workLogCoverageStatusLabel,
   type WorkLogCoverageFilters,
   type WorkLogCoverageStatusFilter,
 } from "./workLogCoverageFilters";
@@ -754,12 +755,12 @@ const WORK_LOG_COVERAGE_STATUS_FILTER_OPTIONS: Array<{
   label: string;
   value: WorkLogCoverageStatusFilter;
 }> = [
-  { label: "전체 상태", value: "" },
-  { label: "문제 로그", value: "needs_review" },
-  { label: "parsed", value: "parsed" },
-  { label: "pointer", value: "pointer" },
-  { label: "unparsed", value: "unparsed" },
-  { label: "unreadable", value: "unreadable" },
+  { label: workLogCoverageStatusLabel(""), value: "" },
+  { label: workLogCoverageStatusLabel("needs_review"), value: "needs_review" },
+  { label: workLogCoverageStatusLabel("parsed"), value: "parsed" },
+  { label: workLogCoverageStatusLabel("pointer"), value: "pointer" },
+  { label: workLogCoverageStatusLabel("unparsed"), value: "unparsed" },
+  { label: workLogCoverageStatusLabel("unreadable"), value: "unreadable" },
 ];
 
 const WORK_REVIEW_QUEUE_STATE_FILTER_OPTIONS: Array<{
@@ -6134,11 +6135,12 @@ function App() {
                       : file.status === "unreadable"
                         ? "파일을 읽지 못한 진행 로그"
                         : file.status === "pointer"
-                          ? "다른 작업 로그를 가리키는 포인터"
+                          ? "주 작업 로그를 참조하는 포인터"
                           : "날짜 heading을 찾지 못한 진행 로그"}
                   </p>
                   <span>
-                    {file.status} · 작업 {file.work_item_count.toLocaleString()}개 · {file.source_path}
+                    {workLogCoverageStatusLabel(file.status)} · 작업 {file.work_item_count.toLocaleString()}개 ·{" "}
+                    {file.source_path}
                   </span>
                 </article>
               ))}

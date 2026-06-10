@@ -43,6 +43,16 @@ export function filterWorkLogCoverageFiles(
   });
 }
 
+export function workLogCoverageStatusLabel(status: WorkLogCoverageStatusFilter | string): string {
+  if (status === "") return "전체 상태";
+  if (status === "needs_review") return "문제 로그";
+  if (status === "parsed") return "파싱 완료";
+  if (status === "pointer") return "주 로그 참조";
+  if (status === "unparsed") return "추출 필요";
+  if (status === "unreadable") return "읽기 실패";
+  return status;
+}
+
 export function workLogCoverageProjectSuggestions(
   files: readonly ProjectWorkLogCoverageFile[],
 ): string[] {

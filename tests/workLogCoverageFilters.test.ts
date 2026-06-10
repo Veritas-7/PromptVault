@@ -6,6 +6,7 @@ import {
   filterWorkLogCoverageFiles,
   workLogCoverageFilterMetaText,
   workLogCoverageProjectSuggestions,
+  workLogCoverageStatusLabel,
   type WorkLogCoverageFilters,
 } from "../src/workLogCoverageFilters.ts";
 import type { ProjectWorkLogCoverageFile } from "../src/types.ts";
@@ -72,4 +73,14 @@ test("work log coverage filters expose project suggestions and empty state", () 
   assert.deepEqual(workLogCoverageProjectSuggestions(files), ["CareVault", "PromptVault"]);
   assert.deepEqual(filterWorkLogCoverageFiles(files, emptyWorkLogCoverageFilters()), files);
   assert.equal(workLogCoverageFilterMetaText(files.length, files.length, 0), "작업로그 필터 · 필터 없음 · 결과 3 / 3개");
+});
+
+test("work log coverage status labels use operator-facing Korean copy", () => {
+  assert.equal(workLogCoverageStatusLabel(""), "전체 상태");
+  assert.equal(workLogCoverageStatusLabel("needs_review"), "문제 로그");
+  assert.equal(workLogCoverageStatusLabel("parsed"), "파싱 완료");
+  assert.equal(workLogCoverageStatusLabel("pointer"), "주 로그 참조");
+  assert.equal(workLogCoverageStatusLabel("unparsed"), "추출 필요");
+  assert.equal(workLogCoverageStatusLabel("unreadable"), "읽기 실패");
+  assert.equal(workLogCoverageStatusLabel("custom_status"), "custom_status");
 });

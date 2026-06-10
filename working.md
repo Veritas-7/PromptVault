@@ -1,10 +1,95 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 01:19 KST
+Updated: 2026-06-11 01:28 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 01:28 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and `PROJECT_STATUS.md`.
+- Make the management UI explain what is parsed, what needs review, and what is
+  intentionally skipped as a pointer so later operators can trust the daily
+  project rows without reading raw files first.
+
+Short-Term Goal:
+
+- Validate real project-local progress-log coverage after the deferred-state
+  slice, then remove confusing internal status wording from the coverage UI.
+
+Current Goal:
+
+- Improve the work-log coverage UI so `workingd.md` pointer files appear as
+  managed "주 로그 참조" entries instead of raw `pointer` status text.
+
+Context:
+
+- Live read-only project progress-log coverage over
+  `/Users/wj/Ai/System/10_Projects` passed:
+  `926` files seen, `925` parsed files, `1` pointer file, `0` unparsed files,
+  `0` unreadable files, `32` projects, `8,347` parsed work items.
+- `work-log-candidates --limit 50 --json` returned `0` candidates, confirming
+  no currently detected unparsed progress logs need AI extraction.
+- The single live pointer file is
+  `/Users/wj/Ai/System/10_Projects/CareVault/workingd.md`, which points to the
+  canonical `working.md` rather than representing a missing work log.
+
+Progress:
+
+- Added an operator-facing status label helper for work-log coverage states.
+- Replaced raw filter labels (`parsed`, `pointer`, `unparsed`, `unreadable`) in
+  the coverage filter with Korean labels.
+- Replaced coverage row raw status text with Korean labels, so pointer rows read
+  as `주 로그 참조`.
+
+Changes:
+
+- `src/workLogCoverageFilters.ts`: added `workLogCoverageStatusLabel`.
+- `src/App.tsx`: uses the label helper in the work-log coverage filter and row
+  status text; pointer description now says it references the main work log.
+- `tests/workLogCoverageFilters.test.ts`: added coverage for the user-facing
+  status labels.
+
+Tests:
+
+- `./src-tauri/target/debug/promptvault-cli work-log-coverage --json` passed
+  live read-only and showed `925` parsed, `1` pointer, `0` unparsed, `0`
+  unreadable.
+- `./src-tauri/target/debug/promptvault-cli work-log-candidates --limit 50
+  --json` passed live read-only and returned `0` candidates.
+- `./src-tauri/target/debug/promptvault-cli work-status-export --limit 10
+  --full-session-index --json` passed live read-only and showed project/day
+  rows with progress-log roles and session-evidence diagnostics.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workLogCoverageFilters.test.ts` passed with `3` tests.
+- `npm run build` passed.
+- `npm run qa:browser-bridge` passed end-to-end against an isolated database,
+  including the work-log coverage path and later review/normalization/save
+  flows.
+
+Issues:
+
+- The real default vault still needs the separate operator decision pass for
+  `25` pending session-evidence review rows.
+- Full historical session backfill is still not complete in the QA sample:
+  the bridge QA reported many remaining session files after bounded batches.
+- cmux/in-app browser testing remains excluded in this environment. Validation
+  used CLI, build/test gates, and browser bridge QA.
+
+Next Steps:
+
+- Commit/push this work-log coverage label slice after diff, staged secret, and
+  status checks.
+- Continue the default-vault operator pass for session-evidence review
+  decisions.
+- Continue bounded full-session backfill verification before declaring the
+  overall project/day management goal complete.
 
 ## Resume Snapshot - 2026-06-11 01:19 KST
 

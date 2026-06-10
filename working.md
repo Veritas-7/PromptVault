@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 15:32 KST
+Updated: 2026-06-10 15:43 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-10 15:32 KST
+## Resume Snapshot - 2026-06-10 15:43 KST
 
 Long-Term Goal:
 
@@ -34,9 +34,13 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed implementation baseline before this slice:
-  `3432162 feat: add source search review proposals` and
-  `9ce989f docs: record source proposal review flow`.
-- Current verified implementation slice: review-ready source proposals now expose
+  `1c45652 feat: link source proposals to review decisions`.
+- Current implementation slice: `work-session-evidence-source-search` now
+  supports known Antigravity SQLite conversation DB files in addition to JSONL
+  session files. It uses the existing Antigravity protobuf prompt extraction
+  heuristic, keeps max-row bounds, returns redacted user-prompt snippets, and
+  still does not create or approve session evidence.
+- Previous verified implementation slice: review-ready source proposals now expose
   a row-local `검토 완료 반영` action in the review-queue UI. The action calls the
   existing review queue update API with an auditable
   `source_proposal_review_ready:<source_search_hit_id>` reason, so the operator
@@ -86,9 +90,10 @@ Current Work:
   `3f4185e fix: index codex session evidence by activity date`.
 - The earlier body-derived progress-log title cleanup slice was completed and
   pushed as `c392add fix: clear rough worklog title normalization debt`.
-- Actual default-vault verification after the current source-proposals slice:
+- Actual default-vault verification after the current Antigravity source-search
+  slice:
   `work-session-evidence-candidates --limit 5 --json` reported `97` rows,
-  `7,934` items, `32` projects, `26` days, `898` files, and a full stored
+  `7,947` items, `32` projects, `26` days, `899` files, and a full stored
   session index of `12,889/12,889` prompts.
   Session-evidence candidates remain `26`, all unresolved after the full stored
   index; title-normalization rows remain `0`.
@@ -132,10 +137,18 @@ Current Work:
   `review_ready_count=1`, `blocked_count=0`, source line `6`, and
   `trace_validated=true` for the copied source trace
   `Analyze local/simple-ts-app for beginner learning. Source files are already filtered for secrets.`
-- Verification proof after the current slice: API bridge tests passed (`209`
-  Node tests ran), Rust `session_evidence_source` tests passed (`2`), CLI
-  `work_session_evidence` tests passed (`3`), `cargo fmt --check` passed,
-  `npm run check` passed, and isolated browser bridge QA passed.
+- Actual Antigravity DB source-search proof after the current slice:
+  `cargo run --quiet --bin promptvault-cli -- work-session-evidence-source-search
+  --source-path /Users/wj/.gemini/antigravity-cli/conversations/8b491726-6a1c-453d-b597-4524a0430f39.db
+  --query "notebooklm-llm-wiki-flow" --limit 5 --max-lines 200 --json`
+  scanned `1` bounded DB user row, matched `1`, returned `1`, and returned
+  `cwd=/Users/wj/Ai/System/10_Projects/notebooklm-llm-wiki-flow` with a redacted
+  read-only warning.
+- Verification proof after the current slice: Rust `session_evidence_source_search`
+  tests passed (`2`), API bridge tests passed (`209` Node tests ran), CLI
+  work-session-evidence bridge validation tests passed (`3`), `cargo fmt --check`
+  passed, `npm run build` passed, full `npm run check` passed after this
+  `working.md` update, and isolated browser bridge QA passed.
 - Current UI decision-link proof: `npm run build` passed, targeted API bridge
   tests passed (`209` Node tests ran), and
   `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed against
@@ -146,9 +159,8 @@ Current Work:
   Full `npm run check` also passed after the `working.md` update.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
-  useful step is keeping durable reviewed-decision apply/audit separate from
-  matched session-evidence creation, then adding a bounded source reader for
-  selected non-JSONL session sources.
+  useful step is adding UI/browser QA coverage for selecting a DB-backed nearby
+  source row when the review queue fixture can represent that source path.
 
 Resume Contract:
 
@@ -167,8 +179,8 @@ Resume Contract:
 Management Coverage Status:
 
 - The app does manage project/day work from real parsed artifacts: current
-  default-vault export reported `32` projects, `26` days, `898` progress files,
-  `7,934` work items, `97` project/day rows, and a full stored session index of
+  default-vault export reported `32` projects, `26` days, `899` progress files,
+  `7,947` work items, `97` project/day rows, and a full stored session index of
   `12,889/12,889` sanitized prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
@@ -184,6 +196,84 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Antigravity DB source-search reader
+
+Current Goal:
+
+- Extend bounded source search beyond JSONL so selected Antigravity conversation
+  DB session sources can be inspected through the same redacted, read-only
+  manual-review contract.
+
+Context:
+
+- `work-session-evidence-source-search` previously rejected every non-JSONL
+  selected source even though Antigravity conversation DB files were already
+  parsed into the stored session index.
+- The existing Antigravity parser already extracts user prompt protobuf fields
+  from `steps` rows where `step_type=14`; the missing piece was reusing that
+  logic for one-file source-search output.
+- This slice intentionally does not create matched session evidence or mark
+  review decisions complete.
+
+Progress:
+
+- Added source-kind detection for source-search paths under known session roots.
+- Kept JSONL source-search behavior intact through a JSONL reader branch.
+- Added an Antigravity SQLite reader branch that opens the DB read-only, scans
+  bounded `steps` user rows, extracts prompt text and workspace, scores query
+  overlap, and returns redacted snippets.
+- Updated CLI help, README, and docs to describe JSONL or Antigravity SQLite
+  source-search support.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added source-search source-kind dispatch,
+  Antigravity DB bounded reader, shared source-search item construction, and a
+  redaction/DB fixture test.
+- `src-tauri/src/bin/promptvault-cli.rs`: updated CLI help text.
+- `README.md`, `docs/CLI.md`: updated source-search documentation from JSONL
+  only to JSONL or Antigravity SQLite.
+- `working.md`: recorded current live counters, proof commands, and remaining
+  verification boundary.
+
+Tests:
+
+- PASS: `cargo fmt --check`.
+- PASS: `cargo test session_evidence_source_search --lib` (`2` tests passed,
+  including the new Antigravity DB source-search fixture).
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "source search|source proposals"`
+  (`209` Node bridge/parser tests ran and passed).
+- PASS: `cargo test --bin promptvault-cli bridge_routes_work_session_evidence`
+  (`3` CLI bridge validation tests passed).
+- PASS: actual Antigravity source-search smoke via
+  `cargo run --quiet --bin promptvault-cli -- work-session-evidence-source-search
+  --source-path /Users/wj/.gemini/antigravity-cli/conversations/8b491726-6a1c-453d-b597-4524a0430f39.db
+  --query "notebooklm-llm-wiki-flow" --limit 5 --max-lines 200 --json`; it
+  scanned `1`, matched `1`, returned `1`, and preserved the expected project
+  cwd.
+- PASS: `npm run build`.
+- PASS: `npm run check` after this `working.md` update. This covered UI tests
+  (`520` passed), production build, Rust library tests (`235` passed), CLI tests
+  (`34` passed), doc tests, and clippy with `-D warnings`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-6e8gpl/qa.sqlite`;
+  this revalidated the existing browser bridge/UI source-search and
+  source-proposal flow plus broader work-management panels.
+
+Issues:
+
+- Browser QA still exercises the JSONL-backed source-search row because the
+  isolated fixture currently has a JSONL source. Add DB-backed fixture coverage
+  later if the UI needs an explicit Antigravity row path.
+- Source-search results are still manual-review context only; durable reviewed
+  decisions and matched session-evidence links remain separate.
+
+Next Steps:
+
+- Add UI/browser QA coverage for selecting an Antigravity DB-backed nearby row
+  when the review queue fixture can represent that source path.
 
 ## Completed Slice - 2026-06-10 Source proposal review-queue decision action
 
@@ -312,8 +402,8 @@ Tests:
 
 Issues:
 
-- Source proposals currently support known JSONL session sources only. Selected
-  Antigravity SQLite sources still need a separate bounded source reader.
+- The earlier JSONL-only source-search limitation was resolved later by the
+  Antigravity DB source-search reader slice above.
 - `review_ready=true` is not durable approval. The next flow must still require
   explicit operator review-queue decisions and must not invent missing traces.
 
@@ -376,9 +466,9 @@ Tests:
 
 Issues:
 
-- Source search supports known JSONL session sources only. Antigravity
-  conversation SQLite sources still need a separate bounded reader if they are
-  selected from nearby rows.
+- The original implementation supported known JSONL session sources only. The
+  later Antigravity DB reader slice above resolved the first non-JSONL source
+  reader gap.
 - Search hits are manual-review context, not durable proof. Review-complete
   decisions still do not create matched session evidence links automatically.
 

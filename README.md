@@ -124,9 +124,10 @@ drilldown is read-only navigation: it returns sanitized excerpts, source paths,
 optional query overlap scores, and matched terms, but it does not create,
 approve, or attach session evidence.
 Use `work-session-evidence-source-search` or the row-local `원본 검색` action to
-search one selected JSONL session file in a bounded, redacted, read-only way.
-It returns matched user-prompt line numbers and snippets for manual review only;
-the output still does not create, approve, or attach session evidence.
+search one selected JSONL session file or Antigravity SQLite conversation DB in
+a bounded, redacted, read-only way. It returns matched user-prompt line/row
+numbers and snippets for manual review only; the output still does not create,
+approve, or attach session evidence.
 Use `work-session-evidence-source-proposals` or the row-local `검토 제안` action
 after source search to convert copied search snippets into review-ready proposal
 input. It validates the copied trace, same-project source membership, and
@@ -175,8 +176,9 @@ Recommended agent workflow:
    a candidate row. Treat the output as a navigation hint, not proof.
 10. Use `cargo run --bin promptvault-cli -- work-session-evidence-source-search
    --source-path PATH --query "PROJECT YYYY-MM-DD" --limit 5 --max-lines 100000
-   --json` to inspect one selected JSONL source file with redacted snippets and
-   line numbers. Treat the output as manual review context, not proof.
+   --json` to inspect one selected JSONL source file or Antigravity SQLite
+   conversation DB with redacted snippets and line/row numbers. Treat the output
+   as manual review context, not proof.
 11. Use `cargo run --bin promptvault-cli -- work-session-evidence-source-proposals
    --candidate-id ID --source-path PATH --query "PROJECT YYYY-MM-DD" --limit 5
    --max-lines 100000 --json` to turn copied source-search hits into review

@@ -2978,15 +2978,13 @@ pub fn run_project_work_session_evidence_source_search(
     if !canonical_path.is_file() {
         return Err("work-session-evidence-source-search source-path must be a file".into());
     }
-    if !project_work_session_evidence_source_search_path_allowed(&canonical_path) {
+    let source_kind = project_work_session_evidence_source_search_path_kind(&canonical_path)
+        .ok_or(
+        "work-session-evidence-source-search source-path must be under a known session source root",
+    )?;
+    if !project_work_session_evidence_source_search_kind_supported(source_kind) {
         return Err(
-            "work-session-evidence-source-search source-path must be under a known session source root"
-                .into(),
-        );
-    }
-    if canonical_path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
-        return Err(
-            "work-session-evidence-source-search currently supports JSONL session files only"
+            "work-session-evidence-source-search currently supports JSONL session files and Antigravity SQLite conversation DB files only"
                 .into(),
         );
     }
@@ -3017,6 +3015,7 @@ pub fn run_project_work_session_evidence_source_search(
     } else {
         let search = read_project_work_session_evidence_source_search_items(
             &canonical_path,
+            source_kind,
             &query_terms,
             limit,
             max_lines,
@@ -3026,7 +3025,7 @@ pub fn run_project_work_session_evidence_source_search(
         items = search.items;
         if search.hit_max_lines {
             warnings.push(format!(
-                "Source search stopped after {max_lines} lines; increase --max-lines for a wider bounded search."
+                "Source search stopped after {max_lines} source rows/lines; increase --max-lines for a wider bounded search."
             ));
         }
     }
@@ -9523,6 +9522,41 @@ struct ProjectWorkSessionEvidenceSourceSearchPrompt {
 
 fn read_project_work_session_evidence_source_search_items(
     path: &Path,
+    source_kind: SourceKind,
+    query_terms: &[String],
+    limit: usize,
+    max_lines: usize,
+) -> Result<ProjectWorkSessionEvidenceSourceSearchRead, Box<dyn std::error::Error>> {
+    match source_kind {
+        SourceKind::AntigravityConversationSqlite => {
+            read_project_work_session_evidence_source_search_antigravity_sqlite_items(
+                path,
+                query_terms,
+                limit,
+                max_lines,
+            )
+        }
+        SourceKind::CodexJsonl
+        | SourceKind::ClaudeProjectJsonl
+        | SourceKind::ClaudeTranscriptJsonl
+        | SourceKind::ClaudeHistoryJsonl
+        | SourceKind::AntigravityTranscriptJsonl
+        | SourceKind::AntigravityHistoryJsonl => {
+            read_project_work_session_evidence_source_search_jsonl_items(
+                path,
+                query_terms,
+                limit,
+                max_lines,
+            )
+        }
+        SourceKind::GeminiTmpChatJson | SourceKind::ProjectProgressMarkdown => {
+            Err("work-session-evidence-source-search unsupported source kind".into())
+        }
+    }
+}
+
+fn read_project_work_session_evidence_source_search_jsonl_items(
+    path: &Path,
     query_terms: &[String],
     limit: usize,
     max_lines: usize,
@@ -9553,41 +9587,17 @@ fn read_project_work_session_evidence_source_search_items(
         else {
             continue;
         };
-        let searchable = format!(
-            "{}\n{}\n{}",
-            prompt.session_id.as_deref().unwrap_or(""),
-            prompt.cwd.as_deref().unwrap_or(""),
-            prompt.text
-        );
-        let (match_score, matched_terms) =
-            project_work_session_evidence_nearby_match(query_terms, &searchable);
-        if match_score == 0 {
-            continue;
+        if let Some(item) = project_work_session_evidence_source_search_item_from_prompt(
+            path,
+            index + 1,
+            prompt,
+            query_terms,
+        ) {
+            matched_line_count += 1;
+            if items.len() < limit {
+                items.push(item);
+            }
         }
-        matched_line_count += 1;
-        if items.len() >= limit {
-            continue;
-        }
-        let risk_flags = detect_risks(&prompt.text);
-        items.push(ProjectWorkSessionEvidenceSourceSearchItem {
-            id: hash_text(&format!("{}:{}:{}", path.display(), index + 1, prompt.text))
-                .chars()
-                .take(16)
-                .collect(),
-            line_number: index + 1,
-            session_id: prompt.session_id,
-            timestamp: prompt.timestamp,
-            cwd: prompt.cwd,
-            match_score,
-            matched_terms,
-            excerpt: truncate_chars(
-                &redact_sensitive_text(&markdown_inline(&prompt.text)),
-                PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_EXCERPT_CHARS,
-            ),
-            word_count: count_words(&prompt.text),
-            char_count: prompt.text.chars().count(),
-            risk_flags,
-        });
     }
 
     Ok(ProjectWorkSessionEvidenceSourceSearchRead {
@@ -9595,6 +9605,113 @@ fn read_project_work_session_evidence_source_search_items(
         matched_line_count,
         hit_max_lines,
         items,
+    })
+}
+
+fn read_project_work_session_evidence_source_search_antigravity_sqlite_items(
+    path: &Path,
+    query_terms: &[String],
+    limit: usize,
+    max_lines: usize,
+) -> Result<ProjectWorkSessionEvidenceSourceSearchRead, Box<dyn std::error::Error>> {
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let mut stmt =
+        conn.prepare("SELECT idx, step_payload FROM steps WHERE step_type = 14 ORDER BY idx")?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+    })?;
+    let session_id = path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown-antigravity-conversation")
+        .to_string();
+    let mut scanned_line_count = 0;
+    let mut matched_line_count = 0;
+    let mut items = Vec::new();
+    let mut hit_max_lines = false;
+
+    for (row_index, row) in rows.enumerate() {
+        if row_index >= max_lines {
+            hit_max_lines = true;
+            break;
+        }
+        scanned_line_count += 1;
+        let (idx, payload) = row?;
+        let strings = protobuf_string_entries(&payload);
+        let Some(text) = best_prompt_candidate(&strings) else {
+            continue;
+        };
+        let line_number = usize::try_from(idx)
+            .ok()
+            .and_then(|idx| idx.checked_add(1))
+            .unwrap_or(row_index + 1);
+        let prompt = ProjectWorkSessionEvidenceSourceSearchPrompt {
+            session_id: Some(session_id.clone()),
+            timestamp: None,
+            cwd: best_workspace_candidate(&strings),
+            text,
+        };
+        if let Some(item) = project_work_session_evidence_source_search_item_from_prompt(
+            path,
+            line_number,
+            prompt,
+            query_terms,
+        ) {
+            matched_line_count += 1;
+            if items.len() < limit {
+                items.push(item);
+            }
+        }
+    }
+
+    Ok(ProjectWorkSessionEvidenceSourceSearchRead {
+        scanned_line_count,
+        matched_line_count,
+        hit_max_lines,
+        items,
+    })
+}
+
+fn project_work_session_evidence_source_search_item_from_prompt(
+    path: &Path,
+    line_number: usize,
+    prompt: ProjectWorkSessionEvidenceSourceSearchPrompt,
+    query_terms: &[String],
+) -> Option<ProjectWorkSessionEvidenceSourceSearchItem> {
+    let text = normalize_prompt_text(&strip_injected_context(&prompt.text));
+    if text.is_empty() {
+        return None;
+    }
+    let searchable = format!(
+        "{}\n{}\n{}",
+        prompt.session_id.as_deref().unwrap_or(""),
+        prompt.cwd.as_deref().unwrap_or(""),
+        text
+    );
+    let (match_score, matched_terms) =
+        project_work_session_evidence_nearby_match(query_terms, &searchable);
+    if match_score == 0 {
+        return None;
+    }
+    let risk_flags = detect_risks(&text);
+    Some(ProjectWorkSessionEvidenceSourceSearchItem {
+        id: hash_text(&format!("{}:{}:{}", path.display(), line_number, text))
+            .chars()
+            .take(16)
+            .collect(),
+        line_number,
+        session_id: prompt.session_id,
+        timestamp: prompt.timestamp,
+        cwd: prompt.cwd,
+        match_score,
+        matched_terms,
+        excerpt: truncate_chars(
+            &redact_sensitive_text(&markdown_inline(&text)),
+            PROJECT_WORK_SESSION_EVIDENCE_SOURCE_SEARCH_EXCERPT_CHARS,
+        ),
+        word_count: count_words(&text),
+        char_count: text.chars().count(),
+        risk_flags,
     })
 }
 
@@ -9658,41 +9775,51 @@ fn project_work_session_evidence_source_search_prompt(
     })
 }
 
-fn project_work_session_evidence_source_search_path_allowed(path: &Path) -> bool {
-    if source_specs().into_iter().any(|source| {
-        if !matches!(
-            source.kind,
-            SourceKind::CodexJsonl
-                | SourceKind::ClaudeProjectJsonl
-                | SourceKind::ClaudeTranscriptJsonl
-                | SourceKind::ClaudeHistoryJsonl
-                | SourceKind::AntigravityTranscriptJsonl
-                | SourceKind::AntigravityHistoryJsonl
-        ) {
-            return false;
+fn project_work_session_evidence_source_search_kind_supported(kind: SourceKind) -> bool {
+    matches!(
+        kind,
+        SourceKind::CodexJsonl
+            | SourceKind::ClaudeProjectJsonl
+            | SourceKind::ClaudeTranscriptJsonl
+            | SourceKind::ClaudeHistoryJsonl
+            | SourceKind::AntigravityTranscriptJsonl
+            | SourceKind::AntigravityHistoryJsonl
+            | SourceKind::AntigravityConversationSqlite
+    )
+}
+
+fn project_work_session_evidence_source_search_path_kind(path: &Path) -> Option<SourceKind> {
+    for source in source_specs() {
+        if !project_work_session_evidence_source_search_kind_supported(source.kind) {
+            continue;
         }
         let Ok(root) = source.root.canonicalize() else {
-            return false;
+            continue;
         };
-        if root.is_file() {
+        let path_matches = if root.is_file() {
             path == root
         } else {
             path.starts_with(root)
+        };
+        if path_matches && source_file_matches(path, source.kind) {
+            return Some(source.kind);
         }
-    }) {
-        return true;
     }
 
     #[cfg(test)]
     {
         if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
             if path.starts_with(temp_dir) {
-                return true;
+                return match path.extension().and_then(|ext| ext.to_str()) {
+                    Some("jsonl") => Some(SourceKind::CodexJsonl),
+                    Some("db") => Some(SourceKind::AntigravityConversationSqlite),
+                    _ => None,
+                };
             }
         }
     }
 
-    false
+    None
 }
 
 fn project_work_session_evidence_source_proposals_from_search(
@@ -22216,6 +22343,106 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(result.matched_line_count, 1);
         assert_eq!(result.returned_item_count, 1);
         assert_eq!(result.items[0].line_number, 2);
+        assert_eq!(
+            result.items[0].matched_terms,
+            vec![
+                "evidence".to_string(),
+                "nearbyproject".to_string(),
+                "raw".to_string()
+            ]
+        );
+        assert_eq!(
+            result.items[0].cwd.as_deref(),
+            Some("/Users/wj/Ai/System/10_Projects/NearbyProject")
+        );
+        assert!(result.items[0].excerpt.contains("[REDACTED_"));
+        assert!(!result.items[0].excerpt.contains("short-secret-value"));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("read-only")));
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn session_evidence_source_search_reads_bounded_antigravity_db_matches() {
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-session-source-search-antigravity-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let conn = Connection::open(&path).expect("open source search db fixture");
+        conn.execute(
+            "CREATE TABLE steps (
+                idx integer,
+                step_type integer NOT NULL DEFAULT 0,
+                status integer NOT NULL DEFAULT 0,
+                has_subtrajectory numeric NOT NULL DEFAULT false,
+                metadata blob,
+                error_details blob,
+                permissions blob,
+                task_details blob,
+                render_info blob,
+                step_payload blob,
+                step_format integer NOT NULL DEFAULT 0,
+                PRIMARY KEY (idx)
+            )",
+            [],
+        )
+        .expect("create steps table");
+        let matching_user_payload = pb_message(
+            19,
+            &[
+                pb_string(
+                    2,
+                    "NearbyProject raw evidence includes api_key=short-secret-value",
+                ),
+                pb_string(11, "/Users/wj/Ai/System/10_Projects/NearbyProject"),
+            ]
+            .concat(),
+        );
+        let other_user_payload = pb_message(
+            19,
+            &[
+                pb_string(2, "Unrelated project maintenance note"),
+                pb_string(11, "/Users/wj/Ai/System/10_Projects/OtherProject"),
+            ]
+            .concat(),
+        );
+        let model_payload = pb_message(20, &pb_string(1, "assistant output must not be collected"));
+        conn.execute(
+            "INSERT INTO steps (idx, step_type, status, step_payload) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![0_i64, 14_i64, 3_i64, matching_user_payload],
+        )
+        .expect("insert matching user step");
+        conn.execute(
+            "INSERT INTO steps (idx, step_type, status, step_payload) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![1_i64, 15_i64, 3_i64, model_payload],
+        )
+        .expect("insert ignored model step");
+        conn.execute(
+            "INSERT INTO steps (idx, step_type, status, step_payload) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![2_i64, 14_i64, 3_i64, other_user_payload],
+        )
+        .expect("insert nonmatching user step");
+        drop(conn);
+
+        let result = run_project_work_session_evidence_source_search(
+            ProjectWorkSessionEvidenceSourceSearchOptions {
+                source_path: path.display().to_string(),
+                query: "NearbyProject raw evidence".to_string(),
+                limit: Some(5),
+                max_lines: Some(10),
+            },
+        )
+        .expect("search antigravity db source fixture");
+
+        assert_eq!(result.query_term_count, 3);
+        assert_eq!(result.scanned_line_count, 2);
+        assert_eq!(result.matched_line_count, 1);
+        assert_eq!(result.returned_item_count, 1);
+        assert_eq!(result.items[0].line_number, 1);
         assert_eq!(
             result.items[0].matched_terms,
             vec![

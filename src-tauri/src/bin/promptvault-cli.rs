@@ -2822,7 +2822,7 @@ fn help_text() -> String {
         "  work-session-evidence-review-apply writes approved session-evidence review decisions into an idempotent durable reviewed-items audit table; it does not create session evidence links.\n",
         "  work-session-evidence-reviewed-items lists durable reviewed session-evidence audit rows by project and date without creating session evidence links.\n",
         "  work-session-evidence-nearby lists same-project session records nearest a target project/date as navigation hints only; optional --query ranks nearby rows by local token overlap but does not approve or create session evidence.\n",
-        "  work-session-evidence-source-search reads one known JSONL session source in a bounded, redacted, read-only way and returns query-matched user prompt snippets; it does not approve or create session evidence.\n",
+        "  work-session-evidence-source-search reads one known JSONL or Antigravity SQLite session source in a bounded, redacted, read-only way and returns query-matched user prompt snippets; it does not approve or create session evidence.\n",
         "  work-session-evidence-source-proposals validates copied source-search snippets for one unresolved candidate and returns review-ready manual proposals without approving or creating durable session evidence.\n",
         "  work-log-coverage lists parsed and unparsed project progress logs by project.\n",
         "  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n",

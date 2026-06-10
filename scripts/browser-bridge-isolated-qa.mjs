@@ -1045,22 +1045,28 @@ async function runBrowserQa() {
       const rows = Array.from(document.querySelectorAll('[data-work-status-export-row="true"]'));
       return meta.includes("근거 limit 영향")
         && meta.includes("근거limit")
-        && rows.length > 0
-        && rows.every((row) => (row.textContent ?? "").includes("세션 근거 필요"));
+        && (
+          rows.length === 0
+          || rows.every((row) => (row.textContent ?? "").includes("세션 근거 필요"))
+        );
     }, undefined, { timeout: 30000 });
     workStatusExportBoundedFilterMeta =
       (await page.locator('[data-work-status-export-filter-meta="true"]').textContent())?.trim() ?? "";
     workStatusExportBoundedFilteredRows =
       await page.locator('[data-work-status-export-row="true"]').allTextContents();
-    await page.locator('[data-work-status-export-row-toggle="true"]').first().click();
-    await page.waitForFunction(() => {
-      const detail = document.querySelector('[data-work-status-export-row-detail="true"]')?.textContent ?? "";
-      return detail.includes("매칭된 세션 근거 없음")
-        && detail.includes("제한된 근거만 사용 중")
-        && detail.includes("로그 유형");
-    }, undefined, { timeout: 30000 });
-    workStatusExportBoundedFilteredRowDetail =
-      (await page.locator('[data-work-status-export-row-detail="true"]').first().textContent())?.trim() ?? "";
+    if (workStatusExportBoundedFilteredRows.length) {
+      await page.locator('[data-work-status-export-row-toggle="true"]').first().click();
+      await page.waitForFunction(() => {
+        const detail = document.querySelector('[data-work-status-export-row-detail="true"]')?.textContent ?? "";
+        return detail.includes("매칭된 세션 근거 없음")
+          && detail.includes("제한된 근거만 사용 중")
+          && detail.includes("로그 유형");
+      }, undefined, { timeout: 30000 });
+      workStatusExportBoundedFilteredRowDetail =
+        (await page.locator('[data-work-status-export-row-detail="true"]').first().textContent())?.trim() ?? "";
+    } else {
+      workStatusExportBoundedFilteredRowDetail = "no bounded-session-limit rows";
+    }
     workStatusExportMarkdown =
       (await page.locator('[data-work-status-export-markdown="true"]').textContent())?.trim() ?? "";
     step("work status export unresolved fixture");

@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 17:34 KST
+Updated: 2026-06-10 17:49 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -40,7 +40,13 @@ Current Work:
 - Current implementation focus: continue reducing unresolved project/day
   session-evidence rows and provider/review reliability gaps without weakening
   the source-trace/operator-review contract.
-- Latest verified implementation slice: the review queue UI now has a
+- Latest verified local implementation slice: source-search proposals now block
+  hits whose matched terms are only the project identifier. This prevents weak
+  cross-date evidence such as a `RepoTutorStudio` hit with only
+  `matched_terms=["repotutorstudio"]` and a generic unrelated trace from
+  becoming review-ready. The implementation is verified locally and pending
+  commit in this snapshot.
+- Previous verified implementation slice: the review queue UI now has a
   `추천 검토 제안` action that runs the existing nearby-session lookup, bounded
   source search, and source-proposal generation in one operator click. This
   still stops before approval: it does not approve a queue row, create durable
@@ -296,6 +302,31 @@ Current Work:
   continued through source proposal approval, review apply, reviewed item
   reload, and broader work-management panels. Ports `5174` and `5177` had no
   remaining listeners after QA cleanup.
+- Current weak source-hit gate proof:
+  The default vault top row remains `RepoTutorStudio` `2026-06-10`
+  (`session-evidence-RepoTutorStudio-072eff316b`). Running
+  `work-session-evidence-source-proposals` against the previously recommended
+  `2026-06-09` Codex source path with query
+  `RepoTutorStudio 2026-06-10 Resume Snapshot` now returns
+  `review_ready_count=0`, `blocked_count=1`, and blocker
+  `source_hit_matches_only_project_identifier` for hit
+  `1a3fe4bbae95e753`, whose only matched term is `repotutorstudio` and whose
+  copied trace is `Analyze local/simple-ts-app for beginner learning. Source
+  files are already filtered for secrets.` This row must not be approved from
+  that weak source hit.
+  Verification passed: `cargo fmt --check --manifest-path src-tauri/Cargo.toml`;
+  `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_source_proposals`
+  (`3` matching tests); `cargo build --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`;
+  default-vault CLI proof above; `npm run check` with Rust library tests now
+  `237` passed, CLI tests `35` passed, doc tests, and clippy with
+  `-D warnings`; `node --check scripts/browser-bridge-isolated-qa.mjs`; and
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` against
+  isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-MILJFi/qa.sqlite`.
+  The QA also exposed and fixed a brittle bounded-session-limit filter
+  assumption: that filter may legitimately return zero rows, so the script now
+  verifies either zero rows or rows all marked `세션 근거 필요`. Ports `5174` and
+  `5177` had no remaining listeners after QA cleanup.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is continuing unresolved project/day session-evidence review and
@@ -340,6 +371,78 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Weak source-hit proposal gate
+
+Current Goal:
+
+- Keep session-evidence source proposals fail-closed so project/day rows are not
+  marked review-ready from source hits that only match the project identifier.
+- Implementation commit is pending in this snapshot.
+
+Context:
+
+- After adding `추천 검토 제안`, the default vault top row
+  `RepoTutorStudio` `2026-06-10` produced a copied-trace source proposal from a
+  `2026-06-09` source hit.
+- The proposal was technically trace-copied, but its only matched term was the
+  project identifier `repotutorstudio`; the copied trace itself was the generic
+  prompt `Analyze local/simple-ts-app for beginner learning. Source files are
+  already filtered for secrets.`
+- That is not strong enough evidence for durable session-evidence approval.
+
+Progress:
+
+- Added backend gating that blocks source proposals when every matched term is a
+  project identifier term.
+- Preserved existing valid behavior: source hits with non-project evidence terms
+  remain review-ready, and Antigravity DB-backed source hits still pass when the
+  source trace contains real evidence terms.
+- Hardened isolated browser QA for `bounded-session-limit` filter results that
+  legitimately contain zero rows. The QA now accepts zero rows or rows whose
+  visible text all marks `세션 근거 필요`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added source-hit evidence-term gating and Rust
+  regression coverage for project-identifier-only matches.
+- `scripts/browser-bridge-isolated-qa.mjs`: made the bounded-session-limit
+  filter check data-distribution tolerant.
+- `working.md`: records the stricter gate, default-vault proof, QA fix,
+  verification commands, and remaining pending queue state.
+
+Tests:
+
+- PASS: `cargo fmt --check --manifest-path src-tauri/Cargo.toml`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_source_proposals`
+  (`3` matching tests passed).
+- PASS: `cargo build --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`.
+- PASS: default-vault proof command for
+  `session-evidence-RepoTutorStudio-072eff316b` returned
+  `review_ready_count=0`, `blocked_count=1`, and
+  `source_hit_matches_only_project_identifier`.
+- PASS: `npm run check`. This covered UI/API tests, production build,
+  `cargo build --bin promptvault-cli`, Rust library tests (`237` passed), CLI
+  tests (`35` passed), doc tests, and clippy with `-D warnings`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-MILJFi/qa.sqlite`.
+- PASS: default-vault review queue sync still reports `48` stored rows, `26`
+  pending review rows, `22` stale rows, and `26` synced candidates.
+- PASS: `lsof -nP -iTCP:5174 -sTCP:LISTEN` and
+  `lsof -nP -iTCP:5177 -sTCP:LISTEN` returned no listeners.
+
+Issues:
+
+- This intentionally does not reduce the pending queue count. It prevents a
+  weak source-search hit from being approved as durable evidence.
+
+Next Steps:
+
+- Commit and push this slice, then update this section with the commit hash.
+- Continue with the remaining `26` pending rows, but require non-project
+  evidence terms or stronger copied source traces before approving anything.
 
 ## Completed Slice - 2026-06-10 Recommended source-proposals action
 

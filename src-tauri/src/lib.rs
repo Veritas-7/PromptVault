@@ -9890,10 +9890,14 @@ fn project_work_session_evidence_source_proposal_from_hit(
     .collect::<Vec<_>>();
     risk_flags.sort();
     risk_flags.dedup();
+    let source_hit_has_evidence_match =
+        project_work_session_source_hit_has_evidence_match(candidate, hit);
     let blocker_reason = if candidate.needs_title_normalization {
         Some("title_normalization_required_first".to_string())
     } else if !trace_validated {
         Some("source_trace_not_copied_from_search_hit".to_string())
+    } else if !source_hit_has_evidence_match {
+        Some("source_hit_matches_only_project_identifier".to_string())
     } else if !risk_flags.is_empty() {
         Some("candidate_or_source_hit_has_risk_flags".to_string())
     } else {
@@ -9940,6 +9944,37 @@ fn project_work_session_evidence_source_proposal_from_hit(
 
 fn project_work_session_evidence_source_hit_confidence(match_score: usize) -> f64 {
     (0.55 + (match_score.min(4) as f64 * 0.1)).min(0.95)
+}
+
+fn project_work_session_source_hit_has_evidence_match(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+    hit: &ProjectWorkSessionEvidenceSourceSearchItem,
+) -> bool {
+    if hit.matched_terms.is_empty() {
+        return false;
+    }
+    let project_terms = project_work_session_project_identifier_terms(&candidate.project);
+    hit.matched_terms
+        .iter()
+        .any(|term| !project_terms.contains(term.as_str()))
+}
+
+fn project_work_session_project_identifier_terms(project: &str) -> HashSet<String> {
+    let stop = stop_words();
+    word_regex()
+        .find_iter(&frequency_safe_prompt_text(project))
+        .filter_map(|mat| {
+            let token = mat
+                .as_str()
+                .trim_matches(|ch: char| ch == '_' || ch == '-')
+                .to_string();
+            if token.chars().count() < 3 || stop.contains(token.as_str()) {
+                None
+            } else {
+                Some(token)
+            }
+        })
+        .collect()
 }
 
 fn project_work_session_project_like_pattern(project: &str) -> String {
@@ -22846,6 +22881,65 @@ Status: completed as a source-only/report-only hardening slice.
             .warnings
             .iter()
             .any(|warning| warning.contains("review input only")));
+    }
+
+    #[test]
+    fn session_evidence_source_proposals_block_project_identifier_only_hits() {
+        let candidate = session_evidence_candidate_fixture(
+            "session-evidence-RepoTutorStudio-source-proposal",
+            "RepoTutorStudio",
+            "2026-06-10: RepoTutor Studio resume snapshot needs reviewed session evidence.",
+            false,
+        );
+        let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
+            generated_at: "2026-06-10T00:00:00Z".to_string(),
+            source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl".to_string(),
+            query: "RepoTutorStudio 2026-06-10 Resume Snapshot".to_string(),
+            query_term_count: 3,
+            requested_limit: 5,
+            requested_max_lines: 100_000,
+            scanned_line_count: 12,
+            matched_line_count: 1,
+            returned_item_count: 1,
+            items: vec![ProjectWorkSessionEvidenceSourceSearchItem {
+                id: "source-hit-project-only".to_string(),
+                line_number: 6,
+                session_id: Some("turn-source-hit-project-only".to_string()),
+                timestamp: Some("2026-06-09T12:00:00Z".to_string()),
+                cwd: Some("/Users/wj/Ai/System/10_Projects/RepoTutorStudio".to_string()),
+                match_score: 1,
+                matched_terms: vec!["repotutorstudio".to_string()],
+                excerpt:
+                    "Analyze local/simple-ts-app for beginner learning. Source files are already filtered for secrets."
+                        .to_string(),
+                word_count: 12,
+                char_count: 96,
+                risk_flags: Vec::new(),
+            }],
+            warnings: vec![
+                "Raw source search is read-only and redacted; returned snippets do not create or approve session evidence."
+                    .to_string(),
+            ],
+        };
+
+        let result = project_work_session_evidence_source_proposals_from_search(
+            Path::new("/tmp/promptvault.sqlite"),
+            &candidate,
+            source_search,
+        );
+
+        assert_eq!(result.returned_proposal_count, 1);
+        assert_eq!(result.review_ready_count, 0);
+        assert_eq!(result.blocked_count, 1);
+        let proposal = &result.proposals[0];
+        assert!(proposal.trace_validated);
+        assert!(!proposal.review_ready);
+        assert_eq!(
+            proposal.blocker_reason.as_deref(),
+            Some("source_hit_matches_only_project_identifier")
+        );
+        assert_eq!(proposal.match_score, 1);
+        assert_eq!(proposal.matched_terms, vec!["repotutorstudio".to_string()]);
     }
 
     #[test]

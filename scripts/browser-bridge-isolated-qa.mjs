@@ -1396,12 +1396,16 @@ async function runBrowserQa() {
       || sourceAudit.returned_item_count > sourceAudit.total_items
       || sourceAudit.rows_with_review_ready_count > sourceAudit.audited_item_count
       || sourceAudit.rows_with_blocked_proposals_count > sourceAudit.audited_item_count
+      || sourceAudit.operator_plan.review_ready_count > sourceAudit.audited_item_count
+      || sourceAudit.operator_plan.manual_defer_count > sourceAudit.audited_item_count
+      || sourceAudit.operator_plan.bulk_reject_count > sourceAudit.audited_item_count
+      || sourceAudit.operator_plan.manual_inspect_count > sourceAudit.audited_item_count
       || !sourceAudit.warnings.some((warning) => warning.includes("read-only"))
     ) {
       throw new Error(`Invalid session evidence source audit response: ${JSON.stringify(sourceAudit)}`);
     }
     workSessionEvidenceSourceAuditBridge =
-      `audited ${sourceAudit.audited_item_count} / ${sourceAudit.returned_item_count} · review-ready ${sourceAudit.total_review_ready_count} · blocked ${sourceAudit.total_blocked_count}`;
+      `audited ${sourceAudit.audited_item_count} / ${sourceAudit.returned_item_count} · review-ready ${sourceAudit.total_review_ready_count} · blocked ${sourceAudit.total_blocked_count} · plan manual-defer ${sourceAudit.operator_plan.manual_defer_count} · plan bulk-reject ${sourceAudit.operator_plan.bulk_reject_count}`;
     const firstApprovableItem = workSessionEvidenceReviewQueue.items.find(
       (item, index) => index > 0 && !item.needs_title_normalization,
     ) ?? workSessionEvidenceReviewQueue.items.find((item) => !item.needs_title_normalization);
@@ -1605,11 +1609,19 @@ async function runBrowserQa() {
         ?.textContent ?? "";
       const panel = document.querySelector('[data-work-session-evidence-source-audit="true"]')
         ?.textContent ?? "";
+      const operatorPlan = document.querySelector('[data-work-session-evidence-source-audit-operator-plan="true"]')
+        ?.textContent ?? "";
       return meta.includes("감사")
         && meta.includes("review-ready proposal")
         && panel.includes("원본 감사 요약")
         && panel.includes("읽기 전용")
-        && panel.includes("read-only");
+        && panel.includes("read-only")
+        && operatorPlan.includes("원본 감사 운영 계획")
+        && operatorPlan.includes("검토준비")
+        && operatorPlan.includes("수동보류")
+        && operatorPlan.includes("일괄거절")
+        && operatorPlan.includes("수동확인")
+        && operatorPlan.includes("원본검토 필요");
     }, undefined, { timeout: 90000 });
     workSessionEvidenceSourceAuditUiText =
       (await page.locator('[data-work-session-evidence-source-audit="true"]').textContent())
@@ -1709,9 +1721,13 @@ async function runBrowserQa() {
         ?.textContent ?? "";
       const manualText = document.querySelector('[data-work-session-evidence-source-audit-manual-inspect="true"]')
         ?.textContent ?? "";
+      const operatorPlan = document.querySelector('[data-work-session-evidence-source-audit-operator-plan="true"]')
+        ?.textContent ?? "";
       return text.includes("감사 판정 거절 가능")
         && bulkText.includes("감사 판정 일괄 거절 가능")
-        && manualText.includes("수동 확인 필요");
+        && manualText.includes("수동 확인 필요")
+        && operatorPlan.includes("원본 감사 운영 계획")
+        && operatorPlan.includes("일괄거절");
     }, undefined, { timeout: 30000 });
     const sourceAuditRejectCandidateIds = await page
       .locator("[data-work-session-evidence-source-audit-bulk-reject-item]")

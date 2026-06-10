@@ -391,6 +391,7 @@ import {
   workSessionEvidenceSourceAuditManualInspectReasonText,
   workSessionEvidenceSourceAuditManualInspectText,
   workSessionEvidenceSourceAuditMetaText,
+  workSessionEvidenceSourceAuditOperatorPlanText,
   workSessionEvidenceSourceAuditRejectableText,
   workSessionEvidenceSourceAuditRejectReason,
   workSessionEvidenceSourceProposalsBlockerSummaryText,
@@ -1416,6 +1417,8 @@ function App() {
     workSessionEvidenceSourceAuditManualDeferableText(workSessionEvidenceSourceAuditResult);
   const workSessionEvidenceSourceAuditManualInspectSummary =
     workSessionEvidenceSourceAuditManualInspectText(workSessionEvidenceSourceAuditResult);
+  const workSessionEvidenceSourceAuditOperatorPlanSummary =
+    workSessionEvidenceSourceAuditOperatorPlanText(workSessionEvidenceSourceAuditResult);
   const isWorkSessionEvidenceSourceAuditBulkRejecting =
     workSessionEvidenceReviewQueueUpdatingCandidateId === WORK_SESSION_EVIDENCE_SOURCE_AUDIT_BULK_REJECT_ID;
   const isWorkSessionEvidenceSourceAuditBulkDeferring =
@@ -6778,6 +6781,9 @@ function App() {
               </span>
               <span data-work-session-evidence-source-audit-manual-inspect="true">
                 {workSessionEvidenceSourceAuditManualInspectSummary}
+              </span>
+              <span data-work-session-evidence-source-audit-operator-plan="true">
+                {workSessionEvidenceSourceAuditOperatorPlanSummary}
               </span>
               {workSessionEvidenceSourceAuditResult.warnings.map((warning, index) => (
                 <span key={textListItemKey(warning, index)}>

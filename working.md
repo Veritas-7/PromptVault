@@ -1,10 +1,194 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 01:56 KST
+Updated: 2026-06-11 02:08 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 02:08 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Preserve resumable operator evidence for every project/day management path:
+  source traces, review queues, current blockers, verification commands, and
+  explicit next steps.
+- Use AI/SDK-assisted extraction only as proposal or grouping evidence until
+  decisions are source-reviewed, operator-approved, and auditable.
+
+Short-Term Goal:
+
+- Make the default-vault source-audit/manual-inspect operator pass safe and
+  actionable from the app UI before any live review-queue decisions are written.
+
+Current Goal:
+
+- Completed this slice: surface the read-only source-audit `operator_plan` in
+  the UI and isolated browser-bridge QA, not just in CLI/JSON output.
+
+Context:
+
+- Goal identity was rechecked for thread
+  `019ea10c-fbe8-7b60-8889-6f00b5a91a68`; persisted objective still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Previous commit `439b873 feat: add source audit operator plan` added the
+  backend/CLI/API operator plan. This slice exposes that plan to the operator
+  in the frontend summary panel.
+- The live default vault was not modified by this slice. The last live
+  read-only audit still showed `25` pending rows, `0` review-ready rows,
+  `5` manual-defer candidates, `20` bulk-reject candidates, and `5`
+  manual-inspect candidates.
+- cmux/in-app browser testing remains excluded in this environment; validation
+  used isolated browser-bridge QA plus automated test/build gates.
+
+Progress:
+
+- Added `workSessionEvidenceSourceAuditOperatorPlanText(...)` so the frontend
+  has a stable operator-plan summary.
+- Rendered the plan in the source-audit summary article with
+  `data-work-session-evidence-source-audit-operator-plan="true"`.
+- Extended isolated browser-bridge QA to assert the rendered operator plan
+  includes review-ready, manual-defer, bulk-reject, manual-inspect, and
+  source-review-required planning copy.
+- Added unit assertions for the new helper, including the null/no-plan state.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: operator-plan summary helper.
+- `src/App.tsx`: source-audit summary renders the operator-plan text.
+- `tests/workSummaryStatus.test.ts`: helper coverage for operator-plan copy.
+- `scripts/browser-bridge-isolated-qa.mjs`: API invariant checks and UI
+  selector assertions for the operator-plan summary.
+- `working.md`: this resume snapshot and verification record.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `51` tests.
+- `node --check scripts/browser-bridge-isolated-qa.mjs` passed.
+- `npm run build` passed; Vite emitted the existing `>500 kB` chunk warning.
+- `npm run qa:browser-bridge` passed end-to-end against an isolated database,
+  including the new source-audit operator-plan UI selector assertion.
+- Full `npm run check` passed: UI tests, Vite / TypeScript build, Rust CLI
+  build, Rust lib tests `252`, CLI tests `47`, doc-tests, and clippy
+  `-D warnings`.
+
+Issues:
+
+- Live default vault still has the `25` pending session-evidence review rows.
+  This slice only improves planning visibility and does not write live
+  decisions.
+- There are still no live `review_ready` rows, so approval remains out of
+  scope until copied source-review evidence exists.
+- Full historical session backfill remains incomplete in QA samples; the
+  bridge QA still reports remaining session files after bounded batches.
+- cmux/in-app browser testing remains excluded in this environment.
+
+Research:
+
+- No external research was needed. The UI copy follows the backend
+  `operator_plan` contract from the previous slice.
+
+Next Steps:
+
+- Run the deliberate live operator pass when authorized: defer the `5`
+  manual-inspect rows, reject the `20` bulk-reject rows only if the operator
+  accepts the plan, and approve nothing until source-review JSON exists.
+- Continue full-session backfill verification until the project/day management
+  view no longer depends on bounded QA samples.
+- Keep updating this `working.md` after each meaningful slice.
+
+## Resume Snapshot - 2026-06-11 01:59 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Preserve enough status in this file that a later Codex session can resume
+  without reconstructing the whole thread: current goal, live-vault state,
+  completed slices, changed files, verification, issues, and next steps.
+- Keep AI/SDK-assisted extraction and grouping as proposal evidence only until
+  operator-reviewed decisions are explicit, source-traced, and fail-closed.
+
+Short-Term Goal:
+
+- Finish surfacing the source-audit `operator_plan` in the UI and isolated
+  browser-bridge QA so the operator pass is actionable from the app, not only
+  from CLI/JSON output.
+
+Current Goal:
+
+- Add a frontend summary for `operator_plan` counts and make bridge QA assert
+  that review-ready, manual-defer, bulk-reject, manual-inspect, and
+  source-review-required planning evidence is visible to the operator.
+
+Context:
+
+- Goal identity was rechecked for thread
+  `019ea10c-fbe8-7b60-8889-6f00b5a91a68`; persisted objective still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- The previous committed slice added backend/CLI/API `operator_plan` evidence
+  and pushed commit `439b873 feat: add source audit operator plan`.
+- The repo was clean before this snapshot. No live default-vault review
+  decisions have been written.
+- The live pending-review source audit remains: `25` pending rows, with
+  `review_ready_count=0`, `manual_defer_count=5`, `bulk_reject_count=20`,
+  `manual_inspect_count=5`, and
+  `approval_requires_source_review_count=0`.
+
+Progress:
+
+- Verified that this `working.md` already carries the long-term goal, the
+  short-term source-audit operator-pass goal, the latest committed slice,
+  tests, live audit counts, issues, and next steps.
+- Confirmed one gap: the newly selected UI/bridge-QA slice had not yet been
+  captured as the top resume snapshot, so this entry records it before code
+  edits continue.
+
+Changes:
+
+- `working.md`: added this continuation snapshot only. Source files are not yet
+  changed in the current UI/bridge-QA slice.
+
+Tests:
+
+- No code tests were needed for this documentation-only resume checkpoint.
+- Goal identity was verified through `codex_handoff.py inspect`; no mismatch or
+  goal warning was reported.
+
+Issues:
+
+- The UI still needs to expose the `operator_plan` summary.
+- Isolated browser-bridge QA still needs an assertion that the operator-plan
+  summary is visible.
+- Live default vault still has `25` pending review rows and remains unchanged.
+- Full historical session backfill verification remains incomplete.
+- cmux/in-app browser testing remains excluded in this environment.
+
+Research:
+
+- No external research was needed. This checkpoint comes from live repo state,
+  the current thread goal, and the existing source-audit implementation.
+
+Next Steps:
+
+- Implement `workSessionEvidenceSourceAuditOperatorPlanText(...)` in
+  `src/workSummaryStatus.ts`.
+- Render that summary in the source-audit panel in `src/App.tsx` with a stable
+  QA selector.
+- Add targeted unit coverage in `tests/workSummaryStatus.test.ts`.
+- Extend `scripts/browser-bridge-isolated-qa.mjs` to verify the summary in the
+  app surface.
+- Run targeted tests, build, and then full `npm run check` before committing
+  the UI/QA slice.
 
 ## Resume Snapshot - 2026-06-11 01:56 KST
 

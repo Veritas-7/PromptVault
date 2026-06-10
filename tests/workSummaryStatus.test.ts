@@ -75,6 +75,7 @@ import {
   workSessionEvidenceSourceAuditManualInspectReasonText,
   workSessionEvidenceSourceAuditManualInspectText,
   workSessionEvidenceSourceAuditMetaText,
+  workSessionEvidenceSourceAuditOperatorPlanText,
   workSessionEvidenceSourceAuditRejectableItems,
   workSessionEvidenceSourceAuditRejectableText,
   workSessionEvidenceSourceAuditRejectReason,
@@ -3046,6 +3047,14 @@ test("work session evidence source audit summary separates ready and blocked row
   assert.equal(
     workSessionEvidenceSourceAuditMetaText(sessionEvidenceSourceAuditResult()),
     "감사 3/3행 · 검토 준비 row 1개 · review-ready proposal 1개 · 차단 row 1개 · 차단 proposal 1개 · 원본 hit 없음 1개 · 결과 검토 준비 1건, 차단 1건, 원본 hit 없음 1건 · 차단 사유 지시문 trace 1건 · 위험표시 source_prompt_instruction_only 1건 · 근처 limit 6 · source limit 5 · max lines 100,000",
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditOperatorPlanText(sessionEvidenceSourceAuditResult()),
+    "원본 감사 운영 계획 · 검토준비 1개 · 수동보류 2개 · 일괄거절 0개 · 수동확인 2개 · 승인 전 원본검토 필요 1개",
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditOperatorPlanText(null),
+    "원본 감사 운영 계획 없음",
   );
   assert.equal(
     workSessionEvidenceSourceAuditItemText(sessionEvidenceSourceAuditResult().items[1]),

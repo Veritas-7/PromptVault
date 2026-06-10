@@ -2149,6 +2149,21 @@ export function workSessionEvidenceSourceAuditMetaText(
   return parts.join(" · ");
 }
 
+export function workSessionEvidenceSourceAuditOperatorPlanText(
+  result: Pick<ProjectWorkSessionEvidenceSourceAuditResult, "operator_plan"> | null,
+): string {
+  if (!result) return "원본 감사 운영 계획 없음";
+  const plan = result.operator_plan;
+  return [
+    "원본 감사 운영 계획",
+    `검토준비 ${plan.review_ready_count.toLocaleString()}개`,
+    `수동보류 ${plan.manual_defer_count.toLocaleString()}개`,
+    `일괄거절 ${plan.bulk_reject_count.toLocaleString()}개`,
+    `수동확인 ${plan.manual_inspect_count.toLocaleString()}개`,
+    `승인 전 원본검토 필요 ${plan.approval_requires_source_review_count.toLocaleString()}개`,
+  ].join(" · ");
+}
+
 export function workSessionEvidenceSourceAuditItemText(
   item: ProjectWorkSessionEvidenceSourceAuditResult["items"][number],
 ): string {

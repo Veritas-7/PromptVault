@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 18:51 KST
+Updated: 2026-06-10 19:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,8 +34,31 @@ Short-Term Goal:
 Current Work:
 
 - Latest implementation commit:
-  `835fe31 fix: block instruction-only source proposals`.
+  `e145a61 fix: block generic source proposal matches`.
 - Latest verified behavior:
+  after rebuilding `promptvault-cli`, the real default-vault `oss-favorites`
+  `2026-06-04` source proposals that previously returned `review_ready_count=5`
+  now return `review_ready_count=0`, `blocked_count=5`, and
+  `blocker_reason=source_hit_matches_only_project_or_generic_terms`. No durable
+  approval/apply command was run.
+- Tests run for latest slice:
+  `cargo test session_evidence_source_proposals --lib` passed with `5` tests;
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `47` tests.
+- Full verification for latest slice:
+  `npm run check` passed: UI tests `523` passed, Vite/TypeScript build passed,
+  `cargo build --bin promptvault-cli` passed, Rust lib tests `239` passed, CLI
+  tests `35` passed, doc-tests passed, and clippy `-D warnings` passed.
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-bw9mAC/qa.sqlite`.
+  The QA reached source-proposals bridge/UI, review queue UI, review apply,
+  reviewed-items reload, work-log management, normalization, and saved-items
+  flows. Temporary Vite/bridge processes exited during cleanup; ports `5174`
+  and `5177` had no remaining listeners afterward.
+- Previous implementation commit:
+  `835fe31 fix: block instruction-only source proposals`.
+- Previous verified behavior:
   after rebuilding `promptvault-cli`, the real default-vault `CareVault`
   `2026-06-03` and `oss-favorites` `2026-05-31` source proposals that previously
   returned `review_ready=1` now return `review_ready_count=0`,

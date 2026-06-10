@@ -712,6 +712,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     review_state: review_state
                         .ok_or("work-session-evidence-review-queue-update requires --state")?,
                     review_reason,
+                    source_review: None,
                 },
             )?;
             if json {

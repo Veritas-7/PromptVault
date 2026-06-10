@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 16:13 KST
+Updated: 2026-06-10 16:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,9 +33,12 @@ Short-Term Goal:
 
 Current Work:
 
-- Most recent pushed implementation baseline before this slice:
-  `c4b1a18 test: cover antigravity source row qa`.
-- Current implementation slice: non-browser Rust coverage now verifies that an
+- Most recent pushed baseline before this slice:
+  `9028c03 docs: update antigravity proposal handoff`.
+- Current implementation slice: source-proposal review approvals now preserve
+  copied source trace metadata through review queue update, durable review
+  apply, reviewed-items reload, API validation, and UI display. Commit pending.
+- Previous verified implementation slice: non-browser Rust coverage verifies that an
   actual Antigravity SQLite source-search hit can be converted into a
   copied-trace source proposal with `review_ready=true`.
 - Previous verified implementation slice: isolated browser bridge QA now creates a
@@ -175,6 +178,20 @@ Current Work:
   `working.md` update, covering UI tests, production build, Rust library tests
   (`236` passed), CLI tests (`34` passed), doc tests, and clippy with
   `-D warnings`.
+- Verification proof after the current source-review trace durability slice:
+  `cargo fmt --check --manifest-path src-tauri/Cargo.toml` passed;
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_evidence_review_apply_persists_approved_rows_once`
+  passed with a fail-closed assertion that `source_proposal_review_ready:<hit>`
+  approvals require copied trace metadata; `npm run test:ui -- tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`
+  passed (`520` UI/API tests); `npm run build` passed; and
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-meEdVj/qa.sqlite`.
+  The browser bridge QA crossed source-proposals, review queue UI approval,
+  review apply, and reviewed-items reload with the new `source_review` payload.
+  Full `npm run check` also passed after this `working.md` update, covering UI
+  tests, production build, Rust library tests (`236` passed), CLI tests (`34`
+  passed), doc tests, and clippy with `-D warnings`.
 - Current UI decision-link proof: `npm run build` passed, targeted API bridge
   tests passed (`209` Node tests ran), and
   `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed against
@@ -223,6 +240,80 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Source proposal trace durability
+
+Current Goal:
+
+- Preserve copied source-search trace metadata after a source-proposal review
+  approval so durable reviewed rows remain source-traced after apply/reload.
+
+Context:
+
+- Before this slice, source proposal approval persisted only
+  `source_proposal_review_ready:<hit>` in `review_reason`. The durable reviewed
+  row did not structurally retain `source_path`, source line, hit id, or copied
+  `source_trace`.
+- This weakened the source-traced review contract even though source search and
+  source proposal generation were fail-closed.
+
+Progress:
+
+- Added nullable `source_review_json` to session-evidence review queue and
+  reviewed-items tables, with schema backfill for existing DBs.
+- Extended review queue update options, queue items, and reviewed items with
+  `source_review`.
+- Source-proposal approvals now require copied trace metadata when
+  `review_reason` starts with `source_proposal_review_ready:`.
+- The backend rejects source-proposal approvals when metadata is missing,
+  mismatched to candidate/project/date, not review-ready, not trace-validated,
+  or not referencing the same source-search hit id.
+- Review apply copies the source review JSON into durable reviewed items.
+- UI source proposal approval now submits the proposal object and displays
+  stored source trace details in both review queue rows and durable reviewed
+  rows after reload.
+- Browser bridge/API validation now accepts and validates source-review objects.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: schema extension, review update validation, queue/read
+  mappers, reviewed item persistence, and source-review durability regression.
+- `src-tauri/src/bin/promptvault-cli.rs`: explicit `source_review: None` for
+  CLI review queue updates.
+- `src/types.ts` and `src/promptVaultApi.ts`: typed and validated
+  `source_review` on queue/reviewed rows and update options.
+- `src/App.tsx`: source proposal approval sends the copied proposal object and
+  displays persisted trace metadata after reload.
+- `tests/promptVaultApi.test.ts` and `tests/workSummaryStatus.test.ts`:
+  bridge/API fixtures and assertions cover source-review persistence.
+- `working.md`: recorded this slice and verification state.
+
+Tests:
+
+- PASS: `cargo fmt --check --manifest-path src-tauri/Cargo.toml`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_evidence_review_apply_persists_approved_rows_once`
+  (`1` matching Rust test passed, with source-review required/persisted
+  assertions).
+- PASS: `npm run test:ui -- tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts`
+  (`520` UI/API tests passed).
+- PASS: `npm run build`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+- PASS: `npm run check` after this `working.md` update. This covered UI tests,
+  production build, Rust library tests (`236` passed), CLI tests (`34` passed),
+  doc tests, and clippy with `-D warnings`.
+
+Issues:
+
+- Commit is still pending for this slice.
+- Broader goal remains active: default-vault unresolved session-evidence
+  candidates still need review/closure, and provider reliability work remains.
+
+Next Steps:
+
+- Commit and push the source-review trace durability slice after staged diff and
+  secret checks pass.
+- Continue reducing unresolved project/day session-evidence rows without
+  weakening source-trace/operator-review requirements.
 
 ## Completed Slice - 2026-06-10 DB-backed source proposal Rust regression
 

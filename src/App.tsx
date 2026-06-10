@@ -298,6 +298,7 @@ import type {
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceNearbyResult,
+  ProjectWorkSessionEvidenceSourceProposal,
   ProjectWorkSessionEvidenceSourceProposalsResult,
   ProjectWorkSessionEvidenceSourceSearchResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
@@ -2168,6 +2169,7 @@ function App() {
     candidateId: string,
     reviewState: "approved" | "rejected",
     reviewReasonOverride?: string,
+    sourceReview?: ProjectWorkSessionEvidenceSourceProposal,
   ) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     const reviewReason = reviewReasonOverride
@@ -2183,6 +2185,7 @@ function App() {
         limit: WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT,
         review_state: reviewState,
         review_reason: reviewReason,
+        ...(sourceReview ? { source_review: sourceReview } : {}),
       });
       setWorkSessionEvidenceReviewQueueResult(nextQueue);
       setWorkSessionEvidenceReviewQueueState("ready");
@@ -6380,6 +6383,17 @@ function App() {
                       </span>
                     ) : null}
                     <span>{workSessionEvidenceReviewQueueSourceRolesText(item)}</span>
+                    {item.source_review ? (
+                      <>
+                        <span data-work-session-evidence-source-review={item.candidate_id}>
+                          source trace line {item.source_review.source_line_number.toLocaleString()} ·{" "}
+                          hit {item.source_review.source_search_hit_id}
+                        </span>
+                        <p className="work-log-proposal-evidence">
+                          {item.source_review.source_trace}
+                        </p>
+                      </>
+                    ) : null}
                     <span>
                       {item.latest_source_file} · seen {item.first_seen_at} / {item.last_seen_at}
                     </span>
@@ -6574,6 +6588,7 @@ function App() {
                                                                     proposal.candidate_id,
                                                                     "approved",
                                                                     `source_proposal_review_ready:${proposal.source_search_hit_id}`,
+                                                                    proposal,
                                                                   )}
                                                                 type="button"
                                                               >
@@ -6672,6 +6687,17 @@ function App() {
                   <span>
                     {item.review_reason} · {item.operational_status} · {item.candidate_id}
                   </span>
+                  {item.source_review ? (
+                    <>
+                      <span data-work-session-evidence-reviewed-source-review={item.candidate_id}>
+                        source trace line {item.source_review.source_line_number.toLocaleString()} ·{" "}
+                        hit {item.source_review.source_search_hit_id}
+                      </span>
+                      <p className="work-log-proposal-evidence">
+                        {item.source_review.source_trace}
+                      </p>
+                    </>
+                  ) : null}
                   <span>
                     작업 {item.work_item_count.toLocaleString()}개 · 파일{" "}
                     {item.source_file_count.toLocaleString()}개 · {item.session_evidence_audit}

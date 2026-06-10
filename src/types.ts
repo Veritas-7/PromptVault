@@ -375,6 +375,7 @@ export interface ProjectWorkSessionEvidenceReviewQueueItem {
   candidate_reason: string;
   session_evidence_audit: string;
   needs_title_normalization: boolean;
+  source_review: ProjectWorkSessionEvidenceSourceProposal | null;
 }
 
 export interface ProjectWorkSessionEvidenceReviewQueueResult {
@@ -414,6 +415,7 @@ export interface ProjectWorkSessionEvidenceReviewedItem {
   candidate_reason: string;
   session_evidence_audit: string;
   needs_title_normalization: boolean;
+  source_review: ProjectWorkSessionEvidenceSourceProposal | null;
 }
 
 export interface ProjectWorkSessionEvidenceReviewApplyResult {

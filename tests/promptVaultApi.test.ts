@@ -497,6 +497,32 @@ function projectWorkSessionEvidenceProposalsPayload(overrides = {}) {
   };
 }
 
+function projectWorkSessionEvidenceSourceReviewPayload(overrides = {}) {
+  return {
+    candidate_id: "session-evidence-PromptVault-a1b2c3d4e5",
+    project: "PromptVault",
+    date: "2026-06-09",
+    source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    source_line_number: 12,
+    source_session_id: "turn-source-hit-1",
+    source_timestamp: "2026-06-09T01:00:00Z",
+    source_cwd: "/Users/wj/Ai/System/10_Projects/PromptVault",
+    source_search_hit_id: "source-hit-1",
+    proposal_kind: "manual_session_search",
+    proposed_action:
+      "Review copied source-search trace from line 12 before approving any durable session-evidence record.",
+    source_trace: "PromptVault nearby evidence source hit.",
+    trace_validated: true,
+    review_ready: true,
+    blocker_reason: null,
+    match_score: 3,
+    matched_terms: ["evidence", "nearby", "promptvault"],
+    confidence: 0.85,
+    risk_flags: [],
+    ...overrides,
+  };
+}
+
 function projectWorkSessionEvidenceReviewQueuePayload(overrides = {}) {
   const candidate = projectWorkSessionEvidenceCandidatesPayload().candidates[0];
   return {
@@ -518,6 +544,7 @@ function projectWorkSessionEvidenceReviewQueuePayload(overrides = {}) {
       review_state: "pending_review",
       review_reason: "session_evidence_candidate_needs_title_normalization",
       candidate_reason: candidate.reason,
+      source_review: null,
     }],
     warnings: [],
     ...overrides,
@@ -528,7 +555,9 @@ function projectWorkSessionEvidenceReviewApplyPayload(overrides = {}) {
   const approvedItem = {
     ...projectWorkSessionEvidenceReviewQueuePayload().items[0],
     review_state: "approved",
-    review_reason: "operator_approved_session_evidence_review",
+    review_reason: "source_proposal_review_ready:source-hit-1",
+    needs_title_normalization: false,
+    source_review: projectWorkSessionEvidenceSourceReviewPayload(),
   };
   return {
     generated_at: "2026-06-09T00:01:00Z",
@@ -1512,6 +1541,7 @@ test("browser bridge work session evidence review queue update posts decision op
   const originalFetch = globalThis.fetch;
   let requestPath = "";
   let requestBody = "";
+  const sourceReview = projectWorkSessionEvidenceSourceReviewPayload();
   globalThis.fetch = async (input, init) => {
     requestPath = String(input);
     requestBody = String(init?.body ?? "");
@@ -1521,7 +1551,9 @@ test("browser bridge work session evidence review queue update posts decision op
       items: [{
         ...projectWorkSessionEvidenceReviewQueuePayload().items[0],
         review_state: "approved",
-        review_reason: "operator_approved_session_evidence_review",
+        review_reason: "source_proposal_review_ready:source-hit-1",
+        needs_title_normalization: false,
+        source_review: sourceReview,
       }],
     })), { status: 200 });
   };
@@ -1532,7 +1564,8 @@ test("browser bridge work session evidence review queue update posts decision op
   const result = await updateProjectWorkSessionEvidenceReviewQueue({
     candidate_id: "session-evidence-PromptVault-a1b2c3d4e5",
     review_state: "approved",
-    review_reason: "operator_approved_session_evidence_review",
+    review_reason: "source_proposal_review_ready:source-hit-1",
+    source_review: sourceReview,
     limit: 10,
   });
 
@@ -1541,13 +1574,15 @@ test("browser bridge work session evidence review queue update posts decision op
     options: {
       candidate_id: "session-evidence-PromptVault-a1b2c3d4e5",
       review_state: "approved",
-      review_reason: "operator_approved_session_evidence_review",
+      review_reason: "source_proposal_review_ready:source-hit-1",
+      source_review: sourceReview,
       limit: 10,
     },
   });
   assert.equal(result.pending_review_count, 0);
   assert.equal(result.approved_count, 1);
   assert.equal(result.items[0].review_state, "approved");
+  assert.equal(result.items[0].source_review?.source_trace, "PromptVault nearby evidence source hit.");
 });
 
 test("browser bridge work session evidence review apply posts options and validates rows", async (t) => {
@@ -1573,8 +1608,10 @@ test("browser bridge work session evidence review apply posts options and valida
   assert.equal(result.skipped_existing_count, 0);
   assert.equal(result.total_reviewed_item_count, 1);
   assert.equal(result.items[0].candidate_id, "session-evidence-PromptVault-a1b2c3d4e5");
-  assert.equal(result.items[0].review_reason, "operator_approved_session_evidence_review");
+  assert.equal(result.items[0].review_reason, "source_proposal_review_ready:source-hit-1");
   assert.equal(result.items[0].source_files[1], "workingd.md");
+  assert.equal(result.items[0].source_review?.source_line_number, 12);
+  assert.equal(result.items[0].source_review?.source_search_hit_id, "source-hit-1");
 });
 
 test("browser bridge work session evidence review apply rejects impossible counters", async (t) => {
@@ -1632,6 +1669,7 @@ test("browser bridge work session evidence reviewed items posts filters and vali
   assert.deepEqual(result.available_projects, ["PromptVault"]);
   assert.equal(result.items[0].candidate_id, "session-evidence-PromptVault-a1b2c3d4e5");
   assert.equal(result.items[0].source_files[1], "workingd.md");
+  assert.equal(result.items[0].source_review?.source_trace, "PromptVault nearby evidence source hit.");
 });
 
 test("browser bridge work session evidence reviewed items rejects duplicate candidate ids", async (t) => {

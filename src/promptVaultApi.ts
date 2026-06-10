@@ -30,6 +30,7 @@ import type {
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceNearbyResult,
+  ProjectWorkSessionEvidenceSourceProposal,
   ProjectWorkSessionEvidenceSourceProposalsResult,
   ProjectWorkSessionEvidenceSourceSearchResult,
   ProjectWorkSessionEvidenceReviewQueueResult,
@@ -154,6 +155,7 @@ export interface ProjectWorkSessionEvidenceReviewQueueUpdateOptions {
   candidate_id: string;
   review_state: string;
   review_reason?: string;
+  source_review?: ProjectWorkSessionEvidenceSourceProposal;
 }
 
 export interface ProjectWorkSessionEvidenceReviewApplyOptions {
@@ -2768,6 +2770,7 @@ function isProjectWorkSessionEvidenceReviewQueueItem(value: unknown): boolean {
     && isNonBlankString(value.candidate_reason)
     && value.session_evidence_audit === "unresolved-after-full-index"
     && typeof value.needs_title_normalization === "boolean"
+    && (value.source_review === null || isProjectWorkSessionEvidenceSourceProposal(value.source_review))
     && isFrequencyItemsWithinTotal(value.source_statuses, value.work_item_count);
 }
 
@@ -2833,6 +2836,7 @@ function isProjectWorkSessionEvidenceReviewedItem(value: unknown): boolean {
     && isNonBlankString(value.candidate_reason)
     && value.session_evidence_audit === "unresolved-after-full-index"
     && typeof value.needs_title_normalization === "boolean"
+    && (value.source_review === null || isProjectWorkSessionEvidenceSourceProposal(value.source_review))
     && isFrequencyItemsWithinTotal(value.source_statuses, value.work_item_count);
 }
 

@@ -1025,6 +1025,7 @@ pub struct ProjectWorkSessionEvidenceReviewQueueUpdateOptions {
     pub candidate_id: String,
     pub review_state: String,
     pub review_reason: Option<String>,
+    pub source_review: Option<ProjectWorkSessionEvidenceSourceProposal>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -1064,6 +1065,7 @@ pub struct ProjectWorkSessionEvidenceReviewQueueItem {
     pub candidate_reason: String,
     pub session_evidence_audit: String,
     pub needs_title_normalization: bool,
+    pub source_review: Option<ProjectWorkSessionEvidenceSourceProposal>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1105,6 +1107,7 @@ pub struct ProjectWorkSessionEvidenceReviewedItem {
     pub candidate_reason: String,
     pub session_evidence_audit: String,
     pub needs_title_normalization: bool,
+    pub source_review: Option<ProjectWorkSessionEvidenceSourceProposal>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2725,6 +2728,7 @@ pub fn run_project_work_session_evidence_review_queue_update(
         candidate_id,
         review_state,
         &review_reason,
+        options.source_review.as_ref(),
         &generated_at,
     )?;
     let rows = read_project_work_session_evidence_review_queue(&conn, limit)?;
@@ -11075,10 +11079,10 @@ fn sync_project_work_session_evidence_review_queue(
                 project, proposal_date, operational_status, source_statuses_json,
                 work_item_count, source_file_count, source_files_json, top_titles_json,
                 sample_evidence, latest_source_path, latest_source_file, candidate_reason,
-                session_evidence_audit, needs_title_normalization
+                session_evidence_audit, needs_title_normalization, source_review_json
             ) VALUES (
                 ?1, ?2, ?3, 'pending_review', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-                ?12, ?13, ?14, ?15, ?16, ?17, ?18
+                ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL
             )
             ON CONFLICT(candidate_id) DO UPDATE SET
                 last_seen_at=excluded.last_seen_at,
@@ -11105,6 +11109,11 @@ fn sync_project_work_session_evidence_review_queue(
                     WHEN project_work_session_evidence_review_queue.review_state IN ('approved', 'rejected')
                     THEN project_work_session_evidence_review_queue.review_reason
                     ELSE excluded.review_reason
+                END,
+                source_review_json=CASE
+                    WHEN project_work_session_evidence_review_queue.review_state IN ('approved', 'rejected')
+                    THEN project_work_session_evidence_review_queue.source_review_json
+                    ELSE excluded.source_review_json
                 END",
             params![
                 &candidate.candidate_id,
@@ -11168,18 +11177,26 @@ fn update_project_work_session_evidence_review_queue_state(
     candidate_id: &str,
     review_state: &str,
     review_reason: &str,
+    source_review: Option<&ProjectWorkSessionEvidenceSourceProposal>,
     updated_at: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let current_row = conn
         .query_row(
-            "SELECT review_state, needs_title_normalization
+            "SELECT review_state, needs_title_normalization, project, proposal_date
              FROM project_work_session_evidence_review_queue
              WHERE candidate_id=?1",
             params![candidate_id],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?)),
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, bool>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            },
         )
         .optional()?;
-    let Some((current_review_state, needs_title_normalization)) = current_row else {
+    let Some((current_review_state, needs_title_normalization, project, date)) = current_row else {
         return Err("work-session-evidence-review-queue candidate not found".into());
     };
     if current_review_state == "stale" && review_state == "approved" {
@@ -11194,16 +11211,110 @@ fn update_project_work_session_evidence_review_queue_state(
                 .into(),
         );
     }
+    let source_review_json = project_work_session_evidence_review_source_review_json(
+        candidate_id,
+        &project,
+        &date,
+        review_state,
+        review_reason,
+        source_review,
+    )?;
     let changed = conn.execute(
         "UPDATE project_work_session_evidence_review_queue
-         SET review_state=?2, review_reason=?3, last_seen_at=?4
+         SET review_state=?2, review_reason=?3, source_review_json=?4, last_seen_at=?5
          WHERE candidate_id=?1",
-        params![candidate_id, review_state, review_reason, updated_at],
+        params![
+            candidate_id,
+            review_state,
+            review_reason,
+            source_review_json,
+            updated_at
+        ],
     )?;
     if changed == 0 {
         return Err("work-session-evidence-review-queue candidate not found".into());
     }
     Ok(())
+}
+
+fn project_work_session_evidence_review_source_review_json(
+    candidate_id: &str,
+    project: &str,
+    date: &str,
+    review_state: &str,
+    review_reason: &str,
+    source_review: Option<&ProjectWorkSessionEvidenceSourceProposal>,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let source_proposal_reason = review_reason.starts_with("source_proposal_review_ready:");
+    if source_review.is_some() && review_state != "approved" {
+        return Err(
+            "work-session-evidence-review-queue source review trace can only be stored for approved rows"
+                .into(),
+        );
+    }
+    if source_proposal_reason && review_state == "approved" && source_review.is_none() {
+        return Err(
+            "work-session-evidence-review-queue source proposal approvals require copied source review trace metadata"
+                .into(),
+        );
+    }
+    let Some(review) = source_review else {
+        return Ok(None);
+    };
+    if review.candidate_id != candidate_id || review.project != project || review.date != date {
+        return Err(
+            "work-session-evidence-review-queue source review trace must match the approved candidate"
+                .into(),
+        );
+    }
+    if !review.review_ready || !review.trace_validated || review.blocker_reason.is_some() {
+        return Err(
+            "work-session-evidence-review-queue source review trace must be review-ready and validated"
+                .into(),
+        );
+    }
+    if review.source_path.trim().is_empty()
+        || review.source_line_number == 0
+        || review.source_search_hit_id.trim().is_empty()
+        || review.source_trace.trim().is_empty()
+    {
+        return Err(
+            "work-session-evidence-review-queue source review trace has incomplete source metadata"
+                .into(),
+        );
+    }
+    if source_proposal_reason
+        && !review_reason
+            .trim_start_matches("source_proposal_review_ready:")
+            .eq(review.source_search_hit_id.as_str())
+    {
+        return Err(
+            "work-session-evidence-review-queue source proposal review reason must reference the copied source-search hit"
+                .into(),
+        );
+    }
+    Ok(Some(serde_json::to_string(review)?))
+}
+
+fn project_work_session_evidence_source_review_from_json_column(
+    value: Option<String>,
+    column: usize,
+) -> rusqlite::Result<Option<ProjectWorkSessionEvidenceSourceProposal>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if value.trim().is_empty() {
+        return Ok(None);
+    }
+    serde_json::from_str::<ProjectWorkSessionEvidenceSourceProposal>(&value)
+        .map(Some)
+        .map_err(|err| {
+            rusqlite::Error::FromSqlConversionFailure(
+                column,
+                rusqlite::types::Type::Text,
+                Box::new(err),
+            )
+        })
 }
 
 struct ProjectWorkSessionEvidenceReviewQueueRows {
@@ -11225,7 +11336,7 @@ fn read_project_work_session_evidence_review_queue(
             project, proposal_date, operational_status, source_statuses_json,
             work_item_count, source_file_count, source_files_json, top_titles_json,
             sample_evidence, latest_source_path, latest_source_file, candidate_reason,
-            session_evidence_audit, needs_title_normalization
+            session_evidence_audit, needs_title_normalization, source_review_json
          FROM project_work_session_evidence_review_queue
          ORDER BY
             CASE review_state
@@ -11266,6 +11377,7 @@ fn read_project_work_session_evidence_review_queue(
         let top_titles_json: String = row.get(12)?;
         let source_files = serde_json::from_str::<Vec<String>>(&source_files_json)?;
         let latest_source_file = row.get::<_, String>(15)?;
+        let source_review_json = row.get::<_, Option<String>>(19)?;
         let source_file_roles = project_work_source_file_roles(&source_files);
         let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
         items.push(ProjectWorkSessionEvidenceReviewQueueItem {
@@ -11290,6 +11402,10 @@ fn read_project_work_session_evidence_review_queue(
             candidate_reason: row.get(16)?,
             session_evidence_audit: row.get(17)?,
             needs_title_normalization,
+            source_review: project_work_session_evidence_source_review_from_json_column(
+                source_review_json,
+                19,
+            )?,
         });
     }
     sort_project_work_session_evidence_review_queue_items(&mut items);
@@ -11327,7 +11443,7 @@ fn read_project_work_session_evidence_review_queue_items_by_state(
             project, proposal_date, operational_status, source_statuses_json,
             work_item_count, source_file_count, source_files_json, top_titles_json,
             sample_evidence, latest_source_path, latest_source_file, candidate_reason,
-            session_evidence_audit, needs_title_normalization
+            session_evidence_audit, needs_title_normalization, source_review_json
          FROM project_work_session_evidence_review_queue
          WHERE review_state=?1
          ORDER BY last_seen_at DESC
@@ -11356,6 +11472,7 @@ fn read_project_work_session_evidence_review_queue_items_by_state(
             )
         })?;
         let latest_source_file = row.get::<_, String>(15)?;
+        let source_review_json = row.get::<_, Option<String>>(19)?;
         let source_file_roles = project_work_source_file_roles(&source_files);
         let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
         Ok(ProjectWorkSessionEvidenceReviewQueueItem {
@@ -11380,6 +11497,10 @@ fn read_project_work_session_evidence_review_queue_items_by_state(
             candidate_reason: row.get(16)?,
             session_evidence_audit: row.get(17)?,
             needs_title_normalization: row.get::<_, i64>(18)? != 0,
+            source_review: project_work_session_evidence_source_review_from_json_column(
+                source_review_json,
+                19,
+            )?,
         })
     })?;
     rows.collect::<Result<Vec<_>, _>>()
@@ -11397,16 +11518,21 @@ fn persist_project_work_session_evidence_reviewed_items(
         let source_statuses_json = serde_json::to_string(&row.source_statuses)?;
         let source_files_json = serde_json::to_string(&row.source_files)?;
         let top_titles_json = serde_json::to_string(&row.top_titles)?;
+        let source_review_json = row
+            .source_review
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
         let changed = tx.execute(
             "INSERT OR IGNORE INTO project_work_session_evidence_reviewed_items (
                 applied_at, candidate_id, review_reason, project, proposal_date,
                 operational_status, source_statuses_json, work_item_count, source_file_count,
                 source_files_json, top_titles_json, sample_evidence, latest_source_path,
                 latest_source_file, candidate_reason, session_evidence_audit,
-                needs_title_normalization
+                needs_title_normalization, source_review_json
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                ?15, ?16, ?17
+                ?15, ?16, ?17, ?18
             )",
             params![
                 applied_at,
@@ -11426,6 +11552,7 @@ fn persist_project_work_session_evidence_reviewed_items(
                 &row.candidate_reason,
                 &row.session_evidence_audit,
                 row.needs_title_normalization as i64,
+                source_review_json,
             ],
         )?;
         applied_item_count += changed;
@@ -11452,7 +11579,7 @@ fn read_project_work_session_evidence_reviewed_items(
             operational_status, source_statuses_json, work_item_count, source_file_count,
             source_files_json, top_titles_json, sample_evidence, latest_source_path,
             latest_source_file, candidate_reason, session_evidence_audit,
-            needs_title_normalization
+            needs_title_normalization, source_review_json
          FROM project_work_session_evidence_reviewed_items
          ORDER BY applied_at DESC, id DESC",
     )?;
@@ -11483,6 +11610,7 @@ fn read_project_work_session_evidence_reviewed_items(
         let top_titles_json: String = row.get(11)?;
         let source_files = serde_json::from_str::<Vec<String>>(&source_files_json)?;
         let latest_source_file = row.get::<_, String>(14)?;
+        let source_review_json = row.get::<_, Option<String>>(18)?;
         let source_file_roles = project_work_source_file_roles(&source_files);
         let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
         items.push(ProjectWorkSessionEvidenceReviewedItem {
@@ -11506,6 +11634,10 @@ fn read_project_work_session_evidence_reviewed_items(
             candidate_reason: row.get(15)?,
             session_evidence_audit: row.get(16)?,
             needs_title_normalization: row.get::<_, i64>(17)? != 0,
+            source_review: project_work_session_evidence_source_review_from_json_column(
+                source_review_json,
+                18,
+            )?,
         });
     }
     Ok(ProjectWorkSessionEvidenceReviewedItemRows {
@@ -13316,7 +13448,8 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             latest_source_file TEXT NOT NULL,
             candidate_reason TEXT NOT NULL,
             session_evidence_audit TEXT NOT NULL,
-            needs_title_normalization INTEGER NOT NULL
+            needs_title_normalization INTEGER NOT NULL,
+            source_review_json TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_review_queue_state
             ON project_work_session_evidence_review_queue(review_state, last_seen_at DESC);
@@ -13340,7 +13473,8 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             latest_source_file TEXT NOT NULL,
             candidate_reason TEXT NOT NULL,
             session_evidence_audit TEXT NOT NULL,
-            needs_title_normalization INTEGER NOT NULL
+            needs_title_normalization INTEGER NOT NULL,
+            source_review_json TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_reviewed_items_applied_at
             ON project_work_session_evidence_reviewed_items(applied_at DESC);
@@ -13502,7 +13636,34 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
         ",
     )?;
     ensure_project_work_log_extraction_items_schema(conn)?;
+    ensure_project_work_session_evidence_review_schema(conn)?;
     ensure_project_work_summary_snapshot_schema(conn)?;
+    Ok(())
+}
+
+fn ensure_project_work_session_evidence_review_schema(
+    conn: &Connection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_session_evidence_review_queue",
+        "source_review_json",
+    )? {
+        conn.execute(
+            "ALTER TABLE project_work_session_evidence_review_queue ADD COLUMN source_review_json TEXT",
+            [],
+        )?;
+    }
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_session_evidence_reviewed_items",
+        "source_review_json",
+    )? {
+        conn.execute(
+            "ALTER TABLE project_work_session_evidence_reviewed_items ADD COLUMN source_review_json TEXT",
+            [],
+        )?;
+    }
     Ok(())
 }
 
@@ -25512,6 +25673,7 @@ Status: completed as a source-only/report-only hardening slice.
             "session-evidence-RoughProject-b1b2c3d4e5",
             "approved",
             "operator_approved_session_evidence_review",
+            None,
             "2026-06-09T00:15:00Z",
         )
         .expect_err("title-normalization row cannot be approved");
@@ -25525,6 +25687,7 @@ Status: completed as a source-only/report-only hardening slice.
             "session-evidence-SafeProject-a1b2c3d4e5",
             "approved",
             "operator_approved_session_evidence_review",
+            None,
             "2026-06-09T00:30:00Z",
         )
         .expect("approve session evidence row");
@@ -25578,6 +25741,7 @@ Status: completed as a source-only/report-only hardening slice.
             "session-evidence-RoughProject-b1b2c3d4e5",
             "approved",
             "operator_approved_session_evidence_review",
+            None,
             "2026-06-09T01:15:00Z",
         )
         .expect_err("stale row cannot be approved");
@@ -25591,6 +25755,7 @@ Status: completed as a source-only/report-only hardening slice.
             "session-evidence-RoughProject-b1b2c3d4e5",
             "rejected",
             "operator_rejected_session_evidence_review",
+            None,
             "2026-06-09T01:30:00Z",
         )
         .expect("reject stale row");
@@ -25698,11 +25863,49 @@ Status: completed as a source-only/report-only hardening slice.
         };
         sync_project_work_session_evidence_review_queue(&mut conn, &result, "2026-06-09T00:00:00Z")
             .expect("sync session evidence queue");
+        let source_review = ProjectWorkSessionEvidenceSourceProposal {
+            candidate_id: "session-evidence-SafeProject-apply-a1b2c3d4e5".to_string(),
+            project: "SafeProject".to_string(),
+            date: "2026-06-09".to_string(),
+            source_path:
+                "/Users/wj/.codex/sessions/2026/06/09/rollout-safe-project.jsonl".to_string(),
+            source_line_number: 42,
+            source_session_id: Some("turn-safe-project-source".to_string()),
+            source_timestamp: Some("2026-06-09T00:05:00Z".to_string()),
+            source_cwd: Some("/tmp/SafeProject".to_string()),
+            source_search_hit_id: "source-hit-safe-project".to_string(),
+            proposal_kind: "manual_session_search".to_string(),
+            proposed_action:
+                "Review copied source-search trace from line 42 before approving any durable session-evidence record."
+                    .to_string(),
+            source_trace: "SafeProject copied source-search trace for durable review.".to_string(),
+            trace_validated: true,
+            review_ready: true,
+            blocker_reason: None,
+            match_score: 3,
+            matched_terms: vec!["safeproject".to_string(), "durable".to_string()],
+            confidence: 0.85,
+            risk_flags: Vec::new(),
+        };
+        let missing_source_review_error = update_project_work_session_evidence_review_queue_state(
+            &conn,
+            "session-evidence-SafeProject-apply-a1b2c3d4e5",
+            "approved",
+            "source_proposal_review_ready:source-hit-safe-project",
+            None,
+            "2026-06-09T00:05:00Z",
+        )
+        .expect_err("source proposal approvals require copied trace metadata");
+        assert_eq!(
+            missing_source_review_error.to_string(),
+            "work-session-evidence-review-queue source proposal approvals require copied source review trace metadata"
+        );
         update_project_work_session_evidence_review_queue_state(
             &conn,
             "session-evidence-SafeProject-apply-a1b2c3d4e5",
             "approved",
-            "operator_approved_session_evidence_review",
+            "source_proposal_review_ready:source-hit-safe-project",
+            Some(&source_review),
             "2026-06-09T00:10:00Z",
         )
         .expect("approve session evidence review row");
@@ -25711,6 +25914,7 @@ Status: completed as a source-only/report-only hardening slice.
             "session-evidence-SafeProject-apply-rejected-b1b2c3d4e5",
             "rejected",
             "operator_rejected_session_evidence_review",
+            None,
             "2026-06-09T00:10:00Z",
         )
         .expect("reject session evidence review row");
@@ -25737,6 +25941,23 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(
             first.items[0].session_evidence_audit,
             "unresolved-after-full-index"
+        );
+        let persisted_source_review = first.items[0]
+            .source_review
+            .as_ref()
+            .expect("source review trace is persisted");
+        assert_eq!(
+            persisted_source_review.source_search_hit_id,
+            "source-hit-safe-project"
+        );
+        assert_eq!(persisted_source_review.source_line_number, 42);
+        assert_eq!(
+            persisted_source_review.source_trace,
+            "SafeProject copied source-search trace for durable review."
+        );
+        assert_eq!(
+            persisted_source_review.source_path,
+            "/Users/wj/.codex/sessions/2026/06/09/rollout-safe-project.jsonl"
         );
 
         let second = run_project_work_session_evidence_review_apply(
@@ -25769,6 +25990,14 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(
             listed.items[0].candidate_id,
             "session-evidence-SafeProject-apply-a1b2c3d4e5"
+        );
+        assert_eq!(
+            listed.items[0]
+                .source_review
+                .as_ref()
+                .expect("listed source review trace")
+                .source_search_hit_id,
+            "source-hit-safe-project"
         );
 
         let _ = std::fs::remove_file(&db_path);

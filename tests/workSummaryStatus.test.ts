@@ -797,6 +797,7 @@ function sessionEvidenceReviewQueueItem(
     candidate_reason: "unresolved_after_full_index,needs_title_normalization",
     session_evidence_audit: "unresolved-after-full-index",
     needs_title_normalization: true,
+    source_review: null,
     ...overrides,
   };
 }

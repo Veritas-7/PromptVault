@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 03:11 KST
+Updated: 2026-06-11 03:13 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-11 03:11 KST
+## Resume Snapshot - 2026-06-11 03:13 KST
 
 Long-Term Goal:
 
@@ -34,8 +34,10 @@ Short-Term Goal:
 Current Goal:
 
 - Completed and pushed: `5f0b716 fix: keep stale work log review rows
-  approval-safe`. `HEAD` and `origin/main` both resolve to
-  `5f0b716758dfa3472879678d7919ee4014b71cf6`.
+  approval-safe`.
+- Completed and pushed afterward: docs-only continuity correction for this
+  `working.md` handoff snapshot. Use `git log -1 --oneline` for the current
+  repository tip rather than treating the previous code-slice hash as HEAD.
 - Current active follow-up: keep this handoff accurate, then pick the next
   small QA/improvement slice without approving, rejecting, syncing, applying, or
   otherwise writing live review decisions unless explicitly requested.
@@ -46,14 +48,15 @@ Context:
   `work-log-review-queue` and was pushed to `origin/main`.
 - This slice `5f0b716` hardened stale work-log backfill review rows from both
   the UI and backend update path and was pushed to `origin/main`.
+- The latest docs-only handoff correction records that PromptVault should manage
+  both model/session-derived evidence and project-local progress logs such as
+  `workingd.md`.
 - The newly identified gap was asymmetric with other queues: normalization and
   session-evidence review queues already had stale-row approval-safe helper
   tests, but work-log backfill rows could still expose an approve action for
   `stale` rows and the backend update function did not reject stale approvals.
 - `risk_blocked` remains approvable after explicit operator/local review; only
   `stale` is blocked from approval because it is no longer a live candidate.
-- `git status --short --branch` reports a clean tree against `origin/main`
-  before this handoff correction.
 
 Progress:
 
@@ -102,6 +105,9 @@ Tests:
 - Pre-push safety checks for `5f0b716` passed: `gitleaks dir . --no-banner
   --redact`, `gitleaks protect --staged --no-banner`, and private GitHub repo
   visibility verification.
+- Handoff correction checks passed: `git diff --check -- working.md`, full
+  `gitleaks dir . --no-banner --redact`, and staged `gitleaks protect --staged
+  --no-banner`.
 
 Issues:
 
@@ -117,8 +123,6 @@ Research:
 
 Next Steps:
 
-- Verify this `working.md` handoff correction, then either commit/push it as a
-  docs-only continuity fix or fold it into the next small implementation slice.
 - Next implementation candidate: inspect review queue apply/save paths and
   progress-log ingestion handling for stale-state or operator-gate asymmetries,
   using isolated QA/default-vault read checks before any durable writes.

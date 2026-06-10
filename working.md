@@ -1,10 +1,80 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 09:40 KST
+Updated: 2026-06-10 10:01 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Refreshed session-index report consistency
+
+Current Goal:
+
+- Make `work-status-export --refresh-session-index --full-session-index`
+  report session scan counts, refreshed index counts, and total index counts
+  from the same sanitized evidence basis.
+
+Context:
+
+- A live full refresh before this slice produced mixed counters: the report
+  still displayed the pre-refresh scan limit while the refreshed SQLite index
+  stored fewer sanitized project-session records.
+- The mismatch made it harder to trust whether project/day work management was
+  verified against actual refreshed Codex session evidence.
+- `project_work_session_evidence` refreshed the stored index, but then returned
+  the raw prompt scan rather than reading back the sanitized index it had just
+  persisted.
+
+Progress:
+
+- Added a focused refresh helper that persists raw scanned prompts into the
+  sanitized session evidence index, then reads the report evidence back from
+  that same index when records exist.
+- `index_used` and `index_updated` can now both be true for a fresh refresh:
+  the index was rebuilt and the report was computed from the rebuilt sanitized
+  index.
+- Added a regression test proving unrelated raw prompts are excluded after the
+  refreshed sanitized index is read back.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: changes refreshed session evidence to return indexed
+  sanitized records after persistence and adds the regression test.
+- `working.md`: records the live counter mismatch and this correction.
+
+Tests:
+
+- PASS: `cargo fmt --manifest-path src-tauri/Cargo.toml`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_evidence_refresh_reads_back_sanitized_index --lib`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_evidence_prefers_existing_index --lib`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml work_status_export_rejects_conflicting_full_session_limit --lib`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml --lib` (`221` Rust
+  library tests).
+- PASS/OBSERVED: `cargo run --manifest-path src-tauri/Cargo.toml --quiet --bin promptvault-cli -- work-status-export --limit 1 --refresh-session-index --full-session-index --json`.
+- PASS: `npm run check` (`507` UI tests, `221` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- The live refresh/export now reports `report_session_scan_prompt_count=10654`,
+  `report_session_evidence_index_used=true`,
+  `report_session_evidence_index_updated=true`,
+  `report_session_evidence_index_count=10654`, and
+  `report_session_evidence_index_total_count=10654`.
+- The same run reported `31` projects, `26` days, `884` progress files, and
+  `10,148` work items in the active project/day management scan.
+- The remaining warning (`Session evidence: 설정된 제한 137개 프롬프트에서 스캔을
+  중지했습니다.`) is a raw fallback scan-limit warning, not a counter mismatch.
+- Isolated browser bridge QA used temporary DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-7o30dK/qa.sqlite`
+  and passed through work status export, session evidence proposals/review
+  queue/apply, work-log management, provider status/health, normalization,
+  approved review save, run history, and saved-items flows.
+
+Remaining:
+
+- Run diff/secret checks, stage explicit paths, commit, and push.
 
 ## Completed Slice - 2026-06-10 Durable session-evidence review audit apply
 

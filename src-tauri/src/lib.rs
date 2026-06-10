@@ -7608,7 +7608,25 @@ fn project_work_session_evidence(
     }
 
     let prompts = project_work_session_prompts(limit, warnings)?;
+    refreshed_project_work_session_evidence_from_prompts(database_path, limit, prompts)
+}
+
+fn refreshed_project_work_session_evidence_from_prompts(
+    database_path: &Path,
+    limit: usize,
+    prompts: Vec<PromptRecord>,
+) -> Result<ProjectWorkSessionEvidence, Box<dyn std::error::Error>> {
     let index_count = persist_project_work_session_index(database_path, &prompts)?;
+    let indexed = project_work_session_prompts_from_index(database_path, limit)?;
+    if !indexed.is_empty() {
+        return Ok(ProjectWorkSessionEvidence {
+            prompts: indexed,
+            index_used: true,
+            index_updated: true,
+            index_count,
+        });
+    }
+
     Ok(ProjectWorkSessionEvidence {
         prompts,
         index_used: false,
@@ -19285,6 +19303,38 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(evidence.index_count, 1);
         assert_eq!(evidence.prompts.len(), 1);
         assert!(warnings.is_empty());
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn project_work_session_evidence_refresh_reads_back_sanitized_index() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-session-index-refresh-sanitized-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let project_prompt = project_path_session_record(
+            "session-index-refresh-project",
+            "ExampleProject",
+            "2026-06-09T15:30:00Z",
+        );
+        let unrelated_prompt =
+            dated_record("session-index-refresh-unrelated", "2026-06-09T15:31:00Z");
+
+        let evidence = refreshed_project_work_session_evidence_from_prompts(
+            &db_path,
+            10,
+            vec![unrelated_prompt, project_prompt],
+        )
+        .expect("refreshed evidence");
+
+        assert!(evidence.index_used);
+        assert!(evidence.index_updated);
+        assert_eq!(evidence.index_count, 1);
+        assert_eq!(evidence.prompts.len(), 1);
+        assert!(evidence.prompts[0].text.contains("ExampleProject"));
+        assert!(!evidence.prompts[0].text.contains("unrelated"));
 
         let _ = std::fs::remove_file(db_path);
     }

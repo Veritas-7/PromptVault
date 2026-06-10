@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 17:49 KST
+Updated: 2026-06-10 17:50 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,18 +34,18 @@ Short-Term Goal:
 Current Work:
 
 - Latest pushed implementation slice:
-  `c186a2e feat: add recommended source proposals action`.
+  `9d209c3 fix: block weak source evidence proposals`.
 - Current repo HEAD should be refreshed with `git log -5 --oneline` on resume;
   docs-only baseline commits may move after this implementation slice.
 - Current implementation focus: continue reducing unresolved project/day
   session-evidence rows and provider/review reliability gaps without weakening
   the source-trace/operator-review contract.
-- Latest verified local implementation slice: source-search proposals now block
+- Latest verified implementation slice: source-search proposals now block
   hits whose matched terms are only the project identifier. This prevents weak
   cross-date evidence such as a `RepoTutorStudio` hit with only
   `matched_terms=["repotutorstudio"]` and a generic unrelated trace from
-  becoming review-ready. The implementation is verified locally and pending
-  commit in this snapshot.
+  becoming review-ready. Pushed as
+  `9d209c3 fix: block weak source evidence proposals`.
 - Previous verified implementation slice: the review queue UI now has a
   `추천 검토 제안` action that runs the existing nearby-session lookup, bounded
   source search, and source-proposal generation in one operator click. This
@@ -378,7 +378,8 @@ Current Goal:
 
 - Keep session-evidence source proposals fail-closed so project/day rows are not
   marked review-ready from source hits that only match the project identifier.
-- Implementation commit is pending in this snapshot.
+- Pushed implementation commit:
+  `9d209c3 fix: block weak source evidence proposals`.
 
 Context:
 
@@ -440,7 +441,6 @@ Issues:
 
 Next Steps:
 
-- Commit and push this slice, then update this section with the commit hash.
 - Continue with the remaining `26` pending rows, but require non-project
   evidence terms or stronger copied source traces before approving anything.
 

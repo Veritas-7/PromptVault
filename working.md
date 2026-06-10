@@ -1,10 +1,120 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 00:43 KST
+Updated: 2026-06-11 01:19 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 01:19 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and `PROJECT_STATUS.md`.
+- Use AI-assisted extraction/normalization only when every durable work item
+  remains source-traced, day/project grouped, operator-reviewable, and
+  fail-closed. Approval must stay explicit and copied evidence must be checked.
+
+Short-Term Goal:
+
+- Persist source-audit/manual-inspect decisions instead of relying on temporary
+  filters. Risk/no-source/manual-inspect session-evidence rows should be
+  durably holdable as `deferred` so later sessions can continue review without
+  losing operator intent.
+
+Current Goal:
+
+- Added durable `deferred` state support for the session-evidence review queue
+  across Rust, CLI, bridge API parsing, UI filters/actions, QA, and docs.
+- The next concrete task is a live default-vault operator decision pass using
+  `pending_review`, `deferred`, `approved`, and `rejected` states. This slice
+  did not approve, reject, or defer live default-vault data.
+
+Context:
+
+- Live default vault read-only check:
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- Current live session-evidence review queue: `25` pending rows, `0` deferred
+  rows, `0` approved rows, `0` rejected rows.
+- Current live source audit over those rows: `25` items total:
+  `12` `no_recommended_source`, `11` `blocked`, `2` `no_source_hits`.
+- Live risk flags remain present in audit data:
+  `long_base64_like_token` `9` times and `possible_api_key` `2` times.
+- Browser QA used an isolated temporary database and validated persistence
+  through the real browser bridge route. No default-vault decisions were
+  written.
+
+Progress:
+
+- Added `deferred_count` to session-evidence review queue results and status
+  summaries.
+- Made queue sync preserve `approved`, `rejected`, and `deferred` operator
+  states while still marking disappeared pending rows stale.
+- Added CLI/API/UI support for `--review-state deferred` and row updates to
+  `deferred`.
+- Added UI actions for general deferral and source-audit manual-inspect hold:
+  `보류` and `수동확인 보류`.
+- Kept apply/approval safety intact: only `approved` rows feed the apply path,
+  source-review JSON remains approval-only, and `deferred` rows are not applied.
+- Updated README/CLI docs so future sessions know the deferred/manual-inspect
+  state is durable.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: queue state model, sync preservation, state filter,
+  deferred counters, update normalization, and Rust preservation test.
+- `src-tauri/src/bin/promptvault-cli.rs`: help text, allowed state values, and
+  human/JSON counters.
+- `src/types.ts`, `src/promptVaultApi.ts`, `src/reviewQueueFilters.ts`,
+  `src/workSummaryStatus.ts`, `src/App.tsx`: frontend/API state model, status
+  text, filters, and defer actions.
+- `tests/workSummaryStatus.test.ts`, `tests/promptVaultApi.test.ts`: deferred
+  parsing/status/action coverage.
+- `scripts/browser-bridge-isolated-qa.mjs`: isolated bridge QA now defers a row
+  and verifies durable persistence through the route.
+- `docs/CLI.md`, `README.md`: documented deferred/manual-inspect queue flow.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `51` tests.
+- `cargo test project_work_session_evidence_review_queue --lib` passed.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts` passed with `213` tests.
+- `node --check scripts/browser-bridge-isolated-qa.mjs` passed.
+- `npm run build` passed.
+- `cargo test --bin promptvault-cli
+  work_session_evidence_review_queue_help_documents_sync_review_safety` passed.
+- `npm run qa:browser-bridge` passed end-to-end, including isolated durable
+  deferred queue persistence and source-audit manual-inspect defer UI coverage.
+- Full `npm run check` passed: UI tests `531`, Vite / TypeScript build,
+  `cargo build --bin promptvault-cli`, Rust lib tests `252`, CLI tests `47`,
+  doc-tests, and clippy `-D warnings`.
+- Live read-only CLI checks passed for default-vault pending/deferred queue
+  state and source-audit outcome/risk counters.
+
+Issues:
+
+- Default vault still has `25` pending session-evidence review rows and `0`
+  deferred rows. Operator decisions have not been applied to live data.
+- Source audit still has no `review_ready` rows; most current work is
+  no-source/blocked/no-hit review, not approval.
+- cmux/in-app browser testing remains excluded in this environment. Validation
+  used CLI, local build/test gates, and browser bridge QA.
+
+Next Steps:
+
+- Commit/push this deferred-state slice after diff, whitespace, staged secret,
+  and status checks.
+- Run a live default-vault operator decision pass: defer manual-inspect rows,
+  reject confirmed no-source/no-hit rows, and only approve rows with copied
+  source-review evidence.
+- Continue validating project/day management against real sessions and
+  project-local progress logs before claiming the overall work-management goal
+  is complete.
 
 ## Resume Snapshot - 2026-06-11 00:43 KST
 

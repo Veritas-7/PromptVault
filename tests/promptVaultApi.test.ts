@@ -542,6 +542,7 @@ function projectWorkSessionEvidenceReviewQueuePayload(overrides = {}) {
     returned_item_count: 1,
     pending_review_count: 1,
     stale_count: 0,
+    deferred_count: 0,
     approved_count: 0,
     rejected_count: 0,
     needs_title_normalization_count: 1,
@@ -1646,6 +1647,7 @@ test("browser bridge work session evidence review queue posts sync options and v
   });
   assert.equal(result.synced_candidate_count, 1);
   assert.equal(result.pending_review_count, 1);
+  assert.equal(result.deferred_count, 0);
   assert.equal(result.needs_title_normalization_count, 1);
   assert.equal(result.items[0].candidate_id, "session-evidence-PromptVault-a1b2c3d4e5");
   assert.equal(result.items[0].review_state, "pending_review");
@@ -1704,6 +1706,50 @@ test("browser bridge work session evidence review queue update posts decision op
   assert.equal(result.approved_count, 1);
   assert.equal(result.items[0].review_state, "approved");
   assert.equal(result.items[0].source_review?.source_trace, "PromptVault nearby evidence source hit.");
+});
+
+test("browser bridge work session evidence review queue update accepts deferred decisions", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionEvidenceReviewQueuePayload({
+      pending_review_count: 0,
+      deferred_count: 1,
+      items: [{
+        ...projectWorkSessionEvidenceReviewQueuePayload().items[0],
+        review_state: "deferred",
+        review_reason: "source_audit_manual_inspect:no_source_hits",
+        needs_title_normalization: false,
+      }],
+    })), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await updateProjectWorkSessionEvidenceReviewQueue({
+    candidate_id: "session-evidence-PromptVault-a1b2c3d4e5",
+    review_state: "deferred",
+    review_reason: "source_audit_manual_inspect:no_source_hits",
+    limit: 10,
+  });
+
+  assert.match(requestPath, /\/api\/work-session-evidence-review-queue\/update$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      candidate_id: "session-evidence-PromptVault-a1b2c3d4e5",
+      review_state: "deferred",
+      review_reason: "source_audit_manual_inspect:no_source_hits",
+      limit: 10,
+    },
+  });
+  assert.equal(result.pending_review_count, 0);
+  assert.equal(result.deferred_count, 1);
+  assert.equal(result.items[0].review_state, "deferred");
+  assert.equal(result.items[0].source_review, null);
 });
 
 test("browser bridge work session evidence review apply posts options and validates rows", async (t) => {

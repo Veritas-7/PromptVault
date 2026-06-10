@@ -11,6 +11,7 @@ export type WorkReviewQueueStateFilter =
   | "pending_review"
   | "risk_blocked"
   | "stale"
+  | "deferred"
   | "approved"
   | "rejected";
 

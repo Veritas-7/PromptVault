@@ -5,6 +5,7 @@ import {
   canApproveWorkLogNormalizationReviewQueueItem,
   canRejectWorkLogNormalizationReviewQueueItem,
   canApproveWorkSessionEvidenceReviewQueueItem,
+  canDeferWorkSessionEvidenceReviewQueueItem,
   canRejectWorkSessionEvidenceReviewQueueItem,
   canBulkRejectWorkSessionEvidenceSourceAuditItem,
   canRejectWorkSessionEvidenceSourceAuditItem,
@@ -862,6 +863,7 @@ function sessionEvidenceReviewQueueResult(
     returned_item_count: 5,
     pending_review_count: 30,
     stale_count: 2,
+    deferred_count: 0,
     approved_count: 6,
     rejected_count: 2,
     needs_title_normalization_count: 12,
@@ -3351,14 +3353,14 @@ test("work session evidence review queue labels describe persisted review rows",
   );
   assert.equal(
     workSessionEvidenceReviewQueueMetaText("ready", sessionEvidenceReviewQueueResult()),
-    "세션근거 큐 저장 40개 · 표시 5개 · 동기화 36개 · stale 전환 2개 · 검토 30개 · stale 2개 · 검토완료 6개 · 거절 2개 · 제목정규화 12개",
+    "세션근거 큐 저장 40개 · 표시 5개 · 동기화 36개 · stale 전환 2개 · 검토 30개 · stale 2개 · 보류 0개 · 검토완료 6개 · 거절 2개 · 제목정규화 12개",
   );
   assert.equal(
     workSessionEvidenceReviewQueueMetaText(
       "ready",
       sessionEvidenceReviewQueueResult({ warnings: ["capped sync"] }),
     ),
-    "세션근거 큐 저장 40개 · 표시 5개 · 동기화 36개 · stale 전환 2개 · 검토 30개 · stale 2개 · 검토완료 6개 · 거절 2개 · 제목정규화 12개 · 경고 1개",
+    "세션근거 큐 저장 40개 · 표시 5개 · 동기화 36개 · stale 전환 2개 · 검토 30개 · stale 2개 · 보류 0개 · 검토완료 6개 · 거절 2개 · 제목정규화 12개 · 경고 1개",
   );
   assert.equal(
     workSessionEvidenceReviewQueueMetaText(failed, null),
@@ -3385,24 +3387,41 @@ test("work session evidence review queue labels describe persisted review rows",
     })),
     "검토 완료 · operator_approved_session_evidence · unresolved-after-full-index · 제목 확인됨",
   );
+  assert.equal(
+    workSessionEvidenceReviewQueueItemStateText(sessionEvidenceReviewQueueItem({
+      review_state: "deferred",
+      review_reason: "source_audit_manual_inspect:no_source_hits",
+      needs_title_normalization: false,
+    })),
+    "수동 확인 보류 · source_audit_manual_inspect:no_source_hits · unresolved-after-full-index · 제목 확인됨",
+  );
 });
 
 test("work session evidence review queue actions keep stale rows approval-safe", () => {
   const pendingNeedsTitle = sessionEvidenceReviewQueueItem();
   const pendingReady = sessionEvidenceReviewQueueItem({ needs_title_normalization: false });
   const stale = { ...pendingReady, review_state: "stale" as const };
+  const deferred = { ...pendingReady, review_state: "deferred" as const };
   const approved = { ...pendingReady, review_state: "approved" as const };
   const rejected = { ...pendingReady, review_state: "rejected" as const };
 
   assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(pendingNeedsTitle), false);
+  assert.equal(canDeferWorkSessionEvidenceReviewQueueItem(pendingNeedsTitle), true);
   assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(pendingNeedsTitle), true);
   assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(pendingReady), true);
+  assert.equal(canDeferWorkSessionEvidenceReviewQueueItem(pendingReady), true);
   assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(pendingReady), true);
   assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(stale), false);
+  assert.equal(canDeferWorkSessionEvidenceReviewQueueItem(stale), true);
   assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(stale), true);
+  assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(deferred), false);
+  assert.equal(canDeferWorkSessionEvidenceReviewQueueItem(deferred), false);
+  assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(deferred), true);
   assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(approved), false);
+  assert.equal(canDeferWorkSessionEvidenceReviewQueueItem(approved), false);
   assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(approved), false);
   assert.equal(canApproveWorkSessionEvidenceReviewQueueItem(rejected), false);
+  assert.equal(canDeferWorkSessionEvidenceReviewQueueItem(rejected), false);
   assert.equal(canRejectWorkSessionEvidenceReviewQueueItem(rejected), false);
 });
 

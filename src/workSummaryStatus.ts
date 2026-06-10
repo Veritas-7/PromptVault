@@ -454,7 +454,8 @@ export function workManagementReviewDecisionText(
   if (!workLog && !normalization && !sessionEvidence) return null;
   const workLogPending = (workLog?.pending_ai_review_count ?? 0) + (workLog?.risk_blocked_count ?? 0);
   const normalizationPending = normalization?.pending_review_count ?? 0;
-  const sessionPending = sessionEvidence?.pending_review_count ?? 0;
+  const sessionDeferred = sessionEvidence?.deferred_count ?? 0;
+  const sessionPending = (sessionEvidence?.pending_review_count ?? 0) + sessionDeferred;
   const totalItems =
     (workLog?.total_items ?? 0) + (normalization?.total_items ?? 0) + (sessionEvidence?.total_items ?? 0);
   const pendingItems = workLogPending + normalizationPending + sessionPending;
@@ -480,6 +481,9 @@ export function workManagementReviewDecisionText(
   }
   if (sessionEvidence) {
     parts.push(`세션 ${sessionPending.toLocaleString()}/${sessionEvidence.total_items.toLocaleString()}개`);
+    if (sessionDeferred > 0) {
+      parts.push(`세션 보류 ${sessionDeferred.toLocaleString()}개`);
+    }
   }
   if (pendingItems === 0 && staleItems === 0) {
     parts.push("대기 없음");
@@ -531,6 +535,9 @@ export function workManagementReviewBlockerText(
     }
     if (sessionEvidence.stale_count > 0) {
       parts.push(`세션 stale ${sessionEvidence.stale_count.toLocaleString()}개`);
+    }
+    if (sessionEvidence.deferred_count > 0) {
+      parts.push(`세션 수동확인 보류 ${sessionEvidence.deferred_count.toLocaleString()}개`);
     }
   }
 
@@ -592,6 +599,9 @@ export function workManagementReviewResolutionText(
     } else if (evidenceReviewCount > 0) {
       parts.push(`세션근거 provider 설정 필요 ${evidenceReviewCount.toLocaleString()}개`);
     }
+  }
+  if (sessionEvidence && sessionEvidence.deferred_count > 0) {
+    parts.push(`세션 수동확인 보류 ${sessionEvidence.deferred_count.toLocaleString()}개`);
   }
 
   return parts.length ? `검토 해소 경로 · ${parts.join(" · ")}` : null;
@@ -706,6 +716,7 @@ function workManagementReadinessReviewQueueText(input: WorkManagementReadinessIn
     + (input.normalizationReviewQueue?.stale_count ?? 0);
   const sessionPending =
     (input.sessionEvidenceReviewQueue?.pending_review_count ?? 0)
+    + (input.sessionEvidenceReviewQueue?.deferred_count ?? 0)
     + (input.sessionEvidenceReviewQueue?.stale_count ?? 0);
   if (!input.workLogReviewQueue && !input.normalizationReviewQueue && !input.sessionEvidenceReviewQueue) {
     return "검토 큐 미확인";
@@ -769,7 +780,9 @@ function workManagementNormalizationReviewPendingCount(
 function workManagementSessionEvidenceReviewPendingCount(
   result: ProjectWorkSessionEvidenceReviewQueueResult | null,
 ): number {
-  return (result?.pending_review_count ?? 0) + (result?.stale_count ?? 0);
+  return (result?.pending_review_count ?? 0)
+    + (result?.deferred_count ?? 0)
+    + (result?.stale_count ?? 0);
 }
 
 function workManagementSessionBackfillRemaining(
@@ -2483,6 +2496,7 @@ export function workSessionEvidenceReviewQueueMetaText(
     `stale 전환 ${result.stale_candidate_count.toLocaleString()}개`,
     `검토 ${result.pending_review_count.toLocaleString()}개`,
     `stale ${result.stale_count.toLocaleString()}개`,
+    `보류 ${result.deferred_count.toLocaleString()}개`,
     `검토완료 ${result.approved_count.toLocaleString()}개`,
     `거절 ${result.rejected_count.toLocaleString()}개`,
     `제목정규화 ${result.needs_title_normalization_count.toLocaleString()}개`,
@@ -2509,6 +2523,14 @@ export function canApproveWorkSessionEvidenceReviewQueueItem(
 export function canRejectWorkSessionEvidenceReviewQueueItem(
   item: ProjectWorkSessionEvidenceReviewQueueItem,
 ): boolean {
+  return item.review_state === "pending_review"
+    || item.review_state === "stale"
+    || item.review_state === "deferred";
+}
+
+export function canDeferWorkSessionEvidenceReviewQueueItem(
+  item: ProjectWorkSessionEvidenceReviewQueueItem,
+): boolean {
   return item.review_state === "pending_review" || item.review_state === "stale";
 }
 
@@ -2519,6 +2541,8 @@ export function workSessionEvidenceReviewQueueItemStateText(
     ? "검토 대기"
     : item.review_state === "stale"
       ? "stale"
+      : item.review_state === "deferred"
+        ? "수동 확인 보류"
       : item.review_state === "approved"
         ? "검토 완료"
         : "거절됨";

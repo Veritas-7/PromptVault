@@ -405,6 +405,7 @@ import {
   workSessionEvidenceReviewQueueSourceRolesText,
   workSessionEvidenceSourceSearchQueryText,
   canApproveWorkSessionEvidenceReviewQueueItem,
+  canDeferWorkSessionEvidenceReviewQueueItem,
   canRejectWorkSessionEvidenceReviewQueueItem,
   workLogExtractionMetaText,
   workLogExtractionPersistenceText,
@@ -768,6 +769,7 @@ const WORK_REVIEW_QUEUE_STATE_FILTER_OPTIONS: Array<{
   { label: "전체 상태", value: "" },
   { label: "검토 대기", value: "pending_review" },
   { label: "stale", value: "stale" },
+  { label: "보류/수동확인", value: "deferred" },
   { label: "승인/완료", value: "approved" },
   { label: "거절", value: "rejected" },
 ];
@@ -2320,7 +2322,7 @@ function App() {
 
   async function updateWorkSessionEvidenceReviewQueueItem(
     candidateId: string,
-    reviewState: "approved" | "rejected",
+    reviewState: "approved" | "deferred" | "rejected",
     reviewReasonOverride?: string,
     sourceReview?: ProjectWorkSessionEvidenceSourceProposal,
   ) {
@@ -2328,7 +2330,9 @@ function App() {
     const reviewReason = reviewReasonOverride
       ?? (reviewState === "approved"
         ? "operator_approved_session_evidence"
-        : "operator_rejected_session_evidence");
+        : reviewState === "deferred"
+          ? "operator_deferred_session_evidence"
+          : "operator_rejected_session_evidence");
     setError(null);
     setWorkSessionEvidenceReviewQueueState("loading");
     setWorkSessionEvidenceReviewQueueUpdatingCandidateId(candidateId);
@@ -6842,6 +6846,26 @@ function App() {
                           : "감사 판정 거절"}
                       </button>
                     ) : null}
+                    {manualInspectReason && item.review_state !== "deferred" ? (
+                      <button
+                        aria-label={`${item.project} ${item.date} 감사 결과 기준 세션 근거 후보 수동확인 보류`}
+                        className="inline-action compact-action"
+                        data-defer-work-session-evidence-source-audit-item={item.candidate_id}
+                        disabled={isTopLevelActionLocked}
+                        onClick={() =>
+                          void updateWorkSessionEvidenceReviewQueueItem(
+                            item.candidate_id,
+                            "deferred",
+                            `source_audit_manual_inspect:${item.outcome}`,
+                          )}
+                        type="button"
+                      >
+                        <StopCircle size={14} />
+                        {workSessionEvidenceReviewQueueUpdatingCandidateId === item.candidate_id
+                          ? "처리 중"
+                          : "수동확인 보류"}
+                      </button>
+                    ) : null}
                   </article>
                 );
               })
@@ -6911,6 +6935,23 @@ function App() {
                           {workSessionEvidenceReviewQueueUpdatingCandidateId === item.candidate_id
                             ? "처리 중"
                             : "검토 완료"}
+                        </button>
+                      ) : null}
+                      {canDeferWorkSessionEvidenceReviewQueueItem(item) ? (
+                        <button
+                          aria-label={`${item.project} ${item.date} 세션 근거 후보 수동확인 보류`}
+                          className="inline-action compact-action"
+                          data-defer-work-session-evidence-review-queue={item.candidate_id}
+                          disabled={isTopLevelActionLocked}
+                          onClick={() =>
+                            void updateWorkSessionEvidenceReviewQueueItem(
+                              item.candidate_id,
+                              "deferred",
+                            )}
+                          type="button"
+                        >
+                          <StopCircle size={14} />
+                          보류
                         </button>
                       ) : null}
                       {canRejectWorkSessionEvidenceReviewQueueItem(item) ? (

@@ -1097,6 +1097,7 @@ pub struct ProjectWorkSessionEvidenceReviewQueueResult {
     pub returned_item_count: usize,
     pub pending_review_count: usize,
     pub stale_count: usize,
+    pub deferred_count: usize,
     pub approved_count: usize,
     pub rejected_count: usize,
     pub needs_title_normalization_count: usize,
@@ -2796,6 +2797,7 @@ pub fn run_project_work_session_evidence_review_queue(
         returned_item_count: rows.items.len(),
         pending_review_count: rows.pending_review_count,
         stale_count: rows.stale_count,
+        deferred_count: rows.deferred_count,
         approved_count: rows.approved_count,
         rejected_count: rows.rejected_count,
         needs_title_normalization_count: rows.needs_title_normalization_count,
@@ -2858,6 +2860,7 @@ pub fn run_project_work_session_evidence_review_queue_update(
         returned_item_count: rows.items.len(),
         pending_review_count: rows.pending_review_count,
         stale_count: rows.stale_count,
+        deferred_count: rows.deferred_count,
         approved_count: rows.approved_count,
         rejected_count: rows.rejected_count,
         needs_title_normalization_count: rows.needs_title_normalization_count,
@@ -12024,17 +12027,17 @@ fn sync_project_work_session_evidence_review_queue(
                 same_project_other_session_date_count=excluded.same_project_other_session_date_count,
                 nearest_same_project_other_session_date=excluded.nearest_same_project_other_session_date,
                 review_state=CASE
-                    WHEN project_work_session_evidence_review_queue.review_state IN ('approved', 'rejected')
+                    WHEN project_work_session_evidence_review_queue.review_state IN ('approved', 'rejected', 'deferred')
                     THEN project_work_session_evidence_review_queue.review_state
                     ELSE excluded.review_state
                 END,
                 review_reason=CASE
-                    WHEN project_work_session_evidence_review_queue.review_state IN ('approved', 'rejected')
+                    WHEN project_work_session_evidence_review_queue.review_state IN ('approved', 'rejected', 'deferred')
                     THEN project_work_session_evidence_review_queue.review_reason
                     ELSE excluded.review_reason
                 END,
                 source_review_json=CASE
-                    WHEN project_work_session_evidence_review_queue.review_state IN ('approved', 'rejected')
+                    WHEN project_work_session_evidence_review_queue.review_state IN ('approved', 'rejected', 'deferred')
                     THEN project_work_session_evidence_review_queue.source_review_json
                     ELSE excluded.source_review_json
                 END",
@@ -12095,7 +12098,11 @@ fn normalized_project_work_session_evidence_review_queue_update_state(
     match review_state.trim() {
         "approved" => Ok(("approved", "operator_approved_session_evidence_review")),
         "rejected" => Ok(("rejected", "operator_rejected_session_evidence_review")),
-        _ => Err("work-session-evidence-review-queue state must be approved or rejected".into()),
+        "deferred" => Ok(("deferred", "operator_deferred_session_evidence_review")),
+        _ => Err(
+            "work-session-evidence-review-queue state must be approved, rejected, or deferred"
+                .into(),
+        ),
     }
 }
 
@@ -12248,6 +12255,7 @@ struct ProjectWorkSessionEvidenceReviewQueueRows {
     total_items: usize,
     pending_review_count: usize,
     stale_count: usize,
+    deferred_count: usize,
     approved_count: usize,
     rejected_count: usize,
     needs_title_normalization_count: usize,
@@ -12273,10 +12281,11 @@ fn read_project_work_session_evidence_review_queue(
          ORDER BY
             CASE review_state
                 WHEN 'pending_review' THEN 0
-                WHEN 'stale' THEN 1
-                WHEN 'approved' THEN 2
-                WHEN 'rejected' THEN 3
-                ELSE 4
+                WHEN 'deferred' THEN 1
+                WHEN 'stale' THEN 2
+                WHEN 'approved' THEN 3
+                WHEN 'rejected' THEN 4
+                ELSE 5
             END,
             last_seen_at DESC,
             proposal_date DESC,
@@ -12286,6 +12295,7 @@ fn read_project_work_session_evidence_review_queue(
     let mut total_items = 0usize;
     let mut pending_review_count = 0usize;
     let mut stale_count = 0usize;
+    let mut deferred_count = 0usize;
     let mut approved_count = 0usize;
     let mut rejected_count = 0usize;
     let mut needs_title_normalization_count = 0usize;
@@ -12348,6 +12358,7 @@ fn read_project_work_session_evidence_review_queue(
         match item.review_state.as_str() {
             "pending_review" => pending_review_count += 1,
             "stale" => stale_count += 1,
+            "deferred" => deferred_count += 1,
             "approved" => approved_count += 1,
             "rejected" => rejected_count += 1,
             _ => {}
@@ -12363,6 +12374,7 @@ fn read_project_work_session_evidence_review_queue(
         total_items,
         pending_review_count,
         stale_count,
+        deferred_count,
         approved_count,
         rejected_count,
         needs_title_normalization_count,
@@ -12703,7 +12715,9 @@ fn normalize_project_work_session_evidence_review_state_filter<'a>(
     };
     match review_state_filter {
         "all" => Ok(None),
-        "pending_review" | "stale" | "approved" | "rejected" => Ok(Some(review_state_filter)),
+        "pending_review" | "stale" | "deferred" | "approved" | "rejected" => {
+            Ok(Some(review_state_filter))
+        }
         _ => Err(format!("{command} unknown review_state_filter: {review_state_filter}").into()),
     }
 }
@@ -28030,6 +28044,7 @@ Status: completed as a source-only/report-only hardening slice.
             .expect("read queue");
         assert_eq!(rows.total_items, 3);
         assert_eq!(rows.pending_review_count, 3);
+        assert_eq!(rows.deferred_count, 0);
         assert_eq!(rows.needs_title_normalization_count, 1);
         assert_eq!(
             rows.items[0].candidate_id,
@@ -28088,7 +28103,27 @@ Status: completed as a source-only/report-only hardening slice.
         let rows = read_project_work_session_evidence_review_queue(&conn, 10, None, None)
             .expect("read approved");
         assert_eq!(rows.pending_review_count, 2);
+        assert_eq!(rows.deferred_count, 0);
         assert_eq!(rows.approved_count, 1);
+
+        update_project_work_session_evidence_review_queue_state(
+            &conn,
+            "session-evidence-PriorityProject-c1b2c3d4e5",
+            "deferred",
+            "operator_deferred_session_evidence_review",
+            None,
+            "2026-06-09T00:45:00Z",
+        )
+        .expect("defer session evidence row");
+        let rows = read_project_work_session_evidence_review_queue(&conn, 10, None, None)
+            .expect("read deferred");
+        assert_eq!(rows.pending_review_count, 1);
+        assert_eq!(rows.deferred_count, 1);
+        assert!(rows.items.iter().any(|item| {
+            item.candidate_id == "session-evidence-PriorityProject-c1b2c3d4e5"
+                && item.review_state == "deferred"
+                && item.review_reason == "operator_deferred_session_evidence_review"
+        }));
 
         let result = ProjectWorkSessionEvidenceCandidatesResult {
             candidates: vec![safe],
@@ -28109,11 +28144,12 @@ Status: completed as a source-only/report-only hardening slice.
             "2026-06-09T01:00:00Z",
         )
         .expect("sync queue again");
-        assert_eq!(stale_count, 2);
+        assert_eq!(stale_count, 1);
         let rows = read_project_work_session_evidence_review_queue(&conn, 10, None, None)
             .expect("read stale");
         assert_eq!(rows.pending_review_count, 0);
-        assert_eq!(rows.stale_count, 2);
+        assert_eq!(rows.stale_count, 1);
+        assert_eq!(rows.deferred_count, 1);
         assert_eq!(rows.approved_count, 1);
         assert!(rows.items.iter().any(|item| {
             item.candidate_id == "session-evidence-SafeProject-a1b2c3d4e5"
@@ -28127,8 +28163,8 @@ Status: completed as a source-only/report-only hardening slice.
         }));
         assert!(rows.items.iter().any(|item| {
             item.candidate_id == "session-evidence-PriorityProject-c1b2c3d4e5"
-                && item.review_state == "stale"
-                && item.review_reason == "candidate_no_longer_live"
+                && item.review_state == "deferred"
+                && item.review_reason == "operator_deferred_session_evidence_review"
         }));
 
         let stale_approval_error = update_project_work_session_evidence_review_queue_state(
@@ -28156,7 +28192,8 @@ Status: completed as a source-only/report-only hardening slice.
         .expect("reject stale row");
         let rows = read_project_work_session_evidence_review_queue(&conn, 10, None, None)
             .expect("read rejected");
-        assert_eq!(rows.stale_count, 1);
+        assert_eq!(rows.stale_count, 0);
+        assert_eq!(rows.deferred_count, 1);
         assert_eq!(rows.rejected_count, 1);
 
         drop(conn);

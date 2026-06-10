@@ -398,6 +398,7 @@ export interface ProjectWorkSessionEvidenceReviewQueueResult {
   returned_item_count: number;
   pending_review_count: number;
   stale_count: number;
+  deferred_count: number;
   approved_count: number;
   rejected_count: number;
   needs_title_normalization_count: number;

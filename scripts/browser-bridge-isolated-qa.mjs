@@ -635,6 +635,8 @@ async function runBrowserQa() {
   let workSessionEvidenceReviewQueueUiRows = [];
   let workSessionEvidenceReviewQueueFilterMeta = "";
   let workSessionEvidenceReviewQueueFilteredRows = [];
+  let workSessionEvidenceReviewQueueUiStateAfterDefer = "";
+  let uiDeferredSessionEvidenceCandidateId = null;
   let workSessionEvidenceAntigravitySourceSearch = "";
   let workSessionEvidenceSourceAuditBridge = "";
   let workSessionEvidenceSourceAuditUiText = "";
@@ -1238,6 +1240,7 @@ async function runBrowserQa() {
         > workSessionEvidenceReviewQueue.total_items
       || workSessionEvidenceReviewQueue.pending_review_count
         + workSessionEvidenceReviewQueue.stale_count
+        + workSessionEvidenceReviewQueue.deferred_count
         + workSessionEvidenceReviewQueue.approved_count
         + workSessionEvidenceReviewQueue.rejected_count
         !== workSessionEvidenceReviewQueue.total_items
@@ -1255,6 +1258,7 @@ async function runBrowserQa() {
       `큐 ${workSessionEvidenceReviewQueue.returned_item_count} / ${workSessionEvidenceReviewQueue.total_items}`,
       `동기화 ${workSessionEvidenceReviewQueue.synced_candidate_count}`,
       `검토완료 ${workSessionEvidenceReviewQueue.approved_count}`,
+      `보류 ${workSessionEvidenceReviewQueue.deferred_count}`,
       `대기 ${workSessionEvidenceReviewQueue.pending_review_count}`,
     ].join(" · ");
     workSessionEvidenceReviewQueueRows = workSessionEvidenceReviewQueue.items
@@ -1527,6 +1531,67 @@ async function runBrowserQa() {
         ?.textContent ?? "";
       return meta.includes("필터 없음");
     }, undefined, { timeout: 30000 });
+    const protectedRecommendedSourceCandidateId = workSessionEvidenceReviewQueue.items[0]?.candidate_id ?? "";
+    const sessionEvidenceDeferSelector = protectedRecommendedSourceCandidateId
+      ? [
+        "[data-defer-work-session-evidence-review-queue]",
+        `:not([data-defer-work-session-evidence-review-queue="${protectedRecommendedSourceCandidateId}"])`,
+      ].join("")
+      : "[data-defer-work-session-evidence-review-queue]";
+    const firstSessionEvidenceDefer = page
+      .locator(sessionEvidenceDeferSelector)
+      .first();
+    if (await firstSessionEvidenceDefer.count()) {
+      const deferredCandidateId = await firstSessionEvidenceDefer.getAttribute(
+        "data-defer-work-session-evidence-review-queue",
+      );
+      if (!deferredCandidateId) {
+        throw new Error("Session evidence review queue defer button did not expose candidate id");
+      }
+      uiDeferredSessionEvidenceCandidateId = deferredCandidateId;
+      const sessionEvidenceDeferResponse = page.waitForResponse((response) =>
+        response.url().includes("/api/work-session-evidence-review-queue/update")
+        && response.request().method() === "POST",
+        { timeout: 90000 },
+      );
+      await firstSessionEvidenceDefer.click();
+      await sessionEvidenceDeferResponse;
+      await page.waitForFunction(() => {
+        const text = document.querySelector('[data-work-session-evidence-review-queue-meta="true"]')
+          ?.textContent ?? "";
+        return text.includes("세션근거 큐 저장") && !text.includes("동기화 중");
+      }, undefined, { timeout: 90000 });
+      const sessionEvidenceQueueAfterDefer = await bridgeJson(
+        page,
+        "/api/work-session-evidence-review-queue",
+        { options: { limit: 200, review_state_filter: "deferred" } },
+      );
+      const deferredSessionEvidenceRow = sessionEvidenceQueueAfterDefer.items.find(
+        (item) => item.candidate_id === deferredCandidateId,
+      );
+      if (
+        !deferredSessionEvidenceRow
+        || deferredSessionEvidenceRow.review_state !== "deferred"
+        || sessionEvidenceQueueAfterDefer.deferred_count < 1
+      ) {
+        throw new Error(`Session evidence review queue UI defer did not persist: ${
+          JSON.stringify(deferredSessionEvidenceRow ?? sessionEvidenceQueueAfterDefer)
+        }`);
+      }
+      const visibleDeferredStateText = await page
+        .locator(`[data-work-session-evidence-review-queue-state="${deferredCandidateId}"]`)
+        .first()
+        .textContent()
+        .catch(() => "");
+      if (visibleDeferredStateText && !visibleDeferredStateText.includes("수동 확인 보류")) {
+        throw new Error(`Visible deferred row did not render deferred state: ${visibleDeferredStateText}`);
+      }
+      workSessionEvidenceReviewQueueUiStateAfterDefer =
+        `${deferredSessionEvidenceRow.review_state} · ${deferredSessionEvidenceRow.review_reason}`;
+    } else {
+      workSessionEvidenceReviewQueueUiStateAfterDefer =
+        "no deferrable session evidence review queue row";
+    }
     const sourceAuditUiResponse = page.waitForResponse((response) =>
       response.url().includes("/api/work-session-evidence-source-audit")
       && response.request().method() === "POST",
@@ -1552,9 +1617,21 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-session-evidence-source-audit-filter-meta="true"]')
         ?.textContent ?? "";
+      const manualRows = Array.from(
+        document.querySelectorAll("[data-work-session-evidence-source-audit-manual-inspect-note]"),
+      );
       return text.includes("원본 감사 필터 수동 확인 필요")
         && text.includes("수동확인")
-        && text.includes("일괄거절");
+        && text.includes("일괄거절")
+        && manualRows.length > 0
+        && manualRows.some((row) => {
+          const candidateId = row.getAttribute("data-work-session-evidence-source-audit-manual-inspect-note");
+          return candidateId
+            ? Boolean(document.querySelector(
+              `[data-defer-work-session-evidence-source-audit-item="${candidateId}"]`,
+            ))
+            : false;
+        });
     }, undefined, { timeout: 30000 });
     await page.locator('[data-work-session-evidence-source-audit-filter="true"]').selectOption("all");
     await page.waitForFunction(() => {
@@ -1604,8 +1681,14 @@ async function runBrowserQa() {
     }, sourceAuditRejectCandidateIds, { timeout: 90000 });
     workSessionEvidenceSourceAuditRejectUiState =
       `${sourceAuditRejectCandidateIds.length} candidates · bulk rejected from source audit`;
+    const recommendedSourceProposalsSelector = uiDeferredSessionEvidenceCandidateId
+      ? [
+        "[data-work-session-evidence-recommended-source-proposals-action]",
+        `:not([data-work-session-evidence-recommended-source-proposals-action="${uiDeferredSessionEvidenceCandidateId}"])`,
+      ].join("")
+      : "[data-work-session-evidence-recommended-source-proposals-action]";
     const firstRecommendedSourceProposalsButton = page
-      .locator('[data-work-session-evidence-recommended-source-proposals-action]')
+      .locator(recommendedSourceProposalsSelector)
       .first();
     await firstRecommendedSourceProposalsButton.waitFor({ timeout: 90000 });
     const firstNearbyCandidateId = await firstRecommendedSourceProposalsButton.getAttribute(
@@ -2691,6 +2774,7 @@ async function runBrowserQa() {
       workSessionEvidenceReviewQueueUiRows,
       workSessionEvidenceReviewQueueFilterMeta,
       workSessionEvidenceReviewQueueFilteredRows,
+      workSessionEvidenceReviewQueueUiStateAfterDefer,
       workSessionEvidenceAntigravitySourceSearch,
       workSessionEvidenceSourceAuditBridge,
       workSessionEvidenceSourceAuditUiText,

@@ -510,6 +510,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "work-session-evidence-proposals" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_session_evidence_proposals_help_text());
+                return Ok(());
+            }
             let json = take_flag(&mut args, "--json");
             let ai = take_flag(&mut args, "--ai");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
@@ -2822,6 +2826,33 @@ fn print_help() {
     println!("{}", help_text());
 }
 
+fn work_session_evidence_proposals_help_text() -> String {
+    [
+        "PromptVault work-session-evidence-proposals",
+        "",
+        "Usage:",
+        "  promptvault-cli work-session-evidence-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]",
+        "",
+        "Purpose:",
+        "  Generates read-only source-traced proposals for project/day rows still missing session evidence.",
+        "  Without --ai, returns local fallback proposals that require operator review.",
+        "  With --ai, attempts configured OpenAI/GLM providers and falls back to local review-only proposals on provider failure.",
+        "  Use --needs-title-normalization to focus rows blocked by title cleanup before evidence review.",
+        "",
+        "Review safety:",
+        "  This command does not create session evidence links.",
+        "  Persist candidate decisions with work-session-evidence-review-queue --sync-candidates.",
+        "  Source-proposal approvals must include copied trace metadata via review queue update.",
+        "  Apply only operator-approved decisions with work-session-evidence-review-apply.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-session-evidence-proposals --limit 5 --json",
+        "  promptvault-cli work-session-evidence-proposals --limit 5 --ai --json",
+        "  promptvault-cli work-session-evidence-proposals --needs-title-normalization --ai --json",
+    ]
+    .join("\n")
+}
+
 fn work_log_normalization_proposals_help_text() -> String {
     [
         "PromptVault work-log-normalization-proposals",
@@ -4580,6 +4611,20 @@ mod tests {
         assert!(help.contains("does not write durable normalized rows"));
         assert!(help.contains("work-log-normalization-review-queue --sync-proposals"));
         assert!(help.contains("work-log-normalization-apply"));
+    }
+
+    #[test]
+    fn work_session_evidence_proposals_help_documents_source_review_safety() {
+        let help = work_session_evidence_proposals_help_text();
+
+        assert!(help.contains("promptvault-cli work-session-evidence-proposals [--limit N>0]"));
+        assert!(help.contains("read-only source-traced proposals"));
+        assert!(help.contains("Without --ai, returns local fallback proposals"));
+        assert!(help.contains("With --ai, attempts configured OpenAI/GLM providers"));
+        assert!(help.contains("does not create session evidence links"));
+        assert!(help.contains("work-session-evidence-review-queue --sync-candidates"));
+        assert!(help.contains("copied trace metadata"));
+        assert!(help.contains("work-session-evidence-review-apply"));
     }
 
     #[test]

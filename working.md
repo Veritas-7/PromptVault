@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 19:43 KST
+Updated: 2026-06-10 19:48 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,23 +33,37 @@ Short-Term Goal:
 
 Current Work:
 
-- Active in-progress slice:
-  improve AI normalization proposal discoverability. Live CLI checks show
-  `work-log-normalization-candidates --limit 12 --json` still has
-  `total_candidate_count=97`, while `work-log-normalization-proposals --limit
-  2 --ai --json` attempted GLM but timed out and safely fell back to local
-  review-only proposals. The command supports `--ai`, but
-  `work-log-normalization-proposals --help` currently fails as an unknown
-  argument, making the OpenAI/GLM path and review-only safety contract harder
+- Active completed implementation slice, ready to commit:
+  improve session-evidence proposal discoverability for the remaining
+  unresolved project/day rows. Live CLI checks still show `26` candidates with
+  `unresolved_after_full_index_count=26`. The command
+  `work-session-evidence-proposals` supports `--ai`, but
+  `work-session-evidence-proposals --help` currently exits `1` with
+  `unknown work-session-evidence-proposals argument: --help`, making the
+  OpenAI/GLM path, source-trace contract, and non-writing review workflow harder
   to discover.
 - Current implementation status:
   `src-tauri/src/bin/promptvault-cli.rs` now adds
-  `work-log-normalization-proposals --help` / `-h` / `help` handling plus an
-  explicit help body documenting `--ai`, OpenAI/GLM fallback, non-writing
-  review safety, `work-log-normalization-review-queue --sync-proposals`, and
-  `work-log-normalization-apply`. Unit tests for the help flag and help body
-  have been added.
+  `work-session-evidence-proposals --help` / `-h` / `help` handling plus an
+  explicit help body documenting `--ai`, OpenAI/GLM fallback, read-only
+  source-traced proposals, no automatic session-evidence link creation,
+  `work-session-evidence-review-queue --sync-candidates`, copied trace metadata,
+  and `work-session-evidence-review-apply`. A unit test for the help body has
+  been added.
 - Verification for active slice:
+  `cargo fmt` passed. `cargo test --bin promptvault-cli help` passed with `4`
+  tests. `cargo build --bin promptvault-cli` passed. The rebuilt command
+  `src-tauri/target/debug/promptvault-cli work-session-evidence-proposals
+  --help` now exits `0` and prints `21` lines documenting usage, `--ai`,
+  OpenAI/GLM fallback, read-only source-traced proposals, no automatic session
+  evidence links, and the review queue/apply flow. `git diff --check` passed.
+  `npm run check` passed: UI tests `523` passed, Vite/TypeScript build passed,
+  Rust lib tests `240` passed, CLI tests `37` passed, doc-tests passed, and
+  clippy `-D warnings` passed. Browser-bridge QA was not rerun for this
+  CLI-only help slice because no bridge/API/UI behavior changed.
+- Previous completed implementation slice:
+  `331187b fix: document normalization proposal help`.
+- Verification for previous slice:
   `cargo fmt && cargo test --bin promptvault-cli help` passed with `3` tests.
   `cargo build --bin promptvault-cli` passed. The rebuilt command
   `src-tauri/target/debug/promptvault-cli work-log-normalization-proposals
@@ -59,7 +73,7 @@ Current Work:
   `240` passed, CLI tests `36` passed, doc-tests passed, and clippy
   `-D warnings` passed. Browser-bridge QA was not rerun for this CLI-only help
   slice because no bridge/API/UI behavior changed.
-- Previous completed implementation slice:
+- Earlier completed implementation slice:
   `c8c7a71 feat: expose work log coverage file counts`.
 - Full verification for previous slice:
   `npm run check` passed: UI tests `523` passed, Vite/TypeScript build passed,

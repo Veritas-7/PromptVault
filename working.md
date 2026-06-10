@@ -1,10 +1,109 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 02:08 KST
+Updated: 2026-06-11 02:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 02:17 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Preserve operator-visible evidence for all long-running work-management
+  operations so later sessions can resume from the UI and this file without
+  reconstructing raw thread history.
+- Keep AI/SDK-assisted extraction and grouping as proposal evidence only until
+  source-reviewed, operator-approved, and auditable.
+
+Short-Term Goal:
+
+- Reduce the remaining full-session backfill gap by making the completion plan
+  visibly reviewable before the operator runs another long backfill.
+
+Current Goal:
+
+- Completed this slice: add a read-only visible session-index completion-plan
+  summary showing the exact large-batch settings, long-run repeat count,
+  click capacity, remaining-file delta, and long-backfill confirmation state.
+
+Context:
+
+- Goal identity was rechecked for thread
+  `019ea10c-fbe8-7b60-8889-6f00b5a91a68`; persisted objective still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- The previous slice exposed source-audit `operator_plan` in the UI and
+  isolated browser QA, then pushed commit
+  `8335b34 ux: show source audit operator plan`.
+- This slice does not write live default-vault review decisions and does not
+  run a live full backfill. It only makes the existing calculated completion
+  plan visible and tested.
+- Isolated browser QA shows the completion plan example:
+  `완료 계획 · source당 500개 · 긴 반복 50배치 · 클릭당 source별 최대 25,000개 · 남은 파일 26,538→0개 · 이번 긴 이어 백필 후 완료 예상 · 긴 백필 확인됨`.
+
+Progress:
+
+- Added `workSessionIndexCompletionPlanText(...)` to summarize the computed
+  large-batch completion plan.
+- Rendered the summary in the session-index/backfill status area with
+  `data-work-session-index-completion-plan="true"`.
+- Extended isolated browser-bridge QA to assert the completion-plan summary is
+  visible after large-batch preset and after applying the calculated completion
+  plan.
+- Added unit coverage for complete-in-one-run, partial-after-run,
+  confirmation-required, confirmed, null, and already-complete states.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: session-index completion-plan summary helper.
+- `src/App.tsx`: visible completion-plan status row in the work-management
+  session-index panel.
+- `tests/workSummaryStatus.test.ts`: helper coverage for completion-plan copy
+  and edge states.
+- `scripts/browser-bridge-isolated-qa.mjs`: UI assertions and JSON evidence
+  capture for the completion-plan summary.
+- `working.md`: this resume snapshot and verification record.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `51` tests.
+- `node --check scripts/browser-bridge-isolated-qa.mjs` passed.
+- `npm run build` passed; Vite emitted the existing `>500 kB` chunk warning.
+- `npm run qa:browser-bridge` passed end-to-end against an isolated database,
+  including the new `data-work-session-index-completion-plan` assertions.
+- Full `npm run check` passed: UI tests, Vite / TypeScript build, Rust CLI
+  build, Rust lib tests `252`, CLI tests `47`, doc-tests, and clippy
+  `-D warnings`.
+
+Issues:
+
+- Full historical session backfill is still not actually complete in the live
+  default vault. This slice only improves the visible operator plan for the
+  next long backfill run.
+- Live default vault still has the prior `25` pending session-evidence review
+  rows; no live review decisions were written.
+- cmux/in-app browser testing remains excluded in this environment.
+
+Research:
+
+- No external research was needed. The change follows existing backfill
+  planning helpers and isolated browser QA evidence.
+
+Next Steps:
+
+- Run the deliberate live operator pass only when authorized: defer the `5`
+  manual-inspect rows, reject the `20` bulk-reject rows only if the operator
+  accepts the plan, and approve nothing until source-review JSON exists.
+- Use the visible completion plan to run a live long session-index backfill
+  when ready, then refresh status export and review queues against the fuller
+  stored index.
+- Keep updating this `working.md` after each meaningful slice.
 
 ## Resume Snapshot - 2026-06-11 02:08 KST
 

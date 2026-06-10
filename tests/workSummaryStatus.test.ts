@@ -119,6 +119,7 @@ import {
   workSummaryFailureText,
   workSummaryIndexStatusText,
   workSessionIndexCheckpointGuidanceText,
+  workSessionIndexCompletionPlanText,
   workSessionIndexNextRunImpactText,
   workSessionIndexPartialBackfillWarningText,
   workSessionIndexPlannedRemainingText,
@@ -1468,9 +1469,22 @@ test("work session index planned remaining text follows current batch controls",
     workSessionIndexNextRunImpactText(result, 500, 2, 50, true),
     "다음 실행 효과 · 긴 이어 백필 · 이번 클릭 source당 최대 25,000개 · 남은 파일 24,800→0개 · 이번 클릭 후 완료 예상",
   );
+  assert.equal(
+    workSessionIndexCompletionPlanText(result, 500, 50, false),
+    "완료 계획 · source당 500개 · 긴 반복 50배치 · 클릭당 source별 최대 25,000개 · 남은 파일 24,800→0개 · 이번 긴 이어 백필 후 완료 예상 · 긴 백필 확인 필요",
+  );
+  assert.equal(
+    workSessionIndexCompletionPlanText(result, 500, 50, true),
+    "완료 계획 · source당 500개 · 긴 반복 50배치 · 클릭당 source별 최대 25,000개 · 남은 파일 24,800→0개 · 이번 긴 이어 백필 후 완료 예상 · 긴 백필 확인됨",
+  );
+  assert.equal(
+    workSessionIndexCompletionPlanText(result, 500, 10, true),
+    "완료 계획 · source당 500개 · 긴 반복 10배치 · 클릭당 source별 최대 5,000개 · 남은 파일 24,800→19,800개 · 이번 긴 이어 백필 후 19,800개 남음 · 긴 백필 확인됨",
+  );
   assert.equal(workSessionIndexPlannedRemainingText(result, null, 2, 10), null);
   assert.equal(workSessionIndexCheckpointGuidanceText(result, null, 2, 10), null);
   assert.equal(workSessionIndexNextRunImpactText(result, null, 2, 10, true), null);
+  assert.equal(workSessionIndexCompletionPlanText(result, 500, null, true), null);
   assert.equal(workSessionIndexPartialBackfillWarningText(null), null);
   assert.equal(
     workSessionIndexPlannedRemainingText({
@@ -1510,6 +1524,19 @@ test("work session index planned remaining text follows current batch controls",
       })),
     }, 25, 2, 10, true),
     "다음 실행 효과 · 세션 백필 완료 · 추가 실행 없음",
+  );
+  assert.equal(
+    workSessionIndexCompletionPlanText({
+      ...result,
+      all_sources_completed: true,
+      source_states: result.source_states.map((source) => ({
+        ...source,
+        processed_files: source.total_files,
+        next_file_index: source.total_files,
+        completed: true,
+      })),
+    }, 500, 50, true),
+    null,
   );
   assert.equal(
     workSessionIndexPartialBackfillWarningText({

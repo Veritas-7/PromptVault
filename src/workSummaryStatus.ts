@@ -402,6 +402,37 @@ export function workSessionIndexNextRunImpactText(
   return parts.join(" · ");
 }
 
+export function workSessionIndexCompletionPlanText(
+  result: ProjectWorkSessionIndexResult | null,
+  completionBatchFiles: number,
+  completionMaxBatches: number | null,
+  longRunConfirmed: boolean,
+): string | null {
+  if (!result?.source_states.length || completionMaxBatches === null) return null;
+  if (completionBatchFiles <= 0 || completionMaxBatches <= 0) return null;
+  const remainingBySource = result.source_states.map((source) =>
+    Math.max(0, source.total_files - source.processed_files)
+  );
+  const remainingFiles = remainingBySource.reduce((sum, remaining) => sum + remaining, 0);
+  if (remainingFiles === 0) return null;
+  const filesPerSourceRun = completionBatchFiles * completionMaxBatches;
+  const remainingAfterRun = remainingBySource
+    .map((remaining) => Math.max(0, remaining - filesPerSourceRun))
+    .reduce((sum, remaining) => sum + remaining, 0);
+  const planState = remainingAfterRun === 0
+    ? "이번 긴 이어 백필 후 완료 예상"
+    : `이번 긴 이어 백필 후 ${remainingAfterRun.toLocaleString()}개 남음`;
+  return [
+    "완료 계획",
+    `source당 ${completionBatchFiles.toLocaleString()}개`,
+    `긴 반복 ${completionMaxBatches.toLocaleString()}배치`,
+    `클릭당 source별 최대 ${filesPerSourceRun.toLocaleString()}개`,
+    `남은 파일 ${remainingFiles.toLocaleString()}→${remainingAfterRun.toLocaleString()}개`,
+    planState,
+    longRunConfirmed ? "긴 백필 확인됨" : "긴 백필 확인 필요",
+  ].join(" · ");
+}
+
 export function workSessionIndexPartialBackfillWarningText(
   result: ProjectWorkSessionIndexResult | null,
 ): string | null {

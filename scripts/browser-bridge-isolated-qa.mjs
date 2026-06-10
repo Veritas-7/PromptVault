@@ -836,6 +836,8 @@ async function runBrowserQa() {
       const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
       const guidance = document.querySelector('[data-work-session-index-checkpoint-guidance="true"]')?.textContent ?? "";
       const impact = document.querySelector('[data-work-session-index-next-run-impact="true"]')?.textContent ?? "";
+      const completionPlan = document.querySelector('[data-work-session-index-completion-plan="true"]')
+        ?.textContent ?? "";
       const standardMatch = planned.match(/이어 백필 예상\s+([\d,]+)회/);
       const longMatch = planned.match(/긴 이어 백필 예상\s+([\d,]+)회/);
       const standardRuns = standardMatch ? Number.parseInt(standardMatch[1].replaceAll(",", ""), 10) : 0;
@@ -854,7 +856,10 @@ async function runBrowserQa() {
         && impact.includes("긴 이어 백필")
         && impact.includes("source당 최대 5,000개")
         && impact.includes("남은 파일")
-        && impact.includes("이후 예상");
+        && impact.includes("이후 예상")
+        && completionPlan.includes("완료 계획")
+        && completionPlan.includes("source당 500개")
+        && completionPlan.includes("긴 백필 확인됨");
     }, undefined, { timeout: 60000 });
     workSessionIndexBackfill.plannedAfterBatch500 =
       (await page.locator('[data-work-session-index-planned-remaining="true"]').textContent())?.trim() ?? "";
@@ -862,6 +867,8 @@ async function runBrowserQa() {
       (await page.locator('[data-work-session-index-checkpoint-guidance="true"]').textContent())?.trim() ?? "";
     workSessionIndexBackfill.impactAfterBatch500 =
       (await page.locator('[data-work-session-index-next-run-impact="true"]').textContent())?.trim() ?? "";
+    workSessionIndexBackfill.completionPlanPreviewAfterBatch500 =
+      (await page.locator('[data-work-session-index-completion-plan="true"]').textContent())?.trim() ?? "";
     await page.locator('[data-apply-work-session-index-completion-plan="true"]').click();
     await page.waitForFunction(() => {
       const batchInput = document.querySelector('[data-work-session-index-batch-files="true"]');
@@ -872,17 +879,24 @@ async function runBrowserQa() {
       const longStatus = document.querySelector('[data-work-session-index-long-confirm-meta="true"]')?.textContent ?? "";
       const planned = document.querySelector('[data-work-session-index-planned-remaining="true"]')?.textContent ?? "";
       const impact = document.querySelector('[data-work-session-index-next-run-impact="true"]')?.textContent ?? "";
+      const completionPlan = document.querySelector('[data-work-session-index-completion-plan="true"]')
+        ?.textContent ?? "";
       return batchValue === "500"
         && Number.isSafeInteger(maxBatches)
         && maxBatches > 10
         && longStatus.includes(`반복 ${maxBatches.toLocaleString()}배치`)
         && planned.includes("긴 이어 백필 예상 1회")
-        && impact.includes("이번 클릭 후 완료 예상");
+        && impact.includes("이번 클릭 후 완료 예상")
+        && completionPlan.includes("완료 계획")
+        && completionPlan.includes(`긴 반복 ${maxBatches.toLocaleString()}배치`)
+        && completionPlan.includes("이번 긴 이어 백필 후 완료 예상");
     }, undefined, { timeout: 60000 });
     workSessionIndexBackfill.completionPlanAfterBatch500 = {
       longMaxBatches: (await page.locator('[data-work-session-index-long-max-batches="true"]').inputValue()).trim(),
       planned: (await page.locator('[data-work-session-index-planned-remaining="true"]').textContent())?.trim() ?? "",
       impact: (await page.locator('[data-work-session-index-next-run-impact="true"]').textContent())?.trim() ?? "",
+      completionPlan: (await page.locator('[data-work-session-index-completion-plan="true"]').textContent())
+        ?.trim() ?? "",
     };
     await page.locator('[data-browser-bridge-status="connected"]').waitFor({ timeout: 60000 });
     await page.locator('[data-work-summary-session-limit="true"]').fill(String(WORK_SESSION_LIMIT));

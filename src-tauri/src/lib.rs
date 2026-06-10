@@ -2360,10 +2360,12 @@ pub fn run_project_work_session_evidence_candidates(
     }
     let mut candidates = build_project_work_session_evidence_candidates_from_rows(
         &all_rows,
-        limit,
+        usize::MAX,
         options.needs_title_normalization,
     );
     annotate_project_work_session_evidence_candidate_date_hints(&database_path, &mut candidates)?;
+    sort_project_work_session_evidence_candidates_for_review(&mut candidates);
+    candidates.truncate(limit);
     let total_candidate_count = all_rows
         .iter()
         .filter(|row| row.session_evidence_audit == "unresolved-after-full-index")
@@ -8945,6 +8947,126 @@ fn nearest_project_work_session_date(
         .map(|(date, _)| date)
 }
 
+fn project_work_session_date_distance(left: &str, right: &str) -> i64 {
+    let Some(left) = NaiveDate::parse_from_str(left, "%Y-%m-%d").ok() else {
+        return i64::MAX;
+    };
+    let Some(right) = NaiveDate::parse_from_str(right, "%Y-%m-%d").ok() else {
+        return i64::MAX;
+    };
+    left.signed_duration_since(right).num_days().abs()
+}
+
+fn project_work_session_evidence_reason_token<'a>(
+    reason: &'a str,
+    prefix: &str,
+) -> Option<&'a str> {
+    reason
+        .split(',')
+        .map(str::trim)
+        .find_map(|token| token.strip_prefix(prefix))
+}
+
+fn project_work_session_evidence_reason_has_token(reason: &str, expected: &str) -> bool {
+    reason
+        .split(',')
+        .map(str::trim)
+        .any(|token| token == expected)
+}
+
+fn project_work_session_evidence_review_priority(
+    date: &str,
+    reason: &str,
+    needs_title_normalization: bool,
+) -> (usize, i64) {
+    let title_penalty = if needs_title_normalization { 10 } else { 0 };
+    if project_work_session_evidence_reason_has_token(
+        reason,
+        "same_project_session_same_date_unmatched",
+    ) {
+        return (title_penalty, 0);
+    }
+    if project_work_session_evidence_reason_has_token(reason, "same_project_session_other_dates") {
+        let distance = project_work_session_evidence_reason_token(
+            reason,
+            "nearest_same_project_session_date=",
+        )
+        .map(|nearest_date| project_work_session_date_distance(date, nearest_date))
+        .unwrap_or(i64::MAX);
+        return (title_penalty + 1, distance);
+    }
+    if project_work_session_evidence_reason_has_token(reason, "no_same_project_session_dates") {
+        return (title_penalty + 2, i64::MAX);
+    }
+    (title_penalty + 3, i64::MAX)
+}
+
+fn sort_project_work_session_evidence_candidates_for_review(
+    candidates: &mut [ProjectWorkSessionEvidenceCandidate],
+) {
+    candidates.sort_by(|left, right| {
+        let left_priority = project_work_session_evidence_review_priority(
+            &left.date,
+            &left.reason,
+            left.needs_title_normalization,
+        );
+        let right_priority = project_work_session_evidence_review_priority(
+            &right.date,
+            &right.reason,
+            right.needs_title_normalization,
+        );
+        left_priority
+            .cmp(&right_priority)
+            .then_with(|| right.date.cmp(&left.date))
+            .then_with(|| left.project.cmp(&right.project))
+            .then_with(|| left.candidate_id.cmp(&right.candidate_id))
+    });
+}
+
+fn project_work_session_evidence_review_state_rank(review_state: &str) -> usize {
+    match review_state {
+        "pending_review" => 0,
+        "stale" => 1,
+        "approved" => 2,
+        "rejected" => 3,
+        _ => 4,
+    }
+}
+
+fn sort_project_work_session_evidence_review_queue_items(
+    items: &mut [ProjectWorkSessionEvidenceReviewQueueItem],
+) {
+    items.sort_by(|left, right| {
+        let left_state_rank = project_work_session_evidence_review_state_rank(&left.review_state);
+        let right_state_rank = project_work_session_evidence_review_state_rank(&right.review_state);
+        let left_priority = if left.review_state == "pending_review" {
+            project_work_session_evidence_review_priority(
+                &left.date,
+                &left.candidate_reason,
+                left.needs_title_normalization,
+            )
+        } else {
+            (0, 0)
+        };
+        let right_priority = if right.review_state == "pending_review" {
+            project_work_session_evidence_review_priority(
+                &right.date,
+                &right.candidate_reason,
+                right.needs_title_normalization,
+            )
+        } else {
+            (0, 0)
+        };
+        left_state_rank
+            .cmp(&right_state_rank)
+            .then_with(|| left_priority.cmp(&right_priority))
+            .then_with(|| right.last_seen_at.cmp(&left.last_seen_at))
+            .then_with(|| right.date.cmp(&left.date))
+            .then_with(|| left.project.cmp(&right.project))
+            .then_with(|| left.candidate_id.cmp(&right.candidate_id))
+    });
+}
+
 fn append_project_work_candidate_reason(reason: &mut String, token: &str) {
     if token.trim().is_empty() || reason.split(',').any(|part| part == token) {
         return;
@@ -10116,9 +10238,6 @@ fn read_project_work_session_evidence_review_queue(
         if needs_title_normalization {
             needs_title_normalization_count += 1;
         }
-        if items.len() >= limit {
-            continue;
-        }
         let source_statuses_json: String = row.get(8)?;
         let source_files_json: String = row.get(11)?;
         let top_titles_json: String = row.get(12)?;
@@ -10150,6 +10269,8 @@ fn read_project_work_session_evidence_review_queue(
             needs_title_normalization,
         });
     }
+    sort_project_work_session_evidence_review_queue_items(&mut items);
+    items.truncate(limit);
     Ok(ProjectWorkSessionEvidenceReviewQueueRows {
         total_items,
         pending_review_count,
@@ -21064,6 +21185,51 @@ Status: completed as a source-only/report-only hardening slice.
         let _ = std::fs::remove_file(db_path);
     }
 
+    #[test]
+    fn session_evidence_candidates_prioritize_near_session_hints_before_truncating() {
+        let mut older_near = session_evidence_candidate_fixture(
+            "session-evidence-OlderNear-a1b2c3d4e5",
+            "OlderNear",
+            "OlderNear has a nearby same-project session date.",
+            false,
+        );
+        older_near.date = "2026-06-01".to_string();
+        older_near.reason = "unresolved_after_full_index,no_session_evidence,same_project_session_other_dates,nearest_same_project_session_date=2026-06-02".to_string();
+        older_near.nearest_same_project_other_session_date = Some("2026-06-02".to_string());
+        older_near.same_project_other_session_date_count = 1;
+
+        let mut newer_missing = session_evidence_candidate_fixture(
+            "session-evidence-NewerMissing-a1b2c3d4e5",
+            "NewerMissing",
+            "NewerMissing has no same-project session dates.",
+            false,
+        );
+        newer_missing.date = "2026-06-10".to_string();
+        newer_missing.reason =
+            "unresolved_after_full_index,no_session_evidence,no_same_project_session_dates"
+                .to_string();
+
+        let mut title_same_date = session_evidence_candidate_fixture(
+            "session-evidence-TitleSameDate-a1b2c3d4e5",
+            "TitleSameDate",
+            "TitleSameDate needs title cleanup despite a same-date hint.",
+            true,
+        );
+        title_same_date.date = "2026-06-10".to_string();
+        title_same_date.reason = "unresolved_after_full_index,no_session_evidence,needs_title_normalization,same_project_session_same_date_unmatched".to_string();
+        title_same_date.same_project_same_date_session_count = 1;
+
+        let mut candidates = vec![newer_missing, title_same_date, older_near];
+        sort_project_work_session_evidence_candidates_for_review(&mut candidates);
+        candidates.truncate(1);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(
+            candidates[0].candidate_id,
+            "session-evidence-OlderNear-a1b2c3d4e5"
+        );
+    }
+
     fn session_evidence_candidates_result_fixture(
         candidates: Vec<ProjectWorkSessionEvidenceCandidate>,
     ) -> ProjectWorkSessionEvidenceCandidatesResult {
@@ -23827,18 +23993,34 @@ Status: completed as a source-only/report-only hardening slice.
             same_project_other_session_date_count: 0,
             nearest_same_project_other_session_date: None,
         };
+        let prioritized = ProjectWorkSessionEvidenceCandidate {
+            candidate_id: "session-evidence-PriorityProject-c1b2c3d4e5".to_string(),
+            date: "2026-06-01".to_string(),
+            project: "PriorityProject".to_string(),
+            top_titles: vec!["Priority nearby session hint".to_string()],
+            sample_evidence: "2026-06-01: Priority nearby session hint".to_string(),
+            latest_source_path: "/tmp/PriorityProject/working.md".to_string(),
+            reason: "unresolved_after_full_index,no_session_evidence,same_project_session_other_dates,nearest_same_project_session_date=2026-06-02".to_string(),
+            same_project_other_session_dates: vec![FrequencyItem {
+                text: "2026-06-02".to_string(),
+                count: 3,
+            }],
+            same_project_other_session_date_count: 1,
+            nearest_same_project_other_session_date: Some("2026-06-02".to_string()),
+            ..safe.clone()
+        };
         let result = ProjectWorkSessionEvidenceCandidatesResult {
             generated_at: "2026-06-09T00:00:00Z".to_string(),
             database_path: db_path.display().to_string(),
             requested_limit: 20,
             session_limit_used: 100,
-            total_candidate_count: 2,
-            returned_candidate_count: 2,
-            report_total_rows: 2,
-            report_total_items: 3,
-            report_project_count: 2,
-            report_date_count: 2,
-            report_files_seen: 2,
+            total_candidate_count: 3,
+            returned_candidate_count: 3,
+            report_total_rows: 3,
+            report_total_items: 4,
+            report_project_count: 3,
+            report_date_count: 3,
+            report_files_seen: 3,
             report_session_scan_prompt_count: 0,
             report_session_evidence_count: 0,
             report_unique_session_evidence_count: 0,
@@ -23848,9 +24030,9 @@ Status: completed as a source-only/report-only hardening slice.
             report_session_evidence_index_total_count: 100,
             report_session_evidence_mode: PROJECT_WORK_SESSION_EVIDENCE_MODE.to_string(),
             bounded_session_limit_count: 0,
-            unresolved_after_full_index_count: 2,
+            unresolved_after_full_index_count: 3,
             needs_title_normalization_count: 1,
-            candidates: vec![safe.clone(), rough.clone()],
+            candidates: vec![safe.clone(), rough.clone(), prioritized.clone()],
             warnings: Vec::new(),
         };
 
@@ -23862,9 +24044,13 @@ Status: completed as a source-only/report-only hardening slice.
         .expect("sync session evidence queue");
         assert_eq!(stale_count, 0);
         let rows = read_project_work_session_evidence_review_queue(&conn, 10).expect("read queue");
-        assert_eq!(rows.total_items, 2);
-        assert_eq!(rows.pending_review_count, 2);
+        assert_eq!(rows.total_items, 3);
+        assert_eq!(rows.pending_review_count, 3);
         assert_eq!(rows.needs_title_normalization_count, 1);
+        assert_eq!(
+            rows.items[0].candidate_id,
+            "session-evidence-PriorityProject-c1b2c3d4e5"
+        );
         assert!(rows.items.iter().any(|item| {
             item.candidate_id == "session-evidence-SafeProject-a1b2c3d4e5"
                 && item.review_state == "pending_review"
@@ -23900,7 +24086,7 @@ Status: completed as a source-only/report-only hardening slice.
         .expect("approve session evidence row");
         let rows =
             read_project_work_session_evidence_review_queue(&conn, 10).expect("read approved");
-        assert_eq!(rows.pending_review_count, 1);
+        assert_eq!(rows.pending_review_count, 2);
         assert_eq!(rows.approved_count, 1);
 
         let result = ProjectWorkSessionEvidenceCandidatesResult {
@@ -23922,10 +24108,10 @@ Status: completed as a source-only/report-only hardening slice.
             "2026-06-09T01:00:00Z",
         )
         .expect("sync queue again");
-        assert_eq!(stale_count, 1);
+        assert_eq!(stale_count, 2);
         let rows = read_project_work_session_evidence_review_queue(&conn, 10).expect("read stale");
         assert_eq!(rows.pending_review_count, 0);
-        assert_eq!(rows.stale_count, 1);
+        assert_eq!(rows.stale_count, 2);
         assert_eq!(rows.approved_count, 1);
         assert!(rows.items.iter().any(|item| {
             item.candidate_id == "session-evidence-SafeProject-a1b2c3d4e5"
@@ -23934,6 +24120,11 @@ Status: completed as a source-only/report-only hardening slice.
         }));
         assert!(rows.items.iter().any(|item| {
             item.candidate_id == "session-evidence-RoughProject-b1b2c3d4e5"
+                && item.review_state == "stale"
+                && item.review_reason == "candidate_no_longer_live"
+        }));
+        assert!(rows.items.iter().any(|item| {
+            item.candidate_id == "session-evidence-PriorityProject-c1b2c3d4e5"
                 && item.review_state == "stale"
                 && item.review_reason == "candidate_no_longer_live"
         }));
@@ -23961,7 +24152,7 @@ Status: completed as a source-only/report-only hardening slice.
         .expect("reject stale row");
         let rows =
             read_project_work_session_evidence_review_queue(&conn, 10).expect("read rejected");
-        assert_eq!(rows.stale_count, 0);
+        assert_eq!(rows.stale_count, 1);
         assert_eq!(rows.rejected_count, 1);
 
         drop(conn);

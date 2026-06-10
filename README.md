@@ -111,6 +111,10 @@ to reload those durable reviewed-decision audit rows later by project and date.
 The review-queue command stores unresolved full-index session-evidence candidates
 for operator approval/rejection, preserving source trace from project logs such
 as `working.md`, `workingd.md`, `WORKING_LOG.md`, and `PROJECT_STATUS.md`.
+Same-project session-date hints only affect review ordering: same-date and
+nearest other-date hints are shown before rows with no known same-project
+session dates, and title-normalization rows remain blocked from review-complete
+approval until their titles are cleaned up.
 Status export, candidates, proposals, and the review queue also classify those
 source artifacts as handoff logs, work logs, project-status files, progress logs,
 generated reports, dated work logs, or generic progress artifacts so project/day

@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 13:44 KST
+Updated: 2026-06-10 13:59 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-10 13:44 KST
+## Resume Snapshot - 2026-06-10 13:59 KST
 
 Long-Term Goal:
 
@@ -33,16 +33,18 @@ Short-Term Goal:
 
 Current Work:
 
-- Most recent pushed implementation baseline before the current UI slice:
-  `3aae630 feat: add session evidence date diagnostics`.
-- Most recent pushed documentation refresh:
-  `9023c9b docs: refresh working resume state`.
-- Current verified implementation slice: human-readable session-evidence
-  diagnostic labels in proposal/review queue rows. The UI now renders
-  same-date, same-project-other-date, nearest-date, and no-same-project-session
-  hints as operator-facing text instead of requiring raw `candidate_reason`
-  parsing.
-- Previous verified implementation slice: same-project session-date diagnostics
+- Most recent pushed implementation baseline before this slice:
+  `6781953 feat: show session evidence diagnostics`.
+- Current verified implementation slice: session-evidence candidates and the
+  durable review queue are now sorted by same-project session-date diagnostics
+  before truncation. Same-date unmatched rows rank first, nearest other-date
+  same-project rows rank next by date distance, no-same-project-session rows
+  rank after those, and title-normalization rows remain behind reviewable rows.
+- Previous verified implementation slice: human-readable session-evidence
+  diagnostic labels in proposal/review queue rows. The UI renders same-date,
+  same-project-other-date, nearest-date, and no-same-project-session hints as
+  operator-facing text instead of requiring raw `candidate_reason` parsing.
+- Earlier verified implementation slice: same-project session-date diagnostics
   for the remaining full-index-unresolved session-evidence candidates. The
   diagnostics expose same-date count, other-date session date buckets, and
   nearest other session date, but they do not auto-attach cross-date proof.
@@ -55,15 +57,24 @@ Current Work:
   `892` files, and a full stored session index of `12,889/12,889` prompts.
   Rows needing session evidence remain `26`; `4` pure status snapshots remain
   classified as `status-snapshot`; title-normalization rows remain `0`.
-- Actual default-vault candidate diagnostics after the current slice:
+- Actual default-vault candidate diagnostics after the current priority slice:
   `26` candidates remain; `25` have same-project session evidence on other
   dates; `1` has no known same-project session evidence
   (`SuperpowersSkillManager` on `2026-06-05`); `0` have same-date session rows
-  that failed to attach.
+  that failed to attach. With `--limit 10`, the top rows are now nearest-session
+  candidates such as `RepoTutorStudio` `2026-06-10`
+  (`nearest_same_project_session_date=2026-06-09`) and `ResearchFlowAI`
+  `2026-06-08` (`nearest_same_project_session_date=2026-06-07`), instead of
+  simple latest-date order.
+- Actual default-vault review-queue sync after the current priority slice:
+  `48` stored queue rows, `10` returned, `26` synced live candidates, and `26`
+  pending unresolved candidates. The returned top rows use the same priority as
+  the candidate API, so operator review starts with nearest same-project session
+  hints.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
-  useful step is provider/manual search prioritization for the remaining
-  unresolved session-evidence rows.
+  useful step is provider/manual search execution or a drilldown action for the
+  prioritized unresolved session-evidence rows.
 
 Resume Contract:
 
@@ -96,6 +107,93 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Session-evidence review priority ordering
+
+Current Goal:
+
+- Use same-project session-date diagnostics to put the most reviewable
+  unresolved session-evidence rows first, without changing the fail-closed
+  evidence gate or auto-approving cross-date evidence.
+
+Context:
+
+- The previous slices exposed same-project session-date hints in JSON and UI,
+  but candidate and durable review-queue ordering still used broad date/project
+  order.
+- Actual default-vault candidates before this change were `26` total:
+  `25` had same-project sessions on other dates, `1` had no same-project
+  sessions, and `0` had same-date unmatched sessions.
+- The operator needed nearest same-project session hints at the top so provider
+  or manual search can focus on likely session artifacts first.
+
+Progress:
+
+- Candidate ordering now annotates every unresolved candidate before applying
+  the requested limit, then sorts by review priority.
+- Durable review queue sync now uses the same priority ordering instead of
+  stopping after the first date/project rows.
+- Reviewable candidates stay ahead of title-normalization-blocked candidates.
+- Same-date unmatched rows rank first; same-project other-date rows rank next by
+  nearest date distance; no-same-project-session rows rank after those.
+- Cross-date hints remain diagnostic-only. They do not become `source_trace`
+  proof and do not bypass operator review.
+
+Live Default-vault Proof:
+
+- `work-session-evidence-candidates --limit 10 --json` now starts with nearest
+  same-project session hints:
+  `RepoTutorStudio` `2026-06-10` nearest `2026-06-09`,
+  `ResearchFlowAI` `2026-06-08` nearest `2026-06-07`,
+  `enterprise_diagnosis_flutter` `2026-06-08` nearest `2026-06-09`,
+  `autoresearch-skill-system` `2026-06-06` nearest `2026-06-05`, and
+  `CareVault` `2026-06-05` nearest `2026-06-06`.
+- `work-session-evidence-review-queue --sync-candidates --limit 10 --json`
+  reported `48` total stored queue rows, `10` returned rows, `26` synced live
+  candidates, and `26` pending unresolved candidates. The returned top rows
+  match the candidate priority ordering.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added session-evidence review priority helpers,
+  candidate sorting before truncation, durable review-queue sorting, and Rust
+  coverage for limit-before-sort regressions.
+- `docs/CLI.md`: documented review-priority ordering for candidates and review
+  queue sync.
+- `README.md`: documented that same-project date hints affect review ordering
+  only and do not auto-complete evidence.
+- `working.md`: refreshed this resumable state.
+
+Tests:
+
+- PASS: goal identity guard via
+  `codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml session_evidence`
+  (`15` Rust lib session-evidence tests and `3` CLI session-evidence tests).
+- PASS: `npm run check` (UI tests, production build, Rust lib tests `231`,
+  CLI tests `34`, doc tests, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+  Isolated QA DB:
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-rOFLGk/qa.sqlite`.
+
+Issues:
+
+- Session-evidence rows are still unresolved until provider/manual review finds
+  exact target-session proof or an operator approves a source-traced review
+  action.
+- The default durable review queue has older stored rows, so `total=48` is
+  larger than the current live unresolved candidate count of `26`.
+
+Research:
+
+- No external research used for this slice.
+
+Next Steps:
+
+- Add or run a provider/manual session-search workflow against the prioritized
+  rows, starting with nearest same-project session hints.
+- Consider a candidate drilldown/search action so operators can jump from a
+  row to nearby same-project sessions without treating the hint as proof.
 
 ## Completed Slice - 2026-06-10 Human-readable session-evidence diagnostics UI
 

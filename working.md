@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 17:18 KST
+Updated: 2026-06-10 17:20 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,7 +34,7 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed baseline:
-  `7131c9d docs: record review queue diagnostics commit`.
+  `3390b95 feat: add recommended source search action`.
 - Current implementation focus: continue reducing unresolved project/day
   session-evidence rows and provider/review reliability gaps without weakening
   the source-trace/operator-review contract.
@@ -42,6 +42,7 @@ Current Work:
   `추천 원본 검색` action that runs the existing nearby-session lookup and bounded
   source search in one operator click. This is still read-only navigation and
   does not approve, create, or attach durable session evidence automatically.
+  Pushed as `3390b95 feat: add recommended source search action`.
 - Previous verified implementation slice: session-evidence review queue rows and
   durable reviewed items now preserve structured same-project session-date
   diagnostics instead of exposing those hints only through `candidate_reason`
@@ -318,6 +319,8 @@ Current Goal:
 - Reduce repetitive review-queue operation for the remaining unresolved
   session-evidence rows without weakening the source-trace/operator-review
   contract.
+- Pushed implementation commit:
+  `3390b95 feat: add recommended source search action`.
 
 Context:
 

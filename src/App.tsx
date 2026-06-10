@@ -456,6 +456,7 @@ import {
   workStatusExportPageStatusText,
   workStatusExportRowAuditToggleText,
   workStatusExportRowFilterLabel,
+  workStatusExportRowNextActionText,
   workStatusExportRowSessionSourcesText,
   workStatusExportRowSourceFilesText,
   workStatusExportRowSourceRolesText,
@@ -6234,6 +6235,7 @@ function App() {
                           <span>{workStatusExportRowSourceRolesText(row)}</span>
                           <span>{workStatusExportRowSourceStatusesText(row)}</span>
                           <span>{workStatusExportRowSessionSourcesText(row)}</span>
+                          <span>{workStatusExportRowNextActionText(row)}</span>
                           <span>최근 근거 파일 · {pathDisplayText(row.latest_source_path)}</span>
                           <p>{row.sample_evidence || "샘플 근거 없음"}</p>
                         </div>

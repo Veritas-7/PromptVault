@@ -1,10 +1,94 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 06:18 KST
+Updated: 2026-06-11 06:19 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 06:19 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Add actionable next-step text to expanded project/day status export rows so
+  operators can act on title-normalization and session-candidate gaps without
+  switching first to the work-management overview list.
+
+Current Active Work:
+
+- Previous title/session follow-up row-action slice is complete, verified,
+  committed, and pushed as `0c383fc ux: surface session follow-up actions`.
+- Documentation completion snapshot is pushed as
+  `f9144b4 docs: record session follow-up completion`.
+- Fresh repo check after that push showed `main...origin/main` clean.
+- Current slice is in progress: status export row details should include a
+  compact next-action line that preserves the same ordered remediation:
+  title normalization first, then same-date/nearby session candidate handling
+  when applicable.
+
+Progress:
+
+- Inspected status export row detail rendering and helper tests.
+- Chose a scoped UI/helper slice; no backend matching or persistence changes
+  should be needed.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds
+  `workStatusExportRowNextActionText` for title-normalization, bounded-session,
+  unresolved full-index, same-date, nearby-date, status-snapshot, and
+  session-supported rows.
+- `src/App.tsx`: renders the status export row next-action line inside expanded
+  row details.
+- `tests/workSummaryStatus.test.ts`: locks the status export row next-action
+  text for bounded-session, session-supported, nearby session, same-date
+  session, and status snapshot rows.
+- `scripts/browser-bridge-isolated-qa.mjs`: asserts the expanded status export
+  detail includes the new next-action line.
+- `working.md`: records this status export row-action slice.
+
+Tests:
+
+- RED as expected:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before implementation because `workStatusExportRowNextActionText` was
+  not exported yet.
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  (`52` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check`.
+- PASS: `git diff --check`.
+- PASS: `gitleaks dir . --no-banner --redact`.
+- PASS: `git diff --cached --name-only` showed only the five intended files.
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact`.
+- Pending: commit, push, and post-push verification.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- This slice should add display guidance only. It must not alter status export
+  row filtering, matching, queue persistence, or durable review decisions.
+
+Next Step:
+
+- Commit, push, and post-push verify the status export row-action slice.
 
 ## Resume Snapshot - 2026-06-11 06:09 KST
 

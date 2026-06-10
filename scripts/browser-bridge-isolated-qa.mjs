@@ -1202,6 +1202,7 @@ async function runBrowserQa() {
         const detail = document.querySelector('[data-work-status-export-row-detail="true"]')?.textContent ?? "";
         return detail.includes("매칭된 세션 근거 없음")
           && detail.includes("제한된 근거만 사용 중")
+          && detail.includes("다음 조치")
           && detail.includes("로그 유형");
       }, undefined, { timeout: 30000 });
       workStatusExportBoundedFilteredRowDetail =
@@ -1240,6 +1241,8 @@ async function runBrowserQa() {
       const detail = document.querySelector('[data-work-status-export-row-detail="true"]')?.textContent ?? "";
       return detail.includes("매칭된 세션 근거 없음")
         && detail.includes("전체 인덱스에서도 미해결")
+        && detail.includes("같은 날짜 후보 2건")
+        && detail.includes("다음 조치 · 제목 정규화 큐 검토 후 같은 날짜 세션 후보 2건 수동 연결 검토")
         && detail.includes("핸드오프 로그");
     }, undefined, { timeout: 30000 });
     workStatusExportUnresolvedFixtureRowDetail =

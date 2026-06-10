@@ -1039,6 +1039,50 @@ export function workStatusExportRowSessionSourcesText(row: ProjectWorkStatusExpo
   ].filter((part): part is string => part !== null).join(" · ");
 }
 
+export function workStatusExportRowNextActionText(row: ProjectWorkStatusExportRow): string {
+  if (row.needs_title_normalization) {
+    const sessionFollowUp = row.needs_session_evidence
+      ? workStatusExportRowSessionFollowUpText(row)
+      : null;
+    return sessionFollowUp
+      ? `다음 조치 · 제목 정규화 큐 검토 후 ${sessionFollowUp}`
+      : "다음 조치 · 제목 정규화 큐 검토";
+  }
+  if (row.needs_session_evidence) {
+    const sessionFollowUp = workStatusExportRowSessionFollowUpText(row);
+    return sessionFollowUp ? `다음 조치 · ${sessionFollowUp}` : "다음 조치 · 세션근거 큐 검토";
+  }
+  if (row.session_evidence_audit === "status-snapshot") {
+    return "다음 조치 · 프로젝트 상태 스냅샷 확인";
+  }
+  if (row.session_evidence_count > 0 || row.session_sources.length > 0) {
+    return "다음 조치 · 세션 근거 확인됨";
+  }
+  return "다음 조치 · 상태 export row 확인";
+}
+
+function workStatusExportRowSessionFollowUpText(row: ProjectWorkStatusExportRow): string | null {
+  if (row.session_evidence_audit !== "unresolved-after-full-index") {
+    return row.session_evidence_audit === "no-session-index"
+      ? "세션 인덱스 생성 후 재검증"
+      : "세션 백필 후 재검증 · 근거 limit 영향";
+  }
+  if (row.same_project_same_date_session_count > 0) {
+    return `같은 날짜 세션 후보 ${row.same_project_same_date_session_count.toLocaleString()}건 수동 연결 검토`;
+  }
+  if (!row.nearest_same_project_other_session_date) {
+    return "세션근거 큐 검토 · 전체 인덱스 미해결";
+  }
+  const distanceText = row.nearest_same_project_other_session_distance_days === null
+    ? ""
+    : ` · ${row.nearest_same_project_other_session_distance_days.toLocaleString()}일 차이`;
+  const priorityText = row.nearest_same_project_other_session_distance_days !== null
+      && row.nearest_same_project_other_session_distance_days <= 1
+    ? "인접 날짜 세션 후보 검토"
+    : "먼 날짜 세션 후보 낮은 우선순위 검토";
+  return `${priorityText} · ${row.nearest_same_project_other_session_date}${distanceText}`;
+}
+
 function workStatusExportRowSessionDateHintText(row: ProjectWorkStatusExportRow): string | null {
   if (row.same_project_same_date_session_count > 0) {
     return `같은 날짜 후보 ${row.same_project_same_date_session_count.toLocaleString()}건`;

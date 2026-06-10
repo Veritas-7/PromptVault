@@ -136,6 +136,7 @@ import {
   workStatusExportPageStatusText,
   workStatusExportRowAuditToggleText,
   workStatusExportRowFilterLabel,
+  workStatusExportRowNextActionText,
   workStatusExportRowSessionSourcesText,
   workStatusExportRowSourceFilesText,
   workStatusExportRowSourceRolesText,
@@ -1923,9 +1924,14 @@ test("work status export text exposes project day evidence coverage", () => {
     "매칭된 세션 근거 없음 · 검토완료 audit 1건 · 제한된 근거만 사용 중",
   );
   assert.equal(
+    workStatusExportRowNextActionText(result.rows[0]),
+    "다음 조치 · 제목 정규화 큐 검토 후 세션 백필 후 재검증 · 근거 limit 영향",
+  );
+  assert.equal(
     workStatusExportRowSessionSourcesText(result.rows[1]),
     "세션 소스 · Codex local sessions 9건 · 고유 3건",
   );
+  assert.equal(workStatusExportRowNextActionText(result.rows[1]), "다음 조치 · 세션 근거 확인됨");
   assert.equal(
     workStatusExportRowSessionSourcesText({
       ...result.rows[0],
@@ -1938,11 +1944,30 @@ test("work status export text exposes project day evidence coverage", () => {
     "매칭된 세션 근거 없음 · 검토완료 audit 1건 · 전체 인덱스에서도 미해결 · 가장 가까운 같은 프로젝트 세션 2026-06-09 · 1일 차이",
   );
   assert.equal(
+    workStatusExportRowNextActionText({
+      ...result.rows[0],
+      session_evidence_audit: "unresolved-after-full-index",
+      same_project_other_session_dates: [{ text: "2026-06-09", count: 2 }],
+      same_project_other_session_date_count: 1,
+      nearest_same_project_other_session_date: "2026-06-09",
+      nearest_same_project_other_session_distance_days: 1,
+    }),
+    "다음 조치 · 제목 정규화 큐 검토 후 인접 날짜 세션 후보 검토 · 2026-06-09 · 1일 차이",
+  );
+  assert.equal(
     workStatusExportRowSessionSourcesText({
       ...result.rows[0],
       same_project_same_date_session_count: 3,
     }),
     "매칭된 세션 근거 없음 · 검토완료 audit 1건 · 제한된 근거만 사용 중 · 같은 날짜 후보 3건",
+  );
+  assert.equal(
+    workStatusExportRowNextActionText({
+      ...result.rows[0],
+      session_evidence_audit: "unresolved-after-full-index",
+      same_project_same_date_session_count: 3,
+    }),
+    "다음 조치 · 제목 정규화 큐 검토 후 같은 날짜 세션 후보 3건 수동 연결 검토",
   );
   assert.equal(
     workStatusExportRowSessionSourcesText({
@@ -1951,6 +1976,15 @@ test("work status export text exposes project day evidence coverage", () => {
       session_evidence_audit: "status-snapshot",
     }),
     "매칭된 세션 근거 없음 · 검토완료 audit 1건 · 프로젝트 상태 스냅샷",
+  );
+  assert.equal(
+    workStatusExportRowNextActionText({
+      ...result.rows[0],
+      needs_session_evidence: false,
+      session_evidence_audit: "status-snapshot",
+      needs_title_normalization: false,
+    }),
+    "다음 조치 · 프로젝트 상태 스냅샷 확인",
   );
   assert.equal(workStatusExportRowFilterLabel("needs-session-evidence"), "세션 근거 필요");
   assert.equal(workStatusExportRowFilterLabel("bounded-session-limit"), "근거 limit 영향");

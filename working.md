@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 21:31 KST
+Updated: 2026-06-10 21:38 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,39 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed live data review slice:
+  near-session review queue source-trace triage and one durable reviewed-item
+  apply on the real default vault.
+- Completed behavior:
+  reloaded the real default vault
+  `work-session-evidence-review-queue --row-filter near-session-date-hint
+  --json` and confirmed `9` near pending candidates. Ran the same query shape as
+  the browser UI recommended-source-proposal path against all `9` rows. Only
+  `session-evidence-RepoTutorStudio-072eff316b` produced a copied source-search
+  proposal with `review_ready=true`, `blocker_reason=null`, source line `6`, and
+  source trace `Analyze local/simple-ts-app for beginner learning. Source files
+  are already filtered for secrets.` The other `8` rows were not approved:
+  blockers included `source_hit_matches_only_project_or_generic_terms`,
+  `source_trace_is_instruction_only`, `candidate_or_source_hit_has_risk_flags`,
+  or no proposal.
+- Verification status:
+  updated the queue row with
+  `work-session-evidence-review-queue-update --state approved --reason
+  source_proposal_review_ready:1a3fe4bbae95e753 --source-review-json ...` using
+  the copied proposal object, then ran
+  `work-session-evidence-review-apply --limit 20 --json`. Follow-up
+  `work-session-evidence-review-queue --row-filter near-session-date-hint
+  --json` now reports `9` total, `8` pending, `1` approved, `0` rejected.
+  `work-session-evidence-reviewed-items --project RepoTutorStudio --date
+  2026-06-10 --json` returns `1` durable reviewed item preserving source path
+  `/Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl`,
+  source line `6`, hit id `1a3fe4bbae95e753`, and the copied source trace.
+- Next product work:
+  the remaining `8` near rows need either better source selection/search
+  refinement or manual rejection/deferral. Do not approve rows blocked only by
+  project-name/generic-term matches, instruction-only traces, or risk flags.
+  Consider a small operator-facing summary of blocker counts if repeated manual
+  source-proposal checks remain slow.
 - Completed implementation slice:
   `1d3af9b feat: filter session evidence queue in ui`.
 - Completed behavior:

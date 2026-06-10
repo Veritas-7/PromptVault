@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 19:02 KST
+Updated: 2026-06-10 19:22 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,8 +34,41 @@ Short-Term Goal:
 Current Work:
 
 - Latest implementation commit:
-  `e145a61 fix: block generic source proposal matches`.
+  `c9953c4 fix: block stale source proposal dates`.
 - Latest verified behavior:
+  added a source-proposal date-distance blocker. A copied source-search hit can
+  become review-ready only when the source prompt date is same-day or adjacent
+  to the candidate project/day; otherwise it is blocked with
+  `source_hit_date_too_far_from_candidate`. This prevents stale nearby sessions
+  from becoming durable approval input for later work-log dates.
+  after rebuilding `promptvault-cli`, the previous surviving real default-vault
+  candidates now return `review_ready_count=0`: `oss-favorites` `2026-06-09`
+  and `2026-06-10`, `Jclaw` `2026-04-12`, and `LocalMind` `2026-06-04`,
+  `2026-06-09`, and `2026-06-10`. A full top-26 unresolved candidate sample
+  using each row's top nearby source returned `readyRows=[]`. No durable
+  approval/apply command was run.
+- Tests run for latest slice:
+  `cargo test session_evidence_source_proposals --lib` passed with `6` tests
+  after one expected red-ordering failure was fixed; `node
+  --disable-warning=ExperimentalWarning --experimental-transform-types --test
+  tests/workSummaryStatus.test.ts` passed with `47` tests. A mistyped
+  `cargo fmt --manifest-path src-tauri/Cargo.toml` from inside `src-tauri/`
+  failed because the path was doubled; rerunning `cargo fmt && cargo test ...`
+  from `src-tauri/` passed. A first full `npm run check` run caught a clippy
+  `manual_map` issue; the expression was simplified and the rerun passed.
+- Full verification for latest slice:
+  `npm run check` passed: UI tests `523` passed, Vite/TypeScript build passed,
+  `cargo build --bin promptvault-cli` passed, Rust lib tests `240` passed, CLI
+  tests `35` passed, doc-tests passed, and clippy `-D warnings` passed.
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-ti9J2g/qa.sqlite`.
+  The QA reached source-proposals bridge/UI, review queue UI, review apply,
+  reviewed-items reload, work-log management, normalization, saved-items, and
+  work-status export pagination/filter flows.
+- Previous implementation commit:
+  `e145a61 fix: block generic source proposal matches`.
+- Previous verified behavior:
   after rebuilding `promptvault-cli`, the real default-vault `oss-favorites`
   `2026-06-04` source proposals that previously returned `review_ready_count=5`
   now return `review_ready_count=0`, `blocked_count=5`, and

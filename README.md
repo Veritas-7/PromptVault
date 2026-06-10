@@ -116,7 +116,8 @@ create matched session evidence links. Use `work-session-evidence-reviewed-items
 to reload those durable reviewed-decision audit rows later by project and date.
 The review-queue command stores unresolved full-index session-evidence candidates
 for operator approval/rejection, preserving source trace from project logs such
-as `working.md`, `workingd.md`, `WORKING_LOG.md`, and `PROJECT_STATUS.md`.
+as `working.md`, `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+`PROJECT_STATUS.md`.
 Same-project session-date hints only affect review ordering: same-date and
 nearest other-date hints are shown before rows with no known same-project
 session dates, and title-normalization rows remain blocked from review-complete

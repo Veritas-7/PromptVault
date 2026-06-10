@@ -21862,6 +21862,7 @@ mod tests {
         let workingd = project_dir.join("workingd.md");
         let working_log = project_dir.join("WORKING_LOG.md");
         let work_log = project_dir.join("work_log.md");
+        let progress_log = project_dir.join("PROGRESS_LOG.md");
         let plan_worklog = project_dir.join("docs/plans/2026-06-09-local-slice-worklog.md");
         let refactor_progress = project_dir.join("docs/refactor-progress.md");
         let status = project_dir.join("PROJECT_STATUS.md");
@@ -21872,6 +21873,7 @@ mod tests {
         std::fs::write(&workingd, "# Working D\n").expect("write workingd");
         std::fs::write(&working_log, "# Working Log\n").expect("write working log");
         std::fs::write(&work_log, "# Work Log\n").expect("write work log");
+        std::fs::write(&progress_log, "# Progress Log\n").expect("write progress log");
         std::fs::write(&plan_worklog, "# Plan Worklog\n").expect("write plan worklog");
         std::fs::write(&refactor_progress, "# Refactor Progress\n")
             .expect("write refactor progress");
@@ -21893,6 +21895,10 @@ mod tests {
         ));
         assert!(source_file_matches(
             &work_log,
+            SourceKind::ProjectProgressMarkdown
+        ));
+        assert!(source_file_matches(
+            &progress_log,
             SourceKind::ProjectProgressMarkdown
         ));
         assert!(source_file_matches(
@@ -23802,6 +23808,7 @@ Status: completed as a source-only/report-only hardening slice.
             "working.md".to_string(),
             "workingd.md".to_string(),
             "WORKING_LOG.md".to_string(),
+            "PROGRESS_LOG.md".to_string(),
             "PROJECT_STATUS.md".to_string(),
             "run-worklog-report.md".to_string(),
             "2026-06-09-refresh-notes.md".to_string(),
@@ -23811,6 +23818,10 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(project_work_source_file_role("working.md"), "handoff-log");
         assert_eq!(project_work_source_file_role("workingd.md"), "handoff-log");
         assert_eq!(project_work_source_file_role("WORKING_LOG.md"), "work-log");
+        assert_eq!(
+            project_work_source_file_role("PROGRESS_LOG.md"),
+            "progress-log"
+        );
         assert_eq!(
             project_work_source_file_role("PROJECT_STATUS.md"),
             "project-status"
@@ -23835,6 +23846,9 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(roles
             .iter()
             .any(|role| role.text == "work-log" && role.count == 1));
+        assert!(roles
+            .iter()
+            .any(|role| role.text == "progress-log" && role.count == 1));
         assert!(roles
             .iter()
             .any(|role| role.text == "project-status" && role.count == 1));
@@ -26122,8 +26136,10 @@ Status: completed as a source-only/report-only hardening slice.
         ));
         let alpha_dir = root.join("Alpha/docs");
         let beta_dir = root.join("Beta");
+        let gamma_dir = root.join("Gamma");
         std::fs::create_dir_all(&alpha_dir).expect("create alpha docs dir");
         std::fs::create_dir_all(&beta_dir).expect("create beta dir");
+        std::fs::create_dir_all(&gamma_dir).expect("create gamma dir");
         std::fs::write(
             alpha_dir.join("progress.md"),
             "## Current Slice - 2026-06-09 Nested alpha\n\n- Verified nested log.\n",
@@ -26134,6 +26150,11 @@ Status: completed as a source-only/report-only hardening slice.
             "# Worklog\n\nNo dated heading yet.\n",
         )
         .expect("write beta worklog");
+        std::fs::write(
+            gamma_dir.join("PROGRESS_LOG.md"),
+            "## Current Slice - 2026-06-10 Gamma progress log\n\n- Verified uppercase progress log coverage.\n",
+        )
+        .expect("write gamma progress log");
         let source = SourceSpec {
             id: "project-progress-logs",
             label: "Project progress logs",
@@ -26143,25 +26164,38 @@ Status: completed as a source-only/report-only hardening slice.
 
         let coverage = build_project_progress_log_coverage(&source).expect("build coverage");
 
-        assert_eq!(coverage.files_seen, 2);
-        assert_eq!(coverage.parsed_file_count, 1);
+        assert_eq!(coverage.files_seen, 3);
+        assert_eq!(coverage.parsed_file_count, 2);
         assert_eq!(coverage.unparsed_file_count, 1);
         assert_eq!(coverage.unreadable_file_count, 0);
         assert_eq!(coverage.pointer_file_count, 0);
-        assert_eq!(coverage.project_count, 2);
-        assert_eq!(coverage.work_item_count, 1);
-        assert_eq!(coverage.files[0].project, "Alpha");
-        assert_eq!(coverage.files[0].source_file, "progress.md");
-        assert_eq!(coverage.files[0].status, "parsed");
-        assert_eq!(coverage.files[0].work_item_count, 1);
-        assert_eq!(coverage.files[0].latest_date.as_deref(), Some("2026-06-09"));
-        assert_eq!(
-            coverage.files[0].latest_title.as_deref(),
-            Some("Nested alpha")
-        );
-        assert_eq!(coverage.files[1].project, "Beta");
-        assert_eq!(coverage.files[1].status, "unparsed");
-        assert_eq!(coverage.files[1].work_item_count, 0);
+        assert_eq!(coverage.project_count, 3);
+        assert_eq!(coverage.work_item_count, 2);
+        let alpha = coverage
+            .files
+            .iter()
+            .find(|file| file.project == "Alpha")
+            .expect("alpha coverage row");
+        assert_eq!(alpha.source_file, "progress.md");
+        assert_eq!(alpha.status, "parsed");
+        assert_eq!(alpha.work_item_count, 1);
+        assert_eq!(alpha.latest_date.as_deref(), Some("2026-06-09"));
+        assert_eq!(alpha.latest_title.as_deref(), Some("Nested alpha"));
+        let beta = coverage
+            .files
+            .iter()
+            .find(|file| file.project == "Beta")
+            .expect("beta coverage row");
+        assert_eq!(beta.status, "unparsed");
+        assert_eq!(beta.work_item_count, 0);
+        let gamma = coverage
+            .files
+            .iter()
+            .find(|file| file.project == "Gamma")
+            .expect("gamma coverage row");
+        assert_eq!(gamma.source_file, "PROGRESS_LOG.md");
+        assert_eq!(gamma.status, "parsed");
+        assert_eq!(gamma.latest_date.as_deref(), Some("2026-06-10"));
 
         std::fs::remove_dir_all(root).expect("remove coverage fixture");
     }

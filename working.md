@@ -1,10 +1,105 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 03:34 KST
+Updated: 2026-06-11 03:40 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 03:40 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep project-local progress-log ingestion verified against live files under
+  `/Users/wj/Ai/System/10_Projects`, not only synthetic fixtures.
+- Keep `working.md` as the first handoff truth for long-term goal, short-term
+  goal, current active work, completed slices, verification evidence, and the
+  next concrete continuation step.
+
+Short-Term Goal:
+
+- Lock the project-local progress-log ingestion contract for `PROGRESS_LOG.md`
+  and uppercase progress artifacts so future parser/refactor work cannot drop a
+  user-requested progress-log file class silently.
+
+Current Goal:
+
+- In progress: add regression coverage and docs for `PROGRESS_LOG.md` handling
+  in progress-log matching, coverage summaries, and source artifact role
+  classification.
+
+Context:
+
+- Goal identity was rechecked for thread
+  `019ea10c-fbe8-7b60-8889-6f00b5a91a68`; persisted objective still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- No project-local `AGENTS.md` or `design.md` was found under PromptVault; the
+  workspace/root policy and this file remain the active handoff guides.
+- Live file-name scan under `/Users/wj/Ai/System/10_Projects` found existing
+  project-local progress artifacts including `working.md`, `workingd.md`,
+  `WORKING_LOG.md`, `PROJECT_STATUS.md`, and one real `PROGRESS_LOG.md`.
+- Live `work-log-coverage --json` reported `files_seen=934`,
+  `parsed_file_count=933`, `unparsed_file_count=0`,
+  `unreadable_file_count=0`, `pointer_file_count=1`,
+  `project_count=32`, and `work_item_count=8411`; the real
+  `book-forge-tauri/PROGRESS_LOG.md` row was parsed with 7 work items.
+
+Progress:
+
+- Confirmed existing code already matches `PROGRESS_LOG.md` through
+  case-insensitive progress-log name matching.
+- Added explicit backend regression coverage for matching `PROGRESS_LOG.md`.
+- Added coverage fixture protection for an uppercase `PROGRESS_LOG.md` file
+  producing a parsed project/day row.
+- Added source artifact role coverage so `PROGRESS_LOG.md` is classified as
+  `progress-log`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: expanded progress-log matcher, coverage, and source
+  role tests for `PROGRESS_LOG.md`; removed order dependence in the coverage
+  fixture by looking rows up by project.
+- `README.md`: documented `PROGRESS_LOG.md` as a project-local source-trace
+  artifact.
+- `docs/CLI.md`: documented `PROGRESS_LOG.md` in
+  `work-session-evidence-candidates` source role output.
+- `working.md`: added this handoff snapshot.
+
+Tests:
+
+- Ran live `cargo run --bin promptvault-cli -- work-log-coverage --json`:
+  parsed `934` project progress-log files with zero unparsed/unreadable rows
+  and confirmed the real `PROGRESS_LOG.md` was included.
+- `cargo test project_progress_log --lib` passed with 7 tests.
+- `cargo test project_work_source_file_roles_classify_progress_artifacts --lib`
+  passed with 1 test.
+- `cargo fmt --check` passed.
+- `cargo test project_progress --lib` passed with 20 tests.
+- `git diff --check` passed.
+- Full `npm run check` passed: UI tests `534`, Vite / TypeScript build, Rust
+  CLI build, Rust lib tests `256`, CLI tests `47`, doc-tests, and clippy
+  `-D warnings`.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; isolated
+  CLI and browser-bridge QA remain the available substitutes.
+- This slice is a guardrail/documentation hardening change; it does not approve,
+  reject, sync, apply, or write live review decisions.
+
+Research:
+
+- No external research was needed. The decision came from live local file
+  distribution plus existing parser behavior.
+
+Next Steps:
+
+- Run pre-push gitleaks checks, then commit/push if clean.
 
 ## Resume Snapshot - 2026-06-11 03:34 KST
 

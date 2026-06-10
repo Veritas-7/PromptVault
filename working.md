@@ -1,10 +1,130 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 02:17 KST
+Updated: 2026-06-11 02:20 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 02:20 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep long-running work-management operations resumable from durable evidence:
+  live DB command output, source counts, review-queue state, verification
+  commands, and this file.
+- Keep AI/SDK-assisted extraction and grouping as proposal evidence only until
+  source-reviewed, operator-approved, and auditable.
+
+Short-Term Goal:
+
+- Replace the prior isolated-QA-only session-index completion claim with live
+  default-vault evidence from real local session sources.
+
+Current Goal:
+
+- Completed this slice: verified and refreshed the live default-vault sanitized
+  session index for real Codex/Codex CX/Claude/Antigravity sources, then
+  rechecked the full-index status export and pending review queue without
+  writing any review decisions.
+
+Context:
+
+- Goal identity was rechecked for thread
+  `019ea10c-fbe8-7b60-8889-6f00b5a91a68`; persisted objective still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- cmux/in-app browser work remains excluded in this environment by the current
+  objective text. Verification used the CLI and stored live default vault.
+- The live default vault is
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- `work-session-index` writes sanitized session-index records only. It is
+  separate from review-queue decisions, and this slice did not run
+  `--sync-candidates`, approve, defer, or reject review rows.
+
+Progress:
+
+- Ran a live checkpoint session-index pass with `--batch-files 500
+  --max-batches 1`. The result shows all `10` configured real session sources
+  completed.
+- The completed source set covered `28,008` files:
+  Codex `25,274`, Codex CX `11`, Claude projects `1,636`, Claude transcripts
+  `667`, Claude prompt history `1`, Antigravity CLI transcripts `361`,
+  Antigravity IDE transcripts `3`, Antigravity CLI history `1`,
+  Antigravity CLI conversation DB `53`, and Antigravity IDE conversation DB
+  `1`.
+- Stored sanitized prompt index count is now `12,904`; the command reported
+  `all_sources_completed=true` and no warnings.
+- Re-ran full-index status export. It used the stored session index and
+  reported `report_session_evidence_index_used=true`,
+  `report_session_evidence_index_count=12904`,
+  `report_session_evidence_index_total_count=12904`, and no warnings.
+- Re-ran read-only source audit and review queue checks. Pending rows remain
+  `25`, with `0` review-ready rows, `5` manual-defer/manual-inspect rows, and
+  `20` bulk-reject candidates.
+
+Changes:
+
+- `working.md`: added this live default-vault session-index verification
+  snapshot.
+- No source code was changed in this slice.
+
+Tests:
+
+- `cargo run --quiet --bin promptvault-cli -- work-session-index
+  --batch-files 500 --max-batches 1 --json` passed against the live default
+  vault. Summary: `stored_prompt_count=12904`,
+  `all_sources_completed=true`, `warnings=[]`.
+- `cargo run --quiet --bin promptvault-cli -- work-status-export --limit 20
+  --full-session-index --json` passed. Summary:
+  `total_row_count=104`, `returned_row_count=20`,
+  `report_project_count=32`, `report_date_count=27`,
+  `report_total_items=8370`, `report_session_evidence_count=233284`,
+  `report_unique_session_evidence_count=2066`,
+  `report_session_evidence_index_used=true`, `warnings=[]`.
+- `cargo run --quiet --bin promptvault-cli --
+  work-session-evidence-source-audit --limit 100 --review-state
+  pending_review --nearby-limit 6 --source-limit 5 --max-lines 100000 --json`
+  passed read-only. Summary: `total_items=25`,
+  `rows_with_review_ready_count=0`, `manual_defer_count=5`,
+  `bulk_reject_count=20`, `manual_inspect_count=5`.
+- `cargo run --quiet --bin promptvault-cli --
+  work-session-evidence-review-queue --limit 100 --review-state
+  pending_review --json` passed read-only. Summary:
+  `total_items=25`, `returned_item_count=25`.
+
+Issues:
+
+- The earlier full-session backfill gap is closed for the current configured
+  session sources in the live default vault, but this is a point-in-time state:
+  new raw sessions after this snapshot will still require future incremental
+  indexing.
+- Live default vault still has `25` pending session-evidence review rows.
+  Approval remains blocked because source audit found `0` review-ready rows.
+- The `5` manual-inspect rows and `20` bulk-reject rows still need an explicit
+  operator decision before any live review-state writes.
+- cmux/in-app browser testing remains excluded in this environment.
+
+Research:
+
+- No external research was needed. The command behavior was verified from the
+  local CLI parser and live JSON output.
+
+Next Steps:
+
+- Do not approve session-evidence rows until copied source-review evidence
+  exists.
+- When explicitly authorized, run the deliberate live operator pass: defer the
+  `5` manual-inspect rows and reject the `20` bulk-reject rows only if the
+  operator accepts the current plan.
+- Continue improving project/day management coverage for project progress logs
+  (`working.md`, `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`,
+  `PROJECT_STATUS.md`) now that the real session index is complete.
+- Keep updating this `working.md` after each meaningful slice.
 
 ## Resume Snapshot - 2026-06-11 02:17 KST
 

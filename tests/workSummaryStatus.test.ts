@@ -58,6 +58,8 @@ import {
   workSessionEvidenceProposalsActionLabel,
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
+  workSessionEvidenceSourceProposalBlockerText,
+  workSessionEvidenceSourceProposalStateText,
   workSessionEvidenceReviewQueueActionLabel,
   workSessionEvidenceReviewApplyActionLabel,
   workSessionEvidenceReviewApplyFailureText,
@@ -166,6 +168,7 @@ import type {
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceNearbyItem,
   ProjectWorkSessionEvidenceNearbyResult,
+  ProjectWorkSessionEvidenceSourceProposal,
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
@@ -949,6 +952,34 @@ function sessionEvidenceProposal(
     needs_title_normalization: candidate.needs_title_normalization,
     top_titles: candidate.top_titles,
     sample_evidence: candidate.sample_evidence,
+    risk_flags: [],
+    ...overrides,
+  };
+}
+
+function sessionEvidenceSourceProposal(
+  overrides: Partial<ProjectWorkSessionEvidenceSourceProposal> = {},
+): ProjectWorkSessionEvidenceSourceProposal {
+  const candidate = sessionEvidenceReviewQueueItem();
+  return {
+    candidate_id: candidate.candidate_id,
+    project: candidate.project,
+    date: candidate.date,
+    source_path: "/Users/wj/.codex/sessions/2026/06/09/source.jsonl",
+    source_line_number: 42,
+    source_session_id: "session-1",
+    source_timestamp: "2026-06-09T12:00:00Z",
+    source_cwd: "/Users/wj/Ai/System/10_Projects/PromptVault",
+    source_search_hit_id: "source-hit-1",
+    proposal_kind: "manual_session_search",
+    proposed_action: "Review copied source trace.",
+    source_trace: candidate.sample_evidence,
+    trace_validated: true,
+    review_ready: true,
+    blocker_reason: null,
+    match_score: 3,
+    matched_terms: ["promptvault"],
+    confidence: 0.88,
     risk_flags: [],
     ...overrides,
   };
@@ -2673,6 +2704,28 @@ test("work session evidence proposal labels describe read-only AI proposals", ()
       confidence: 0.95,
     })),
     "source_trace_not_in_candidate_evidence · 수동 세션 검색 · confidence 0.95 · unresolved-after-full-index",
+  );
+});
+
+test("work session evidence source proposal labels explain blocker states", () => {
+  assert.equal(
+    workSessionEvidenceSourceProposalStateText(sessionEvidenceSourceProposal()),
+    "검토 준비 · 수동 세션 검색 · 복사 trace 검증됨 · confidence 0.88",
+  );
+  assert.equal(
+    workSessionEvidenceSourceProposalStateText(sessionEvidenceSourceProposal({
+      review_ready: false,
+      blocker_reason: "source_hit_matches_only_project_identifier",
+    })),
+    "차단됨 · 프로젝트명만 일치해 durable 승인 불가 · 수동 세션 검색 · 복사 trace 검증됨 · confidence 0.88",
+  );
+  assert.equal(
+    workSessionEvidenceSourceProposalBlockerText("source_trace_not_copied_from_search_hit"),
+    "원본 hit에서 복사된 trace가 아님",
+  );
+  assert.equal(
+    workSessionEvidenceSourceProposalBlockerText("unexpected_blocker"),
+    "알 수 없는 차단 사유: unexpected_blocker",
   );
 });
 

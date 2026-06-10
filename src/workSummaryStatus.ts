@@ -27,6 +27,7 @@ import type {
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceNearbyItem,
   ProjectWorkSessionEvidenceNearbyResult,
+  ProjectWorkSessionEvidenceSourceProposal,
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
@@ -1878,13 +1879,17 @@ export function workSessionEvidenceProposalWarningNoticeText(
   return `${providerText} · 경고 ${result.warnings.length.toLocaleString()}개`;
 }
 
+function workSessionEvidenceProposalKindLabel(proposalKind: string): string {
+  if (proposalKind === "source_log_trace") return "소스 로그 trace";
+  if (proposalKind === "manual_session_search") return "수동 세션 검색";
+  if (proposalKind === "title_normalization_first") return "제목 정규화 우선";
+  return "보류";
+}
+
 export function workSessionEvidenceProposalKindText(
   proposal: ProjectWorkSessionEvidenceProposal,
 ): string {
-  if (proposal.proposal_kind === "source_log_trace") return "소스 로그 trace";
-  if (proposal.proposal_kind === "manual_session_search") return "수동 세션 검색";
-  if (proposal.proposal_kind === "title_normalization_first") return "제목 정규화 우선";
-  return "보류";
+  return workSessionEvidenceProposalKindLabel(proposal.proposal_kind);
 }
 
 export function workSessionEvidenceProposalStateText(
@@ -1898,6 +1903,40 @@ export function workSessionEvidenceProposalStateText(
     workSessionEvidenceProposalKindText(proposal),
     `confidence ${proposal.confidence.toFixed(2)}`,
     proposal.session_evidence_audit,
+  ].join(" · ");
+}
+
+export function workSessionEvidenceSourceProposalBlockerText(
+  blockerReason: string | null,
+): string {
+  if (blockerReason === "title_normalization_required_first") {
+    return "제목 정규화가 먼저 필요";
+  }
+  if (blockerReason === "source_trace_not_copied_from_search_hit") {
+    return "원본 hit에서 복사된 trace가 아님";
+  }
+  if (blockerReason === "source_hit_matches_only_project_identifier") {
+    return "프로젝트명만 일치해 durable 승인 불가";
+  }
+  if (blockerReason === "candidate_or_source_hit_has_risk_flags") {
+    return "후보 또는 원본 hit에 risk flag 있음";
+  }
+  if (!blockerReason) return "차단 사유 없음";
+  return `알 수 없는 차단 사유: ${blockerReason}`;
+}
+
+export function workSessionEvidenceSourceProposalStateText(
+  proposal: ProjectWorkSessionEvidenceSourceProposal,
+): string {
+  const stateText = proposal.review_ready
+    ? "검토 준비"
+    : `차단됨 · ${workSessionEvidenceSourceProposalBlockerText(proposal.blocker_reason)}`;
+  const traceText = proposal.trace_validated ? "복사 trace 검증됨" : "복사 trace 미검증";
+  return [
+    stateText,
+    workSessionEvidenceProposalKindLabel(proposal.proposal_kind),
+    traceText,
+    `confidence ${proposal.confidence.toFixed(2)}`,
   ].join(" · ");
 }
 

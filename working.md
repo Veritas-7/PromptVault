@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 17:53 KST
+Updated: 2026-06-10 18:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,14 +33,12 @@ Short-Term Goal:
 
 Current Work:
 
-- Latest pushed implementation slice:
+- Latest verified implementation slice in this worktree: source-proposal
+  blocker states now render operator-readable Korean/actionable text in the
+  review queue UI instead of raw internal reason codes. Commit hash should be
+  refreshed after this note is committed.
+- Previous pushed implementation slice:
   `9d209c3 fix: block weak source evidence proposals`.
-- Active in-progress slice for the next handoff: make source-proposal blocker
-  states operator-readable in the review queue UI. The backend already blocks
-  project-identifier-only evidence with
-  `source_hit_matches_only_project_identifier`; the next code slice should add
-  a `workSummaryStatus` helper, render Korean/actionable blocker text in
-  `src/App.tsx`, and cover it in `tests/workSummaryStatus.test.ts`.
 - Current repo HEAD should be refreshed with `git log -5 --oneline` on resume;
   docs-only baseline commits may move after this implementation slice.
 - Current implementation focus: continue reducing unresolved project/day
@@ -341,9 +339,9 @@ Current Work:
   useful step is continuing unresolved project/day session-evidence review and
   provider reliability work without weakening the manual-review/source-trace
   contract.
-- Immediate next implementation step: improve source-proposal blocker copy in
-  the review queue UI so an operator sees why a proposal is blocked without
-  reading raw internal reason codes.
+- Immediate next implementation step after this slice is committed: continue
+  reducing unresolved project/day session-evidence rows, using the stricter
+  source-trace gate and operator-readable source-proposal labels.
 
 Resume Contract:
 
@@ -383,6 +381,75 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Source proposal blocker UI labels
+
+Current Goal:
+
+- Make source-proposal blocker states operator-readable in the review queue UI
+  without weakening the backend fail-closed source-trace gate.
+- Commit hash: pending until this note is committed.
+
+Context:
+
+- The backend already blocks weak source hits with
+  `source_hit_matches_only_project_identifier`.
+- The UI still showed raw blocker reason codes in source proposal rows, which
+  forced an operator to understand internal implementation names before deciding
+  why a proposal could not be approved.
+
+Progress:
+
+- Added a source-proposal state label helper that maps known blocker reasons to
+  Korean/actionable review text, including the project-identifier-only blocker.
+- Reused the existing proposal-kind label mapping so AI proposal labels and
+  source proposal labels stay consistent.
+- Updated the review queue source proposal panel to show a single readable
+  status line such as `차단됨 · 프로젝트명만 일치해 durable 승인 불가` instead of
+  exposing raw blocker codes.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: added
+  `workSessionEvidenceSourceProposalBlockerText` and
+  `workSessionEvidenceSourceProposalStateText`.
+- `src/App.tsx`: renders the readable source proposal state label in the
+  source-proposals panel.
+- `tests/workSummaryStatus.test.ts`: covers ready source proposals, known
+  blocker mapping, and unknown blocker fallback text.
+- `working.md`: records the implementation, verification commands, and next
+  resume point.
+
+Tests:
+
+- PASS: `npm run test:ui -- tests/workSummaryStatus.test.ts --test-name-pattern "work session evidence source proposal labels"`
+  ran the UI test suite and passed `523` tests, including the new source
+  proposal blocker label case.
+- PASS: `npm run build`.
+- PASS: `git diff --check`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-NOqM8s/qa.sqlite`.
+  The QA crossed source-proposals bridge, source-proposals UI, review queue UI,
+  review apply, reviewed-items reload, and the broader work-management panels.
+- PASS: `npm run check`. This covered UI tests, production build,
+  `cargo build --bin promptvault-cli`, Rust library tests (`237` passed), CLI
+  tests (`35` passed), doc tests, and clippy with `-D warnings`.
+- PASS: `lsof -nP -iTCP:5174 -sTCP:LISTEN` and
+  `lsof -nP -iTCP:5177 -sTCP:LISTEN` returned no listeners after QA cleanup.
+
+Issues:
+
+- This slice improves operator visibility only. It does not reduce the pending
+  review queue count or approve any session evidence.
+- The broader management goal remains incomplete while unresolved
+  session-evidence rows and provider/review reliability gaps remain.
+
+Next Steps:
+
+- Continue resolving pending project/day session-evidence rows by generating
+  copied-trace source proposals only from real source artifacts, then approving
+  only rows whose trace proves the project/date work item.
 
 ## Completed Slice - 2026-06-10 Weak source-hit proposal gate
 

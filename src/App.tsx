@@ -372,6 +372,7 @@ import {
   workSessionEvidenceProposalsActionLabel,
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
+  workSessionEvidenceSourceProposalStateText,
   workSessionEvidenceReviewQueueActionLabel,
   workSessionEvidenceReviewQueueDateDiagnosticText,
   workSessionEvidenceReviewApplyActionLabel,
@@ -6719,18 +6720,9 @@ function App() {
                                                             line{" "}
                                                             {proposal.source_line_number
                                                               .toLocaleString()} ·{" "}
-                                                            {proposal.review_ready
-                                                              ? "review-ready"
-                                                              : "blocked"}
+                                                            {workSessionEvidenceSourceProposalStateText(proposal)}
                                                           </strong>
-                                                          <span>
-                                                            {proposal.proposal_kind} · confidence{" "}
-                                                            {proposal.confidence.toFixed(2)}
-                                                          </span>
                                                           <p>{proposal.source_trace}</p>
-                                                          {proposal.blocker_reason ? (
-                                                            <span>{proposal.blocker_reason}</span>
-                                                          ) : null}
                                                           {proposal.review_ready
                                                             && canApproveWorkSessionEvidenceReviewQueueItem(item)
                                                             ? (

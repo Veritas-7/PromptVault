@@ -258,6 +258,7 @@ import {
   workManagementOverviewPersistenceText,
   workManagementOverviewProjectSuggestions,
   workManagementOverviewSessionText,
+  workManagementOverviewSourceRoleText,
   workManagementOverviewSourceText,
   type WorkManagementOverviewFilters,
   type WorkManagementOverviewPersistenceState,
@@ -6108,30 +6109,38 @@ function App() {
         {workManagementOverviewLoaded ? (
           visibleWorkManagementOverviewRows.length ? (
             <div className="work-summary-list" data-work-management-overview="true">
-              {visibleWorkManagementOverviewRows.map((row) => (
-                <article className="work-summary-row work-management-overview-row" key={row.key}>
-                  <div>
-                    <strong>{row.project}</strong>
-                    <span>{row.date}</span>
-                  </div>
-                  <p>{row.latest_title ?? "제목 없는 작업 관리 row"}</p>
-                  <span>
-                    {workManagementOverviewSourceText(row)} · 작업 {row.work_item_count.toLocaleString()}개 ·
-                    추출제안 {row.extraction_proposal_count.toLocaleString()}개 · 저장추출{" "}
-                    {row.saved_extraction_count.toLocaleString()}개 · 정규화{" "}
-                    {row.normalized_row_count.toLocaleString()}개 · {workManagementOverviewConfidenceText(row)}
-                  </span>
-                  <span data-work-management-row-session="true">
-                    {workManagementOverviewSessionText(row)}
-                  </span>
-                  <span data-work-management-row-persistence="true">
-                    {workManagementOverviewPersistenceText(row)}
-                  </span>
-                  <span data-work-management-row-action="true">
-                    {workManagementOverviewNextActionText(row)}
-                  </span>
-                </article>
-              ))}
+              {visibleWorkManagementOverviewRows.map((row) => {
+                const sourceRoleText = workManagementOverviewSourceRoleText(row);
+                return (
+                  <article className="work-summary-row work-management-overview-row" key={row.key}>
+                    <div>
+                      <strong>{row.project}</strong>
+                      <span>{row.date}</span>
+                    </div>
+                    <p>{row.latest_title ?? "제목 없는 작업 관리 row"}</p>
+                    <span>
+                      {workManagementOverviewSourceText(row)} · 작업 {row.work_item_count.toLocaleString()}개 ·
+                      추출제안 {row.extraction_proposal_count.toLocaleString()}개 · 저장추출{" "}
+                      {row.saved_extraction_count.toLocaleString()}개 · 정규화{" "}
+                      {row.normalized_row_count.toLocaleString()}개 · {workManagementOverviewConfidenceText(row)}
+                    </span>
+                    {sourceRoleText ? (
+                      <span data-work-management-row-source-roles="true">
+                        {sourceRoleText}
+                      </span>
+                    ) : null}
+                    <span data-work-management-row-session="true">
+                      {workManagementOverviewSessionText(row)}
+                    </span>
+                    <span data-work-management-row-persistence="true">
+                      {workManagementOverviewPersistenceText(row)}
+                    </span>
+                    <span data-work-management-row-action="true">
+                      {workManagementOverviewNextActionText(row)}
+                    </span>
+                  </article>
+                );
+              })}
               {hiddenWorkManagementOverviewRowCount ? (
                 <div className="work-summary-overflow">
                   그 외 관리 row {hiddenWorkManagementOverviewRowCount.toLocaleString()}개

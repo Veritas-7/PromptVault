@@ -1873,6 +1873,7 @@ test("work status export text exposes project day evidence coverage", () => {
     "진행로그 3개 · working.md, workingd.md, WORKLOG.md",
   );
   assert.equal(workSourceFileRoleLabel("handoff-log"), "핸드오프 로그");
+  assert.equal(workSourceFileRoleLabel("progress-log"), "진행 로그");
   assert.equal(
     workStatusExportRowSourceRolesText(result.rows[1]),
     "로그 유형 · 핸드오프 로그 2개, 작업 로그 1개 · 최근 핸드오프 로그",

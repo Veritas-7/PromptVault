@@ -15,6 +15,7 @@ import {
   workManagementOverviewPersistenceText,
   workManagementOverviewProjectSuggestions,
   workManagementOverviewSessionText,
+  workManagementOverviewSourceRoleText,
   workManagementOverviewSourceText,
 } from "../src/workManagementOverview.ts";
 import type {
@@ -332,14 +333,17 @@ function statusExportResult(): ProjectWorkStatusExportResult {
         operational_status: "session-supported",
         source_statuses: [{ text: "logged", count: 5 }],
         work_item_count: 5,
-        source_file_count: 1,
-        source_files: ["working.md"],
-        source_file_roles: [{ text: "handoff-log", count: 1 }],
+        source_file_count: 2,
+        source_files: ["working.md", "PROGRESS_LOG.md"],
+        source_file_roles: [
+          { text: "handoff-log", count: 1 },
+          { text: "progress-log", count: 1 },
+        ],
         top_titles: ["PromptVault session supported row"],
         sample_evidence: "PromptVault has session evidence.",
-        latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
-        latest_source_file: "working.md",
-        latest_source_role: "handoff-log",
+        latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/PROGRESS_LOG.md",
+        latest_source_file: "PROGRESS_LOG.md",
+        latest_source_role: "progress-log",
         session_evidence_count: 2,
         unique_session_evidence_count: 1,
         session_evidence_reviewed_item_count: 0,
@@ -467,6 +471,15 @@ test("work management overview exposes status export session coverage", () => {
   assert.ok(promptVault);
   assert.deepEqual(promptVault.sources, ["status_export", "progress_log"]);
   assert.equal(promptVault.status_export_count, 1);
+  assert.deepEqual(promptVault.source_file_roles, [
+    { text: "handoff-log", count: 1 },
+    { text: "progress-log", count: 1 },
+  ]);
+  assert.equal(promptVault.latest_source_role, "progress-log");
+  assert.equal(
+    workManagementOverviewSourceRoleText(promptVault),
+    "로그 유형 · 핸드오프 로그 1개, 진행 로그 1개 · 최근 진행 로그",
+  );
   assert.equal(promptVault.needs_session_evidence, false);
   assert.equal(promptVault.needs_title_normalization, false);
   assert.equal(promptVault.session_evidence_audit, "matched");
@@ -476,6 +489,8 @@ test("work management overview exposes status export session coverage", () => {
   assert.ok(careVault);
   assert.deepEqual(careVault.sources, ["status_export"]);
   assert.equal(careVault.status_export_count, 1);
+  assert.deepEqual(careVault.source_file_roles, [{ text: "handoff-log", count: 1 }]);
+  assert.equal(careVault.latest_source_role, "handoff-log");
   assert.equal(careVault.needs_session_evidence, true);
   assert.equal(careVault.needs_title_normalization, true);
   assert.equal(careVault.session_evidence_audit, "unresolved-after-full-index");
@@ -577,6 +592,7 @@ test("work management overview status text exposes management coverage", () => {
     workManagementOverviewSourceText(overview.rows[0]),
     "현재요약 · 스냅샷 · 저장추출 · 정규화 · 진행로그",
   );
+  assert.equal(workManagementOverviewSourceRoleText(overview.rows[0]), null);
   assert.equal(
     workManagementOverviewPersistenceText(overview.rows[0]),
     "저장관리 · 최신 스냅샷 2026-06-09T01:00:00Z · 최신 저장추출 2026-06-09T01:30:00Z · 최신 정규화 2026-06-09T01:45:00Z",

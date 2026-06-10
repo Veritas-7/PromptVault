@@ -1,5 +1,7 @@
 import { storedFilterSuggestionValues } from "./storedFilters.ts";
+import { workSourceFileRoleLabel, workSourceFileRolesInlineText } from "./workSourceFileRoles.ts";
 import type {
+  FrequencyItem,
   ProjectWorkLogCoverageResult,
   ProjectWorkLogExtractionItemsResult,
   ProjectWorkLogExtractionProposalsResult,
@@ -79,6 +81,8 @@ export interface WorkManagementOverviewRow {
   latest_saved_extraction_at: string | null;
   latest_normalized_at: string | null;
   latest_title: string | null;
+  source_file_roles: FrequencyItem[];
+  latest_source_role: string | null;
 }
 
 export interface WorkManagementOverview {
@@ -148,6 +152,7 @@ const SOURCE_LABELS: Record<WorkManagementOverviewSource, string> = {
 
 interface MutableWorkManagementOverviewRow extends WorkManagementOverviewRow {
   sourceSet: Set<WorkManagementOverviewSource>;
+  sourceRoleCounts: Map<string, number>;
 }
 
 export function buildWorkManagementOverview(
@@ -242,6 +247,8 @@ export function buildWorkManagementOverview(
       row.nearest_same_project_other_session_distance_days =
         item.nearest_same_project_other_session_distance_days;
     }
+    addWorkManagementOverviewSourceRoles(row, item.source_file_roles);
+    row.latest_source_role = item.latest_source_role;
     row.sourceSet.add("status_export");
   }
 
@@ -255,13 +262,14 @@ export function buildWorkManagementOverview(
   }
 
   const rows = [...rowsByKey.values()]
-    .map(({ sourceSet, ...row }) => ({
+    .map(({ sourceSet, sourceRoleCounts, ...row }) => ({
       ...row,
       persistence_state: row.snapshot_count > 0
           || row.saved_extraction_count > 0
           || row.normalized_row_count > 0
         ? "persisted" as const
         : "live_only" as const,
+      source_file_roles: frequencyItemsFromCounts(sourceRoleCounts),
       sources: SOURCE_ORDER.filter((source) => sourceSet.has(source)),
     }))
     .sort((left, right) => {
@@ -407,6 +415,17 @@ export function workManagementOverviewSourceText(row: WorkManagementOverviewRow)
   return row.sources.map((source) => SOURCE_LABELS[source]).join(" · ");
 }
 
+export function workManagementOverviewSourceRoleText(
+  row: WorkManagementOverviewRow,
+): string | null {
+  if (!row.source_file_roles.length) return null;
+  const parts = [`로그 유형 · ${workSourceFileRolesInlineText(row.source_file_roles)}`];
+  if (row.latest_source_role) {
+    parts.push(`최근 ${workSourceFileRoleLabel(row.latest_source_role)}`);
+  }
+  return parts.join(" · ");
+}
+
 export function workManagementOverviewConfidenceText(row: WorkManagementOverviewRow): string {
   if (row.confidence_count === 0 || row.min_confidence === null || row.max_confidence === null) {
     return "confidence 없음";
@@ -541,6 +560,7 @@ function upsertRow(
     project,
     sources: [],
     sourceSet: new Set(),
+    sourceRoleCounts: new Map(),
     current_summary_count: 0,
     snapshot_count: 0,
     extraction_proposal_count: 0,
@@ -566,6 +586,8 @@ function upsertRow(
     latest_saved_extraction_at: null,
     latest_normalized_at: null,
     latest_title: null,
+    source_file_roles: [],
+    latest_source_role: null,
   };
   rowsByKey.set(key, row);
   return row;
@@ -580,6 +602,22 @@ function addRowConfidence(row: MutableWorkManagementOverviewRow, confidence: num
   row.max_confidence = row.max_confidence === null
     ? confidence
     : Math.max(row.max_confidence, confidence);
+}
+
+function addWorkManagementOverviewSourceRoles(
+  row: MutableWorkManagementOverviewRow,
+  roles: readonly FrequencyItem[],
+): void {
+  for (const role of roles) {
+    row.sourceRoleCounts.set(
+      role.text,
+      (row.sourceRoleCounts.get(role.text) ?? 0) + role.count,
+    );
+  }
+}
+
+function frequencyItemsFromCounts(counts: ReadonlyMap<string, number>): FrequencyItem[] {
+  return [...counts.entries()].map(([text, count]) => ({ text, count }));
 }
 
 function normalizedConfidenceFilter(value: string): number | null {

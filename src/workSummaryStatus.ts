@@ -1,6 +1,10 @@
 import { activeActionLockReason, type ActionLockState } from "./actionLocks.ts";
 import { pathDisplayText } from "./promptRowA11y.ts";
 import { riskFlagLabel } from "./riskLabels.ts";
+import {
+  workSourceFileRoleLabel,
+  workSourceFileRolesInlineText,
+} from "./workSourceFileRoles.ts";
 import type {
   ProjectWorkAiProviderHealthProvider,
   ProjectWorkAiProviderHealthResult,
@@ -964,25 +968,7 @@ export function workStatusExportRowSourceFilesText(row: ProjectWorkStatusExportR
   return `진행로그 ${row.source_file_count.toLocaleString()}개 · ${visibleFiles.join(", ")}${suffix}`;
 }
 
-export function workSourceFileRoleLabel(role: string): string {
-  const labels: Record<string, string> = {
-    "handoff-log": "핸드오프 로그",
-    "work-log": "작업 로그",
-    "project-status": "프로젝트 상태",
-    "progress-log": "진행 로그",
-    "generated-report": "생성 리포트",
-    "dated-work-log": "날짜별 작업 로그",
-    "progress-artifact": "진행 산출물",
-  };
-  return labels[role] ?? role;
-}
-
-function workSourceFileRolesInlineText(items: { text: string; count: number }[]): string {
-  return items
-    .slice(0, 4)
-    .map((item) => `${workSourceFileRoleLabel(item.text)} ${item.count.toLocaleString()}개`)
-    .join(", ");
-}
+export { workSourceFileRoleLabel };
 
 export function workStatusExportRowSourceRolesText(row: ProjectWorkStatusExportRow): string {
   if (!row.source_file_roles.length) return "로그 유형 없음";

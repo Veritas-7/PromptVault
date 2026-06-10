@@ -1,10 +1,201 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 03:43 KST
+Updated: 2026-06-11 03:52 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 03:52 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file: record the long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Verify whether the work-management overview should surface source-file role
+  counts from `work-status-export` so `progress-log` sources are visible beside
+  `handoff-log`, `work-log`, and `project-status` evidence.
+
+Current Active Work:
+
+- Implemented and verified a narrow overview visibility slice:
+  `work-status-export` source file role counts now flow into work-management
+  overview rows, and the UI can display `progress-log` beside
+  `handoff-log`, `work-log`, and `project-status` evidence.
+- Repository state was clean at resume: `main...origin/main`, with latest
+  pushed tip expected at `14f5d43 docs: update progress log ingestion handoff`.
+- Current staged tree is ready for commit/push after full test and secret gates.
+
+Progress:
+
+- Added shared source-role label helpers so status export and management
+  overview use the same Korean labels.
+- Added `source_file_roles` and `latest_source_role` to management overview
+  rows.
+- Merged `ProjectWorkStatusExportRow.source_file_roles` into overview rows.
+- Added `workManagementOverviewSourceRoleText` and rendered it in the overview
+  row UI behind `data-work-management-row-source-roles`.
+- Added regression coverage for a `PROGRESS_LOG.md` status-export row showing
+  `진행 로그` in overview text.
+
+Changes:
+
+- `src/workSourceFileRoles.ts`: new shared source role label/inline text helper.
+- `src/workSummaryStatus.ts`: reuses shared source role helper and re-exports
+  `workSourceFileRoleLabel` for existing callers/tests.
+- `src/workManagementOverview.ts`: carries status-export source role counts and
+  latest source role into overview rows.
+- `src/App.tsx`: displays overview source-role text when available.
+- `tests/workManagementOverview.test.ts`: verifies `progress-log` role flow
+  into overview rows and helper text.
+- `tests/workSummaryStatus.test.ts`: keeps direct `progress-log` label coverage.
+
+Tests:
+
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts tests/workSummaryStatus.test.ts`
+  (`62` tests).
+- PASS: `npm run build` (TypeScript + Vite build). Vite still emits the existing
+  large chunk warning around the 500kB threshold.
+- PASS: `npm run check` (UI tests, TypeScript/Vite build, Rust CLI build, Rust
+  lib tests, CLI tests, doc-tests, and clippy `-D warnings`).
+- PASS: `cargo fmt --check`.
+- PASS: `git diff --check` and `git diff --cached --check`.
+- PASS: `gitleaks dir . --no-banner --redact`.
+- PASS: `gitleaks protect --staged --no-banner --redact`.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; CLI/unit
+  tests and local build remain the available verification route.
+- No external research was needed for this small local UI/helper contract.
+
+Next Step:
+
+- Commit this source-role overview UI slice, push to `origin/main`, then verify
+  clean status and matching local/remote heads.
+
+## Resume Snapshot - 2026-06-11 03:50 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file: record the long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Verify whether the work-management overview should surface source-file role
+  counts from `work-status-export` so `progress-log` sources are visible beside
+  `handoff-log`, `work-log`, and `project-status` evidence.
+
+Current Active Work:
+
+- Implemented and currently verifying a narrow overview visibility slice:
+  `work-status-export` source file role counts now flow into work-management
+  overview rows, and the UI can display `progress-log` beside
+  `handoff-log`, `work-log`, and `project-status` evidence.
+- Repository state was clean at resume: `main...origin/main`, with latest
+  pushed tip expected at `14f5d43 docs: update progress log ingestion handoff`.
+- Current working tree has this uncommitted slice plus this handoff update.
+
+Progress:
+
+- Added shared source-role label helpers so status export and management
+  overview use the same Korean labels.
+- Added `source_file_roles` and `latest_source_role` to management overview
+  rows.
+- Merged `ProjectWorkStatusExportRow.source_file_roles` into overview rows.
+- Added `workManagementOverviewSourceRoleText` and rendered it in the overview
+  row UI behind `data-work-management-row-source-roles`.
+- Added regression coverage for a `PROGRESS_LOG.md` status-export row showing
+  `진행 로그` in overview text.
+
+Changes:
+
+- `src/workSourceFileRoles.ts`: new shared source role label/inline text helper.
+- `src/workSummaryStatus.ts`: reuses shared source role helper and re-exports
+  `workSourceFileRoleLabel` for existing callers/tests.
+- `src/workManagementOverview.ts`: carries status-export source role counts and
+  latest source role into overview rows.
+- `src/App.tsx`: displays overview source-role text when available.
+- `tests/workManagementOverview.test.ts`: verifies `progress-log` role flow
+  into overview rows and helper text.
+- `tests/workSummaryStatus.test.ts`: keeps direct `progress-log` label coverage.
+
+Tests:
+
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts tests/workSummaryStatus.test.ts`
+  (`62` tests).
+- PASS: `npm run build` (TypeScript + Vite build). Vite still emits the existing
+  large chunk warning around the 500kB threshold.
+- Pending before commit/push: full `npm run check`, diff check, and secret scan.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; CLI/unit
+  tests and local build remain the available verification route.
+- No external research was needed for this small local UI/helper contract.
+
+Next Step:
+
+- Run the full repository check, inspect the final diff, then commit and push if
+  all gates pass.
+
+## Resume Snapshot - 2026-06-11 03:47 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file: record the long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Verify whether the work-management overview should surface source-file role
+  counts from `work-status-export` so `progress-log` sources are visible beside
+  `handoff-log`, `work-log`, and `project-status` evidence.
+
+Current Active Work:
+
+- Inspecting the UI/helper path for source-role visibility in
+  `src/workManagementOverview.ts`, `src/workSummaryStatus.ts`, related tests,
+  and the overview rendering in `src/App.tsx`.
+- No code changes for this new slice had been made yet in this snapshot.
+- Repository state was clean at resume: `main...origin/main`, with latest
+  pushed tip expected at `14f5d43 docs: update progress log ingestion handoff`.
+
+Next Step:
+
+- Add a narrow regression/UI slice if the overview currently drops
+  `source_file_roles` or `latest_source_role`, then update this file with the
+  exact files changed, commands run, PASS/FAIL evidence, and follow-up boundary.
 
 ## Resume Snapshot - 2026-06-11 03:43 KST
 

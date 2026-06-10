@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 03:52 KST
+Updated: 2026-06-11 03:53 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-11 03:52 KST
+## Resume Snapshot - 2026-06-11 03:53 KST
 
 Long-Term Goal:
 
@@ -29,13 +29,16 @@ Short-Term Goal:
 
 Current Active Work:
 
-- Implemented and verified a narrow overview visibility slice:
+- Completed and pushed a narrow overview visibility slice:
   `work-status-export` source file role counts now flow into work-management
   overview rows, and the UI can display `progress-log` beside
   `handoff-log`, `work-log`, and `project-status` evidence.
 - Repository state was clean at resume: `main...origin/main`, with latest
   pushed tip expected at `14f5d43 docs: update progress log ingestion handoff`.
-- Current staged tree is ready for commit/push after full test and secret gates.
+- Code slice commit: `f15fd8e ux: show work source roles in management overview`.
+- Post-push verification showed local `HEAD` and `origin/main` both at
+  `f15fd8e955a8b4a85bb2df83cc5399bc7338bdd4` and `git status --short --branch`
+  clean at `main...origin/main`.
 
 Progress:
 
@@ -83,8 +86,10 @@ Issues:
 
 Next Step:
 
-- Commit this source-role overview UI slice, push to `origin/main`, then verify
-  clean status and matching local/remote heads.
+- Next implementation candidate: add browser-bridge or DOM-level QA coverage for
+  `data-work-management-row-source-roles` once a fixture can load a
+  status-export row with mixed `handoff-log`/`progress-log` roles, then verify
+  the row text in the rendered management overview.
 
 ## Resume Snapshot - 2026-06-11 03:50 KST
 

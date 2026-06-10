@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 13:18 KST
+Updated: 2026-06-10 13:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-10 13:18 KST
+## Resume Snapshot - 2026-06-10 13:33 KST
 
 Long-Term Goal:
 
@@ -35,32 +35,30 @@ Current Work:
 
 - Most recent pushed implementation baseline:
   `caf2e1e fix: exempt status snapshots from session evidence`.
-- Most recent verified implementation slice: reduce noisy session-evidence
-  candidate rows where the source is only a `PROJECT_STATUS.md` status
-  snapshot. These rows remain visible as managed project/day status rows, but
-  are no longer treated as missing session-evidence proof when their only role
-  is `project-status`.
-- Current active slice: make the remaining `26` session-evidence candidates
-  easier to review without inventing evidence. The next likely implementation
-  is operator-visible diagnostics for whether the same project has session
-  evidence on nearby or other dates. These diagnostics must not auto-attach
-  cross-date proof.
-- Latest pushed handoff-only documentation refresh:
-  `3b91db9 docs: refresh working handoff state`.
+- Most recent pushed documentation refresh:
+  `9023c9b docs: refresh working resume state`.
+- Current verified implementation slice: same-project session-date diagnostics
+  for the remaining full-index-unresolved session-evidence candidates. The
+  diagnostics expose same-date count, other-date session date buckets, and
+  nearest other session date, but they do not auto-attach cross-date proof.
 - Previous session-index implementation slice:
   `3f4185e fix: index codex session evidence by activity date`.
 - The earlier body-derived progress-log title cleanup slice was completed and
   pushed as `c392add fix: clear rough worklog title normalization debt`.
-- Actual default-vault verification after `caf2e1e`:
-  status export reported `97` rows, `7,825` items, `32` projects, `26` days,
+- Actual default-vault verification after the current diagnostics slice:
+  status export reported `97` rows, `7,843` items, `32` projects, `26` days,
   `892` files, and a full stored session index of `12,889/12,889` prompts.
-  Rows needing session evidence are now `26`; `4` pure status snapshots are
+  Rows needing session evidence remain `26`; `4` pure status snapshots remain
   classified as `status-snapshot`; title-normalization rows remain `0`.
+- Actual default-vault candidate diagnostics after the current slice:
+  `26` candidates remain; `25` have same-project session evidence on other
+  dates; `1` has no known same-project session evidence
+  (`SuperpowersSkillManager` on `2026-06-05`); `0` have same-date session rows
+  that failed to attach.
 - The next change should stay source-traced and reviewable. Do not infer
   cross-date or cross-project evidence unless the target session artifact proves
-  it. If durable non-Codex indexing is too broad for the next slice, add an
-  operator-visible diagnostic that clearly states which session sources are
-  fully indexed and which are still raw-fallback/proposal-only.
+  it. The next useful slice is to turn these diagnostics into a sharper review
+  or provider workflow without reducing the evidence gate.
 
 Resume Contract:
 
@@ -80,7 +78,7 @@ Management Coverage Status:
 
 - The app does manage project/day work from real parsed artifacts: current
   default-vault export reported `32` projects, `26` days, `892` progress files,
-  `7,825` work items, `97` project/day rows, and a full stored session index of
+  `7,843` work items, `97` project/day rows, and a full stored session index of
   `12,889` sanitized prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
@@ -93,6 +91,110 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Same-project session-date diagnostics
+
+Current Goal:
+
+- Make the remaining `26` full-index-unresolved session-evidence candidates
+  easier to triage by showing whether the same project has stored session
+  evidence on other dates, without treating that as proof for the target date.
+
+Context:
+
+- After `caf2e1e`, the noisy pure `PROJECT_STATUS.md` rows are out of the
+  session-evidence-required queue. The remaining candidates are from real
+  handoff/progress/work logs.
+- Manual inspection showed many candidate projects have stored session evidence
+  on other dates, but the candidate JSON and review queue only exposed
+  `unresolved-after-full-index`. That made it hard to distinguish "same project
+  has nearby sessions" from "no known session evidence at all".
+- Cross-date evidence must remain diagnostic only. It must not be accepted as a
+  durable `source_trace` or auto-attached session proof.
+
+Progress:
+
+- Added same-project session-date diagnostics to
+  `ProjectWorkSessionEvidenceCandidate`.
+- Candidate JSON now includes:
+  `same_project_same_date_session_count`,
+  `same_project_other_session_dates`,
+  `same_project_other_session_date_count`, and
+  `nearest_same_project_other_session_date`.
+- Candidate `reason` now adds review-visible tokens:
+  `same_project_session_other_dates`,
+  `nearest_same_project_session_date=<date>`, or
+  `no_same_project_session_dates`.
+- Provider prompts now explicitly say same-project session-date diagnostics are
+  navigation hints only and are not source traces.
+- Actual default-vault candidate verification:
+  `total_candidate_count=26`, `returned_candidate_count=26`,
+  `12,889/12,889` indexed prompts, `25` candidates with other-date same-project
+  session hints, `1` candidate with no same-project session dates, and `0`
+  same-date-unmatched rows.
+- Isolated browser bridge QA confirmed the review queue UI displays the
+  diagnostic reason tokens in session-evidence queue rows.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: annotates candidates by querying
+  `project_work_session_evidence` for same-project date buckets and appending
+  diagnostic reason tokens after candidate filtering.
+- `src-tauri/src/lib.rs`: adds provider prompt diagnostics text and a regression
+  test for same-date, other-date, nearest-date, and no-session cases.
+- `src/types.ts`: extends `ProjectWorkSessionEvidenceCandidate`.
+- `src/promptVaultApi.ts`: validates the new date-diagnostic fields at the
+  browser bridge boundary.
+- `tests/promptVaultApi.test.ts`: covers parser preservation of date hints.
+- `working.md`: records the verified slice and current default-vault state.
+
+Tests:
+
+- PASS: goal identity guard via
+  `codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml
+  session_evidence_candidates_include_same_project_session_date_diagnostics`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml
+  session_evidence_candidates_keep_only_full_index_unresolved_rows`.
+- PASS: `node --disable-warning=ExperimentalWarning
+  --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  (`203` tests).
+- PASS: actual default-vault
+  `cargo run --manifest-path src-tauri/Cargo.toml --bin promptvault-cli --
+  work-session-evidence-candidates --limit 80 --json`:
+  `26` candidates, `25` with same-project other-date hints, `1` with
+  `no_same_project_session_dates`, and `0` same-date-unmatched rows.
+- PASS: actual default-vault
+  `src-tauri/target/debug/promptvault-cli work-status-export --limit 200
+  --full-session-index --json`: `97` rows, `7,843` items, `32` projects,
+  `26` days, `892` files, `12,889/12,889` indexed prompts,
+  `needs_session_evidence=26`, `matched=67`, `unresolved=26`,
+  `status-snapshot=4`.
+- PASS: `npm run check` (UI tests `513`, production build, Rust lib tests
+  `230`, CLI tests `34`, doc tests, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+  Isolated QA DB:
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-ww2rOm/qa.sqlite`.
+
+Issues:
+
+- The `26` candidates are still unresolved; diagnostics explain nearby/other
+  project evidence but do not close the evidence gate.
+- `SuperpowersSkillManager` on `2026-06-05` has no same-project session-date
+  evidence in the current stored index.
+- The review queue currently surfaces the diagnostic via `candidate_reason`.
+  A future UI polish slice could render the structured date hints separately.
+
+Research:
+
+- No external research used for this slice.
+
+Next Steps:
+
+- Decide whether to surface structured date hints as a dedicated review queue
+  line or use them to prioritize provider/manual session search.
+- Keep full-index unresolved rows fail-closed until same-date/project evidence
+  is actually found or an operator approves a source-traced review action.
 
 ## Completed Slice - 2026-06-10 Project-status session-evidence noise reduction
 

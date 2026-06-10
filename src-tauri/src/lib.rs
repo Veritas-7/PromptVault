@@ -38,6 +38,7 @@ const DEFAULT_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 80;
 const MAX_PROJECT_WORK_STATUS_EXPORT_LIMIT: usize = 1_000;
 const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_CANDIDATE_LIMIT: usize = 200;
+const PROJECT_WORK_SESSION_EVIDENCE_DATE_HINT_LIMIT: usize = 6;
 const DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_LIMIT: usize = 20;
 const MAX_PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_LIMIT: usize = 100;
 const PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_PROVIDER_CHUNK_MAX_CANDIDATES: usize = 8;
@@ -909,6 +910,10 @@ pub struct ProjectWorkSessionEvidenceCandidate {
     pub reason: String,
     pub session_evidence_audit: String,
     pub needs_title_normalization: bool,
+    pub same_project_same_date_session_count: usize,
+    pub same_project_other_session_dates: Vec<FrequencyItem>,
+    pub same_project_other_session_date_count: usize,
+    pub nearest_same_project_other_session_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2353,11 +2358,12 @@ pub fn run_project_work_session_evidence_candidates(
             "Session evidence candidates use a bounded session index for {bounded_session_limit_count} project/day rows; increase session_limit or refresh the session index before treating them as full-index unresolved."
         ));
     }
-    let candidates = build_project_work_session_evidence_candidates_from_rows(
+    let mut candidates = build_project_work_session_evidence_candidates_from_rows(
         &all_rows,
         limit,
         options.needs_title_normalization,
     );
+    annotate_project_work_session_evidence_candidate_date_hints(&database_path, &mut candidates)?;
     let total_candidate_count = all_rows
         .iter()
         .filter(|row| row.session_evidence_audit == "unresolved-after-full-index")
@@ -8802,7 +8808,151 @@ fn project_work_session_evidence_candidate_from_row(
         reason: reasons.join(","),
         session_evidence_audit: row.session_evidence_audit.clone(),
         needs_title_normalization: row.needs_title_normalization,
+        same_project_same_date_session_count: 0,
+        same_project_other_session_dates: Vec::new(),
+        same_project_other_session_date_count: 0,
+        nearest_same_project_other_session_date: None,
     }
+}
+
+#[derive(Debug, Clone)]
+struct ProjectWorkSessionDateCount {
+    date: String,
+    count: usize,
+}
+
+fn annotate_project_work_session_evidence_candidate_date_hints(
+    database_path: &Path,
+    candidates: &mut [ProjectWorkSessionEvidenceCandidate],
+) -> Result<(), Box<dyn std::error::Error>> {
+    if candidates.is_empty() {
+        return Ok(());
+    }
+    let conn = open_promptvault_database(database_path)?;
+    let projects = candidates
+        .iter()
+        .map(|candidate| candidate.project.clone())
+        .collect::<BTreeSet<_>>();
+    let mut dates_by_project = BTreeMap::new();
+    for project in projects {
+        let date_counts = project_work_session_date_counts_for_project(&conn, &project)?;
+        dates_by_project.insert(project, date_counts);
+    }
+
+    for candidate in candidates {
+        let date_counts = dates_by_project
+            .get(&candidate.project)
+            .cloned()
+            .unwrap_or_default();
+        let same_date_count = date_counts
+            .iter()
+            .find(|item| item.date == candidate.date)
+            .map(|item| item.count)
+            .unwrap_or(0);
+        let other_dates = date_counts
+            .into_iter()
+            .filter(|item| item.date != candidate.date)
+            .collect::<Vec<_>>();
+        let nearest_other_date = nearest_project_work_session_date(&candidate.date, &other_dates)
+            .or_else(|| other_dates.first().map(|item| item.date.clone()));
+
+        candidate.same_project_same_date_session_count = same_date_count;
+        candidate.same_project_other_session_date_count = other_dates.len();
+        candidate.nearest_same_project_other_session_date = nearest_other_date.clone();
+        candidate.same_project_other_session_dates = other_dates
+            .iter()
+            .take(PROJECT_WORK_SESSION_EVIDENCE_DATE_HINT_LIMIT)
+            .map(|item| FrequencyItem {
+                text: item.date.clone(),
+                count: item.count,
+            })
+            .collect();
+
+        if same_date_count > 0 {
+            append_project_work_candidate_reason(
+                &mut candidate.reason,
+                "same_project_session_same_date_unmatched",
+            );
+        }
+        if let Some(nearest_date) = nearest_other_date {
+            append_project_work_candidate_reason(
+                &mut candidate.reason,
+                "same_project_session_other_dates",
+            );
+            append_project_work_candidate_reason(
+                &mut candidate.reason,
+                &format!("nearest_same_project_session_date={nearest_date}"),
+            );
+        } else {
+            append_project_work_candidate_reason(
+                &mut candidate.reason,
+                "no_same_project_session_dates",
+            );
+        }
+    }
+    Ok(())
+}
+
+fn project_work_session_date_counts_for_project(
+    conn: &Connection,
+    project: &str,
+) -> Result<Vec<ProjectWorkSessionDateCount>, Box<dyn std::error::Error>> {
+    let pattern = format!("%/10_Projects/{}%", sqlite_like_escape(project));
+    let mut stmt = conn.prepare(
+        "SELECT prompt_date, COUNT(*) AS prompt_count
+         FROM project_work_session_evidence
+         WHERE source_path LIKE ?1 ESCAPE '\\'
+            OR cwd LIKE ?1 ESCAPE '\\'
+            OR text LIKE ?1 ESCAPE '\\'
+         GROUP BY prompt_date
+         ORDER BY prompt_date DESC",
+    )?;
+    let rows = stmt
+        .query_map([pattern], |row| {
+            Ok(ProjectWorkSessionDateCount {
+                date: row.get(0)?,
+                count: row.get::<_, i64>(1)? as usize,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn sqlite_like_escape(value: &str) -> String {
+    let mut escaped = String::new();
+    for ch in value.chars() {
+        if matches!(ch, '%' | '_' | '\\') {
+            escaped.push('\\');
+        }
+        escaped.push(ch);
+    }
+    escaped
+}
+
+fn nearest_project_work_session_date(
+    candidate_date: &str,
+    dates: &[ProjectWorkSessionDateCount],
+) -> Option<String> {
+    let target = NaiveDate::parse_from_str(candidate_date, "%Y-%m-%d").ok()?;
+    dates
+        .iter()
+        .filter_map(|item| {
+            let parsed = NaiveDate::parse_from_str(&item.date, "%Y-%m-%d").ok()?;
+            let distance = parsed.signed_duration_since(target).num_days().abs();
+            Some((item.date.clone(), distance))
+        })
+        .min_by(|left, right| left.1.cmp(&right.1).then_with(|| right.0.cmp(&left.0)))
+        .map(|(date, _)| date)
+}
+
+fn append_project_work_candidate_reason(reason: &mut String, token: &str) {
+    if token.trim().is_empty() || reason.split(',').any(|part| part == token) {
+        return;
+    }
+    if !reason.is_empty() {
+        reason.push(',');
+    }
+    reason.push_str(token);
 }
 
 #[derive(Debug, Deserialize)]
@@ -9357,7 +9507,7 @@ fn project_work_session_evidence_messages(
     candidates: &[ProjectWorkSessionEvidenceCandidate],
 ) -> (String, String) {
     let system = format!(
-        "You triage project/date work-management rows that remain unresolved after the full stored session index. Use only supplied source traces from project-local work logs and titles. Do not invent sessions, session IDs, files, dates, projects, or evidence. Return JSON only with key proposals. proposal_kind must be one of source_log_trace, manual_session_search, title_normalization_first, reject. source_trace must be copied verbatim from the candidate Sample evidence or Titles. Use confidence at least {:.2} only when the source_trace fully supports the proposed action. Durable writes are not allowed here; every proposal still requires operator approval later.",
+        "You triage project/date work-management rows that remain unresolved after the full stored session index. Use only supplied source traces from project-local work logs and titles. Same-project session date diagnostics are navigation hints only and are not source traces. Do not invent sessions, session IDs, files, dates, projects, or evidence. Return JSON only with key proposals. proposal_kind must be one of source_log_trace, manual_session_search, title_normalization_first, reject. source_trace must be copied verbatim from the candidate Sample evidence or Titles. Use confidence at least {:.2} only when the source_trace fully supports the proposed action. Durable writes are not allowed here; every proposal still requires operator approval later.",
         PROJECT_WORK_SESSION_EVIDENCE_PROPOSAL_MIN_ACCEPTED_CONFIDENCE
     );
     let mut user = String::new();
@@ -9379,7 +9529,7 @@ fn project_work_session_evidence_candidate_message(
     candidate: &ProjectWorkSessionEvidenceCandidate,
 ) -> String {
     format!(
-        "Candidate ID: {}\nProject: {}\nDate: {}\nSource: {}\nSource role: {}\nReason: {}\nWork items: {}\nNeeds title normalization: {}\nTitles:\n{}\nSample evidence:\n{}\n\n",
+        "Candidate ID: {}\nProject: {}\nDate: {}\nSource: {}\nSource role: {}\nReason: {}\nWork items: {}\nNeeds title normalization: {}\nSame-project same-date session count: {}\nSame-project other session dates: {}\nNearest same-project other session date: {}\nTitles:\n{}\nSample evidence:\n{}\n\n",
         candidate.candidate_id,
         candidate.project,
         candidate.date,
@@ -9388,9 +9538,26 @@ fn project_work_session_evidence_candidate_message(
         candidate.reason,
         candidate.work_item_count,
         candidate.needs_title_normalization,
+        candidate.same_project_same_date_session_count,
+        project_work_session_date_hints_text(&candidate.same_project_other_session_dates),
+        candidate
+            .nearest_same_project_other_session_date
+            .as_deref()
+            .unwrap_or("none"),
         candidate.top_titles.join("\n"),
         candidate.sample_evidence
     )
+}
+
+fn project_work_session_date_hints_text(items: &[FrequencyItem]) -> String {
+    if items.is_empty() {
+        return "none".to_string();
+    }
+    items
+        .iter()
+        .map(|item| format!("{} ({})", item.text, item.count))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn project_work_session_evidence_candidate_chunks(
@@ -20806,7 +20973,95 @@ Status: completed as a source-only/report-only hardening slice.
             },
             session_evidence_audit: "unresolved-after-full-index".to_string(),
             needs_title_normalization,
+            same_project_same_date_session_count: 0,
+            same_project_other_session_dates: Vec::new(),
+            same_project_other_session_date_count: 0,
+            nearest_same_project_other_session_date: None,
         }
+    }
+
+    #[test]
+    fn session_evidence_candidates_include_same_project_session_date_diagnostics() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-session-evidence-date-hints-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let prompts = vec![
+            project_path_session_record(
+                "diag-project-same-date",
+                "DiagProject",
+                "2026-06-09T12:00:00Z",
+            ),
+            project_path_session_record(
+                "diag-project-previous-date",
+                "DiagProject",
+                "2026-06-08T12:00:00Z",
+            ),
+            project_path_session_record(
+                "diag-project-next-date",
+                "DiagProject",
+                "2026-06-10T12:00:00Z",
+            ),
+            project_path_session_record(
+                "diag-other-project",
+                "OtherProject",
+                "2026-06-09T12:00:00Z",
+            ),
+        ];
+        persist_project_work_session_index(&db_path, &prompts).expect("persist session hints");
+
+        let mut candidates = vec![
+            session_evidence_candidate_fixture(
+                "session-evidence-DiagProject-a1b2c3d4e5",
+                "DiagProject",
+                "DiagProject still needs source-traced evidence.",
+                false,
+            ),
+            session_evidence_candidate_fixture(
+                "session-evidence-MissingProject-a1b2c3d4e5",
+                "MissingProject",
+                "MissingProject still needs source-traced evidence.",
+                false,
+            ),
+        ];
+        candidates[0].date = "2026-06-09".to_string();
+        candidates[1].date = "2026-06-09".to_string();
+
+        annotate_project_work_session_evidence_candidate_date_hints(&db_path, &mut candidates)
+            .expect("annotate date hints");
+
+        let diagnostic = &candidates[0];
+        assert_eq!(diagnostic.same_project_same_date_session_count, 1);
+        assert_eq!(diagnostic.same_project_other_session_date_count, 2);
+        assert_eq!(diagnostic.same_project_other_session_dates.len(), 2);
+        assert_eq!(
+            diagnostic.same_project_other_session_dates[0].text,
+            "2026-06-10"
+        );
+        assert_eq!(
+            diagnostic
+                .nearest_same_project_other_session_date
+                .as_deref(),
+            Some("2026-06-10")
+        );
+        assert!(diagnostic
+            .reason
+            .contains("same_project_session_same_date_unmatched"));
+        assert!(diagnostic
+            .reason
+            .contains("same_project_session_other_dates"));
+        assert!(diagnostic
+            .reason
+            .contains("nearest_same_project_session_date=2026-06-10"));
+
+        let missing = &candidates[1];
+        assert_eq!(missing.same_project_same_date_session_count, 0);
+        assert_eq!(missing.same_project_other_session_date_count, 0);
+        assert_eq!(missing.nearest_same_project_other_session_date, None);
+        assert!(missing.reason.contains("no_same_project_session_dates"));
+
+        let _ = std::fs::remove_file(db_path);
     }
 
     fn session_evidence_candidates_result_fixture(
@@ -23537,6 +23792,10 @@ Status: completed as a source-only/report-only hardening slice.
             reason: "unresolved_after_full_index,no_session_evidence".to_string(),
             session_evidence_audit: "unresolved-after-full-index".to_string(),
             needs_title_normalization: false,
+            same_project_same_date_session_count: 0,
+            same_project_other_session_dates: Vec::new(),
+            same_project_other_session_date_count: 0,
+            nearest_same_project_other_session_date: None,
         };
         let rough = ProjectWorkSessionEvidenceCandidate {
             candidate_id: "session-evidence-RoughProject-b1b2c3d4e5".to_string(),
@@ -23563,6 +23822,10 @@ Status: completed as a source-only/report-only hardening slice.
                 .to_string(),
             session_evidence_audit: "unresolved-after-full-index".to_string(),
             needs_title_normalization: true,
+            same_project_same_date_session_count: 0,
+            same_project_other_session_dates: Vec::new(),
+            same_project_other_session_date_count: 0,
+            nearest_same_project_other_session_date: None,
         };
         let result = ProjectWorkSessionEvidenceCandidatesResult {
             generated_at: "2026-06-09T00:00:00Z".to_string(),
@@ -23738,6 +24001,10 @@ Status: completed as a source-only/report-only hardening slice.
             reason: "unresolved_after_full_index,no_session_evidence".to_string(),
             session_evidence_audit: "unresolved-after-full-index".to_string(),
             needs_title_normalization: false,
+            same_project_same_date_session_count: 0,
+            same_project_other_session_dates: Vec::new(),
+            same_project_other_session_date_count: 0,
+            nearest_same_project_other_session_date: None,
         };
         let rejected = ProjectWorkSessionEvidenceCandidate {
             candidate_id: "session-evidence-SafeProject-apply-rejected-b1b2c3d4e5".to_string(),
@@ -23763,6 +24030,10 @@ Status: completed as a source-only/report-only hardening slice.
             reason: "unresolved_after_full_index,no_session_evidence".to_string(),
             session_evidence_audit: "unresolved-after-full-index".to_string(),
             needs_title_normalization: false,
+            same_project_same_date_session_count: 0,
+            same_project_other_session_dates: Vec::new(),
+            same_project_other_session_date_count: 0,
+            nearest_same_project_other_session_date: None,
         };
         let result = ProjectWorkSessionEvidenceCandidatesResult {
             generated_at: "2026-06-09T00:00:00Z".to_string(),

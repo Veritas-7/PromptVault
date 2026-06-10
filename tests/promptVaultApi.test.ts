@@ -435,6 +435,13 @@ function projectWorkSessionEvidenceCandidatesPayload(overrides = {}) {
       reason: "unresolved_after_full_index,no_session_evidence,needs_title_normalization",
       session_evidence_audit: "unresolved-after-full-index",
       needs_title_normalization: true,
+      same_project_same_date_session_count: 0,
+      same_project_other_session_dates: [
+        { text: "2026-06-08", count: 4 },
+        { text: "2026-06-07", count: 2 },
+      ],
+      same_project_other_session_date_count: 2,
+      nearest_same_project_other_session_date: "2026-06-08",
     }],
     warnings: [],
     ...overrides,
@@ -1222,6 +1229,13 @@ test("browser bridge work session evidence candidates posts options and validate
   assert.equal(result.candidates[0].source_file_roles[0].text, "handoff-log");
   assert.equal(result.candidates[0].latest_source_role, "handoff-log");
   assert.equal(result.candidates[0].session_evidence_audit, "unresolved-after-full-index");
+  assert.equal(result.candidates[0].same_project_same_date_session_count, 0);
+  assert.equal(result.candidates[0].same_project_other_session_date_count, 2);
+  assert.deepEqual(result.candidates[0].same_project_other_session_dates, [
+    { text: "2026-06-08", count: 4 },
+    { text: "2026-06-07", count: 2 },
+  ]);
+  assert.equal(result.candidates[0].nearest_same_project_other_session_date, "2026-06-08");
 });
 
 test("browser bridge work session evidence candidates rejects inconsistent counters", async (t) => {

@@ -767,6 +767,14 @@ function isFrequencyItemsEachWithinTotal(value: unknown, total: unknown): boolea
     && value.every((item) => isFrequencyItem(item) && item.count <= total);
 }
 
+function isFrequencyDateHintsWithinDateCount(value: unknown, total: unknown): boolean {
+  return Array.isArray(value)
+    && isNonNegativeSafeInteger(total)
+    && value.length <= total
+    && recordStringFieldValuesAreUnique(value, "text")
+    && value.every(isFrequencyItem);
+}
+
 function frequencyItemCountsSumTo(value: unknown, total: unknown): boolean {
   if (!Array.isArray(value) || !isNonNegativeSafeInteger(total)) return false;
   let countSum = 0;
@@ -2529,6 +2537,16 @@ function isProjectWorkSessionEvidenceCandidate(value: unknown): boolean {
     && isNonBlankString(value.reason)
     && value.session_evidence_audit === "unresolved-after-full-index"
     && typeof value.needs_title_normalization === "boolean"
+    && isNonNegativeSafeInteger(value.same_project_same_date_session_count)
+    && isNonNegativeSafeInteger(value.same_project_other_session_date_count)
+    && isFrequencyDateHintsWithinDateCount(
+      value.same_project_other_session_dates,
+      value.same_project_other_session_date_count,
+    )
+    && (value.nearest_same_project_other_session_date === null
+      || isNonBlankString(value.nearest_same_project_other_session_date))
+    && (value.same_project_other_session_date_count > 0
+      || value.nearest_same_project_other_session_date === null)
     && isFrequencyItemsWithinTotal(value.source_statuses, value.work_item_count);
 }
 

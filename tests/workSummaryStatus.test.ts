@@ -1641,6 +1641,22 @@ test("work management readiness text summarizes coverage, session backfill, queu
         })),
       },
     }, 25, 2, 10, 500, false),
+    "다음 조치 · 대용량 적용 후 긴 백필 확인 후 긴 이어 백필 · 남은 파일 24,800개 · 예상 5회 · 현재 입력 100회",
+  );
+  assert.equal(
+    workManagementNextActionText({
+      coverage: coverageResult({ files_seen: 32, parsed_file_count: 32, unparsed_file_count: 0 }),
+      aiProviderStatus: providerStatus,
+      sessionIndex: {
+        ...sessionIndex,
+        source_states: sessionIndex.source_states.map((source) => ({
+          ...source,
+          total_files: 25_150,
+          processed_files: 350,
+          next_file_index: 350,
+        })),
+      },
+    }, 25, 2, 10, 500, true),
     "다음 조치 · 대용량 적용 후 긴 이어 백필 · 남은 파일 24,800개 · 예상 5회 · 현재 입력 100회",
   );
   assert.equal(

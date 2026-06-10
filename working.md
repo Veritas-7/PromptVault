@@ -1,10 +1,102 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 04:50 KST
+Updated: 2026-06-11 05:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 04:52 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Make the work-management next-action text explicit when the recommended
+  remaining session backfill path requires both applying a large batch size and
+  typing the long-backfill confirmation phrase before the long run can execute.
+
+Current Active Work:
+
+- Previous selected source-role fallback slice is complete, verified, committed,
+  and pushed as
+  `0139f46 ux: preserve selected work source role filters`.
+- Fresh repo check at resume showed `main...origin/main` clean with local HEAD
+  and `origin/main` both at
+  `0139f464bc23567daab1576c538637fe7b605ac5`.
+- Current slice is implemented locally and under verification: update the
+  readiness next-action guidance so it does not imply a long backfill can run
+  immediately before the operator has typed the required confirmation phrase.
+
+Progress:
+
+- Confirmed goal identity still anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed there is no project-local `AGENTS.md` or `design.md`; the project
+  root `working.md` remains the active continuation surface.
+- Inspected the existing session-index planning helpers and tests around
+  planned remaining runs, checkpoint guidance, completion plan, and management
+  readiness next actions.
+- Updated the recommended large-batch next-action branch so an unconfirmed
+  long backfill says `대용량 적용 후 긴 백필 확인 후 긴 이어 백필` instead of
+  implying the long run is immediately executable.
+- Added a paired test assertion that keeps the confirmed state at
+  `대용량 적용 후 긴 이어 백필`.
+- Extended browser-bridge QA so the management overview refresh runs with a
+  small batch input and an empty long-backfill confirmation, forcing the actual
+  DOM next-action text to include the new confirmation-required wording.
+- Re-ran browser-bridge QA. It passed through the work-management overview
+  next-action DOM assertion, then completed source-role, freeze, saved
+  extraction, normalization, review-queue, and saved-items flows.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: clarifies next-action wording for recommended
+  large long-backfill plans that still need long-run confirmation.
+- `tests/workSummaryStatus.test.ts`: covers unconfirmed and confirmed
+  recommended large long-backfill next-action text.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies the new next-action wording
+  through the browser-bridge DOM flow.
+- `working.md`: records this new slice and current verification plan.
+
+Tests:
+
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  (`52` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `git diff --check`.
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check` (UI tests, TypeScript/Vite build, Rust CLI build,
+  Rust lib tests, CLI tests, doc-tests, and clippy `-D warnings`).
+- PASS: `gitleaks dir . --no-banner --redact` (`no leaks found`).
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact`
+  (`no leaks found`).
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- Work-session-index backfill remains intentionally bounded by safety caps in
+  QA and reports remaining source files with guided continuation. This slice is
+  only clarifying the next-action text for that bounded state.
+
+Next Step:
+
+- Commit/push this management next-action clarification slice, then verify
+  `main...origin/main` is clean at the pushed commit.
 
 ## Resume Snapshot - 2026-06-11 04:35 KST
 

@@ -2184,6 +2184,8 @@ async function runBrowserQa() {
 
     step("work log management");
     step("work management overview");
+    await page.locator('[data-work-session-index-batch-files="true"]').fill("25");
+    await page.locator('[data-work-session-index-long-confirm="true"]').fill("");
     await page.locator('[data-refresh-work-management-overview="true"]').click();
     await page.locator('[data-work-management-overview-meta="true"]').waitFor({ timeout: 120000 });
     await page.waitForFunction(() => {
@@ -2299,9 +2301,8 @@ async function runBrowserQa() {
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-management-next-action="true"]')?.textContent ?? "";
       return text.includes("다음 조치")
-        && text.includes("긴 이어 백필")
+        && text.includes("대용량 적용 후 긴 백필 확인 후 긴 이어 백필")
         && text.includes("예상")
-        && !text.includes("대용량 적용 후")
         && (
           text.includes("백필큐")
           || text.includes("긴 이어 백필")

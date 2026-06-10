@@ -858,8 +858,11 @@ function workManagementSessionBackfillNextAction(
     )
     : null;
   if (recommendedPlan && recommendedPlan.runs < currentPlan.runs) {
+    const recommendedAction = recommendedPlan.mode === "긴 이어 백필" && !longRunConfirmed
+      ? "대용량 적용 후 긴 백필 확인 후 긴 이어 백필"
+      : `대용량 적용 후 ${recommendedPlan.mode}`;
     return [
-      `대용량 적용 후 ${recommendedPlan.mode}`,
+      recommendedAction,
       remainingText,
       `예상 ${recommendedPlan.runs.toLocaleString()}회`,
       `현재 입력 ${currentPlan.runs.toLocaleString()}회`,

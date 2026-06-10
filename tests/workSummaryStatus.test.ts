@@ -63,6 +63,7 @@ import {
   workSessionEvidenceReviewedItemsActionLabel,
   workSessionEvidenceReviewedItemsFailureText,
   workSessionEvidenceReviewedItemsMetaText,
+  workSessionEvidenceReviewQueueDateDiagnosticText,
   workSessionEvidenceReviewQueueFailureText,
   workSessionEvidenceReviewQueueItemStateText,
   workSessionEvidenceReviewQueueMetaText,
@@ -797,6 +798,10 @@ function sessionEvidenceReviewQueueItem(
     candidate_reason: "unresolved_after_full_index,needs_title_normalization",
     session_evidence_audit: "unresolved-after-full-index",
     needs_title_normalization: true,
+    same_project_same_date_session_count: 0,
+    same_project_other_session_dates: [{ text: "2026-06-08", count: 2 }],
+    same_project_other_session_date_count: 1,
+    nearest_same_project_other_session_date: "2026-06-08",
     source_review: null,
     ...overrides,
   };
@@ -2645,6 +2650,38 @@ test("work session evidence reason diagnostics explain session-date hints", () =
       "unresolved_after_full_index,no_session_evidence",
     ),
     null,
+  );
+});
+
+test("work session evidence review queue diagnostics prefer structured session-date hints", () => {
+  assert.equal(
+    workSessionEvidenceReviewQueueDateDiagnosticText(sessionEvidenceReviewQueueItem({
+      candidate_reason: "unresolved_after_full_index,no_session_evidence,no_same_project_session_dates",
+      same_project_other_session_date_count: 1,
+      same_project_other_session_dates: [{ text: "2026-06-08", count: 2 }],
+      nearest_same_project_other_session_date: "2026-06-08",
+    })),
+    "같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 2026-06-08 · 자동 연결 아님",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueDateDiagnosticText(sessionEvidenceReviewQueueItem({
+      candidate_reason: "unresolved_after_full_index,no_session_evidence,same_project_session_other_dates,nearest_same_project_session_date=2026-06-09",
+      same_project_same_date_session_count: 1,
+      same_project_other_session_date_count: 0,
+      same_project_other_session_dates: [],
+      nearest_same_project_other_session_date: null,
+    })),
+    "같은 날짜 세션 후보 있음 · 자동 연결 실패 확인 필요",
+  );
+  assert.equal(
+    workSessionEvidenceReviewQueueDateDiagnosticText(sessionEvidenceReviewQueueItem({
+      candidate_reason: "unresolved_after_full_index,no_session_evidence,no_same_project_session_dates",
+      same_project_same_date_session_count: 0,
+      same_project_other_session_date_count: 0,
+      same_project_other_session_dates: [],
+      nearest_same_project_other_session_date: null,
+    })),
+    "같은 프로젝트 세션 날짜 없음 · 수동 검색 필요",
   );
 });
 

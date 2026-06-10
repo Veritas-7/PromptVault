@@ -2770,6 +2770,16 @@ function isProjectWorkSessionEvidenceReviewQueueItem(value: unknown): boolean {
     && isNonBlankString(value.candidate_reason)
     && value.session_evidence_audit === "unresolved-after-full-index"
     && typeof value.needs_title_normalization === "boolean"
+    && isNonNegativeSafeInteger(value.same_project_same_date_session_count)
+    && isNonNegativeSafeInteger(value.same_project_other_session_date_count)
+    && isFrequencyDateHintsWithinDateCount(
+      value.same_project_other_session_dates,
+      value.same_project_other_session_date_count,
+    )
+    && (value.nearest_same_project_other_session_date === null
+      || isNonBlankString(value.nearest_same_project_other_session_date))
+    && (value.same_project_other_session_date_count > 0
+      || value.nearest_same_project_other_session_date === null)
     && (value.source_review === null || isProjectWorkSessionEvidenceSourceProposal(value.source_review))
     && isFrequencyItemsWithinTotal(value.source_statuses, value.work_item_count);
 }
@@ -2836,6 +2846,16 @@ function isProjectWorkSessionEvidenceReviewedItem(value: unknown): boolean {
     && isNonBlankString(value.candidate_reason)
     && value.session_evidence_audit === "unresolved-after-full-index"
     && typeof value.needs_title_normalization === "boolean"
+    && isNonNegativeSafeInteger(value.same_project_same_date_session_count)
+    && isNonNegativeSafeInteger(value.same_project_other_session_date_count)
+    && isFrequencyDateHintsWithinDateCount(
+      value.same_project_other_session_dates,
+      value.same_project_other_session_date_count,
+    )
+    && (value.nearest_same_project_other_session_date === null
+      || isNonBlankString(value.nearest_same_project_other_session_date))
+    && (value.same_project_other_session_date_count > 0
+      || value.nearest_same_project_other_session_date === null)
     && (value.source_review === null || isProjectWorkSessionEvidenceSourceProposal(value.source_review))
     && isFrequencyItemsWithinTotal(value.source_statuses, value.work_item_count);
 }

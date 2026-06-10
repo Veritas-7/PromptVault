@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 16:52 KST
+Updated: 2026-06-10 17:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,11 +34,11 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed baseline:
-  `9c9efd6 feat: accept source review metadata in cli`.
-- Current implementation focus: continue reducing unresolved project/day
-  session-evidence rows and provider/review reliability gaps without weakening
-  the source-trace/operator-review contract.
-- Latest verified implementation slice: CLI source-proposal review approvals
+  `d4329e1 docs: record cli source review commit`.
+- Current implementation slice: session-evidence review queue rows and durable
+  reviewed items now preserve structured same-project session-date diagnostics
+  instead of exposing those hints only through `candidate_reason` text.
+- Previous verified implementation slice: CLI source-proposal review approvals
   can pass copied source trace metadata through `--source-review-json` or
   `--source-review-file`, matching the existing UI/API `source_review` contract
   instead of hard-coding CLI updates to `source_review: None`. Pushed as
@@ -228,6 +228,23 @@ Current Work:
   `9c9efd6 feat: accept source review metadata in cli`. Post-push verification
   reported `git status --short --branch` clean on `main...origin/main`,
   divergence `0 0`, and latest log `9c9efd6`.
+- Current review-queue diagnostics proof:
+  `work-session-evidence-candidates --limit 80 --json` reported `26`
+  candidates, `97` project/day rows, `8,022` work items, `903` progress files,
+  `32` projects, `26` days, and a full stored session index of
+  `12,889/12,889` prompts. The input surface remains project-log heavy:
+  candidate latest-source roles were `16` handoff logs, `5` work logs, and `5`
+  progress logs. `work-session-evidence-review-queue --limit 20
+  --sync-candidates --json` reported `48` stored queue rows, `26`
+  pending-review rows, `22` stale rows, and `26` synced candidates. Running the
+  new code against the default vault with `work-session-evidence-review-queue
+  --limit 3 --sync-candidates --json` returned structured diagnostics, e.g.
+  `RepoTutorStudio` `2026-06-10` has
+  `same_project_other_session_dates=[2026-06-09:5]` and
+  `nearest_same_project_other_session_date=2026-06-09`.
+  Verification passed: `cargo fmt --check --manifest-path src-tauri/Cargo.toml`,
+  `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_evidence_review`,
+  targeted UI/API tests (`521` Node tests), and full `npm run check`.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is continuing unresolved project/day session-evidence review and
@@ -251,8 +268,8 @@ Resume Contract:
 Management Coverage Status:
 
 - The app does manage project/day work from real parsed artifacts: current
-  default-vault export reported `32` projects, `26` days, `899` progress files,
-  `7,947` work items, `97` project/day rows, and a full stored session index of
+  default-vault export reported `32` projects, `26` days, `903` progress files,
+  `8,022` work items, `97` project/day rows, and a full stored session index of
   `12,889/12,889` sanitized prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
@@ -265,11 +282,79 @@ Immediate Resume Commands:
 - `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli`
 - `src-tauri/target/debug/promptvault-cli work-status-export --limit 200 --full-session-index --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
+- `src-tauri/target/debug/promptvault-cli work-session-evidence-review-queue --limit 20 --sync-candidates --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --query "RepoTutorStudio 2026-06-10" --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-search --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Current Slice - 2026-06-10 Structured review queue diagnostics
+
+Current Goal:
+
+- Preserve same-project session-date diagnostics as structured review-queue and
+  durable reviewed-item fields so operator UI/API/CLI consumers do not have to
+  parse `candidate_reason` to recover nearest-session hints.
+
+Context:
+
+- The candidate API already exposed `same_project_same_date_session_count`,
+  `same_project_other_session_dates`, `same_project_other_session_date_count`,
+  and `nearest_same_project_other_session_date`.
+- The persisted review queue only stored the diagnostic in
+  `candidate_reason`, so queue/reviewed reloads were less structured than the
+  source candidate rows.
+
+Progress:
+
+- Added review queue and reviewed-item SQLite columns for same-project
+  session-date diagnostics, with defaulted migrations for existing DBs.
+- Review queue sync now stores those fields from live candidates, preserving
+  approved/rejected operator state while refreshing diagnostics.
+- Review apply copies the diagnostics into durable reviewed items.
+- Browser bridge validation, TypeScript types, and UI rendering now accept and
+  prefer structured diagnostics, falling back to `candidate_reason` for older
+  rows.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: schema, migration, queue sync/read, reviewed-item
+  persistence/read, and Rust regression assertions.
+- `src/types.ts` and `src/promptVaultApi.ts`: review queue/reviewed item
+  diagnostic fields and response validation.
+- `src/workSummaryStatus.ts` and `src/App.tsx`: structured diagnostic display
+  for review queue and durable reviewed rows.
+- `tests/promptVaultApi.test.ts`, `tests/reviewQueueFilters.test.ts`, and
+  `tests/workSummaryStatus.test.ts`: fixtures and assertions for the new fields.
+- `working.md`: recorded actual default-vault counts, verification, and next
+  resume action.
+
+Tests:
+
+- PASS: `cargo fmt --check --manifest-path src-tauri/Cargo.toml`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_evidence_review`
+  (`2` matching Rust tests passed).
+- PASS: `npm run test:ui -- tests/promptVaultApi.test.ts tests/workSummaryStatus.test.ts tests/reviewQueueFilters.test.ts`
+  (`521` Node tests passed; the script runs the full UI/API test set).
+- PASS: `cargo run --quiet --manifest-path src-tauri/Cargo.toml --bin promptvault-cli -- work-session-evidence-review-queue --limit 3 --sync-candidates --json`
+  against the default vault returned structured same-project date diagnostics
+  for the top review rows.
+- PASS: `npm run check`. This covered UI/API tests, production build,
+  `cargo build --bin promptvault-cli`, Rust library tests (`236` passed), CLI
+  tests (`35` passed), doc tests, and clippy with `-D warnings`.
+
+Issues:
+
+- Publication is still pending for this slice: staged diff/secret scan, commit,
+  push, and clean/synced verification remain.
+- Broader goal remains active: `26` default-vault session-evidence candidates
+  still need review/closure.
+
+Next Steps:
+
+- Stage only the changed source/test/log files, run staged diff and secret
+  checks, commit this diagnostics slice, and push.
 
 ## Completed Slice - 2026-06-10 CLI source review approval input
 

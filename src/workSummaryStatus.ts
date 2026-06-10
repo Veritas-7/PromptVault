@@ -1925,6 +1925,26 @@ export function workSessionEvidenceCandidateReasonDiagnosticText(
   return null;
 }
 
+export function workSessionEvidenceReviewQueueDateDiagnosticText(
+  item: Pick<
+    ProjectWorkSessionEvidenceReviewQueueItem,
+    | "candidate_reason"
+    | "same_project_same_date_session_count"
+    | "same_project_other_session_date_count"
+    | "nearest_same_project_other_session_date"
+  >,
+): string | null {
+  if (item.same_project_same_date_session_count > 0) {
+    return "같은 날짜 세션 후보 있음 · 자동 연결 실패 확인 필요";
+  }
+  if (item.same_project_other_session_date_count > 0) {
+    return item.nearest_same_project_other_session_date
+      ? `같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 ${item.nearest_same_project_other_session_date} · 자동 연결 아님`
+      : "같은 프로젝트 다른 날짜 세션 있음 · 자동 연결 아님";
+  }
+  return workSessionEvidenceCandidateReasonDiagnosticText(item.candidate_reason);
+}
+
 export function workSessionEvidenceReviewQueueActionLabel(
   state: WorkSessionEvidenceReviewQueueState,
   hasResult: boolean,

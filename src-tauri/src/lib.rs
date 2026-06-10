@@ -1065,6 +1065,10 @@ pub struct ProjectWorkSessionEvidenceReviewQueueItem {
     pub candidate_reason: String,
     pub session_evidence_audit: String,
     pub needs_title_normalization: bool,
+    pub same_project_same_date_session_count: usize,
+    pub same_project_other_session_dates: Vec<FrequencyItem>,
+    pub same_project_other_session_date_count: usize,
+    pub nearest_same_project_other_session_date: Option<String>,
     pub source_review: Option<ProjectWorkSessionEvidenceSourceProposal>,
 }
 
@@ -1107,6 +1111,10 @@ pub struct ProjectWorkSessionEvidenceReviewedItem {
     pub candidate_reason: String,
     pub session_evidence_audit: String,
     pub needs_title_normalization: bool,
+    pub same_project_same_date_session_count: usize,
+    pub same_project_other_session_dates: Vec<FrequencyItem>,
+    pub same_project_other_session_date_count: usize,
+    pub nearest_same_project_other_session_date: Option<String>,
     pub source_review: Option<ProjectWorkSessionEvidenceSourceProposal>,
 }
 
@@ -11073,16 +11081,21 @@ fn sync_project_work_session_evidence_review_queue(
         let source_statuses_json = serde_json::to_string(&candidate.source_statuses)?;
         let source_files_json = serde_json::to_string(&candidate.source_files)?;
         let top_titles_json = serde_json::to_string(&candidate.top_titles)?;
+        let same_project_other_session_dates_json =
+            serde_json::to_string(&candidate.same_project_other_session_dates)?;
         tx.execute(
             "INSERT INTO project_work_session_evidence_review_queue (
                 candidate_id, first_seen_at, last_seen_at, review_state, review_reason,
                 project, proposal_date, operational_status, source_statuses_json,
                 work_item_count, source_file_count, source_files_json, top_titles_json,
                 sample_evidence, latest_source_path, latest_source_file, candidate_reason,
-                session_evidence_audit, needs_title_normalization, source_review_json
+                session_evidence_audit, needs_title_normalization,
+                same_project_same_date_session_count, same_project_other_session_dates_json,
+                same_project_other_session_date_count, nearest_same_project_other_session_date,
+                source_review_json
             ) VALUES (
                 ?1, ?2, ?3, 'pending_review', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-                ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL
+                ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, NULL
             )
             ON CONFLICT(candidate_id) DO UPDATE SET
                 last_seen_at=excluded.last_seen_at,
@@ -11100,6 +11113,10 @@ fn sync_project_work_session_evidence_review_queue(
                 candidate_reason=excluded.candidate_reason,
                 session_evidence_audit=excluded.session_evidence_audit,
                 needs_title_normalization=excluded.needs_title_normalization,
+                same_project_same_date_session_count=excluded.same_project_same_date_session_count,
+                same_project_other_session_dates_json=excluded.same_project_other_session_dates_json,
+                same_project_other_session_date_count=excluded.same_project_other_session_date_count,
+                nearest_same_project_other_session_date=excluded.nearest_same_project_other_session_date,
                 review_state=CASE
                     WHEN project_work_session_evidence_review_queue.review_state IN ('approved', 'rejected')
                     THEN project_work_session_evidence_review_queue.review_state
@@ -11134,6 +11151,10 @@ fn sync_project_work_session_evidence_review_queue(
                 &candidate.reason,
                 &candidate.session_evidence_audit,
                 candidate.needs_title_normalization as i64,
+                candidate.same_project_same_date_session_count as i64,
+                &same_project_other_session_dates_json,
+                candidate.same_project_other_session_date_count as i64,
+                candidate.nearest_same_project_other_session_date.as_deref(),
             ],
         )?;
     }
@@ -11336,7 +11357,10 @@ fn read_project_work_session_evidence_review_queue(
             project, proposal_date, operational_status, source_statuses_json,
             work_item_count, source_file_count, source_files_json, top_titles_json,
             sample_evidence, latest_source_path, latest_source_file, candidate_reason,
-            session_evidence_audit, needs_title_normalization, source_review_json
+            session_evidence_audit, needs_title_normalization,
+            same_project_same_date_session_count, same_project_other_session_dates_json,
+            same_project_other_session_date_count, nearest_same_project_other_session_date,
+            source_review_json
          FROM project_work_session_evidence_review_queue
          ORDER BY
             CASE review_state
@@ -11377,7 +11401,8 @@ fn read_project_work_session_evidence_review_queue(
         let top_titles_json: String = row.get(12)?;
         let source_files = serde_json::from_str::<Vec<String>>(&source_files_json)?;
         let latest_source_file = row.get::<_, String>(15)?;
-        let source_review_json = row.get::<_, Option<String>>(19)?;
+        let same_project_other_session_dates_json: String = row.get(20)?;
+        let source_review_json = row.get::<_, Option<String>>(23)?;
         let source_file_roles = project_work_source_file_roles(&source_files);
         let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
         items.push(ProjectWorkSessionEvidenceReviewQueueItem {
@@ -11402,9 +11427,15 @@ fn read_project_work_session_evidence_review_queue(
             candidate_reason: row.get(16)?,
             session_evidence_audit: row.get(17)?,
             needs_title_normalization,
+            same_project_same_date_session_count: row.get::<_, i64>(19)? as usize,
+            same_project_other_session_dates: serde_json::from_str(
+                &same_project_other_session_dates_json,
+            )?,
+            same_project_other_session_date_count: row.get::<_, i64>(21)? as usize,
+            nearest_same_project_other_session_date: row.get(22)?,
             source_review: project_work_session_evidence_source_review_from_json_column(
                 source_review_json,
-                19,
+                23,
             )?,
         });
     }
@@ -11443,7 +11474,10 @@ fn read_project_work_session_evidence_review_queue_items_by_state(
             project, proposal_date, operational_status, source_statuses_json,
             work_item_count, source_file_count, source_files_json, top_titles_json,
             sample_evidence, latest_source_path, latest_source_file, candidate_reason,
-            session_evidence_audit, needs_title_normalization, source_review_json
+            session_evidence_audit, needs_title_normalization,
+            same_project_same_date_session_count, same_project_other_session_dates_json,
+            same_project_other_session_date_count, nearest_same_project_other_session_date,
+            source_review_json
          FROM project_work_session_evidence_review_queue
          WHERE review_state=?1
          ORDER BY last_seen_at DESC
@@ -11472,7 +11506,16 @@ fn read_project_work_session_evidence_review_queue_items_by_state(
             )
         })?;
         let latest_source_file = row.get::<_, String>(15)?;
-        let source_review_json = row.get::<_, Option<String>>(19)?;
+        let same_project_other_session_dates_json: String = row.get(20)?;
+        let same_project_other_session_dates =
+            serde_json::from_str(&same_project_other_session_dates_json).map_err(|err| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    20,
+                    rusqlite::types::Type::Text,
+                    Box::new(err),
+                )
+            })?;
+        let source_review_json = row.get::<_, Option<String>>(23)?;
         let source_file_roles = project_work_source_file_roles(&source_files);
         let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
         Ok(ProjectWorkSessionEvidenceReviewQueueItem {
@@ -11497,9 +11540,13 @@ fn read_project_work_session_evidence_review_queue_items_by_state(
             candidate_reason: row.get(16)?,
             session_evidence_audit: row.get(17)?,
             needs_title_normalization: row.get::<_, i64>(18)? != 0,
+            same_project_same_date_session_count: row.get::<_, i64>(19)? as usize,
+            same_project_other_session_dates,
+            same_project_other_session_date_count: row.get::<_, i64>(21)? as usize,
+            nearest_same_project_other_session_date: row.get(22)?,
             source_review: project_work_session_evidence_source_review_from_json_column(
                 source_review_json,
-                19,
+                23,
             )?,
         })
     })?;
@@ -11518,6 +11565,8 @@ fn persist_project_work_session_evidence_reviewed_items(
         let source_statuses_json = serde_json::to_string(&row.source_statuses)?;
         let source_files_json = serde_json::to_string(&row.source_files)?;
         let top_titles_json = serde_json::to_string(&row.top_titles)?;
+        let same_project_other_session_dates_json =
+            serde_json::to_string(&row.same_project_other_session_dates)?;
         let source_review_json = row
             .source_review
             .as_ref()
@@ -11529,10 +11578,12 @@ fn persist_project_work_session_evidence_reviewed_items(
                 operational_status, source_statuses_json, work_item_count, source_file_count,
                 source_files_json, top_titles_json, sample_evidence, latest_source_path,
                 latest_source_file, candidate_reason, session_evidence_audit,
-                needs_title_normalization, source_review_json
+                needs_title_normalization, same_project_same_date_session_count,
+                same_project_other_session_dates_json, same_project_other_session_date_count,
+                nearest_same_project_other_session_date, source_review_json
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                ?15, ?16, ?17, ?18
+                ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22
             )",
             params![
                 applied_at,
@@ -11552,6 +11603,10 @@ fn persist_project_work_session_evidence_reviewed_items(
                 &row.candidate_reason,
                 &row.session_evidence_audit,
                 row.needs_title_normalization as i64,
+                row.same_project_same_date_session_count as i64,
+                &same_project_other_session_dates_json,
+                row.same_project_other_session_date_count as i64,
+                row.nearest_same_project_other_session_date.as_deref(),
                 source_review_json,
             ],
         )?;
@@ -11579,7 +11634,9 @@ fn read_project_work_session_evidence_reviewed_items(
             operational_status, source_statuses_json, work_item_count, source_file_count,
             source_files_json, top_titles_json, sample_evidence, latest_source_path,
             latest_source_file, candidate_reason, session_evidence_audit,
-            needs_title_normalization, source_review_json
+            needs_title_normalization, same_project_same_date_session_count,
+            same_project_other_session_dates_json, same_project_other_session_date_count,
+            nearest_same_project_other_session_date, source_review_json
          FROM project_work_session_evidence_reviewed_items
          ORDER BY applied_at DESC, id DESC",
     )?;
@@ -11610,7 +11667,8 @@ fn read_project_work_session_evidence_reviewed_items(
         let top_titles_json: String = row.get(11)?;
         let source_files = serde_json::from_str::<Vec<String>>(&source_files_json)?;
         let latest_source_file = row.get::<_, String>(14)?;
-        let source_review_json = row.get::<_, Option<String>>(18)?;
+        let same_project_other_session_dates_json: String = row.get(19)?;
+        let source_review_json = row.get::<_, Option<String>>(22)?;
         let source_file_roles = project_work_source_file_roles(&source_files);
         let latest_source_role = project_work_source_file_role(&latest_source_file).to_string();
         items.push(ProjectWorkSessionEvidenceReviewedItem {
@@ -11634,9 +11692,15 @@ fn read_project_work_session_evidence_reviewed_items(
             candidate_reason: row.get(15)?,
             session_evidence_audit: row.get(16)?,
             needs_title_normalization: row.get::<_, i64>(17)? != 0,
+            same_project_same_date_session_count: row.get::<_, i64>(18)? as usize,
+            same_project_other_session_dates: serde_json::from_str(
+                &same_project_other_session_dates_json,
+            )?,
+            same_project_other_session_date_count: row.get::<_, i64>(20)? as usize,
+            nearest_same_project_other_session_date: row.get(21)?,
             source_review: project_work_session_evidence_source_review_from_json_column(
                 source_review_json,
-                18,
+                22,
             )?,
         });
     }
@@ -13449,6 +13513,10 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             candidate_reason TEXT NOT NULL,
             session_evidence_audit TEXT NOT NULL,
             needs_title_normalization INTEGER NOT NULL,
+            same_project_same_date_session_count INTEGER NOT NULL DEFAULT 0,
+            same_project_other_session_dates_json TEXT NOT NULL DEFAULT '[]',
+            same_project_other_session_date_count INTEGER NOT NULL DEFAULT 0,
+            nearest_same_project_other_session_date TEXT,
             source_review_json TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_review_queue_state
@@ -13474,6 +13542,10 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             candidate_reason TEXT NOT NULL,
             session_evidence_audit TEXT NOT NULL,
             needs_title_normalization INTEGER NOT NULL,
+            same_project_same_date_session_count INTEGER NOT NULL DEFAULT 0,
+            same_project_other_session_dates_json TEXT NOT NULL DEFAULT '[]',
+            same_project_other_session_date_count INTEGER NOT NULL DEFAULT 0,
+            nearest_same_project_other_session_date TEXT,
             source_review_json TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_project_work_session_evidence_reviewed_items_applied_at
@@ -13647,10 +13719,90 @@ fn ensure_project_work_session_evidence_review_schema(
     if !sqlite_table_has_column(
         conn,
         "project_work_session_evidence_review_queue",
+        "same_project_same_date_session_count",
+    )? {
+        conn.execute(
+            "ALTER TABLE project_work_session_evidence_review_queue ADD COLUMN same_project_same_date_session_count INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_session_evidence_review_queue",
+        "same_project_other_session_dates_json",
+    )? {
+        conn.execute(
+            "ALTER TABLE project_work_session_evidence_review_queue ADD COLUMN same_project_other_session_dates_json TEXT NOT NULL DEFAULT '[]'",
+            [],
+        )?;
+    }
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_session_evidence_review_queue",
+        "same_project_other_session_date_count",
+    )? {
+        conn.execute(
+            "ALTER TABLE project_work_session_evidence_review_queue ADD COLUMN same_project_other_session_date_count INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_session_evidence_review_queue",
+        "nearest_same_project_other_session_date",
+    )? {
+        conn.execute(
+            "ALTER TABLE project_work_session_evidence_review_queue ADD COLUMN nearest_same_project_other_session_date TEXT",
+            [],
+        )?;
+    }
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_session_evidence_review_queue",
         "source_review_json",
     )? {
         conn.execute(
             "ALTER TABLE project_work_session_evidence_review_queue ADD COLUMN source_review_json TEXT",
+            [],
+        )?;
+    }
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_session_evidence_reviewed_items",
+        "same_project_same_date_session_count",
+    )? {
+        conn.execute(
+            "ALTER TABLE project_work_session_evidence_reviewed_items ADD COLUMN same_project_same_date_session_count INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_session_evidence_reviewed_items",
+        "same_project_other_session_dates_json",
+    )? {
+        conn.execute(
+            "ALTER TABLE project_work_session_evidence_reviewed_items ADD COLUMN same_project_other_session_dates_json TEXT NOT NULL DEFAULT '[]'",
+            [],
+        )?;
+    }
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_session_evidence_reviewed_items",
+        "same_project_other_session_date_count",
+    )? {
+        conn.execute(
+            "ALTER TABLE project_work_session_evidence_reviewed_items ADD COLUMN same_project_other_session_date_count INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    if !sqlite_table_has_column(
+        conn,
+        "project_work_session_evidence_reviewed_items",
+        "nearest_same_project_other_session_date",
+    )? {
+        conn.execute(
+            "ALTER TABLE project_work_session_evidence_reviewed_items ADD COLUMN nearest_same_project_other_session_date TEXT",
             [],
         )?;
     }
@@ -25656,6 +25808,21 @@ Status: completed as a source-only/report-only hardening slice.
             rows.items[0].candidate_id,
             "session-evidence-PriorityProject-c1b2c3d4e5"
         );
+        assert_eq!(rows.items[0].same_project_same_date_session_count, 0);
+        assert_eq!(rows.items[0].same_project_other_session_date_count, 1);
+        assert_eq!(
+            rows.items[0]
+                .same_project_other_session_dates
+                .first()
+                .map(|item| (item.text.as_str(), item.count)),
+            Some(("2026-06-02", 3))
+        );
+        assert_eq!(
+            rows.items[0]
+                .nearest_same_project_other_session_date
+                .as_deref(),
+            Some("2026-06-02")
+        );
         assert!(rows.items.iter().any(|item| {
             item.candidate_id == "session-evidence-SafeProject-a1b2c3d4e5"
                 && item.review_state == "pending_review"
@@ -25802,9 +25969,12 @@ Status: completed as a source-only/report-only hardening slice.
             session_evidence_audit: "unresolved-after-full-index".to_string(),
             needs_title_normalization: false,
             same_project_same_date_session_count: 0,
-            same_project_other_session_dates: Vec::new(),
-            same_project_other_session_date_count: 0,
-            nearest_same_project_other_session_date: None,
+            same_project_other_session_dates: vec![FrequencyItem {
+                text: "2026-06-08".to_string(),
+                count: 2,
+            }],
+            same_project_other_session_date_count: 1,
+            nearest_same_project_other_session_date: Some("2026-06-08".to_string()),
         };
         let rejected = ProjectWorkSessionEvidenceCandidate {
             candidate_id: "session-evidence-SafeProject-apply-rejected-b1b2c3d4e5".to_string(),
@@ -25942,6 +26112,21 @@ Status: completed as a source-only/report-only hardening slice.
             first.items[0].session_evidence_audit,
             "unresolved-after-full-index"
         );
+        assert_eq!(first.items[0].same_project_same_date_session_count, 0);
+        assert_eq!(first.items[0].same_project_other_session_date_count, 1);
+        assert_eq!(
+            first.items[0]
+                .same_project_other_session_dates
+                .first()
+                .map(|item| (item.text.as_str(), item.count)),
+            Some(("2026-06-08", 2))
+        );
+        assert_eq!(
+            first.items[0]
+                .nearest_same_project_other_session_date
+                .as_deref(),
+            Some("2026-06-08")
+        );
         let persisted_source_review = first.items[0]
             .source_review
             .as_ref()
@@ -25990,6 +26175,12 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(
             listed.items[0].candidate_id,
             "session-evidence-SafeProject-apply-a1b2c3d4e5"
+        );
+        assert_eq!(
+            listed.items[0]
+                .nearest_same_project_other_session_date
+                .as_deref(),
+            Some("2026-06-08")
         );
         assert_eq!(
             listed.items[0]

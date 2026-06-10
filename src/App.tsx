@@ -371,6 +371,7 @@ import {
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
   workSessionEvidenceReviewQueueActionLabel,
+  workSessionEvidenceReviewQueueDateDiagnosticText,
   workSessionEvidenceReviewApplyActionLabel,
   workSessionEvidenceReviewApplyFailureText,
   workSessionEvidenceReviewApplyMetaText,
@@ -6305,9 +6306,7 @@ function App() {
           visibleWorkSessionEvidenceReviewQueueItems.length ? (
             <div className="work-summary-list" data-work-session-evidence-review-queue="true">
               {visibleWorkSessionEvidenceReviewQueueItems.map((item) => {
-                const diagnosticText = workSessionEvidenceCandidateReasonDiagnosticText(
-                  item.candidate_reason,
-                );
+                const diagnosticText = workSessionEvidenceReviewQueueDateDiagnosticText(item);
                 const nearbyActive = workSessionEvidenceNearbyCandidateId === item.candidate_id;
                 const nearbyResult = nearbyActive ? workSessionEvidenceNearbyResult : null;
                 return (
@@ -6672,42 +6671,50 @@ function App() {
         {workSessionEvidenceReviewApplyResult || workSessionEvidenceReviewedItemsResult ? (
           visibleWorkSessionEvidenceReviewedItems.length ? (
             <div className="work-summary-list" data-work-session-evidence-reviewed-items="true">
-              {visibleWorkSessionEvidenceReviewedItems.map((item) => (
-                <article
-                  className="work-summary-row work-log-proposal-row"
-                  key={item.candidate_id}
-                >
-                  <div>
-                    <strong>{item.project}</strong>
-                    <span>{item.date}</span>
-                    <span>stored {item.applied_at}</span>
-                  </div>
-                  <p>{item.top_titles.join(" · ")}</p>
-                  <p className="work-log-proposal-evidence">{item.sample_evidence}</p>
-                  <span>
-                    {item.review_reason} · {item.operational_status} · {item.candidate_id}
-                  </span>
-                  {item.source_review ? (
-                    <>
-                      <span data-work-session-evidence-reviewed-source-review={item.candidate_id}>
-                        source trace line {item.source_review.source_line_number.toLocaleString()} ·{" "}
-                        hit {item.source_review.source_search_hit_id}
+              {visibleWorkSessionEvidenceReviewedItems.map((item) => {
+                const diagnosticText = workSessionEvidenceReviewQueueDateDiagnosticText(item);
+                return (
+                  <article
+                    className="work-summary-row work-log-proposal-row"
+                    key={item.candidate_id}
+                  >
+                    <div>
+                      <strong>{item.project}</strong>
+                      <span>{item.date}</span>
+                      <span>stored {item.applied_at}</span>
+                    </div>
+                    <p>{item.top_titles.join(" · ")}</p>
+                    <p className="work-log-proposal-evidence">{item.sample_evidence}</p>
+                    <span>
+                      {item.review_reason} · {item.operational_status} · {item.candidate_id}
+                    </span>
+                    {diagnosticText ? (
+                      <span data-work-session-evidence-reviewed-diagnostic={item.candidate_id}>
+                        {diagnosticText}
                       </span>
-                      <p className="work-log-proposal-evidence">
-                        {item.source_review.source_trace}
-                      </p>
-                    </>
-                  ) : null}
-                  <span>
-                    작업 {item.work_item_count.toLocaleString()}개 · 파일{" "}
-                    {item.source_file_count.toLocaleString()}개 · {item.session_evidence_audit}
-                  </span>
-                  <span>{workSessionEvidenceReviewQueueSourceRolesText(item)}</span>
-                  <span>
-                    {item.latest_source_file} · {item.latest_source_path}
-                  </span>
-                </article>
-              ))}
+                    ) : null}
+                    {item.source_review ? (
+                      <>
+                        <span data-work-session-evidence-reviewed-source-review={item.candidate_id}>
+                          source trace line {item.source_review.source_line_number.toLocaleString()} ·{" "}
+                          hit {item.source_review.source_search_hit_id}
+                        </span>
+                        <p className="work-log-proposal-evidence">
+                          {item.source_review.source_trace}
+                        </p>
+                      </>
+                    ) : null}
+                    <span>
+                      작업 {item.work_item_count.toLocaleString()}개 · 파일{" "}
+                      {item.source_file_count.toLocaleString()}개 · {item.session_evidence_audit}
+                    </span>
+                    <span>{workSessionEvidenceReviewQueueSourceRolesText(item)}</span>
+                    <span>
+                      {item.latest_source_file} · {item.latest_source_path}
+                    </span>
+                  </article>
+                );
+              })}
               {hiddenWorkSessionEvidenceReviewedItemCount ? (
                 <div className="work-summary-overflow">
                   그 외 저장된 세션근거 검토결과{" "}

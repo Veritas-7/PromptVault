@@ -1535,6 +1535,10 @@ test("browser bridge work session evidence review queue posts sync options and v
   assert.equal(result.items[0].source_files[1], "workingd.md");
   assert.equal(result.items[0].source_file_roles[0].text, "handoff-log");
   assert.equal(result.items[0].latest_source_role, "handoff-log");
+  assert.equal(result.items[0].same_project_same_date_session_count, 0);
+  assert.equal(result.items[0].same_project_other_session_date_count, 2);
+  assert.equal(result.items[0].same_project_other_session_dates[0].text, "2026-06-08");
+  assert.equal(result.items[0].nearest_same_project_other_session_date, "2026-06-08");
 });
 
 test("browser bridge work session evidence review queue update posts decision options", async (t) => {
@@ -1670,6 +1674,9 @@ test("browser bridge work session evidence reviewed items posts filters and vali
   assert.equal(result.items[0].candidate_id, "session-evidence-PromptVault-a1b2c3d4e5");
   assert.equal(result.items[0].source_files[1], "workingd.md");
   assert.equal(result.items[0].source_review?.source_trace, "PromptVault nearby evidence source hit.");
+  assert.equal(result.items[0].same_project_other_session_date_count, 2);
+  assert.equal(result.items[0].same_project_other_session_dates[0].text, "2026-06-08");
+  assert.equal(result.items[0].nearest_same_project_other_session_date, "2026-06-08");
 });
 
 test("browser bridge work session evidence reviewed items rejects duplicate candidate ids", async (t) => {

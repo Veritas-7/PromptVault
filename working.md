@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 13:33 KST
+Updated: 2026-06-10 13:44 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-10 13:33 KST
+## Resume Snapshot - 2026-06-10 13:44 KST
 
 Long-Term Goal:
 
@@ -33,11 +33,16 @@ Short-Term Goal:
 
 Current Work:
 
-- Most recent pushed implementation baseline:
-  `caf2e1e fix: exempt status snapshots from session evidence`.
+- Most recent pushed implementation baseline before the current UI slice:
+  `3aae630 feat: add session evidence date diagnostics`.
 - Most recent pushed documentation refresh:
   `9023c9b docs: refresh working resume state`.
-- Current verified implementation slice: same-project session-date diagnostics
+- Current verified implementation slice: human-readable session-evidence
+  diagnostic labels in proposal/review queue rows. The UI now renders
+  same-date, same-project-other-date, nearest-date, and no-same-project-session
+  hints as operator-facing text instead of requiring raw `candidate_reason`
+  parsing.
+- Previous verified implementation slice: same-project session-date diagnostics
   for the remaining full-index-unresolved session-evidence candidates. The
   diagnostics expose same-date count, other-date session date buckets, and
   nearest other session date, but they do not auto-attach cross-date proof.
@@ -55,10 +60,10 @@ Current Work:
   dates; `1` has no known same-project session evidence
   (`SuperpowersSkillManager` on `2026-06-05`); `0` have same-date session rows
   that failed to attach.
-- The next change should stay source-traced and reviewable. Do not infer
-  cross-date or cross-project evidence unless the target session artifact proves
-  it. The next useful slice is to turn these diagnostics into a sharper review
-  or provider workflow without reducing the evidence gate.
+- The current evidence gate remains fail-closed. Do not infer cross-date or
+  cross-project evidence unless the target session artifact proves it. The next
+  useful step is provider/manual search prioritization for the remaining
+  unresolved session-evidence rows.
 
 Resume Contract:
 
@@ -91,6 +96,79 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Human-readable session-evidence diagnostics UI
+
+Current Goal:
+
+- Make session-evidence proposal/review rows easier to operate by translating
+  diagnostic `candidate_reason` tokens into a dedicated human-readable line
+  without changing session-evidence acceptance rules.
+
+Context:
+
+- The previous slice added same-project date diagnostics to candidate JSON and
+  reason tokens, but the UI still required operators to read raw tokens such as
+  `same_project_session_other_dates` and
+  `nearest_same_project_session_date=2026-06-09`.
+- Cross-date hints remain navigation aids only. They must not be shown as
+  accepted proof or treated as a durable `source_trace`.
+
+Progress:
+
+- Added a shared reason-diagnostic label helper for session-evidence candidates.
+- Proposal rows and review queue rows now show a separate diagnostic line when
+  the reason contains same-date unmatched, same-project other-date, nearest-date,
+  or no-same-project-session hints.
+- The raw `candidate_reason` string remains visible for audit/debug traceability.
+- Isolated browser bridge QA confirmed the review queue UI renders the new
+  operator text, including:
+  `같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 2026-06-09 · 자동 연결 아님`.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: added
+  `workSessionEvidenceCandidateReasonDiagnosticText`.
+- `tests/workSummaryStatus.test.ts`: added coverage for same-date unmatched,
+  same-project other-date with/without nearest date, no-same-project-session,
+  and unrelated reason strings.
+- `src/App.tsx`: renders diagnostic labels in session-evidence proposal rows
+  and review queue rows.
+- `working.md`: refreshed the resume snapshot and this completed slice.
+
+Tests:
+
+- PASS: goal identity guard via
+  `codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`.
+- PASS: `node --disable-warning=ExperimentalWarning
+  --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  (`44` tests).
+- PASS: `npm run check` (UI tests `514`, production build, Rust lib tests
+  `230`, CLI tests `34`, doc tests, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+  Isolated QA DB:
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-e3ZjHK/qa.sqlite`.
+- PASS: `git diff --check`.
+
+Issues:
+
+- The UI is clearer, but the underlying unresolved rows remain unresolved until
+  same-date/project evidence is found or an operator approves a source-traced
+  review action.
+- The default-vault unresolved counts from the previous slice still need a fresh
+  full export after this UI-only change if another session needs current live
+  numbers.
+
+Research:
+
+- No external research used for this slice.
+
+Next Steps:
+
+- Use the diagnostic labels to prioritize provider/manual session search for the
+  remaining unresolved session-evidence rows.
+- Keep cross-date hints diagnostic-only unless a target session artifact proves
+  the exact project/date work.
 
 ## Completed Slice - 2026-06-10 Same-project session-date diagnostics
 
@@ -182,8 +260,7 @@ Issues:
   project evidence but do not close the evidence gate.
 - `SuperpowersSkillManager` on `2026-06-05` has no same-project session-date
   evidence in the current stored index.
-- The review queue currently surfaces the diagnostic via `candidate_reason`.
-  A future UI polish slice could render the structured date hints separately.
+- The later UI slice above now renders the structured date hints separately.
 
 Research:
 
@@ -191,8 +268,8 @@ Research:
 
 Next Steps:
 
-- Decide whether to surface structured date hints as a dedicated review queue
-  line or use them to prioritize provider/manual session search.
+- Continue from the later UI slice above: use the clearer diagnostics to
+  prioritize provider/manual session search.
 - Keep full-index unresolved rows fail-closed until same-date/project evidence
   is actually found or an operator approves a source-traced review action.
 

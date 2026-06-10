@@ -1899,6 +1899,32 @@ export function workSessionEvidenceProposalStateText(
   ].join(" · ");
 }
 
+export function workSessionEvidenceCandidateReasonDiagnosticText(
+  reason: string,
+): string | null {
+  const tokens = reason
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean);
+  const nearestDate = tokens
+    .find((token) => token.startsWith("nearest_same_project_session_date="))
+    ?.split("=", 2)[1]
+    ?.trim();
+
+  if (tokens.includes("same_project_session_same_date_unmatched")) {
+    return "같은 날짜 세션 후보 있음 · 자동 연결 실패 확인 필요";
+  }
+  if (tokens.includes("same_project_session_other_dates")) {
+    return nearestDate
+      ? `같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 ${nearestDate} · 자동 연결 아님`
+      : "같은 프로젝트 다른 날짜 세션 있음 · 자동 연결 아님";
+  }
+  if (tokens.includes("no_same_project_session_dates")) {
+    return "같은 프로젝트 세션 날짜 없음 · 수동 검색 필요";
+  }
+  return null;
+}
+
 export function workSessionEvidenceReviewQueueActionLabel(
   state: WorkSessionEvidenceReviewQueueState,
   hasResult: boolean,

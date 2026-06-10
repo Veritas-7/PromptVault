@@ -355,6 +355,7 @@ import {
   workLogNormalizationReviewQueueMetaText,
   canApproveWorkLogNormalizationReviewQueueItem,
   canRejectWorkLogNormalizationReviewQueueItem,
+  workSessionEvidenceCandidateReasonDiagnosticText,
   workSessionEvidenceProposalStateText,
   workSessionEvidenceProposalWarningNoticeText,
   workSessionEvidenceProposalsActionLabel,
@@ -6090,38 +6091,48 @@ function App() {
         {workSessionEvidenceProposalsResult ? (
           visibleWorkSessionEvidenceProposals.length ? (
             <div className="work-summary-list" data-work-session-evidence-proposals="true">
-              {visibleWorkSessionEvidenceProposals.map((proposal) => (
-                <article
-                  className="work-summary-row work-log-proposal-row"
-                  key={proposal.candidate_id}
-                >
-                  <div>
-                    <strong>{proposal.project}</strong>
-                    <span>{proposal.date}</span>
-                  </div>
-                  <p>{proposal.proposed_action}</p>
-                  <p className="work-log-proposal-evidence">{proposal.source_trace}</p>
-                  <span data-work-session-evidence-proposal-state={proposal.candidate_id}>
-                    {workSessionEvidenceProposalStateText(proposal)}
-                  </span>
-                  <span>
-                    provider {workSessionEvidenceProposalsResult.provider_runtime}
-                    {workSessionEvidenceProposalsResult.provider_model
-                      ? ` · model ${workSessionEvidenceProposalsResult.provider_model}`
-                      : ""}
-                    {workSessionEvidenceProposalsResult.used_ai ? " · AI" : " · local"}
-                  </span>
-                  <span>
-                    작업 {proposal.work_item_count.toLocaleString()}개 ·{" "}
-                    {proposal.source_file} · {proposal.source_role} ·{" "}
-                    {proposal.candidate_reason}
-                  </span>
-                  {proposal.risk_flags.length ? (
-                    <span>위험표시 {proposal.risk_flags.map(riskFlagLabel).join(", ")}</span>
-                  ) : null}
-                  <span>{proposal.source_path}</span>
-                </article>
-              ))}
+              {visibleWorkSessionEvidenceProposals.map((proposal) => {
+                const diagnosticText = workSessionEvidenceCandidateReasonDiagnosticText(
+                  proposal.candidate_reason,
+                );
+                return (
+                  <article
+                    className="work-summary-row work-log-proposal-row"
+                    key={proposal.candidate_id}
+                  >
+                    <div>
+                      <strong>{proposal.project}</strong>
+                      <span>{proposal.date}</span>
+                    </div>
+                    <p>{proposal.proposed_action}</p>
+                    <p className="work-log-proposal-evidence">{proposal.source_trace}</p>
+                    <span data-work-session-evidence-proposal-state={proposal.candidate_id}>
+                      {workSessionEvidenceProposalStateText(proposal)}
+                    </span>
+                    <span>
+                      provider {workSessionEvidenceProposalsResult.provider_runtime}
+                      {workSessionEvidenceProposalsResult.provider_model
+                        ? ` · model ${workSessionEvidenceProposalsResult.provider_model}`
+                        : ""}
+                      {workSessionEvidenceProposalsResult.used_ai ? " · AI" : " · local"}
+                    </span>
+                    <span>
+                      작업 {proposal.work_item_count.toLocaleString()}개 ·{" "}
+                      {proposal.source_file} · {proposal.source_role} ·{" "}
+                      {proposal.candidate_reason}
+                    </span>
+                    {diagnosticText ? (
+                      <span data-work-session-evidence-proposal-diagnostic={proposal.candidate_id}>
+                        {diagnosticText}
+                      </span>
+                    ) : null}
+                    {proposal.risk_flags.length ? (
+                      <span>위험표시 {proposal.risk_flags.map(riskFlagLabel).join(", ")}</span>
+                    ) : null}
+                    <span>{proposal.source_path}</span>
+                  </article>
+                );
+              })}
               {hiddenWorkSessionEvidenceProposalCount ? (
                 <div className="work-summary-overflow">
                   그 외 세션근거 제안 {hiddenWorkSessionEvidenceProposalCount.toLocaleString()}개
@@ -6137,67 +6148,77 @@ function App() {
         {workSessionEvidenceReviewQueueResult ? (
           visibleWorkSessionEvidenceReviewQueueItems.length ? (
             <div className="work-summary-list" data-work-session-evidence-review-queue="true">
-              {visibleWorkSessionEvidenceReviewQueueItems.map((item) => (
-                <article
-                  className="work-summary-row work-log-proposal-row"
-                  key={item.candidate_id}
-                >
-                  <div>
-                    <strong>{item.project}</strong>
-                    <span>{item.date}</span>
-                    {canApproveWorkSessionEvidenceReviewQueueItem(item) ? (
-                      <button
-                        aria-label={`${item.project} ${item.date} 세션 근거 미해결 후보 검토 완료`}
-                        className="inline-action compact-action"
-                        data-approve-work-session-evidence-review-queue={item.candidate_id}
-                        disabled={isTopLevelActionLocked}
-                        onClick={() =>
-                          void updateWorkSessionEvidenceReviewQueueItem(
-                            item.candidate_id,
-                            "approved",
-                          )}
-                        type="button"
-                      >
-                        <CheckCircle2 size={14} />
-                        {workSessionEvidenceReviewQueueUpdatingCandidateId === item.candidate_id
-                          ? "처리 중"
-                          : "검토 완료"}
-                      </button>
+              {visibleWorkSessionEvidenceReviewQueueItems.map((item) => {
+                const diagnosticText = workSessionEvidenceCandidateReasonDiagnosticText(
+                  item.candidate_reason,
+                );
+                return (
+                  <article
+                    className="work-summary-row work-log-proposal-row"
+                    key={item.candidate_id}
+                  >
+                    <div>
+                      <strong>{item.project}</strong>
+                      <span>{item.date}</span>
+                      {canApproveWorkSessionEvidenceReviewQueueItem(item) ? (
+                        <button
+                          aria-label={`${item.project} ${item.date} 세션 근거 미해결 후보 검토 완료`}
+                          className="inline-action compact-action"
+                          data-approve-work-session-evidence-review-queue={item.candidate_id}
+                          disabled={isTopLevelActionLocked}
+                          onClick={() =>
+                            void updateWorkSessionEvidenceReviewQueueItem(
+                              item.candidate_id,
+                              "approved",
+                            )}
+                          type="button"
+                        >
+                          <CheckCircle2 size={14} />
+                          {workSessionEvidenceReviewQueueUpdatingCandidateId === item.candidate_id
+                            ? "처리 중"
+                            : "검토 완료"}
+                        </button>
+                      ) : null}
+                      {canRejectWorkSessionEvidenceReviewQueueItem(item) ? (
+                        <button
+                          aria-label={`${item.project} ${item.date} 세션 근거 후보 거절`}
+                          className="inline-action compact-action"
+                          data-reject-work-session-evidence-review-queue={item.candidate_id}
+                          disabled={isTopLevelActionLocked}
+                          onClick={() =>
+                            void updateWorkSessionEvidenceReviewQueueItem(
+                              item.candidate_id,
+                              "rejected",
+                            )}
+                          type="button"
+                        >
+                          <XCircle size={14} />
+                          거절
+                        </button>
+                      ) : null}
+                    </div>
+                    <p>{item.top_titles[0] ?? "제목 없는 세션 근거 후보"}</p>
+                    <p className="work-log-proposal-evidence">{item.sample_evidence}</p>
+                    <span data-work-session-evidence-review-queue-state={item.candidate_id}>
+                      {workSessionEvidenceReviewQueueItemStateText(item)}
+                    </span>
+                    <span>
+                      작업 {item.work_item_count.toLocaleString()}개 · source{" "}
+                      {item.source_file_count.toLocaleString()}개 · {item.candidate_reason}
+                    </span>
+                    {diagnosticText ? (
+                      <span data-work-session-evidence-review-queue-diagnostic={item.candidate_id}>
+                        {diagnosticText}
+                      </span>
                     ) : null}
-                    {canRejectWorkSessionEvidenceReviewQueueItem(item) ? (
-                      <button
-                        aria-label={`${item.project} ${item.date} 세션 근거 후보 거절`}
-                        className="inline-action compact-action"
-                        data-reject-work-session-evidence-review-queue={item.candidate_id}
-                        disabled={isTopLevelActionLocked}
-                        onClick={() =>
-                          void updateWorkSessionEvidenceReviewQueueItem(
-                            item.candidate_id,
-                            "rejected",
-                          )}
-                        type="button"
-                      >
-                        <XCircle size={14} />
-                        거절
-                      </button>
-                    ) : null}
-                  </div>
-                  <p>{item.top_titles[0] ?? "제목 없는 세션 근거 후보"}</p>
-                  <p className="work-log-proposal-evidence">{item.sample_evidence}</p>
-                  <span data-work-session-evidence-review-queue-state={item.candidate_id}>
-                    {workSessionEvidenceReviewQueueItemStateText(item)}
-                  </span>
-                  <span>
-                    작업 {item.work_item_count.toLocaleString()}개 · source{" "}
-                    {item.source_file_count.toLocaleString()}개 · {item.candidate_reason}
-                  </span>
-                  <span>{workSessionEvidenceReviewQueueSourceRolesText(item)}</span>
-                  <span>
-                    {item.latest_source_file} · seen {item.first_seen_at} / {item.last_seen_at}
-                  </span>
-                  <span>{item.latest_source_path}</span>
-                </article>
-              ))}
+                    <span>{workSessionEvidenceReviewQueueSourceRolesText(item)}</span>
+                    <span>
+                      {item.latest_source_file} · seen {item.first_seen_at} / {item.last_seen_at}
+                    </span>
+                    <span>{item.latest_source_path}</span>
+                  </article>
+                );
+              })}
               {hiddenWorkSessionEvidenceReviewQueueItemCount ? (
                 <div className="work-summary-overflow">
                   그 외 세션근거 큐 row {hiddenWorkSessionEvidenceReviewQueueItemCount.toLocaleString()}개

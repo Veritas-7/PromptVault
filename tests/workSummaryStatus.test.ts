@@ -50,6 +50,7 @@ import {
   workLogNormalizationReviewQueueFailureText,
   workLogNormalizationReviewQueueItemStateText,
   workLogNormalizationReviewQueueMetaText,
+  workSessionEvidenceCandidateReasonDiagnosticText,
   workSessionEvidenceProposalStateText,
   workSessionEvidenceProposalWarningNoticeText,
   workSessionEvidenceProposalsActionLabel,
@@ -2610,6 +2611,39 @@ test("work session evidence proposal labels describe read-only AI proposals", ()
       confidence: 0.95,
     })),
     "source_trace_not_in_candidate_evidence · 수동 세션 검색 · confidence 0.95 · unresolved-after-full-index",
+  );
+});
+
+test("work session evidence reason diagnostics explain session-date hints", () => {
+  assert.equal(
+    workSessionEvidenceCandidateReasonDiagnosticText(
+      "unresolved_after_full_index,no_session_evidence,same_project_session_same_date_unmatched",
+    ),
+    "같은 날짜 세션 후보 있음 · 자동 연결 실패 확인 필요",
+  );
+  assert.equal(
+    workSessionEvidenceCandidateReasonDiagnosticText(
+      "unresolved_after_full_index,no_session_evidence,same_project_session_other_dates,nearest_same_project_session_date=2026-06-09",
+    ),
+    "같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 2026-06-09 · 자동 연결 아님",
+  );
+  assert.equal(
+    workSessionEvidenceCandidateReasonDiagnosticText(
+      "unresolved_after_full_index,no_session_evidence,same_project_session_other_dates",
+    ),
+    "같은 프로젝트 다른 날짜 세션 있음 · 자동 연결 아님",
+  );
+  assert.equal(
+    workSessionEvidenceCandidateReasonDiagnosticText(
+      "unresolved_after_full_index,no_session_evidence,no_same_project_session_dates",
+    ),
+    "같은 프로젝트 세션 날짜 없음 · 수동 검색 필요",
+  );
+  assert.equal(
+    workSessionEvidenceCandidateReasonDiagnosticText(
+      "unresolved_after_full_index,no_session_evidence",
+    ),
+    null,
   );
 });
 

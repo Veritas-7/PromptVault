@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 21:38 KST
+Updated: 2026-06-10 21:49 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,39 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed implementation slice:
+  work status export now surfaces durable reviewed session-evidence audit rows
+  for project/date rows. This is an audit hint, not a synthetic session match:
+  rows can still report `needs_session_evidence=true` and
+  `session_evidence_audit=unresolved-after-full-index` while also showing that
+  an operator already approved a source-traced reviewed audit item.
+- Changes:
+  `ProjectWorkStatusExportRow` now includes
+  `session_evidence_reviewed_item_count` and
+  `has_session_evidence_reviewed_item`. The Rust export annotates rows from
+  `project_work_session_evidence_reviewed_items`, Markdown export appends
+  `reviewed audit N`, the browser API validates counter/boolean consistency,
+  and the work-management UI status text shows `검토완료 N건` /
+  `검토완료 audit N건`.
+- Live default-vault verification:
+  `work-status-export --row-filter near-session-date-hint
+  --full-session-index --limit 12 --json` returns the real
+  `RepoTutorStudio` / `2026-06-10` row with
+  `session_evidence_reviewed_item_count=1` and
+  `has_session_evidence_reviewed_item=true`. The Markdown export for the same
+  row includes `reviewed audit 1` in the Sessions column.
+- Verification:
+  focused frontend tests passed with `267` tests; focused Rust
+  `cargo test project_work_status_export --lib` passed with `5` tests. Full
+  `npm run check` passed: UI tests `524` passed, Vite / TypeScript build
+  passed, `cargo build --bin promptvault-cli` passed, Rust lib tests `249`
+  passed, CLI tests `46` passed, doc-tests passed, and clippy
+  `-D warnings` passed.
+- Next product work:
+  continue reducing the remaining `8` near-session pending rows. The status
+  export now makes already reviewed audit rows visible, so the next pass should
+  focus on rows still lacking either direct session evidence or a reviewed audit
+  item, then improve source selection/search or explicitly reject unsafe rows.
 - Completed live data review slice:
   near-session review queue source-trace triage and one durable reviewed-item
   apply on the real default vault.

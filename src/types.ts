@@ -227,6 +227,8 @@ export interface ProjectWorkStatusExportRow {
   latest_source_role: string;
   session_evidence_count: number;
   unique_session_evidence_count: number;
+  session_evidence_reviewed_item_count: number;
+  has_session_evidence_reviewed_item: boolean;
   session_sources: FrequencyItem[];
   needs_session_evidence: boolean;
   session_evidence_audit: string;

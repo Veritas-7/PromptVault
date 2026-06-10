@@ -386,6 +386,8 @@ function projectWorkStatusExportPayload(overrides = {}) {
       latest_source_role: "handoff-log",
       session_evidence_count: 7,
       unique_session_evidence_count: 2,
+      session_evidence_reviewed_item_count: 1,
+      has_session_evidence_reviewed_item: true,
       session_sources: [{ text: "Codex local sessions", count: 7 }],
       needs_session_evidence: false,
       session_evidence_audit: "matched",
@@ -1254,6 +1256,8 @@ test("browser bridge work status export posts options and validates rows", async
   assert.equal(result.rows[0].source_file_roles[0].text, "handoff-log");
   assert.equal(result.rows[0].source_file_roles[0].count, 2);
   assert.equal(result.rows[0].latest_source_role, "handoff-log");
+  assert.equal(result.rows[0].session_evidence_reviewed_item_count, 1);
+  assert.equal(result.rows[0].has_session_evidence_reviewed_item, true);
   assert.equal(result.report_session_evidence_count, 7);
   assert.equal(result.report_session_evidence_index_count, 200);
   assert.equal(result.report_session_evidence_index_total_count, 500);
@@ -1284,6 +1288,8 @@ test("browser bridge work status export accepts status snapshot audit rows", asy
       latest_source_role: "project-status",
       session_evidence_count: 0,
       unique_session_evidence_count: 0,
+      session_evidence_reviewed_item_count: 0,
+      has_session_evidence_reviewed_item: false,
       session_sources: [],
       needs_session_evidence: false,
       session_evidence_audit: "status-snapshot",
@@ -1356,6 +1362,26 @@ test("browser bridge work status export rejects impossible index counters", asyn
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /report_session_evidence_index|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work status export rejects inconsistent reviewed audit counters", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const payload = projectWorkStatusExportPayload();
+  payload.rows[0].has_session_evidence_reviewed_item = false;
+  globalThis.fetch = async () => new Response(JSON.stringify(payload), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => loadProjectWorkStatusExport(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /session_evidence_reviewed_item_count|undefined/);
       return true;
     },
   );

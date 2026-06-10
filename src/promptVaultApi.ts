@@ -2518,6 +2518,9 @@ function isProjectWorkStatusExportRow(value: unknown): boolean {
     && isProjectWorkSourceFileRole(value.latest_source_role)
     && isNonNegativeSafeInteger(value.session_evidence_count)
     && isNonNegativeSafeIntegerAtMost(value.unique_session_evidence_count, value.session_evidence_count)
+    && isNonNegativeSafeInteger(value.session_evidence_reviewed_item_count)
+    && typeof value.has_session_evidence_reviewed_item === "boolean"
+    && value.has_session_evidence_reviewed_item === (value.session_evidence_reviewed_item_count > 0)
     && isFrequencyItemsWithinTotal(value.source_statuses, value.work_item_count)
     && isFrequencyItemsWithinTotal(value.session_sources, value.session_evidence_count)
     && typeof value.needs_session_evidence === "boolean"

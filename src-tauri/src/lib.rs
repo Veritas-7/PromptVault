@@ -863,6 +863,8 @@ pub struct ProjectWorkStatusExportRow {
     pub latest_source_role: String,
     pub session_evidence_count: usize,
     pub unique_session_evidence_count: usize,
+    pub session_evidence_reviewed_item_count: usize,
+    pub has_session_evidence_reviewed_item: bool,
     pub session_sources: Vec<FrequencyItem>,
     pub needs_session_evidence: bool,
     pub session_evidence_audit: String,
@@ -2429,6 +2431,7 @@ pub fn run_project_work_status_export(
         let mut rows =
             build_project_work_status_export_rows(&report, session_evidence_index_total_count);
         annotate_project_work_status_export_row_date_hints(&database_path, &mut rows)?;
+        annotate_project_work_status_export_row_reviewed_items(&database_path, &mut rows)?;
         filter_project_work_status_export_rows(rows, row_filter)
     };
     let (rows, total_row_count, row_offset, rows_truncated, next_row_offset) =
@@ -9110,6 +9113,8 @@ fn build_project_work_status_export_rows(
                 latest_source_role,
                 session_evidence_count,
                 unique_session_evidence_count: unique_session_keys.len(),
+                session_evidence_reviewed_item_count: 0,
+                has_session_evidence_reviewed_item: false,
                 session_sources: rank_counts(session_source_counts, usize::MAX),
                 needs_session_evidence: session_evidence_count == 0 && !is_project_status_snapshot,
                 session_evidence_audit: project_work_status_session_evidence_audit(
@@ -9380,6 +9385,38 @@ fn annotate_project_work_status_export_row_date_hints(
             hint.nearest_other_date_distance_days;
         row.same_project_other_session_dates =
             project_work_session_date_hints_to_frequency_items(&hint.other_dates);
+    }
+    Ok(())
+}
+
+fn annotate_project_work_status_export_row_reviewed_items(
+    database_path: &Path,
+    rows: &mut [ProjectWorkStatusExportRow],
+) -> Result<(), Box<dyn std::error::Error>> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let conn = open_promptvault_database(database_path)?;
+    let mut stmt = conn.prepare(
+        "SELECT project, proposal_date, COUNT(*)
+         FROM project_work_session_evidence_reviewed_items
+         GROUP BY project, proposal_date",
+    )?;
+    let mut reviewed_counts = BTreeMap::<(String, String), usize>::new();
+    let mut db_rows = stmt.query([])?;
+    while let Some(row) = db_rows.next()? {
+        let project: String = row.get(0)?;
+        let date: String = row.get(1)?;
+        let count = row.get::<_, i64>(2)?.max(0) as usize;
+        reviewed_counts.insert((project, date), count);
+    }
+    for row in rows {
+        let count = reviewed_counts
+            .get(&(row.project.clone(), row.date.clone()))
+            .copied()
+            .unwrap_or(0);
+        row.session_evidence_reviewed_item_count = count;
+        row.has_session_evidence_reviewed_item = count > 0;
     }
     Ok(())
 }
@@ -12307,7 +12344,7 @@ fn render_project_work_status_export_markdown(
     out.push_str("| Date | Project | Status | Items | Sessions | Sources | Titles | Evidence |\n");
     out.push_str("|---|---|---:|---:|---:|---|---|---|\n");
     for row in rows {
-        let session_summary = if row.session_sources.is_empty() {
+        let mut session_summary = if row.session_sources.is_empty() {
             if row.same_project_same_date_session_count > 0 {
                 format!(
                     "none; same-date same-project candidates {}",
@@ -12335,6 +12372,12 @@ fn render_project_work_status_export_markdown(
                 .collect::<Vec<_>>()
                 .join(", ")
         };
+        if row.session_evidence_reviewed_item_count > 0 {
+            session_summary.push_str(&format!(
+                "; reviewed audit {}",
+                row.session_evidence_reviewed_item_count
+            ));
+        }
         let title_summary = if row.top_titles.is_empty() {
             "untitled".to_string()
         } else {
@@ -22753,6 +22796,8 @@ Status: completed as a source-only/report-only hardening slice.
             latest_source_role: "handoff-log".to_string(),
             session_evidence_count: 1,
             unique_session_evidence_count: 1,
+            session_evidence_reviewed_item_count: 0,
+            has_session_evidence_reviewed_item: false,
             session_sources: vec![FrequencyItem {
                 text: "Codex session metadata".to_string(),
                 count: 1,
@@ -22811,6 +22856,8 @@ Status: completed as a source-only/report-only hardening slice.
             latest_source_role: "handoff-log".to_string(),
             session_evidence_count: 0,
             unique_session_evidence_count: 0,
+            session_evidence_reviewed_item_count: 0,
+            has_session_evidence_reviewed_item: false,
             session_sources: Vec::new(),
             needs_session_evidence: true,
             session_evidence_audit: "unresolved-after-full-index".to_string(),
@@ -22860,6 +22907,101 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(!truncated);
         assert_eq!(next, None);
         assert_eq!(page[0].project, "Stale");
+    }
+
+    #[test]
+    fn project_work_status_export_rows_include_reviewed_item_audit_counts() {
+        let suffix = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-status-reviewed-counts-{suffix}.sqlite"
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let conn = open_promptvault_database(&db_path).expect("open status export db");
+        conn.execute(
+            "INSERT INTO project_work_session_evidence_reviewed_items (
+                applied_at, candidate_id, review_reason, project, proposal_date,
+                operational_status, source_statuses_json, work_item_count, source_file_count,
+                source_files_json, top_titles_json, sample_evidence, latest_source_path,
+                latest_source_file, candidate_reason, session_evidence_audit,
+                needs_title_normalization, same_project_same_date_session_count,
+                same_project_other_session_dates_json, same_project_other_session_date_count,
+                nearest_same_project_other_session_date, source_review_json
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
+                ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22
+            )",
+            params![
+                "2026-06-09T00:00:00Z",
+                "session-evidence-SafeProject-a1b2c3d4e5",
+                "source_proposal_review_ready:source-hit-safe-project",
+                "SafeProject",
+                "2026-06-09",
+                "progress-log-only",
+                "[]",
+                1i64,
+                1i64,
+                "[\"working.md\"]",
+                "[\"SafeProject review\"]",
+                "SafeProject copied trace",
+                "/tmp/SafeProject/working.md",
+                "working.md",
+                "unresolved_after_full_index,no_session_evidence",
+                "unresolved-after-full-index",
+                0i64,
+                0i64,
+                "[]",
+                0i64,
+                Option::<&str>::None,
+                Option::<&str>::None,
+            ],
+        )
+        .expect("insert reviewed audit row");
+
+        let row = |project: &str| ProjectWorkStatusExportRow {
+            date: "2026-06-09".to_string(),
+            project: project.to_string(),
+            operational_status: "progress-log-only".to_string(),
+            source_statuses: vec![FrequencyItem {
+                text: "done".to_string(),
+                count: 1,
+            }],
+            work_item_count: 1,
+            source_file_count: 1,
+            source_files: vec!["working.md".to_string()],
+            source_file_roles: vec![FrequencyItem {
+                text: "handoff-log".to_string(),
+                count: 1,
+            }],
+            top_titles: vec!["Work".to_string()],
+            sample_evidence: "Evidence".to_string(),
+            latest_source_path: format!("/tmp/{project}/working.md"),
+            latest_source_file: "working.md".to_string(),
+            latest_source_role: "handoff-log".to_string(),
+            session_evidence_count: 0,
+            unique_session_evidence_count: 0,
+            session_evidence_reviewed_item_count: 0,
+            has_session_evidence_reviewed_item: false,
+            session_sources: Vec::new(),
+            needs_session_evidence: true,
+            session_evidence_audit: "unresolved-after-full-index".to_string(),
+            needs_title_normalization: false,
+            same_project_same_date_session_count: 0,
+            same_project_other_session_dates: Vec::new(),
+            same_project_other_session_date_count: 0,
+            nearest_same_project_other_session_date: None,
+            nearest_same_project_other_session_distance_days: None,
+        };
+        let mut rows = vec![row("SafeProject"), row("OtherProject")];
+
+        annotate_project_work_status_export_row_reviewed_items(&db_path, &mut rows)
+            .expect("annotate reviewed counts");
+
+        assert_eq!(rows[0].session_evidence_reviewed_item_count, 1);
+        assert!(rows[0].has_session_evidence_reviewed_item);
+        assert_eq!(rows[1].session_evidence_reviewed_item_count, 0);
+        assert!(!rows[1].has_session_evidence_reviewed_item);
+
+        let _ = std::fs::remove_file(&db_path);
     }
 
     #[test]
@@ -22980,6 +23122,8 @@ Status: completed as a source-only/report-only hardening slice.
                 latest_source_role: "handoff-log".to_string(),
                 session_evidence_count,
                 unique_session_evidence_count: session_evidence_count,
+                session_evidence_reviewed_item_count: 0,
+                has_session_evidence_reviewed_item: false,
                 session_sources: Vec::new(),
                 needs_session_evidence: session_evidence_count == 0,
                 session_evidence_audit: audit.to_string(),

@@ -885,6 +885,9 @@ export function workStatusExportRowStatusText(row: ProjectWorkStatusExportRow): 
   const flags = [
     row.needs_session_evidence ? "세션 근거 필요" : null,
     row.needs_title_normalization ? "제목 정규화 필요" : null,
+    row.has_session_evidence_reviewed_item
+      ? `검토완료 ${row.session_evidence_reviewed_item_count.toLocaleString()}건`
+      : null,
   ].filter((flag): flag is string => flag !== null);
   return [
     statusLabel[row.operational_status] ?? row.operational_status,
@@ -944,9 +947,13 @@ export function workStatusExportRowSourceStatusesText(row: ProjectWorkStatusExpo
 }
 
 export function workStatusExportRowSessionSourcesText(row: ProjectWorkStatusExportRow): string {
+  const reviewedText = row.has_session_evidence_reviewed_item
+    ? `검토완료 audit ${row.session_evidence_reviewed_item_count.toLocaleString()}건`
+    : null;
   if (row.session_evidence_count <= 0 || !row.session_sources.length) {
     return [
       "매칭된 세션 근거 없음",
+      reviewedText,
       workStatusExportRowSessionEvidenceAuditText(row),
       workStatusExportRowSessionDateHintText(row),
     ].filter((part): part is string => part !== null).join(" · ");
@@ -954,7 +961,8 @@ export function workStatusExportRowSessionSourcesText(row: ProjectWorkStatusExpo
   return [
     `세션 소스 · ${frequencyItemsInlineText(row.session_sources)}`,
     `고유 ${row.unique_session_evidence_count.toLocaleString()}건`,
-  ].join(" · ");
+    reviewedText,
+  ].filter((part): part is string => part !== null).join(" · ");
 }
 
 function workStatusExportRowSessionDateHintText(row: ProjectWorkStatusExportRow): string | null {

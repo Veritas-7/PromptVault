@@ -339,6 +339,7 @@ import {
   workLogNormalizationProposalsActionLabel,
   workLogNormalizationProposalsFailureText,
   workLogNormalizationProposalsMetaText,
+  workLogNormalizationProposalWarningNoticeText,
   workLogNormalizationProposalReviewLabel,
   workLogNormalizationApplyActionLabel,
   workLogNormalizationApplyFailureText,
@@ -355,6 +356,7 @@ import {
   canApproveWorkLogNormalizationReviewQueueItem,
   canRejectWorkLogNormalizationReviewQueueItem,
   workSessionEvidenceProposalStateText,
+  workSessionEvidenceProposalWarningNoticeText,
   workSessionEvidenceProposalsActionLabel,
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
@@ -1266,6 +1268,8 @@ function App() {
     workLogNormalizationProposalsState,
     workLogNormalizationProposalsResult,
   );
+  const workLogNormalizationProposalWarningNotice =
+    workLogNormalizationProposalWarningNoticeText(workLogNormalizationProposalsResult);
   const workLogNormalizationReviewQueueFailureMessage =
     workLogNormalizationReviewQueueFailureText(workLogNormalizationReviewQueueState);
   const workLogNormalizationReviewQueueMeta = workLogNormalizationReviewQueueMetaText(
@@ -1278,6 +1282,8 @@ function App() {
     workSessionEvidenceProposalsState,
     workSessionEvidenceProposalsResult,
   );
+  const workSessionEvidenceProposalWarningNotice =
+    workSessionEvidenceProposalWarningNoticeText(workSessionEvidenceProposalsResult);
   const workSessionEvidenceReviewQueueFailureMessage =
     workSessionEvidenceReviewQueueFailureText(workSessionEvidenceReviewQueueState);
   const workSessionEvidenceReviewQueueMeta = workSessionEvidenceReviewQueueMetaText(
@@ -4138,6 +4144,25 @@ function App() {
             <span>{workLogNormalizationProposalsFailureMessage}</span>
           </div>
         ) : null}
+        {workLogNormalizationProposalWarningNotice && workLogNormalizationProposalsResult?.warnings.length ? (
+          <section
+            className="notice warning panel-notice provider-warning-notice"
+            data-work-log-normalization-proposals-warning="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <div>
+              <span>{workLogNormalizationProposalWarningNotice}</span>
+              <div className="warning-list">
+                {workLogNormalizationProposalsResult.warnings.map((warning, index) => (
+                  <p key={textListItemKey(warning, index)}>
+                    {redactSensitiveDisplayText(warning)}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
         {workLogNormalizationReviewQueueFailureMessage ? (
           <div
             className="notice warning panel-notice"
@@ -4157,6 +4182,25 @@ function App() {
             <AlertTriangle size={18} />
             <span>{workSessionEvidenceProposalsFailureMessage}</span>
           </div>
+        ) : null}
+        {workSessionEvidenceProposalWarningNotice && workSessionEvidenceProposalsResult?.warnings.length ? (
+          <section
+            className="notice warning panel-notice provider-warning-notice"
+            data-work-session-evidence-proposals-warning="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <div>
+              <span>{workSessionEvidenceProposalWarningNotice}</span>
+              <div className="warning-list">
+                {workSessionEvidenceProposalsResult.warnings.map((warning, index) => (
+                  <p key={textListItemKey(warning, index)}>
+                    {redactSensitiveDisplayText(warning)}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </section>
         ) : null}
         {workSessionEvidenceReviewQueueFailureMessage ? (
           <div

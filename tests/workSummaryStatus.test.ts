@@ -36,6 +36,7 @@ import {
   workLogNormalizationProposalsActionLabel,
   workLogNormalizationProposalsFailureText,
   workLogNormalizationProposalsMetaText,
+  workLogNormalizationProposalWarningNoticeText,
   workLogNormalizationProposalReviewLabel,
   workLogNormalizationApplyActionLabel,
   workLogNormalizationApplyFailureText,
@@ -50,6 +51,7 @@ import {
   workLogNormalizationReviewQueueItemStateText,
   workLogNormalizationReviewQueueMetaText,
   workSessionEvidenceProposalStateText,
+  workSessionEvidenceProposalWarningNoticeText,
   workSessionEvidenceProposalsActionLabel,
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
@@ -2369,6 +2371,32 @@ test("work log normalization proposal labels describe AI cleanup proposals", () 
     "AI 정규화 제안을 생성하지 못했습니다. provider 키, 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.",
   );
   assert.equal(workLogNormalizationProposalsFailureText("ready"), null);
+  assert.equal(workLogNormalizationProposalWarningNoticeText(null), null);
+  assert.equal(workLogNormalizationProposalWarningNoticeText(normalizationProposalsResult()), null);
+  assert.equal(
+    workLogNormalizationProposalWarningNoticeText(
+      normalizationProposalsResult({
+        provider: "local-normalization-rules",
+        used_ai: false,
+        warnings: [
+          "GLM work-log normalization 요청 실패: timeout; 로컬 fallback을 사용했습니다.",
+          "Codex CLI는 감지됐지만 PROMPTVAULT_CODEX_WORK_PROVIDER=1이 아니어서 work-log normalization provider로 사용하지 않았습니다.",
+        ],
+      }),
+    ),
+    "로컬 fallback 사용 · 경고 2개",
+  );
+  assert.equal(
+    workLogNormalizationProposalWarningNoticeText(
+      normalizationProposalsResult({
+        provider: "glm",
+        provider_model: "glm-test-model",
+        used_ai: true,
+        warnings: ["OpenAI work-log normalization 요청 실패: timeout; 다음 provider를 사용합니다."],
+      }),
+    ),
+    "AI glm/glm-test-model 사용 · 경고 1개",
+  );
   assert.equal(
     workLogNormalizationProposalReviewLabel(normalizationProposalsResult().proposals[0]),
     "AI 검토 필요 · 로컬 확정 불가",
@@ -2535,6 +2563,33 @@ test("work session evidence proposal labels describe read-only AI proposals", ()
     "세션근거 제안을 생성하지 못했습니다. 세션 인덱스, provider 설정, 브리지 상태를 확인하세요.",
   );
   assert.equal(workSessionEvidenceProposalsFailureText("ready"), null);
+  assert.equal(workSessionEvidenceProposalWarningNoticeText(null), null);
+  assert.equal(workSessionEvidenceProposalWarningNoticeText(sessionEvidenceProposalsResult()), null);
+  assert.equal(
+    workSessionEvidenceProposalWarningNoticeText(
+      sessionEvidenceProposalsResult({
+        provider: "local-session-evidence-rules",
+        provider_model: null,
+        used_ai: false,
+        warnings: [
+          "GLM session-evidence proposal 요청 실패: timeout; 로컬 fallback을 사용했습니다.",
+          "Codex CLI는 감지됐지만 PROMPTVAULT_CODEX_WORK_PROVIDER=1이 아니어서 session-evidence proposal provider로 사용하지 않았습니다.",
+        ],
+      }),
+    ),
+    "로컬 fallback 사용 · 경고 2개",
+  );
+  assert.equal(
+    workSessionEvidenceProposalWarningNoticeText(
+      sessionEvidenceProposalsResult({
+        provider: "glm",
+        provider_model: "glm-test-model",
+        used_ai: true,
+        warnings: ["OpenAI session-evidence proposal 요청 실패: timeout; 다음 provider를 사용합니다."],
+      }),
+    ),
+    "AI glm/glm-test-model 사용 · 경고 1개",
+  );
   assert.equal(
     workSessionEvidenceProposalStateText(sessionEvidenceProposal()),
     "승인 검토 가능 · 제목 정규화 우선 · confidence 0.91 · unresolved-after-full-index",

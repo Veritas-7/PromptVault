@@ -1,10 +1,123 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 11:04 KST
+Updated: 2026-06-10 11:20 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-10 11:20 KST
+
+Long-Term Goal:
+
+- Make PromptVault a reliable project/day work-management surface that can
+  summarize work by project and date from real local evidence, including Codex
+  sessions, Codex CX sessions, and project-local progress logs such as
+  `working.md`, `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep the system reviewable and resumable: every AI-generated extraction,
+  normalization, and session-evidence proposal must remain source-traced,
+  operator-reviewable, durable after approval, and visible in the UI.
+- Continue improving quality, stability, performance, UI/UX, and maintainability
+  until the management rows no longer show unresolved evidence or rough-title
+  cleanup gaps.
+
+Short-Term Goal:
+
+- Finish the current provider-warning slice, then continue closing management
+  rows marked `progress-log-only`, `unresolved-after-full-index`, or
+  `needs_title_normalization`.
+- Improve provider reliability and operator visibility for work-log
+  normalization and session-evidence proposals. GLM is configured but timed out
+  in limited live proposal checks; Codex proposal generation is intentionally
+  disabled until `PROMPTVAULT_CODEX_WORK_PROVIDER=1` is enabled.
+
+Current Work:
+
+- Current uncommitted slice: proposal provider warning visibility.
+- Implemented UI warning notices for work-log normalization proposals and
+  session-evidence proposals so provider timeout, missing-provider, fallback,
+  and Codex opt-in warnings are visible instead of only appearing as
+  `경고 N개`.
+- Verification already passed for TypeScript, UI tests, build, isolated browser
+  bridge QA, and full `npm run check`. Remaining before handoff is explicit-path
+  staging, staged diff/secret checks, commit, push, and status confirmation.
+
+Management Coverage Status:
+
+- The app does manage project/day work from real parsed artifacts: bounded QA
+  reached `31` projects, `26` days, `886` progress files, more than `10,000`
+  work items, and durable project/day rows from an isolated QA database.
+- Project-local progress logs are part of the target input surface, not an
+  afterthought. The parser and QA currently include `working.md`-style files and
+  related progress artifacts, but the remaining unresolved review queues mean the
+  whole management system is not yet complete.
+
+## Completed Slice - 2026-06-10 Proposal provider warning visibility
+
+Current Goal:
+
+- Make AI-backed work-log normalization and session-evidence proposal attempts
+  explain provider failures and opt-in gaps directly in the UI, not only as a
+  compact `경고 N개` meta suffix.
+
+Context:
+
+- Actual CLI checks showed GLM is configured for work management, while Codex is
+  detected but requires `PROMPTVAULT_CODEX_WORK_PROVIDER=1` before it can be used
+  for proposal generation.
+- Limited live `--ai` proposal runs fell back locally because the GLM request
+  timed out and Codex provider opt-in was not enabled.
+- The UI already calls proposal APIs with `ai: true`, but detailed warnings were
+  only visible for extraction provider results.
+
+Progress:
+
+- Added warning notice helpers for work-log normalization proposals and
+  session-evidence proposals.
+- Added visible warning notice blocks that list redacted provider warnings for
+  both proposal result types.
+- Extended isolated browser QA to verify the new DOM warning notices when
+  proposal meta includes warnings.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds proposal warning notice text helpers.
+- `src/App.tsx`: renders redacted warning lists for normalization and
+  session-evidence proposal provider fallback/opt-in warnings.
+- `tests/workSummaryStatus.test.ts`: covers AI and local-fallback warning copy.
+- `scripts/browser-bridge-isolated-qa.mjs`: captures and verifies warning notice
+  DOM for proposal flows.
+
+Tests:
+
+- PASS: `npx tsc --noEmit`.
+- PASS: `npm run test:ui -- tests/workSummaryStatus.test.ts` (`512` UI tests).
+- PASS: `npm run build`.
+- PASS: `git diff --check`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+
+QA Evidence:
+
+- Isolated browser QA used temporary DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-zGO42i/qa.sqlite`.
+- QA reached `work session evidence proposals UI` and captured
+  `workSessionEvidenceProposalsUiWarning` with local fallback and Codex opt-in
+  warning text.
+- QA reached `work log normalization proposals`, then continued through
+  normalization review queue, approval, durable normalized-row reload, stale row
+  handling, approved review queue save, run history, and saved items.
+- The same QA run reported `31` projects, `26` days, `886` progress files,
+  `10,255` work items, and `102` project/day rows under bounded session evidence.
+
+Remaining:
+
+- Run full check and secret checks, then stage explicit paths, commit, and push.
+- Continue provider reliability work: GLM timed out in limited live proposal
+  checks, and Codex proposal generation remains intentionally opt-in until
+  `PROMPTVAULT_CODEX_WORK_PROVIDER=1` is enabled.
+- Continue cleanup of rows still marked `progress-log-only`,
+  `unresolved-after-full-index`, or `needs_title_normalization`.
 
 ## Completed Slice - 2026-06-10 Durable normalized work-log row reload
 

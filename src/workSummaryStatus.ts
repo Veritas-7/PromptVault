@@ -1697,6 +1697,16 @@ export function workLogNormalizationProposalsFailureText(
   return "AI 정규화 제안을 생성하지 못했습니다. provider 키, 데이터베이스 경로, 세션 인덱스, 브리지 상태를 확인하세요.";
 }
 
+export function workLogNormalizationProposalWarningNoticeText(
+  result: ProjectWorkLogNormalizationProposalsResult | null,
+): string | null {
+  if (!result?.warnings.length) return null;
+  const providerText = result.used_ai
+    ? `AI ${result.provider}${result.provider_model ? `/${result.provider_model}` : ""} 사용`
+    : "로컬 fallback 사용";
+  return `${providerText} · 경고 ${result.warnings.length.toLocaleString()}개`;
+}
+
 export function workLogNormalizationProposalReviewLabel(
   proposal: Pick<ProjectWorkLogNormalizationProposal, "accepted" | "rejection_reason">,
 ): string {
@@ -1853,6 +1863,16 @@ export function workSessionEvidenceProposalsFailureText(
 ): string | null {
   if (state !== "failed") return null;
   return "세션근거 제안을 생성하지 못했습니다. 세션 인덱스, provider 설정, 브리지 상태를 확인하세요.";
+}
+
+export function workSessionEvidenceProposalWarningNoticeText(
+  result: ProjectWorkSessionEvidenceProposalsResult | null,
+): string | null {
+  if (!result?.warnings.length) return null;
+  const providerText = result.used_ai
+    ? `AI ${result.provider}${result.provider_model ? `/${result.provider_model}` : ""} 사용`
+    : "로컬 fallback 사용";
+  return `${providerText} · 경고 ${result.warnings.length.toLocaleString()}개`;
 }
 
 export function workSessionEvidenceProposalKindText(

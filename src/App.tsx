@@ -146,6 +146,7 @@ import {
   scanProgress,
   scanPrompts,
   type ProjectWorkLogExtractionItemsOptions,
+  type ProjectWorkLogReviewQueueOptions,
   type ProjectWorkLogNormalizedItemsOptions,
   type ProjectWorkSessionEvidenceReviewQueueOptions,
   type ProjectWorkSessionEvidenceReviewedItemsOptions,
@@ -802,6 +803,21 @@ const WORK_LOG_REVIEW_QUEUE_STATE_FILTER_OPTIONS: Array<{
   { label: "승인", value: "approved" },
   { label: "거절", value: "rejected" },
 ];
+
+function workLogReviewQueueServerStateFilter(
+  state: WorkReviewQueueStateFilter,
+): ProjectWorkLogReviewQueueOptions["review_state_filter"] {
+  switch (state) {
+    case "pending_ai_review":
+    case "risk_blocked":
+    case "stale":
+    case "approved":
+    case "rejected":
+      return state;
+    default:
+      return undefined;
+  }
+}
 
 function waitForNextImportBatch(): Promise<void> {
   return new Promise((resolve) => {
@@ -2887,7 +2903,10 @@ function App() {
       const nextCandidates = await loadProjectWorkLogCandidates();
       setWorkLogCandidatesResult(nextCandidates);
       setWorkLogCandidatesState("ready");
-      const nextQueue = await loadProjectWorkLogReviewQueue({ sync_candidates: true });
+      const nextQueue = await loadProjectWorkLogReviewQueue({
+        review_state_filter: workLogReviewQueueServerStateFilter(workLogReviewQueueFilters.state),
+        sync_candidates: true,
+      });
       setWorkLogReviewQueueResult(nextQueue);
       setWorkLogReviewQueueState("ready");
     } catch (err) {
@@ -2895,6 +2914,26 @@ function App() {
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkLogCandidatesState((current) => (current === "loading" ? "failed" : current));
+      setWorkLogReviewQueueState("failed");
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function refreshWorkLogReviewQueueFromFilters() {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkLogReviewQueueState("loading");
+    try {
+      const nextQueue = await loadProjectWorkLogReviewQueue({
+        review_state_filter: workLogReviewQueueServerStateFilter(workLogReviewQueueFilters.state),
+      });
+      setWorkLogReviewQueueResult(nextQueue);
+      setWorkLogReviewQueueState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
       setWorkLogReviewQueueState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
@@ -5304,6 +5343,7 @@ function App() {
           data-work-log-review-queue-filters="true"
           onSubmit={(event) => {
             event.preventDefault();
+            void refreshWorkLogReviewQueueFromFilters();
           }}
         >
           <label>

@@ -238,6 +238,7 @@ export interface ProjectWorkLogCandidatesOptions {
 export interface ProjectWorkLogReviewQueueOptions {
   database_path?: string;
   limit?: number;
+  review_state_filter?: "pending_ai_review" | "risk_blocked" | "stale" | "approved" | "rejected";
   sync_candidates?: boolean;
 }
 

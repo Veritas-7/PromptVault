@@ -1,10 +1,125 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 02:37 KST
+Updated: 2026-06-11 02:45 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 02:45 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep project/day review and backfill queues safe for operator-gated decisions:
+  AI/SDK-assisted extraction, normalization, and session-evidence suggestions
+  may propose or group evidence, but durable writes still require explicit
+  review.
+- Keep filtered queue views accurate before truncation so agents and operators
+  can inspect risk-blocked, approved, rejected, stale, or pending rows without
+  confusing a bounded page for the whole queue.
+
+Short-Term Goal:
+
+- Improve work-log backfill queue review ergonomics by adding a backend
+  `review_state_filter` for `work-log-review-queue`, matching the existing
+  session-evidence review queue filter pattern.
+
+Current Goal:
+
+- Completed this slice: `work-log-review-queue` now accepts
+  `--review-state pending_ai_review|risk_blocked|stale|approved|rejected`, the
+  browser bridge/API can pass `review_state_filter`, and the UI state filter is
+  sent to the server when syncing or applying the backfill queue filter.
+
+Context:
+
+- Goal identity was rechecked for thread
+  `019ea10c-fbe8-7b60-8889-6f00b5a91a68`; persisted objective still targets
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Live progress-log coverage now reports `files_seen=931`,
+  `parsed_file_count=930`, `pointer_file_count=1`,
+  `unparsed_file_count=0`, `unreadable_file_count=0`,
+  `project_count=32`, and `work_item_count=8381`.
+- Live `work-log-review-queue --review-state risk_blocked --limit 1 --json`
+  returns the one current risk-blocked row:
+  `work-log-notebooklm-llm-wiki-flow-64b5810b0a`, risk
+  `long_base64_like_token`.
+- This slice did not approve, reject, sync, apply, or otherwise write any live
+  review decisions.
+
+Progress:
+
+- Added `ProjectWorkLogReviewQueueOptions.review_state_filter`.
+- Added validation for allowed work-log review states and fail-fast errors for
+  unknown filters.
+- `read_project_work_log_review_queue` now applies the review-state filter
+  before totals, counts, and limit truncation.
+- CLI help documents `work-log-review-queue --review-state ...`.
+- Browser bridge payloads now carry `review_state_filter`.
+- UI backfill queue sync/filter apply actions now pass the selected work-log
+  queue state to the server while preserving local project/reason filtering.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: queue option, filter validation, pre-limit filtering,
+  and Rust regression tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: CLI flag, help text, and plain-text
+  output metadata for the active state filter.
+- `src/promptVaultApi.ts`: API option type for `review_state_filter`.
+- `src/App.tsx`: maps the work-log backfill queue state filter to the server
+  option during sync/filter apply.
+- `tests/promptVaultApi.test.ts`: browser bridge request payload now verifies
+  `review_state_filter`.
+- `working.md`: this resume snapshot and live verification record.
+
+Tests:
+
+- RED first: `cargo test work_log_review_queue --lib` failed before
+  implementation because `ProjectWorkLogReviewQueueOptions` had no
+  `review_state_filter` field.
+- `cargo test work_log_review_queue --lib` passed with `3` tests.
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/promptVaultApi.test.ts` passed with `214` tests.
+- `cargo test help_text_documents_cli_validation_rules --bin promptvault-cli`
+  passed.
+- `cargo run --quiet --bin promptvault-cli -- work-log-review-queue
+  --review-state risk_blocked --limit 1 --json` passed against the live default
+  vault and returned `total_items=1`, `returned_item_count=1`,
+  `risk_blocked_count=1`.
+- `cargo run --quiet --bin promptvault-cli -- work-log-review-queue
+  --review-state manual_only --json` failed as expected with
+  `work-log-review-queue unknown review_state_filter: manual_only`.
+- `npm run build` passed; Vite emitted the existing `>500 kB` chunk warning.
+- `npm run qa:browser-bridge` passed end-to-end against an isolated database.
+  The scripted UI reached `work log review queue`, then
+  `work log approved review queue save`; output included
+  `workLogReviewQueueFilterMeta="백필큐 필터 · 필터 1개 · 결과 1 / 1개"`.
+- Full `npm run check` passed: UI tests `533`, Vite / TypeScript build, Rust
+  CLI build, Rust lib tests `255`, CLI tests `47`, doc-tests, and clippy
+  `-D warnings`.
+
+Issues:
+
+- Live default vault still has one risk-blocked work-log backfill row. It
+  remains local/operator review only because of `long_base64_like_token`.
+- cmux/in-app browser testing remains excluded in this environment; browser
+  bridge and automated UI tests are the available substitute.
+
+Research:
+
+- No external research was needed. The change follows the existing
+  session-evidence review queue's pre-limit filter pattern.
+
+Next Steps:
+
+- Continue improving operator-gated review ergonomics without auto-approving
+  risk-blocked or source-sensitive rows.
+- Keep updating this `working.md` after each meaningful slice.
 
 ## Resume Snapshot - 2026-06-11 02:37 KST
 

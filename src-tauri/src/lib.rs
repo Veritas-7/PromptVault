@@ -273,6 +273,7 @@ pub struct ProjectWorkLogExtractionCandidatesOptions {
 pub struct ProjectWorkLogReviewQueueOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
+    pub review_state_filter: Option<String>,
     pub sync_candidates: Option<bool>,
 }
 
@@ -3592,6 +3593,10 @@ pub fn run_project_work_log_review_queue(
     if matches!(options.limit, Some(0)) {
         return Err("work-log review queue limit requires a positive integer".into());
     }
+    let review_state_filter = normalize_project_work_log_review_state_filter(
+        options.review_state_filter.as_deref(),
+        "work-log-review-queue",
+    )?;
     let generated_at = Utc::now().to_rfc3339();
     let database_path = options
         .database_path
@@ -3617,7 +3622,7 @@ pub fn run_project_work_log_review_queue(
             sync_project_work_log_review_queue(&mut conn, &candidates.candidates, &generated_at)?;
         warnings.extend(candidates.warnings);
     }
-    let rows = read_project_work_log_review_queue(&conn, limit)?;
+    let rows = read_project_work_log_review_queue(&conn, limit, review_state_filter)?;
     Ok(ProjectWorkLogReviewQueueResult {
         generated_at,
         database_path: database_path.display().to_string(),
@@ -3673,7 +3678,7 @@ pub fn run_project_work_log_review_queue_update(
         &review_reason,
         &generated_at,
     )?;
-    let rows = read_project_work_log_review_queue(&conn, limit)?;
+    let rows = read_project_work_log_review_queue(&conn, limit, None)?;
     Ok(ProjectWorkLogReviewQueueResult {
         generated_at,
         database_path: database_path.display().to_string(),
@@ -15297,6 +15302,7 @@ struct ProjectWorkLogReviewQueueRows {
 fn read_project_work_log_review_queue(
     conn: &Connection,
     limit: usize,
+    review_state_filter: Option<&str>,
 ) -> Result<ProjectWorkLogReviewQueueRows, Box<dyn std::error::Error>> {
     let mut stmt = conn.prepare(
         "SELECT candidate_id, first_seen_at, last_seen_at, review_state, review_reason,
@@ -15324,6 +15330,12 @@ fn read_project_work_log_review_queue(
     let mut items = Vec::new();
     while let Some(row) = rows.next()? {
         let review_state: String = row.get(3)?;
+        if !project_work_log_review_queue_item_matches_review_state_filter(
+            &review_state,
+            review_state_filter,
+        ) {
+            continue;
+        }
         total_items += 1;
         match review_state.as_str() {
             "pending_ai_review" => pending_ai_review_count += 1,
@@ -15364,6 +15376,35 @@ fn read_project_work_log_review_queue(
         rejected_count,
         items,
     })
+}
+
+fn normalize_project_work_log_review_state_filter<'a>(
+    review_state_filter: Option<&'a str>,
+    command: &str,
+) -> Result<Option<&'a str>, Box<dyn std::error::Error>> {
+    let Some(review_state_filter) = review_state_filter
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    match review_state_filter {
+        "all" => Ok(None),
+        "pending_ai_review" | "risk_blocked" | "stale" | "approved" | "rejected" => {
+            Ok(Some(review_state_filter))
+        }
+        _ => Err(format!("{command} unknown review_state_filter: {review_state_filter}").into()),
+    }
+}
+
+fn project_work_log_review_queue_item_matches_review_state_filter(
+    review_state: &str,
+    review_state_filter: Option<&str>,
+) -> bool {
+    match review_state_filter {
+        Some(filter) => review_state == filter,
+        None => true,
+    }
 }
 
 fn read_project_work_log_review_queue_candidates(
@@ -27803,7 +27844,7 @@ Status: completed as a source-only/report-only hardening slice.
         )
         .expect("sync queue");
         assert_eq!(stale_count, 0);
-        let rows = read_project_work_log_review_queue(&conn, 10).expect("read queue");
+        let rows = read_project_work_log_review_queue(&conn, 10, None).expect("read queue");
         assert_eq!(rows.total_items, 2);
         assert_eq!(rows.pending_ai_review_count, 1);
         assert_eq!(rows.risk_blocked_count, 1);
@@ -27822,7 +27863,7 @@ Status: completed as a source-only/report-only hardening slice.
             "2026-06-09T00:30:00Z",
         )
         .expect("approve safe queue row");
-        let rows = read_project_work_log_review_queue(&conn, 10).expect("read updated queue");
+        let rows = read_project_work_log_review_queue(&conn, 10, None).expect("read updated queue");
         assert_eq!(rows.pending_ai_review_count, 0);
         assert_eq!(rows.risk_blocked_count, 1);
         assert_eq!(rows.approved_count, 1);
@@ -27837,7 +27878,7 @@ Status: completed as a source-only/report-only hardening slice.
             sync_project_work_log_review_queue(&mut conn, &[safe], "2026-06-09T01:00:00Z")
                 .expect("sync queue again");
         assert_eq!(stale_count, 1);
-        let rows = read_project_work_log_review_queue(&conn, 10).expect("read queue again");
+        let rows = read_project_work_log_review_queue(&conn, 10, None).expect("read queue again");
         assert_eq!(rows.total_items, 2);
         assert_eq!(rows.pending_ai_review_count, 0);
         assert_eq!(rows.risk_blocked_count, 0);
@@ -27858,7 +27899,7 @@ Status: completed as a source-only/report-only hardening slice.
             "2026-06-09T01:30:00Z",
         )
         .expect("reject stale risky queue row");
-        let rows = read_project_work_log_review_queue(&conn, 10).expect("read rejected queue");
+        let rows = read_project_work_log_review_queue(&conn, 10, None).expect("read rejected queue");
         assert_eq!(rows.stale_count, 0);
         assert_eq!(rows.rejected_count, 1);
         assert!(rows.items.iter().any(|item| {
@@ -27866,6 +27907,75 @@ Status: completed as a source-only/report-only hardening slice.
                 && item.review_state == "rejected"
                 && item.review_reason == "risk_flags_require_manual_followup"
         }));
+    }
+
+    #[test]
+    fn project_work_log_review_queue_filters_review_state_before_limit() {
+        let suffix = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-project-work-log-review-queue-filter-{}-{suffix}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut conn = open_promptvault_database(&db_path).expect("open db");
+        let safe = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-Safe-a1b2c3d4e5".to_string(),
+            project: "SafeProject".to_string(),
+            source_path: "/tmp/SafeProject/working.md".to_string(),
+            source_file: "working.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt: "- 2026-06-09: Safe work".to_string(),
+            line_count: 1,
+            char_count: 24,
+            risk_flags: Vec::new(),
+            modified_at: Some("2026-06-09T00:00:00Z".to_string()),
+        };
+        let risky = ProjectWorkLogExtractionCandidate {
+            candidate_id: "work-log-Risky-a1b2c3d4e5".to_string(),
+            project: "RiskyProject".to_string(),
+            source_path: "/tmp/RiskyProject/workingd.md".to_string(),
+            source_file: "workingd.md".to_string(),
+            reason: "missing_dated_heading".to_string(),
+            excerpt: "- api_key = [REDACTED]".to_string(),
+            line_count: 1,
+            char_count: 22,
+            risk_flags: vec!["possible_api_key".to_string()],
+            modified_at: None,
+        };
+        sync_project_work_log_review_queue(
+            &mut conn,
+            &[safe, risky],
+            "2026-06-09T00:00:00Z",
+        )
+        .expect("sync queue");
+
+        let result = run_project_work_log_review_queue(ProjectWorkLogReviewQueueOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(1),
+            review_state_filter: Some("risk_blocked".to_string()),
+            ..Default::default()
+        })
+        .expect("read filtered queue");
+
+        assert_eq!(result.total_items, 1);
+        assert_eq!(result.returned_item_count, 1);
+        assert_eq!(result.pending_ai_review_count, 0);
+        assert_eq!(result.risk_blocked_count, 1);
+        assert_eq!(result.items[0].candidate_id, "work-log-Risky-a1b2c3d4e5");
+
+        std::fs::remove_file(db_path).expect("remove review queue filter db");
+    }
+
+    #[test]
+    fn work_log_review_queue_rejects_unknown_review_state_filter() {
+        let error = run_project_work_log_review_queue(ProjectWorkLogReviewQueueOptions {
+            review_state_filter: Some("manual_only".to_string()),
+            ..Default::default()
+        })
+        .expect_err("unknown review-state filter should fail before reading queue")
+        .to_string();
+
+        assert!(error.contains("work-log-review-queue unknown review_state_filter: manual_only"));
     }
 
     #[test]

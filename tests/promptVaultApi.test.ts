@@ -2627,10 +2627,16 @@ test("browser bridge work log review queue posts sync option and validates persi
     globalThis.fetch = originalFetch;
   });
 
-  const result = await loadProjectWorkLogReviewQueue({ limit: 5, sync_candidates: true });
+  const result = await loadProjectWorkLogReviewQueue({
+    limit: 5,
+    review_state_filter: "risk_blocked",
+    sync_candidates: true,
+  });
 
   assert.match(requestPath, /\/api\/work-log-review-queue$/);
-  assert.deepEqual(JSON.parse(requestBody), { options: { limit: 5, sync_candidates: true } });
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: { limit: 5, review_state_filter: "risk_blocked", sync_candidates: true },
+  });
   assert.equal(result.synced_candidate_count, 1);
   assert.equal(result.risk_blocked_count, 1);
   assert.equal(result.items[0].review_state, "risk_blocked");

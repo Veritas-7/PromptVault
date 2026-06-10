@@ -1585,11 +1585,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let sync_candidates = take_flag(&mut args, "--sync-candidates");
             let mut limit = None;
             let mut database_path = None;
+            let mut review_state_filter = None;
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
                     "--limit" => {
                         limit = Some(parse_positive_usize_arg(iter.next(), "--limit")?);
+                    }
+                    "--review-state" => {
+                        review_state_filter =
+                            Some(parse_required_arg(iter.next(), "--review-state")?);
                     }
                     "--database" => {
                         database_path = Some(parse_required_arg(iter.next(), "--database")?);
@@ -1604,6 +1609,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let result = run_project_work_log_review_queue(ProjectWorkLogReviewQueueOptions {
                 database_path,
                 limit,
+                review_state_filter: review_state_filter.clone(),
                 sync_candidates: Some(sync_candidates),
             })?;
             if json {
@@ -1622,6 +1628,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("stale: {}", result.stale_count);
             println!("approved: {}", result.approved_count);
             println!("rejected: {}", result.rejected_count);
+            if let Some(review_state_filter) = &review_state_filter {
+                println!("review_state_filter: {review_state_filter}");
+            }
             if !result.warnings.is_empty() {
                 println!("warnings:");
                 for warning in &result.warnings {
@@ -3379,7 +3388,7 @@ fn help_text() -> String {
         "  work-log-candidates [--limit N>0] [--json]\n",
         "  work-ai-provider-status [--json]\n",
         "  work-ai-provider-health [--json]\n",
-        "  work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]\n",
+        "  work-log-review-queue [--limit N>0] [--review-state pending_ai_review|risk_blocked|stale|approved|rejected] [--database PATH] [--sync-candidates] [--json]\n",
         "  work-log-review-queue-update --candidate-id ID --state approved|rejected [--reason TEXT] [--limit N>0] [--database PATH] [--json]\n",
         "  work-log-extract [--limit N>0] [--database PATH] [--save] [--ai] [--approved-review-queue] [--json]\n",
         "  work-log-freeze [--limit N>0] [--database PATH] [--json]\n",
@@ -3416,7 +3425,7 @@ fn help_text() -> String {
         "  work-log-candidates prepares unparsed progress logs as redacted AI extraction candidates.\n",
         "  work-ai-provider-status reports OpenAI/GLM/Codex work-management provider readiness without exposing secrets.\n",
         "  work-ai-provider-health sends minimal read-only probes to configured providers and reports live failures without exposing secrets.\n",
-        "  work-log-review-queue persists current extraction candidates into a review queue and marks disappeared candidates stale.\n",
+        "  work-log-review-queue persists current extraction candidates into a review queue and marks disappeared candidates stale; --review-state filters persisted rows before the limit is applied.\n",
         "  work-log-review-queue-update marks one persisted candidate approved or rejected with an audit reason.\n",
         "  work-log-extract validates AI extraction proposals before they can become dated work items; --save persists accepted dated proposals to SQLite; --ai uses configured OpenAI/GLM providers with local fallback; --approved-review-queue reads only operator-approved review queue rows.\n",
         "  work-log-freeze saves live-only parsed project/date progress-log rows to SQLite without running AI extraction.\n",
@@ -5056,7 +5065,7 @@ mod tests {
         assert!(help.contains("work-ai-provider-status [--json]"));
         assert!(help.contains("work-ai-provider-health [--json]"));
         assert!(help.contains(
-            "work-log-review-queue [--limit N>0] [--database PATH] [--sync-candidates] [--json]"
+            "work-log-review-queue [--limit N>0] [--review-state pending_ai_review|risk_blocked|stale|approved|rejected] [--database PATH] [--sync-candidates] [--json]"
         ));
         assert!(help
             .contains("work-log-review-queue-update --candidate-id ID --state approved|rejected"));

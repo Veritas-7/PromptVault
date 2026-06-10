@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 07:24 KST
+Updated: 2026-06-11 07:26 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-11 07:24 KST
+## Resume Snapshot - 2026-06-11 07:26 KST
 
 Long-Term Goal:
 
@@ -39,7 +39,11 @@ Current Active Work:
 - Current slice is in progress: add `latest_date` filtering to the work-log
   coverage UI/helper layer without changing parsing, extraction, review queue,
   AI provider, or durable write behavior.
-- Current slice code is complete and verified; commit/push is pending.
+- Current latest-date coverage filter slice is complete, verified, committed,
+  and pushed as `9f3077e ux: filter work log coverage by latest date`.
+- Fresh post-push verification showed `main...origin/main` clean and
+  `HEAD == origin/main` at
+  `9f3077e93baca70b505dc9591c97b19d16f4a848`.
 
 Progress:
 
@@ -95,8 +99,16 @@ Tests:
 - PASS: rerun `npm run qa:browser-bridge` after using datalist-derived date
   selection; it passed the new coverage date-filter assertion and exited 0.
 - PASS: `npm run check`.
-- Pending: `git diff --check`, secret scan, staged gate, commit, push, and
-  post-push verification.
+- PASS: `git diff --check`.
+- PASS: `gitleaks dir . --no-banner --redact`.
+- PASS: `git diff --cached --name-only` showed only the five intended files.
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact`.
+- PASS: `git push origin main`.
+- PASS: post-push `git status --short --branch` reported
+  `## main...origin/main`.
+- PASS: post-push `git rev-parse HEAD origin/main` matched
+  `9f3077e93baca70b505dc9591c97b19d16f4a848`.
 
 Issues:
 
@@ -108,9 +120,8 @@ Issues:
 
 Next Step:
 
-- Run diff/secret gates, commit and push this latest-date coverage filter
-  slice, then update this file with the final commit hash and next continuation
-  step.
+- Choose the next small PromptVault work-management improvement from the live
+  app state and update this file before editing.
 
 ## Resume Snapshot - 2026-06-11 07:05 KST
 

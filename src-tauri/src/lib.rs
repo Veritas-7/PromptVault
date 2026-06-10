@@ -12810,6 +12810,7 @@ fn normalize_project_work_row_filter<'a>(
         | "needs-session-evidence"
         | "bounded-session-limit"
         | "unresolved-session-evidence"
+        | "same-date-session-hint"
         | "near-session-date-hint"
         | "stale-session-date-hint"
         | "needs-title-normalization"
@@ -12864,6 +12865,7 @@ fn project_work_status_export_row_matches_filter(
         "unresolved-session-evidence" => {
             row.session_evidence_audit == "unresolved-after-full-index"
         }
+        "same-date-session-hint" => project_work_status_export_row_has_same_date_session_hint(row),
         "near-session-date-hint" => project_work_status_export_row_has_near_session_date_hint(row),
         "stale-session-date-hint" => {
             project_work_status_export_row_has_stale_session_date_hint(row)
@@ -12876,16 +12878,20 @@ fn project_work_status_export_row_matches_filter(
     }
 }
 
+fn project_work_status_export_row_has_same_date_session_hint(
+    row: &ProjectWorkStatusExportRow,
+) -> bool {
+    row.needs_session_evidence && row.same_project_same_date_session_count > 0
+}
+
 fn project_work_status_export_row_has_near_session_date_hint(
     row: &ProjectWorkStatusExportRow,
 ) -> bool {
     if !row.needs_session_evidence {
         return false;
     }
-    row.same_project_same_date_session_count > 0
-        || row
-            .nearest_same_project_other_session_distance_days
-            .is_some_and(|distance_days| distance_days <= 1)
+    row.nearest_same_project_other_session_distance_days
+        .is_some_and(|distance_days| distance_days <= 1)
 }
 
 fn project_work_status_export_row_has_stale_session_date_hint(
@@ -12922,6 +12928,9 @@ fn project_work_session_evidence_candidate_matches_filter(
     match row_filter {
         "needs-session-evidence" | "unresolved-session-evidence" => true,
         "bounded-session-limit" => false,
+        "same-date-session-hint" => {
+            project_work_session_evidence_candidate_has_same_date_session_hint(candidate)
+        }
         "near-session-date-hint" => {
             project_work_session_evidence_candidate_has_near_session_date_hint(candidate)
         }
@@ -12936,12 +12945,15 @@ fn project_work_session_evidence_candidate_matches_filter(
     }
 }
 
+fn project_work_session_evidence_candidate_has_same_date_session_hint(
+    candidate: &ProjectWorkSessionEvidenceCandidate,
+) -> bool {
+    candidate.same_project_same_date_session_count > 0
+}
+
 fn project_work_session_evidence_candidate_has_near_session_date_hint(
     candidate: &ProjectWorkSessionEvidenceCandidate,
 ) -> bool {
-    if candidate.same_project_same_date_session_count > 0 {
-        return true;
-    }
     candidate
         .nearest_same_project_other_session_date
         .as_deref()
@@ -12974,6 +12986,9 @@ fn project_work_session_evidence_review_queue_item_matches_filter(
     match row_filter {
         "needs-session-evidence" | "unresolved-session-evidence" => true,
         "bounded-session-limit" => false,
+        "same-date-session-hint" => {
+            project_work_session_evidence_review_queue_item_has_same_date_session_hint(item)
+        }
         "near-session-date-hint" => {
             project_work_session_evidence_review_queue_item_has_near_session_date_hint(item)
         }
@@ -12998,12 +13013,15 @@ fn project_work_session_evidence_review_queue_item_matches_review_state_filter(
     item.review_state == review_state_filter
 }
 
+fn project_work_session_evidence_review_queue_item_has_same_date_session_hint(
+    item: &ProjectWorkSessionEvidenceReviewQueueItem,
+) -> bool {
+    item.same_project_same_date_session_count > 0
+}
+
 fn project_work_session_evidence_review_queue_item_has_near_session_date_hint(
     item: &ProjectWorkSessionEvidenceReviewQueueItem,
 ) -> bool {
-    if item.same_project_same_date_session_count > 0 {
-        return true;
-    }
     item.nearest_same_project_other_session_date
         .as_deref()
         .is_some_and(|nearest_date| {
@@ -23678,7 +23696,19 @@ Status: completed as a source-only/report-only hardening slice.
             near.iter()
                 .map(|row| row.project.as_str())
                 .collect::<Vec<_>>(),
-            vec!["Near", "SameDate"]
+            vec!["Near"]
+        );
+
+        let same = filter_project_work_status_export_rows(
+            rows.clone(),
+            normalize_project_work_status_export_row_filter(Some("same-date-session-hint"))
+                .expect("same date filter"),
+        );
+        assert_eq!(
+            same.iter()
+                .map(|row| row.project.as_str())
+                .collect::<Vec<_>>(),
+            vec!["SameDate"]
         );
 
         let stale = filter_project_work_status_export_rows(
@@ -25053,7 +25083,7 @@ Status: completed as a source-only/report-only hardening slice.
             ProjectWorkSessionEvidenceSourceAuditOptions {
                 database_path: Some(db_path.display().to_string()),
                 limit: Some(10),
-                row_filter: Some("near-session-date-hint".to_string()),
+                row_filter: Some("same-date-session-hint".to_string()),
                 review_state_filter: Some("pending_review".to_string()),
                 nearby_limit: Some(5),
                 source_limit: Some(5),
@@ -25222,7 +25252,17 @@ Status: completed as a source-only/report-only hardening slice.
             .into_iter()
             .map(|candidate| candidate.project)
             .collect::<Vec<_>>(),
-            vec!["Near", "SameDate"]
+            vec!["Near"]
+        );
+        assert_eq!(
+            filter_project_work_session_evidence_candidates(
+                candidates.clone(),
+                Some("same-date-session-hint")
+            )
+            .into_iter()
+            .map(|candidate| candidate.project)
+            .collect::<Vec<_>>(),
+            vec!["SameDate"]
         );
         assert_eq!(
             filter_project_work_session_evidence_candidates(
@@ -25359,14 +25399,26 @@ Status: completed as a source-only/report-only hardening slice.
             None,
         )
         .expect("read near rows");
-        assert_eq!(near_rows.total_items, 2);
-        assert_eq!(near_rows.pending_review_count, 2);
+        assert_eq!(near_rows.total_items, 1);
+        assert_eq!(near_rows.pending_review_count, 1);
         assert_eq!(near_rows.items.len(), 1);
         assert!(
             project_work_session_evidence_review_queue_item_has_near_session_date_hint(
                 &near_rows.items[0]
             )
         );
+        assert_eq!(near_rows.items[0].project, "NearQueue");
+
+        let same_date_rows = read_project_work_session_evidence_review_queue(
+            &conn,
+            10,
+            Some("same-date-session-hint"),
+            None,
+        )
+        .expect("read same-date rows");
+        assert_eq!(same_date_rows.total_items, 1);
+        assert_eq!(same_date_rows.pending_review_count, 1);
+        assert_eq!(same_date_rows.items[0].project, "SameDateQueue");
 
         update_project_work_session_evidence_review_queue_state(
             &conn,
@@ -25396,10 +25448,21 @@ Status: completed as a source-only/report-only hardening slice.
             Some("approved"),
         )
         .expect("read approved near rows");
-        assert_eq!(approved_near_rows.total_items, 1);
+        assert_eq!(approved_near_rows.total_items, 0);
         assert_eq!(approved_near_rows.pending_review_count, 0);
-        assert_eq!(approved_near_rows.approved_count, 1);
-        assert_eq!(approved_near_rows.items[0].project, "SameDateQueue");
+        assert_eq!(approved_near_rows.approved_count, 0);
+
+        let approved_same_date_rows = read_project_work_session_evidence_review_queue(
+            &conn,
+            10,
+            Some("same-date-session-hint"),
+            Some("approved"),
+        )
+        .expect("read approved same-date rows");
+        assert_eq!(approved_same_date_rows.total_items, 1);
+        assert_eq!(approved_same_date_rows.pending_review_count, 0);
+        assert_eq!(approved_same_date_rows.approved_count, 1);
+        assert_eq!(approved_same_date_rows.items[0].project, "SameDateQueue");
 
         let stale_rows = read_project_work_session_evidence_review_queue(
             &conn,

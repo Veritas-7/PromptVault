@@ -1236,6 +1236,20 @@ async function runBrowserQa() {
       (await page.locator('[data-work-status-export-filter-meta="true"]').textContent())?.trim() ?? "";
     workStatusExportUnresolvedFixtureRows =
       await page.locator('[data-work-status-export-row="true"]').allTextContents();
+    await page.locator('[data-work-status-export-filter="true"]').selectOption("same-date-session-hint");
+    await page.waitForFunction(() => {
+      const meta = document.querySelector('[data-work-status-export-filter-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-status-export-row="true"]'));
+      return meta.includes("같은 날짜 세션 후보")
+        && meta.includes("같은날후보 1행")
+        && meta.includes("인접후보 0행")
+        && rows.length === 1
+        && rows.every((row) => (row.textContent ?? "").includes("세션 근거 필요"));
+    }, undefined, { timeout: 30000 });
+    workStatusExportUnresolvedFixtureMeta =
+      (await page.locator('[data-work-status-export-filter-meta="true"]').textContent())?.trim() ?? "";
+    workStatusExportUnresolvedFixtureRows =
+      await page.locator('[data-work-status-export-row="true"]').allTextContents();
     await page.locator('[data-work-status-export-row-toggle="true"]').first().click();
     await page.waitForFunction(() => {
       const detail = document.querySelector('[data-work-status-export-row-detail="true"]')?.textContent ?? "";

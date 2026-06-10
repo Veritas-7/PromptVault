@@ -1989,7 +1989,8 @@ test("work status export text exposes project day evidence coverage", () => {
   assert.equal(workStatusExportRowFilterLabel("needs-session-evidence"), "세션 근거 필요");
   assert.equal(workStatusExportRowFilterLabel("bounded-session-limit"), "근거 limit 영향");
   assert.equal(workStatusExportRowFilterLabel("unresolved-session-evidence"), "전체 인덱스 미해결");
-  assert.equal(workStatusExportRowFilterLabel("near-session-date-hint"), "인접 세션 후보");
+  assert.equal(workStatusExportRowFilterLabel("same-date-session-hint"), "같은 날짜 세션 후보");
+  assert.equal(workStatusExportRowFilterLabel("near-session-date-hint"), "인접 날짜 세션 후보");
   assert.equal(workStatusExportRowFilterLabel("stale-session-date-hint"), "먼 세션 후보");
   assert.deepEqual(
     filterWorkStatusExportRows(result.rows, "needs-session-evidence").map((row) => row.project),
@@ -2047,8 +2048,12 @@ test("work status export text exposes project day evidence coverage", () => {
     ["ResearchFlowAI"],
   );
   assert.deepEqual(
+    filterWorkStatusExportRows(rowsWithSessionDateHints, "same-date-session-hint").map((row) => row.project),
+    ["SameDateProject"],
+  );
+  assert.deepEqual(
     filterWorkStatusExportRows(rowsWithSessionDateHints, "near-session-date-hint").map((row) => row.project),
-    ["RepoTutorStudio", "SameDateProject"],
+    ["RepoTutorStudio"],
   );
   assert.deepEqual(
     filterWorkStatusExportRows(rowsWithSessionDateHints, "stale-session-date-hint").map((row) => row.project),
@@ -2064,7 +2069,7 @@ test("work status export text exposes project day evidence coverage", () => {
       result.rows,
       filterWorkStatusExportRows(result.rows, "needs-session-evidence"),
     ),
-    "필터 세션 근거 필요 · 결과 1 / 2행 · 세션근거 필요 1행 · 근거limit 1행 · 전체미해결 0행 · 인접후보 0행 · 먼후보 0행 · 제목정규화 필요 1행",
+    "필터 세션 근거 필요 · 결과 1 / 2행 · 세션근거 필요 1행 · 근거limit 1행 · 전체미해결 0행 · 같은날후보 0행 · 인접후보 0행 · 먼후보 0행 · 제목정규화 필요 1행",
   );
   assert.equal(
     workStatusExportFilterMetaText(
@@ -2072,7 +2077,15 @@ test("work status export text exposes project day evidence coverage", () => {
       rowsWithUnresolvedSessionEvidence,
       filterWorkStatusExportRows(rowsWithUnresolvedSessionEvidence, "unresolved-session-evidence"),
     ),
-    "필터 전체 인덱스 미해결 · 결과 1 / 2행 · 세션근거 필요 1행 · 근거limit 0행 · 전체미해결 1행 · 인접후보 0행 · 먼후보 0행 · 제목정규화 필요 1행",
+    "필터 전체 인덱스 미해결 · 결과 1 / 2행 · 세션근거 필요 1행 · 근거limit 0행 · 전체미해결 1행 · 같은날후보 0행 · 인접후보 0행 · 먼후보 0행 · 제목정규화 필요 1행",
+  );
+  assert.equal(
+    workStatusExportFilterMetaText(
+      "same-date-session-hint",
+      rowsWithSessionDateHints,
+      filterWorkStatusExportRows(rowsWithSessionDateHints, "same-date-session-hint"),
+    ),
+    "필터 같은 날짜 세션 후보 · 결과 1 / 4행 · 세션근거 필요 3행 · 근거limit 0행 · 전체미해결 3행 · 같은날후보 1행 · 인접후보 1행 · 먼후보 1행 · 제목정규화 필요 3행",
   );
   assert.equal(
     workStatusExportFilterMetaText(
@@ -2080,7 +2093,7 @@ test("work status export text exposes project day evidence coverage", () => {
       rowsWithSessionDateHints,
       filterWorkStatusExportRows(rowsWithSessionDateHints, "near-session-date-hint"),
     ),
-    "필터 인접 세션 후보 · 결과 2 / 4행 · 세션근거 필요 3행 · 근거limit 0행 · 전체미해결 3행 · 인접후보 2행 · 먼후보 1행 · 제목정규화 필요 3행",
+    "필터 인접 날짜 세션 후보 · 결과 1 / 4행 · 세션근거 필요 3행 · 근거limit 0행 · 전체미해결 3행 · 같은날후보 1행 · 인접후보 1행 · 먼후보 1행 · 제목정규화 필요 3행",
   );
   assert.equal(workStatusExportMetaText("loading", result), "프로젝트/일별 상태 export 생성 중");
   assert.equal(workStatusExportMetaText("failed", null), "상태 export를 사용할 수 없음");

@@ -1346,7 +1346,7 @@ test("browser bridge work status export posts options and validates rows", async
   const result = await loadProjectWorkStatusExport({
     limit: 12,
     offset: 12,
-    row_filter: "near-session-date-hint",
+    row_filter: "same-date-session-hint",
     session_limit: 200,
   });
 
@@ -1355,7 +1355,7 @@ test("browser bridge work status export posts options and validates rows", async
     options: {
       limit: 12,
       offset: 12,
-      row_filter: "near-session-date-hint",
+      row_filter: "same-date-session-hint",
       session_limit: 200,
     },
   });

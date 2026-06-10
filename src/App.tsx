@@ -518,6 +518,7 @@ const WORK_STATUS_EXPORT_ROW_FILTER_OPTIONS: WorkStatusExportRowFilter[] = [
   "needs-session-evidence",
   "bounded-session-limit",
   "unresolved-session-evidence",
+  "same-date-session-hint",
   "near-session-date-hint",
   "stale-session-date-hint",
   "needs-title-normalization",
@@ -527,6 +528,7 @@ const WORK_STATUS_EXPORT_ROW_FILTER_OPTIONS: WorkStatusExportRowFilter[] = [
 ];
 const WORK_SESSION_EVIDENCE_REVIEW_QUEUE_ROW_FILTER_OPTIONS: WorkStatusExportRowFilter[] = [
   "all",
+  "same-date-session-hint",
   "near-session-date-hint",
   "stale-session-date-hint",
   "needs-title-normalization",

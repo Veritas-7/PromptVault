@@ -1,10 +1,111 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 06:31 KST
+Updated: 2026-06-11 06:46 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 06:46 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Add a same-date session candidate row filter so status export and
+  session-evidence review flows can isolate the highest-priority manual linking
+  candidates separately from one-day nearby candidates.
+
+Current Active Work:
+
+- Previous status export row-action slice is complete and pushed as
+  `8cb737f ux: add status export row actions`.
+- Documentation completion snapshot is pushed as
+  `1ddaf57 docs: record status export action completion`.
+- Fresh repo check at resume showed `main...origin/main` clean and HEAD
+  matching `origin/main`.
+- Current same-date filter slice is implemented and locally verified; staging,
+  commit, push, and post-push completion snapshot remain pending.
+
+Progress:
+
+- Confirmed goal identity still anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed there is no project-local `AGENTS.md` or `design.md`.
+- Found that same-date rows were included under the broader
+  `near-session-date-hint` filter, making the most actionable same-day manual
+  linking candidates harder to isolate.
+- Split `same-date-session-hint` from `near-session-date-hint` across UI,
+  backend/bridge validation, CLI docs/help, browser-bridge QA, and tests.
+- Fixed one full-gate regression where the source-audit test still used the old
+  broad `near-session-date-hint` meaning for same-date fixture rows.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds `same-date-session-hint`, separates same-day
+  hints from one-day nearby hints, and updates filter labels/metadata.
+- `src/App.tsx`: adds the same-date filter to status export and
+  session-evidence review queue row-filter dropdowns.
+- `src-tauri/src/lib.rs`: accepts and applies `same-date-session-hint` for
+  status export, session evidence candidates, source audit, and persisted review
+  queue views.
+- `src-tauri/src/bin/promptvault-cli.rs`: documents the same-date filter in CLI
+  help and examples.
+- `docs/CLI.md`: documents the same-date, near-date, and stale-date row-filter
+  split.
+- `tests/workSummaryStatus.test.ts`, `tests/promptVaultApi.test.ts`,
+  `src-tauri/src/lib.rs`: lock same-date filter behavior and option transport.
+- `scripts/browser-bridge-isolated-qa.mjs`: asserts the status export UI can
+  select the same-date filter and narrow the unresolved fixture row.
+- `working.md`: records this same-date filter slice for continuation.
+
+Tests:
+
+- RED as expected:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before implementation because `same-date-session-hint` had no label.
+- RED as expected:
+  `cargo test project_work_status_export_filters_rows_before_pagination --lib`
+  failed before implementation because `near-session-date-hint` still included
+  same-date rows.
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts tests/promptVaultApi.test.ts`
+  (`266` tests).
+- PASS: `cargo test project_work_status_export_filters_rows_before_pagination --lib`.
+- PASS: `cargo test session_evidence_candidates_row_filters_before_truncating --lib`.
+- PASS: `cargo test session_evidence_review_queue_row_filters_before_truncating --lib`.
+- PASS: `cargo test session_evidence_source_audit_summarizes_review_ready_and_metadata_only_rows --lib`.
+- PASS: `cargo test help_documents --bin promptvault-cli`.
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check`.
+- PASS: `git diff --check`.
+- PASS: `gitleaks dir . --no-banner --redact`.
+- Pending: staged diff/secret gates, commit, push, and post-push verification.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- This slice does not approve, apply, or invent session evidence. It only
+  narrows read-only/review queue buckets.
+
+Next Step:
+
+- Run staged gates on the explicit changed paths, then commit and push the
+  same-date session filter slice. After push, update this file with the commit
+  hash and post-push verification result.
 
 ## Resume Snapshot - 2026-06-11 06:19 KST
 

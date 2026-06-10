@@ -2744,15 +2744,18 @@ fn work_status_export_help_text() -> String {
         "",
         "Row filters:",
         "  all, needs-session-evidence, bounded-session-limit, unresolved-session-evidence",
-        "  near-session-date-hint, stale-session-date-hint, needs-title-normalization",
+        "  same-date-session-hint, near-session-date-hint, stale-session-date-hint",
+        "  needs-title-normalization",
         "  active, session-supported, progress-log-only",
         "",
         "Session-date filters:",
-        "  near-session-date-hint selects rows still needing evidence with same-date or one-day same-project session hints.",
+        "  same-date-session-hint selects rows still needing evidence with same-date same-project session hints.",
+        "  near-session-date-hint selects rows still needing evidence with one-day same-project session hints.",
         "  stale-session-date-hint selects rows still needing evidence whose nearest same-project session is more than one day away.",
         "",
         "Examples:",
         "  promptvault-cli work-status-export --limit 20 --full-session-index --json",
+        "  promptvault-cli work-status-export --row-filter same-date-session-hint --full-session-index --json",
         "  promptvault-cli work-status-export --row-filter near-session-date-hint --full-session-index --json",
         "  promptvault-cli work-status-export --row-filter stale-session-date-hint --limit 10 --json",
     ]
@@ -3098,6 +3101,7 @@ fn work_session_evidence_candidates_help_text() -> String {
         "Purpose:",
         "  Lists project/day rows still missing session evidence after the current session index is considered.",
         "  Use --refresh-session-index to rescan raw sessions before computing unresolved rows.",
+        "  Use --row-filter same-date-session-hint to focus same-day candidates before nearby or stale candidates.",
         "  Use --row-filter near-session-date-hint to focus one-day same-project session hints before stale candidates.",
         "  Use --needs-title-normalization to focus rows blocked by title cleanup before evidence review.",
         "",
@@ -3108,6 +3112,7 @@ fn work_session_evidence_candidates_help_text() -> String {
         "",
         "Examples:",
         "  promptvault-cli work-session-evidence-candidates --limit 20 --json",
+        "  promptvault-cli work-session-evidence-candidates --row-filter same-date-session-hint --json",
         "  promptvault-cli work-session-evidence-candidates --row-filter near-session-date-hint --json",
         "  promptvault-cli work-session-evidence-candidates --refresh-session-index --session-limit 500 --json",
     ]
@@ -3125,7 +3130,8 @@ fn work_session_evidence_proposals_help_text() -> String {
         "  Generates read-only source-traced proposals for project/day rows still missing session evidence.",
         "  Without --ai, returns local fallback proposals that require operator review.",
         "  With --ai, attempts configured OpenAI/GLM providers and falls back to local review-only proposals on provider failure.",
-        "  Use --row-filter near-session-date-hint to generate proposals for high-priority nearby session candidates first.",
+        "  Use --row-filter same-date-session-hint to generate proposals for highest-priority same-day candidates first.",
+        "  Use --row-filter near-session-date-hint to generate proposals for one-day nearby session candidates.",
         "  Use --needs-title-normalization to focus rows blocked by title cleanup before evidence review.",
         "",
         "Review safety:",
@@ -3233,7 +3239,7 @@ fn work_session_evidence_source_audit_help_text() -> String {
         "  Use review queue update/apply commands only after manually reviewing copied source traces.",
         "",
         "Examples:",
-        "  promptvault-cli work-session-evidence-source-audit --row-filter near-session-date-hint --review-state pending_review --json",
+        "  promptvault-cli work-session-evidence-source-audit --row-filter same-date-session-hint --review-state pending_review --json",
         "  promptvault-cli work-session-evidence-source-audit --limit 20 --nearby-limit 6 --source-limit 5 --max-lines 100000 --json",
     ]
     .join("\n")
@@ -3271,7 +3277,7 @@ fn work_session_evidence_review_queue_help_text() -> String {
         "Purpose:",
         "  Lists persisted session-evidence review queue rows for unresolved project/day candidates.",
         "  Use --sync-candidates to refresh the queue from current unresolved candidates without approving or applying rows.",
-        "  Use --row-filter near-session-date-hint or stale-session-date-hint to inspect persisted queue buckets without changing sync behavior.",
+        "  Use --row-filter same-date-session-hint, near-session-date-hint, or stale-session-date-hint to inspect persisted queue buckets without changing sync behavior.",
         "  Use --review-state pending_review to inspect only unresolved operator-review rows.",
         "  Shows pending, stale, deferred, approved, rejected, and title-normalization blocked counts for operator review.",
         "",
@@ -3282,6 +3288,7 @@ fn work_session_evidence_review_queue_help_text() -> String {
         "",
         "Examples:",
         "  promptvault-cli work-session-evidence-review-queue --sync-candidates --json",
+        "  promptvault-cli work-session-evidence-review-queue --row-filter same-date-session-hint --json",
         "  promptvault-cli work-session-evidence-review-queue --row-filter near-session-date-hint --json",
         "  promptvault-cli work-session-evidence-review-queue --row-filter near-session-date-hint --review-state pending_review --json",
         "  promptvault-cli work-session-evidence-review-queue --limit 20 --json",
@@ -5181,6 +5188,7 @@ mod tests {
 
         assert!(help.contains("promptvault-cli work-session-evidence-proposals [--limit N>0]"));
         assert!(help.contains("--row-filter FILTER"));
+        assert!(help.contains("same-date-session-hint"));
         assert!(help.contains("near-session-date-hint"));
         assert!(help.contains("read-only source-traced proposals"));
         assert!(help.contains("Without --ai, returns local fallback proposals"));
@@ -5198,6 +5206,7 @@ mod tests {
         assert!(help.contains("promptvault-cli work-status-export"));
         assert!(help.contains("--row-filter FILTER"));
         assert!(help.contains("counts and offsets apply to the filtered set"));
+        assert!(help.contains("same-date-session-hint"));
         assert!(help.contains("near-session-date-hint"));
         assert!(help.contains("stale-session-date-hint"));
         assert!(help.contains("one-day same-project session hints"));
@@ -5210,6 +5219,7 @@ mod tests {
 
         assert!(help.contains("promptvault-cli work-session-evidence-candidates"));
         assert!(help.contains("--row-filter FILTER"));
+        assert!(help.contains("same-date-session-hint"));
         assert!(help.contains("near-session-date-hint"));
         assert!(help.contains("--refresh-session-index"));
         assert!(help.contains("--needs-title-normalization"));
@@ -5278,7 +5288,7 @@ mod tests {
         assert!(help.contains("approvals still require copied source review metadata"));
         assert!(help.contains("Weak metadata-only/project-only nearby hints are skipped"));
         assert!(
-            help.contains("work-session-evidence-source-audit --row-filter near-session-date-hint")
+            help.contains("work-session-evidence-source-audit --row-filter same-date-session-hint")
         );
     }
 
@@ -5300,6 +5310,7 @@ mod tests {
 
         assert!(help.contains("promptvault-cli work-session-evidence-review-queue"));
         assert!(help.contains("--row-filter FILTER"));
+        assert!(help.contains("same-date-session-hint"));
         assert!(help.contains("near-session-date-hint"));
         assert!(help.contains("--sync-candidates"));
         assert!(help.contains("without changing sync behavior"));

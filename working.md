@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 12:27 KST
+Updated: 2026-06-10 12:58 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,17 +33,19 @@ Short-Term Goal:
 
 Current Work:
 
-- Latest completed and pushed slice:
+- Current uncommitted implementation slice: expand durable full-session indexing
+  beyond Codex/Codex CX to sanitized Claude Code and Antigravity session
+  sources.
+- Latest completed and pushed implementation slice:
   `3f4185e fix: index codex session evidence by activity date`.
+- Latest pushed handoff-only documentation refresh:
+  `cc2f412 docs: refresh worklog handoff state`.
 - The earlier body-derived progress-log title cleanup slice was completed and
   pushed as `c392add fix: clear rough worklog title normalization debt`.
-- Actual default-vault verification after `3f4185e`: stored sanitized session
-  evidence increased from `10,599` to `11,417`; unresolved session-evidence
-  candidates dropped from `44` to `31`; title-normalization rows remain `0`.
-- Current next implementation slice: investigate the remaining `31`
-  session-evidence candidates and close the source-coverage gap where the full
-  persistent session index currently contains Codex/Codex CX metadata evidence
-  but not yet durable Claude Code or Antigravity session evidence.
+- Actual default-vault verification after the current uncommitted slice:
+  stored sanitized session evidence increased from `11,417` to `12,889`;
+  unresolved session-evidence candidates dropped from `31` to `30`;
+  title-normalization rows remain `0`.
 - The next change should stay source-traced and reviewable. Do not infer
   cross-date or cross-project evidence unless the target session artifact proves
   it. If durable non-Codex indexing is too broad for the next slice, add an
@@ -90,12 +92,30 @@ Progress:
 - Started inspecting candidate distribution and source coverage. The broad
   manual search across local session directories was noisy and should not be
   treated as implementation proof.
+- Extended checkpointed full-session indexing to use all curated session source
+  IDs, not only Codex/Codex CX metadata sources.
+- Added a regression test proving `claude-code-projects` checkpoint indexing
+  emits sanitized project/date evidence while removing raw prompt body text.
+- Rebuilt the actual default-vault session index with the rebuilt CLI:
+  `work-session-index --batch-files 500 --until-complete --reset
+  --confirm-long-run --json`.
+- Full reindex completed in about `180s`, ran `51` batches, emitted no
+  warnings, and completed every indexed source state.
 
 Changes:
 
-- `working.md`: refreshed the handoff state so the latest completed slice is no
-  longer mislabeled as uncommitted work, and the next source-coverage target is
-  visible at the top of the file.
+- `src-tauri/src/lib.rs`: full checkpointed session indexing now iterates all
+  `PROJECT_WORK_SESSION_SOURCE_IDS`; Codex/Codex CX still use metadata-only
+  parsing, while non-Codex sources are parsed through existing source parsers and
+  immediately reduced through `sanitized_project_work_session_prompt`.
+- `src-tauri/src/lib.rs`: expands the session source allowlist to include
+  `claude-code-transcripts`, `antigravity-cli-transcripts`,
+  `antigravity-ide-transcripts`, `antigravity-cli-conversation-db`, and
+  `antigravity-ide-conversation-db`.
+- `src-tauri/src/lib.rs`: adds
+  `project_work_session_index_checkpoint_includes_sanitized_claude_project_evidence`.
+- `working.md`: records the live default-vault source coverage and candidate
+  count after the full rebuild.
 
 Tests:
 
@@ -103,14 +123,62 @@ Tests:
   `codex_handoff.py inspect 019ea10c-fbe8-7b60-8889-6f00b5a91a68 --tail 20`.
 - PASS: `git status --short --branch` showed `## main...origin/main` before
   this documentation refresh.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_session_index_checkpoint_includes_sanitized_claude_project_evidence`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_session_index_checkpoint` (`3` checkpoint tests).
+- PASS: actual default-vault full reindex with rebuilt CLI:
+  `stored_prompt_count=12889`, `sanitized_prompt_count=12889`,
+  `batches_run=51`, `warnings=[]`.
+- PASS: full reindex source states completed:
+  `codex` `25227/25227` files with `11422` matched prompts;
+  `codex-cx` `11/11` with `0`;
+  `claude-code-projects` `1632/1632` with `487`;
+  `claude-code-transcripts` `667/667` with `9`;
+  `claude-code-history` `1/1` with `977`;
+  `antigravity-cli-transcripts` `321/321` with `25`;
+  `antigravity-ide-transcripts` `3/3` with `0`;
+  `antigravity-cli-history` `1/1` with `0`;
+  `antigravity-cli-conversation-db` `10/10` with `7`;
+  `antigravity-ide-conversation-db` `1/1` with `0`.
+- PASS: SQLite source distribution after full reindex:
+  `Codex session metadata=11421`, `Claude prompt history=961`,
+  `Claude Code projects=466`, `Antigravity CLI transcripts=25`,
+  `Claude transcripts=9`, `Antigravity CLI conversation DB=7`.
+- PASS: actual default-vault `work-status-export --limit 200
+  --full-session-index --json`: `97` rows, `7,812` items, `32` projects,
+  `26` days, `892` files, `12,889` indexed prompts, `30`
+  session-evidence-needed rows, `0` title-normalization rows, `67` matched rows.
+- PASS: actual default-vault `work-session-evidence-candidates --limit 80
+  --json`: `total=30`, `returned=30`, `index_count=12889`,
+  `index_total=12889`.
+- PASS: `cargo fmt --manifest-path src-tauri/Cargo.toml --check`.
+- PASS: `git diff --check`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml
+  project_work_session` (`21` session tests).
+- PASS: `npm run check` (UI tests, build, `229` Rust library tests, `34`
+  CLI tests, doc tests, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+  Isolated QA DB:
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-Pa32f0/qa.sqlite`.
+  Verified session-index source states now include Claude transcripts,
+  Antigravity transcripts, and Antigravity conversation DB rows in the UI flow,
+  then passed status export, session-evidence candidates/proposals/review/apply,
+  normalization review/apply, approved review queue save, run history, and saved
+  items flows.
 
 Issues:
 
 - The next implementation must avoid storing raw sensitive prompt content.
   Persisted evidence should remain sanitized project/date/session metadata and
   source references only.
-- Need focused source-specific tests before expanding checkpointed indexing to
-  any non-Codex source.
+- Remaining `30` candidates still need review/provider resolution or stronger
+  same-date project evidence. The newly indexed Claude/Antigravity sources added
+  real durable evidence but did not prove most remaining project/day rows.
+- The full source-expanded reindex currently takes about `180s` on this machine.
+  This is acceptable for explicit long-run indexing, but future work can improve
+  checkpoint performance by avoiding repeated full candidate discovery per
+  source.
 
 Research:
 

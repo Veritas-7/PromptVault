@@ -55,8 +55,13 @@ const PROJECT_WORK_SESSION_SOURCE_IDS: &[&str] = &[
     "codex",
     "codex-cx",
     "claude-code-projects",
+    "claude-code-transcripts",
     "claude-code-history",
+    "antigravity-cli-transcripts",
+    "antigravity-ide-transcripts",
     "antigravity-cli-history",
+    "antigravity-cli-conversation-db",
+    "antigravity-ide-conversation-db",
 ];
 const PROJECT_WORK_CODEX_METADATA_SOURCE_IDS: &[&str] = &["codex", "codex-cx"];
 const PROJECT_WORK_SESSION_EVIDENCE_MODE: &str = "metadata-first-raw-fallback";
@@ -7868,7 +7873,7 @@ fn checkpointed_project_work_session_prompts_from_sources(
     let mut states = Vec::new();
     for source in sources
         .iter()
-        .filter(|source| PROJECT_WORK_CODEX_METADATA_SOURCE_IDS.contains(&source.id))
+        .filter(|source| PROJECT_WORK_SESSION_SOURCE_IDS.contains(&source.id))
     {
         let updated_at = Utc::now().to_rfc3339();
         if !source.root.exists() {
@@ -7913,8 +7918,7 @@ fn checkpointed_project_work_session_prompts_from_sources(
         let end_index = start_index.saturating_add(batch_files).min(total_files);
         let mut matched_in_batch = 0;
         for candidate in &candidates[start_index..end_index] {
-            let modified_at = timestamp_millis_to_rfc3339(candidate.modified_ms);
-            match parse_codex_project_metadata_prompts(source, &candidate.path, modified_at) {
+            match checkpointed_project_work_session_records_for_candidate(source, candidate) {
                 Ok(mut records) => {
                     matched_in_batch += records.len();
                     prompts.append(&mut records);
@@ -7953,6 +7957,22 @@ fn checkpointed_project_work_session_prompts_from_sources(
     let prompt_count = prompts.len();
     normalize_project_work_session_prompts(&mut prompts, prompt_count);
     Ok((prompts, states))
+}
+
+fn checkpointed_project_work_session_records_for_candidate(
+    source: &SourceSpec,
+    candidate: &SourceFileCandidate,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    if PROJECT_WORK_CODEX_METADATA_SOURCE_IDS.contains(&source.id) {
+        let modified_at = timestamp_millis_to_rfc3339(candidate.modified_ms);
+        return parse_codex_project_metadata_prompts(source, &candidate.path, modified_at);
+    }
+
+    let records = parse_source_file(source, &candidate.path)?;
+    Ok(records
+        .iter()
+        .filter_map(sanitized_project_work_session_prompt)
+        .collect())
 }
 
 fn project_work_session_index_state(
@@ -20045,6 +20065,76 @@ Status: completed as a source-only/report-only hardening slice.
             .any(|prompt| prompt.text.contains("CheckpointProject2")));
 
         std::fs::remove_dir_all(root).expect("remove checkpoint temp root");
+    }
+
+    #[test]
+    fn project_work_session_index_checkpoint_includes_sanitized_claude_project_evidence() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-session-index-claude-checkpoint-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let source_root = root.join("claude-projects");
+        std::fs::create_dir_all(&source_root).expect("create claude project root");
+        let db_path = root.join("promptvault.sqlite");
+        let project_path = "/Users/wj/Ai/System/10_Projects/ClaudeCheckpointProject";
+        std::fs::write(
+            source_root.join("claude-session.jsonl"),
+            serde_json::json!({
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": format!("SECRET RAW USER TEXT for {project_path}")
+                },
+                "sessionId": "claude-checkpoint-session",
+                "timestamp": "2026-06-09T14:00:00Z",
+                "cwd": project_path
+            })
+            .to_string(),
+        )
+        .expect("write claude checkpoint fixture");
+        let source = SourceSpec {
+            id: "claude-code-projects",
+            label: "Claude Code projects",
+            root: source_root,
+            kind: SourceKind::ClaudeProjectJsonl,
+        };
+
+        let mut warnings = Vec::new();
+        let (prompts, states) = checkpointed_project_work_session_prompts_from_sources(
+            &db_path,
+            2,
+            true,
+            vec![source],
+            &mut warnings,
+        )
+        .expect("checkpoint claude project source");
+
+        assert!(warnings.is_empty());
+        assert_eq!(prompts.len(), 1);
+        assert_eq!(states.len(), 1);
+        assert_eq!(states[0].source_id, "claude-code-projects");
+        assert_eq!(states[0].total_files, 1);
+        assert_eq!(states[0].processed_files, 1);
+        assert_eq!(states[0].matched_prompt_count, 1);
+        assert!(states[0].completed);
+        assert_eq!(prompts[0].source, "Claude Code projects");
+        assert!(prompts[0].text.contains(project_path));
+        assert!(!prompts[0].text.contains("SECRET RAW USER TEXT"));
+
+        let persistence =
+            upsert_project_work_session_index(&db_path, &prompts, true).expect("persist claude");
+        assert_eq!(persistence.stored_prompt_count, 1);
+        let indexed =
+            project_work_session_prompts_from_index(&db_path, 10).expect("read claude index");
+        assert_eq!(indexed.len(), 1);
+        assert_eq!(indexed[0].source, "Claude Code projects");
+        assert!(indexed[0].text.contains(project_path));
+        assert!(!indexed[0].text.contains("SECRET RAW USER TEXT"));
+
+        std::fs::remove_dir_all(root).expect("remove claude checkpoint temp root");
     }
 
     #[test]

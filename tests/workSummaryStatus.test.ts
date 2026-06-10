@@ -3211,11 +3211,11 @@ test("work session evidence source audit reject helpers keep operator decisions 
   );
   assert.equal(
     workSessionEvidenceSourceAuditManualInspectReasonText(noHit),
-    "수동 확인 필요 · 추천 원본 경로는 있지만 검색 hit 없음",
+    "수동 확인 필요 · 추천 원본 경로는 있지만 검색 hit 없음 · 다음: 추천 원본 경로와 검색 한도를 확인한 뒤 보류 또는 거절",
   );
   assert.equal(
     workSessionEvidenceSourceAuditManualInspectReasonText(blocked),
-    "수동 확인 필요 · 차단 row에 위험표시 source_prompt_instruction_only",
+    "수동 확인 필요 · 차단 row에 위험표시 source_prompt_instruction_only · 다음: source trace를 직접 검토한 뒤 보류 또는 거절",
   );
   assert.equal(workSessionEvidenceSourceAuditManualInspectReasonText(cleanBlocked), null);
   assert.equal(

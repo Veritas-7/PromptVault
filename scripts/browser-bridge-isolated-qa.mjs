@@ -1727,6 +1727,7 @@ async function runBrowserQa() {
         && text.includes("수동확인")
         && text.includes("일괄거절")
         && manualRows.length > 0
+        && manualRows.every((row) => (row.textContent ?? "").includes("다음:"))
         && manualRows.some((row) => {
           const candidateId = row.getAttribute("data-work-session-evidence-source-audit-manual-inspect-note");
           return candidateId

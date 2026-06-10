@@ -1,10 +1,110 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 05:43 KST
+Updated: 2026-06-11 05:54 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 05:45 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Tighten source-audit manual-inspect affordances so rows that cannot be safely
+  bulk-rejected say not only why manual inspection is required, but also the
+  next operator action.
+
+Current Active Work:
+
+- Previous saved review queue filter summary slice is complete, verified,
+  committed, and pushed as
+  `7d82fae ux: show review queue filter conditions`.
+- Documentation completion snapshot is pushed as
+  `04b05bb docs: record filter summary slice completion`.
+- Fresh repo check at resume showed `main...origin/main` clean.
+- Current slice is in progress: add explicit `다음:` action hints to source
+  audit manual-inspect notes and verify those hints through helper tests and
+  browser-bridge DOM assertions.
+
+Progress:
+
+- Confirmed goal identity still anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Memory registry had no direct PromptVault hit, so live repo state remains the
+  active source of truth.
+- Confirmed there is no project-local `AGENTS.md` or `design.md`; the project
+  root `working.md` remains the active continuation surface.
+- Inspected source-audit helper tests, current UI row rendering, and
+  browser-bridge assertions for manual-inspect rows.
+- Chose a small TDD slice: update the manual-inspect reason text first, then
+  keep the existing durable review/defer/reject behavior unchanged.
+- Added RED expectations for `다음:` action hints on no-hit and risk-blocked
+  manual-inspect rows.
+- Updated the helper to append next-action guidance for no-hit,
+  source-not-indexed, nearby-error, source-search-error, risk-blocked, and
+  fallback manual-inspect outcomes.
+- Strengthened browser-bridge QA so every visible manual-inspect note must
+  include `다음:` while still exposing a matching defer action.
+- Ran isolated browser-bridge QA. It passed through the source-audit UI flow,
+  including the manual-inspect filter DOM assertion that every visible
+  manual-inspect note includes `다음:` and has a matching defer action.
+- Ran the full repo check, whitespace diff gate, and whole-tree secret scan.
+  All passed.
+- Staged only the intended four files and ran staged whitespace and secret
+  gates. Both passed.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: adds explicit next-action text to source-audit
+  manual-inspect notes.
+- `tests/workSummaryStatus.test.ts`: locks the no-hit and risk-blocked
+  next-action wording.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies source-audit
+  manual-inspect notes expose `다음:` in the DOM.
+- `working.md`: records this source-audit manual-inspect affordance slice.
+
+Tests:
+
+- RED as expected:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  failed before helper implementation because manual-inspect notes had no
+  `다음:` action hint.
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
+  (`52` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check` (UI tests, TypeScript/Vite build, Rust CLI build,
+  Rust lib tests, CLI tests, doc-tests, and clippy `-D warnings`).
+- PASS: `git diff --check`.
+- PASS: `gitleaks dir . --no-banner --redact` (`no leaks found`).
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact` (`no leaks found`).
+- Pending: commit/push if green.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- This slice should change display guidance only. It must not approve, reject,
+  defer, apply, or otherwise alter durable review policy.
+
+Next Step:
+
+- Commit and push this verified source-audit manual-inspect affordance slice.
 
 ## Resume Snapshot - 2026-06-11 05:33 KST
 

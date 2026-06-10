@@ -2253,24 +2253,24 @@ export function workSessionEvidenceSourceAuditManualInspectReasonText(
 ): string | null {
   if (!workSessionEvidenceSourceAuditNeedsManualInspect(item)) return null;
   if (item.outcome === "no_source_hits") {
-    return "수동 확인 필요 · 추천 원본 경로는 있지만 검색 hit 없음";
+    return "수동 확인 필요 · 추천 원본 경로는 있지만 검색 hit 없음 · 다음: 추천 원본 경로와 검색 한도를 확인한 뒤 보류 또는 거절";
   }
   if (item.outcome === "source_not_indexed_for_project") {
-    return "수동 확인 필요 · 추천 원본 경로가 현재 프로젝트 세션 색인에 없음";
+    return "수동 확인 필요 · 추천 원본 경로가 현재 프로젝트 세션 색인에 없음 · 다음: 세션 색인을 새로고침하거나 경로가 올바른지 확인";
   }
   if (item.outcome === "nearby_error") {
-    return "수동 확인 필요 · 근처 세션 조회 실패";
+    return "수동 확인 필요 · 근처 세션 조회 실패 · 다음: 근처 세션 조회를 재시도한 뒤 보류";
   }
   if (item.outcome === "source_search_error") {
-    return "수동 확인 필요 · 추천 원본 검색 실패";
+    return "수동 확인 필요 · 추천 원본 검색 실패 · 다음: 원본 검색을 재시도하거나 수동으로 원본 확인";
   }
   if (item.outcome === "blocked") {
     const riskFlags = workSessionEvidenceSourceAuditRiskFlagLabels(item);
     if (riskFlags.length) {
-      return `수동 확인 필요 · 차단 row에 위험표시 ${riskFlags.join(", ")}`;
+      return `수동 확인 필요 · 차단 row에 위험표시 ${riskFlags.join(", ")} · 다음: source trace를 직접 검토한 뒤 보류 또는 거절`;
     }
   }
-  return "수동 확인 필요";
+  return "수동 확인 필요 · 다음: 원본 trace를 직접 검토한 뒤 보류 또는 거절";
 }
 
 export function canBulkRejectWorkSessionEvidenceSourceAuditItem(

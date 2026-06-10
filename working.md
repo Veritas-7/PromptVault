@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 18:26 KST
+Updated: 2026-06-10 18:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -35,7 +35,13 @@ Current Work:
 
 - Latest pushed implementation slice:
   `af6a6dc fix: show source proposal risk flags`.
-- Latest verified behavior:
+- Latest verified local implementation slice, pending commit:
+  isolated browser bridge QA now includes a separate risky Antigravity DB source
+  proposal fixture and verifies the blocked
+  `candidate_or_source_hit_has_risk_flags` / `long_base64_like_token` bridge
+  path without disrupting the existing review-ready source-proposal UI approval
+  flow.
+- Previous verified behavior:
   source proposal risk flag details are now visible in the review queue source
   proposal panel. This was driven by a real default-vault
   `enterprise_diagnosis_flutter` source proposal blocked with
@@ -392,6 +398,23 @@ Current Work:
   The QA crossed source-proposals bridge, source-proposals UI, review queue UI,
   review apply, reviewed-items reload, and broader work-management panels.
   Ports `5174` and `5177` had no remaining listeners after QA cleanup.
+- Current source proposal risk QA fixture proof:
+  `scripts/browser-bridge-isolated-qa.mjs` now creates two Antigravity DB
+  fixtures for the session-evidence source proposal path: one safe fixture keeps
+  the existing review-ready UI approval flow intact, and a second risky fixture
+  uses a long token string to force `long_base64_like_token`. The QA calls
+  `/api/work-session-evidence-source-proposals` against the risky fixture and
+  fails unless the response has `review_ready_count=0`, at least one blocked
+  proposal, blocker `candidate_or_source_hit_has_risk_flags`, and risk flag
+  `long_base64_like_token`. Verification passed: `node --check
+  scripts/browser-bridge-isolated-qa.mjs`; `git diff --check`; and
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` against
+  isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-fYnNNb/qa.sqlite`.
+  The QA still crossed source-proposals bridge, source-proposals UI, review
+  queue UI, source-proposal approval, review apply, reviewed-items reload, and
+  broader work-management panels. Ports `5174` and `5177` had no remaining
+  listeners after QA cleanup.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is continuing unresolved project/day session-evidence review and
@@ -439,6 +462,67 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10 Resume Snapshot RepoTutor Studio must help a vibe-coding learner provide a GitHub repository" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Source proposal risk QA fixture
+
+Current Goal:
+
+- Make isolated browser bridge QA directly cover the blocked source-proposal
+  risk-flag path that supports the source proposal risk-detail UI.
+- Pushed implementation commit:
+  pending.
+
+Context:
+
+- The previous UI slice added localized risk details for source proposals, but
+  the isolated QA script still only exercised the review-ready source-proposal
+  approval path.
+- A safe QA source fixture must remain review-ready so the approval flow stays
+  covered. The risk fixture therefore needs to be separate and inserted after
+  the existing recommended source proposal flow has already selected its safe
+  source.
+
+Progress:
+
+- Added a second Antigravity conversation DB fixture path for risk-only source
+  proposal checks.
+- Generalized the Antigravity fixture helper so QA can write multiple source DB
+  files with distinct evidence ids and hashes.
+- Added a risk source-proposals bridge assertion that fails unless the response
+  is blocked with `candidate_or_source_hit_has_risk_flags` and includes
+  `long_base64_like_token`.
+- Preserved the existing review-ready source-proposal UI approval path.
+
+Changes:
+
+- `scripts/browser-bridge-isolated-qa.mjs`: adds the risky Antigravity fixture,
+  validates the blocked source-proposal risk path, and emits the result summary
+  field `workSessionEvidenceRiskSourceProposalBridge`.
+- `working.md`: records the QA fixture change, exact validation, QA DB, and
+  remaining goal status.
+
+Tests:
+
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `git diff --check`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-fYnNNb/qa.sqlite`.
+  The QA crossed source-proposals bridge, source-proposals UI, review queue UI,
+  source proposal approval, review apply, reviewed-items reload, work-log
+  management, normalization, and saved-items flows.
+- PASS: `lsof -nP -iTCP:5174 -sTCP:LISTEN` and
+  `lsof -nP -iTCP:5177 -sTCP:LISTEN` returned no listeners after QA cleanup.
+
+Issues:
+
+- This is QA coverage hardening only. It does not reduce the default-vault
+  pending review count.
+
+Next Steps:
+
+- Commit this QA fixture slice, then continue probing default-vault pending
+  review rows for non-risky copied source traces with non-project evidence.
 
 ## Completed Slice - 2026-06-10 Source proposal risk flag details
 

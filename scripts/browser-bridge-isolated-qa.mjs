@@ -27,6 +27,10 @@ const ANTIGRAVITY_QA_SOURCE_PATH = join(
   ANTIGRAVITY_QA_CONVERSATION_ROOT,
   `promptvault-qa-antigravity-${process.pid}-${Date.now()}.db`,
 );
+const ANTIGRAVITY_QA_RISK_SOURCE_PATH = join(
+  ANTIGRAVITY_QA_CONVERSATION_ROOT,
+  `promptvault-qa-antigravity-risk-${process.pid}-${Date.now()}.db`,
+);
 writeFileSync(SECRET_ENV_PATH, "");
 
 function step(label) {
@@ -119,11 +123,11 @@ function previousIsoDate(value) {
   return date.toISOString().slice(0, 10);
 }
 
-function createAntigravityConversationDbFixture({ cwd, promptText }) {
+function createAntigravityConversationDbFixture({ cwd, promptText, sourcePath = ANTIGRAVITY_QA_SOURCE_PATH }) {
   mkdirSync(ANTIGRAVITY_QA_CONVERSATION_ROOT, { recursive: true });
-  rmSync(ANTIGRAVITY_QA_SOURCE_PATH, { force: true });
+  rmSync(sourcePath, { force: true });
   execFileSync("sqlite3", [
-    ANTIGRAVITY_QA_SOURCE_PATH,
+    sourcePath,
     `CREATE TABLE steps (
         idx integer,
         step_type integer NOT NULL DEFAULT 0,
@@ -148,15 +152,19 @@ function createAntigravityConversationDbFixture({ cwd, promptText }) {
     ]),
   );
   execFileSync("sqlite3", [
-    ANTIGRAVITY_QA_SOURCE_PATH,
+    sourcePath,
     `INSERT INTO steps (idx, step_type, status, step_payload) VALUES (0, 14, 3, x'${userPayload.toString("hex")}');`,
   ], { stdio: "pipe" });
 }
 
-function insertAntigravitySessionEvidenceFixture(queueItem) {
+function insertAntigravitySessionEvidenceFixture(queueItem, options = {}) {
   const project = queueItem.project;
   const evidenceDate = previousIsoDate(queueItem.date);
   const cwd = `/Users/wj/Ai/System/10_Projects/${project}`;
+  const sourcePath = options.sourcePath ?? ANTIGRAVITY_QA_SOURCE_PATH;
+  const idPrefix = options.idPrefix ?? "qa-antigravity-session-evidence";
+  const hashPrefix = options.hashPrefix ?? "qa-antigravity-session-evidence-hash";
+  const extraText = options.extraText ?? "";
   const sourceMaterial = [
     "promptvaultqaantigravity",
     project,
@@ -164,9 +172,10 @@ function insertAntigravitySessionEvidenceFixture(queueItem) {
     ...queueItem.top_titles,
     queueItem.sample_evidence,
     "Validate DB backed nearby session evidence review flow.",
+    extraText,
   ].join(" ");
   const promptText = `PromptVault QA Antigravity DB source-search fixture. ${sourceMaterial}`;
-  createAntigravityConversationDbFixture({ cwd, promptText });
+  createAntigravityConversationDbFixture({ cwd, promptText, sourcePath });
   const now = new Date().toISOString();
   const text = `Antigravity CLI conversation DB indexed session project targets: ${cwd}. ${sourceMaterial}`;
   const idSegment = qaIdSegment(project);
@@ -177,11 +186,11 @@ function insertAntigravitySessionEvidenceFixture(queueItem) {
         text, word_count, char_count, risk_flags_json, quality_json,
         quality_score, quality_band, indexed_at
       ) VALUES (
-        ${sqlString(`qa-antigravity-session-evidence-${idSegment}`)},
-        ${sqlString(`qa-antigravity-session-evidence-hash-${idSegment}`)},
+        ${sqlString(`${idPrefix}-${idSegment}`)},
+        ${sqlString(`${hashPrefix}-${idSegment}`)},
         'Antigravity CLI conversation DB',
         'promptvault-qa-antigravity-session',
-        ${sqlString(ANTIGRAVITY_QA_SOURCE_PATH)},
+        ${sqlString(sourcePath)},
         ${sqlString(`${evidenceDate}T12:00:00Z`)},
         ${sqlString(evidenceDate)},
         ${sqlString(cwd)},
@@ -195,7 +204,7 @@ function insertAntigravitySessionEvidenceFixture(queueItem) {
         ${sqlString(now)}
       );`,
   ], { stdio: "pipe" });
-  return ANTIGRAVITY_QA_SOURCE_PATH;
+  return sourcePath;
 }
 
 function insertSyntheticApprovedReviewQueueRow() {
@@ -613,6 +622,7 @@ async function runBrowserQa() {
   let workSessionEvidenceReviewQueueFilterMeta = "";
   let workSessionEvidenceReviewQueueFilteredRows = [];
   let workSessionEvidenceAntigravitySourceSearch = "";
+  let workSessionEvidenceRiskSourceProposalBridge = "";
   let workSessionEvidenceNearbyMeta = "";
   let workSessionEvidenceNearbyUiText = "";
   let workSessionEvidenceSourceProposalUiStateAfterApprove = "";
@@ -1573,6 +1583,54 @@ async function runBrowserQa() {
       workSessionEvidenceSourceProposalUiStateAfterApprove =
         "no review-ready source proposal approval button";
     }
+    const riskQueueItem = workSessionEvidenceReviewQueue.items.find(
+      (item) => item.candidate_id === firstNearbyCandidateId,
+    );
+    if (!riskQueueItem) {
+      throw new Error(`Could not find queue item for source proposal risk fixture: ${firstNearbyCandidateId}`);
+    }
+    const riskToken = "PromptVaultQaRiskToken_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv";
+    const riskSourcePath = insertAntigravitySessionEvidenceFixture(riskQueueItem, {
+      sourcePath: ANTIGRAVITY_QA_RISK_SOURCE_PATH,
+      idPrefix: "qa-antigravity-risk-session-evidence",
+      hashPrefix: "qa-antigravity-risk-session-evidence-hash",
+      extraText: `Validate blocked source proposal risk display. ${riskToken}`,
+    });
+    const riskSourceProposals = await bridgeJson(
+      page,
+      "/api/work-session-evidence-source-proposals",
+      {
+        options: {
+          candidate_id: riskQueueItem.candidate_id,
+          source_path: riskSourcePath,
+          query: [
+            "promptvaultqaantigravity",
+            riskQueueItem.project,
+            riskQueueItem.date,
+            "Validate blocked source proposal risk display.",
+          ].join("\n"),
+          limit: 3,
+          max_lines: 100000,
+        },
+      },
+    );
+    const riskBlockedProposal = riskSourceProposals.proposals.find(
+      (proposal) =>
+        !proposal.review_ready
+        && proposal.blocker_reason === "candidate_or_source_hit_has_risk_flags"
+        && proposal.risk_flags.includes("long_base64_like_token"),
+    );
+    if (
+      riskSourceProposals.source_path !== riskSourcePath
+      || riskSourceProposals.returned_proposal_count !== riskSourceProposals.proposals.length
+      || !riskBlockedProposal
+      || riskSourceProposals.review_ready_count !== 0
+      || riskSourceProposals.blocked_count < 1
+    ) {
+      throw new Error(`Risk source proposal bridge did not expose blocked risk detail: ${JSON.stringify(riskSourceProposals)}`);
+    }
+    workSessionEvidenceRiskSourceProposalBridge =
+      `${riskBlockedProposal.blocker_reason} · ${riskBlockedProposal.risk_flags.join(", ")}`;
     const firstSessionEvidenceApprove = page
       .locator('[data-approve-work-session-evidence-review-queue]')
       .first();
@@ -2472,6 +2530,7 @@ async function runBrowserQa() {
       workSessionEvidenceReviewQueueFilterMeta,
       workSessionEvidenceReviewQueueFilteredRows,
       workSessionEvidenceAntigravitySourceSearch,
+      workSessionEvidenceRiskSourceProposalBridge,
       workSessionEvidenceNearbyMeta,
       workSessionEvidenceNearbyUiText,
       workSessionEvidenceSourceProposalUiStateAfterApprove,

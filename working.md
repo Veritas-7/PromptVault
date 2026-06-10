@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 18:25 KST
+Updated: 2026-06-10 18:26 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,14 +34,16 @@ Short-Term Goal:
 Current Work:
 
 - Latest pushed implementation slice:
-  `7783e05 fix: block split project source matches`.
-- Latest verified local implementation slice, pending commit:
+  `af6a6dc fix: show source proposal risk flags`.
+- Latest verified behavior:
   source proposal risk flag details are now visible in the review queue source
   proposal panel. This was driven by a real default-vault
   `enterprise_diagnosis_flutter` source proposal blocked with
   `candidate_or_source_hit_has_risk_flags` and `long_base64_like_token`; the UI
   now shows the localized risk label instead of only saying the proposal was
   blocked.
+- Previous pushed implementation slice:
+  `7783e05 fix: block split project source matches`.
 - Previous verified behavior:
   split project-token source proposal gate. The backend now treats
   CamelCase/separator-derived project-name parts such as `repotutor` and
@@ -445,7 +447,7 @@ Current Goal:
 - Make blocked source proposals explain the specific risk flags that caused the
   fail-closed state in the review queue UI.
 - Pushed implementation commit:
-  pending.
+  `af6a6dc fix: show source proposal risk flags`.
 
 Context:
 
@@ -503,8 +505,8 @@ Issues:
 
 Next Steps:
 
-- Commit this UI visibility slice, then continue probing pending review rows for
-  source traces that contain non-project evidence and no risk flags.
+- Continue probing pending review rows for source traces that contain
+  non-project evidence and no risk flags.
 
 ## Completed Slice - 2026-06-10 Split project-token source gate
 

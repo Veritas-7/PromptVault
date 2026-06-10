@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 17:03 KST
+Updated: 2026-06-10 17:04 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,10 +34,14 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed baseline:
-  `d4329e1 docs: record cli source review commit`.
-- Current implementation slice: session-evidence review queue rows and durable
-  reviewed items now preserve structured same-project session-date diagnostics
-  instead of exposing those hints only through `candidate_reason` text.
+  `0387704 feat: persist review queue diagnostics`.
+- Current implementation focus: continue reducing unresolved project/day
+  session-evidence rows and provider/review reliability gaps without weakening
+  the source-trace/operator-review contract.
+- Latest verified implementation slice: session-evidence review queue rows and
+  durable reviewed items now preserve structured same-project session-date
+  diagnostics instead of exposing those hints only through `candidate_reason`
+  text. Pushed as `0387704 feat: persist review queue diagnostics`.
 - Previous verified implementation slice: CLI source-proposal review approvals
   can pass copied source trace metadata through `--source-review-json` or
   `--source-review-file`, matching the existing UI/API `source_review` contract
@@ -245,6 +249,8 @@ Current Work:
   Verification passed: `cargo fmt --check --manifest-path src-tauri/Cargo.toml`,
   `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_evidence_review`,
   targeted UI/API tests (`521` Node tests), and full `npm run check`.
+  Staged diff and `gitleaks protect --staged --redact` passed, then the slice
+  was committed and pushed as `0387704 feat: persist review queue diagnostics`.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is continuing unresolved project/day session-evidence review and
@@ -289,13 +295,15 @@ Immediate Resume Commands:
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
 
-## Current Slice - 2026-06-10 Structured review queue diagnostics
+## Completed Slice - 2026-06-10 Structured review queue diagnostics
 
 Current Goal:
 
 - Preserve same-project session-date diagnostics as structured review-queue and
   durable reviewed-item fields so operator UI/API/CLI consumers do not have to
   parse `candidate_reason` to recover nearest-session hints.
+- Pushed implementation commit:
+  `0387704 feat: persist review queue diagnostics`.
 
 Context:
 
@@ -346,15 +354,14 @@ Tests:
 
 Issues:
 
-- Publication is still pending for this slice: staged diff/secret scan, commit,
-  push, and clean/synced verification remain.
 - Broader goal remains active: `26` default-vault session-evidence candidates
   still need review/closure.
 
 Next Steps:
 
-- Stage only the changed source/test/log files, run staged diff and secret
-  checks, commit this diagnostics slice, and push.
+- Continue resolving the `26` default-vault session-evidence candidates. The next
+  narrow slice should use the structured review queue diagnostics to drive
+  safer source-search/review actions for the top pending rows.
 
 ## Completed Slice - 2026-06-10 CLI source review approval input
 

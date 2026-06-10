@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 17:50 KST
+Updated: 2026-06-10 17:53 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -35,6 +35,12 @@ Current Work:
 
 - Latest pushed implementation slice:
   `9d209c3 fix: block weak source evidence proposals`.
+- Active in-progress slice for the next handoff: make source-proposal blocker
+  states operator-readable in the review queue UI. The backend already blocks
+  project-identifier-only evidence with
+  `source_hit_matches_only_project_identifier`; the next code slice should add
+  a `workSummaryStatus` helper, render Korean/actionable blocker text in
+  `src/App.tsx`, and cover it in `tests/workSummaryStatus.test.ts`.
 - Current repo HEAD should be refreshed with `git log -5 --oneline` on resume;
   docs-only baseline commits may move after this implementation slice.
 - Current implementation focus: continue reducing unresolved project/day
@@ -177,7 +183,8 @@ Current Work:
   --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
   scanned `9` raw JSONL lines, matched `1`, returned `1`, and the first hit was
   line `6` with `match_score=1` and matched term `repotutorstudio`.
-- Actual default-vault source-proposals proof after the current slice:
+- Historical pre-gate default-vault source-proposals proof from the recommended
+  source-proposals slice:
   `work-session-evidence-source-proposals --candidate-id
   session-evidence-RepoTutorStudio-072eff316b --source-path
   /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl
@@ -186,6 +193,8 @@ Current Work:
   `review_ready_count=1`, `blocked_count=0`, source line `6`, and
   `trace_validated=true` for the copied source trace
   `Analyze local/simple-ts-app for beginner learning. Source files are already filtered for secrets.`
+  This is no longer current approval evidence after the weak source-hit gate;
+  use the later `Current weak source-hit gate proof` block as the active truth.
 - Actual Antigravity DB source-search proof after the current slice:
   `cargo run --quiet --bin promptvault-cli -- work-session-evidence-source-search
   --source-path /Users/wj/.gemini/antigravity-cli/conversations/8b491726-6a1c-453d-b597-4524a0430f39.db
@@ -332,6 +341,9 @@ Current Work:
   useful step is continuing unresolved project/day session-evidence review and
   provider reliability work without weakening the manual-review/source-trace
   contract.
+- Immediate next implementation step: improve source-proposal blocker copy in
+  the review queue UI so an operator sees why a proposal is blocked without
+  reading raw internal reason codes.
 
 Resume Contract:
 

@@ -2167,11 +2167,13 @@ function App() {
   async function updateWorkSessionEvidenceReviewQueueItem(
     candidateId: string,
     reviewState: "approved" | "rejected",
+    reviewReasonOverride?: string,
   ) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
-    const reviewReason = reviewState === "approved"
-      ? "operator_approved_session_evidence"
-      : "operator_rejected_session_evidence";
+    const reviewReason = reviewReasonOverride
+      ?? (reviewState === "approved"
+        ? "operator_approved_session_evidence"
+        : "operator_rejected_session_evidence");
     setError(null);
     setWorkSessionEvidenceReviewQueueState("loading");
     setWorkSessionEvidenceReviewQueueUpdatingCandidateId(candidateId);
@@ -6559,6 +6561,29 @@ function App() {
                                                           {proposal.blocker_reason ? (
                                                             <span>{proposal.blocker_reason}</span>
                                                           ) : null}
+                                                          {proposal.review_ready
+                                                            && canApproveWorkSessionEvidenceReviewQueueItem(item)
+                                                            ? (
+                                                              <button
+                                                                aria-label={`${proposal.project} ${proposal.date} source proposal line ${proposal.source_line_number} 검토 완료 반영`}
+                                                                className="inline-action compact-action"
+                                                                data-approve-work-session-evidence-source-proposal={proposal.source_search_hit_id}
+                                                                disabled={isTopLevelActionLocked}
+                                                                onClick={() =>
+                                                                  void updateWorkSessionEvidenceReviewQueueItem(
+                                                                    proposal.candidate_id,
+                                                                    "approved",
+                                                                    `source_proposal_review_ready:${proposal.source_search_hit_id}`,
+                                                                  )}
+                                                                type="button"
+                                                              >
+                                                                <CheckCircle2 size={14} />
+                                                                {workSessionEvidenceReviewQueueUpdatingCandidateId
+                                                                  === proposal.candidate_id
+                                                                  ? "처리 중"
+                                                                  : "검토 완료 반영"}
+                                                              </button>
+                                                            ) : null}
                                                         </div>
                                                       ),
                                                     )

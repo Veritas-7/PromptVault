@@ -482,6 +482,7 @@ async function runBrowserQa() {
   let workSessionEvidenceReviewQueueFilteredRows = [];
   let workSessionEvidenceNearbyMeta = "";
   let workSessionEvidenceNearbyUiText = "";
+  let workSessionEvidenceSourceProposalUiStateAfterApprove = "";
   let workSessionEvidenceReviewQueueUiStateAfterApprove = "";
   let workSessionEvidenceReviewApplyMeta = "";
   let workSessionEvidenceReviewedItemsMeta = "";
@@ -1183,8 +1184,8 @@ async function runBrowserQa() {
       }
     }
     const firstApprovableItem = workSessionEvidenceReviewQueue.items.find(
-      (item) => !item.needs_title_normalization,
-    );
+      (item, index) => index > 0 && !item.needs_title_normalization,
+    ) ?? workSessionEvidenceReviewQueue.items.find((item) => !item.needs_title_normalization);
     if (firstApprovableItem) {
       const approvedQueue = await bridgeJson(
         page,
@@ -1384,6 +1385,47 @@ async function runBrowserQa() {
           && text.includes("durable 승인 아님")
           && text.includes("review input only");
       }, firstSourceSearchSessionId, { timeout: 90000 });
+      const sourceProposalApproveButton = page
+        .locator(`[data-work-session-evidence-source-proposals="${firstSourceSearchSessionId}"] [data-approve-work-session-evidence-source-proposal]`)
+        .first();
+      if (await sourceProposalApproveButton.count()) {
+        const sourceProposalHitId = await sourceProposalApproveButton.getAttribute(
+          "data-approve-work-session-evidence-source-proposal",
+        );
+        if (!sourceProposalHitId) {
+          throw new Error("Source proposal approve button did not expose hit id");
+        }
+        const sourceProposalUpdateResponse = page.waitForResponse((response) =>
+          response.url().includes("/api/work-session-evidence-review-queue/update")
+          && response.request().method() === "POST",
+          { timeout: 90000 },
+        );
+        await sourceProposalApproveButton.click();
+        await sourceProposalUpdateResponse;
+        const sourceProposalQueueAfterApprove = await bridgeJson(
+          page,
+          "/api/work-session-evidence-review-queue",
+          { options: { limit: 200 } },
+        );
+        const sourceProposalApprovedRow = sourceProposalQueueAfterApprove.items.find(
+          (item) => item.candidate_id === firstNearbyCandidateId,
+        );
+        const expectedReviewReason = `source_proposal_review_ready:${sourceProposalHitId}`;
+        if (
+          !sourceProposalApprovedRow
+          || sourceProposalApprovedRow.review_state !== "approved"
+          || sourceProposalApprovedRow.review_reason !== expectedReviewReason
+        ) {
+          throw new Error(`Source proposal approval did not persist review reason: ${
+            JSON.stringify(sourceProposalApprovedRow ?? null)
+          }`);
+        }
+        workSessionEvidenceSourceProposalUiStateAfterApprove =
+          `${sourceProposalApprovedRow.review_state} · ${sourceProposalApprovedRow.review_reason}`;
+      } else {
+        workSessionEvidenceSourceProposalUiStateAfterApprove =
+          "no review-ready source proposal approval button";
+      }
     }
     const firstSessionEvidenceApprove = page
       .locator('[data-approve-work-session-evidence-review-queue]')
@@ -2285,6 +2327,7 @@ async function runBrowserQa() {
       workSessionEvidenceReviewQueueFilteredRows,
       workSessionEvidenceNearbyMeta,
       workSessionEvidenceNearbyUiText,
+      workSessionEvidenceSourceProposalUiStateAfterApprove,
       workSessionEvidenceReviewQueueUiStateAfterApprove,
       workSessionEvidenceReviewApplyMeta,
       workSessionEvidenceReviewedItemsMeta,

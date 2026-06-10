@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 15:23 KST
+Updated: 2026-06-10 15:32 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-10 15:23 KST
+## Resume Snapshot - 2026-06-10 15:32 KST
 
 Long-Term Goal:
 
@@ -34,10 +34,15 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed implementation baseline before this slice:
-  `55e78b2 feat: add bounded source session search`,
-  `e3a83c0 docs: record source session search flow`, and
-  `2d81d72 docs: refresh working coverage snapshot`.
-- Current verified implementation slice: selected source-search hits can now be
+  `3432162 feat: add source search review proposals` and
+  `9ce989f docs: record source proposal review flow`.
+- Current verified implementation slice: review-ready source proposals now expose
+  a row-local `검토 완료 반영` action in the review-queue UI. The action calls the
+  existing review queue update API with an auditable
+  `source_proposal_review_ready:<source_search_hit_id>` reason, so the operator
+  decision is explicit and reloadable while matched session evidence is still not
+  auto-created.
+- Previous verified implementation slice: selected source-search hits can now be
   converted into copied-trace review proposal input via
   `work-session-evidence-source-proposals`, Tauri, browser bridge
   `/api/work-session-evidence-source-proposals`, and the review-queue UI
@@ -131,11 +136,19 @@ Current Work:
   Node tests ran), Rust `session_evidence_source` tests passed (`2`), CLI
   `work_session_evidence` tests passed (`3`), `cargo fmt --check` passed,
   `npm run check` passed, and isolated browser bridge QA passed.
+- Current UI decision-link proof: `npm run build` passed, targeted API bridge
+  tests passed (`209` Node tests ran), and
+  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed against
+  isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-XBS0dP/qa.sqlite`.
+  That QA now clicks the source-proposal approval action and verifies the
+  persisted review reason starts with `source_proposal_review_ready:`.
+  Full `npm run check` also passed after the `working.md` update.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
-  useful step is using review-ready source proposals to support explicit
-  operator review-queue decisions while keeping durable evidence creation
-  separate.
+  useful step is keeping durable reviewed-decision apply/audit separate from
+  matched session-evidence creation, then adding a bounded source reader for
+  selected non-JSONL session sources.
 
 Resume Contract:
 
@@ -171,6 +184,69 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Source proposal review-queue decision action
+
+Current Goal:
+
+- Let an operator turn a review-ready copied source-search proposal into an
+  explicit review-queue decision from the same UI panel, without creating matched
+  session evidence automatically.
+
+Context:
+
+- Source proposals already validate copied trace snippets and mark rows
+  `review_ready` or blocked.
+- The review queue already persists review-complete/rejected decisions with an
+  audit reason.
+- The missing UI connection was an action that made the source-proposal-backed
+  decision explicit instead of relying on the generic row-level `검토 완료` button.
+
+Progress:
+
+- Added a source-proposal-level `검토 완료 반영` button for review-ready proposals
+  when the candidate is still approvable.
+- The button calls the existing review queue update path with
+  `review_state=approved` and `review_reason=source_proposal_review_ready:<hit>`.
+- Kept the ordinary review queue `검토 완료` and `거절` actions intact.
+- Browser bridge QA now keeps the first row pending for the source-proposal UI
+  path, clicks the new button, and verifies the persisted review reason.
+
+Changes:
+
+- `src/App.tsx`: added optional review reason override to
+  `updateWorkSessionEvidenceReviewQueueItem` and rendered the source-proposal
+  approval action inside review-ready source proposal rows.
+- `scripts/browser-bridge-isolated-qa.mjs`: changed direct review-queue approval
+  to use a later candidate when possible, then added UI click/assertions for
+  `data-approve-work-session-evidence-source-proposal`.
+- `working.md`: recorded the slice, verification, and next resume boundary.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "review queue update|source proposals"`
+  (`209` tests ran and passed).
+- PASS: `npm run build`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`;
+  the output showed source-proposal approval persisted with a
+  `source_proposal_review_ready:<hit>` reason before review-apply/reload flows.
+- PASS: `npm run check` after this `working.md` update. This covered UI tests,
+  production build, Rust library tests (`234` passed), CLI tests (`34` passed),
+  doc tests, and clippy with `-D warnings`.
+
+Issues:
+
+- This action saves a review-queue decision only. It still does not create or
+  infer matched session evidence links.
+- Source proposals still depend on JSONL source search; selected Antigravity
+  SQLite sources need a separate bounded source reader.
+
+Next Steps:
+
+- Keep durable reviewed-decision apply/audit separate from matched evidence
+  creation.
+- Add bounded, redacted source-hit support for selected non-JSONL session sources
+  before treating those nearby rows as review-ready inputs.
 
 ## Completed Slice - 2026-06-10 Copied source-search review proposals
 
@@ -243,12 +319,7 @@ Issues:
 
 Next Steps:
 
-- Use review-ready source proposals to support explicit review-queue decisions,
-  then keep any durable reviewed-decision write separate and audited.
-- Add Antigravity SQLite source readers only after defining a bounded, redacted
-  source-hit contract equivalent to the JSONL path.
-- Continue from explicit review-queue decision support; do not auto-create
-  matched session evidence from source proposals.
+- Continue from the source-proposal review-queue decision action above.
 
 ## Completed Slice - 2026-06-10 Bounded source session search
 

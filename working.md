@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 14:35 KST
+Updated: 2026-06-10 14:49 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-10 14:35 KST
+## Resume Snapshot - 2026-06-10 14:49 KST
 
 Long-Term Goal:
 
@@ -34,8 +34,15 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed implementation baseline before this slice:
-  `ece56ab feat: add session evidence nearby drilldown`.
-- Current verified implementation slice: nearby same-project session drilldown
+  `edbd63b feat: rank nearby session hints by query`.
+- Current verified implementation slice: selected nearby JSONL session source
+  files can now be searched in a bounded, redacted, read-only way via
+  `work-session-evidence-source-search`, browser bridge
+  `/api/work-session-evidence-source-search`, and the review-queue UI
+  `원본 검색` action. The output returns user-prompt line numbers, local
+  match scores, matched terms, and redacted snippets only. It still does not
+  create, approve, or attach session evidence.
+- Previous verified implementation slice: nearby same-project session drilldown
   now accepts an optional query and returns local `match_score` plus
   `matched_terms`. The review-queue UI sends project/date/title/sample evidence
   as query material so operators can see which nearby sanitized session locator
@@ -64,11 +71,11 @@ Current Work:
   `3f4185e fix: index codex session evidence by activity date`.
 - The earlier body-derived progress-log title cleanup slice was completed and
   pushed as `c392add fix: clear rough worklog title normalization debt`.
-- Actual default-vault verification after the current diagnostics slice:
-  status export reported `97` rows, `7,843` items, `32` projects, `26` days,
-  `892` files, and a full stored session index of `12,889/12,889` prompts.
-  Rows needing session evidence remain `26`; `4` pure status snapshots remain
-  classified as `status-snapshot`; title-normalization rows remain `0`.
+- Actual default-vault verification after the current source-search slice:
+  status export reported `97` rows, `7,911` items, `32` projects, `26` days,
+  `896` files, and a full stored session index of `12,889/12,889` prompts.
+  Session-evidence candidates remain `26`, all unresolved after the full stored
+  index; title-normalization rows remain `0`.
 - Actual default-vault candidate diagnostics after the current priority slice:
   `26` candidates remain; `25` have same-project session evidence on other
   dates; `1` has no known same-project session evidence
@@ -94,11 +101,18 @@ Current Work:
   `query_term_count=2`, `total_match_count=5`, `returned_item_count=5`, first
   prompt date `2026-06-09`, `date_distance_days=1`, `match_score=1`, and matched
   term `repotutorstudio`.
+- Actual default-vault source-search proof after the current slice:
+  `work-session-evidence-source-search --source-path
+  /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl
+  --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
+  scanned `9` raw JSONL lines, matched `1`, returned `1`, and the first hit was
+  line `6` with `match_score=1` and matched term `repotutorstudio`.
 - Actual browser bridge QA proof after the current slice:
   `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed and
-  exercised `/api/work-session-evidence-nearby` plus the review-queue UI
-  drilldown. Isolated QA DB:
-  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-hNUJ1k/qa.sqlite`.
+  exercised `/api/work-session-evidence-nearby`,
+  `/api/work-session-evidence-source-search`, the review-queue UI drilldown, and
+  the row-local `원본 검색` action. Isolated QA DB:
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-8RbthQ/qa.sqlite`.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is provider/manual search execution or AI-assisted candidate
@@ -134,8 +148,78 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-status-export --limit 200 --full-session-index --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --query "RepoTutorStudio 2026-06-10" --json`
+- `src-tauri/target/debug/promptvault-cli work-session-evidence-source-search --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Bounded source session search
+
+Current Goal:
+
+- Let operators move from a nearby session locator row to a bounded source-file
+  search result without storing raw session bodies or auto-approving evidence.
+
+Context:
+
+- Query-ranked nearby rows identify useful `source_path` values, but the
+  previous UI still required manual terminal/file inspection for source lines.
+- The safer next step is one-file JSONL search only, with known session-source
+  path guards, max-line bounds, and redacted user-prompt snippets.
+
+Progress:
+
+- Added `work-session-evidence-source-search` CLI/Tauri/browser bridge support.
+- Added review-queue UI `원본 검색` action under each nearby row.
+- Source search reads one known JSONL session source line-by-line, extracts
+  user prompts through the existing parser path, scores query overlap, and
+  returns line numbers plus redacted snippets.
+- Kept approval and durable evidence creation separate from search results.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added source-search options/result structs, bounded
+  JSONL streaming search, known source-root guard, Tauri command, and Rust test.
+- `src-tauri/src/bin/promptvault-cli.rs`: added CLI command, bridge route, help
+  text, and validation coverage.
+- `src/promptVaultApi.ts`, `src/types.ts`: added source-search API and strict
+  bridge response validation.
+- `src/App.tsx`: added row-local `원본 검색` UI state and result panel.
+- `tests/promptVaultApi.test.ts`: added source-search bridge parser tests.
+- `scripts/browser-bridge-isolated-qa.mjs`: added direct bridge and UI click QA
+  for source search.
+- `README.md`, `docs/CLI.md`, `working.md`: documented source-search command,
+  bridge route, and read-only limitations.
+
+Tests:
+
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_source_search`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli work_session_evidence`.
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "work session evidence source search"`
+  (`207` UI/API tests ran and passed).
+- PASS: default-vault source-search proof for `RepoTutorStudio` source JSONL:
+  scanned `9` lines, matched `1`, returned `1`, first hit line `6`.
+- PASS: `npm run check` (UI tests, production build, Rust tests `233`, CLI
+  tests `34`, doc tests, clippy `-D warnings`).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  exercised nearby bridge, source-search bridge, review-queue `근처 세션`, and
+  row-local `원본 검색`. Isolated QA DB:
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-8RbthQ/qa.sqlite`.
+
+Issues:
+
+- Source search supports known JSONL session sources only. Antigravity
+  conversation SQLite sources still need a separate bounded reader if they are
+  selected from nearby rows.
+- Search hits are manual-review context, not durable proof. Review-complete
+  decisions still do not create matched session evidence links automatically.
+
+Next Steps:
+
+- Use the source-search hits as provider/manual review input, then add a
+  copied-evidence validation step that can propose review decisions without
+  inventing traces.
+- Keep source-search and durable evidence creation separate until reviewed
+  source traces are explicitly accepted.
 
 ## Completed Slice - 2026-06-10 Query-ranked nearby session hints
 

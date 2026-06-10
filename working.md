@@ -33,7 +33,9 @@ Short-Term Goal:
 
 Current Work:
 
-- Most recent pushed baseline:
+- Most recent pushed repo baseline:
+  `2849df7 docs: record recommended source proposals commit`.
+- Latest pushed implementation slice:
   `c186a2e feat: add recommended source proposals action`.
 - Current implementation focus: continue reducing unresolved project/day
   session-evidence rows and provider/review reliability gaps without weakening

@@ -224,6 +224,7 @@ import {
   emptyWorkLogCoverageFilters,
   filterWorkLogCoverageFiles,
   workLogCoverageFilterMetaText,
+  workLogCoverageLatestDateSuggestions,
   workLogCoverageProjectSuggestions,
   workLogCoverageSourceFileSuggestions,
   workLogCoverageStatusLabel,
@@ -1567,6 +1568,8 @@ function App() {
     : null;
   const workLogCoverageProjectFilterSuggestions =
     workLogCoverageProjectSuggestions(workLogCoverageResult?.files ?? []);
+  const workLogCoverageLatestDateFilterSuggestions =
+    workLogCoverageLatestDateSuggestions(workLogCoverageResult?.files ?? []);
   const workLogCoverageSourceFileFilterSuggestions =
     workLogCoverageSourceFileSuggestions(workLogCoverageResult?.files ?? []);
   const filteredWorkLogCandidates = filterWorkLogExtractionCandidates(
@@ -5012,6 +5015,23 @@ function App() {
             />
           </label>
           <label>
+            <span>최근 날짜</span>
+            <input
+              aria-label="프로젝트 작업 로그 범위 최근 날짜 필터"
+              data-work-log-coverage-date-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-coverage-date-options"
+              onChange={(event) =>
+                setWorkLogCoverageFilters((current) => ({
+                  ...current,
+                  latestDate: event.target.value,
+                }))}
+              placeholder="2026-06-10"
+              type="text"
+              value={workLogCoverageFilters.latestDate}
+            />
+          </label>
+          <label>
             <span>상태</span>
             <select
               aria-label="프로젝트 작업 로그 범위 상태 필터"
@@ -5077,6 +5097,11 @@ function App() {
         <datalist id="work-log-coverage-project-options">
           {workLogCoverageProjectFilterSuggestions.map((project) => (
             <option key={project} value={project} />
+          ))}
+        </datalist>
+        <datalist id="work-log-coverage-date-options">
+          {workLogCoverageLatestDateFilterSuggestions.map((date) => (
+            <option key={date} value={date} />
           ))}
         </datalist>
         <datalist id="work-log-coverage-source-file-options">

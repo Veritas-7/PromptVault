@@ -1,10 +1,116 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 07:07 KST
+Updated: 2026-06-11 07:24 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 07:24 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Add a work-log coverage latest-date filter so operators can narrow
+  project-local progress-log coverage by day as well as project, status, and
+  file kind.
+
+Current Active Work:
+
+- Previous file-kind coverage filter slice is complete, verified, committed,
+  and pushed as `63e1b2c ux: filter work log coverage by file kind`.
+- Latest documentation snapshot is pushed as
+  `bf51762 docs: record latest working snapshot head`.
+- Fresh repo check showed `main...origin/main` clean and
+  `HEAD == origin/main` at
+  `bf51762036df286252973cd4140e86893b6f12ad`.
+- Current slice is in progress: add `latest_date` filtering to the work-log
+  coverage UI/helper layer without changing parsing, extraction, review queue,
+  AI provider, or durable write behavior.
+- Current slice code is complete and verified; commit/push is pending.
+
+Progress:
+
+- Reconfirmed goal identity anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Confirmed only project-level continuation file is `working.md`; no
+  project-local `AGENTS.md`, `design.md`, or `workingd.md`.
+- Inspected current work-log coverage helper, UI filters, row rendering, and
+  isolated browser-bridge QA.
+- Selected a small TDD slice: exact `latest_date` filter with suggestions,
+  operator-facing UI input, and browser-bridge assertion.
+- Added a RED helper test first; it failed because
+  `workLogCoverageLatestDateSuggestions` did not exist.
+- Implemented exact latest-date filtering and date suggestions.
+- Added a "최근 날짜" work-log coverage filter in the UI.
+- Extended isolated browser-bridge QA to apply a real date option from the
+  work-log coverage datalist and assert visible rows match the selected date.
+- First browser-bridge QA attempt failed because the assertion tried to infer a
+  date from only visible rows; visible rows may all be non-parsed/pointer rows.
+- Fixed the QA assertion to use the full-result datalist date option instead.
+
+Changes:
+
+- `src/workLogCoverageFilters.ts`: adds `latestDate` to coverage filters,
+  counts it as an active filter, applies exact `latest_date` matching, and
+  exposes latest-date suggestions.
+- `src/App.tsx`: adds the work-log coverage "최근 날짜" datalist input.
+- `tests/workLogCoverageFilters.test.ts`: adds RED/GREEN coverage for
+  latest-date filtering and suggestion ordering.
+- `scripts/browser-bridge-isolated-qa.mjs`: applies a real coverage date filter
+  from the UI datalist and asserts the filtered rows match that date.
+- `working.md`: records the current slice state and verification.
+
+Tests:
+
+- Baseline: `git status --short --branch` reported `## main...origin/main`.
+- Baseline: `git rev-parse HEAD origin/main` matched
+  `bf51762036df286252973cd4140e86893b6f12ad`.
+- RED as expected:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts`
+  failed before implementation because `workLogCoverageLatestDateSuggestions`
+  was not exported.
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts`
+  (`5` tests).
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts tests/workSummaryStatus.test.ts`
+  (`57` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run build`.
+- Initial `npm run qa:browser-bridge` failed at the new date-filter assertion:
+  visible rows did not expose a parsed latest-date row.
+- PASS: rerun `npm run qa:browser-bridge` after using datalist-derived date
+  selection; it passed the new coverage date-filter assertion and exited 0.
+- PASS: `npm run check`.
+- Pending: `git diff --check`, secret scan, staged gate, commit, push, and
+  post-push verification.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- This slice must stay read-only. It should only narrow displayed coverage rows
+  and must not alter parsing, extraction, AI proposals, or durable review
+  decisions.
+
+Next Step:
+
+- Run diff/secret gates, commit and push this latest-date coverage filter
+  slice, then update this file with the final commit hash and next continuation
+  step.
 
 ## Resume Snapshot - 2026-06-11 07:05 KST
 

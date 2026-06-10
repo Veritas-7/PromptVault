@@ -726,6 +726,9 @@ async function runBrowserQa() {
   let coverageMeta = "";
   let coverageFilterMeta = "";
   let coverageFilteredRows = [];
+  let coverageDateFilterValue = "";
+  let coverageDateFilterMeta = "";
+  let coverageDateFilteredRows = [];
   let coverageSourceFileFilterMeta = "";
   let coverageSourceFileFilteredRows = [];
   let workLogCandidatesMeta = "";
@@ -2530,6 +2533,32 @@ async function runBrowserQa() {
       const text = document.querySelector('[data-work-log-coverage-filter-meta="true"]')?.textContent ?? "";
       return text.includes("작업로그 필터") && text.includes("필터 없음");
     }, undefined, { timeout: 90000 });
+    coverageDateFilterValue = await page.evaluate(() => {
+      const option = document.querySelector("#work-log-coverage-date-options option");
+      return option instanceof HTMLOptionElement ? option.value : "";
+    });
+    if (!coverageDateFilterValue) {
+      throw new Error("Work log coverage did not expose a parsed latest-date row for date filtering");
+    }
+    await page.locator('[data-work-log-coverage-date-filter="true"]').fill(coverageDateFilterValue);
+    await page.locator('[data-apply-work-log-coverage-filters="true"]').click();
+    await page.waitForFunction((expectedDate) => {
+      const metaText = document.querySelector('[data-work-log-coverage-filter-meta="true"]')?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-log-coverage="true"] article'));
+      return metaText.includes("작업로그 필터")
+        && metaText.includes("필터 1개")
+        && rows.length > 0
+        && rows.every((row) => (row.textContent ?? "").includes(expectedDate));
+    }, coverageDateFilterValue, { timeout: 90000 });
+    coverageDateFilterMeta =
+      (await page.locator('[data-work-log-coverage-filter-meta="true"]').textContent())?.trim() ?? "";
+    coverageDateFilteredRows =
+      await page.locator('[data-work-log-coverage="true"] article').allTextContents();
+    await page.locator('[data-clear-work-log-coverage-filters="true"]').click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-log-coverage-filter-meta="true"]')?.textContent ?? "";
+      return text.includes("작업로그 필터") && text.includes("필터 없음");
+    }, undefined, { timeout: 90000 });
     await page.locator('[data-work-log-coverage-source-file-filter="true"]').fill("workingd.md");
     await page.locator('[data-apply-work-log-coverage-filters="true"]').click();
     await page.waitForFunction(() => {
@@ -3147,6 +3176,9 @@ async function runBrowserQa() {
       coverageMeta,
       coverageFilterMeta,
       coverageFilteredRows,
+      coverageDateFilterValue,
+      coverageDateFilterMeta,
+      coverageDateFilteredRows,
       coverageSourceFileFilterMeta,
       coverageSourceFileFilteredRows,
       workLogCandidatesMeta,

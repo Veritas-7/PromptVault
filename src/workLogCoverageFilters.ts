@@ -10,6 +10,7 @@ export type WorkLogCoverageStatusFilter =
   | "unreadable";
 
 export interface WorkLogCoverageFilters {
+  latestDate: string;
   project: string;
   sourceFile: string;
   status: WorkLogCoverageStatusFilter;
@@ -17,6 +18,7 @@ export interface WorkLogCoverageFilters {
 
 export function emptyWorkLogCoverageFilters(): WorkLogCoverageFilters {
   return {
+    latestDate: "",
     project: "",
     sourceFile: "",
     status: "",
@@ -25,6 +27,7 @@ export function emptyWorkLogCoverageFilters(): WorkLogCoverageFilters {
 
 export function activeWorkLogCoverageFilterCount(filters: WorkLogCoverageFilters): number {
   return [
+    filters.latestDate,
     filters.project,
     filters.sourceFile,
     filters.status,
@@ -36,6 +39,8 @@ export function filterWorkLogCoverageFiles(
   filters: WorkLogCoverageFilters,
 ): ProjectWorkLogCoverageFile[] {
   return files.filter((file) => {
+    const latestDate = filters.latestDate.trim();
+    if (latestDate && file.latest_date !== latestDate) return false;
     const project = filters.project.trim();
     if (project && file.project !== project) return false;
     const sourceFile = filters.sourceFile.trim();
@@ -62,6 +67,12 @@ export function workLogCoverageProjectSuggestions(
   files: readonly ProjectWorkLogCoverageFile[],
 ): string[] {
   return storedFilterSuggestionValues(files.map((file) => file.project));
+}
+
+export function workLogCoverageLatestDateSuggestions(
+  files: readonly ProjectWorkLogCoverageFile[],
+): string[] {
+  return storedFilterSuggestionValues(files.map((file) => file.latest_date ?? ""));
 }
 
 export function workLogCoverageSourceFileSuggestions(

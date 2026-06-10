@@ -5,6 +5,7 @@ import {
   emptyWorkLogCoverageFilters,
   filterWorkLogCoverageFiles,
   workLogCoverageFilterMetaText,
+  workLogCoverageLatestDateSuggestions,
   workLogCoverageProjectSuggestions,
   workLogCoverageSourceFileSuggestions,
   workLogCoverageStatusLabel,
@@ -49,6 +50,7 @@ test("work log coverage filters narrow gap logs by status group and project", ()
     }),
   ];
   const filters: WorkLogCoverageFilters = {
+    latestDate: "",
     project: "PromptVault",
     sourceFile: "",
     status: "needs_review",
@@ -77,6 +79,46 @@ test("work log coverage filters expose project suggestions and empty state", () 
   assert.equal(workLogCoverageFilterMetaText(files.length, files.length, 0), "작업로그 필터 · 필터 없음 · 결과 3 / 3개");
 });
 
+test("work log coverage filters narrow parsed rows by latest date", () => {
+  const files = [
+    coverageFile({
+      latest_date: "2026-06-09",
+      latest_title: "PromptVault day one",
+      source_path: "/tmp/PromptVault/working.md",
+    }),
+    coverageFile({
+      latest_date: "2026-06-10",
+      latest_title: "PromptVault day two",
+      source_path: "/tmp/PromptVault/PROGRESS_LOG.md",
+      source_file: "PROGRESS_LOG.md",
+    }),
+    coverageFile({
+      latest_date: null,
+      latest_title: null,
+      source_path: "/tmp/PromptVault/workingd.md",
+      source_file: "workingd.md",
+      status: "pointer",
+      work_item_count: 0,
+    }),
+  ];
+  const filters: WorkLogCoverageFilters = {
+    latestDate: "2026-06-10",
+    project: "",
+    sourceFile: "",
+    status: "",
+  };
+
+  assert.equal(activeWorkLogCoverageFilterCount(filters), 1);
+  assert.deepEqual(
+    filterWorkLogCoverageFiles(files, filters).map((file) => file.latest_title),
+    ["PromptVault day two"],
+  );
+  assert.deepEqual(workLogCoverageLatestDateSuggestions(files), [
+    "2026-06-09",
+    "2026-06-10",
+  ]);
+});
+
 test("work log coverage filters narrow by source file kind", () => {
   const files = [
     coverageFile({ source_file: "working.md", source_path: "/tmp/PromptVault/working.md" }),
@@ -95,6 +137,7 @@ test("work log coverage filters narrow by source file kind", () => {
     }),
   ];
   const filters: WorkLogCoverageFilters = {
+    latestDate: "",
     project: "",
     sourceFile: "workingd.md",
     status: "",

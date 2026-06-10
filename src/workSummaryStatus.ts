@@ -77,6 +77,11 @@ export type WorkStatusExportRowFilter =
   | "active"
   | "session-supported"
   | "progress-log-only";
+export type WorkSessionEvidenceSourceAuditFilter =
+  | "all"
+  | "manual-inspect"
+  | "bulk-rejectable"
+  | "review-ready";
 
 export const WORK_SUMMARY_SNAPSHOT_DETAIL_LIMIT = 3;
 
@@ -2214,6 +2219,49 @@ export function workSessionEvidenceSourceAuditManualInspectItems(
 ): ProjectWorkSessionEvidenceSourceAuditResult["items"] {
   if (!result) return [];
   return result.items.filter(workSessionEvidenceSourceAuditNeedsManualInspect);
+}
+
+export function filterWorkSessionEvidenceSourceAuditItems(
+  items: ProjectWorkSessionEvidenceSourceAuditResult["items"],
+  filter: WorkSessionEvidenceSourceAuditFilter,
+): ProjectWorkSessionEvidenceSourceAuditResult["items"] {
+  if (filter === "all") return items;
+  if (filter === "manual-inspect") {
+    return items.filter(workSessionEvidenceSourceAuditNeedsManualInspect);
+  }
+  if (filter === "bulk-rejectable") {
+    return items.filter(canBulkRejectWorkSessionEvidenceSourceAuditItem);
+  }
+  return items.filter((item) => item.outcome === "review_ready");
+}
+
+export function workSessionEvidenceSourceAuditFilterLabel(
+  filter: WorkSessionEvidenceSourceAuditFilter,
+): string {
+  const labels: Record<WorkSessionEvidenceSourceAuditFilter, string> = {
+    all: "전체",
+    "manual-inspect": "수동 확인 필요",
+    "bulk-rejectable": "일괄 거절 가능",
+    "review-ready": "검토 준비",
+  };
+  return labels[filter];
+}
+
+export function workSessionEvidenceSourceAuditFilterMetaText(
+  filter: WorkSessionEvidenceSourceAuditFilter,
+  items: ProjectWorkSessionEvidenceSourceAuditResult["items"],
+  filteredItems: ProjectWorkSessionEvidenceSourceAuditResult["items"],
+): string {
+  const manualInspectCount = items.filter(workSessionEvidenceSourceAuditNeedsManualInspect).length;
+  const bulkRejectableCount = items.filter(canBulkRejectWorkSessionEvidenceSourceAuditItem).length;
+  const reviewReadyCount = items.filter((item) => item.outcome === "review_ready").length;
+  return [
+    `원본 감사 필터 ${workSessionEvidenceSourceAuditFilterLabel(filter)}`,
+    `결과 ${filteredItems.length.toLocaleString()} / ${items.length.toLocaleString()}행`,
+    `수동확인 ${manualInspectCount.toLocaleString()}행`,
+    `일괄거절 ${bulkRejectableCount.toLocaleString()}행`,
+    `검토준비 ${reviewReadyCount.toLocaleString()}행`,
+  ].join(" · ");
 }
 
 export function workSessionEvidenceSourceAuditRejectableText(

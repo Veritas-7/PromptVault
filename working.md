@@ -1,10 +1,98 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 00:24 KST
+Updated: 2026-06-11 00:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 00:33 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and `PROJECT_STATUS.md`.
+- Keep extraction, normalization, and session-evidence decisions source-traced,
+  operator-reviewable, and fail-closed. Approval remains explicit and requires
+  copied evidence/source-review checks.
+
+Short-Term Goal:
+
+- Make source-audit review practical when the batch contains mixed outcomes:
+  manual-inspect rows must be easy to isolate, while low-ambiguity bulk reject
+  rows remain bulk-actionable.
+
+Current Goal:
+
+- Add a source-audit row filter so an operator can switch between all rows,
+  manual-inspect rows, bulk-rejectable rows, and review-ready rows before
+  deciding what to reject or inspect.
+
+Context:
+
+- Source audit remains read-only and never approves session evidence.
+- The previous slice separated manual-inspect rows from bulk rejection. This
+  slice makes that separation visible and directly navigable in the UI.
+- cmux/in-app browser testing remains excluded in this non-cmux environment;
+  validation uses the local browser bridge QA and full automated gates.
+
+Progress:
+
+- Added source-audit filter options: `all`, `manual-inspect`,
+  `bulk-rejectable`, and `review-ready`.
+- Added filter meta text that reports displayed rows plus total manual-inspect,
+  bulk-rejectable, and review-ready counts.
+- Added source-audit filter select/reset controls and an explicit empty state
+  for filter misses.
+- Updated browser bridge QA to switch to the manual-inspect filter, verify the
+  filter meta, switch back to all rows, and then continue the bulk-reject flow.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: added source-audit filter type, filter helper,
+  label helper, and filter meta helper.
+- `src/App.tsx`: added source-audit filter state, filtered visible rows,
+  select/reset controls, filter meta, and filter-specific empty state.
+- `tests/workSummaryStatus.test.ts`: added source-audit filter assertions for
+  manual-inspect, bulk-rejectable, and review-ready slices.
+- `scripts/browser-bridge-isolated-qa.mjs`: added direct source-audit filter
+  select coverage before bulk reject.
+
+Tests:
+
+- `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `51` tests.
+- `node --check scripts/browser-bridge-isolated-qa.mjs` passed.
+- `npm run build` passed.
+- `npm run qa:browser-bridge` passed end-to-end, including source-audit filter
+  selection, bulk reject, session-evidence apply/reload, work-management
+  overview, normalization queues, and approved work-log queue save.
+- Full `npm run check` passed: UI tests, Vite / TypeScript build,
+  `cargo build --bin promptvault-cli`, Rust lib tests `252`, CLI tests `47`,
+  doc-tests, and clippy `-D warnings`.
+
+Issues:
+
+- Live default-vault audit still needs an operator decision pass. This slice
+  improves review ergonomics but does not decide or apply live audit outcomes.
+- The broader long-term goal is still open: full real-session/project-log
+  management coverage needs continued audit and default-vault validation.
+
+Research:
+
+- No external research was needed. The change followed existing status-export
+  and review-queue filter patterns in the app.
+
+Next Steps:
+
+- Run a live default-vault source audit and use the new filter to inspect
+  manual rows separately from bulk-rejectable rows.
+- If manual-inspect rows remain numerous, add a durable defer state or reason
+  workflow rather than relying only on temporary view filtering.
+- Continue verifying project/day management against real session evidence and
+  project-local logs before any completion claim.
 
 ## Resume Snapshot - 2026-06-11 00:24 KST
 

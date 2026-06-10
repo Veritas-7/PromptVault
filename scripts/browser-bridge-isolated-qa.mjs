@@ -1548,6 +1548,20 @@ async function runBrowserQa() {
     workSessionEvidenceSourceAuditUiText =
       (await page.locator('[data-work-session-evidence-source-audit="true"]').textContent())
         ?.trim() ?? "";
+    await page.locator('[data-work-session-evidence-source-audit-filter="true"]').selectOption("manual-inspect");
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-session-evidence-source-audit-filter-meta="true"]')
+        ?.textContent ?? "";
+      return text.includes("원본 감사 필터 수동 확인 필요")
+        && text.includes("수동확인")
+        && text.includes("일괄거절");
+    }, undefined, { timeout: 30000 });
+    await page.locator('[data-work-session-evidence-source-audit-filter="true"]').selectOption("all");
+    await page.waitForFunction(() => {
+      const text = document.querySelector('[data-work-session-evidence-source-audit-filter-meta="true"]')
+        ?.textContent ?? "";
+      return text.includes("원본 감사 필터 전체");
+    }, undefined, { timeout: 30000 });
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-work-session-evidence-source-audit-rejectable="true"]')
         ?.textContent ?? "";

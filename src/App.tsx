@@ -377,8 +377,11 @@ import {
   workSessionEvidenceProposalsActionLabel,
   workSessionEvidenceProposalsFailureText,
   workSessionEvidenceProposalsMetaText,
+  filterWorkSessionEvidenceSourceAuditItems,
   workSessionEvidenceSourceAuditBulkRejectableItems,
   workSessionEvidenceSourceAuditBulkRejectableText,
+  workSessionEvidenceSourceAuditFilterLabel,
+  workSessionEvidenceSourceAuditFilterMetaText,
   workSessionEvidenceSourceAuditItemText,
   workSessionEvidenceSourceAuditManualInspectReasonText,
   workSessionEvidenceSourceAuditManualInspectText,
@@ -471,6 +474,7 @@ import {
   type WorkSessionEvidenceReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
+  type WorkSessionEvidenceSourceAuditFilter,
   type WorkStatusExportRowFilter,
   type WorkStatusExportState,
   type WorkSummarySnapshotsState,
@@ -508,6 +512,12 @@ const WORK_SESSION_EVIDENCE_REVIEW_QUEUE_ROW_FILTER_OPTIONS: WorkStatusExportRow
   "stale-session-date-hint",
   "needs-title-normalization",
   "progress-log-only",
+];
+const WORK_SESSION_EVIDENCE_SOURCE_AUDIT_FILTER_OPTIONS: WorkSessionEvidenceSourceAuditFilter[] = [
+  "all",
+  "manual-inspect",
+  "bulk-rejectable",
+  "review-ready",
 ];
 const WORK_SUMMARY_HISTORY_LIMIT = 5;
 const WORK_SESSION_INDEX_MAX_BATCHES = 2;
@@ -999,6 +1009,10 @@ function App() {
     workSessionEvidenceReviewQueueReviewStateFilter,
     setWorkSessionEvidenceReviewQueueReviewStateFilter,
   ] = useState<WorkReviewQueueStateFilter>("");
+  const [
+    workSessionEvidenceSourceAuditFilter,
+    setWorkSessionEvidenceSourceAuditFilter,
+  ] = useState<WorkSessionEvidenceSourceAuditFilter>("all");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [resultOrigin, setResultOrigin] = useState<PromptResultOrigin | null>(null);
   const [scanProgressInfo, setScanProgressInfo] = useState<ScanProgress | null>(null);
@@ -1591,6 +1605,25 @@ function App() {
   const hiddenWorkStatusExportRowCount = Math.max(
     0,
     filteredWorkStatusExportRows.length - WORK_STATUS_EXPORT_DISPLAY_LIMIT,
+  );
+  const filteredWorkSessionEvidenceSourceAuditItems = useMemo(() => {
+    return filterWorkSessionEvidenceSourceAuditItems(
+      workSessionEvidenceSourceAuditResult?.items ?? [],
+      workSessionEvidenceSourceAuditFilter,
+    );
+  }, [workSessionEvidenceSourceAuditResult?.items, workSessionEvidenceSourceAuditFilter]);
+  const workSessionEvidenceSourceAuditFilterMeta = workSessionEvidenceSourceAuditResult
+    ? workSessionEvidenceSourceAuditFilterMetaText(
+        workSessionEvidenceSourceAuditFilter,
+        workSessionEvidenceSourceAuditResult.items,
+        filteredWorkSessionEvidenceSourceAuditItems,
+      )
+    : null;
+  const visibleWorkSessionEvidenceSourceAuditItems =
+    filteredWorkSessionEvidenceSourceAuditItems.slice(0, WORK_STATUS_EXPORT_DISPLAY_LIMIT);
+  const hiddenWorkSessionEvidenceSourceAuditItemCount = Math.max(
+    0,
+    filteredWorkSessionEvidenceSourceAuditItems.length - WORK_STATUS_EXPORT_DISPLAY_LIMIT,
   );
   const hiddenWorkSummaryCount = Math.max(
     0,
@@ -6710,9 +6743,48 @@ function App() {
                   : "감사 판정 일괄 거절"}
               </button>
             </article>
-            {workSessionEvidenceSourceAuditResult.items
-              .slice(0, WORK_STATUS_EXPORT_DISPLAY_LIMIT)
-              .map((item) => {
+            <div
+              className="work-summary-filter-row work-status-export-filter-row"
+              data-work-session-evidence-source-audit-filters="true"
+            >
+              <label>
+                <span>원본 감사 row 필터</span>
+                <select
+                  aria-label="원본 감사 row 필터"
+                  data-work-session-evidence-source-audit-filter="true"
+                  disabled={isTopLevelActionLocked}
+                  onChange={(event) =>
+                    setWorkSessionEvidenceSourceAuditFilter(
+                      event.target.value as WorkSessionEvidenceSourceAuditFilter,
+                    )}
+                  value={workSessionEvidenceSourceAuditFilter}
+                >
+                  {WORK_SESSION_EVIDENCE_SOURCE_AUDIT_FILTER_OPTIONS.map((filter) => (
+                    <option key={filter} value={filter}>
+                      {workSessionEvidenceSourceAuditFilterLabel(filter)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                aria-label="원본 감사 row 필터 초기화"
+                className="inline-action compact-action"
+                data-clear-work-session-evidence-source-audit-filter="true"
+                disabled={isTopLevelActionLocked || workSessionEvidenceSourceAuditFilter === "all"}
+                onClick={() => setWorkSessionEvidenceSourceAuditFilter("all")}
+                type="button"
+              >
+                <XCircle size={14} />
+                필터 초기화
+              </button>
+            </div>
+            {workSessionEvidenceSourceAuditFilterMeta ? (
+              <div className="work-summary-index" data-work-session-evidence-source-audit-filter-meta="true">
+                <span>{workSessionEvidenceSourceAuditFilterMeta}</span>
+              </div>
+            ) : null}
+            {visibleWorkSessionEvidenceSourceAuditItems.length ? (
+              visibleWorkSessionEvidenceSourceAuditItems.map((item) => {
                 const manualInspectReason = workSessionEvidenceSourceAuditManualInspectReasonText(item);
                 return (
                   <article
@@ -6772,12 +6844,18 @@ function App() {
                     ) : null}
                   </article>
                 );
-              })}
-            {workSessionEvidenceSourceAuditResult.items.length > WORK_STATUS_EXPORT_DISPLAY_LIMIT ? (
+              })
+            ) : (
+              <div className="empty compact" data-empty-work-session-evidence-source-audit-filter="true">
+                {workSessionEvidenceSourceAuditFilter === "all"
+                  ? "표시할 원본 감사 row 없음"
+                  : "필터에 맞는 원본 감사 row 없음"}
+              </div>
+            )}
+            {hiddenWorkSessionEvidenceSourceAuditItemCount ? (
               <div className="work-summary-overflow">
                 그 외 원본 감사 row{" "}
-                {(workSessionEvidenceSourceAuditResult.items.length - WORK_STATUS_EXPORT_DISPLAY_LIMIT)
-                  .toLocaleString()}개
+                {hiddenWorkSessionEvidenceSourceAuditItemCount.toLocaleString()}개
               </div>
             ) : null}
           </div>

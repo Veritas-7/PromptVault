@@ -8,6 +8,7 @@ import {
   canRejectWorkSessionEvidenceReviewQueueItem,
   canBulkRejectWorkSessionEvidenceSourceAuditItem,
   canRejectWorkSessionEvidenceSourceAuditItem,
+  filterWorkSessionEvidenceSourceAuditItems,
   workAiProviderHealthActionLabel,
   workAiProviderHealthFailureText,
   workAiProviderHealthMetaText,
@@ -62,6 +63,8 @@ import {
   workSessionEvidenceProposalsMetaText,
   workSessionEvidenceSourceAuditBulkRejectableItems,
   workSessionEvidenceSourceAuditBulkRejectableText,
+  workSessionEvidenceSourceAuditFilterLabel,
+  workSessionEvidenceSourceAuditFilterMetaText,
   workSessionEvidenceSourceAuditItemText,
   workSessionEvidenceSourceAuditManualInspectItems,
   workSessionEvidenceSourceAuditManualInspectReasonText,
@@ -3126,6 +3129,37 @@ test("work session evidence source audit reject helpers keep operator decisions 
       }],
     })),
     "감사 판정 거절 가능 row 없음",
+  );
+});
+
+test("work session evidence source audit filters isolate manual inspect work", () => {
+  const result = sessionEvidenceSourceAuditResult();
+  assert.equal(workSessionEvidenceSourceAuditFilterLabel("manual-inspect"), "수동 확인 필요");
+  assert.deepEqual(
+    filterWorkSessionEvidenceSourceAuditItems(result.items, "manual-inspect").map((item) =>
+      item.candidate_id
+    ),
+    ["session-evidence-PromptVault-no-hit"],
+  );
+  assert.deepEqual(
+    filterWorkSessionEvidenceSourceAuditItems(result.items, "bulk-rejectable").map((item) =>
+      item.candidate_id
+    ),
+    ["session-evidence-PromptVault-blocked"],
+  );
+  assert.deepEqual(
+    filterWorkSessionEvidenceSourceAuditItems(result.items, "review-ready").map((item) =>
+      item.candidate_id
+    ),
+    ["session-evidence-PromptVault-ready"],
+  );
+  assert.equal(
+    workSessionEvidenceSourceAuditFilterMetaText(
+      "manual-inspect",
+      result.items,
+      filterWorkSessionEvidenceSourceAuditItems(result.items, "manual-inspect"),
+    ),
+    "원본 감사 필터 수동 확인 필요 · 결과 1 / 3행 · 수동확인 1행 · 일괄거절 1행 · 검토준비 1행",
   );
 });
 

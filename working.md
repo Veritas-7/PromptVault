@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 06:49 KST
+Updated: 2026-06-11 07:03 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-11 06:49 KST
+## Resume Snapshot - 2026-06-11 07:03 KST
 
 Long-Term Goal:
 
@@ -23,9 +23,9 @@ Long-Term Goal:
 
 Short-Term Goal:
 
-- Add a same-date session candidate row filter so status export and
-  session-evidence review flows can isolate the highest-priority manual linking
-  candidates separately from one-day nearby candidates.
+- Add a project work-log coverage file-kind filter so operators can isolate
+  `working.md`, `workingd.md`, `PROGRESS_LOG.md`, `WORKING_LOG.md`, and
+  `PROJECT_STATUS.md` coverage rows without leaving the work-management UI.
 
 Current Active Work:
 
@@ -35,87 +35,77 @@ Current Active Work:
   `1ddaf57 docs: record status export action completion`.
 - Fresh repo check at resume showed `main...origin/main` clean and HEAD
   matching `origin/main`.
-- Current same-date filter slice is complete, verified, committed, and pushed as
+- Previous same-date filter slice is complete, verified, committed, and pushed as
   `d23a560 ux: split same-date session filters`.
 - Feature-commit post-push verification before this completion snapshot showed
   `main...origin/main` clean and `HEAD == origin/main` at
   `d23a56078ea7e1623421f07358ae81ea410d845a`.
+- Current file-kind coverage filter slice is implemented and verified; staged
+  gate, commit, push, and completion snapshot remain pending.
 
 Progress:
 
-- Confirmed goal identity still anchors to
-  `/Users/wj/Ai/System/10_Projects/PromptVault`.
 - Confirmed there is no project-local `AGENTS.md` or `design.md`.
-- Found that same-date rows were included under the broader
-  `near-session-date-hint` filter, making the most actionable same-day manual
-  linking candidates harder to isolate.
-- Split `same-date-session-hint` from `near-session-date-hint` across UI,
-  backend/bridge validation, CLI docs/help, browser-bridge QA, and tests.
-- Fixed one full-gate regression where the source-audit test still used the old
-  broad `near-session-date-hint` meaning for same-date fixture rows.
+- Reconfirmed goal identity anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Re-read the latest `working.md`; the next step is to choose another bounded
+  work-management improvement.
+- Found that work-log coverage already distinguishes parsed, pointer,
+  unparsed, and unreadable logs, but UI filters only cover project and status.
+- Selected a small UI/helper slice to add exact file-kind filtering for project
+  progress-log artifacts, especially `workingd.md` pointer/candidate rows.
+- Added a RED helper test first; it failed because
+  `workLogCoverageSourceFileSuggestions` did not exist yet.
+- Implemented the file-kind filter and verified the isolated browser-bridge UI
+  can filter coverage rows down to `workingd.md`.
 
 Changes:
 
-- `src/workSummaryStatus.ts`: adds `same-date-session-hint`, separates same-day
-  hints from one-day nearby hints, and updates filter labels/metadata.
-- `src/App.tsx`: adds the same-date filter to status export and
-  session-evidence review queue row-filter dropdowns.
-- `src-tauri/src/lib.rs`: accepts and applies `same-date-session-hint` for
-  status export, session evidence candidates, source audit, and persisted review
-  queue views.
-- `src-tauri/src/bin/promptvault-cli.rs`: documents the same-date filter in CLI
-  help and examples.
-- `docs/CLI.md`: documents the same-date, near-date, and stale-date row-filter
-  split.
-- `tests/workSummaryStatus.test.ts`, `tests/promptVaultApi.test.ts`,
-  `src-tauri/src/lib.rs`: lock same-date filter behavior and option transport.
-- `scripts/browser-bridge-isolated-qa.mjs`: asserts the status export UI can
-  select the same-date filter and narrow the unresolved fixture row.
-- `working.md`: records this same-date filter slice for continuation.
+- `src/workLogCoverageFilters.ts`: adds `sourceFile` to
+  `WorkLogCoverageFilters`, includes it in active filter counts, filters exact
+  `source_file` matches, and exposes source-file suggestions.
+- `src/App.tsx`: adds a work-log coverage "파일 종류" datalist input with
+  suggestions from loaded coverage rows.
+- `tests/workLogCoverageFilters.test.ts`: locks file-kind filtering and
+  suggestion ordering for `working.md`, `workingd.md`, and `PROGRESS_LOG.md`.
+- `scripts/browser-bridge-isolated-qa.mjs`: selects `workingd.md` in the
+  coverage UI and asserts all visible rows are that file kind.
+- `working.md`: records this new file-kind coverage filter slice.
 
 Tests:
 
+- Baseline: `git status --short --branch` reported `## main...origin/main`;
+  `HEAD == origin/main == 1ec3c53a0d396c85c3cd6687165ef84f08aa0cc7`.
 - RED as expected:
-  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts`
-  failed before implementation because `same-date-session-hint` had no label.
-- RED as expected:
-  `cargo test project_work_status_export_filters_rows_before_pagination --lib`
-  failed before implementation because `near-session-date-hint` still included
-  same-date rows.
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts`
+  failed before implementation because `workLogCoverageSourceFileSuggestions`
+  was not exported yet.
 - PASS:
-  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workSummaryStatus.test.ts tests/promptVaultApi.test.ts`
-  (`266` tests).
-- PASS: `cargo test project_work_status_export_filters_rows_before_pagination --lib`.
-- PASS: `cargo test session_evidence_candidates_row_filters_before_truncating --lib`.
-- PASS: `cargo test session_evidence_review_queue_row_filters_before_truncating --lib`.
-- PASS: `cargo test session_evidence_source_audit_summarizes_review_ready_and_metadata_only_rows --lib`.
-- PASS: `cargo test help_documents --bin promptvault-cli`.
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts`
+  (`4` tests).
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts tests/workSummaryStatus.test.ts`
+  (`56` tests).
 - PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
-- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run build`.
+- PASS: `npm run qa:browser-bridge`; the run passed the new `workingd.md`
+  coverage source-file filter assertion and exited 0.
 - PASS: `npm run check`.
 - PASS: `git diff --check`.
 - PASS: `gitleaks dir . --no-banner --redact`.
-- PASS: `git diff --cached --name-only` showed only the nine intended files.
-- PASS: `git diff --cached --check`.
-- PASS: `gitleaks protect --staged --no-banner --redact`.
-- PASS: `git push origin main`.
-- PASS: feature-commit post-push `git status --short --branch` reported
-  `## main...origin/main`.
-- PASS: feature-commit post-push `git rev-parse HEAD origin/main` matched
-  `d23a56078ea7e1623421f07358ae81ea410d845a`.
-- Pending: choose the next bounded work-management improvement slice.
+- Pending: staged diff/secret gates, commit, push, and post-push verification.
 
 Issues:
 
 - cmux/in-app browser testing remains excluded in this environment; browser UI
   verification uses the repo's isolated Playwright/browser-bridge QA path.
-- This slice does not approve, apply, or invent session evidence. It only
-  narrows read-only/review queue buckets.
+- This slice must stay read-only. It should only narrow coverage display rows
+  and must not alter parsing, extraction, or durable review decisions.
 
 Next Step:
 
-- Choose the next small PromptVault work-management improvement from the live
-  app state and update this file before editing.
+- Run full verification and staged gates, then commit and push the work-log
+  coverage file-kind filter slice.
 
 ## Resume Snapshot - 2026-06-11 06:19 KST
 

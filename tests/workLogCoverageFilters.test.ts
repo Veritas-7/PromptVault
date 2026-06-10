@@ -6,6 +6,7 @@ import {
   filterWorkLogCoverageFiles,
   workLogCoverageFilterMetaText,
   workLogCoverageProjectSuggestions,
+  workLogCoverageSourceFileSuggestions,
   workLogCoverageStatusLabel,
   type WorkLogCoverageFilters,
 } from "../src/workLogCoverageFilters.ts";
@@ -49,6 +50,7 @@ test("work log coverage filters narrow gap logs by status group and project", ()
   ];
   const filters: WorkLogCoverageFilters = {
     project: "PromptVault",
+    sourceFile: "",
     status: "needs_review",
   };
 
@@ -73,6 +75,41 @@ test("work log coverage filters expose project suggestions and empty state", () 
   assert.deepEqual(workLogCoverageProjectSuggestions(files), ["CareVault", "PromptVault"]);
   assert.deepEqual(filterWorkLogCoverageFiles(files, emptyWorkLogCoverageFilters()), files);
   assert.equal(workLogCoverageFilterMetaText(files.length, files.length, 0), "작업로그 필터 · 필터 없음 · 결과 3 / 3개");
+});
+
+test("work log coverage filters narrow by source file kind", () => {
+  const files = [
+    coverageFile({ source_file: "working.md", source_path: "/tmp/PromptVault/working.md" }),
+    coverageFile({
+      source_file: "workingd.md",
+      source_path: "/tmp/PromptVault/workingd.md",
+      status: "pointer",
+      latest_date: null,
+      latest_title: null,
+      work_item_count: 0,
+    }),
+    coverageFile({
+      project: "PromptVault",
+      source_file: "PROGRESS_LOG.md",
+      source_path: "/tmp/PromptVault/PROGRESS_LOG.md",
+    }),
+  ];
+  const filters: WorkLogCoverageFilters = {
+    project: "",
+    sourceFile: "workingd.md",
+    status: "",
+  };
+
+  assert.equal(activeWorkLogCoverageFilterCount(filters), 1);
+  assert.deepEqual(
+    filterWorkLogCoverageFiles(files, filters).map((file) => file.source_path),
+    ["/tmp/PromptVault/workingd.md"],
+  );
+  assert.deepEqual(workLogCoverageSourceFileSuggestions(files), [
+    "PROGRESS_LOG.md",
+    "working.md",
+    "workingd.md",
+  ]);
 });
 
 test("work log coverage status labels use operator-facing Korean copy", () => {

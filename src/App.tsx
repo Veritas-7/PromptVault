@@ -225,6 +225,7 @@ import {
   filterWorkLogCoverageFiles,
   workLogCoverageFilterMetaText,
   workLogCoverageProjectSuggestions,
+  workLogCoverageSourceFileSuggestions,
   workLogCoverageStatusLabel,
   type WorkLogCoverageFilters,
   type WorkLogCoverageStatusFilter,
@@ -1566,6 +1567,8 @@ function App() {
     : null;
   const workLogCoverageProjectFilterSuggestions =
     workLogCoverageProjectSuggestions(workLogCoverageResult?.files ?? []);
+  const workLogCoverageSourceFileFilterSuggestions =
+    workLogCoverageSourceFileSuggestions(workLogCoverageResult?.files ?? []);
   const filteredWorkLogCandidates = filterWorkLogExtractionCandidates(
     workLogCandidatesResult?.candidates ?? [],
     workLogPreviewFilters,
@@ -5028,6 +5031,23 @@ function App() {
               ))}
             </select>
           </label>
+          <label>
+            <span>파일 종류</span>
+            <input
+              aria-label="프로젝트 작업 로그 범위 파일 종류 필터"
+              data-work-log-coverage-source-file-filter="true"
+              disabled={isTopLevelActionLocked}
+              list="work-log-coverage-source-file-options"
+              onChange={(event) =>
+                setWorkLogCoverageFilters((current) => ({
+                  ...current,
+                  sourceFile: event.target.value,
+                }))}
+              placeholder="workingd.md"
+              type="text"
+              value={workLogCoverageFilters.sourceFile}
+            />
+          </label>
           <button
             aria-label={
               workLogCoverageFilterCount
@@ -5057,6 +5077,11 @@ function App() {
         <datalist id="work-log-coverage-project-options">
           {workLogCoverageProjectFilterSuggestions.map((project) => (
             <option key={project} value={project} />
+          ))}
+        </datalist>
+        <datalist id="work-log-coverage-source-file-options">
+          {workLogCoverageSourceFileFilterSuggestions.map((sourceFile) => (
+            <option key={sourceFile} value={sourceFile} />
           ))}
         </datalist>
         <form

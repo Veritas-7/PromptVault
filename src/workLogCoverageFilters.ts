@@ -11,12 +11,14 @@ export type WorkLogCoverageStatusFilter =
 
 export interface WorkLogCoverageFilters {
   project: string;
+  sourceFile: string;
   status: WorkLogCoverageStatusFilter;
 }
 
 export function emptyWorkLogCoverageFilters(): WorkLogCoverageFilters {
   return {
     project: "",
+    sourceFile: "",
     status: "",
   };
 }
@@ -24,6 +26,7 @@ export function emptyWorkLogCoverageFilters(): WorkLogCoverageFilters {
 export function activeWorkLogCoverageFilterCount(filters: WorkLogCoverageFilters): number {
   return [
     filters.project,
+    filters.sourceFile,
     filters.status,
   ].filter((value) => value.trim()).length;
 }
@@ -35,6 +38,8 @@ export function filterWorkLogCoverageFiles(
   return files.filter((file) => {
     const project = filters.project.trim();
     if (project && file.project !== project) return false;
+    const sourceFile = filters.sourceFile.trim();
+    if (sourceFile && file.source_file !== sourceFile) return false;
     if (!filters.status) return true;
     if (filters.status === "needs_review") {
       return file.status === "unparsed" || file.status === "unreadable";
@@ -57,6 +62,12 @@ export function workLogCoverageProjectSuggestions(
   files: readonly ProjectWorkLogCoverageFile[],
 ): string[] {
   return storedFilterSuggestionValues(files.map((file) => file.project));
+}
+
+export function workLogCoverageSourceFileSuggestions(
+  files: readonly ProjectWorkLogCoverageFile[],
+): string[] {
+  return storedFilterSuggestionValues(files.map((file) => file.source_file));
 }
 
 export function workLogCoverageFilterMetaText(

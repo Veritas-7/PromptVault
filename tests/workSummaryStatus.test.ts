@@ -2773,9 +2773,9 @@ test("work session evidence reason diagnostics explain session-date hints", () =
   );
   assert.equal(
     workSessionEvidenceCandidateReasonDiagnosticText(
-      "unresolved_after_full_index,no_session_evidence,same_project_session_other_dates,nearest_same_project_session_date=2026-06-09",
+      "unresolved_after_full_index,no_session_evidence,same_project_session_other_dates,nearest_same_project_session_date=2026-06-09,nearest_same_project_session_distance_days=1",
     ),
-    "같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 2026-06-09 · 자동 연결 아님",
+    "같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 2026-06-09 · 1일 차이 · 자동 연결 아님",
   );
   assert.equal(
     workSessionEvidenceCandidateReasonDiagnosticText(
@@ -2798,6 +2798,15 @@ test("work session evidence reason diagnostics explain session-date hints", () =
 });
 
 test("work session evidence review queue diagnostics prefer structured session-date hints", () => {
+  assert.equal(
+    workSessionEvidenceReviewQueueDateDiagnosticText(sessionEvidenceReviewQueueItem({
+      candidate_reason: "unresolved_after_full_index,no_session_evidence,same_project_session_other_dates,nearest_same_project_session_date=2026-06-08,nearest_same_project_session_distance_days=2",
+      same_project_other_session_date_count: 1,
+      same_project_other_session_dates: [{ text: "2026-06-08", count: 2 }],
+      nearest_same_project_other_session_date: "2026-06-08",
+    })),
+    "같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 2026-06-08 · 2일 차이 · 자동 연결 아님",
+  );
   assert.equal(
     workSessionEvidenceReviewQueueDateDiagnosticText(sessionEvidenceReviewQueueItem({
       candidate_reason: "unresolved_after_full_index,no_session_evidence,no_same_project_session_dates",

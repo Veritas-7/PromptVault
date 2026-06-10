@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 20:14 KST
+Updated: 2026-06-10 20:21 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,6 +34,46 @@ Short-Term Goal:
 Current Work:
 
 - Active completed implementation slice:
+  expose nearest same-project session date distance in unresolved
+  session-evidence diagnostics. After the false-positive blocker fix, all `26`
+  remaining candidates are still `progress-log-only` /
+  `unresolved_after_full_index`; many have a same-project session on another
+  date, but the UI/CLI reason currently names only the nearest date and does
+  not show whether it is 1 day away or weeks away.
+- Completed behavior:
+  `src-tauri/src/lib.rs` now adds
+  `nearest_same_project_session_distance_days=N` to the candidate reason token
+  when a nearest other-date session exists. `src/workSummaryStatus.ts` now
+  includes that distance in candidate/review-queue diagnostic copy when the
+  candidate reason matches the structured nearest date, while still preferring
+  structured review-queue same-date/other-date counts over stale reason text.
+  `tests/workSummaryStatus.test.ts` covers both distance display and fallback
+  behavior.
+- Verification for active slice:
+  A first repo-root `cargo fmt` attempt failed because the root has no
+  `Cargo.toml`; rerunning from `src-tauri/` passed. `cargo fmt && cargo test
+  session_evidence_candidates_include_same_project_session_date_diagnostics
+  --lib` passed with `1` focused Rust test. `node --disable-warning=ExperimentalWarning
+  --experimental-transform-types --test tests/workSummaryStatus.test.ts` passed
+  with `47` UI helper tests. `cargo build --bin promptvault-cli` passed. Real
+  default-vault candidate JSON now includes
+  `nearest_same_project_session_distance_days=1` for near rows such as
+  RepoTutorStudio / ResearchFlowAI / CareVault, and far rows expose larger
+  distances such as MacMini_RAG_Project `22`, LocalMind `25`-`31`, and
+  ClipboardCollector `92`. `git diff --check` passed. `npm run check` passed:
+  UI tests `523` passed, Vite / TypeScript build passed, Rust lib tests `242`
+  passed, CLI tests `45` passed, doc-tests passed, and clippy `-D warnings`
+  passed. Browser-bridge QA was not rerun because this slice changes backend
+  reason text and UI diagnostic copy only, not bridge routes or interactive app
+  flows.
+- Next work:
+  continue resolving the remaining `26` `progress-log-only` rows. The new
+  distance token should be used to prioritize same-project session rows that
+  are 1 day away before lower-confidence rows whose nearest session is weeks or
+  months away.
+- Previous completed implementation slice:
+  `1eac499 fix: block weak session source proposals`.
+- Previous completed behavior:
   tightened source-proposal false-positive blocking after sampling the top
   unresolved session-evidence rows. Read-only sampling of the top 8 unresolved
   candidates still shows `26` total candidates and found mostly blocked source
@@ -51,7 +91,7 @@ Current Work:
   work-status terms such as `만들고`, `상태`, `상태를`, `작업`, `진행`, and `확인`.
   These terms can still appear in source-search diagnostics, but they cannot
   make a source proposal review-ready by themselves.
-- Verification for active slice:
+- Verification for previous slice:
   `cargo fmt && cargo test session_evidence_source_proposals --lib` passed with
   `8` source-proposal tests. `cargo build --bin promptvault-cli` passed. The
   real CareVault source-proposal probe against

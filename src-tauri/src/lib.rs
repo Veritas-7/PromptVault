@@ -9333,6 +9333,14 @@ fn annotate_project_work_session_evidence_candidate_date_hints(
                 &mut candidate.reason,
                 &format!("nearest_same_project_session_date={nearest_date}"),
             );
+            if let Some(distance_days) =
+                project_work_session_date_distance_checked(&candidate.date, &nearest_date)
+            {
+                append_project_work_candidate_reason(
+                    &mut candidate.reason,
+                    &format!("nearest_same_project_session_distance_days={distance_days}"),
+                );
+            }
         } else {
             append_project_work_candidate_reason(
                 &mut candidate.reason,
@@ -22719,6 +22727,9 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(diagnostic
             .reason
             .contains("nearest_same_project_session_date=2026-06-10"));
+        assert!(diagnostic
+            .reason
+            .contains("nearest_same_project_session_distance_days=1"));
 
         let missing = &candidates[1];
         assert_eq!(missing.same_project_same_date_session_count, 0);

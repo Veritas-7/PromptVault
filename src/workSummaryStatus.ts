@@ -1968,13 +1968,20 @@ export function workSessionEvidenceCandidateReasonDiagnosticText(
     .find((token) => token.startsWith("nearest_same_project_session_date="))
     ?.split("=", 2)[1]
     ?.trim();
+  const nearestDistanceDays = tokens
+    .find((token) => token.startsWith("nearest_same_project_session_distance_days="))
+    ?.split("=", 2)[1]
+    ?.trim();
+  const distanceText = nearestDistanceDays && /^\d+$/.test(nearestDistanceDays)
+    ? ` · ${nearestDistanceDays}일 차이`
+    : "";
 
   if (tokens.includes("same_project_session_same_date_unmatched")) {
     return "같은 날짜 세션 후보 있음 · 자동 연결 실패 확인 필요";
   }
   if (tokens.includes("same_project_session_other_dates")) {
     return nearestDate
-      ? `같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 ${nearestDate} · 자동 연결 아님`
+      ? `같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 ${nearestDate}${distanceText} · 자동 연결 아님`
       : "같은 프로젝트 다른 날짜 세션 있음 · 자동 연결 아님";
   }
   if (tokens.includes("no_same_project_session_dates")) {
@@ -1996,9 +2003,18 @@ export function workSessionEvidenceReviewQueueDateDiagnosticText(
     return "같은 날짜 세션 후보 있음 · 자동 연결 실패 확인 필요";
   }
   if (item.same_project_other_session_date_count > 0) {
-    return item.nearest_same_project_other_session_date
-      ? `같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 ${item.nearest_same_project_other_session_date} · 자동 연결 아님`
-      : "같은 프로젝트 다른 날짜 세션 있음 · 자동 연결 아님";
+    if (item.nearest_same_project_other_session_date) {
+      const reasonHasMatchingNearestDate = item.candidate_reason
+        .split(",")
+        .map((token) => token.trim())
+        .includes(`nearest_same_project_session_date=${item.nearest_same_project_other_session_date}`);
+      const reasonDiagnostic = reasonHasMatchingNearestDate
+        ? workSessionEvidenceCandidateReasonDiagnosticText(item.candidate_reason)
+        : null;
+      return reasonDiagnostic
+        ?? `같은 프로젝트 다른 날짜 세션 있음 · 가장 가까운 날짜 ${item.nearest_same_project_other_session_date} · 자동 연결 아님`;
+    }
+    return "같은 프로젝트 다른 날짜 세션 있음 · 자동 연결 아님";
   }
   return workSessionEvidenceCandidateReasonDiagnosticText(item.candidate_reason);
 }

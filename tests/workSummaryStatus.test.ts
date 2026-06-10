@@ -51,6 +51,8 @@ import {
   workLogNormalizationReviewQueueItemStateText,
   workLogNormalizationReviewQueueMetaText,
   workSessionEvidenceCandidateReasonDiagnosticText,
+  recommendedWorkSessionEvidenceSourceSearchSession,
+  workSessionEvidenceNearbyQueryText,
   workSessionEvidenceProposalStateText,
   workSessionEvidenceProposalWarningNoticeText,
   workSessionEvidenceProposalsActionLabel,
@@ -67,6 +69,7 @@ import {
   workSessionEvidenceReviewQueueFailureText,
   workSessionEvidenceReviewQueueItemStateText,
   workSessionEvidenceReviewQueueMetaText,
+  workSessionEvidenceSourceSearchQueryText,
   workLogExtractionMetaText,
   workLogExtractionApprovalText,
   workLogExtractionPersistenceText,
@@ -161,6 +164,8 @@ import type {
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSessionEvidenceProposal,
   ProjectWorkSessionEvidenceProposalsResult,
+  ProjectWorkSessionEvidenceNearbyItem,
+  ProjectWorkSessionEvidenceNearbyResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
@@ -824,6 +829,57 @@ function sessionEvidenceReviewQueueResult(
     needs_title_normalization_count: 12,
     items: [sessionEvidenceReviewQueueItem()],
     warnings: [],
+    ...overrides,
+  };
+}
+
+function sessionEvidenceNearbyItem(
+  overrides: Partial<ProjectWorkSessionEvidenceNearbyItem> = {},
+): ProjectWorkSessionEvidenceNearbyItem {
+  return {
+    id: "nearby-session-a",
+    source: "Codex",
+    session_id: "session-a",
+    source_path: "/tmp/session-a.jsonl",
+    timestamp: "2026-06-08T00:00:00Z",
+    prompt_date: "2026-06-08",
+    cwd: "/tmp/PromptVault",
+    date_distance_days: 1,
+    match_score: 0,
+    matched_terms: [],
+    excerpt: "PromptVault nearby session excerpt",
+    word_count: 4,
+    char_count: 33,
+    risk_flags: [],
+    ...overrides,
+  };
+}
+
+function sessionEvidenceNearbyResult(
+  overrides: Partial<ProjectWorkSessionEvidenceNearbyResult> = {},
+): ProjectWorkSessionEvidenceNearbyResult {
+  return {
+    generated_at: "2026-06-09T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    project: "PromptVault",
+    date: "2026-06-09",
+    query: "PromptVault\n2026-06-09\nreview queue",
+    query_term_count: 3,
+    requested_limit: 6,
+    total_match_count: 2,
+    returned_item_count: 2,
+    items: [
+      sessionEvidenceNearbyItem(),
+      sessionEvidenceNearbyItem({
+        id: "nearby-session-b",
+        session_id: "session-b",
+        source_path: "/tmp/session-b.jsonl",
+        match_score: 3,
+        matched_terms: ["PromptVault", "queue"],
+        excerpt: "PromptVault review queue source trace",
+      }),
+    ],
+    warnings: ["navigation hints only"],
     ...overrides,
   };
 }
@@ -2682,6 +2738,37 @@ test("work session evidence review queue diagnostics prefer structured session-d
       nearest_same_project_other_session_date: null,
     })),
     "같은 프로젝트 세션 날짜 없음 · 수동 검색 필요",
+  );
+});
+
+test("work session evidence source search helpers build review-safe queries", () => {
+  const item = sessionEvidenceReviewQueueItem({
+    project: "PromptVault",
+    date: "2026-06-09",
+    top_titles: ["PromptVault queue", "  ", "Source trace"],
+    sample_evidence: "- Review queue sample evidence",
+  });
+  assert.equal(
+    workSessionEvidenceNearbyQueryText(item),
+    "PromptVault\n2026-06-09\nPromptVault queue\nSource trace\n- Review queue sample evidence",
+  );
+
+  const nearby = sessionEvidenceNearbyResult();
+  const recommended = recommendedWorkSessionEvidenceSourceSearchSession(nearby);
+  assert.equal(recommended?.id, "nearby-session-b");
+  assert.equal(
+    workSessionEvidenceSourceSearchQueryText(nearby, nearby.items[1]),
+    "PromptVault\n2026-06-09\nPromptVault\n2026-06-09\nreview queue\nPromptVault queue\nPromptVault review queue source trace",
+  );
+  assert.equal(
+    recommendedWorkSessionEvidenceSourceSearchSession(sessionEvidenceNearbyResult({ items: [] })),
+    null,
+  );
+  assert.equal(
+    recommendedWorkSessionEvidenceSourceSearchSession(sessionEvidenceNearbyResult({
+      items: [sessionEvidenceNearbyItem({ id: "zero-match" })],
+    }))?.id,
+    "zero-match",
   );
 });
 

@@ -25,6 +25,8 @@ import type {
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSessionEvidenceProposal,
   ProjectWorkSessionEvidenceProposalsResult,
+  ProjectWorkSessionEvidenceNearbyItem,
+  ProjectWorkSessionEvidenceNearbyResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
   ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
@@ -1943,6 +1945,37 @@ export function workSessionEvidenceReviewQueueDateDiagnosticText(
       : "같은 프로젝트 다른 날짜 세션 있음 · 자동 연결 아님";
   }
   return workSessionEvidenceCandidateReasonDiagnosticText(item.candidate_reason);
+}
+
+export function workSessionEvidenceNearbyQueryText(
+  item: Pick<ProjectWorkSessionEvidenceReviewQueueItem, "project" | "date" | "top_titles" | "sample_evidence">,
+): string {
+  return [item.project, item.date, ...item.top_titles, item.sample_evidence]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function recommendedWorkSessionEvidenceSourceSearchSession(
+  result: Pick<ProjectWorkSessionEvidenceNearbyResult, "items">,
+): ProjectWorkSessionEvidenceNearbyItem | null {
+  return result.items.find((item) => item.match_score > 0) ?? result.items[0] ?? null;
+}
+
+export function workSessionEvidenceSourceSearchQueryText(
+  nearbyResult: Pick<ProjectWorkSessionEvidenceNearbyResult, "project" | "date" | "query">,
+  session: Pick<ProjectWorkSessionEvidenceNearbyItem, "matched_terms" | "excerpt">,
+): string {
+  return [
+    nearbyResult.project,
+    nearbyResult.date,
+    nearbyResult.query ?? "",
+    session.matched_terms.join(" "),
+    session.excerpt,
+  ]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function workSessionEvidenceReviewQueueActionLabel(

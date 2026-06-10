@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 17:04 KST
+Updated: 2026-06-10 17:18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,11 +34,15 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed baseline:
-  `0387704 feat: persist review queue diagnostics`.
+  `7131c9d docs: record review queue diagnostics commit`.
 - Current implementation focus: continue reducing unresolved project/day
   session-evidence rows and provider/review reliability gaps without weakening
   the source-trace/operator-review contract.
-- Latest verified implementation slice: session-evidence review queue rows and
+- Latest verified implementation slice: the review queue UI now has a
+  `추천 원본 검색` action that runs the existing nearby-session lookup and bounded
+  source search in one operator click. This is still read-only navigation and
+  does not approve, create, or attach durable session evidence automatically.
+- Previous verified implementation slice: session-evidence review queue rows and
   durable reviewed items now preserve structured same-project session-date
   diagnostics instead of exposing those hints only through `candidate_reason`
   text. Pushed as `0387704 feat: persist review queue diagnostics`.
@@ -251,6 +255,18 @@ Current Work:
   targeted UI/API tests (`521` Node tests), and full `npm run check`.
   Staged diff and `gitleaks protect --staged --redact` passed, then the slice
   was committed and pushed as `0387704 feat: persist review queue diagnostics`.
+- Current recommended source-search UI proof:
+  The default vault still has `48` session-evidence review queue rows, `26`
+  pending review rows, `22` stale rows, and `26` synced live candidates. The top
+  row remains `RepoTutorStudio` `2026-06-10`, with nearest same-project session
+  date `2026-06-09`. This slice intentionally reduces operator click cost
+  rather than auto-resolving any row.
+  Verification passed: UI/API tests (`522` Node tests), production build,
+  isolated browser bridge QA using `추천 원본 검색` in the review-queue UI, and
+  full `npm run check` including Rust library tests (`236` passed), CLI tests
+  (`35` passed), doc tests, and clippy with `-D warnings`. The isolated QA
+  stopped its temporary bridge/Vite processes, and ports `5174` and `5177` had
+  no remaining listeners.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
   useful step is continuing unresolved project/day session-evidence review and
@@ -294,6 +310,77 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Recommended source-search action
+
+Current Goal:
+
+- Reduce repetitive review-queue operation for the remaining unresolved
+  session-evidence rows without weakening the source-trace/operator-review
+  contract.
+
+Context:
+
+- Before this slice, an operator had to click `근처 세션`, inspect the nearby
+  rows, then click `원본 검색` on the best row before creating source proposals.
+- The backend already had the safe primitives: read-only nearby lookup,
+  read-only bounded source search, and explicit review proposal generation.
+
+Progress:
+
+- Added shared query builders for nearby lookup and source search.
+- Added a deterministic helper that selects the first positive-match nearby
+  session, falling back to the first nearby row when no query match exists.
+- Added the review-queue `추천 원본 검색` action. It calls the existing nearby
+  endpoint, then searches the recommended source path. It does not create
+  proposals, approve rows, or write durable evidence.
+- Updated isolated browser bridge QA so the review-queue UI path clicks the new
+  action and verifies the nearby panel plus source-search result before
+  continuing to source proposals and approval checks.
+
+Changes:
+
+- `src/workSummaryStatus.ts`: query builder and recommended nearby-session
+  selection helpers.
+- `src/App.tsx`: one-click recommended source-search flow and row action.
+- `tests/workSummaryStatus.test.ts`: helper coverage for query construction,
+  positive-match selection, empty rows, and zero-match fallback.
+- `scripts/browser-bridge-isolated-qa.mjs`: browser-bridge UI QA now exercises
+  `추천 원본 검색`.
+- `working.md`: records this slice, verification, and remaining unresolved
+  review queue state.
+
+Tests:
+
+- PASS: `npm run test:ui -- tests/workSummaryStatus.test.ts --test-name-pattern "work session evidence source search helpers"`
+  (`522` UI/API tests ran).
+- PASS: `npm run test:ui -- tests/workSummaryStatus.test.ts tests/promptVaultApi.test.ts`
+  (`522` UI/API tests ran).
+- PASS: `npm run build`.
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`.
+  The review-queue UI clicked `추천 원본 검색`, received nearby and source-search
+  responses, then continued through source proposal, review apply, reviewed item
+  reload, and work-management panels against isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-23LLow/qa.sqlite`.
+- PASS: `npm run check`. This covered UI/API tests, production build,
+  `cargo build --bin promptvault-cli`, Rust library tests (`236` passed), CLI
+  tests (`35` passed), doc tests, and clippy with `-D warnings`.
+- PASS: `lsof -nP -iTCP:5174 -sTCP:LISTEN || true` and
+  `lsof -nP -iTCP:5177 -sTCP:LISTEN || true` returned no remaining listeners.
+- PASS: default-vault review queue sync still reports `48` stored rows, `26`
+  pending review rows, `22` stale rows, and `26` synced candidates.
+
+Issues:
+
+- This slice does not resolve the `26` pending session-evidence rows. It only
+  reduces the manual path from nearby lookup plus source-search to one safe
+  read-only action.
+
+Next Steps:
+
+- Continue reducing the `26` pending rows by using the recommended source-search
+  path to generate copied-trace proposals, then approve only rows whose source
+  trace proves the project/day work item.
 
 ## Completed Slice - 2026-06-10 Structured review queue diagnostics
 

@@ -364,6 +364,8 @@ import {
   workLogNormalizationReviewQueueMetaText,
   canApproveWorkLogNormalizationReviewQueueItem,
   canRejectWorkLogNormalizationReviewQueueItem,
+  recommendedWorkSessionEvidenceSourceSearchSession,
+  workSessionEvidenceNearbyQueryText,
   workSessionEvidenceCandidateReasonDiagnosticText,
   workSessionEvidenceProposalStateText,
   workSessionEvidenceProposalWarningNoticeText,
@@ -382,6 +384,7 @@ import {
   workSessionEvidenceReviewQueueItemStateText,
   workSessionEvidenceReviewQueueMetaText,
   workSessionEvidenceReviewQueueSourceRolesText,
+  workSessionEvidenceSourceSearchQueryText,
   canApproveWorkSessionEvidenceReviewQueueItem,
   canRejectWorkSessionEvidenceReviewQueueItem,
   workLogExtractionMetaText,
@@ -2215,10 +2218,7 @@ function App() {
     setWorkSessionEvidenceSourceProposalsSessionId(null);
     setWorkSessionEvidenceSourceProposalsState("idle");
     try {
-      const query = [item.project, item.date, ...item.top_titles, item.sample_evidence]
-        .map((part) => part.trim())
-        .filter(Boolean)
-        .join("\n");
+      const query = workSessionEvidenceNearbyQueryText(item);
       const next = await loadProjectWorkSessionEvidenceNearby({
         project: item.project,
         date: item.date,
@@ -2242,6 +2242,63 @@ function App() {
     }
   }
 
+  async function loadRecommendedWorkSessionEvidenceSourceSearch(
+    item: ProjectWorkSessionEvidenceReviewQueueItem,
+  ) {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSessionEvidenceNearbyState("loading");
+    setWorkSessionEvidenceNearbyCandidateId(item.candidate_id);
+    setWorkSessionEvidenceSourceSearchResult(null);
+    setWorkSessionEvidenceSourceSearchSessionId(null);
+    setWorkSessionEvidenceSourceSearchState("idle");
+    setWorkSessionEvidenceSourceProposalsResult(null);
+    setWorkSessionEvidenceSourceProposalsSessionId(null);
+    setWorkSessionEvidenceSourceProposalsState("idle");
+    try {
+      const query = workSessionEvidenceNearbyQueryText(item);
+      const nearby = await loadProjectWorkSessionEvidenceNearby({
+        project: item.project,
+        date: item.date,
+        limit: 6,
+        ...(query ? { query } : {}),
+      });
+      setWorkSessionEvidenceNearbyResult(nearby);
+      setWorkSessionEvidenceNearbyState("ready");
+
+      const session = recommendedWorkSessionEvidenceSourceSearchSession(nearby);
+      if (!session) {
+        return;
+      }
+
+      setWorkSessionEvidenceSourceSearchState("loading");
+      setWorkSessionEvidenceSourceSearchSessionId(session.id);
+      const sourceQuery = workSessionEvidenceSourceSearchQueryText(nearby, session);
+      const sourceSearch = await searchProjectWorkSessionEvidenceSource({
+        source_path: session.source_path,
+        query: sourceQuery,
+        limit: 5,
+        max_lines: 100000,
+      });
+      setWorkSessionEvidenceSourceSearchResult(sourceSearch);
+      setWorkSessionEvidenceSourceSearchState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSessionEvidenceSourceSearchResult(null);
+      setWorkSessionEvidenceSourceProposalsResult(null);
+      setWorkSessionEvidenceSourceSearchState((current) =>
+        current === "loading" ? "failed" : current,
+      );
+      setWorkSessionEvidenceNearbyState((current) =>
+        current === "loading" ? "failed" : current,
+      );
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
   async function loadWorkSessionEvidenceSourceSearch(
     session: ProjectWorkSessionEvidenceNearbyResult["items"][number],
     nearbyResult: ProjectWorkSessionEvidenceNearbyResult,
@@ -2254,16 +2311,7 @@ function App() {
     setWorkSessionEvidenceSourceProposalsSessionId(null);
     setWorkSessionEvidenceSourceProposalsState("idle");
     try {
-      const query = [
-        nearbyResult.project,
-        nearbyResult.date,
-        nearbyResult.query ?? "",
-        session.matched_terms.join(" "),
-        session.excerpt,
-      ]
-        .map((part) => part.trim())
-        .filter(Boolean)
-        .join("\n");
+      const query = workSessionEvidenceSourceSearchQueryText(nearbyResult, session);
       const next = await searchProjectWorkSessionEvidenceSource({
         source_path: session.source_path,
         query,
@@ -6309,6 +6357,11 @@ function App() {
                 const diagnosticText = workSessionEvidenceReviewQueueDateDiagnosticText(item);
                 const nearbyActive = workSessionEvidenceNearbyCandidateId === item.candidate_id;
                 const nearbyResult = nearbyActive ? workSessionEvidenceNearbyResult : null;
+                const recommendedSourceSearchActive = nearbyActive
+                  && (
+                    workSessionEvidenceNearbyState === "loading"
+                    || workSessionEvidenceSourceSearchState === "loading"
+                  );
                 return (
                   <article
                     className="work-summary-row work-log-proposal-row"
@@ -6365,6 +6418,17 @@ function App() {
                         {nearbyActive && workSessionEvidenceNearbyState === "loading"
                           ? "조회 중"
                           : "근처 세션"}
+                      </button>
+                      <button
+                        aria-label={`${item.project} ${item.date} 추천 근처 세션 원본 검색`}
+                        className="inline-action compact-action"
+                        data-work-session-evidence-recommended-source-search-action={item.candidate_id}
+                        disabled={isTopLevelActionLocked}
+                        onClick={() => void loadRecommendedWorkSessionEvidenceSourceSearch(item)}
+                        type="button"
+                      >
+                        <Search size={14} />
+                        {recommendedSourceSearchActive ? "검색 중" : "추천 원본 검색"}
                       </button>
                     </div>
                     <p>{item.top_titles[0] ?? "제목 없는 세션 근거 후보"}</p>

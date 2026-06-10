@@ -1465,23 +1465,29 @@ async function runBrowserQa() {
         ?.textContent ?? "";
       return meta.includes("필터 없음");
     }, undefined, { timeout: 30000 });
-    const firstNearbyButton = page
-      .locator('[data-work-session-evidence-nearby-action]')
+    const firstRecommendedSourceSearchButton = page
+      .locator('[data-work-session-evidence-recommended-source-search-action]')
       .first();
-    await firstNearbyButton.waitFor({ timeout: 90000 });
-    const firstNearbyCandidateId = await firstNearbyButton.getAttribute(
-      "data-work-session-evidence-nearby-action",
+    await firstRecommendedSourceSearchButton.waitFor({ timeout: 90000 });
+    const firstNearbyCandidateId = await firstRecommendedSourceSearchButton.getAttribute(
+      "data-work-session-evidence-recommended-source-search-action",
     );
     if (!firstNearbyCandidateId) {
-      throw new Error("Session evidence nearby button did not expose candidate id");
+      throw new Error("Session evidence recommended source-search button did not expose candidate id");
     }
     const nearbyResponse = page.waitForResponse((response) =>
       response.url().includes("/api/work-session-evidence-nearby")
       && response.request().method() === "POST",
       { timeout: 90000 },
     );
-    await firstNearbyButton.click();
+    const sourceSearchResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/work-session-evidence-source-search")
+      && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await firstRecommendedSourceSearchButton.click();
     await nearbyResponse;
+    await sourceSearchResponse;
     await page.waitForFunction((candidateId) => {
       const panel = document.querySelector(`[data-work-session-evidence-nearby="${candidateId}"]`);
       const text = panel?.textContent ?? "";
@@ -1489,39 +1495,24 @@ async function runBrowserQa() {
         && text.includes("자동 proof 아님")
         && text.includes("match score")
         && text.includes("navigation hints only")
-        && text.includes("promptvault-qa-antigravity");
+        && text.includes("promptvault-qa-antigravity")
+        && text.includes("원본 검색")
+        && text.includes("read-only");
     }, firstNearbyCandidateId, { timeout: 90000 });
     workSessionEvidenceNearbyUiText =
       (await page
         .locator(`[data-work-session-evidence-nearby="${firstNearbyCandidateId}"]`)
         .textContent())?.trim() ?? "";
-    const firstSourceSearchButton = page
-      .locator(`[data-work-session-evidence-nearby="${firstNearbyCandidateId}"] .work-session-nearby-item`, {
-        hasText: ANTIGRAVITY_QA_SOURCE_PATH,
-      })
-      .locator("[data-work-session-evidence-source-search-action]")
+    const firstSourceSearchPanel = page
+      .locator(`[data-work-session-evidence-nearby="${firstNearbyCandidateId}"] [data-work-session-evidence-source-search]`)
       .first();
-    await firstSourceSearchButton.waitFor({ timeout: 90000 });
-    const firstSourceSearchSessionId = await firstSourceSearchButton.getAttribute(
-      "data-work-session-evidence-source-search-action",
+    await firstSourceSearchPanel.waitFor({ timeout: 90000 });
+    const firstSourceSearchSessionId = await firstSourceSearchPanel.getAttribute(
+      "data-work-session-evidence-source-search",
     );
     if (!firstSourceSearchSessionId) {
-      throw new Error("Session evidence source search button did not expose session id");
+      throw new Error("Session evidence recommended source search did not expose session id");
     }
-    const sourceSearchResponse = page.waitForResponse((response) =>
-      response.url().includes("/api/work-session-evidence-source-search")
-      && response.request().method() === "POST",
-      { timeout: 90000 },
-    );
-    await firstSourceSearchButton.click();
-    await sourceSearchResponse;
-    await page.waitForFunction((sessionId) => {
-      const panel = document.querySelector(`[data-work-session-evidence-source-search="${sessionId}"]`);
-      const text = panel?.textContent ?? "";
-      return text.includes("원본 검색")
-        && text.includes("자동 proof 아님")
-        && text.includes("read-only");
-    }, firstSourceSearchSessionId, { timeout: 90000 });
     const firstSourceProposalsButton = page
       .locator(`[data-work-session-evidence-source-search="${firstSourceSearchSessionId}"] [data-work-session-evidence-source-proposals-action]`)
       .first();

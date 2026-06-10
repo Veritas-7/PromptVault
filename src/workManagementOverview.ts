@@ -525,25 +525,19 @@ export function workManagementOverviewNextActionText(row: WorkManagementOverview
     return "다음 조치 · 상태 Export 로드로 세션 검증";
   }
   if (row.needs_title_normalization) {
-    return "다음 조치 · 제목 정규화 큐 검토";
+    const sessionFollowUp = row.needs_session_evidence
+      ? workManagementOverviewSessionFollowUpText(row)
+      : null;
+    return sessionFollowUp
+      ? `다음 조치 · 제목 정규화 큐 검토 후 ${sessionFollowUp}`
+      : "다음 조치 · 제목 정규화 큐 검토";
   }
   if (row.needs_session_evidence) {
     if (row.session_evidence_audit !== "unresolved-after-full-index") {
       return "다음 조치 · 세션 백필 후 재검증 · 근거 limit 영향";
     }
-    if (row.same_project_same_date_session_count > 0) {
-      return `다음 조치 · 같은 날짜 세션 후보 ${row.same_project_same_date_session_count.toLocaleString()}건 수동 연결 검토`;
-    }
-    if (row.nearest_same_project_other_session_date) {
-      const distanceText = row.nearest_same_project_other_session_distance_days === null
-        ? ""
-        : ` · ${row.nearest_same_project_other_session_distance_days.toLocaleString()}일 차이`;
-      const priorityText = row.nearest_same_project_other_session_distance_days !== null
-          && row.nearest_same_project_other_session_distance_days <= 1
-        ? "인접 날짜 세션 후보 검토"
-        : "먼 날짜 세션 후보 낮은 우선순위 검토";
-      return `다음 조치 · ${priorityText} · ${row.nearest_same_project_other_session_date}${distanceText}`;
-    }
+    const sessionFollowUp = workManagementOverviewSessionFollowUpText(row);
+    if (sessionFollowUp) return `다음 조치 · ${sessionFollowUp}`;
     return "다음 조치 · 세션근거 큐 검토 · 전체 인덱스 미해결";
   }
   if (row.persistence_state === "live_only") {
@@ -561,6 +555,23 @@ export function workManagementOverviewNextActionText(row: WorkManagementOverview
     return "다음 조치 · AI 제목 정규화 검토";
   }
   return "다음 조치 · 관리 완료 · 정기 재검증";
+}
+
+function workManagementOverviewSessionFollowUpText(row: WorkManagementOverviewRow): string | null {
+  if (row.same_project_same_date_session_count > 0) {
+    return `같은 날짜 세션 후보 ${row.same_project_same_date_session_count.toLocaleString()}건 수동 연결 검토`;
+  }
+  if (!row.nearest_same_project_other_session_date) {
+    return null;
+  }
+  const distanceText = row.nearest_same_project_other_session_distance_days === null
+    ? ""
+    : ` · ${row.nearest_same_project_other_session_distance_days.toLocaleString()}일 차이`;
+  const priorityText = row.nearest_same_project_other_session_distance_days !== null
+      && row.nearest_same_project_other_session_distance_days <= 1
+    ? "인접 날짜 세션 후보 검토"
+    : "먼 날짜 세션 후보 낮은 우선순위 검토";
+  return `${priorityText} · ${row.nearest_same_project_other_session_date}${distanceText}`;
 }
 
 function workManagementOverviewSessionHintText(row: WorkManagementOverviewRow): string | null {

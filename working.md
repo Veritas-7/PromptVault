@@ -1,10 +1,94 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 06:07 KST
+Updated: 2026-06-11 06:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Resume Snapshot - 2026-06-11 06:09 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Improve work-management overview row actions so rows with both title
+  normalization and missing session evidence do not hide the available session
+  candidate follow-up behind the title-normalization step.
+
+Current Active Work:
+
+- Previous bounded backfill comparison slice is complete, verified, committed,
+  and pushed as `32ccb3f ux: compare session backfill modes`.
+- Documentation completion snapshot is pushed as
+  `91fe09b docs: record backfill comparison completion`.
+- Fresh repo check at resume showed `main...origin/main` clean.
+- Current slice is in progress: add a small, ordered next-action hint for
+  title-normalization-first rows that also have same-date or nearby session
+  candidates.
+
+Progress:
+
+- Confirmed goal identity still anchors to
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Memory registry had no direct PromptVault hit, so live repo state remains the
+  active source of truth.
+- Confirmed there is no project-local `AGENTS.md` or `design.md`; the project
+  root `working.md` remains the active continuation surface.
+- Inspected work-management overview helpers, helper tests, and browser-bridge
+  QA coverage around review-action sorting and source-role fixtures.
+
+Changes:
+
+- `src/workManagementOverview.ts`: reuses a session-candidate follow-up helper
+  so title-normalization-first rows still show same-date or nearby session
+  candidate follow-up in their next action.
+- `tests/workManagementOverview.test.ts`: locks same-date and adjacent-date
+  combined title/session next-action text.
+- `scripts/browser-bridge-isolated-qa.mjs`: makes the mocked unresolved status
+  export fixture expose same-date session candidates and asserts the combined
+  next-action text in the work-management overview.
+- `working.md`: records this title/session next-action slice.
+
+Tests:
+
+- RED as expected:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts`
+  failed before implementation because combined title/session rows only showed
+  `제목 정규화 큐 검토`.
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts`
+  (`10` tests).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check`.
+- PASS: `git diff --check`.
+- PASS: `gitleaks dir . --no-banner --redact`.
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact`.
+- Pending: commit, push, and post-push verification.
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- This slice should change row guidance only. It must not alter session
+  evidence matching, queue persistence, or durable review decisions.
+
+Next Step:
+
+- Commit, push, and post-push verify the title/session next-action slice.
 
 ## Resume Snapshot - 2026-06-11 05:57 KST
 

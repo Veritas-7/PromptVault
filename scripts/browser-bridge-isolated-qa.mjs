@@ -456,7 +456,7 @@ function unresolvedWorkStatusExportFixture() {
       needs_session_evidence: true,
       session_evidence_audit: "unresolved-after-full-index",
       needs_title_normalization: true,
-      same_project_same_date_session_count: 0,
+      same_project_same_date_session_count: 2,
       same_project_other_session_dates: [],
       same_project_other_session_date_count: 0,
       nearest_same_project_other_session_date: null,
@@ -2374,7 +2374,7 @@ async function runBrowserQa() {
             return text.includes("QAFixture")
               && text.includes("제목 정규화 필요")
               && text.includes("세션 근거 0건")
-              && text.includes("다음 조치 · 제목 정규화 큐 검토");
+              && text.includes("다음 조치 · 제목 정규화 큐 검토 후 같은 날짜 세션 후보 2건 수동 연결 검토");
           });
       }, undefined, { timeout: 120000 });
     });

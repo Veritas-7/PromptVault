@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 16:07 KST
+Updated: 2026-06-10 16:10 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,8 +34,11 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed implementation baseline before this slice:
-  `efe4e86 feat: support antigravity source search`.
-- Current implementation slice: isolated browser bridge QA now creates a
+  `c4b1a18 test: cover antigravity source row qa`.
+- Current implementation slice: non-browser Rust coverage now verifies that an
+  actual Antigravity SQLite source-search hit can be converted into a
+  copied-trace source proposal with `review_ready=true`.
+- Previous verified implementation slice: isolated browser bridge QA now creates a
   temporary Antigravity SQLite conversation DB under the known source root,
   seeds it as a same-project other-date nearby session hint for a live review
   candidate, and clicks the review-queue UI through DB-backed nearby
@@ -164,6 +167,14 @@ Current Work:
   `source_proposal_review_ready:<hit>` review reason, then revalidates review
   apply/reload plus the broader work-management panels. Full `npm run check`
   also passed after this `working.md` update.
+- Verification proof after the current non-browser DB proposal regression:
+  `cargo fmt --check --manifest-path src-tauri/Cargo.toml` passed and
+  `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_source_proposals_accept_antigravity_db_search_hits`
+  passed (`1` test, with `235` Rust lib tests filtered out and CLI/main test
+  binaries empty for this filter). Full `npm run check` passed after this
+  `working.md` update, covering UI tests, production build, Rust library tests
+  (`236` passed), CLI tests (`34` passed), doc tests, and clippy with
+  `-D warnings`.
 - Current UI decision-link proof: `npm run build` passed, targeted API bridge
   tests passed (`209` Node tests ran), and
   `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed against
@@ -174,8 +185,9 @@ Current Work:
   Full `npm run check` also passed after the `working.md` update.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
-  useful step is adding a narrower CLI/Rust regression for DB-backed
-  source-proposals so the non-browser test suite also covers the same contract.
+  useful step is continuing unresolved project/day session-evidence review and
+  provider reliability work without weakening the manual-review/source-trace
+  contract.
 
 Resume Contract:
 
@@ -211,6 +223,57 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 DB-backed source proposal Rust regression
+
+Current Goal:
+
+- Add a narrow non-browser regression for DB-backed
+  `work-session-evidence-source-proposals` so the source-proposal contract is
+  not covered only by the full browser bridge QA script.
+
+Context:
+
+- Browser QA now proves the Antigravity DB-backed nearby row UI path end to end.
+- The core non-browser suite already had Antigravity DB source-search coverage
+  and copied-trace source-proposal helper coverage, but not a test that connects
+  the actual DB source-search output into source-proposal creation.
+
+Progress:
+
+- Added a Rust test that creates a temp Antigravity SQLite conversation DB with
+  a protobuf user-step payload.
+- The test runs `run_project_work_session_evidence_source_search` against that
+  DB path, then passes the real search result into
+  `project_work_session_evidence_source_proposals_from_search`.
+- The assertions verify one scanned/matched DB row, `.db` source path,
+  line-number mapping from Antigravity `idx`, `review_ready=true`,
+  copied `source_trace`, and both read-only and review-input warnings.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added
+  `session_evidence_source_proposals_accept_antigravity_db_search_hits`.
+- `working.md`: recorded the slice and verification state.
+
+Tests:
+
+- PASS: `cargo fmt --check --manifest-path src-tauri/Cargo.toml`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_source_proposals_accept_antigravity_db_search_hits`
+  (`1` matching Rust test passed).
+- PASS: `npm run check` after this `working.md` update. This covered UI tests,
+  production build, Rust library tests (`236` passed), CLI tests (`34` passed),
+  doc tests, and clippy with `-D warnings`.
+
+Issues:
+
+- No slice-specific open issue. The broader goal remains active because
+  unresolved project/day session-evidence rows still need review and closure.
+
+Next Steps:
+
+- Continue closing unresolved project/day session-evidence rows while preserving
+  explicit operator review and copied source trace requirements.
 
 ## Completed Slice - 2026-06-10 DB-backed source row browser QA
 

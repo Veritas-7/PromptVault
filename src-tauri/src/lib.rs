@@ -22536,6 +22536,100 @@ Status: completed as a source-only/report-only hardening slice.
     }
 
     #[test]
+    fn session_evidence_source_proposals_accept_antigravity_db_search_hits() {
+        let path = std::env::temp_dir().join(format!(
+            "promptvault-session-source-proposals-antigravity-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let conn = Connection::open(&path).expect("open source proposals db fixture");
+        conn.execute(
+            "CREATE TABLE steps (
+                idx integer,
+                step_type integer NOT NULL DEFAULT 0,
+                status integer NOT NULL DEFAULT 0,
+                has_subtrajectory numeric NOT NULL DEFAULT false,
+                metadata blob,
+                error_details blob,
+                permissions blob,
+                task_details blob,
+                render_info blob,
+                step_payload blob,
+                step_format integer NOT NULL DEFAULT 0,
+                PRIMARY KEY (idx)
+            )",
+            [],
+        )
+        .expect("create steps table");
+        let user_payload = pb_message(
+            19,
+            &[
+                pb_string(
+                    2,
+                    "NearbyProject reviewed evidence source hit from Antigravity DB.",
+                ),
+                pb_string(11, "/Users/wj/Ai/System/10_Projects/NearbyProject"),
+            ]
+            .concat(),
+        );
+        conn.execute(
+            "INSERT INTO steps (idx, step_type, status, step_payload) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![4_i64, 14_i64, 3_i64, user_payload],
+        )
+        .expect("insert matching user step");
+        drop(conn);
+
+        let source_search = run_project_work_session_evidence_source_search(
+            ProjectWorkSessionEvidenceSourceSearchOptions {
+                source_path: path.display().to_string(),
+                query: "NearbyProject reviewed evidence".to_string(),
+                limit: Some(5),
+                max_lines: Some(10),
+            },
+        )
+        .expect("search antigravity db source proposal fixture");
+        let candidate = session_evidence_candidate_fixture(
+            "session-evidence-NearbyProject-antigravity-source-proposal",
+            "NearbyProject",
+            "2026-06-09: NearbyProject still needs reviewed session evidence.",
+            false,
+        );
+
+        let result = project_work_session_evidence_source_proposals_from_search(
+            Path::new("/tmp/promptvault.sqlite"),
+            &candidate,
+            source_search,
+        );
+
+        assert_eq!(result.returned_proposal_count, 1);
+        assert_eq!(result.review_ready_count, 1);
+        assert_eq!(result.blocked_count, 0);
+        assert_eq!(result.scanned_line_count, 1);
+        assert_eq!(result.matched_line_count, 1);
+        assert!(result.source_path.ends_with(".db"));
+        let proposal = &result.proposals[0];
+        assert_eq!(proposal.candidate_id, candidate.candidate_id);
+        assert_eq!(proposal.source_line_number, 5);
+        assert_eq!(proposal.proposal_kind, "manual_session_search");
+        assert!(proposal.trace_validated);
+        assert!(proposal.review_ready);
+        assert_eq!(proposal.blocker_reason, None);
+        assert!(proposal
+            .source_trace
+            .contains("NearbyProject reviewed evidence source hit"));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("read-only")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("review input only")));
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn session_evidence_candidates_prioritize_near_session_hints_before_truncating() {
         let mut older_near = session_evidence_candidate_fixture(
             "session-evidence-OlderNear-a1b2c3d4e5",

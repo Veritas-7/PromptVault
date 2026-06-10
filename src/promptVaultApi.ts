@@ -28,6 +28,7 @@ import type {
   ProjectWorkSessionEvidenceCandidatesResult,
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
+  ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
   ProjectWorkStatusExportResult,
@@ -155,6 +156,13 @@ export interface ProjectWorkSessionEvidenceReviewQueueUpdateOptions {
 export interface ProjectWorkSessionEvidenceReviewApplyOptions {
   database_path?: string;
   limit?: number;
+}
+
+export interface ProjectWorkSessionEvidenceReviewedItemsOptions {
+  database_path?: string;
+  limit?: number;
+  date?: string;
+  project?: string;
 }
 
 export interface ProjectWorkSessionIndexOptions {
@@ -461,6 +469,22 @@ export async function applyProjectWorkSessionEvidenceReviewRows(
     "/api/work-session-evidence-review-apply",
     { options },
     parseProjectWorkSessionEvidenceReviewApplyResult,
+  );
+}
+
+export async function listProjectWorkSessionEvidenceReviewedItems(
+  options: ProjectWorkSessionEvidenceReviewedItemsOptions = {},
+): Promise<ProjectWorkSessionEvidenceReviewedItemsResult> {
+  if (hasTauriInvoke()) {
+    return invoke<ProjectWorkSessionEvidenceReviewedItemsResult>(
+      "project_work_session_evidence_reviewed_items",
+      { options },
+    );
+  }
+  return postBridge<ProjectWorkSessionEvidenceReviewedItemsResult>(
+    "/api/work-session-evidence-reviewed-items",
+    { options },
+    parseProjectWorkSessionEvidenceReviewedItemsResult,
   );
 }
 
@@ -2740,6 +2764,35 @@ function parseProjectWorkSessionEvidenceReviewApplyResult(
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
   }
   return value as unknown as ProjectWorkSessionEvidenceReviewApplyResult;
+}
+
+function projectWorkSessionEvidenceReviewedItemsWithinResult(value: Record<string, unknown>) {
+  if (!isNonNegativeSafeInteger(value.total_items)
+    || !isNonNegativeSafeIntegerAtMost(value.returned_item_count, value.total_items)
+    || !Array.isArray(value.items)) {
+    return false;
+  }
+  return value.items.length === value.returned_item_count;
+}
+
+function parseProjectWorkSessionEvidenceReviewedItemsResult(
+  value: unknown,
+): ProjectWorkSessionEvidenceReviewedItemsResult {
+  if (!isRecord(value)
+    || !isTimestampString(value.generated_at)
+    || !isNonBlankString(value.database_path)
+    || !Array.isArray(value.available_dates)
+    || !isNonBlankStringArray(value.available_dates)
+    || !Array.isArray(value.available_projects)
+    || !isNonBlankStringArray(value.available_projects)
+    || !Array.isArray(value.items)
+    || !value.items.every(isProjectWorkSessionEvidenceReviewedItem)
+    || !recordStringFieldValuesAreUnique(value.items, "candidate_id")
+    || !projectWorkSessionEvidenceReviewedItemsWithinResult(value)
+    || !isNonBlankStringArray(value.warnings)) {
+    throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);
+  }
+  return value as unknown as ProjectWorkSessionEvidenceReviewedItemsResult;
 }
 
 function isProjectWorkSummary(value: unknown): boolean {

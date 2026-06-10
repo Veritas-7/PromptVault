@@ -425,6 +425,17 @@ export interface ProjectWorkSessionEvidenceReviewApplyResult {
   warnings: string[];
 }
 
+export interface ProjectWorkSessionEvidenceReviewedItemsResult {
+  generated_at: string;
+  database_path: string;
+  total_items: number;
+  returned_item_count: number;
+  available_dates: string[];
+  available_projects: string[];
+  items: ProjectWorkSessionEvidenceReviewedItem[];
+  warnings: string[];
+}
+
 export interface ProjectWorkSessionIndexSourceState {
   source_id: string;
   source_label: string;

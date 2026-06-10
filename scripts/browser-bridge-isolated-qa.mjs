@@ -481,6 +481,7 @@ async function runBrowserQa() {
   let workSessionEvidenceReviewQueueFilteredRows = [];
   let workSessionEvidenceReviewQueueUiStateAfterApprove = "";
   let workSessionEvidenceReviewApplyMeta = "";
+  let workSessionEvidenceReviewedItemsMeta = "";
   let workSessionEvidenceReviewedRows = [];
   let workStatusExportMarkdown = "";
   let workSummaryIndex = "";
@@ -1293,6 +1294,58 @@ async function runBrowserQa() {
         })
       }`);
     }
+    step("work session evidence reviewed items reload");
+    await waitForEnabled(page, '[data-load-work-session-evidence-reviewed-items="true"]');
+    const sessionEvidenceReviewedItemsResponse = page.waitForResponse((response) =>
+      response.url().includes("/api/work-session-evidence-reviewed-items")
+      && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await page.locator('[data-load-work-session-evidence-reviewed-items="true"]').click();
+    const sessionEvidenceReviewedItemsPayload = await (await sessionEvidenceReviewedItemsResponse).json();
+    if (
+      sessionEvidenceReviewedItemsPayload.database_path !== DATABASE_PATH
+      || sessionEvidenceReviewedItemsPayload.total_items < 1
+      || sessionEvidenceReviewedItemsPayload.returned_item_count < 1
+      || !sessionEvidenceReviewedItemsPayload.items.some((item) =>
+        item.candidate_id === firstSessionEvidenceCandidateId
+      )
+    ) {
+      throw new Error(`Invalid session evidence reviewed items payload: ${
+        JSON.stringify(sessionEvidenceReviewedItemsPayload)
+      }`);
+    }
+    await page.waitForFunction((candidateId) => {
+      const meta = document.querySelector('[data-work-session-evidence-reviewed-items-meta="true"]')
+        ?.textContent ?? "";
+      const rows = Array.from(document.querySelectorAll('[data-work-session-evidence-reviewed-items="true"] article'));
+      const error = document.querySelector('[data-work-session-evidence-reviewed-items-error="true"]')
+        ?.textContent ?? "";
+      return (meta.includes("감사 총") && rows.some((row) => row.textContent?.includes(candidateId)))
+        || error.trim().length > 0;
+    }, firstSessionEvidenceCandidateId, { timeout: 90000 });
+    workSessionEvidenceReviewedItemsMeta =
+      (await page.locator('[data-work-session-evidence-reviewed-items-meta="true"]').textContent())?.trim() ?? "";
+    workSessionEvidenceReviewedRows =
+      await page.locator('[data-work-session-evidence-reviewed-items="true"] article').allTextContents();
+    const sessionEvidenceReviewedItemsErrorLocator =
+      page.locator('[data-work-session-evidence-reviewed-items-error="true"]');
+    const workSessionEvidenceReviewedItemsError = await sessionEvidenceReviewedItemsErrorLocator.count()
+      ? ((await sessionEvidenceReviewedItemsErrorLocator.textContent())?.trim() ?? "")
+      : "";
+    if (
+      workSessionEvidenceReviewedItemsError
+      || !workSessionEvidenceReviewedItemsMeta.includes("감사 총")
+      || !workSessionEvidenceReviewedRows.some((row) => row.includes(firstSessionEvidenceCandidateId))
+    ) {
+      throw new Error(`Session evidence reviewed items UI did not render durable rows: ${
+        JSON.stringify({
+          workSessionEvidenceReviewedItemsMeta,
+          workSessionEvidenceReviewedRows,
+          workSessionEvidenceReviewedItemsError,
+        })
+      }`);
+    }
     await page.locator('[data-save-work-summary-snapshot="true"]').click();
     await page.waitForFunction((databasePath) => {
       const text = document.querySelector('[data-work-summary-persistence="true"]')?.textContent ?? "";
@@ -2001,6 +2054,7 @@ async function runBrowserQa() {
       workSessionEvidenceReviewQueueFilteredRows,
       workSessionEvidenceReviewQueueUiStateAfterApprove,
       workSessionEvidenceReviewApplyMeta,
+      workSessionEvidenceReviewedItemsMeta,
       workSessionEvidenceReviewedRows,
       workStatusExportMarkdownPreview: workStatusExportMarkdown.slice(0, 240),
       workManagementMeta,

@@ -132,6 +132,7 @@ import {
   PROJECT_WORK_SESSION_INDEX_MAX_BATCH_FILES,
   runProjectWorkSessionIndex,
   listProjectWorkSummarySnapshots,
+  listProjectWorkSessionEvidenceReviewedItems,
   listImportEvents,
   listImportStates,
   listStoredPromptFacets,
@@ -141,6 +142,7 @@ import {
   scanPrompts,
   type ProjectWorkLogExtractionItemsOptions,
   type ProjectWorkLogNormalizedItemsOptions,
+  type ProjectWorkSessionEvidenceReviewedItemsOptions,
   type ProjectWorkSummarySnapshotsOptions,
   updateProjectWorkLogNormalizationReviewQueueItem,
   updateProjectWorkLogReviewQueueItem,
@@ -292,6 +294,7 @@ import type {
   ProjectWorkLogReviewQueueResult,
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
+  ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceReviewQueueResult,
   PromptRecord,
   ProjectWorkSessionIndexResult,
@@ -354,6 +357,9 @@ import {
   workSessionEvidenceReviewApplyActionLabel,
   workSessionEvidenceReviewApplyFailureText,
   workSessionEvidenceReviewApplyMetaText,
+  workSessionEvidenceReviewedItemsActionLabel,
+  workSessionEvidenceReviewedItemsFailureText,
+  workSessionEvidenceReviewedItemsMetaText,
   workSessionEvidenceReviewQueueFailureText,
   workSessionEvidenceReviewQueueItemStateText,
   workSessionEvidenceReviewQueueMetaText,
@@ -423,6 +429,7 @@ import {
   type WorkLogNormalizationReviewQueueState,
   type WorkSessionEvidenceProposalsState,
   type WorkSessionEvidenceReviewApplyState,
+  type WorkSessionEvidenceReviewedItemsState,
   type WorkSessionEvidenceReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
@@ -788,6 +795,8 @@ function App() {
     useState<WorkSessionEvidenceReviewQueueState>("idle");
   const [workSessionEvidenceReviewApplyState, setWorkSessionEvidenceReviewApplyState] =
     useState<WorkSessionEvidenceReviewApplyState>("idle");
+  const [workSessionEvidenceReviewedItemsState, setWorkSessionEvidenceReviewedItemsState] =
+    useState<WorkSessionEvidenceReviewedItemsState>("idle");
   const [workManagementRefreshState, setWorkManagementRefreshState] =
     useState<WorkManagementRefreshState>("idle");
   const [workManagementFreezeState, setWorkManagementFreezeState] =
@@ -851,6 +860,8 @@ function App() {
     useState<ProjectWorkSessionEvidenceReviewQueueResult | null>(null);
   const [workSessionEvidenceReviewApplyResult, setWorkSessionEvidenceReviewApplyResult] =
     useState<ProjectWorkSessionEvidenceReviewApplyResult | null>(null);
+  const [workSessionEvidenceReviewedItemsResult, setWorkSessionEvidenceReviewedItemsResult] =
+    useState<ProjectWorkSessionEvidenceReviewedItemsResult | null>(null);
   const [workLogNormalizedItemsResult, setWorkLogNormalizedItemsResult] =
     useState<ProjectWorkLogNormalizedItemsResult | null>(null);
   const [
@@ -950,6 +961,7 @@ function App() {
     || workSessionEvidenceProposalsState === "loading"
     || workSessionEvidenceReviewQueueState === "loading"
     || workSessionEvidenceReviewApplyState === "loading"
+    || workSessionEvidenceReviewedItemsState === "loading"
     || workManagementRefreshState === "loading"
     || workManagementFreezeState === "loading";
   const isBrowserBridgeChecking = browserQaMode && browserBridgeStatus === "checking";
@@ -1319,6 +1331,12 @@ function App() {
     workSessionEvidenceReviewApplyState,
     workSessionEvidenceReviewApplyResult,
   );
+  const workSessionEvidenceReviewedItemsFailureMessage =
+    workSessionEvidenceReviewedItemsFailureText(workSessionEvidenceReviewedItemsState);
+  const workSessionEvidenceReviewedItemsMeta = workSessionEvidenceReviewedItemsMetaText(
+    workSessionEvidenceReviewedItemsState,
+    workSessionEvidenceReviewedItemsResult,
+  );
   const workSummarySnapshotsFailureMessage = workSummarySnapshotsFailureText(workSummarySnapshotsState);
   const workSummarySnapshotsMeta = workSummarySnapshotsMetaText(
     workSummarySnapshotsState,
@@ -1516,6 +1534,12 @@ function App() {
       0,
       WORK_SESSION_EVIDENCE_REVIEW_QUEUE_DISPLAY_LIMIT,
     );
+  const workSessionEvidenceReviewedItems =
+    workSessionEvidenceReviewedItemsResult?.items ?? workSessionEvidenceReviewApplyResult?.items ?? [];
+  const visibleWorkSessionEvidenceReviewedItems = workSessionEvidenceReviewedItems.slice(
+    0,
+    WORK_SESSION_EVIDENCE_REVIEW_QUEUE_DISPLAY_LIMIT,
+  );
   const visibleWorkLogNormalizedItems =
     (workLogNormalizationApplyResult?.items ?? workLogNormalizedItemsResult?.items ?? []).slice(
       0,
@@ -1556,6 +1580,14 @@ function App() {
     filteredWorkSessionEvidenceReviewQueueItems.length
       - WORK_SESSION_EVIDENCE_REVIEW_QUEUE_DISPLAY_LIMIT,
   );
+  const workSessionEvidenceReviewedTotalCount =
+    workSessionEvidenceReviewedItemsResult?.total_items
+    ?? workSessionEvidenceReviewApplyResult?.total_reviewed_item_count
+    ?? workSessionEvidenceReviewedItems.length;
+  const hiddenWorkSessionEvidenceReviewedItemCount = Math.max(
+    0,
+    workSessionEvidenceReviewedTotalCount - visibleWorkSessionEvidenceReviewedItems.length,
+  );
   const hiddenWorkLogNormalizedItemCount = Math.max(
     0,
     ((workLogNormalizationApplyResult?.items ?? workLogNormalizedItemsResult?.items ?? []).length)
@@ -1574,6 +1606,8 @@ function App() {
     || workLogNormalizationApplyResult !== null
     || workSessionEvidenceProposalsResult !== null
     || workSessionEvidenceReviewQueueResult !== null
+    || workSessionEvidenceReviewApplyResult !== null
+    || workSessionEvidenceReviewedItemsResult !== null
     || workLogNormalizedItemsResult !== null
     || workLogCoverageResult !== null;
   const workManagementOverview = useMemo(() => buildWorkManagementOverview({
@@ -1810,6 +1844,12 @@ function App() {
     return { limit };
   }
 
+  function workSessionEvidenceReviewedItemOptions({
+    limit = WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT,
+  }: { limit?: number } = {}): ProjectWorkSessionEvidenceReviewedItemsOptions {
+    return { limit };
+  }
+
   async function refreshWorkSummarySnapshots(options = workSummarySnapshotOptions()) {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     setError(null);
@@ -1850,6 +1890,26 @@ function App() {
     if (!claimExclusiveAction(topLevelActionClaimRef)) return;
     try {
       await refreshWorkLogExtractionRunsAfterSave();
+    } finally {
+      releaseExclusiveAction(topLevelActionClaimRef);
+    }
+  }
+
+  async function refreshWorkSessionEvidenceReviewedItems(
+    options = workSessionEvidenceReviewedItemOptions(),
+  ) {
+    if (!claimExclusiveAction(topLevelActionClaimRef)) return;
+    setError(null);
+    setWorkSessionEvidenceReviewedItemsState("loading");
+    try {
+      const next = await listProjectWorkSessionEvidenceReviewedItems(options);
+      setWorkSessionEvidenceReviewedItemsResult(next);
+      setWorkSessionEvidenceReviewedItemsState("ready");
+    } catch (err) {
+      const message = displayErrorText(err);
+      syncBrowserBridgeFailure(message);
+      setError(message);
+      setWorkSessionEvidenceReviewedItemsState("failed");
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -2104,12 +2164,19 @@ function App() {
         limit: WORK_SESSION_EVIDENCE_REVIEW_QUEUE_MANAGEMENT_LIMIT,
       });
       setWorkSessionEvidenceReviewQueueResult(nextQueue);
+      setWorkSessionEvidenceReviewedItemsState("loading");
+      const reviewedItems = await listProjectWorkSessionEvidenceReviewedItems(
+        workSessionEvidenceReviewedItemOptions(),
+      );
+      setWorkSessionEvidenceReviewedItemsResult(reviewedItems);
+      setWorkSessionEvidenceReviewedItemsState("ready");
       setWorkSessionEvidenceReviewApplyState("ready");
     } catch (err) {
       const message = displayErrorText(err);
       syncBrowserBridgeFailure(message);
       setError(message);
       setWorkSessionEvidenceReviewApplyState("failed");
+      setWorkSessionEvidenceReviewedItemsState((current) => (current === "loading" ? "failed" : current));
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -2517,6 +2584,7 @@ function App() {
     setWorkLogExtractionRunMode("ai");
     setWorkLogExtractionState("loading");
     setWorkLogExtractionItemsState("loading");
+    setWorkSessionEvidenceReviewedItemsState("loading");
     try {
       const nextStatusExport = await loadProjectWorkStatusExport({
         limit: statusExportLimit,
@@ -2570,6 +2638,12 @@ function App() {
       );
       setWorkLogNormalizedItemsResult(nextNormalizedItems);
 
+      const nextReviewedItems = await listProjectWorkSessionEvidenceReviewedItems(
+        workSessionEvidenceReviewedItemOptions(),
+      );
+      setWorkSessionEvidenceReviewedItemsResult(nextReviewedItems);
+      setWorkSessionEvidenceReviewedItemsState("ready");
+
       setWorkManagementRefreshState("ready");
     } catch (err) {
       const message = displayErrorText(err);
@@ -2584,6 +2658,7 @@ function App() {
       setWorkAiProviderStatusState((current) => (current === "loading" ? "failed" : current));
       setWorkLogExtractionState((current) => (current === "loading" ? "failed" : current));
       setWorkLogExtractionItemsState((current) => (current === "loading" ? "failed" : current));
+      setWorkSessionEvidenceReviewedItemsState((current) => (current === "loading" ? "failed" : current));
     } finally {
       releaseExclusiveAction(topLevelActionClaimRef);
     }
@@ -3658,6 +3733,25 @@ function App() {
                   : "검토결과 저장"}
             </button>
             <button
+              aria-label={workSessionEvidenceReviewedItemsActionLabel(
+                workSessionEvidenceReviewedItemsState,
+                workSessionEvidenceReviewedItemsResult !== null,
+                actionLockState,
+              )}
+              className="inline-action"
+              data-load-work-session-evidence-reviewed-items="true"
+              disabled={isTopLevelActionLocked}
+              onClick={() => void refreshWorkSessionEvidenceReviewedItems()}
+              type="button"
+            >
+              <ShieldCheck size={15} />
+              {workSessionEvidenceReviewedItemsState === "loading"
+                ? "검토결과 불러오는 중"
+                : workSessionEvidenceReviewedItemsResult
+                  ? "검토결과 다시 보기"
+                  : "검토결과 불러오기"}
+            </button>
+            <button
               aria-label={workLogNormalizationApplyActionLabel(
                 workLogNormalizationApplyState,
                 hasApprovedWorkLogNormalizationRows,
@@ -4018,6 +4112,16 @@ function App() {
           >
             <AlertTriangle size={18} />
             <span>{workSessionEvidenceReviewApplyFailureMessage}</span>
+          </div>
+        ) : null}
+        {workSessionEvidenceReviewedItemsFailureMessage ? (
+          <div
+            className="notice warning panel-notice"
+            data-work-session-evidence-reviewed-items-error="true"
+            {...ALERT_NOTICE_PROPS}
+          >
+            <AlertTriangle size={18} />
+            <span>{workSessionEvidenceReviewedItemsFailureMessage}</span>
           </div>
         ) : null}
         {workLogNormalizationApplyFailureMessage ? (
@@ -5137,6 +5241,12 @@ function App() {
             <span>{workSessionEvidenceReviewApplyMeta}</span>
           </div>
         ) : null}
+        {workSessionEvidenceReviewedItemsResult || workSessionEvidenceReviewedItemsState !== "idle" ? (
+          <div className="work-summary-index" data-work-session-evidence-reviewed-items-meta="true">
+            <ShieldCheck size={15} />
+            <span>{workSessionEvidenceReviewedItemsMeta}</span>
+          </div>
+        ) : null}
         {workSessionEvidenceReviewQueueFilterMeta ? (
           <div
             className="work-summary-index"
@@ -5987,10 +6097,10 @@ function App() {
             <span>{workLogNormalizationApplyMeta}</span>
           </div>
         ) : null}
-        {workSessionEvidenceReviewApplyResult ? (
-          workSessionEvidenceReviewApplyResult.items.length ? (
+        {workSessionEvidenceReviewApplyResult || workSessionEvidenceReviewedItemsResult ? (
+          visibleWorkSessionEvidenceReviewedItems.length ? (
             <div className="work-summary-list" data-work-session-evidence-reviewed-items="true">
-              {workSessionEvidenceReviewApplyResult.items.map((item) => (
+              {visibleWorkSessionEvidenceReviewedItems.map((item) => (
                 <article
                   className="work-summary-row work-log-proposal-row"
                   key={item.candidate_id}
@@ -6015,16 +6125,12 @@ function App() {
                   </span>
                 </article>
               ))}
-              {workSessionEvidenceReviewApplyResult.returned_item_count
-                < workSessionEvidenceReviewApplyResult.total_reviewed_item_count ? (
-                  <div className="work-summary-overflow">
-                    그 외 저장된 세션근거 검토결과{" "}
-                    {(
-                      workSessionEvidenceReviewApplyResult.total_reviewed_item_count
-                      - workSessionEvidenceReviewApplyResult.returned_item_count
-                    ).toLocaleString()}개
-                  </div>
-                ) : null}
+              {hiddenWorkSessionEvidenceReviewedItemCount ? (
+                <div className="work-summary-overflow">
+                  그 외 저장된 세션근거 검토결과{" "}
+                  {hiddenWorkSessionEvidenceReviewedItemCount.toLocaleString()}개
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="empty compact" data-empty-work-session-evidence-reviewed-items="true">

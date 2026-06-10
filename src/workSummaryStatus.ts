@@ -24,6 +24,7 @@ import type {
   ProjectWorkSessionEvidenceProposal,
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
+  ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
   ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
@@ -53,6 +54,7 @@ export type WorkLogNormalizationApplyState = "idle" | "loading" | "ready" | "fai
 export type WorkSessionEvidenceProposalsState = "idle" | "loading" | "ready" | "failed";
 export type WorkSessionEvidenceReviewQueueState = "idle" | "loading" | "ready" | "failed";
 export type WorkSessionEvidenceReviewApplyState = "idle" | "loading" | "ready" | "failed";
+export type WorkSessionEvidenceReviewedItemsState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementRefreshState = "idle" | "loading" | "ready" | "failed";
 export type WorkManagementFreezeState = "idle" | "loading" | "ready" | "failed";
 export type WorkLogExtractionRunMode = "ai" | "local";
@@ -2041,6 +2043,45 @@ export function workSessionEvidenceReviewApplyFailureText(
 ): string | null {
   if (state !== "failed") return null;
   return "승인된 세션근거 검토결과를 durable audit table에 저장하지 못했습니다. 데이터베이스 경로, 승인 큐 상태, 브리지 상태를 확인하세요.";
+}
+
+export function workSessionEvidenceReviewedItemsActionLabel(
+  state: WorkSessionEvidenceReviewedItemsState,
+  hasReviewedItems: boolean,
+  lockState: ActionLockState,
+): string {
+  if (state === "loading") return "저장된 세션근거 검토결과 불러오는 중";
+  const lockReason = activeActionLockReason(lockState);
+  if (lockReason) {
+    return `${lockReason}에는 저장된 세션근거 검토결과를 불러올 수 없습니다`;
+  }
+  if (hasReviewedItems) return "저장된 세션근거 검토결과 다시 불러오기";
+  return "저장된 세션근거 검토결과 불러오기";
+}
+
+export function workSessionEvidenceReviewedItemsMetaText(
+  state: WorkSessionEvidenceReviewedItemsState,
+  result: ProjectWorkSessionEvidenceReviewedItemsResult | null,
+): string {
+  if (state === "loading") return "저장된 세션근거 검토결과 불러오는 중";
+  if (!result) {
+    return state === "failed"
+      ? "저장된 세션근거 검토결과를 사용할 수 없음"
+      : "저장된 세션근거 검토결과를 아직 불러오지 않음";
+  }
+  return [
+    `감사 총 ${result.total_items.toLocaleString()}개`,
+    `표시 ${result.returned_item_count.toLocaleString()}개`,
+    `날짜 ${result.available_dates.length.toLocaleString()}개`,
+    `프로젝트 ${result.available_projects.length.toLocaleString()}개`,
+  ].join(" · ");
+}
+
+export function workSessionEvidenceReviewedItemsFailureText(
+  state: WorkSessionEvidenceReviewedItemsState,
+): string | null {
+  if (state !== "failed") return null;
+  return "저장된 세션근거 검토결과를 불러오지 못했습니다. 데이터베이스 경로와 브리지 상태를 확인하세요.";
 }
 
 export function workSummarySnapshotVisibleSummaries(

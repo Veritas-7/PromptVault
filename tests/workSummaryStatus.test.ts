@@ -52,6 +52,9 @@ import {
   workSessionEvidenceReviewApplyActionLabel,
   workSessionEvidenceReviewApplyFailureText,
   workSessionEvidenceReviewApplyMetaText,
+  workSessionEvidenceReviewedItemsActionLabel,
+  workSessionEvidenceReviewedItemsFailureText,
+  workSessionEvidenceReviewedItemsMetaText,
   workSessionEvidenceReviewQueueFailureText,
   workSessionEvidenceReviewQueueItemStateText,
   workSessionEvidenceReviewQueueMetaText,
@@ -121,6 +124,7 @@ import {
   type WorkLogNormalizationReviewQueueState,
   type WorkSessionEvidenceProposalsState,
   type WorkSessionEvidenceReviewApplyState,
+  type WorkSessionEvidenceReviewedItemsState,
   type WorkSessionEvidenceReviewQueueState,
   type WorkManagementFreezeState,
   type WorkManagementRefreshState,
@@ -147,6 +151,7 @@ import type {
   ProjectWorkSessionEvidenceProposal,
   ProjectWorkSessionEvidenceProposalsResult,
   ProjectWorkSessionEvidenceReviewApplyResult,
+  ProjectWorkSessionEvidenceReviewedItemsResult,
   ProjectWorkSessionEvidenceReviewQueueItem,
   ProjectWorkSessionEvidenceReviewQueueResult,
   ProjectWorkSessionIndexResult,
@@ -806,6 +811,22 @@ function sessionEvidenceReviewApplyResult(
       id: 4,
       applied_at: "2026-06-09T00:03:00Z",
     }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function sessionEvidenceReviewedItemsResult(
+  overrides: Partial<ProjectWorkSessionEvidenceReviewedItemsResult> = {},
+): ProjectWorkSessionEvidenceReviewedItemsResult {
+  return {
+    generated_at: "2026-06-09T00:04:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_items: 9,
+    returned_item_count: 4,
+    available_dates: ["2026-06-09", "2026-06-10"],
+    available_projects: ["PromptVault", "CareVault"],
+    items: sessionEvidenceReviewApplyResult().items,
     warnings: [],
     ...overrides,
   };
@@ -2651,6 +2672,43 @@ test("work session evidence review apply labels describe durable reviewed audit 
     "승인된 세션근거 검토결과를 durable audit table에 저장하지 못했습니다. 데이터베이스 경로, 승인 큐 상태, 브리지 상태를 확인하세요.",
   );
   assert.equal(workSessionEvidenceReviewApplyFailureText("ready"), null);
+});
+
+test("work session evidence reviewed item labels describe durable audit reload", () => {
+  const failed: WorkSessionEvidenceReviewedItemsState = "failed";
+  assert.equal(
+    workSessionEvidenceReviewedItemsActionLabel("idle", false, lockState()),
+    "저장된 세션근거 검토결과 불러오기",
+  );
+  assert.equal(
+    workSessionEvidenceReviewedItemsActionLabel("ready", true, lockState()),
+    "저장된 세션근거 검토결과 다시 불러오기",
+  );
+  assert.equal(
+    workSessionEvidenceReviewedItemsActionLabel("ready", true, lockState({ scanRunning: true })),
+    "스캔 실행 중에는 저장된 세션근거 검토결과를 불러올 수 없습니다",
+  );
+  assert.equal(
+    workSessionEvidenceReviewedItemsMetaText("idle", null),
+    "저장된 세션근거 검토결과를 아직 불러오지 않음",
+  );
+  assert.equal(
+    workSessionEvidenceReviewedItemsMetaText("loading", sessionEvidenceReviewedItemsResult()),
+    "저장된 세션근거 검토결과 불러오는 중",
+  );
+  assert.equal(
+    workSessionEvidenceReviewedItemsMetaText("ready", sessionEvidenceReviewedItemsResult()),
+    "감사 총 9개 · 표시 4개 · 날짜 2개 · 프로젝트 2개",
+  );
+  assert.equal(
+    workSessionEvidenceReviewedItemsMetaText(failed, null),
+    "저장된 세션근거 검토결과를 사용할 수 없음",
+  );
+  assert.equal(
+    workSessionEvidenceReviewedItemsFailureText(failed),
+    "저장된 세션근거 검토결과를 불러오지 못했습니다. 데이터베이스 경로와 브리지 상태를 확인하세요.",
+  );
+  assert.equal(workSessionEvidenceReviewedItemsFailureText("ready"), null);
 });
 
 test("work log extraction save state excludes already managed rows", () => {

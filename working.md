@@ -1,10 +1,88 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 10:01 KST
+Updated: 2026-06-10 10:35 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+
+## Completed Slice - 2026-06-10 Durable session-evidence reviewed item reload
+
+Current Goal:
+
+- Make saved session-evidence review decisions reloadable as a durable audit list,
+  not only visible immediately after `work-session-evidence-review-apply`.
+
+Context:
+
+- The project/day management system already parses project-local progress logs
+  such as `working.md`, `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`, then joins those rows with sanitized Codex/Codex CX
+  session evidence.
+- A live full-index status export during this slice reported `31` projects,
+  `26` days, `885` progress files, `10,178` work items, `101` project/day rows,
+  `10,599/10,599` stored session-index records, `186,897` linked item matches,
+  and `1,261` unique session records.
+- That is real-session verification, but not final completion: some rows remain
+  `progress-log-only` or `unresolved-after-full-index`, so AI/review queue
+  cleanup is still required before claiming complete project/day management.
+
+Progress:
+
+- Added `work-session-evidence-reviewed-items` to the CLI, browser bridge, and
+  Tauri command surface.
+- Added a durable list result for `project_work_session_evidence_reviewed_items`
+  with optional project/date filters and available project/date suggestions.
+- Updated the UI so "검토결과 불러오기" reloads durable reviewed rows after a
+  page refresh or independent management refresh.
+- Updated the apply flow and full work-management refresh to reload the durable
+  reviewed-item list after approved session-evidence review rows are stored.
+- Extended browser bridge QA to click the new reload button and verify
+  `/api/work-session-evidence-reviewed-items` returns the approved candidate row.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: adds reviewed-item list options/result, runner,
+  Tauri command, filtered reader, and regression coverage.
+- `src-tauri/src/bin/promptvault-cli.rs`: adds CLI command, bridge route,
+  validation coverage, and help text.
+- `src/promptVaultApi.ts`, `src/types.ts`, `src/workSummaryStatus.ts`, and
+  `src/App.tsx`: add parser, types, UI state, button, meta/error copy, and
+  durable reviewed-row rendering.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies the independent reviewed
+  item reload flow in an isolated DB.
+- `README.md` and `docs/CLI.md`: document the new command and bridge endpoint.
+
+Tests:
+
+- PASS: `cargo fmt --manifest-path src-tauri/Cargo.toml`.
+- PASS: `npm run test:ui` (`510` UI tests).
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml project_work_session_evidence_review_apply_persists_approved_rows_once --lib`.
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml bridge_routes_work_session_evidence_review_queue_validation_errors --bin promptvault-cli`.
+- PASS: `npm run build`.
+- PASS: `git diff --check`.
+- PASS: `npm run check` (`510` UI tests, `221` Rust library tests, `34` CLI
+  tests, doc tests, build, and clippy).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  after the durable reload rendering priority check.
+
+QA Evidence:
+
+- The isolated browser QA reached `work session evidence reviewed items reload`
+  after review queue approval and `work-session-evidence-review-apply`.
+- QA result included `workSessionEvidenceReviewedItemsMeta` and
+  `workSessionEvidenceReviewedRows` from the isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-lfw1fG/qa.sqlite`.
+- The QA run also continued through work-management overview, normalization,
+  approved review save, run history, provider guard, and saved-items flows.
+
+Remaining:
+
+- Run final secret checks, stage explicit paths, commit, and push.
+- Continue unresolved project/day cleanup: rows still marked `progress-log-only`,
+  `unresolved-after-full-index`, or `needs_title_normalization` need AI-assisted
+  normalization/session-evidence review before the system can be called fully
+  complete.
 
 ## Completed Slice - 2026-06-10 Refreshed session-index report consistency
 

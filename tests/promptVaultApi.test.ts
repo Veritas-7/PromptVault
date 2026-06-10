@@ -24,6 +24,7 @@ import {
   loadProjectWorkSessionEvidenceProposals,
   loadProjectWorkSessionEvidenceReviewQueue,
   applyProjectWorkSessionEvidenceReviewRows,
+  listProjectWorkSessionEvidenceReviewedItems,
   loadProjectWorkStatusExport,
   runProjectWorkSessionIndex,
   listProjectWorkSummarySnapshots,
@@ -533,6 +534,21 @@ function projectWorkSessionEvidenceReviewApplyPayload(overrides = {}) {
       id: 4,
       applied_at: "2026-06-09T00:02:00Z",
     }],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function projectWorkSessionEvidenceReviewedItemsPayload(overrides = {}) {
+  const reviewed = projectWorkSessionEvidenceReviewApplyPayload().items[0];
+  return {
+    generated_at: "2026-06-09T00:03:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_items: 1,
+    returned_item_count: 1,
+    available_dates: ["2026-06-09"],
+    available_projects: ["PromptVault"],
+    items: [reviewed],
     warnings: [],
     ...overrides,
   };
@@ -1391,6 +1407,64 @@ test("browser bridge work session evidence review apply rejects impossible count
 
   await assert.rejects(
     () => applyProjectWorkSessionEvidenceReviewRows({ limit: 5 }),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /session-evidence-PromptVault|workingd\.md|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge work session evidence reviewed items posts filters and validates rows", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestPath = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestPath = String(input);
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify(projectWorkSessionEvidenceReviewedItemsPayload()), { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await listProjectWorkSessionEvidenceReviewedItems({
+    date: "2026-06-09",
+    project: "PromptVault",
+    limit: 5,
+  });
+
+  assert.match(requestPath, /\/api\/work-session-evidence-reviewed-items$/);
+  assert.deepEqual(JSON.parse(requestBody), {
+    options: {
+      date: "2026-06-09",
+      project: "PromptVault",
+      limit: 5,
+    },
+  });
+  assert.equal(result.total_items, 1);
+  assert.equal(result.returned_item_count, 1);
+  assert.deepEqual(result.available_dates, ["2026-06-09"]);
+  assert.deepEqual(result.available_projects, ["PromptVault"]);
+  assert.equal(result.items[0].candidate_id, "session-evidence-PromptVault-a1b2c3d4e5");
+  assert.equal(result.items[0].source_files[1], "workingd.md");
+});
+
+test("browser bridge work session evidence reviewed items rejects duplicate candidate ids", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const reviewed = projectWorkSessionEvidenceReviewApplyPayload().items[0];
+  globalThis.fetch = async () => new Response(JSON.stringify(projectWorkSessionEvidenceReviewedItemsPayload({
+    total_items: 2,
+    returned_item_count: 2,
+    items: [reviewed, reviewed],
+  })), { status: 200 });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listProjectWorkSessionEvidenceReviewedItems({ limit: 5 }),
     (error) => {
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);

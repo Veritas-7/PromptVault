@@ -1014,6 +1014,14 @@ pub struct ProjectWorkSessionEvidenceReviewApplyOptions {
     pub limit: Option<usize>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectWorkSessionEvidenceReviewedItemsOptions {
+    pub database_path: Option<String>,
+    pub limit: Option<usize>,
+    pub date: Option<String>,
+    pub project: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkSessionEvidenceReviewQueueItem {
     pub candidate_id: String,
@@ -1090,6 +1098,18 @@ pub struct ProjectWorkSessionEvidenceReviewApplyResult {
     pub skipped_existing_count: usize,
     pub total_reviewed_item_count: usize,
     pub returned_item_count: usize,
+    pub items: Vec<ProjectWorkSessionEvidenceReviewedItem>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkSessionEvidenceReviewedItemsResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub total_items: usize,
+    pub returned_item_count: usize,
+    pub available_dates: Vec<String>,
+    pub available_projects: Vec<String>,
     pub items: Vec<ProjectWorkSessionEvidenceReviewedItem>,
     pub warnings: Vec<String>,
 }
@@ -1593,6 +1613,14 @@ fn project_work_session_evidence_review_apply(
     options: Option<ProjectWorkSessionEvidenceReviewApplyOptions>,
 ) -> Result<ProjectWorkSessionEvidenceReviewApplyResult, String> {
     run_project_work_session_evidence_review_apply(options.unwrap_or_default())
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn project_work_session_evidence_reviewed_items(
+    options: Option<ProjectWorkSessionEvidenceReviewedItemsOptions>,
+) -> Result<ProjectWorkSessionEvidenceReviewedItemsResult, String> {
+    run_list_project_work_session_evidence_reviewed_items(options.unwrap_or_default())
         .map_err(|err| err.to_string())
 }
 
@@ -2575,7 +2603,8 @@ pub fn run_project_work_session_evidence_review_apply(
         &generated_at,
     )?;
     let skipped_existing_count = processed_queue_count.saturating_sub(applied_item_count);
-    let reviewed_rows = read_project_work_session_evidence_reviewed_items(&conn, limit)?;
+    let reviewed_rows =
+        read_project_work_session_evidence_reviewed_items(&conn, limit, None, None)?;
     let mut warnings = Vec::new();
     if approved_queue_count == 0 {
         warnings.push(
@@ -2598,6 +2627,54 @@ pub fn run_project_work_session_evidence_review_apply(
         returned_item_count: reviewed_rows.items.len(),
         items: reviewed_rows.items,
         warnings,
+    })
+}
+
+pub fn run_list_project_work_session_evidence_reviewed_items(
+    options: ProjectWorkSessionEvidenceReviewedItemsOptions,
+) -> Result<ProjectWorkSessionEvidenceReviewedItemsResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err(
+            "work-session-evidence reviewed item database path requires a non-empty value".into(),
+        );
+    }
+    if matches!(options.limit, Some(0)) {
+        return Err("work-session-evidence reviewed item limit requires a positive integer".into());
+    }
+    let date_filter = normalized_optional_filter(
+        options.date.as_deref(),
+        "work-session-evidence reviewed item date filter requires a non-empty value",
+    )?;
+    let project_filter = normalized_optional_filter(
+        options.project.as_deref(),
+        "work-session-evidence reviewed item project filter requires a non-empty value",
+    )?;
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_PROJECT_WORK_SESSION_EVIDENCE_REVIEWED_ITEM_LIMIT)
+        .min(MAX_PROJECT_WORK_SESSION_EVIDENCE_REVIEWED_ITEM_LIMIT);
+    let conn = open_promptvault_database(&database_path)?;
+    let item_rows = read_project_work_session_evidence_reviewed_items(
+        &conn,
+        limit,
+        date_filter.as_deref(),
+        project_filter.as_deref(),
+    )?;
+    Ok(ProjectWorkSessionEvidenceReviewedItemsResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        total_items: item_rows.total_items,
+        returned_item_count: item_rows.items.len(),
+        available_dates: item_rows.available_dates,
+        available_projects: item_rows.available_projects,
+        items: item_rows.items,
+        warnings: Vec::new(),
     })
 }
 
@@ -9888,11 +9965,15 @@ fn persist_project_work_session_evidence_reviewed_items(
 struct ProjectWorkSessionEvidenceReviewedItemRows {
     total_items: usize,
     items: Vec<ProjectWorkSessionEvidenceReviewedItem>,
+    available_dates: Vec<String>,
+    available_projects: Vec<String>,
 }
 
 fn read_project_work_session_evidence_reviewed_items(
     conn: &Connection,
     limit: usize,
+    date_filter: Option<&str>,
+    project_filter: Option<&str>,
 ) -> Result<ProjectWorkSessionEvidenceReviewedItemRows, Box<dyn std::error::Error>> {
     let mut stmt = conn.prepare(
         "SELECT id, applied_at, candidate_id, review_reason, project, proposal_date,
@@ -9906,8 +9987,22 @@ fn read_project_work_session_evidence_reviewed_items(
     let mut rows = stmt.query([])?;
     let mut total_items = 0usize;
     let mut items = Vec::new();
+    let mut available_dates = BTreeSet::new();
+    let mut available_projects = BTreeSet::new();
     while let Some(row) = rows.next()? {
+        let project: String = row.get(4)?;
+        let date: String = row.get(5)?;
+        if !project_work_log_normalized_item_matches_filters(
+            &date,
+            &project,
+            date_filter,
+            project_filter,
+        ) {
+            continue;
+        }
         total_items += 1;
+        available_dates.insert(date.clone());
+        available_projects.insert(project.clone());
         if items.len() >= limit {
             continue;
         }
@@ -9923,8 +10018,8 @@ fn read_project_work_session_evidence_reviewed_items(
             applied_at: row.get(1)?,
             candidate_id: row.get(2)?,
             review_reason: row.get(3)?,
-            project: row.get(4)?,
-            date: row.get(5)?,
+            project,
+            date,
             operational_status: row.get(6)?,
             source_statuses: serde_json::from_str(&source_statuses_json)?,
             work_item_count: row.get::<_, i64>(8)? as usize,
@@ -9941,7 +10036,12 @@ fn read_project_work_session_evidence_reviewed_items(
             needs_title_normalization: row.get::<_, i64>(17)? != 0,
         });
     }
-    Ok(ProjectWorkSessionEvidenceReviewedItemRows { total_items, items })
+    Ok(ProjectWorkSessionEvidenceReviewedItemRows {
+        total_items,
+        items,
+        available_dates: available_dates.into_iter().collect(),
+        available_projects: available_projects.into_iter().collect(),
+    })
 }
 
 fn paginate_project_work_status_export_rows(
@@ -16452,6 +16552,7 @@ pub fn run() {
             project_work_session_evidence_review_queue,
             project_work_session_evidence_review_queue_update,
             project_work_session_evidence_review_apply,
+            project_work_session_evidence_reviewed_items,
             project_work_summary_snapshots,
             project_work_log_coverage,
             project_work_log_candidates,
@@ -22932,6 +23033,24 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(second.skipped_existing_count, 1);
         assert_eq!(second.total_reviewed_item_count, 1);
         assert_eq!(second.returned_item_count, 1);
+
+        let listed = run_list_project_work_session_evidence_reviewed_items(
+            ProjectWorkSessionEvidenceReviewedItemsOptions {
+                database_path: Some(db_path.display().to_string()),
+                limit: Some(10),
+                date: Some("2026-06-09".to_string()),
+                project: Some("SafeProject".to_string()),
+            },
+        )
+        .expect("list reviewed session evidence rows");
+        assert_eq!(listed.total_items, 1);
+        assert_eq!(listed.returned_item_count, 1);
+        assert_eq!(listed.available_dates, vec!["2026-06-09".to_string()]);
+        assert_eq!(listed.available_projects, vec!["SafeProject".to_string()]);
+        assert_eq!(
+            listed.items[0].candidate_id,
+            "session-evidence-SafeProject-apply-a1b2c3d4e5"
+        );
 
         let _ = std::fs::remove_file(&db_path);
     }

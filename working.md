@@ -1,12 +1,12 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 15:01 KST
+Updated: 2026-06-10 15:23 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
 
-## Resume Snapshot - 2026-06-10 14:49 KST
+## Resume Snapshot - 2026-06-10 15:23 KST
 
 Long-Term Goal:
 
@@ -34,8 +34,18 @@ Short-Term Goal:
 Current Work:
 
 - Most recent pushed implementation baseline before this slice:
-  `edbd63b feat: rank nearby session hints by query`.
-- Current verified implementation slice: selected nearby JSONL session source
+  `55e78b2 feat: add bounded source session search`,
+  `e3a83c0 docs: record source session search flow`, and
+  `2d81d72 docs: refresh working coverage snapshot`.
+- Current verified implementation slice: selected source-search hits can now be
+  converted into copied-trace review proposal input via
+  `work-session-evidence-source-proposals`, Tauri, browser bridge
+  `/api/work-session-evidence-source-proposals`, and the review-queue UI
+  `검토 제안` action. It validates same-project source membership, copied hit
+  excerpts, title-normalization blockers, and risk flags. `review_ready` is
+  operator review input only; it still does not create, approve, or attach
+  durable session evidence.
+- Previous verified implementation slice: selected nearby JSONL session source
   files can now be searched in a bounded, redacted, read-only way via
   `work-session-evidence-source-search`, browser bridge
   `/api/work-session-evidence-source-search`, and the review-queue UI
@@ -71,9 +81,10 @@ Current Work:
   `3f4185e fix: index codex session evidence by activity date`.
 - The earlier body-derived progress-log title cleanup slice was completed and
   pushed as `c392add fix: clear rough worklog title normalization debt`.
-- Actual default-vault verification after the current source-search slice:
-  status export reported `97` rows, `7,911` items, `32` projects, `26` days,
-  `896` files, and a full stored session index of `12,889/12,889` prompts.
+- Actual default-vault verification after the current source-proposals slice:
+  `work-session-evidence-candidates --limit 5 --json` reported `97` rows,
+  `7,934` items, `32` projects, `26` days, `898` files, and a full stored
+  session index of `12,889/12,889` prompts.
   Session-evidence candidates remain `26`, all unresolved after the full stored
   index; title-normalization rows remain `0`.
 - Actual default-vault candidate diagnostics after the current priority slice:
@@ -107,16 +118,24 @@ Current Work:
   --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
   scanned `9` raw JSONL lines, matched `1`, returned `1`, and the first hit was
   line `6` with `match_score=1` and matched term `repotutorstudio`.
-- Actual browser bridge QA proof after the current slice:
-  `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge` passed and
-  exercised `/api/work-session-evidence-nearby`,
-  `/api/work-session-evidence-source-search`, the review-queue UI drilldown, and
-  the row-local `원본 검색` action. Isolated QA DB:
-  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-8RbthQ/qa.sqlite`.
+- Actual default-vault source-proposals proof after the current slice:
+  `work-session-evidence-source-proposals --candidate-id
+  session-evidence-RepoTutorStudio-072eff316b --source-path
+  /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl
+  --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
+  scanned `9` raw JSONL lines, matched `1`, returned `1` proposal,
+  `review_ready_count=1`, `blocked_count=0`, source line `6`, and
+  `trace_validated=true` for the copied source trace
+  `Analyze local/simple-ts-app for beginner learning. Source files are already filtered for secrets.`
+- Verification proof after the current slice: API bridge tests passed (`209`
+  Node tests ran), Rust `session_evidence_source` tests passed (`2`), CLI
+  `work_session_evidence` tests passed (`3`), `cargo fmt --check` passed,
+  `npm run check` passed, and isolated browser bridge QA passed.
 - The current evidence gate remains fail-closed. Do not infer cross-date or
   cross-project evidence unless the target session artifact proves it. The next
-  useful step is provider/manual search execution or AI-assisted candidate
-  evaluation against the nearby drilldown output.
+  useful step is using review-ready source proposals to support explicit
+  operator review-queue decisions while keeping durable evidence creation
+  separate.
 
 Resume Contract:
 
@@ -135,8 +154,8 @@ Resume Contract:
 Management Coverage Status:
 
 - The app does manage project/day work from real parsed artifacts: current
-  default-vault export reported `32` projects, `26` days, `896` progress files,
-  `7,911` work items, `97` project/day rows, and a full stored session index of
+  default-vault export reported `32` projects, `26` days, `898` progress files,
+  `7,934` work items, `97` project/day rows, and a full stored session index of
   `12,889/12,889` sanitized prompts.
 - Project-local progress logs are part of the target input surface, not an
   afterthought. The parser and QA currently include `working.md`-style files and
@@ -149,8 +168,87 @@ Immediate Resume Commands:
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates --limit 80 --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --query "RepoTutorStudio 2026-06-10" --json`
 - `src-tauri/target/debug/promptvault-cli work-session-evidence-source-search --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
+- `src-tauri/target/debug/promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /Users/wj/.codex/sessions/2026/06/09/rollout-2026-06-09T18-49-11-019eabc9-393a-7042-8a9e-151aee9dddaa.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json`
 - `npm run check`
 - `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+
+## Completed Slice - 2026-06-10 Copied source-search review proposals
+
+Current Goal:
+
+- Turn bounded source-search hits into copied-trace review proposal input so an
+  operator can see which exact source line is ready for review, without creating
+  durable session evidence automatically.
+
+Context:
+
+- Query-ranked nearby rows identify candidate source files.
+- Source search identifies matched user-prompt lines and redacted snippets.
+- The missing link was a review-ready proposal object that proves the trace was
+  copied from the search hit and belongs to the target candidate/project.
+
+Progress:
+
+- Added `work-session-evidence-source-proposals` CLI/Tauri/browser bridge
+  support.
+- Added review-queue UI `검토 제안` action under source-search results.
+- The proposal path reruns bounded source search for one known source path,
+  validates same-project indexing for the candidate, copies the hit excerpt as
+  `source_trace`, and marks each proposal either review-ready or blocked.
+- Kept durable reviewed decisions and matched session evidence creation outside
+  this flow.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added source-proposals options/result structs,
+  proposal runner, copied-trace validation helpers, same-project source guard,
+  Tauri command, and Rust test.
+- `src-tauri/src/bin/promptvault-cli.rs`: added CLI command, bridge route, CORS
+  preflight entry, help text, and bridge validation coverage.
+- `src/promptVaultApi.ts`, `src/types.ts`: added source-proposals API types and
+  strict bridge response validation.
+- `src/App.tsx`: added row-local `검토 제안` UI state, action, and result panel.
+- `tests/promptVaultApi.test.ts`: added source-proposals bridge parser tests.
+- `scripts/browser-bridge-isolated-qa.mjs`: added direct bridge and UI click QA
+  assertions for source proposals when a source-search hit exists.
+- `README.md`, `docs/CLI.md`, `working.md`: documented the source-proposals
+  command, bridge route, review-only contract, and resume proof.
+
+Tests:
+
+- PASS: `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts --test-name-pattern "source proposals|source search"`
+  (`209` tests ran and passed).
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml session_evidence_source`
+  (`2` tests passed).
+- PASS: `cargo test --manifest-path src-tauri/Cargo.toml --bin promptvault-cli work_session_evidence`
+  (`3` tests passed).
+- PASS: actual default-vault source-proposals proof for `RepoTutorStudio`
+  returned `review_ready_count=1`, `blocked_count=0`, source line `6`, and
+  `trace_validated=true` from the copied source-search excerpt.
+- PASS: `cargo fmt --check --manifest-path src-tauri/Cargo.toml`.
+- PASS: `npm run check` (UI tests, production build, Rust tests `234`, CLI
+  tests `34`, doc tests, clippy `-D warnings`).
+- PASS: `PROMPTVAULT_QA_WORK_SESSION_LIMIT=50 npm run qa:browser-bridge`
+  exercised direct bridge endpoints including
+  `/api/work-session-evidence-source-proposals` plus UI review flows against
+  isolated DB
+  `/var/folders/1n/7vk05dld54v11w5snxcg4wxr0000gn/T/promptvault-browser-qa-wPqhqJ/qa.sqlite`.
+
+Issues:
+
+- Source proposals currently support known JSONL session sources only. Selected
+  Antigravity SQLite sources still need a separate bounded source reader.
+- `review_ready=true` is not durable approval. The next flow must still require
+  explicit operator review-queue decisions and must not invent missing traces.
+
+Next Steps:
+
+- Use review-ready source proposals to support explicit review-queue decisions,
+  then keep any durable reviewed-decision write separate and audited.
+- Add Antigravity SQLite source readers only after defining a bounded, redacted
+  source-hit contract equivalent to the JSONL path.
+- Continue from explicit review-queue decision support; do not auto-create
+  matched session evidence from source proposals.
 
 ## Completed Slice - 2026-06-10 Bounded source session search
 

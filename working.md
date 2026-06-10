@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 17:29 KST
+Updated: 2026-06-10 17:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,17 +33,17 @@ Short-Term Goal:
 
 Current Work:
 
-- Most recent pushed baseline before the current local slice:
-  `f714579 docs: record recommended source search commit`.
+- Most recent pushed baseline:
+  `c186a2e feat: add recommended source proposals action`.
 - Current implementation focus: continue reducing unresolved project/day
   session-evidence rows and provider/review reliability gaps without weakening
   the source-trace/operator-review contract.
-- Latest verified local implementation slice: the review queue UI now has a
+- Latest verified implementation slice: the review queue UI now has a
   `추천 검토 제안` action that runs the existing nearby-session lookup, bounded
   source search, and source-proposal generation in one operator click. This
   still stops before approval: it does not approve a queue row, create durable
-  session evidence, or attach source evidence automatically. The implementation
-  is verified locally and pending commit in this snapshot.
+  session evidence, or attach source evidence automatically. Pushed as
+  `c186a2e feat: add recommended source proposals action`.
 - Previous verified implementation slice: the review queue UI now has a
   `추천 원본 검색` action that runs the existing nearby-session lookup and bounded
   source search in one operator click. This is still read-only navigation and
@@ -345,7 +345,8 @@ Current Goal:
 
 - Reduce another repetitive review-queue step for unresolved session-evidence
   rows while keeping the source-trace/operator-review contract fail-closed.
-- Implementation commit is pending in this snapshot.
+- Pushed implementation commit:
+  `c186a2e feat: add recommended source proposals action`.
 
 Context:
 
@@ -403,7 +404,6 @@ Issues:
 
 Next Steps:
 
-- Commit and push this slice, then update this section with the commit hash.
 - Continue resolving pending rows by reviewing copied-trace source proposals
   only where the source artifact proves the project/day work item.
 

@@ -2132,7 +2132,21 @@ export function workSessionEvidenceNearbyQueryText(
 export function recommendedWorkSessionEvidenceSourceSearchSession(
   result: Pick<ProjectWorkSessionEvidenceNearbyResult, "items">,
 ): ProjectWorkSessionEvidenceNearbyItem | null {
-  return result.items.find((item) => item.match_score > 0) ?? result.items[0] ?? null;
+  return result.items.find((item) => item.match_score > 0 && !isWeakMetadataOnlyNearbySession(item))
+    ?? result.items.find((item) => !isWeakMetadataOnlyNearbySession(item))
+    ?? null;
+}
+
+function isWeakMetadataOnlyNearbySession(
+  session: Pick<ProjectWorkSessionEvidenceNearbyItem, "source" | "matched_terms" | "match_score" | "excerpt">,
+): boolean {
+  const source = session.source.trim().toLowerCase();
+  const excerpt = session.excerpt.trim().toLowerCase();
+  const isSessionMetadata = source.includes("session metadata");
+  const isProjectTargetIndex = excerpt.includes("session project targets")
+    || excerpt.includes("indexed session project targets");
+  const isProjectOnlyMatch = session.match_score <= 1 || session.matched_terms.length <= 1;
+  return isSessionMetadata && isProjectTargetIndex && isProjectOnlyMatch;
 }
 
 export function workSessionEvidenceSourceSearchQueryText(

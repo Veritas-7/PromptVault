@@ -3001,6 +3001,42 @@ test("work session evidence source search helpers build review-safe queries", ()
     }))?.id,
     "zero-match",
   );
+  assert.equal(
+    recommendedWorkSessionEvidenceSourceSearchSession(sessionEvidenceNearbyResult({
+      items: [
+        sessionEvidenceNearbyItem({
+          id: "weak-metadata-only",
+          source: "Codex session metadata",
+          match_score: 1,
+          matched_terms: ["promptvault"],
+          excerpt:
+            "Codex session metadata indexed session project targets: /Users/wj/Ai/System/10_Projects/PromptVault",
+        }),
+      ],
+    })),
+    null,
+  );
+  assert.equal(
+    recommendedWorkSessionEvidenceSourceSearchSession(sessionEvidenceNearbyResult({
+      items: [
+        sessionEvidenceNearbyItem({
+          id: "weak-metadata-first",
+          source: "Codex session metadata",
+          match_score: 1,
+          matched_terms: ["promptvault"],
+          excerpt:
+            "Codex session metadata indexed session project targets: /Users/wj/Ai/System/10_Projects/PromptVault",
+        }),
+        sessionEvidenceNearbyItem({
+          id: "specific-session",
+          source: "Codex",
+          match_score: 2,
+          matched_terms: ["promptvault", "queue"],
+        }),
+      ],
+    }))?.id,
+    "specific-session",
+  );
 });
 
 test("work session evidence review queue labels describe persisted review rows", () => {

@@ -6551,6 +6551,14 @@ function App() {
                 const diagnosticText = workSessionEvidenceReviewQueueDateDiagnosticText(item);
                 const nearbyActive = workSessionEvidenceNearbyCandidateId === item.candidate_id;
                 const nearbyResult = nearbyActive ? workSessionEvidenceNearbyResult : null;
+                const recommendedSourceSearchSession = nearbyResult
+                  ? recommendedWorkSessionEvidenceSourceSearchSession(nearbyResult)
+                  : null;
+                const recommendedSourceSearchUnavailable = Boolean(
+                  nearbyResult
+                    && nearbyResult.items.length
+                    && !recommendedSourceSearchSession,
+                );
                 const recommendedSourceSearchActive = nearbyActive
                   && (
                     workSessionEvidenceNearbyState === "loading"
@@ -6697,6 +6705,16 @@ function App() {
                                 {warning}
                               </span>
                             ))}
+                            {recommendedSourceSearchUnavailable ? (
+                              <span
+                                data-work-session-evidence-recommended-source-search-unavailable={
+                                  item.candidate_id
+                                }
+                              >
+                                자동 추천 원본 없음 · metadata-only/project-only 후보만 감지됨 ·
+                                근처 세션에서 직접 원본 검색 필요
+                              </span>
+                            ) : null}
                             {nearbyResult.items.length ? (
                               nearbyResult.items.map((session) => (
                                 <div

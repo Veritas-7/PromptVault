@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 22:30 KST
+Updated: 2026-06-10 22:39 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -33,6 +33,41 @@ Short-Term Goal:
 
 Current Work:
 
+- Completed implementation slice:
+  weak metadata-only nearby session hints are no longer used as the automatic
+  recommended source-search target. This keeps the review queue fail-closed
+  when the only nearby evidence is a broad `Codex session metadata` project
+  target row that matches only the project name.
+- Context:
+  a live default-vault check for `ResearchFlowAI` on `2026-06-08` still showed
+  `8` near-session pending review rows overall. For the first row, the nearby
+  query returned `56` matches and the top `50` were all `Codex session metadata`
+  rows with `match_score=1` and matched term `researchflowai`. Source-search on
+  the top rollout found only one weak hit, line `6`, excerpt `Return exactly OK`.
+- Changes:
+  `src/workSummaryStatus.ts` now skips metadata-only/project-only nearby rows
+  when choosing `recommendedWorkSessionEvidenceSourceSearchSession`. General
+  non-metadata zero-match rows remain selectable for manual source search.
+  `src/App.tsx` now displays
+  `자동 추천 원본 없음 · metadata-only/project-only 후보만 감지됨 · 근처 세션에서 직접 원본 검색 필요`
+  in the nearby panel instead of silently stopping. `tests/workSummaryStatus.test.ts`
+  adds regression coverage for the weak metadata-only skip and for selecting a
+  later specific session when one exists.
+- Verification:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types
+  --test tests/workSummaryStatus.test.ts` passed with `48` tests. `npm run
+  build` passed. A focused headless Playwright smoke against local Vite
+  `127.0.0.1:5184` with mocked browser-bridge endpoints clicked the review
+  queue and `추천 검토 제안` action for a weak metadata-only nearby result; it
+  confirmed `sourceSearchCalls=0`, no source-search panel, no console/page
+  errors, and the new unavailable text rendered. The temporary Vite server was
+  stopped and port `5184` had no remaining listener.
+- Next product work:
+  continue with the remaining `8` near-session pending rows. The UI now avoids
+  implying weak metadata rows are recommended proof; the next deeper backend
+  improvement is either source-search result quality ranking when multiple hits
+  exist in a source file, or a batch blocker-summary workflow for the pending
+  queue.
 - Completed QA reliability slice:
   fixed the isolated browser QA timeout in the `work status export unresolved
   fixture` path. The fixture had drifted behind the current

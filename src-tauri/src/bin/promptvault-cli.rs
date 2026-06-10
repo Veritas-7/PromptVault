@@ -421,6 +421,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", result.markdown);
         }
         "work-session-evidence-candidates" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_session_evidence_candidates_help_text());
+                return Ok(());
+            }
             let json = take_flag(&mut args, "--json");
             let refresh_session_index = take_flag(&mut args, "--refresh-session-index");
             let needs_title_normalization = take_flag(&mut args, "--needs-title-normalization");
@@ -813,6 +817,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "work-session-evidence-reviewed-items" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_session_evidence_reviewed_items_help_text());
+                return Ok(());
+            }
             let json = take_flag(&mut args, "--json");
             let mut limit = None;
             let mut database_path = None;
@@ -869,6 +877,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         "work-session-evidence-nearby" => {
+            if take_help_flag(&mut args) {
+                println!("{}", work_session_evidence_nearby_help_text());
+                return Ok(());
+            }
             let json = take_flag(&mut args, "--json");
             let mut limit = None;
             let mut database_path = None;
@@ -2846,6 +2858,30 @@ fn print_help() {
     println!("{}", help_text());
 }
 
+fn work_session_evidence_candidates_help_text() -> String {
+    [
+        "PromptVault work-session-evidence-candidates",
+        "",
+        "Usage:",
+        "  promptvault-cli work-session-evidence-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]",
+        "",
+        "Purpose:",
+        "  Lists project/day rows still missing session evidence after the current session index is considered.",
+        "  Use --refresh-session-index to rescan raw sessions before computing unresolved rows.",
+        "  Use --needs-title-normalization to focus rows blocked by title cleanup before evidence review.",
+        "",
+        "Review safety:",
+        "  This command is read-only and does not create review queue rows by itself.",
+        "  Persist candidates for operator review with work-session-evidence-review-queue --sync-candidates.",
+        "  Inspect same-project session hints with work-session-evidence-nearby before using source-search commands.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-session-evidence-candidates --limit 20 --json",
+        "  promptvault-cli work-session-evidence-candidates --refresh-session-index --session-limit 500 --json",
+    ]
+    .join("\n")
+}
+
 fn work_session_evidence_proposals_help_text() -> String {
     [
         "PromptVault work-session-evidence-proposals",
@@ -2869,6 +2905,29 @@ fn work_session_evidence_proposals_help_text() -> String {
         "  promptvault-cli work-session-evidence-proposals --limit 5 --json",
         "  promptvault-cli work-session-evidence-proposals --limit 5 --ai --json",
         "  promptvault-cli work-session-evidence-proposals --needs-title-normalization --ai --json",
+    ]
+    .join("\n")
+}
+
+fn work_session_evidence_nearby_help_text() -> String {
+    [
+        "PromptVault work-session-evidence-nearby",
+        "",
+        "Usage:",
+        "  promptvault-cli work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--query TEXT] [--limit N>0] [--database PATH] [--json]",
+        "",
+        "Purpose:",
+        "  Lists nearby same-project session prompts around one unresolved project/day row.",
+        "  Optional --query narrows matches to operator-selected project, title, or evidence terms.",
+        "  Use the returned source paths as bounded input for work-session-evidence-source-search.",
+        "",
+        "Review safety:",
+        "  This command is read-only and does not approve or create session evidence.",
+        "  Nearby sessions are hints only; source-backed approvals still require copied source review metadata.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-session-evidence-nearby --project PromptVault --date 2026-06-10 --json",
+        "  promptvault-cli work-session-evidence-nearby --project CareVault --date 2026-06-05 --query \"review queue\" --limit 10 --json",
     ]
     .join("\n")
 }
@@ -2917,6 +2976,28 @@ fn work_session_evidence_source_proposals_help_text() -> String {
         "Examples:",
         "  promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-Example-123 --source-path /path/to/session.jsonl --query \"Example\" --json",
         "  promptvault-cli work-session-evidence-source-proposals --candidate-id session-evidence-Example-123 --source-path /path/to/conversation.db --query \"Example\" --limit 5 --json",
+    ]
+    .join("\n")
+}
+
+fn work_session_evidence_reviewed_items_help_text() -> String {
+    [
+        "PromptVault work-session-evidence-reviewed-items",
+        "",
+        "Usage:",
+        "  promptvault-cli work-session-evidence-reviewed-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]",
+        "",
+        "Purpose:",
+        "  Lists durable session-evidence reviewed items that were applied from approved review queue rows.",
+        "  Use --date and --project to verify one project/day row after apply.",
+        "",
+        "Review safety:",
+        "  This command is read-only and does not modify the review queue or reviewed items.",
+        "  It is the audit view after work-session-evidence-review-apply.",
+        "",
+        "Examples:",
+        "  promptvault-cli work-session-evidence-reviewed-items --limit 20 --json",
+        "  promptvault-cli work-session-evidence-reviewed-items --project PromptVault --date 2026-06-10 --json",
     ]
     .join("\n")
 }
@@ -4767,6 +4848,31 @@ mod tests {
     }
 
     #[test]
+    fn work_session_evidence_candidates_help_documents_read_only_candidate_safety() {
+        let help = work_session_evidence_candidates_help_text();
+
+        assert!(help.contains("promptvault-cli work-session-evidence-candidates"));
+        assert!(help.contains("--refresh-session-index"));
+        assert!(help.contains("--needs-title-normalization"));
+        assert!(help.contains("missing session evidence"));
+        assert!(help.contains("read-only and does not create review queue rows"));
+        assert!(help.contains("work-session-evidence-review-queue --sync-candidates"));
+        assert!(help.contains("work-session-evidence-nearby"));
+    }
+
+    #[test]
+    fn work_session_evidence_nearby_help_documents_hint_safety() {
+        let help = work_session_evidence_nearby_help_text();
+
+        assert!(help.contains("promptvault-cli work-session-evidence-nearby --project NAME"));
+        assert!(help.contains("--query narrows matches"));
+        assert!(help.contains("nearby same-project session prompts"));
+        assert!(help.contains("work-session-evidence-source-search"));
+        assert!(help.contains("read-only and does not approve or create session evidence"));
+        assert!(help.contains("copied source review metadata"));
+    }
+
+    #[test]
     fn work_session_evidence_source_search_help_documents_read_only_search_safety() {
         let help = work_session_evidence_source_search_help_text();
 
@@ -4796,6 +4902,18 @@ mod tests {
         assert!(help.contains("work-session-evidence-review-queue-update"));
         assert!(help.contains("copied source review metadata"));
         assert!(help.contains("work-session-evidence-review-apply"));
+    }
+
+    #[test]
+    fn work_session_evidence_reviewed_items_help_documents_audit_view_safety() {
+        let help = work_session_evidence_reviewed_items_help_text();
+
+        assert!(help.contains("promptvault-cli work-session-evidence-reviewed-items"));
+        assert!(help.contains("--date YYYY-MM-DD"));
+        assert!(help.contains("--project NAME"));
+        assert!(help.contains("durable session-evidence reviewed items"));
+        assert!(help.contains("read-only and does not modify the review queue"));
+        assert!(help.contains("audit view after work-session-evidence-review-apply"));
     }
 
     #[test]

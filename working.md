@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-10 19:58 KST
+Updated: 2026-06-10 20:02 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -34,6 +34,39 @@ Short-Term Goal:
 Current Work:
 
 - Active completed implementation slice:
+  finish command-specific help coverage for the remaining session-evidence
+  workflow commands. Live CLI checks showed
+  `work-session-evidence-candidates --help`,
+  `work-session-evidence-nearby --help`, and
+  `work-session-evidence-reviewed-items --help` all exit `1` with
+  `unknown ... argument: --help`, even though these commands are the workflow
+  entry point, same-project hint view, and durable audit view.
+- Current implementation status:
+  `src-tauri/src/bin/promptvault-cli.rs` now adds command-specific `--help` /
+  `-h` / `help` handling for `work-session-evidence-candidates`,
+  `work-session-evidence-nearby`, and
+  `work-session-evidence-reviewed-items`. The help text documents
+  `--refresh-session-index`, `--needs-title-normalization`, review-queue sync,
+  nearby same-project hints, source-search handoff, read-only behavior, and
+  reviewed-items audit checks. Unit tests for all three help bodies have been
+  added.
+- Verification for active slice:
+  `cargo fmt && cargo test --bin promptvault-cli help` passed with `12` tests.
+  `cargo build --bin promptvault-cli` passed. The rebuilt commands
+  `src-tauri/target/debug/promptvault-cli work-session-evidence-candidates
+  --help`, `src-tauri/target/debug/promptvault-cli
+  work-session-evidence-nearby --help`, and
+  `src-tauri/target/debug/promptvault-cli
+  work-session-evidence-reviewed-items --help` now all exit `0`; candidates
+  prints `18` lines, nearby prints `17` lines, and reviewed-items prints `16`
+  lines. `git diff --check` passed. `npm run check` passed: UI tests `523`
+  passed, Vite/TypeScript build passed, Rust lib tests `240` passed, CLI tests
+  `45` passed, doc-tests passed, and clippy `-D warnings` passed.
+  Browser-bridge QA was not rerun for this CLI-only help slice because no
+  bridge/API/UI behavior changed.
+- Previous completed implementation slice:
+  `33fc92d fix: document session review cli help`.
+- Previous completed behavior:
   improve review queue/apply command discoverability for the manual
   session-evidence approval path. Live CLI checks showed
   `work-session-evidence-review-queue --help`,

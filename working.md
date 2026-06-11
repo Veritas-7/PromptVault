@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 15:04 KST
+Updated: 2026-06-11 15:11 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -27,9 +27,11 @@ Short-Term Goal:
 
 Current Active Work:
 
-- Codex JSONL parser streaming slice is implemented and under final
-  verification.
-- Commit/push is pending from this snapshot.
+- Codex JSONL parser streaming slice is implemented, verified, committed, and
+  pushed as `ef8922f perf: stream codex jsonl prompt imports`.
+- Post-push verification showed `main...origin/main` clean and
+  `HEAD == origin/main` at
+  `ef8922f4a63c624ad3a70e06aaa0d22f17a78678`.
 - Previous pushed state is
   `8732423 docs: record stored project filter completion`.
 
@@ -61,6 +63,15 @@ Progress:
 - Current permanent DB audit after the checkpoint:
   `codex next_file_index=2625`, `total_files=25300`, `completed=0`,
   `imported_prompt_count=18152`; `prompts` table count is `92155`.
+- After the feature commit/push, continued five more 500-file Codex checkpoints:
+  - `2625..3125 / 25301` in `83.03s`, `707` batch prompts.
+  - `3125..3625 / 25301` in `29.62s`, `526` batch prompts.
+  - `3625..4125 / 25301` in `55.06s`, `608` batch prompts.
+  - `4125..4625 / 25301` in `83.90s`, `3824` batch prompts.
+  - `4625..5125 / 25302` in `22.95s`, `527` batch prompts.
+- Latest permanent DB audit:
+  `codex next_file_index=5125`, `total_files=25302`, `completed=0`,
+  `imported_prompt_count=24344`; `prompts` table count remains `92155`.
 
 Changes:
 
@@ -77,13 +88,20 @@ Tests / Verification So Far:
 - PASS: `cargo test parse_codex_jsonl_streams_prompt_lines_and_preserves_cwd`.
 - PASS: `cargo test import_batch_persists_resume_state`.
 - PASS: `cargo build --bin promptvault-cli`.
+- PASS: `npm run check`; UI tests, Vite build, Rust CLI build, Rust lib tests
+  (`260` passed), CLI tests (`47` passed), doc-tests, and clippy
+  `-D warnings` all passed.
+- PASS: `git diff --check`.
+- PASS: `gitleaks dir . --no-banner --redact`.
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact`.
 - Runtime evidence: Codex 500-file and 2000-file imports completed with
   bounded memory after the parser change.
 
 Known Exclusions / Next Continuation:
 
 - The long-term objective is still not complete. Codex permanent import remains
-  at `2625 / 25300`; continue with 500-file checkpoints or add a dedicated
+  at `5125 / 25302`; continue with 500-file checkpoints or add a dedicated
   progress-visible long Codex backfill runner before claiming all current
   sessions are parsed.
 - The 2000-file checkpoint worked but took almost 10 minutes; use 500 or

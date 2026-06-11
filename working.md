@@ -1,10 +1,111 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 07:43 KST
+Updated: 2026-06-11 14:01 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
-Resumed from Codex thread: `019ea10c-fbe8-7b60-8889-6f00b5a91a68`
+Resumed from Codex thread: `019eb503-f8ed-7df2-8275-7da158b188eb`
+
+## Resume Snapshot - 2026-06-11 14:01 KST
+
+Long-Term Goal:
+
+- Keep PromptVault as the durable project/day work-management surface for real
+  local evidence sources: Codex sessions, Codex CX sessions, Claude logs,
+  Antigravity logs, and project-local progress logs including `working.md`,
+  `workingd.md`, `WORKING_LOG.md`, `PROGRESS_LOG.md`, and
+  `PROJECT_STATUS.md`.
+- Keep every continuation resumable from this file with long-term goal,
+  short-term goal, current active work, completed slices, verification
+  evidence, known exclusions, and the next concrete continuation step.
+- Preserve the distinction between parsed local evidence, AI/SDK-assisted
+  proposals, and operator-approved durable writes.
+
+Short-Term Goal:
+
+- Add condition-aware project/day management audit filter meta so operators can
+  see which management overview filters are active without reading every input.
+- Keep the slice display-only: no parser, SQLite, review decision, or durable
+  write behavior changes.
+
+Current Active Work:
+
+- Fresh repo check before this slice showed `main...origin/main` clean and
+  `HEAD == origin/main` at
+  `16af1d44ffbd4b60c7facc7c65ddd23c5a815dd7`.
+- AutoResearch session target binding passed for
+  `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Condition-aware management audit filter meta slice is complete and verified.
+- This file records the completed slice and next restart point.
+
+Progress:
+
+- Confirmed the active Codex thread objective, `PromptVault.txt` pointer, and
+  live repo root all target `/Users/wj/Ai/System/10_Projects/PromptVault`.
+- Chose the next small work-management improvement from the live app state.
+- Identified a UX gap: management audit filter meta showed only filter count
+  and result count, so operators could not tell whether active filters were
+  date, project, evidence source, log type, persistence, or confidence.
+- Added condition-aware meta copy for date, project, source, log type,
+  persistence, and minimum confidence filters.
+- Updated the isolated browser-bridge QA assertions so the browser run proves
+  the rendered management audit meta includes active condition labels.
+
+Changes:
+
+- `src/workManagementOverview.ts`: changes
+  `workManagementOverviewFilterMetaText` to derive active filter count from the
+  full filter object and render condition labels.
+- `src/App.tsx`: passes the full management overview filter object into the
+  meta helper.
+- `tests/workManagementOverview.test.ts`: covers condition-aware management
+  audit meta for date/project, no-filter, source/log-type/persistence, and
+  confidence filters.
+- `scripts/browser-bridge-isolated-qa.mjs`: asserts project/log-type and
+  project/source/confidence condition labels in rendered management filter
+  meta.
+- `working.md`: records this continuation state.
+
+Tests:
+
+- Baseline: `git status --short --branch` reported `## main...origin/main`.
+- Baseline: `git rev-parse HEAD origin/main` matched
+  `16af1d44ffbd4b60c7facc7c65ddd23c5a815dd7`.
+- PASS:
+  `CODEX_THREAD_ID=019eb503-f8ed-7df2-8275-7da158b188eb AUTORESEARCH_SESSION_ID=019eb503-f8ed-7df2-8275-7da158b188eb AUTORESEARCH_SESSION_TARGET_ROOT=/Users/wj/Ai/System/10_Projects/PromptVault /Users/wj/Ai/System/10_Projects/autoresearch-skill-system/scripts/autoresearch-bind-session-target --repo-root /Users/wj/Ai/System/10_Projects/PromptVault`.
+- RED as expected:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts`
+  failed before implementation because the helper still treated the third
+  argument as an active-count value.
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workManagementOverview.test.ts`
+  (`10` tests).
+- PASS: `npm run test:ui` (`536` tests).
+- PASS: `npm run build` (same existing Vite chunk-size warning).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- First `npm run qa:browser-bridge` attempt failed before the changed
+  management audit step because Playwright reported
+  `Target page, context or browser has been closed` during work-session-index
+  long-continue wait.
+- PASS: rerun `npm run qa:browser-bridge`; it passed the management source-role
+  and saved-extraction condition-label assertions and exited 0.
+- PASS: `npm run check` (`536` UI tests, Rust `256` lib tests, Rust `47` CLI
+  tests, build, and clippy).
+
+Issues:
+
+- cmux/in-app browser testing remains excluded in this environment; browser UI
+  verification uses the repo's isolated Playwright/browser-bridge QA path.
+- This slice intentionally does not change filtering behavior. It only makes
+  active management audit filters visible in the meta text.
+
+Next Step:
+
+- Run diff/secret/staged checks, commit this slice if the staged paths remain
+  limited to the intended files, then verify `HEAD == origin/main`.
+- Next development session should choose one small PromptVault improvement from
+  live state, preferably continuing project/day management audit clarity or
+  full-session backfill operator guidance.
 
 ## Resume Snapshot - 2026-06-11 07:43 KST
 

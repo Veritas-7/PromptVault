@@ -444,15 +444,42 @@ export function workManagementOverviewSourceRoleOptions(
 export function workManagementOverviewFilterMetaText(
   resultCount: number,
   totalCount: number,
-  activeFilterCount: number,
+  filters: WorkManagementOverviewFilters,
 ): string {
+  const activeFilterCount = activeWorkManagementOverviewFilterCount(filters);
   const parts = [
     activeFilterCount > 0
       ? `관리 감사 필터 ${activeFilterCount.toLocaleString()}개`
       : "관리 감사 필터 없음",
+    ...workManagementOverviewFilterConditionText(filters),
     `결과 ${resultCount.toLocaleString()} / ${totalCount.toLocaleString()}개`,
   ];
   return parts.join(" · ");
+}
+
+function workManagementOverviewFilterConditionText(
+  filters: WorkManagementOverviewFilters,
+): string[] {
+  const conditions = [];
+  const date = filters.date.trim();
+  if (date) conditions.push(`날짜 ${date}`);
+  const project = filters.project.trim();
+  if (project) conditions.push(`프로젝트 ${project}`);
+  const source = filters.source.trim();
+  if (source) {
+    conditions.push(`근거 ${SOURCE_LABELS[source as WorkManagementOverviewSource] ?? source}`);
+  }
+  const sourceRole = filters.sourceRole.trim();
+  if (sourceRole) conditions.push(`로그 유형 ${workSourceFileRoleLabel(sourceRole)}`);
+  const persistence = filters.persistence.trim();
+  if (persistence) {
+    conditions.push(
+      `저장 상태 ${persistence === "persisted" ? "저장관리" : persistence === "live_only" ? "라이브만" : persistence}`,
+    );
+  }
+  const minConfidence = normalizedConfidenceFilter(filters.minConfidence);
+  if (minConfidence !== null) conditions.push(`confidence ${minConfidence.toFixed(2)} 이상`);
+  return conditions.length ? [`조건 ${conditions.join(" · ")}`] : [];
 }
 
 export function workManagementOverviewSourceText(row: WorkManagementOverviewRow): string {

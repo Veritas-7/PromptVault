@@ -1894,7 +1894,7 @@ function App() {
   const workManagementOverviewFilterMeta = workManagementOverviewFilterMetaText(
     filteredWorkManagementOverviewRows.length,
     workManagementOverview.rows.length,
-    workManagementOverviewFilterCount,
+    workManagementOverviewFilters,
   );
   const workManagementOverviewDateFilterSuggestions =
     workManagementOverviewDateSuggestions(workManagementOverview.rows);

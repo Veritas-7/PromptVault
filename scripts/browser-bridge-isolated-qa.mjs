@@ -2418,6 +2418,7 @@ async function runBrowserQa() {
       const sourceRoleRows = [...document.querySelectorAll('[data-work-management-row-source-roles="true"]')]
         .map((element) => element.textContent ?? "");
       return filterText.includes("관리 감사 필터 2개")
+        && filterText.includes("조건 프로젝트 QASupported · 로그 유형 진행 로그")
         && rows.length === 1
         && (rows[0]?.textContent ?? "").includes("QASupported")
         && sourceRoleRows.some((text) =>
@@ -2484,6 +2485,7 @@ async function runBrowserQa() {
       const text = document.querySelector('[data-work-management-filter-meta="true"]')?.textContent ?? "";
       const rows = [...document.querySelectorAll('[data-work-management-overview="true"] article')];
       return text.includes("관리 감사 필터 3개")
+        && text.includes("조건 프로젝트 notebooklm-llm-wiki-flow · 근거 저장추출 · confidence 0.99 이상")
         && rows.some((row) => (row.textContent ?? "").includes("notebooklm-llm-wiki-flow"));
     }, undefined, { timeout: 120000 });
     workManagementFilterMeta =

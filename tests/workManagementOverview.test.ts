@@ -894,12 +894,30 @@ test("work management overview filters expose auditable project date rows", () =
     "RepoTutorStudio",
   ]);
   assert.equal(
-    workManagementOverviewFilterMetaText(1, 3, 2),
-    "관리 감사 필터 2개 · 결과 1 / 3개",
+    workManagementOverviewFilterMetaText(1, 3, {
+      date: "2026-06-09",
+      minConfidence: "",
+      persistence: "",
+      project: "PromptVault",
+      source: "",
+      sourceRole: "",
+    }),
+    "관리 감사 필터 2개 · 조건 날짜 2026-06-09 · 프로젝트 PromptVault · 결과 1 / 3개",
   );
   assert.equal(
-    workManagementOverviewFilterMetaText(3, 3, 0),
+    workManagementOverviewFilterMetaText(3, 3, emptyWorkManagementOverviewFilters()),
     "관리 감사 필터 없음 · 결과 3 / 3개",
+  );
+  assert.equal(
+    workManagementOverviewFilterMetaText(1, 3, {
+      date: "",
+      minConfidence: "0.8",
+      persistence: "persisted",
+      project: "",
+      source: "status_export",
+      sourceRole: "progress-log",
+    }),
+    "관리 감사 필터 4개 · 조건 근거 상태Export · 로그 유형 진행 로그 · 저장 상태 저장관리 · confidence 0.80 이상 · 결과 1 / 3개",
   );
 });
 

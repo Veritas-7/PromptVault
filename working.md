@@ -1,6 +1,6 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 14:31 KST
+Updated: 2026-06-11 14:33 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
@@ -27,7 +27,11 @@ Short-Term Goal:
 Current Active Work:
 
 - Stored project facet/filter slice is implemented and verified.
-- Explicit-path commit/push is pending from this snapshot.
+- Feature commit is pushed as
+  `fae6d70 feat: add stored project prompt filters`.
+- Post-push verification showed `main...origin/main` clean and
+  `HEAD == origin/main` at
+  `fae6d708eed598a0a1feafaa4d47c646c34e71de`.
 - The previous project prompt statistics slice is pushed as
   `ef91d87 feat: add project prompt statistics`.
 
@@ -77,6 +81,26 @@ Tests:
 - PASS: `npm run check`; UI tests, Vite build, Rust CLI build, Rust lib tests
   (`259` passed), CLI tests (`47` passed), doc-tests, and clippy
   `-D warnings` all passed.
+- PASS: `git diff --check`.
+- PASS: `gitleaks dir . --no-banner --redact`.
+- PASS: `git diff --cached --check`.
+- PASS: `gitleaks protect --staged --no-banner --redact`.
+
+Post-Push Live State Audit:
+
+- `src-tauri/target/debug/promptvault-cli sources --json`: 13 configured
+  sources reachable; 12 `ok`, 1 empty
+  (`antigravity-ide-alt-transcripts`).
+- `src-tauri/target/debug/promptvault-cli plan --json`: 31,526 matching
+  source files, 41,559,816,646 bytes, 101 large files; Codex alone has 25,296
+  files and a 38.0 GiB warning.
+- Permanent DB `/Users/wj/Documents/PromptVault/promptvault.sqlite`:
+  `prompts` count is 90,765.
+- Import cursors are not complete for every configured source. Stored
+  `import_states` include completed Antigravity conversation/history sources,
+  but Codex is at 25 / 25,140 files and Gemini temporary chats are at
+  145 / 2,433 files. Several reachable configured sources do not yet have an
+  import cursor row.
 
 Known Exclusions / Next Continuation:
 

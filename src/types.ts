@@ -49,6 +49,7 @@ export interface ScanStats {
   repeated_prompts: FrequencyItem[];
   top_quality_gaps: FrequencyItem[];
   prompts_by_date: FrequencyItem[];
+  prompts_by_project?: FrequencyItem[];
   source_summaries: SourceSummary[];
 }
 

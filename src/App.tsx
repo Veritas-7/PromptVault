@@ -8472,6 +8472,11 @@ function App() {
               emptyText={frequencyEmptyText(hasPromptResult, "날짜")}
             />
             <FrequencyColumn
+              title="프로젝트"
+              items={result?.stats.prompts_by_project ?? []}
+              emptyText={frequencyEmptyText(hasPromptResult, "프로젝트")}
+            />
+            <FrequencyColumn
               title="품질 보완점"
               items={qualityGapItems}
               emptyText={frequencyEmptyText(hasPromptResult, "품질 보완점")}
@@ -8745,7 +8750,7 @@ function FrequencyColumn({
   const visibleItems = items.slice(0, FREQUENCY_DISPLAY_LIMIT);
   const hiddenItemCount = Math.max(0, items.length - FREQUENCY_DISPLAY_LIMIT);
   return (
-    <div className="frequency-column">
+    <div className="frequency-column" data-frequency-column={title}>
       <h3>{title}</h3>
       {items.length ? (
         <>

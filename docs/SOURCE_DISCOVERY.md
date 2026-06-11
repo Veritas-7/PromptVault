@@ -33,7 +33,7 @@ The default export path is:
 ~/Documents/PromptVault/promptvault-export-YYYY-MM-DD-HHMMSS.md
 ```
 
-The Markdown contains source coverage, frequent words, frequent prompt-start phrases, repeated prompts, a prompt-improvement checklist, and grouped prompt records with session/workspace/source-file metadata.
+The Markdown contains source coverage, frequent words, frequent prompt-start phrases, repeated prompts, prompts by date, prompts by project, a prompt-improvement checklist, and grouped prompt records with session/workspace/source-file metadata.
 
 ## Source Notes
 

@@ -1362,6 +1362,13 @@ function isScanStats(value: unknown): boolean {
     && frequencyTextsAreUnique(value.top_quality_gaps)
     && isFrequencyItemsWithinTotal(value.prompts_by_date, value.total_prompts)
     && frequencyTextsAreUnique(value.prompts_by_date)
+    && (
+      value.prompts_by_project === undefined
+      || (
+        isFrequencyItemsWithinTotal(value.prompts_by_project, value.total_prompts)
+        && frequencyTextsAreUnique(value.prompts_by_project)
+      )
+    )
     && Array.isArray(value.source_summaries)
     && value.source_summaries.every(isSourceSummary)
     && sourceSummaryIdsAreUnique(value.source_summaries)

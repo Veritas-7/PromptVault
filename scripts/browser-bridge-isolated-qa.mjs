@@ -1019,6 +1019,16 @@ async function runBrowserQa() {
     if (scanPersistence.database_path !== DATABASE_PATH || scanPersistence.total_prompts < 1) {
       throw new Error(`Scan did not persist prompts to isolated DB: ${JSON.stringify(scanPersistence)}`);
     }
+    await page.waitForFunction(() => {
+      const column = document.querySelector('[data-frequency-column="프로젝트"]');
+      const rows = column?.querySelectorAll(".frequency-item") ?? [];
+      return rows.length > 0
+        && Array.from(rows).some((row) => {
+          const label = row.querySelector("span")?.textContent?.trim() ?? "";
+          const count = Number.parseInt(row.querySelector("strong")?.textContent ?? "", 10);
+          return label.length > 0 && Number.isSafeInteger(count) && count > 0;
+        });
+    }, undefined, { timeout: 30000 });
 
     step("improve");
     await page.locator('[data-prompt-row="true"]').first().click();

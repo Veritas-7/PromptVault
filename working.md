@@ -1,10 +1,87 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 14:01 KST
+Updated: 2026-06-11 14:17 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019eb503-f8ed-7df2-8275-7da158b188eb`
+
+## Resume Snapshot - 2026-06-11 14:17 KST
+
+Long-Term Goal:
+
+- Keep PromptVault able to collect all locally available user-authored prompts
+  from the configured agent/session/progress-log sources, then make those
+  prompts inspectable by date, project, source, quality, and management state.
+- Preserve resumability from this file with exact current scope, completed
+  slices, verification evidence, and the next concrete continuation step.
+
+Short-Term Goal:
+
+- Add direct project-level prompt statistics to scan results, Markdown export,
+  browser/API validation, and the visible statistics panel.
+- Keep compatibility with older browser bridge payloads that do not yet include
+  `prompts_by_project`.
+
+Current Active Work:
+
+- Project prompt statistics slice is implemented and verified.
+- Commit/push is pending from this snapshot.
+- The prior management audit filter-condition slice remains complete and pushed
+  as `48d7f2c ux: show management audit filter conditions` plus
+  `8a11db0 docs: record management audit filter completion`.
+
+Progress:
+
+- Added backend `ScanStats.prompts_by_project` aggregation. Project keys prefer
+  prompt `cwd`, then source `path`, then `/Users/wj/Ai/System/10_Projects/...`
+  paths found in prompt text, with `unknown-project` fallback.
+- Added `## Prompts By Project` to Markdown scan exports.
+- Added the `프로젝트` frequency column to the React statistics panel.
+- Added browser-bridge/API validation for optional project frequency rows while
+  keeping missing `prompts_by_project` accepted for older payloads.
+- Added isolated browser QA coverage proving the rendered `프로젝트` frequency
+  column has at least one non-empty project bucket after scan.
+- Updated README and source discovery docs to describe project-level prompt
+  analytics/export content.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: project prompt aggregation, Markdown export section,
+  and Rust regression tests.
+- `src/types.ts` and `src/promptVaultApi.ts`: optional
+  `prompts_by_project` API surface and validator checks.
+- `src/App.tsx`: visible project statistics column and stable
+  `data-frequency-column` selector.
+- `tests/promptVaultApi.test.ts`: invalid project frequency total rejection.
+- `scripts/browser-bridge-isolated-qa.mjs`: scan-step project-stat DOM check.
+- `README.md` and `docs/SOURCE_DISCOVERY.md`: docs updated for project stats.
+
+Tests:
+
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/workManagementOverview.test.ts`
+  (`225` passed).
+- PASS: `node --check scripts/browser-bridge-isolated-qa.mjs`.
+- PASS: `cargo fmt -- --check`.
+- PASS: `cargo test prompts_by_project` (`2` project-stat tests passed).
+- PASS: `cargo test markdown_export_includes_prompts_by_project`.
+- PASS: `npm run test:ui` (`537` passed).
+- PASS: `npm run build` (existing Vite chunk-size warning only).
+- PASS: `npm run qa:browser-bridge`; reached scan, improvement, work
+  management, normalization, review queue, and saved item reload flows. The new
+  project frequency-column assertion passed immediately after scan.
+- PASS: `npm run check`; UI tests, Vite build, Rust CLI build, Rust lib tests
+  (`258` passed), CLI tests (`47` passed), doc-tests, and clippy
+  `-D warnings` all passed.
+
+Known Exclusions / Next Continuation:
+
+- This slice adds direct project statistics for scan results and exports. It
+  does not claim the larger long-term goal is complete; remaining continuation
+  should still audit whether every configured prompt/session source is fully
+  imported/backfilled and whether the operator-facing "all prompts by
+  date/project" workflow needs a stored-history report beyond scan-time stats.
 
 ## Resume Snapshot - 2026-06-11 14:01 KST
 

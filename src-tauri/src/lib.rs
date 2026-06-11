@@ -196,6 +196,7 @@ pub struct ScanStats {
     pub repeated_prompts: Vec<FrequencyItem>,
     pub top_quality_gaps: Vec<FrequencyItem>,
     pub prompts_by_date: Vec<FrequencyItem>,
+    pub prompts_by_project: Vec<FrequencyItem>,
     pub source_summaries: Vec<SourceSummary>,
 }
 
@@ -14524,6 +14525,7 @@ fn build_stats(prompts: &[PromptRecord], source_summaries: Vec<SourceSummary>) -
         repeated_prompts: repeated_prompts(prompts, 20),
         top_quality_gaps: top_quality_gaps(prompts, 20),
         prompts_by_date: prompts_by_date(prompts, 40),
+        prompts_by_project: prompts_by_project(prompts, 40),
         source_summaries,
     }
 }
@@ -14642,6 +14644,31 @@ fn prompts_by_date(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem>
     items.sort_by(|a, b| b.text.cmp(&a.text));
     items.truncate(limit);
     items
+}
+
+fn prompts_by_project(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for prompt in prompts {
+        *counts.entry(prompt_project_key(prompt)).or_default() += 1;
+    }
+    rank_counts(counts, limit)
+}
+
+fn prompt_project_key(prompt: &PromptRecord) -> String {
+    if let Some(cwd) = prompt.cwd.as_deref() {
+        if let Some(project) = project_key_from_10_projects_path(cwd) {
+            return project;
+        }
+    }
+    if let Some(project) = project_key_from_10_projects_path(&prompt.path) {
+        return project;
+    }
+    for path in project_paths_from_text(&prompt.text) {
+        if let Some(project) = project_key_from_10_projects_path(&path) {
+            return project;
+        }
+    }
+    "unknown-project".to_string()
 }
 
 fn prompt_date(timestamp: Option<&str>) -> String {
@@ -18855,6 +18882,15 @@ fn render_markdown(
         }
     }
 
+    md.push_str("\n## Prompts By Project\n\n");
+    if stats.prompts_by_project.is_empty() {
+        md.push_str("- No project prompts found in this scan.\n");
+    } else {
+        for item in &stats.prompts_by_project {
+            md.push_str(&format!("- `{}`: {}\n", item.text, item.count));
+        }
+    }
+
     md.push_str("\n## Frequent Quality Gaps\n\n");
     if stats.top_quality_gaps.is_empty() {
         md.push_str("- No quality gaps found in this scan.\n");
@@ -21780,6 +21816,19 @@ mod tests {
 
         assert!(markdown.contains("## Warnings"));
         assert!(markdown.contains("- 설정된 제한 1개 프롬프트에서 스캔을 중지했습니다."));
+    }
+
+    #[test]
+    fn markdown_export_includes_prompts_by_project() {
+        let mut prompt = record("project export");
+        prompt.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
+        let prompts = vec![prompt];
+        let stats = build_stats(&prompts, Vec::new());
+
+        let markdown = render_markdown("2026-06-03T00:00:00Z", &stats, &prompts, &[]);
+
+        assert!(markdown.contains("## Prompts By Project"));
+        assert!(markdown.contains("- `PromptVault`: 1"));
     }
 
     #[test]
@@ -31135,6 +31184,47 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(dates
             .iter()
             .any(|item| item.text == "2026-06-06" && item.count == 1));
+    }
+
+    #[test]
+    fn prompts_by_project_counts_representative_project_keys() {
+        let mut cwd_project = record("cwd-project");
+        cwd_project.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault/src-tauri".to_string());
+
+        let mut path_project = record("path-project");
+        path_project.path =
+            "/Users/wj/Ai/System/10_Projects/CareVault/.claude/session.jsonl".to_string();
+
+        let mut text_project = record("text-project");
+        text_project.text =
+            "Continue /Users/wj/Ai/System/10_Projects/NuancedNarrator/working.md".to_string();
+
+        let prompts = vec![
+            cwd_project,
+            path_project,
+            text_project,
+            record("unknown-project"),
+        ];
+        let projects = prompts_by_project(&prompts, 10);
+
+        assert!(projects
+            .iter()
+            .any(|item| item.text == "PromptVault" && item.count == 1));
+        assert!(projects
+            .iter()
+            .any(|item| item.text == "CareVault" && item.count == 1));
+        assert!(projects
+            .iter()
+            .any(|item| item.text == "NuancedNarrator" && item.count == 1));
+        assert!(projects
+            .iter()
+            .any(|item| item.text == "unknown-project" && item.count == 1));
+
+        let stats = build_stats(&prompts, Vec::new());
+        assert!(stats
+            .prompts_by_project
+            .iter()
+            .any(|item| item.text == "PromptVault" && item.count == 1));
     }
 
     #[test]

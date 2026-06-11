@@ -2,7 +2,7 @@
 
 PromptVault is a local-first Tauri + React + TypeScript workbench for collecting user prompts from local Claude Code, Google Antigravity, Codex CLI, and Codex app/session stores.
 
-It extracts user-authored prompts, strips known injected context blocks, persists prompts to a permanent SQLite database, writes Markdown exports, shows daily/source/frequency/quality analytics, and recommends stronger development-agent prompts through OpenAI or GLM when configured, with a deterministic local fallback. In-app recommendations are saved as prompt-improvement history so prompt changes can be managed instead of treated as transient UI output.
+It extracts user-authored prompts, strips known injected context blocks, persists prompts to a permanent SQLite database, writes Markdown exports, shows daily/project/source/frequency/quality analytics, and recommends stronger development-agent prompts through OpenAI or GLM when configured, with a deterministic local fallback. In-app recommendations are saved as prompt-improvement history so prompt changes can be managed instead of treated as transient UI output.
 
 ## Source Roots
 

@@ -4708,6 +4708,7 @@ fn run_import_batch_for_source(
             Err(err) => warnings.push(format!("순회 항목을 건너뜀: {err}")),
         }
     }
+    sort_import_candidates(&mut candidates);
     let source_plan = source_plan_from_candidates(&source, &candidates, &warnings);
     let total_files = candidates.len();
     let total_bytes = candidates
@@ -4805,6 +4806,10 @@ fn run_import_batch_for_source(
         persistence,
         warnings,
     })
+}
+
+fn sort_import_candidates(candidates: &mut [SourceFileCandidate]) {
+    candidates.sort_by(|left, right| left.path.cmp(&right.path));
 }
 
 fn build_scan_plan_for_sources(generated_at: String, sources: Vec<SourceSpec>) -> ScanPlan {
@@ -21261,6 +21266,50 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.contains("large JSONL files may dominate scan time")));
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn import_batch_uses_stable_path_order_for_resume_cursor() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-import-stable-order-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        std::fs::write(
+            root.join("002.jsonl"),
+            r#"{"type":"response_item","payload":{"role":"user","content":[{"text":"Import stable order second file should not be first."}]}}"#,
+        )
+        .expect("write second path first");
+        std::fs::write(
+            root.join("001.jsonl"),
+            r#"{"type":"response_item","payload":{"role":"user","content":[{"text":"Import stable order first file should be first."}]}}"#,
+        )
+        .expect("write first path second");
+
+        let db_path = root.join("promptvault.sqlite");
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let first = run_import_batch_for_source(&db_path, source, 1, true, Some(10))
+            .expect("first stable import batch");
+
+        assert_eq!(first.batch_start_index, 0);
+        assert_eq!(first.batch_file_count, 1);
+        assert_eq!(first.batch_prompt_count, 1);
+        assert_eq!(first.state.processed_files, 1);
+        assert!(!first.state.completed);
+        assert!(first.prompts[0]
+            .text
+            .contains("stable order first file should be first"));
 
         std::fs::remove_dir_all(root).expect("remove temp root");
     }

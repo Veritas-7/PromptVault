@@ -246,6 +246,7 @@ Run `plan` before an unrestricted scan on large stores. It inventories matching 
 Stored-prompt filters also expose project facets derived from `/10_Projects/<project>` paths in `cwd`, source paths, or prompt text.
 
 Codex JSONL imports stream prompt-relevant lines instead of materializing every line in a session file before parsing, which keeps large Codex backfills resumable without multi-gigabyte process memory spikes. Large Codex stores are still CPU-bound; prefer checkpointed `import-batch --source codex --files 500` runs when advancing the permanent vault.
+Durable import batches use stable path ordering for the resume cursor, so use `--reset` when switching an existing large source from an older modified-time cursor to the stable ordering.
 
 The Tauri UI runs full exports but receives only a latest-prompt preview over IPC, so the large Markdown file remains on disk instead of being serialized into the frontend.
 

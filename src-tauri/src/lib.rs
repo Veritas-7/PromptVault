@@ -2169,6 +2169,10 @@ fn should_persist_scan_result(persist: bool, persist_on_cancel: bool, warnings: 
     persist && (persist_on_cancel || !scan_was_canceled(warnings))
 }
 
+fn scan_options_allow_source_reconciliation(options: &ScanOptions) -> bool {
+    options.limit.is_none() && options.source_limit.is_none()
+}
+
 pub fn run_scan(options: ScanOptions) -> Result<ScanResult, Box<dyn std::error::Error>> {
     let run_id = normalized_scan_run_id(options.run_id.as_deref())?;
     let cancel_flag = register_scan_run(run_id.as_deref())?;
@@ -2234,6 +2238,7 @@ fn run_scan_with_cancel(
     let write_markdown = options.write_markdown.unwrap_or(true);
     let persist = options.persist.unwrap_or(true);
     let persist_on_cancel = options.persist_on_cancel.unwrap_or(true);
+    let reconcile_source_rows = scan_options_allow_source_reconciliation(&options);
     if matches!(options.output_path.as_deref(), Some(path) if path.trim().is_empty()) {
         return Err("output path requires a non-empty value".into());
     }
@@ -2301,6 +2306,12 @@ fn run_scan_with_cancel(
                 summary.prompts_found = found.len();
                 summarize_source_quality(&mut summary, &found);
                 promote_source_notes_to_warning(&source, &mut summary, &mut warnings);
+                if source_limit != usize::MAX && summary.prompts_found >= source_limit {
+                    warnings.push(format!(
+                        "설정된 소스별 제한 {source_limit}개 프롬프트까지만 {} 스캔 결과를 저장했습니다.",
+                        source.label
+                    ));
+                }
                 prompts.append(&mut found);
             }
             Err(err) => {
@@ -2371,13 +2382,18 @@ fn run_scan_with_cancel(
             .as_deref()
             .map(PathBuf::from)
             .unwrap_or_else(default_database_path);
-        Some(persist_scan_result(
-            &database_path,
-            &generated_at,
-            &prompts,
-            &stats,
-            &warnings,
-        )?)
+        let stats = if reconcile_source_rows {
+            persist_scan_result(&database_path, &generated_at, &prompts, &stats, &warnings)?
+        } else {
+            persist_incremental_scan_result(
+                &database_path,
+                &generated_at,
+                &prompts,
+                &stats,
+                &warnings,
+            )?
+        };
+        Some(stats)
     } else {
         None
     };
@@ -18509,6 +18525,7 @@ fn should_reconcile_stored_source_rows(warnings: &[String]) -> bool {
         warning == SCAN_CANCELED_WARNING
             || warning == SCAN_CANCELED_NOT_PERSISTED_WARNING
             || warning.starts_with("설정된 제한")
+            || warning.starts_with("설정된 소스별 제한")
     })
 }
 
@@ -31575,6 +31592,130 @@ Status: completed as a source-only/report-only hardening slice.
             vec![
                 "limited-current-row".to_string(),
                 "limited-stale-row".to_string()
+            ]
+        );
+
+        std::fs::remove_file(db_path).expect("remove persisted db");
+    }
+
+    #[test]
+    fn source_limit_scan_options_disable_source_reconciliation() {
+        assert!(scan_options_allow_source_reconciliation(&ScanOptions {
+            limit: None,
+            source_limit: None,
+            ..Default::default()
+        }));
+        assert!(!scan_options_allow_source_reconciliation(&ScanOptions {
+            limit: Some(10),
+            source_limit: None,
+            ..Default::default()
+        }));
+        assert!(!scan_options_allow_source_reconciliation(&ScanOptions {
+            limit: None,
+            source_limit: Some(10),
+            ..Default::default()
+        }));
+    }
+
+    #[test]
+    fn source_limit_warning_keeps_stale_source_rows() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-keep-source-limit-stale-test-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut stale = dated_record("source-limit-stale-row", "2026-06-06T00:00:00Z");
+        stale.source = "Codex".to_string();
+        let mut current = dated_record("source-limit-current-row", "2026-06-06T00:01:00Z");
+        current.source = stale.source.clone();
+        let first_stats = build_stats(
+            &[stale.clone()],
+            vec![source_summary_for(&stale.source, 1, 1, "ok", Vec::new())],
+        );
+        persist_scan_result(
+            &db_path,
+            "2026-06-06T00:02:00Z",
+            &[stale],
+            &first_stats,
+            &[],
+        )
+        .expect("persist stale row");
+
+        let second_stats = build_stats(
+            &[current.clone()],
+            vec![source_summary_for(&current.source, 1, 1, "ok", Vec::new())],
+        );
+        let warnings = vec![
+            "설정된 소스별 제한 1개 프롬프트까지만 Codex 스캔 결과를 저장했습니다.".to_string(),
+        ];
+        let persistence = persist_scan_result(
+            &db_path,
+            "2026-06-06T00:03:00Z",
+            &[current],
+            &second_stats,
+            &warnings,
+        )
+        .expect("persist source limited row");
+
+        assert_eq!(persistence.stored_prompt_count, 2);
+        let conn = Connection::open(&db_path).expect("open persisted db");
+        let ids = prompt_ids_for_source(&conn, "Codex");
+        assert_eq!(
+            ids,
+            vec![
+                "source-limit-current-row".to_string(),
+                "source-limit-stale-row".to_string()
+            ]
+        );
+
+        std::fs::remove_file(db_path).expect("remove persisted db");
+    }
+
+    #[test]
+    fn incremental_scan_result_keeps_stale_source_rows_without_warning() {
+        let db_path = std::env::temp_dir().join(format!(
+            "promptvault-incremental-keep-stale-test-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+        let mut stale = dated_record("incremental-stale-row", "2026-06-06T00:00:00Z");
+        stale.source = "Codex".to_string();
+        let mut current = dated_record("incremental-current-row", "2026-06-06T00:01:00Z");
+        current.source = stale.source.clone();
+        let first_stats = build_stats(
+            &[stale.clone()],
+            vec![source_summary_for(&stale.source, 1, 1, "ok", Vec::new())],
+        );
+        persist_scan_result(
+            &db_path,
+            "2026-06-06T00:02:00Z",
+            &[stale],
+            &first_stats,
+            &[],
+        )
+        .expect("persist stale row");
+
+        let second_stats = build_stats(
+            &[current.clone()],
+            vec![source_summary_for(&current.source, 1, 1, "ok", Vec::new())],
+        );
+        let persistence = persist_incremental_scan_result(
+            &db_path,
+            "2026-06-06T00:03:00Z",
+            &[current],
+            &second_stats,
+            &[],
+        )
+        .expect("persist incremental row");
+
+        assert_eq!(persistence.stored_prompt_count, 2);
+        let conn = Connection::open(&db_path).expect("open persisted db");
+        let ids = prompt_ids_for_source(&conn, "Codex");
+        assert_eq!(
+            ids,
+            vec![
+                "incremental-current-row".to_string(),
+                "incremental-stale-row".to_string()
             ]
         );
 

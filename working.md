@@ -1,10 +1,93 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 15:11 KST
+Updated: 2026-06-11 16:23 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019eb503-f8ed-7df2-8275-7da158b188eb`
+
+## Resume Snapshot - 2026-06-11 16:23 KST
+
+Long-Term Goal:
+
+- Keep PromptVault able to collect all locally available user-authored prompts
+  from configured Antigravity, Codex app/CLI, Claude, Gemini, and
+  project-progress sources, then make those prompts inspectable by date,
+  project, source, quality, and management state.
+- Preserve resumability from this file with exact current scope, completed
+  slices, verification evidence, and the next concrete continuation step.
+
+Short-Term Goal:
+
+- Finish the permanent-vault backfill audit after the stable-order and Codex
+  streaming fixes.
+- Prevent bounded `scan --source-limit` refreshes from pruning already stored
+  source rows.
+
+Current Active Work:
+
+- Stable path-order import cursor fix is committed and pushed as
+  `badcd13 fix: stabilize import batch cursor order`.
+- Codex permanent import was reset under stable path ordering and completed to
+  `25310 / 25310` files at the 2026-06-11 16:19 KST cutoff.
+- A bounded `scan --source codex --source-limit 50 --limit 2000 --no-export`
+  run exposed that limited persisted scans were still doing source
+  reconciliation. That reduced stored Codex rows to 50 before this fix.
+- The DB was recovered by a full Codex reset import after rebuilding the CLI.
+  Final recovery batch: `25000..25310 / 25310`, `completed: true`,
+  `stored_prompts: 92245`.
+
+Progress:
+
+- Reset-imported all non-Codex sources under stable ordering:
+  `codex-cx`, `claude-code-projects`, `claude-code-transcripts`,
+  `claude-code-history`, `antigravity-cli-transcripts`,
+  `antigravity-ide-transcripts`, `antigravity-ide-alt-transcripts`,
+  `antigravity-cli-history`, `antigravity-cli-conversation-db`,
+  `antigravity-ide-conversation-db`, `gemini-tmp-chat`, and
+  `project-progress-logs`.
+- Recovered Codex rows from the limited-scan pruning mistake with a full reset
+  import. Permanent DB audit after recovery:
+  - `prompts` table count: `92245`.
+  - `Codex` stored prompt count: `70413`.
+  - `codex import_state`: `next_file_index=25310`,
+    `total_files=25310`, `completed=1`, `imported_prompt_count=70413`,
+    `total_bytes=40923963682`.
+- Current source plan immediately after recovery showed Codex file count still
+  matching at `25310`, with byte count drifting upward because this active
+  Codex thread continues to append to the current session JSONL.
+- Current source plan also showed `project-progress-logs` had grown from 966 to
+  970 files during this work; refresh that source after this snapshot edit so
+  the worklog update itself is stored.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: bounded scans (`limit` or `source_limit`) now persist
+  incrementally instead of reconciling/pruning stored source rows; source-limit
+  scans add an explicit warning; regression tests cover the source-limit and
+  incremental persistence paths.
+- `README.md`: documented that bounded scans preserve older stored prompt rows.
+- `working.md`: this operational checkpoint and recovery evidence.
+
+Tests / Verification So Far:
+
+- PASS: `cargo fmt --check`.
+- PASS: `cargo test --lib source_limit` (`3` passed).
+- PASS:
+  `cargo test --lib incremental_scan_result_keeps_stale_source_rows_without_warning`
+  (`1` passed).
+- PASS: `cargo build --bin promptvault-cli`.
+- Runtime evidence: Codex reset import completed after recovery with
+  `stored_prompts: 92245`.
+
+Known Exclusions / Next Continuation:
+
+- Before closing the goal, run a final verification suite, refresh
+  `project-progress-logs` after this file edit, refresh the Codex cursor at a
+  final cutoff, and compare `import_states` to `plan` again.
+- Codex is a moving target while this Codex thread is active. Treat exact byte
+  equality as cutoff-based; file count/cursor completion is the durable import
+  readiness signal during an active session.
 
 ## Resume Snapshot - 2026-06-11 15:04 KST
 

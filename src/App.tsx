@@ -1306,6 +1306,11 @@ function App() {
       ?? (result?.stats.prompts_by_date ?? []).map((date) => date.text);
     return storedFilterSuggestionValues(dates);
   }, [result?.stats.prompts_by_date, storedFacetsResult?.dates]);
+  const storedProjectSuggestions = useMemo(() => {
+    const projects = storedFacetsResult?.projects?.map((project) => project.text)
+      ?? (result?.stats.prompts_by_project ?? []).map((project) => project.text);
+    return storedFilterSuggestionValues(projects);
+  }, [result?.stats.prompts_by_project, storedFacetsResult?.projects]);
   const storedWorkspaceSuggestions = useMemo(() => {
     return storedFilterSuggestionValues(
       storedFacetsResult?.workspaces.map((workspace) => workspace.text) ?? [],
@@ -7820,6 +7825,18 @@ function App() {
             />
           </label>
           <label className="stored-filter-control">
+            <span>프로젝트</span>
+            <input
+              aria-label={storedFilterInputLabel("project", actionLockState)}
+              data-stored-filter-project="true"
+              disabled={isTopLevelActionLocked}
+              list="stored-project-options"
+              value={storedFilters.project}
+              placeholder="PromptVault"
+              onChange={(event) => updateStoredFilter("project", event.currentTarget.value)}
+            />
+          </label>
+          <label className="stored-filter-control">
             <span>작업공간</span>
             <input
               aria-label={storedFilterInputLabel("workspace", actionLockState)}
@@ -7860,6 +7877,11 @@ function App() {
         <datalist id="stored-date-options">
           {storedDateSuggestions.map((date) => (
             <option key={date} value={date} />
+          ))}
+        </datalist>
+        <datalist id="stored-project-options">
+          {storedProjectSuggestions.map((project) => (
+            <option key={project} value={project} />
           ))}
         </datalist>
         <datalist id="stored-workspace-options">

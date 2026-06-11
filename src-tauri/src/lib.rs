@@ -1574,6 +1574,7 @@ pub struct StoredPromptFacetsResult {
     pub total_prompts: usize,
     pub sources: Vec<FrequencyItem>,
     pub dates: Vec<FrequencyItem>,
+    pub projects: Vec<FrequencyItem>,
     pub workspaces: Vec<FrequencyItem>,
 }
 
@@ -1615,6 +1616,7 @@ pub struct StoredPromptsOptions {
     pub query: Option<String>,
     pub source: Option<String>,
     pub date: Option<String>,
+    pub project: Option<String>,
     pub workspace: Option<String>,
     pub preview_sort: Option<String>,
 }
@@ -4618,6 +4620,7 @@ pub fn run_list_stored_prompt_facets(
         limit,
     )?;
     ensure_unknown_date_facet(&conn, &mut dates, limit)?;
+    let projects = read_stored_prompt_project_facets(&conn, limit)?;
     let workspaces =
         read_stored_prompt_facet(&conn, "COALESCE(cwd, '')", "COALESCE(cwd, '') <> ''", limit)?;
 
@@ -4627,6 +4630,7 @@ pub fn run_list_stored_prompt_facets(
         total_prompts: total_prompts as usize,
         sources,
         dates,
+        projects,
         workspaces,
     })
 }
@@ -4654,12 +4658,14 @@ pub fn run_load_stored_prompts(
     let query = options.query.unwrap_or_default();
     let source = options.source.unwrap_or_default();
     let date = options.date.unwrap_or_default();
+    let project = options.project.unwrap_or_default();
     let workspace = options.workspace.unwrap_or_default();
     let conn = open_promptvault_database(&database_path)?;
     let filters = StoredPromptFilters {
         query: query.trim(),
         source: source.trim(),
         date: date.trim(),
+        project: project.trim(),
         workspace: workspace.trim(),
     };
     let prompts = read_stored_prompts(&conn, limit, &filters, preview_sort)?;
@@ -14655,15 +14661,19 @@ fn prompts_by_project(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyIt
 }
 
 fn prompt_project_key(prompt: &PromptRecord) -> String {
-    if let Some(cwd) = prompt.cwd.as_deref() {
+    prompt_project_key_from_parts(prompt.cwd.as_deref(), &prompt.path, &prompt.text)
+}
+
+fn prompt_project_key_from_parts(cwd: Option<&str>, path: &str, text: &str) -> String {
+    if let Some(cwd) = cwd {
         if let Some(project) = project_key_from_10_projects_path(cwd) {
             return project;
         }
     }
-    if let Some(project) = project_key_from_10_projects_path(&prompt.path) {
+    if let Some(project) = project_key_from_10_projects_path(path) {
         return project;
     }
-    for path in project_paths_from_text(&prompt.text) {
+    for path in project_paths_from_text(text) {
         if let Some(project) = project_key_from_10_projects_path(&path) {
             return project;
         }
@@ -18169,6 +18179,7 @@ struct StoredPromptFilters<'a> {
     query: &'a str,
     source: &'a str,
     date: &'a str,
+    project: &'a str,
     workspace: &'a str,
 }
 
@@ -18198,12 +18209,20 @@ fn read_stored_prompts(
             OR prompt_date LIKE ?2)
            AND (?3 = '' OR source = ?3)
            AND (?4 = '' OR prompt_date = ?4)
-           AND (?5 = '' OR LOWER(COALESCE(cwd, '')) LIKE ?6)
+           AND (?5 = ''
+                OR LOWER(COALESCE(cwd, '')) LIKE ?6
+                OR LOWER(COALESCE(cwd, '')) LIKE ?7
+                OR LOWER(source_path) LIKE ?6
+                OR LOWER(source_path) LIKE ?7
+                OR LOWER(text) LIKE ?6
+                OR LOWER(text) LIKE ?7)
+           AND (?8 = '' OR LOWER(COALESCE(cwd, '')) LIKE ?9)
          ORDER BY {order_by}
-         LIMIT ?7"
+         LIMIT ?10"
     );
     let query_lower = filters.query.to_lowercase();
     let like = format!("%{query_lower}%");
+    let (project_child_like, project_root_like) = stored_project_filter_patterns(filters.project);
     let workspace_lower = filters.workspace.to_lowercase();
     let workspace_like = format!("%{workspace_lower}%");
     let mut stmt = conn.prepare(&sql)?;
@@ -18214,6 +18233,9 @@ fn read_stored_prompts(
                 like,
                 filters.source,
                 filters.date,
+                filters.project.to_lowercase(),
+                project_child_like,
+                project_root_like,
                 workspace_lower,
                 workspace_like,
                 limit as i64,
@@ -18270,6 +18292,7 @@ fn count_stored_prompt_matches(
 ) -> Result<usize, Box<dyn std::error::Error>> {
     let query_lower = filters.query.to_lowercase();
     let like = format!("%{query_lower}%");
+    let (project_child_like, project_root_like) = stored_project_filter_patterns(filters.project);
     let workspace_lower = filters.workspace.to_lowercase();
     let workspace_like = format!("%{workspace_lower}%");
     let count: i64 = conn.query_row(
@@ -18282,18 +18305,64 @@ fn count_stored_prompt_matches(
             OR prompt_date LIKE ?2)
            AND (?3 = '' OR source = ?3)
            AND (?4 = '' OR prompt_date = ?4)
-           AND (?5 = '' OR LOWER(COALESCE(cwd, '')) LIKE ?6)",
+           AND (?5 = ''
+                OR LOWER(COALESCE(cwd, '')) LIKE ?6
+                OR LOWER(COALESCE(cwd, '')) LIKE ?7
+                OR LOWER(source_path) LIKE ?6
+                OR LOWER(source_path) LIKE ?7
+                OR LOWER(text) LIKE ?6
+                OR LOWER(text) LIKE ?7)
+           AND (?8 = '' OR LOWER(COALESCE(cwd, '')) LIKE ?9)",
         rusqlite::params![
             query_lower,
             like,
             filters.source,
             filters.date,
+            filters.project.to_lowercase(),
+            project_child_like,
+            project_root_like,
             workspace_lower,
             workspace_like,
         ],
         |row| row.get(0),
     )?;
     Ok(count as usize)
+}
+
+fn stored_project_filter_patterns(project: &str) -> (String, String) {
+    let project = project.to_lowercase();
+    (
+        format!("%/10_projects/{project}/%"),
+        format!("%/10_projects/{project}"),
+    )
+}
+
+fn read_stored_prompt_project_facets(
+    conn: &Connection,
+    limit: usize,
+) -> Result<Vec<FrequencyItem>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare("SELECT COALESCE(cwd, ''), source_path, text FROM prompts")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut counts = HashMap::new();
+    for (cwd, path, text) in rows {
+        let cwd = if cwd.trim().is_empty() {
+            None
+        } else {
+            Some(cwd.as_str())
+        };
+        *counts
+            .entry(prompt_project_key_from_parts(cwd, &path, &text))
+            .or_default() += 1;
+    }
+    Ok(rank_counts(counts, limit))
 }
 
 fn read_stored_prompt_facet(
@@ -31416,6 +31485,7 @@ Status: completed as a source-only/report-only hardening slice.
             query: None,
             source: None,
             date: None,
+            project: None,
             workspace: None,
             preview_sort: None,
         })
@@ -31456,6 +31526,7 @@ Status: completed as a source-only/report-only hardening slice.
             query: Some("needle".to_string()),
             source: None,
             date: None,
+            project: None,
             workspace: None,
             preview_sort: Some("quality-asc".to_string()),
         })
@@ -31499,6 +31570,7 @@ Status: completed as a source-only/report-only hardening slice.
             query: None,
             source: None,
             date: None,
+            project: None,
             workspace: None,
             preview_sort: Some("latest".to_string()),
         })
@@ -31551,6 +31623,7 @@ Status: completed as a source-only/report-only hardening slice.
             query: Some("src-tauri".to_string()),
             source: Some("Codex".to_string()),
             date: Some("2026-06-06".to_string()),
+            project: None,
             workspace: Some("promptvault".to_string()),
             preview_sort: Some("latest".to_string()),
         })
@@ -31569,6 +31642,68 @@ Status: completed as a source-only/report-only hardening slice.
     }
 
     #[test]
+    fn load_stored_prompts_filters_by_project_from_cwd_path_or_text() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-load-project-filtered-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create project filtered root");
+        let db_path = root.join("promptvault.sqlite");
+
+        let mut cwd_project = dated_record("stored-cwd-project", "2026-06-06T00:00:00Z");
+        cwd_project.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
+
+        let mut path_project = dated_record("stored-path-project", "2026-06-06T00:00:00Z");
+        path_project.path =
+            "/Users/wj/Ai/System/10_Projects/CareVault/.codex/session.jsonl".to_string();
+
+        let mut text_project = dated_record("stored-text-project", "2026-06-06T00:00:00Z");
+        text_project.text =
+            "Review /Users/wj/Ai/System/10_Projects/NuancedNarrator/working.md".to_string();
+        text_project.word_count = count_words(&text_project.text);
+        text_project.char_count = text_project.text.chars().count();
+
+        let prompts = vec![
+            cwd_project,
+            path_project,
+            text_project,
+            record("stored-unknown"),
+        ];
+        let stats = build_stats(&prompts, Vec::new());
+        persist_scan_result(&db_path, "2026-06-06T00:01:00Z", &prompts, &stats, &[])
+            .expect("persist project filtered prompt vault");
+
+        let carevault = run_load_stored_prompts(StoredPromptsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(10),
+            project: Some("CareVault".to_string()),
+            preview_sort: Some("latest".to_string()),
+            ..Default::default()
+        })
+        .expect("load CareVault project prompts");
+        assert_eq!(carevault.returned_prompt_count, 1);
+        assert_eq!(carevault.prompts[0].id, "stored-path-project");
+        assert_eq!(carevault.stats.prompts_by_project[0].text, "CareVault");
+
+        let nuanced = run_load_stored_prompts(StoredPromptsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(10),
+            project: Some("NuancedNarrator".to_string()),
+            preview_sort: Some("latest".to_string()),
+            ..Default::default()
+        })
+        .expect("load NuancedNarrator project prompts");
+        assert_eq!(nuanced.returned_prompt_count, 1);
+        assert_eq!(nuanced.prompts[0].id, "stored-text-project");
+        assert_eq!(nuanced.stats.prompts_by_project[0].text, "NuancedNarrator");
+
+        std::fs::remove_dir_all(root).expect("remove project filtered root");
+    }
+
+    #[test]
     fn stored_prompt_facets_summarize_sources_dates_and_workspaces() {
         let root = std::env::temp_dir().join(format!(
             "promptvault-facets-{}",
@@ -31581,13 +31716,13 @@ Status: completed as a source-only/report-only hardening slice.
         let db_path = root.join("promptvault.sqlite");
         let mut codex_today = dated_record("facet-codex-today", "2026-06-06T00:00:00Z");
         codex_today.source = "Codex".to_string();
-        codex_today.cwd = Some("/Users/wj".to_string());
+        codex_today.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
         let mut codex_yesterday = dated_record("facet-codex-yesterday", "2026-06-05T00:00:00Z");
         codex_yesterday.source = "Codex".to_string();
-        codex_yesterday.cwd = Some("/Users/wj".to_string());
+        codex_yesterday.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
         let mut claude_today = dated_record("facet-claude-today", "2026-06-06T00:00:00Z");
         claude_today.source = "Claude".to_string();
-        claude_today.cwd = Some("/Users/wj".to_string());
+        claude_today.cwd = Some("/Users/wj/Ai/System/10_Projects/CareVault".to_string());
         let mut gemini_today = dated_record("facet-gemini-today", "2026-06-06T00:00:00Z");
         gemini_today.source = "Gemini".to_string();
         gemini_today.cwd = Some("/tmp/OtherProject".to_string());
@@ -31608,8 +31743,13 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(result.sources[0].count, 2);
         assert_eq!(result.dates[0].text, "2026-06-06");
         assert_eq!(result.dates[0].count, 3);
-        assert_eq!(result.workspaces[0].text, "/Users/wj");
-        assert_eq!(result.workspaces[0].count, 3);
+        assert_eq!(result.projects[0].text, "PromptVault");
+        assert_eq!(result.projects[0].count, 2);
+        assert_eq!(
+            result.workspaces[0].text,
+            "/Users/wj/Ai/System/10_Projects/PromptVault"
+        );
+        assert_eq!(result.workspaces[0].count, 2);
 
         std::fs::remove_dir_all(root).expect("remove facets root");
     }

@@ -1,10 +1,91 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 14:17 KST
+Updated: 2026-06-11 14:31 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019eb503-f8ed-7df2-8275-7da158b188eb`
+
+## Resume Snapshot - 2026-06-11 14:31 KST
+
+Long-Term Goal:
+
+- Keep PromptVault able to collect all locally available user-authored prompts
+  from configured agent/session/progress-log sources, then make those prompts
+  inspectable by date, project, source, quality, and management state.
+- Preserve resumability from this file with exact current scope, completed
+  slices, verification evidence, and the next concrete continuation step.
+
+Short-Term Goal:
+
+- Add project-level stored-history facets and filtering so saved prompt
+  previews can be narrowed by project without requiring operators to know the
+  full workspace path.
+- Keep existing source, date, workspace, query, and preview-sort behavior
+  compatible.
+
+Current Active Work:
+
+- Stored project facet/filter slice is implemented and verified.
+- Explicit-path commit/push is pending from this snapshot.
+- The previous project prompt statistics slice is pushed as
+  `ef91d87 feat: add project prompt statistics`.
+
+Progress:
+
+- Added `project` to stored prompt filter state, load options, labels,
+  snapshots, active-filter counts, and UI controls.
+- Added stored project suggestions from fresh stored facets, falling back to
+  loaded prompt project stats when facet data is not available.
+- Added backend stored project filtering across `cwd`, `source_path`, and
+  prompt text paths under `/10_Projects/<project>`.
+- Added stored project facets derived with the same project-key priority as
+  scan-time project stats.
+- Updated stored facet summaries to include project counts.
+- Updated browser bridge QA to require the stored facet summary to expose
+  projects and to wait for the project filter input.
+- Updated README to document stored project facets.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: stored project filter options, facet aggregation,
+  SQL filtering, shared project-key helper, and Rust regression tests.
+- `src/App.tsx`: stored project suggestions, input, and datalist.
+- `src/storedFilters.ts`, `src/storedFacetStatus.ts`, `src/types.ts`, and
+  `src/promptVaultApi.ts`: API/UI types and validation for project facets.
+- `tests/storedFilters.test.ts`, `tests/storedFacetStatus.test.ts`, and
+  `tests/promptVaultApi.test.ts`: project filter/facet validation coverage.
+- `scripts/browser-bridge-isolated-qa.mjs`: stored facet/project-filter DOM
+  assertion.
+- `README.md`: stored project facet documentation.
+
+Tests:
+
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/storedFilters.test.ts tests/storedFacetStatus.test.ts tests/promptVaultApi.test.ts`
+  (`231` passed).
+- PASS: `npm run build` (existing Vite chunk-size warning only).
+- PASS: `cargo fmt -- --check`.
+- PASS:
+  `cargo test load_stored_prompts_filters_by_project_from_cwd_path_or_text`.
+- PASS:
+  `cargo test stored_prompt_facets_summarize_sources_dates_and_workspaces`.
+- PASS: `npm run test:ui` (`538` passed).
+- PASS: `npm run qa:browser-bridge`; stored facets/prompts step verified the
+  project summary and `data-stored-filter-project` input before continuing
+  through the full browser QA flow.
+- PASS: `npm run check`; UI tests, Vite build, Rust CLI build, Rust lib tests
+  (`259` passed), CLI tests (`47` passed), doc-tests, and clippy
+  `-D warnings` all passed.
+
+Known Exclusions / Next Continuation:
+
+- This slice makes stored prompt history directly filterable by project. It
+  does not prove that every configured source has been fully imported or
+  backfilled.
+- Remaining continuation should audit full source import/backfill completeness
+  and whether a dedicated stored-history report is needed for the "all prompts
+  by date/project" workflow beyond interactive filters and scan/export stats.
 
 ## Resume Snapshot - 2026-06-11 14:17 KST
 

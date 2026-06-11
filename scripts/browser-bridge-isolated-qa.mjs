@@ -1073,8 +1073,10 @@ async function runBrowserQa() {
     await page.locator('[data-refresh-stored-facets="true"]').click();
     await page.waitForFunction(() => {
       const text = document.querySelector('[data-stored-facet-summary="true"]')?.textContent ?? "";
-      return text.includes("저장됨") || text.includes("저장소 필터 후보");
+      return (text.includes("저장됨") && text.includes("프로젝트"))
+        || text.includes("저장소 필터 후보");
     });
+    await page.locator('[data-stored-filter-project="true"]').waitFor({ timeout: 30000 });
     await page.locator('[data-load-stored-prompts="true"]').click();
     await page.waitForFunction(() => {
       return document.querySelectorAll('[data-prompt-row="true"]').length > 0

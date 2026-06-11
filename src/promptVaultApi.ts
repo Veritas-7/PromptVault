@@ -93,6 +93,7 @@ export interface StoredPromptsOptions {
   query?: string;
   source?: string;
   date?: string;
+  project?: string;
   workspace?: string;
   preview_sort?: string;
 }
@@ -3487,6 +3488,13 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
     || !frequencyTextsAreUnique(value.sources)
     || !isFrequencyItemsWithinTotal(value.dates, value.total_prompts)
     || !frequencyTextsAreUnique(value.dates)
+    || (
+      value.projects !== undefined
+      && (
+        !isFrequencyItemsWithinTotal(value.projects, value.total_prompts)
+        || !frequencyTextsAreUnique(value.projects)
+      )
+    )
     || !isFrequencyItemsWithinTotal(value.workspaces, value.total_prompts)
     || !frequencyTextsAreUnique(value.workspaces)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);

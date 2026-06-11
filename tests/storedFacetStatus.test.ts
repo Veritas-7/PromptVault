@@ -8,6 +8,7 @@ import {
 
 const readyResult = {
   dates: [{ text: "2026-06-06", count: 3 }],
+  projects: [{ text: "PromptVault", count: 12 }],
   sources: [{ text: "Codex", count: 200 }],
   total_prompts: 362,
   workspaces: [{ text: "PromptVault", count: 12 }],
@@ -25,16 +26,17 @@ test("stored facet failure text is only shown after failed refreshes", () => {
 test("stored facet summary uses live facet result when available", () => {
   assert.equal(
     storedFacetSummaryText("ready", 0, readyResult),
-    "362개 저장됨, 소스 1개, 날짜 1개, 작업공간 1개",
+    "362개 저장됨, 소스 1개, 날짜 1개, 프로젝트 1개, 작업공간 1개",
   );
   assert.equal(
     storedFacetSummaryText("ready", 0, {
       dates: [],
+      projects: [{ text: "PromptVault", count: 12 }],
       sources: [{ text: "Codex", count: 200 }, { text: "Claude", count: 20 }],
       total_prompts: 220,
       workspaces: [{ text: "PromptVault", count: 12 }, { text: "Other", count: 2 }],
     }),
-    "220개 저장됨, 소스 2개, 날짜 0개, 작업공간 2개",
+    "220개 저장됨, 소스 2개, 날짜 0개, 프로젝트 1개, 작업공간 2개",
   );
 });
 

@@ -2,6 +2,7 @@ export type StoredFacetsState = "idle" | "loading" | "ready" | "failed";
 
 export interface StoredFacetSummaryResult {
   dates: readonly unknown[];
+  projects?: readonly unknown[];
   sources: readonly unknown[];
   total_prompts: number;
   workspaces: readonly unknown[];
@@ -26,8 +27,9 @@ export function storedFacetSummaryText(
   if (result) {
     const sourceCount = countLabel(result.sources.length, "소스");
     const dateCount = countLabel(result.dates.length, "날짜");
+    const projectCount = countLabel(result.projects?.length ?? 0, "프로젝트");
     const workspaceCount = countLabel(result.workspaces.length, "작업공간");
-    return `${result.total_prompts.toLocaleString()}개 저장됨, ${sourceCount}, ${dateCount}, ${workspaceCount}`;
+    return `${result.total_prompts.toLocaleString()}개 저장됨, ${sourceCount}, ${dateCount}, ${projectCount}, ${workspaceCount}`;
   }
   if (state === "loading") return "저장소 필터 후보 불러오는 중";
   if (state === "failed") {

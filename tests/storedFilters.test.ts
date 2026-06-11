@@ -18,6 +18,7 @@ import { pathDisplayText, sourceLabelDisplayText } from "../src/promptRowA11y.ts
 
 const emptyFilters: StoredPromptFilters = {
   date: "",
+  project: "",
   query: "",
   source: "",
   workspace: "",
@@ -39,6 +40,7 @@ test("stored prompt options trim and omit empty filters", () => {
     date: undefined,
     limit: 1000,
     preview_sort: "latest",
+    project: undefined,
     query: undefined,
     source: undefined,
     workspace: undefined,
@@ -53,6 +55,7 @@ test("stored prompt options preserve exact source and date filters", () => {
   const options = storedPromptLoadOptions(
     {
       date: "2026-06-06",
+      project: " PromptVault ",
       query: " cmux ",
       source: "Codex",
       workspace: " PromptVault ",
@@ -65,6 +68,7 @@ test("stored prompt options preserve exact source and date filters", () => {
     date: "2026-06-06",
     limit: 25,
     preview_sort: "quality_asc",
+    project: "PromptVault",
     query: "cmux",
     source: "Codex",
     workspace: "PromptVault",
@@ -76,17 +80,19 @@ test("active stored prompt filter count ignores whitespace", () => {
   assert.equal(
     activeStoredPromptFilterCount({
       date: "2026-06-06",
+      project: "PromptVault",
       query: " ",
       source: "Codex",
       workspace: "PromptVault",
     }),
-    3,
+    4,
   );
 });
 
 test("stored prompt filter snapshots preserve loaded filter values", () => {
   const filters = {
     date: "2026-06-06",
+    project: "PromptVault",
     query: "cmux",
     source: "Codex",
     workspace: "PromptVault",
@@ -101,12 +107,13 @@ test("stored prompt filter snapshots preserve loaded filter values", () => {
 test("stored result filter count follows the last loaded stored result", () => {
   const loadedFilters = {
     date: "2026-06-06",
+    project: "PromptVault",
     query: "",
     source: "Codex",
     workspace: "PromptVault",
   };
 
-  assert.equal(storedResultFilterCount("stored", loadedFilters), 3);
+  assert.equal(storedResultFilterCount("stored", loadedFilters), 4);
   assert.equal(storedResultFilterCount("stored", emptyFilters), 0);
   assert.equal(storedResultFilterCount("scan", loadedFilters), 0);
   assert.equal(storedResultFilterCount(null, loadedFilters), 0);
@@ -144,6 +151,7 @@ test("stored filter input labels explain field and locked state", () => {
   assert.equal(storedFilterInputLabel("text", lockState()), "저장소 텍스트 필터");
   assert.equal(storedFilterInputLabel("source", lockState()), "저장소 소스 필터");
   assert.equal(storedFilterInputLabel("date", lockState()), "저장소 날짜 필터");
+  assert.equal(storedFilterInputLabel("project", lockState()), "저장소 프로젝트 필터");
   assert.equal(storedFilterInputLabel("workspace", lockState()), "저장소 작업공간 필터");
   assert.equal(
     storedFilterInputLabel("text", lockState({ storedLoadRunning: true })),

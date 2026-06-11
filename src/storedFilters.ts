@@ -6,12 +6,14 @@ export interface StoredPromptFilters {
   query: string;
   source: string;
   date: string;
+  project: string;
   workspace: string;
 }
 
 export function emptyStoredPromptFilters(): StoredPromptFilters {
   return {
     date: "",
+    project: "",
     query: "",
     source: "",
     workspace: "",
@@ -21,6 +23,7 @@ export function emptyStoredPromptFilters(): StoredPromptFilters {
 export function storedPromptFiltersSnapshot(filters: StoredPromptFilters): StoredPromptFilters {
   return {
     date: filters.date,
+    project: filters.project,
     query: filters.query,
     source: filters.source,
     workspace: filters.workspace,
@@ -49,6 +52,7 @@ export function activeStoredPromptFilterCount(filters: StoredPromptFilters): num
     filters.query,
     filters.source,
     filters.date,
+    filters.project,
     filters.workspace,
   ].filter((value) => value.trim()).length;
 }
@@ -88,6 +92,7 @@ export function storedFilterInputLabel(fieldLabel: string, lockState: ActionLock
   const reason = activeActionLockReason(lockState);
   const labelMap: Record<string, string> = {
     date: "날짜",
+    project: "프로젝트",
     source: "소스",
     text: "텍스트",
     workspace: "작업공간",
@@ -108,6 +113,7 @@ export function storedPromptLoadOptions(
     date: trimmedOptional(filters.date),
     limit,
     preview_sort: previewSortForMode(previewMode),
+    project: trimmedOptional(filters.project),
     query: trimmedOptional(filters.query),
     source: trimmedOptional(filters.source),
     workspace: trimmedOptional(filters.workspace),

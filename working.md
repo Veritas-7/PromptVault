@@ -1,10 +1,94 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 14:33 KST
+Updated: 2026-06-11 15:04 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019eb503-f8ed-7df2-8275-7da158b188eb`
+
+## Resume Snapshot - 2026-06-11 15:04 KST
+
+Long-Term Goal:
+
+- Keep PromptVault able to collect all locally available user-authored prompts
+  from configured Antigravity, Codex app/CLI, Claude, Gemini, and
+  project-progress sources, then make those prompts inspectable by date,
+  project, source, quality, and management state.
+- Preserve resumability from this file with exact current scope, completed
+  slices, verification evidence, and the next concrete continuation step.
+
+Short-Term Goal:
+
+- Make the remaining large Codex JSONL permanent-vault backfill feasible by
+  removing the parser's full-file line buffering and proving lower-memory
+  checkpoint imports.
+- Continue actual permanent DB backfill for all non-Codex sources and a bounded
+  Codex checkpoint.
+
+Current Active Work:
+
+- Codex JSONL parser streaming slice is implemented and under final
+  verification.
+- Commit/push is pending from this snapshot.
+- Previous pushed state is
+  `8732423 docs: record stored project filter completion`.
+
+Progress:
+
+- Reconfirmed thread identity for
+  `019eb503-f8ed-7df2-8275-7da158b188eb`; persisted objective still targets
+  PromptVault.
+- Read `/Users/wj/Downloads/working.md/PromptVault.txt`; it points to this
+  repo and `working.md`.
+- Completed real permanent DB imports for reachable non-Codex/stale sources:
+  `codex-cx`, `claude-code-projects`, `claude-code-transcripts`,
+  `antigravity-cli-transcripts`, `antigravity-ide-alt-transcripts`,
+  `antigravity-cli-conversation-db`, `project-progress-logs`, and
+  `gemini-tmp-chat`.
+- Attempted a pre-fix `codex --files 5000` import; after about 10 minutes the
+  process still had no checkpoint output and used over 1GB RSS, so it was
+  stopped before DB state changed.
+- Confirmed a pre-fix `codex --files 100` checkpoint completed and advanced
+  Codex from `25` to `125`.
+- Changed Codex JSONL parsing to stream non-empty lines and parse only lines
+  that can contain `turn_context` or user `response_item` prompt context,
+  instead of collecting every line in memory first.
+- Rebuilt the CLI and reran Codex imports:
+  - `codex --files 500`: completed `125..625 / 25299` in `111.94s`, RSS about
+    `60MB`.
+  - `codex --files 2000`: completed `625..2625 / 25300` in `593.94s`, RSS
+    about `124MB`.
+- Current permanent DB audit after the checkpoint:
+  `codex next_file_index=2625`, `total_files=25300`, `completed=0`,
+  `imported_prompt_count=18152`; `prompts` table count is `92155`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: Codex JSONL streaming parser helper, relevant-line
+  prefilter, and parser regression test that preserves `cwd` while ignoring
+  large assistant noise.
+- `README.md`: Codex large-import guidance for checkpointed permanent vault
+  backfills.
+- `working.md`: this operational checkpoint and remaining gap.
+
+Tests / Verification So Far:
+
+- PASS: `cargo fmt -- --check`.
+- PASS: `cargo test parse_codex_jsonl_streams_prompt_lines_and_preserves_cwd`.
+- PASS: `cargo test import_batch_persists_resume_state`.
+- PASS: `cargo build --bin promptvault-cli`.
+- Runtime evidence: Codex 500-file and 2000-file imports completed with
+  bounded memory after the parser change.
+
+Known Exclusions / Next Continuation:
+
+- The long-term objective is still not complete. Codex permanent import remains
+  at `2625 / 25300`; continue with 500-file checkpoints or add a dedicated
+  progress-visible long Codex backfill runner before claiming all current
+  sessions are parsed.
+- The 2000-file checkpoint worked but took almost 10 minutes; use 500 or
+  smaller for interactive operation unless a background runner/progress surface
+  is added.
 
 ## Resume Snapshot - 2026-06-11 14:31 KST
 

@@ -5960,25 +5960,36 @@ fn parse_codex_jsonl(
 ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
     let mut records = Vec::new();
     let mut cwd: Option<String> = None;
-    for line in jsonl_lines(path)? {
+    for_each_jsonl_line(path, |line| {
+        if !codex_jsonl_line_may_contain_prompt_context(&line) {
+            return Ok(());
+        }
         let value: Value = serde_json::from_str(&line)?;
         if value.get("type").and_then(Value::as_str) == Some("turn_context") {
             cwd = value
                 .pointer("/payload/cwd")
                 .and_then(Value::as_str)
                 .map(str::to_string);
-            continue;
+            return Ok(());
         }
         if value.get("type").and_then(Value::as_str) != Some("response_item") {
-            continue;
+            return Ok(());
         }
         if value.pointer("/payload/role").and_then(Value::as_str) != Some("user") {
-            continue;
+            return Ok(());
         }
         let text = text_from_value(value.pointer("/payload/content"));
         push_record(&mut records, source, path, &value, cwd.clone(), text);
-    }
+        Ok(())
+    })?;
     Ok(records)
+}
+
+fn codex_jsonl_line_may_contain_prompt_context(line: &str) -> bool {
+    line.contains("\"turn_context\"")
+        || (line.contains("\"response_item\"")
+            && line.contains("\"role\"")
+            && line.contains("\"user\""))
 }
 
 fn parse_claude_project_jsonl(
@@ -14121,16 +14132,27 @@ fn push_record(
 }
 
 fn jsonl_lines(path: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut lines = Vec::new();
+    for_each_jsonl_line(path, |line| {
+        lines.push(line);
+        Ok(())
+    })?;
+    Ok(lines)
+}
+
+fn for_each_jsonl_line<F>(path: &Path, mut visit: F) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: FnMut(String) -> Result<(), Box<dyn std::error::Error>>,
+{
     let file = File::open(path)?;
     let reader = BufReader::new(file);
-    let mut lines = Vec::new();
     for line in reader.lines() {
         let line = line?;
         if !line.trim().is_empty() {
-            lines.push(line);
+            visit(line)?;
         }
     }
-    Ok(lines)
+    Ok(())
 }
 
 fn text_from_value(value: Option<&Value>) -> String {
@@ -21683,6 +21705,48 @@ mod tests {
             .iter()
             .any(|prompt| prompt.text.contains("second unique prompt path")));
         assert_eq!(files_seen, 2);
+    }
+
+    #[test]
+    fn parse_codex_jsonl_streams_prompt_lines_and_preserves_cwd() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-codex-streaming-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create codex streaming root");
+        let path = root.join("streaming.jsonl");
+        let assistant_noise =
+            "Large assistant trace that should not become a prompt. ".repeat(1024);
+        std::fs::write(
+            &path,
+            format!(
+                "{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"streaming-test\"}}}}\n\
+                 {{\"type\":\"response_item\",\"payload\":{{\"role\":\"assistant\",\"content\":[{{\"text\":\"{assistant_noise}\"}}]}}}}\n\
+                 {{\"type\":\"turn_context\",\"payload\":{{\"cwd\":\"/Users/wj/Ai/System/10_Projects/PromptVault\"}}}}\n\
+                 {{\"type\":\"response_item\",\"payload\":{{\"role\":\"user\",\"content\":[{{\"text\":\"Optimize Codex JSONL import, keep cwd metadata, run cargo test, and report results.\"}}]}}}}\n"
+            ),
+        )
+        .expect("write codex streaming fixture");
+
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let records = parse_codex_jsonl(&source, &path).expect("parse codex jsonl");
+        std::fs::remove_dir_all(root).expect("remove codex streaming root");
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            records[0].cwd.as_deref(),
+            Some("/Users/wj/Ai/System/10_Projects/PromptVault")
+        );
+        assert!(records[0].text.contains("Optimize Codex JSONL import"));
     }
 
     #[test]

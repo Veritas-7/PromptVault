@@ -81,7 +81,16 @@ npm run qa:browser-bridge
 The runner starts Vite and the local bridge, points the bridge at a temporary
 SQLite file, clicks through scan, local improvement, plan/import, stored prompt
 loading, work summary snapshot saving, session-evidence review queue sync/update,
-and work-log management, then prints the observed counters. To run the same bridge manually, point it at a temporary
+and work-log management, then prints the observed counters.
+
+For final local release/package verification, run the full release preflight:
+
+```bash
+npm run check:release
+```
+
+This runs the whitespace gate, full-repo gitleaks scan, frontend/Rust check
+suite, isolated browser bridge QA, and Tauri production package build. To run the same bridge manually, point it at a temporary
 SQLite file:
 
 ```bash

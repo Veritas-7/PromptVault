@@ -16,6 +16,8 @@ Last updated: 2026-06-18
 | Bridge/API validation | `tests/promptVaultApi.test.ts` covers stored repeated facets and quality gaps | PASS |
 | Full local quality gate | `npm run check` passed frontend tests/build, Rust build, Rust tests, and strict clippy | PASS |
 | Isolated browser QA | `npm run qa:browser-bridge` passed after the work-log coverage status fix | PASS |
+| Source-audit UI QA stability | Browser QA selects the bounded `near-session-date-hint` + `pending_review` scope before running source audit, matching the bridge smoke path and avoiding full-scope release-gate timeouts | PASS |
+| Release/package preflight | `npm run check:release` ties whitespace, gitleaks, `npm run check`, isolated browser QA, and Tauri production packaging into one repeatable gate | PASS |
 | Secret scan | `gitleaks dir . --no-banner --redact` | PASS |
 
 Additional verification commands:
@@ -27,6 +29,7 @@ node --disable-warning=ExperimentalWarning --experimental-transform-types --test
 node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts tests/workSummaryStatus.test.ts
 npm run qa:browser-bridge
 npm run check
+npm run check:release
 git diff --check
 gitleaks dir . --no-banner --redact
 ```
@@ -195,6 +198,7 @@ cargo run --quiet --bin promptvault-cli -- --help
 - Full release scan response payload: PASS, `returned_prompt_count=0`, `prompts_truncated=true`, `markdown_included=false`.
 - Full release quality distribution: PASS, `average_quality=66.49`, `weak_prompt_count=61,243`, and top quality gaps `constraints`, `verification`, `output_format`, `action_verb`, `context`.
 - Tauri production build: PASS, produced `src-tauri/target/release/bundle/macos/promptvault.app` and `src-tauri/target/release/bundle/dmg/promptvault_0.1.0_aarch64.dmg`.
+- Release preflight: PASS, `npm run check:release` completed whitespace, gitleaks, frontend/Rust checks, isolated browser bridge QA, and Tauri production packaging from one command.
 - Dev server smoke: PASS, `http://localhost:5174/` returned HTTP 200. Existing CareVault server occupied default port 1420, so PromptVault was started with `VITE_PORT=5174`.
 - Diff whitespace gate: PASS, `git diff --check`.
 - Playwright render smoke: PASS, `Agent prompt intelligence` loaded, `Recommendation` panel rendered, 5 panels were present, and `bodyWidth=viewportWidth=1440`.

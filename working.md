@@ -38,7 +38,11 @@ Changes:
 - `src/App.css`: focus-visible rings, hover affordance, panel/search polish,
   wrapped notices, and mobile 44px+ targets for compact controls.
 - `scripts/browser-bridge-isolated-qa.mjs`: verifies work-log coverage status
-  from the raw data attribute instead of localized visible text.
+  from the raw data attribute instead of localized visible text; source-audit
+  UI QA now uses the same bounded near-session/pending-review scope as the
+  bridge smoke path before clicking the expensive audit action.
+- `package.json`, `README.md`, `autoresearch/evidence/completion_audit.md`:
+  added `npm run check:release` as the repeatable local release/package gate.
 - `README.md`, `autoresearch/evidence/completion_audit.md`: updated completion
   evidence for the stored-facet hardening and UI/QA slice.
 
@@ -55,12 +59,19 @@ Verification:
 - PASS: `npm run qa:browser-bridge`.
 - PASS: `npm run check` (frontend tests/build, Rust build, Rust tests, strict
   clippy).
+- PASS: `npm run check:release` (whitespace gate, full-repo gitleaks scan,
+  `npm run check`, isolated browser bridge QA, and Tauri production package
+  build).
+- PASS: Tauri production bundles created
+  `src-tauri/target/release/bundle/macos/promptvault.app` and
+  `src-tauri/target/release/bundle/dmg/promptvault_0.1.0_aarch64.dmg`.
 
 Known Exclusions / Next Continuation:
 
-- No known failing gate after this slice. Before the next release/push, rerun
-  `git diff --check`, `gitleaks dir . --no-banner --redact`, and remote sync
-  verification from the repo root.
+- No known failing gate after this slice. Release/package verification is now
+  one repeatable command: `npm run check:release`, which runs `git diff
+  --check`, `gitleaks dir . --no-banner --redact`, `npm run check`,
+  `npm run qa:browser-bridge`, and `npm run tauri build`.
 
 ## Resume Snapshot - 2026-06-11 17:20 KST
 

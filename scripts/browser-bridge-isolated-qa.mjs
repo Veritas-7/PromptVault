@@ -560,6 +560,52 @@ async function waitForEnabled(page, selector, timeout = 120000) {
   }, selector, { timeout });
 }
 
+async function clickWorkSessionEvidenceSourceAuditAction(page, label) {
+  const selector = '[data-work-session-evidence-source-audit-action="true"]';
+  const path = "/api/work-session-evidence-source-audit";
+  let lastSnapshot = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    await waitForEnabled(page, selector);
+    const responsePromise = page.waitForResponse((response) =>
+      response.url().includes(path) && response.request().method() === "POST",
+      { timeout: 90000 },
+    );
+    await page.locator(selector).click();
+    const started = await Promise.race([
+      responsePromise.then((response) => ({ response })),
+      page.waitForFunction(() => {
+        const meta = document.querySelector('[data-work-session-evidence-source-audit-meta="true"]')
+          ?.textContent ?? "";
+        return meta.includes("원본 감사 실행 중");
+      }, undefined, { timeout: 2000 })
+        .then(() => ({ loading: true }))
+        .catch(() => ({ loading: false })),
+    ]);
+    if ("response" in started) return started.response;
+    if (started.loading) return await responsePromise;
+
+    responsePromise.catch(() => undefined);
+    lastSnapshot = await page.evaluate((targetSelector) => {
+      const element = document.querySelector(targetSelector);
+      return {
+        exists: Boolean(element),
+        disabled: Boolean(element?.disabled),
+        ariaDisabled: element?.getAttribute("aria-disabled") ?? "",
+        label: element?.textContent?.trim() ?? "",
+        sourceAuditMeta: document.querySelector('[data-work-session-evidence-source-audit-meta="true"]')
+          ?.textContent?.trim() ?? "",
+        reviewQueueMeta: document.querySelector('[data-work-session-evidence-review-queue-meta="true"]')
+          ?.textContent?.trim() ?? "",
+      };
+    }, selector);
+    console.log(`[qa] ${label} click attempt ${attempt} produced no source-audit request: ${
+      JSON.stringify(lastSnapshot)
+    }`);
+    await page.waitForTimeout(500);
+  }
+  throw new Error(`${label} did not start source-audit request: ${JSON.stringify(lastSnapshot)}`);
+}
+
 async function bridgeJson(page, path, body = {}) {
   return page.evaluate(
     async ({ path, body, bridgePort }) => {
@@ -1625,6 +1671,12 @@ async function runBrowserQa() {
       return Boolean(input && !input.checked);
     }, undefined, { timeout: 30000 });
     step("work session evidence review queue UI");
+    await waitForEnabled(page, '[data-work-session-evidence-review-queue-row-filter="true"]');
+    await page.locator('[data-work-session-evidence-review-queue-row-filter="true"]')
+      .selectOption("near-session-date-hint");
+    await waitForEnabled(page, '[data-work-session-evidence-review-queue-review-state-filter="true"]');
+    await page.locator('[data-work-session-evidence-review-queue-review-state-filter="true"]')
+      .selectOption("pending_review");
     await waitForEnabled(page, '[data-sync-work-session-evidence-review-queue="true"]');
     await page.locator('[data-sync-work-session-evidence-review-queue="true"]').click();
     await page.waitForFunction(() => {
@@ -1746,13 +1798,7 @@ async function runBrowserQa() {
       workSessionEvidenceReviewQueueUiStateAfterDefer =
         "no deferrable session evidence review queue row";
     }
-    const sourceAuditUiResponse = page.waitForResponse((response) =>
-      response.url().includes("/api/work-session-evidence-source-audit")
-      && response.request().method() === "POST",
-      { timeout: 90000 },
-    );
-    await page.locator('[data-work-session-evidence-source-audit-action="true"]').click();
-    await sourceAuditUiResponse;
+    await clickWorkSessionEvidenceSourceAuditAction(page, "source audit UI");
     await page.waitForFunction(() => {
       const meta = document.querySelector('[data-work-session-evidence-source-audit-meta="true"]')
         ?.textContent ?? "";
@@ -1844,13 +1890,7 @@ async function runBrowserQa() {
     }
     workSessionEvidenceSourceAuditDeferUiState =
       `${sourceAuditDeferCandidateIds.length} candidates · bulk deferred from source audit`;
-    const sourceAuditUiReloadResponse = page.waitForResponse((response) =>
-      response.url().includes("/api/work-session-evidence-source-audit")
-      && response.request().method() === "POST",
-      { timeout: 90000 },
-    );
-    await page.locator('[data-work-session-evidence-source-audit-action="true"]').click();
-    await sourceAuditUiReloadResponse;
+    await clickWorkSessionEvidenceSourceAuditAction(page, "source audit UI reload");
     await page.waitForFunction(() => {
       const meta = document.querySelector('[data-work-session-evidence-source-audit-meta="true"]')
         ?.textContent ?? "";

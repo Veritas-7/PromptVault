@@ -4,7 +4,37 @@ PromptVault is a local-first Tauri + React + TypeScript workbench for collecting
 
 It extracts user-authored prompts, strips known injected context blocks, persists prompts to a permanent SQLite database, writes Markdown exports, shows daily/project/source/frequency/quality analytics, and recommends stronger development-agent prompts through OpenAI or GLM when configured, with a deterministic local fallback. In-app recommendations are saved as prompt-improvement history so prompt changes can be managed instead of treated as transient UI output.
 
-## Source Roots
+## For People
+
+### What It Does
+
+PromptVault turns scattered local AI work history into a searchable local vault. It helps answer:
+
+- What did I work on by day and project?
+- Which prompts or prompt starts do I repeat most often?
+- Which prompts are weak, vague, or missing useful constraints?
+- Which sessions or work logs can support a project/day work record?
+- How did a prompt improve over time?
+
+The app is local-first. It reads supported local prompt/session stores, writes its own SQLite database, and does not modify the source files it scans.
+
+### How It Works
+
+1. PromptVault discovers supported source roots under the current macOS user's home directory.
+2. The Rust backend parses source files and keeps user-authored prompts while filtering known injected context, tool output, and runtime noise.
+3. Scan/import results are saved into `~/Documents/PromptVault/promptvault.sqlite` with stable prompt IDs, source summaries, quality scores, import cursors, and review/audit tables.
+4. The React/Tauri UI reads the same database to show stored prompts, source stats, repeated prompt starts, quality gaps, project/day work summaries, review queues, and prompt-improvement history.
+5. Optional AI recommendations use OpenAI first, then GLM, then deterministic local fallback rules. Missing API keys do not block local scanning or review.
+
+### Portability Across Macs
+
+PromptVault source discovery is home-relative, not tied to this repository author's account path. The app resolves roots from the current user's home directory, so `~/.codex/sessions` means each user's own home directory.
+
+This works well when Claude, Codex, Antigravity, and Gemini keep their data in the standard locations listed below. Missing tools or empty folders are treated as unavailable sources, not fatal errors. Custom or nonstandard storage paths may need a code/config extension, or an explicit path for commands that support one, before PromptVault can discover them automatically.
+
+## Supported Source Roots
+
+These paths are resolved from the current user's home directory:
 
 - `~/.codex/sessions`
 - `~/.codex-cx/sessions`
@@ -31,7 +61,11 @@ Scans persist by default to:
 
 The database stores scan runs, prompt records, source summaries, first/last seen timestamps, quality scores, ISO prompt dates, resumable import state, import events, and prompt-improvement events. Re-running a scan upserts by stable prompt ID, so existing prompt records are updated instead of duplicated. In-app recommendation events are appended to `prompt_improvements` with prompt id, source, provider, quality delta, rationale, checklist, warnings, and revised prompt text.
 
-## Development
+## For Agents and LLMs
+
+Use this section when an LLM, coding agent, or maintainer needs exact commands, local verification steps, release gates, or CLI details.
+
+### Development
 
 ```bash
 npm install
@@ -44,7 +78,7 @@ Tauri dev mode:
 npm run tauri dev
 ```
 
-## Agent Quickstart
+### Agent Quickstart
 
 Use these steps when an LLM or coding agent needs to install, run, and verify
 PromptVault from a fresh checkout:
@@ -90,7 +124,9 @@ npm run check:release
 ```
 
 This runs the whitespace gate, full-repo gitleaks scan, frontend/Rust check
-suite, isolated browser bridge QA, and Tauri production package build. To run the same bridge manually, point it at a temporary
+suite, isolated browser bridge QA, and Tauri production package build.
+
+To run the same bridge manually, point it at a temporary
 SQLite file:
 
 ```bash
@@ -214,7 +250,7 @@ By default, CLI stdout does not print prompt bodies. Prompt previews require
 `--include-prompts`, are capped, and are redacted for token/key/private-key
 risk patterns.
 
-## CLI
+### CLI
 
 ```bash
 cd src-tauri
@@ -284,7 +320,7 @@ cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
 The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, `/api/import-events`, `/api/work-summary`, `/api/work-status-export`, `/api/work-session-evidence-candidates`, `/api/work-session-evidence-nearby`, `/api/work-session-evidence-source-search`, `/api/work-session-evidence-source-proposals`, `/api/work-session-evidence-proposals`, `/api/work-session-evidence-review-queue`, `/api/work-session-evidence-review-queue/update`, `/api/work-session-evidence-review-apply`, `/api/work-session-evidence-reviewed-items`, `/api/work-ai-provider-status`, `/api/work-ai-provider-health`, `/api/work-log-normalization-candidates`, `/api/work-log-normalization-proposals`, `/api/work-log-normalization-review-queue`, `/api/work-log-normalization-review-queue/update`, `/api/work-log-normalization-apply`, `/api/work-summary-snapshots`, and `/api/work-session-index` endpoints so cmux or another in-app browser can exercise the same scan, scan cancellation, active scan progress with discovery counts, stored-prompt loading, stored facet summaries, planning, improvement, resumable import, saved cursor, import activity, project/day summaries, compact status exports, session-evidence review candidates, read-only nearby same-project session drilldowns, bounded redacted source-session search, copied source-search review proposals, read-only session-evidence proposals, persisted session-evidence review decisions, durable reviewed-decision audit saves and reloads, work-management AI provider readiness, work-management AI provider live-health probes, title-focused work-log normalization, saved summary history, and sanitized session-index backfill code paths without Tauri IPC. The browser Stop control returns partial scan results for review but does not write canceled partial scans into the permanent SQLite vault; completed browser scans still persist normally.
 Use `npm run qa:browser-bridge` or `serve --database /tmp/promptvault-browser-qa.sqlite` when validating write-capable browser flows against an isolated database.
 
-## AI Recommendation Path
+### AI Recommendation Path
 
 PromptVault reads non-public AI provider configuration from the first available source:
 
@@ -304,7 +340,7 @@ Used keys:
 
 The provider order is OpenAI Responses API first, GLM chat completions second, then local prompt-improvement rules. If configured providers are missing, rate-limited, unavailable, or return an unusable `revised_prompt`, PromptVault falls back locally and reports the warning in the result. Use `improve --local` when automation needs deterministic offline recommendations. Use `repair --json --count N>0` to scan weakest prompts and return deterministic redacted prompt/recommendation pairs; repair batches are capped at 10 records. CLI `improve` and `repair` do not persist recommendation history by default. The app sets `persist: true` for selected-prompt recommendations, and those events are stored in SQLite for later management. OpenAI, GLM, and local recommendations report prompt-quality before/after scores, score delta, resolved gaps, and remaining gaps.
 
-## Verification
+### Verification
 
 ```bash
 npm run build

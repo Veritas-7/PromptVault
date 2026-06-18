@@ -6,6 +6,76 @@ Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019eb503-f8ed-7df2-8275-7da158b188eb`
 
+## Resume Snapshot - 2026-06-18 18:10 KST
+
+Long-Term Goal:
+
+- Make PromptVault source-backed enough that raw prompt/session logs can be
+  deleted only when a conservative audit says the permanent SQLite vault has
+  complete import cursors, per-file hash/status ledger coverage, and no missing
+  current source files.
+
+Current Active Work:
+
+- Added `vault-audit` as a fail-closed deletion-readiness gate for the permanent
+  vault.
+- Connected the audit through Rust library API, Tauri command, CLI command, and
+  browser bridge `/api/vault-audit`.
+- Added tests for a ready vault, missing file-state ledger blocker, and the case
+  where old stored prompt rows reference source files that are already gone.
+- Backfilled `source_file_states` on the real permanent DB for Antigravity,
+  Claude, Codex, Codex CX, Gemini, Hermes, and project-progress sources.
+- Improved import refresh so old stored prompt paths without prior file-state
+  rows are recorded as explicit `missing` ledger rows when the original source
+  file is no longer in the current source tree.
+
+Current Permanent Vault Evidence:
+
+- `cargo run --quiet --bin promptvault-cli -- vault-audit --json`:
+  `deletion_ready=false`.
+- Stored prompts: `105673`.
+- SQLite size: `452M` at `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- Import source cursors: `16/16` completed.
+- File-state ledger sources: `14`.
+- Current file-state rows: `41452` total, `41040` ok, `0` error, `412`
+  missing.
+- Remaining hard blocker:
+  `Claude Code projects: 412 source files are marked missing from the current filesystem`.
+- Those missing Claude rows cover `461` stored prompt rows, and a hash check
+  found `461` unique stale rows with no duplicate prompt hash elsewhere. They
+  were not pruned from the DB.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: added `VaultAudit*` result/options structs,
+  `run_vault_audit`, SQLite integrity/source/import/file-ledger aggregation,
+  fail-closed deletion readiness, missing stored-path ledger refresh, Tauri
+  command, and focused regression tests.
+- `src-tauri/src/bin/promptvault-cli.rs`: added `vault-audit`, bridge
+  `/api/vault-audit`, help text, and bridge lock coverage tests.
+- `README.md` and `docs/CLI.md`: documented the people/agent pre-delete audit
+  workflow and `deletion_ready=false` hard-stop rule.
+
+Verification:
+
+- PASS: `cargo fmt --check`.
+- PASS: `cargo test --lib vault_audit`.
+- PASS: `cargo test --lib import_batch_marks_missing_stored_paths`.
+- PASS: `cargo test --bin promptvault-cli bridge_uses_configured_default_database_path`.
+- PASS: `cargo test --bin promptvault-cli bridge_serializes_database_backed_routes_only`.
+- PASS: real permanent-vault ledger backfill completed for all currently
+  available source files with parser/hash errors `0`.
+
+Known Exclusions / Next Continuation:
+
+- PromptVault is stronger and more honest, but the current permanent vault is
+  not deletion-ready by the new audit definition because 412 historical Claude
+  Code project source files are already missing. Do not delete remaining raw
+  originals until this is explicitly accepted as a legacy-missing archive case
+  or those originals are recovered.
+- `unknown-date` remains a quality warning for `107` stored prompts, mostly
+  Antigravity conversation DB rows plus `4` Hermes CLI rows.
+
 ## Resume Snapshot - 2026-06-18 KST
 
 Long-Term Goal:

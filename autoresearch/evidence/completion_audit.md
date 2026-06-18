@@ -19,12 +19,20 @@ Last updated: 2026-06-18
 | Source-audit UI QA stability | Browser QA selects the bounded `near-session-date-hint` + `pending_review` scope before running source audit, matching the bridge smoke path and avoiding full-scope release-gate timeouts | PASS |
 | Release/package preflight | `npm run check:release` ties whitespace, gitleaks, `npm run check`, isolated browser QA, and Tauri production packaging into one repeatable gate | PASS |
 | Secret scan | `gitleaks dir . --no-banner --redact` | PASS |
+| Vault deletion-readiness gate | `vault-audit` checks SQLite integrity, completed import cursors, per-file `source_file_states`, source-path coverage, parser/hash errors, and missing source files without printing prompt bodies | PASS |
+| Browser bridge vault audit | `/api/vault-audit` shares the same DB-backed audit path as CLI/Tauri and is covered by bridge database-lock tests | PASS |
+| Permanent vault file-state backfill | Current source files were reprocessed into `source_file_states`: `41452` rows, `41040` ok, `0` parser/hash errors, `412` missing historical Claude files | PASS_WITH_NOTE |
+| Permanent vault delete readiness | `vault-audit` reports `deletion_ready=false` because 412 historical `Claude Code projects` source files are already missing; the 461 stored prompt rows are unique and were not pruned | BLOCKED_BY_MISSING_ORIGINALS |
 
 Additional verification commands:
 
 ```bash
 cargo fmt --check
 cargo test --lib stored_prompt_facets
+cargo test --lib vault_audit
+cargo test --lib import_batch_marks_missing_stored_paths
+cargo test --bin promptvault-cli bridge_uses_configured_default_database_path
+cargo test --bin promptvault-cli bridge_serializes_database_backed_routes_only
 node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/qualityGaps.test.ts tests/storedFacetStatus.test.ts
 node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts tests/workSummaryStatus.test.ts
 npm run qa:browser-bridge
@@ -32,6 +40,7 @@ npm run check
 npm run check:release
 git diff --check
 gitleaks dir . --no-banner --redact
+cargo run --quiet --bin promptvault-cli -- vault-audit --json
 ```
 
 ## Requirement Map

@@ -9,6 +9,7 @@ cargo run --bin promptvault-cli -- sources
 cargo run --bin promptvault-cli -- sources --json
 cargo run --bin promptvault-cli -- plan [--source ID[,ID...]] --json
 cargo run --bin promptvault-cli -- import-batch --source ID [--files N>0] [--reset] --json
+cargo run --bin promptvault-cli -- vault-audit [--database PATH] --json
 cargo run --bin promptvault-cli -- scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export]
 cargo run --bin promptvault-cli -- scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] --json
 cargo run --bin promptvault-cli -- improve [--local] --prompt "TEXT"
@@ -43,6 +44,8 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `import-batch --source ID` reads the next resumable file slice for one source, persists prompts, stores that source's cursor in SQLite `import_states`, stores per-file byte/mtime/hash/status in `source_file_states`, and appends a persistent activity row to `import_events`.
 - After a source has completed, `import-batch` still detects new, changed, and previously errored files without reparsing every file; changed files reconcile stale prompt rows for that file.
 - `import-batch --reset` restarts the cursor for that source before importing the requested slice.
+- `vault-audit --json` is the pre-delete gate for raw source logs. It prints no prompt bodies and reports `deletion_ready=false` unless SQLite integrity, completed import cursors, source-path coverage, and per-file `source_file_states` hash/status ledger checks pass.
+- Treat `deletion_ready=false` as a hard stop before deleting or archiving original source files. PromptVault never deletes originals automatically.
 - `help`, `--help`, and no-argument invocation print help and exit 0.
 - Unknown commands print help plus an error and exit non-zero.
 - `scan` persists prompt records to `~/Documents/PromptVault/promptvault.sqlite` by default.
@@ -87,7 +90,7 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `work-session-index` upserts sanitized Codex/Codex CX session records so progress-log work items can be linked to real session evidence without storing raw session bodies.
 - `work-session-index --batch-files` is capped at `1..500`; short backfills up to `--max-batches 2` need no confirmation.
 - `work-session-index --confirm-long-run` is required when the effective max batch count is above `2`, including `--until-complete` when no smaller `--max-batches` is supplied.
-- `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, `/api/import-events`, `/api/work-summary`, `/api/work-status-export`, `/api/work-session-evidence-candidates`, `/api/work-session-evidence-nearby`, `/api/work-session-evidence-source-search`, `/api/work-session-evidence-source-proposals`, `/api/work-session-evidence-proposals`, `/api/work-session-evidence-review-queue`, `/api/work-session-evidence-review-queue/update`, `/api/work-session-evidence-review-apply`, `/api/work-session-evidence-reviewed-items`, `/api/work-ai-provider-status`, `/api/work-ai-provider-health`, `/api/work-log-normalization-candidates`, `/api/work-log-normalization-proposals`, `/api/work-log-normalization-review-queue`, `/api/work-log-normalization-review-queue/update`, `/api/work-log-normalization-apply`, `/api/work-summary-snapshots`, and `/api/work-session-index` on the requested local address.
+- `serve` starts a local browser bridge for cmux/in-app browser QA. It exposes `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, `/api/import-events`, `/api/vault-audit`, `/api/work-summary`, `/api/work-status-export`, `/api/work-session-evidence-candidates`, `/api/work-session-evidence-nearby`, `/api/work-session-evidence-source-search`, `/api/work-session-evidence-source-proposals`, `/api/work-session-evidence-proposals`, `/api/work-session-evidence-review-queue`, `/api/work-session-evidence-review-queue/update`, `/api/work-session-evidence-review-apply`, `/api/work-session-evidence-reviewed-items`, `/api/work-ai-provider-status`, `/api/work-ai-provider-health`, `/api/work-log-normalization-candidates`, `/api/work-log-normalization-proposals`, `/api/work-log-normalization-review-queue`, `/api/work-log-normalization-review-queue/update`, `/api/work-log-normalization-apply`, `/api/work-summary-snapshots`, and `/api/work-session-index` on the requested local address.
 - `serve --database PATH` makes browser-bridge persistence use the supplied SQLite file by default, so full click QA can exercise save/import flows without touching the permanent vault. Per-request `database_path` payload fields still take precedence.
 
 ## Agent-Native Design Notes
@@ -111,6 +114,7 @@ cargo run --bin promptvault-cli -- sources
 cargo run --bin promptvault-cli -- sources --json
 cargo run --bin promptvault-cli -- plan --source codex --json
 cargo run --bin promptvault-cli -- import-batch --source antigravity-ide-transcripts --files 1 --reset --json
+cargo run --bin promptvault-cli -- vault-audit --json
 set +e; cargo run --bin promptvault-cli -- sources --bogus; test "$?" -ne 0; set -e
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md
 cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json

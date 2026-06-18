@@ -19,8 +19,8 @@ use promptvault_lib::{
     run_project_work_session_evidence_source_audit,
     run_project_work_session_evidence_source_proposals,
     run_project_work_session_evidence_source_search, run_project_work_session_index,
-    run_project_work_status_export, run_project_work_summary, run_scan, source_specs,
-    CancelScanOptions, ImportBatchOptions, ImportEventsOptions, ImportStatesOptions,
+    run_project_work_status_export, run_project_work_summary, run_scan, run_vault_audit,
+    source_specs, CancelScanOptions, ImportBatchOptions, ImportEventsOptions, ImportStatesOptions,
     ImproveRequest, ProjectWorkLogExtractionCandidatesOptions,
     ProjectWorkLogExtractionItemsOptions, ProjectWorkLogExtractionProposalsOptions,
     ProjectWorkLogExtractionRunsOptions, ProjectWorkLogFreezeOptions,
@@ -37,7 +37,7 @@ use promptvault_lib::{
     ProjectWorkSessionEvidenceSourceSearchOptions, ProjectWorkSessionIndexOptions,
     ProjectWorkStatusExportOptions, ProjectWorkSummaryOptions, ProjectWorkSummarySnapshotsOptions,
     PromptRecord, ScanOptions, ScanPlanOptions, ScanProgressOptions, StoredPromptFacetsOptions,
-    StoredPromptsOptions,
+    StoredPromptsOptions, VaultAuditOptions,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -237,6 +237,72 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 for warning in result.warnings {
                     println!("- {warning}");
                 }
+            }
+        }
+        "vault-audit" => {
+            let json = take_flag(&mut args, "--json");
+            let mut database_path = None;
+            let mut iter = args.into_iter();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--database" => {
+                        database_path = Some(parse_required_arg(iter.next(), "--database")?)
+                    }
+                    other => return Err(format!("unknown vault-audit argument: {other}").into()),
+                }
+            }
+            let result = run_vault_audit(VaultAuditOptions { database_path })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+                return Ok(());
+            }
+            println!("PromptVault vault audit");
+            println!("database: {}", result.database_path);
+            println!("deletion_ready: {}", result.deletion_ready);
+            println!("database_integrity_ok: {}", result.database_integrity_ok);
+            println!("prompts: {}", result.total_prompts);
+            println!("sources: {}", result.source_count);
+            println!("source_paths: {}", result.source_path_count);
+            println!("dates: {}", result.date_count);
+            println!("unknown_date_prompts: {}", result.unknown_date_prompt_count);
+            println!("empty_text_prompts: {}", result.empty_text_prompt_count);
+            println!(
+                "import_sources: {}/{} completed",
+                result.completed_import_source_count, result.import_source_count
+            );
+            println!(
+                "file_states: {} ok / {} total, errors {}, missing {}",
+                result.file_state_ok_count,
+                result.file_state_total_count,
+                result.file_state_error_count,
+                result.file_state_missing_count
+            );
+            if !result.blockers.is_empty() {
+                println!("blockers:");
+                for blocker in &result.blockers {
+                    println!("- {blocker}");
+                }
+            }
+            if !result.warnings.is_empty() {
+                println!("warnings:");
+                for warning in &result.warnings {
+                    println!("- {warning}");
+                }
+            }
+            for source in &result.sources {
+                println!(
+                    "{}\tready={}\tstored={}\tpaths={}\timport={}/{}\tfiles_ok={}/{}\terrors={}\tmissing={}",
+                    source.source_id,
+                    source.deletion_ready,
+                    source.stored_prompt_count,
+                    source.stored_source_path_count,
+                    source.import_processed_files,
+                    source.import_total_files,
+                    source.file_state_ok_files,
+                    source.file_state_total_files,
+                    source.file_state_error_files,
+                    source.file_state_missing_files
+                );
             }
         }
         "improve" => {
@@ -3375,6 +3441,7 @@ fn help_text() -> String {
         "  sources [--json]\n",
         "  plan [--source ID[,ID...]] [--json]\n",
         "  import-batch --source ID [--files N>0] [--reset] [--json]\n",
+        "  vault-audit [--database PATH] [--json]\n",
         "  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n",
         "  improve [--json] [--local] --prompt TEXT\n",
         "  improve [--json] [--local] < prompt.txt\n",
@@ -3414,6 +3481,7 @@ fn help_text() -> String {
         "Rules:\n",
         "  plan inventories matching source files without reading prompt bodies.\n",
         "  import-batch persists one resumable source slice and updates its DB cursor.\n",
+        "  vault-audit is the pre-delete gate: it reports deletion_ready=false unless SQLite integrity, completed import cursors, per-file source_file_states hash ledgers, and source-path coverage all pass.\n",
         "  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n",
         "  --no-persist keeps scan results out of the PromptVault database.\n",
         "  work-report reads project progress logs and groups slice work by date and project.\n",
@@ -3454,7 +3522,7 @@ fn help_text() -> String {
         "  Use only one preview sort selector: --preview-sort or --weakest-first.\n",
         "  repair --count is capped at 10.\n",
         "  repair scans are side-effect-free and do not update the PromptVault database.\n",
-        "  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, scan cancellation/progress, saved import cursors, and import activity.\n",
+        "  serve exposes local browser-bridge endpoints for cmux/in-app browser QA, including stored prompts, prompt facets, vault audit, scan cancellation/progress, saved import cursors, and import activity.\n",
         "  serve --database PATH isolates browser-bridge persistence for full click QA without touching the permanent vault.",
     )
     .to_string()
@@ -3493,6 +3561,11 @@ struct ImportStatesBridgePayload {
 #[derive(serde::Deserialize)]
 struct ImportEventsBridgePayload {
     options: Option<ImportEventsOptions>,
+}
+
+#[derive(serde::Deserialize)]
+struct VaultAuditBridgePayload {
+    options: Option<VaultAuditOptions>,
 }
 
 #[derive(serde::Deserialize)]
@@ -3831,6 +3904,15 @@ fn handle_bridge_route(
                 .database_path
                 .get_or_insert_with(|| bridge_database_path(database_path));
             let result = run_list_import_events(options)?;
+            write_json_response(stream, 200, &result)
+        }
+        ("POST", "/api/vault-audit") => {
+            let payload = serde_json::from_str::<VaultAuditBridgePayload>(&request.body)?;
+            let mut options = payload.options.unwrap_or_default();
+            options
+                .database_path
+                .get_or_insert_with(|| bridge_database_path(database_path));
+            let result = run_vault_audit(options)?;
             write_json_response(stream, 200, &result)
         }
         ("POST", "/api/prompt-facets") => {
@@ -4198,6 +4280,7 @@ fn bridge_route_uses_database(method: &str, path: &str) -> bool {
         ("POST", "/api/import-batch")
             | ("POST", "/api/import-states")
             | ("POST", "/api/import-events")
+            | ("POST", "/api/vault-audit")
             | ("POST", "/api/prompt-facets")
             | ("POST", "/api/prompts")
             | ("POST", "/api/scan")
@@ -4912,6 +4995,14 @@ mod tests {
         assert!(import_states_response.starts_with("HTTP/1.1 200 OK"));
         assert!(import_states_response.contains(&database_text));
 
+        let vault_audit_response = bridge_response_for_with_database(
+            "/api/vault-audit",
+            r#"{"options":{}}"#,
+            database_path.clone(),
+        );
+        assert!(vault_audit_response.starts_with("HTTP/1.1 200 OK"));
+        assert!(vault_audit_response.contains(&database_text));
+
         let _ = std::fs::remove_file(database_path);
     }
 
@@ -4921,6 +5012,7 @@ mod tests {
             "/api/import-batch",
             "/api/import-states",
             "/api/import-events",
+            "/api/vault-audit",
             "/api/prompt-facets",
             "/api/prompts",
             "/api/scan",

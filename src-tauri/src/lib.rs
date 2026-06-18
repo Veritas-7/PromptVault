@@ -1583,6 +1583,56 @@ pub struct ImportEventsResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultAuditSource {
+    pub source_id: String,
+    pub source_label: String,
+    pub root_path: String,
+    pub stored_prompt_count: usize,
+    pub stored_source_path_count: usize,
+    pub unknown_date_prompt_count: usize,
+    pub import_state_present: bool,
+    pub import_completed: bool,
+    pub import_total_files: usize,
+    pub import_processed_files: usize,
+    pub import_imported_prompt_count: usize,
+    pub file_state_total_files: usize,
+    pub file_state_ok_files: usize,
+    pub file_state_error_files: usize,
+    pub file_state_missing_files: usize,
+    pub file_state_prompt_count: usize,
+    pub file_state_byte_count: u64,
+    pub file_state_status_counts: Vec<FrequencyItem>,
+    pub deletion_ready: bool,
+    pub blockers: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultAuditResult {
+    pub generated_at: String,
+    pub database_path: String,
+    pub database_integrity_ok: bool,
+    pub integrity_check: Vec<String>,
+    pub deletion_ready: bool,
+    pub total_prompts: usize,
+    pub source_count: usize,
+    pub source_path_count: usize,
+    pub date_count: usize,
+    pub unknown_date_prompt_count: usize,
+    pub empty_text_prompt_count: usize,
+    pub import_source_count: usize,
+    pub completed_import_source_count: usize,
+    pub file_state_source_count: usize,
+    pub file_state_total_count: usize,
+    pub file_state_ok_count: usize,
+    pub file_state_error_count: usize,
+    pub file_state_missing_count: usize,
+    pub sources: Vec<VaultAuditSource>,
+    pub blockers: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredPromptFacetsResult {
     pub generated_at: String,
     pub database_path: String,
@@ -1618,6 +1668,11 @@ pub struct ImportStatesOptions {
 pub struct ImportEventsOptions {
     pub database_path: Option<String>,
     pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct VaultAuditOptions {
+    pub database_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -1807,6 +1862,11 @@ fn list_import_states(options: Option<ImportStatesOptions>) -> Result<ImportStat
 #[tauri::command]
 fn list_import_events(options: Option<ImportEventsOptions>) -> Result<ImportEventsResult, String> {
     run_list_import_events(options.unwrap_or_default()).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn vault_audit(options: Option<VaultAuditOptions>) -> Result<VaultAuditResult, String> {
+    run_vault_audit(options.unwrap_or_default()).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -4618,6 +4678,470 @@ pub fn run_list_import_events(
     })
 }
 
+#[derive(Debug, Clone, Default)]
+struct VaultAuditPromptAggregate {
+    stored_prompt_count: usize,
+    stored_source_path_count: usize,
+    unknown_date_prompt_count: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+struct VaultAuditFileAggregate {
+    source_label: String,
+    total_files: usize,
+    ok_files: usize,
+    error_files: usize,
+    missing_files: usize,
+    prompt_count: usize,
+    byte_count: u64,
+    status_counts: Vec<FrequencyItem>,
+}
+
+#[derive(Debug, Clone)]
+struct VaultAuditSourceSeed {
+    source_id: String,
+    source_label: String,
+    root_path: String,
+}
+
+pub fn run_vault_audit(
+    options: VaultAuditOptions,
+) -> Result<VaultAuditResult, Box<dyn std::error::Error>> {
+    if matches!(options.database_path.as_deref(), Some(path) if path.trim().is_empty()) {
+        return Err("vault-audit database path requires a non-empty value".into());
+    }
+    let generated_at = Utc::now().to_rfc3339();
+    let database_path = options
+        .database_path
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(default_database_path);
+    let conn = open_promptvault_database(&database_path)?;
+    refresh_import_metadata_source_labels(&conn)?;
+
+    let integrity_check = read_sqlite_integrity_check(&conn)?;
+    let database_integrity_ok =
+        integrity_check.len() == 1 && integrity_check.first().is_some_and(|row| row == "ok");
+    let total_prompts = count_prompt_rows(&conn)?;
+    let source_count = count_distinct_prompt_column(&conn, "source")?;
+    let source_path_count = count_distinct_prompt_column(&conn, "source_path")?;
+    let date_count = count_distinct_prompt_column(&conn, "prompt_date")?;
+    let unknown_date_prompt_count = count_unknown_date_prompt_rows(&conn)?;
+    let empty_text_prompt_count = count_empty_text_prompt_rows(&conn)?;
+    let prompt_aggregates = read_vault_audit_prompt_aggregates(&conn)?;
+    let mut import_states = read_import_states(&conn)?;
+    canonicalize_import_state_labels(&mut import_states);
+    let file_aggregates = read_vault_audit_file_aggregates(&conn)?;
+    let import_by_id = import_states
+        .iter()
+        .map(|state| (state.source_id.clone(), state.clone()))
+        .collect::<BTreeMap<_, _>>();
+
+    let seeds =
+        build_vault_audit_source_seeds(&import_states, &file_aggregates, &prompt_aggregates);
+    let mut blockers = Vec::new();
+    let mut warnings = Vec::new();
+    if !database_integrity_ok {
+        blockers.push(format!(
+            "SQLite integrity_check failed: {}",
+            integrity_check.join("; ")
+        ));
+    }
+    if total_prompts == 0 {
+        blockers.push("No stored prompts are present in the vault database.".to_string());
+    }
+    if empty_text_prompt_count > 0 {
+        blockers.push(format!(
+            "{empty_text_prompt_count} stored prompt rows have empty text."
+        ));
+    }
+    if unknown_date_prompt_count > 0 {
+        warnings.push(format!(
+            "{unknown_date_prompt_count} stored prompt rows use unknown-date; search works, but day-level work review is incomplete for those rows."
+        ));
+    }
+
+    let mut sources = Vec::new();
+    for seed in seeds {
+        let import_state = import_by_id.get(&seed.source_id);
+        let file_state = file_aggregates.get(&seed.source_id);
+        let prompt_state = prompt_aggregates.get(&seed.source_label);
+        let source = build_vault_audit_source(seed, import_state, file_state, prompt_state);
+        for blocker in &source.blockers {
+            blockers.push(format!("{}: {blocker}", source.source_label));
+        }
+        for warning in &source.warnings {
+            warnings.push(format!("{}: {warning}", source.source_label));
+        }
+        sources.push(source);
+    }
+    sources.sort_by(|left, right| {
+        left.source_label
+            .cmp(&right.source_label)
+            .then_with(|| left.source_id.cmp(&right.source_id))
+    });
+
+    let completed_import_source_count =
+        import_states.iter().filter(|state| state.completed).count();
+    let file_state_source_count = file_aggregates.len();
+    let file_state_total_count = file_aggregates
+        .values()
+        .map(|state| state.total_files)
+        .sum();
+    let file_state_ok_count = file_aggregates.values().map(|state| state.ok_files).sum();
+    let file_state_error_count = file_aggregates
+        .values()
+        .map(|state| state.error_files)
+        .sum();
+    let file_state_missing_count = file_aggregates
+        .values()
+        .map(|state| state.missing_files)
+        .sum();
+
+    Ok(VaultAuditResult {
+        generated_at,
+        database_path: database_path.display().to_string(),
+        database_integrity_ok,
+        integrity_check,
+        deletion_ready: blockers.is_empty(),
+        total_prompts,
+        source_count,
+        source_path_count,
+        date_count,
+        unknown_date_prompt_count,
+        empty_text_prompt_count,
+        import_source_count: import_states.len(),
+        completed_import_source_count,
+        file_state_source_count,
+        file_state_total_count,
+        file_state_ok_count,
+        file_state_error_count,
+        file_state_missing_count,
+        sources,
+        blockers,
+        warnings,
+    })
+}
+
+fn read_sqlite_integrity_check(
+    conn: &Connection,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare("PRAGMA integrity_check")?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn count_prompt_rows(conn: &Connection) -> Result<usize, Box<dyn std::error::Error>> {
+    let count = conn.query_row("SELECT COUNT(*) FROM prompts", [], |row| {
+        row.get::<_, i64>(0)
+    })?;
+    Ok(count as usize)
+}
+
+fn count_distinct_prompt_column(
+    conn: &Connection,
+    column: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    if !matches!(column, "source" | "source_path" | "prompt_date") {
+        return Err("unsupported distinct prompt column".into());
+    }
+    let sql = format!("SELECT COUNT(DISTINCT {column}) FROM prompts");
+    let count = conn.query_row(&sql, [], |row| row.get::<_, i64>(0))?;
+    Ok(count as usize)
+}
+
+fn count_unknown_date_prompt_rows(conn: &Connection) -> Result<usize, Box<dyn std::error::Error>> {
+    let count = conn.query_row(
+        "SELECT COUNT(*)
+         FROM prompts
+         WHERE prompt_date IS NULL OR prompt_date = '' OR prompt_date = 'unknown-date'",
+        [],
+        |row| row.get::<_, i64>(0),
+    )?;
+    Ok(count as usize)
+}
+
+fn count_empty_text_prompt_rows(conn: &Connection) -> Result<usize, Box<dyn std::error::Error>> {
+    let count = conn.query_row(
+        "SELECT COUNT(*) FROM prompts WHERE TRIM(COALESCE(text, '')) = ''",
+        [],
+        |row| row.get::<_, i64>(0),
+    )?;
+    Ok(count as usize)
+}
+
+fn read_vault_audit_prompt_aggregates(
+    conn: &Connection,
+) -> Result<BTreeMap<String, VaultAuditPromptAggregate>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT source,
+            COUNT(*) AS stored_prompt_count,
+            COUNT(DISTINCT source_path) AS stored_source_path_count,
+            SUM(CASE
+                WHEN prompt_date IS NULL OR prompt_date = '' OR prompt_date = 'unknown-date'
+                THEN 1 ELSE 0 END) AS unknown_date_prompt_count
+         FROM prompts
+         GROUP BY source",
+    )?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                VaultAuditPromptAggregate {
+                    stored_prompt_count: row.get::<_, i64>(1)? as usize,
+                    stored_source_path_count: row.get::<_, i64>(2)? as usize,
+                    unknown_date_prompt_count: row.get::<_, i64>(3)? as usize,
+                },
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows.into_iter().collect())
+}
+
+fn read_vault_audit_file_aggregates(
+    conn: &Connection,
+) -> Result<BTreeMap<String, VaultAuditFileAggregate>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT source_id,
+            MAX(source_label) AS source_label,
+            COUNT(*) AS total_files,
+            SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END) AS ok_files,
+            SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_files,
+            SUM(CASE WHEN missing_at IS NOT NULL THEN 1 ELSE 0 END) AS missing_files,
+            SUM(prompt_count) AS prompt_count,
+            SUM(byte_count) AS byte_count
+         FROM source_file_states
+         GROUP BY source_id",
+    )?;
+    let mut rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                VaultAuditFileAggregate {
+                    source_label: row.get(1)?,
+                    total_files: row.get::<_, i64>(2)? as usize,
+                    ok_files: row.get::<_, i64>(3)? as usize,
+                    error_files: row.get::<_, i64>(4)? as usize,
+                    missing_files: row.get::<_, i64>(5)? as usize,
+                    prompt_count: row.get::<_, i64>(6)? as usize,
+                    byte_count: row.get::<_, i64>(7)? as u64,
+                    status_counts: Vec::new(),
+                },
+            ))
+        })?
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+    let mut status_stmt = conn.prepare(
+        "SELECT source_id, status, COUNT(*)
+         FROM source_file_states
+         GROUP BY source_id, status
+         ORDER BY source_id ASC, status ASC",
+    )?;
+    for row in status_stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            FrequencyItem {
+                text: row.get(1)?,
+                count: row.get::<_, i64>(2)? as usize,
+            },
+        ))
+    })? {
+        let (source_id, item) = row?;
+        if let Some(aggregate) = rows.get_mut(&source_id) {
+            aggregate.status_counts.push(item);
+        }
+    }
+    Ok(rows)
+}
+
+fn build_vault_audit_source_seeds(
+    import_states: &[ImportState],
+    file_aggregates: &BTreeMap<String, VaultAuditFileAggregate>,
+    prompt_aggregates: &BTreeMap<String, VaultAuditPromptAggregate>,
+) -> Vec<VaultAuditSourceSeed> {
+    let specs = source_specs();
+    let mut seeds = Vec::new();
+    let mut seen_ids = BTreeSet::new();
+    let mut seen_labels = BTreeSet::new();
+    let mut label_to_id = BTreeMap::new();
+    for source in &specs {
+        label_to_id.insert(source.label.to_string(), source.id.to_string());
+    }
+    for state in import_states {
+        label_to_id
+            .entry(state.source_label.clone())
+            .or_insert_with(|| state.source_id.clone());
+    }
+
+    for source in specs {
+        if import_states
+            .iter()
+            .any(|state| state.source_id == source.id)
+            || file_aggregates.contains_key(source.id)
+            || prompt_aggregates.contains_key(source.label)
+        {
+            seen_ids.insert(source.id.to_string());
+            seen_labels.insert(source.label.to_string());
+            seeds.push(VaultAuditSourceSeed {
+                source_id: source.id.to_string(),
+                source_label: source.label.to_string(),
+                root_path: source.root.display().to_string(),
+            });
+        }
+    }
+
+    for state in import_states {
+        if seen_ids.insert(state.source_id.clone()) {
+            seen_labels.insert(state.source_label.clone());
+            seeds.push(VaultAuditSourceSeed {
+                source_id: state.source_id.clone(),
+                source_label: state.source_label.clone(),
+                root_path: state.root_path.clone(),
+            });
+        }
+    }
+
+    for (source_id, aggregate) in file_aggregates {
+        if seen_ids.insert(source_id.clone()) {
+            seen_labels.insert(aggregate.source_label.clone());
+            seeds.push(VaultAuditSourceSeed {
+                source_id: source_id.clone(),
+                source_label: aggregate.source_label.clone(),
+                root_path: String::new(),
+            });
+        }
+    }
+
+    for source_label in prompt_aggregates.keys() {
+        if seen_labels.contains(source_label) {
+            continue;
+        }
+        if let Some(source_id) = label_to_id.get(source_label) {
+            if seen_ids.contains(source_id) {
+                continue;
+            }
+        }
+        seen_labels.insert(source_label.clone());
+        seeds.push(VaultAuditSourceSeed {
+            source_id: format!("stored:{source_label}"),
+            source_label: source_label.clone(),
+            root_path: String::new(),
+        });
+    }
+    seeds
+}
+
+fn build_vault_audit_source(
+    seed: VaultAuditSourceSeed,
+    import_state: Option<&ImportState>,
+    file_state: Option<&VaultAuditFileAggregate>,
+    prompt_state: Option<&VaultAuditPromptAggregate>,
+) -> VaultAuditSource {
+    let stored_prompt_count = prompt_state
+        .map(|state| state.stored_prompt_count)
+        .unwrap_or(0);
+    let stored_source_path_count = prompt_state
+        .map(|state| state.stored_source_path_count)
+        .unwrap_or(0);
+    let unknown_date_prompt_count = prompt_state
+        .map(|state| state.unknown_date_prompt_count)
+        .unwrap_or(0);
+    let import_total_files = import_state.map(|state| state.total_files).unwrap_or(0);
+    let import_processed_files = import_state.map(|state| state.processed_files).unwrap_or(0);
+    let import_imported_prompt_count = import_state
+        .map(|state| state.imported_prompt_count)
+        .unwrap_or(0);
+    let import_completed = import_state.map(|state| state.completed).unwrap_or(false);
+    let file_state_total_files = file_state.map(|state| state.total_files).unwrap_or(0);
+    let file_state_ok_files = file_state.map(|state| state.ok_files).unwrap_or(0);
+    let file_state_error_files = file_state.map(|state| state.error_files).unwrap_or(0);
+    let file_state_missing_files = file_state.map(|state| state.missing_files).unwrap_or(0);
+    let file_state_prompt_count = file_state.map(|state| state.prompt_count).unwrap_or(0);
+    let file_state_byte_count = file_state.map(|state| state.byte_count).unwrap_or(0);
+    let file_state_status_counts = file_state
+        .map(|state| state.status_counts.clone())
+        .unwrap_or_default();
+
+    let mut blockers = Vec::new();
+    let mut warnings = Vec::new();
+    if stored_prompt_count > 0 && import_state.is_none() {
+        blockers.push(
+            "stored prompts exist but the source has no import_states cursor row".to_string(),
+        );
+    }
+    if import_state.is_some() && !import_completed {
+        blockers.push(format!(
+            "import is incomplete: processed {import_processed_files} of {import_total_files} files"
+        ));
+    }
+    if import_total_files > 0 && file_state_total_files == 0 {
+        blockers.push(
+            "source has imported files but no source_file_states hash ledger rows".to_string(),
+        );
+    }
+    if import_total_files > 0 && file_state_total_files < import_total_files {
+        blockers.push(format!(
+            "source_file_states covers {file_state_total_files} of {import_total_files} imported files"
+        ));
+    }
+    if stored_source_path_count > 0 && file_state_total_files < stored_source_path_count {
+        blockers.push(format!(
+            "stored prompts reference {stored_source_path_count} source paths but the file-state ledger has {file_state_total_files} files"
+        ));
+    }
+    if file_state_error_files > 0 {
+        blockers.push(format!(
+            "{file_state_error_files} source files have parser/hash errors"
+        ));
+    }
+    if file_state_missing_files > 0 {
+        blockers.push(format!(
+            "{file_state_missing_files} source files are marked missing from the current filesystem"
+        ));
+    }
+    if import_total_files > 0 && file_state_ok_files < import_total_files {
+        blockers.push(format!(
+            "only {file_state_ok_files} of {import_total_files} source files have ok file-state rows"
+        ));
+    }
+    if unknown_date_prompt_count > 0 {
+        warnings.push(format!(
+            "{unknown_date_prompt_count} stored prompts use unknown-date"
+        ));
+    }
+    if file_state_prompt_count > 0 && stored_prompt_count > file_state_prompt_count {
+        warnings.push(format!(
+            "stored prompt count {stored_prompt_count} exceeds file-state parsed prompt count {file_state_prompt_count}"
+        ));
+    }
+
+    VaultAuditSource {
+        source_id: seed.source_id,
+        source_label: seed.source_label,
+        root_path: seed.root_path,
+        stored_prompt_count,
+        stored_source_path_count,
+        unknown_date_prompt_count,
+        import_state_present: import_state.is_some(),
+        import_completed,
+        import_total_files,
+        import_processed_files,
+        import_imported_prompt_count,
+        file_state_total_files,
+        file_state_ok_files,
+        file_state_error_files,
+        file_state_missing_files,
+        file_state_prompt_count,
+        file_state_byte_count,
+        file_state_status_counts,
+        deletion_ready: blockers.is_empty(),
+        blockers,
+        warnings,
+    }
+}
+
 pub fn run_list_stored_prompt_facets(
     options: StoredPromptFacetsOptions,
 ) -> Result<StoredPromptFacetsResult, Box<dyn std::error::Error>> {
@@ -4773,6 +5297,13 @@ fn run_import_batch_for_source(
         .map(|candidate| candidate.path.display().to_string())
         .collect::<BTreeSet<_>>();
     mark_missing_source_file_import_states(&conn, source.id, &current_paths, &generated_at)?;
+    mark_missing_stored_source_paths_without_states(
+        &conn,
+        source.id,
+        source.label,
+        &current_paths,
+        &generated_at,
+    )?;
 
     let resume_start_index = previous_state
         .as_ref()
@@ -18714,6 +19245,48 @@ fn mark_missing_source_file_import_states(
     Ok(())
 }
 
+fn mark_missing_stored_source_paths_without_states(
+    conn: &Connection,
+    source_id: &str,
+    source_label: &str,
+    current_paths: &BTreeSet<String>,
+    missing_at: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT p.source_path, COUNT(*) AS prompt_count
+         FROM prompts p
+         LEFT JOIN source_file_states s
+            ON s.source_id = ?1 AND s.source_path = p.source_path
+         WHERE p.source = ?2 AND s.source_path IS NULL
+         GROUP BY p.source_path",
+    )?;
+    let rows = stmt
+        .query_map(params![source_id, source_label], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    for (source_path, prompt_count) in rows {
+        if current_paths.contains(&source_path) {
+            continue;
+        }
+        let state = SourceFileImportState {
+            source_id: source_id.to_string(),
+            source_label: source_label.to_string(),
+            source_path,
+            byte_count: 0,
+            modified_ms: 0,
+            content_sha256: String::new(),
+            prompt_count,
+            status: "missing".to_string(),
+            error: Some("source file missing before file-state ledger refresh".to_string()),
+            parsed_at: missing_at.to_string(),
+            missing_at: Some(missing_at.to_string()),
+        };
+        upsert_source_file_import_state(conn, &state)?;
+    }
+    Ok(())
+}
+
 fn source_file_needs_import(
     candidate: &SourceFileCandidate,
     state: Option<&SourceFileImportState>,
@@ -20713,6 +21286,7 @@ pub fn run() {
             import_batch,
             list_import_states,
             list_import_events,
+            vault_audit,
             list_stored_prompt_facets,
             load_stored_prompts,
             improve_prompt,
@@ -22526,6 +23100,167 @@ mod tests {
         assert_eq!(latest.total_files, 2);
         assert!(latest.completed);
         assert!(latest.warnings.is_empty());
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn vault_audit_passes_with_completed_import_and_file_state_ledger() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-vault-audit-ready-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        std::fs::write(
+            root.join("001.jsonl"),
+            r#"{"type":"turn_context","payload":{"cwd":"/Users/wj/Ai/System/10_Projects/PromptVault"}}
+{"type":"response_item","timestamp":"2026-06-18T01:02:03Z","payload":{"role":"user","content":[{"text":"Audit PromptVault before deleting source logs, run tests, and report blockers."}]}}
+"#,
+        )
+        .expect("write prompt file");
+        let db_path = root.join("promptvault.sqlite");
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        run_import_batch_for_source(&db_path, source, 10, true, Some(10))
+            .expect("import audit fixture");
+        let audit = run_vault_audit(VaultAuditOptions {
+            database_path: Some(db_path.display().to_string()),
+        })
+        .expect("audit vault");
+
+        assert!(audit.database_integrity_ok);
+        assert!(audit.deletion_ready, "{:?}", audit.blockers);
+        assert_eq!(audit.total_prompts, 1);
+        assert_eq!(audit.file_state_total_count, 1);
+        assert_eq!(audit.file_state_ok_count, 1);
+        assert!(audit.blockers.is_empty());
+        assert!(audit
+            .sources
+            .iter()
+            .any(|source| source.source_id == "test-codex" && source.deletion_ready));
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn vault_audit_blocks_deletion_when_file_state_ledger_is_missing() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-vault-audit-missing-ledger-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        std::fs::write(
+            root.join("001.jsonl"),
+            r#"{"type":"response_item","timestamp":"2026-06-18T01:02:03Z","payload":{"role":"user","content":[{"text":"Block source deletion when PromptVault lacks file-state hash ledgers."}]}}"#,
+        )
+        .expect("write prompt file");
+        let db_path = root.join("promptvault.sqlite");
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        run_import_batch_for_source(&db_path, source, 10, true, Some(10))
+            .expect("import audit fixture");
+        let conn = open_promptvault_database(&db_path).expect("open audit fixture db");
+        delete_source_file_import_states(&conn, "test-codex").expect("remove ledger rows");
+        drop(conn);
+
+        let audit = run_vault_audit(VaultAuditOptions {
+            database_path: Some(db_path.display().to_string()),
+        })
+        .expect("audit vault");
+
+        assert!(audit.database_integrity_ok);
+        assert!(!audit.deletion_ready);
+        assert!(audit.blockers.iter().any(|blocker| {
+            blocker.contains("no source_file_states hash ledger rows")
+                || blocker.contains("file-state ledger")
+        }));
+        let source = audit
+            .sources
+            .iter()
+            .find(|source| source.source_id == "test-codex")
+            .expect("audit source row");
+        assert!(!source.deletion_ready);
+        assert_eq!(source.file_state_total_files, 0);
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn import_batch_marks_missing_stored_paths_that_lacked_file_state_rows() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-import-missing-stored-path-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        let missing_path = root.join("001.jsonl");
+        let present_path = root.join("002.jsonl");
+        std::fs::write(
+            &missing_path,
+            r#"{"type":"response_item","timestamp":"2026-06-18T01:02:03Z","payload":{"role":"user","content":[{"text":"Preserve missing stored path audit metadata without deleting prompts."}]}}"#,
+        )
+        .expect("write missing fixture");
+        std::fs::write(
+            &present_path,
+            r#"{"type":"response_item","timestamp":"2026-06-18T01:03:03Z","payload":{"role":"user","content":[{"text":"Keep current stored path import ledger healthy."}]}}"#,
+        )
+        .expect("write present fixture");
+        let db_path = root.join("promptvault.sqlite");
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        run_import_batch_for_source(&db_path, source.clone(), 10, true, Some(10))
+            .expect("initial import");
+        std::fs::remove_file(&missing_path).expect("remove one source file");
+        let conn = open_promptvault_database(&db_path).expect("open fixture db");
+        conn.execute(
+            "DELETE FROM source_file_states WHERE source_id = ?1 AND source_path = ?2",
+            params!["test-codex", missing_path.display().to_string()],
+        )
+        .expect("remove old file-state row");
+        drop(conn);
+
+        run_import_batch_for_source(&db_path, source, 10, false, Some(10))
+            .expect("refresh import after missing source path");
+        let audit = run_vault_audit(VaultAuditOptions {
+            database_path: Some(db_path.display().to_string()),
+        })
+        .expect("audit refreshed missing path");
+        let source = audit
+            .sources
+            .iter()
+            .find(|source| source.source_id == "test-codex")
+            .expect("audit source row");
+
+        assert!(!audit.deletion_ready);
+        assert_eq!(source.file_state_missing_files, 1);
+        assert_eq!(source.file_state_error_files, 0);
+        assert!(source
+            .blockers
+            .iter()
+            .any(|blocker| blocker.contains("marked missing")));
 
         std::fs::remove_dir_all(root).expect("remove temp root");
     }

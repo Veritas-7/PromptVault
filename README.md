@@ -41,8 +41,7 @@ npm run dev
 In another shell, start the local browser bridge when testing outside Tauri:
 
 ```bash
-cd src-tauri
-cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- serve --addr 127.0.0.1:5174
 ```
 
 For the native desktop app:
@@ -50,6 +49,11 @@ For the native desktop app:
 ```bash
 npm run tauri dev
 ```
+
+Production packaging uses the GUI-only Tauri package in `src-tauri/`. The
+development/QA CLI lives in `src-tauri-cli/` and is run with
+`cargo run --manifest-path src-tauri-cli/Cargo.toml -- ...`, so release `.app`
+bundles do not include a duplicate CLI executable.
 
 For a full local quality gate:
 
@@ -129,7 +133,7 @@ timestamps such as epoch-millis and compact `YYYYMMDD_HHMMSS`, then to the
 source file's modified time. This is especially useful for Hermes JSONL files
 and Antigravity CLI/IDE SQLite conversation DBs that use UUID file names.
 
-Before treating the SQLite vault as a replacement for original source logs, run `cargo run --bin promptvault-cli -- vault-audit --json`. The default audit is strict: `deletion_ready` stays `false` unless SQLite integrity passes, import cursors are complete, every imported source has per-file hash/status ledger coverage, and every source file is still present with no parser/hash error. If originals have already been deleted after a successful import, run `cargo run --bin promptvault-cli -- vault-audit --allow-source-file-deletion --json`; this accepts only missing files that still have sealed `ok` byte/hash ledger rows and keeps `strict_source_backed_ready=false` so the report shows that live originals are gone. `--allow-legacy-missing` is a separate explicit acceptance for files that were already missing before a ledger refresh and therefore cannot be rehashed. The app does not delete originals for you.
+Before treating the SQLite vault as a replacement for original source logs, run `cargo run --manifest-path src-tauri-cli/Cargo.toml -- vault-audit --json`. The default audit is strict: `deletion_ready` stays `false` unless SQLite integrity passes, import cursors are complete, every imported source has per-file hash/status ledger coverage, and every source file is still present with no parser/hash error. If originals have already been deleted after a successful import, run `cargo run --manifest-path src-tauri-cli/Cargo.toml -- vault-audit --allow-source-file-deletion --json`; this accepts only missing files that still have sealed `ok` byte/hash ledger rows and keeps `strict_source_backed_ready=false` so the report shows that live originals are gone. `--allow-legacy-missing` is a separate explicit acceptance for files that were already missing before a ledger refresh and therefore cannot be rehashed. The app does not delete originals for you.
 
 Audit results include `deletion_readiness_status`:
 
@@ -181,8 +185,7 @@ in-app browser:
 ```bash
 cd <path-to-PromptVault>
 npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
-cd src-tauri
-cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- serve --addr 127.0.0.1:5174
 curl -sS http://127.0.0.1:5174/api/health
 ```
 
@@ -211,27 +214,25 @@ To run the same bridge manually, point it at a temporary
 SQLite file:
 
 ```bash
-cd src-tauri
-cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174 --database /tmp/promptvault-browser-qa.sqlite
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- serve --addr 127.0.0.1:5174 --database /tmp/promptvault-browser-qa.sqlite
 ```
 
 For project/day work-ledger checks outside the UI, use:
 
 ```bash
-cd src-tauri
-cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --json
-cargo run --bin promptvault-cli -- work-session-evidence-candidates --row-filter near-session-date-hint --json
-cargo run --bin promptvault-cli -- work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --query "RepoTutorStudio 2026-06-10" --json
-cargo run --bin promptvault-cli -- work-session-evidence-source-search --source-path /path/to/rollout.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json
-cargo run --bin promptvault-cli -- work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /path/to/rollout.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --row-filter near-session-date-hint --limit 5 --json
-cargo run --bin promptvault-cli -- work-session-evidence-review-queue --sync-candidates --limit 20 --json
-cargo run --bin promptvault-cli -- work-session-evidence-review-queue --row-filter near-session-date-hint --json
-cargo run --bin promptvault-cli -- work-session-evidence-review-apply --limit 20 --json
-cargo run --bin promptvault-cli -- work-session-evidence-reviewed-items --limit 20 --json
-cargo run --bin promptvault-cli -- work-log-normalization-candidates --limit 20 --needs-title-normalization --json
-cargo run --bin promptvault-cli -- work-log-normalization-proposals --limit 20 --needs-title-normalization --ai --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-candidates --limit 20 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-candidates --row-filter near-session-date-hint --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-nearby --project RepoTutorStudio --date 2026-06-10 --limit 8 --query "RepoTutorStudio 2026-06-10" --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-source-search --source-path /path/to/rollout.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-source-proposals --candidate-id session-evidence-RepoTutorStudio-072eff316b --source-path /path/to/rollout.jsonl --query "RepoTutorStudio 2026-06-10" --limit 5 --max-lines 100000 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-proposals --row-filter near-session-date-hint --limit 5 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-review-queue --sync-candidates --limit 20 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-review-queue --row-filter near-session-date-hint --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-review-apply --limit 20 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-reviewed-items --limit 20 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-log-normalization-candidates --limit 20 --needs-title-normalization --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-log-normalization-proposals --limit 20 --needs-title-normalization --ai --json
 ```
 
 The candidates command is read-only. The proposals command is also read-only:
@@ -276,62 +277,62 @@ The default permanent vault is:
 
 Recommended agent workflow:
 
-1. Run `cargo run --bin promptvault-cli -- sources --json` to confirm source
+1. Run `cargo run --manifest-path src-tauri-cli/Cargo.toml -- sources --json` to confirm source
    roots for Codex app/CLI, Claude, Hermes CLI/app, Antigravity, and Gemini
    stores.
-2. Run `cargo run --bin promptvault-cli -- plan --json` before a full import.
+2. Run `cargo run --manifest-path src-tauri-cli/Cargo.toml -- plan --json` before a full import.
    This inventories matching files without reading prompt bodies.
-3. Use `cargo run --bin promptvault-cli -- import-batch --source SOURCE_ID
+3. Use `cargo run --manifest-path src-tauri-cli/Cargo.toml -- import-batch --source SOURCE_ID
    --files N --json` for resumable incremental imports. The cursor and per-file
    parse state are stored in SQLite, so completed sources can still detect and
    reprocess changed files without parsing every source file again.
-4. Run `cargo run --bin promptvault-cli -- vault-audit --json` before deleting
+4. Run `cargo run --manifest-path src-tauri-cli/Cargo.toml -- vault-audit --json` before deleting
    or archiving raw source logs. Treat `deletion_ready=false` as a hard stop.
    After originals are deliberately removed, rerun with
    `--allow-source-file-deletion` to verify that missing files are backed by
    sealed byte/hash ledger rows; use `--allow-legacy-missing` only when
    accepting files that were already gone before PromptVault could hash them.
-5. Use `cargo run --bin promptvault-cli -- scan --no-export --json` only when
+5. Use `cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --no-export --json` only when
    the agent needs aggregate stats without creating a Markdown export. Bounded
    scans with `--limit` or `--source-limit` persist incrementally and do not
    prune older stored prompts for that source.
-6. Use `cargo run --bin promptvault-cli -- scan --preview-limit 5
+6. Use `cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --preview-limit 5
    --include-prompts --no-export --json` only when a bounded prompt-body sample
    is necessary for verification.
-7. Use `cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3`
+7. Use `cargo run --manifest-path src-tauri-cli/Cargo.toml -- repair --json --limit 100 --count 3`
    to test deterministic weakest-prompt recommendations.
-8. Use `cargo run --bin promptvault-cli -- work-status-export --limit 25
+8. Use `cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 25
    --session-limit 200` to review compact project/day work status outside the
    app from the same progress-log plus sanitized session-evidence report. Add
    `--offset 25` with the same limit to review the next page without rendering
    every project/day row at once, or use `--full-session-index` to verify
    against every stored sanitized session record without manually copying the
    stored count into `--session-limit`.
-9. Use `cargo run --bin promptvault-cli -- work-session-evidence-candidates
+9. Use `cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-candidates
    --limit 20 --json` to list project/day rows that still have no matched
    session evidence after the selected, full stored session index.
-10. Use `cargo run --bin promptvault-cli -- work-session-evidence-nearby
+10. Use `cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-nearby
    --project NAME --date YYYY-MM-DD --limit 8 --query "PROJECT YYYY-MM-DD"
    --json` to inspect and locally rank nearby same-project session records for
    a candidate row. Treat the output as a navigation hint, not proof.
-11. Use `cargo run --bin promptvault-cli -- work-session-evidence-source-search
+11. Use `cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-source-search
    --source-path PATH --query "PROJECT YYYY-MM-DD" --limit 5 --max-lines 100000
    --json` to inspect one selected JSONL source file or Antigravity SQLite
    conversation DB with redacted snippets and line/row numbers. Treat the output
    as manual review context, not proof.
-11. Use `cargo run --bin promptvault-cli -- work-session-evidence-source-proposals
+11. Use `cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-source-proposals
    --candidate-id ID --source-path PATH --query "PROJECT YYYY-MM-DD" --limit 5
    --max-lines 100000 --json` to turn copied source-search hits into review
    proposal input. Treat `review_ready` as operator input only, not durable
    approval.
-12. Use `cargo run --bin promptvault-cli -- work-session-evidence-proposals
+12. Use `cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-proposals
    --limit 20 --needs-title-normalization --ai --json` to generate read-only
    OpenAI/GLM/Codex-opt-in/local proposals for title-normalization blockers,
    or omit the filter for all unresolved rows. Codex is used only when
    `PROMPTVAULT_CODEX_WORK_PROVIDER=1` is set. Accepted proposals still require
    later operator review, and review-complete queue rows do not write durable
    session evidence.
-13. Use `cargo run --bin promptvault-cli -- work-session-index --batch-files 25
+13. Use `cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-index --batch-files 25
    --max-batches 2 --json` for short sanitized session-index backfills, and add
    `--confirm-long-run` when intentionally running above the short two-batch cap.
 
@@ -342,41 +343,40 @@ risk patterns.
 ### CLI
 
 ```bash
-cd src-tauri
-cargo run --bin promptvault-cli -- sources
-cargo run --bin promptvault-cli -- sources --json
-cargo run --bin promptvault-cli -- plan --source codex --json
-cargo run --bin promptvault-cli -- import-batch --source antigravity-ide-transcripts --files 1 --reset --json
-cargo run --bin promptvault-cli -- vault-audit --json
-cargo run --bin promptvault-cli -- vault-audit --allow-source-file-deletion --json
-cargo run --bin promptvault-cli -- scan --output ~/Documents/PromptVault/all-prompts.md
-cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md --json
-cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
-cargo run --bin promptvault-cli -- scan --source antigravity-ide-conversation-db --output /tmp/promptvault-antigravity-ide-db.md --json
-cargo run --bin promptvault-cli -- scan --no-export --json
-cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
-cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
-cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
-cargo run --bin promptvault-cli -- improve --prompt "Fix the failing parser test and verify it."
-cargo run --bin promptvault-cli -- improve --json --prompt "make better"
-cargo run --bin promptvault-cli -- improve --local --json --prompt "make better"
-cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
-cargo run --bin promptvault-cli -- work-status-export --limit 25 --session-limit 200
-cargo run --bin promptvault-cli -- work-status-export --limit 25 --full-session-index
-cargo run --bin promptvault-cli -- work-status-export --row-filter near-session-date-hint --full-session-index --json
-cargo run --bin promptvault-cli -- work-status-export --limit 25 --offset 25 --session-limit 200
-cargo run --bin promptvault-cli -- work-status-export --limit 25 --session-limit 200 --json
-cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --needs-title-normalization --json
-cargo run --bin promptvault-cli -- work-session-evidence-candidates --row-filter near-session-date-hint --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --row-filter near-session-date-hint --limit 5 --json
-cargo run --bin promptvault-cli -- work-log-normalization-candidates --limit 20 --needs-title-normalization --json
-cargo run --bin promptvault-cli -- work-log-normalization-proposals --limit 20 --needs-title-normalization --ai --json
-cargo run --bin promptvault-cli -- work-ai-provider-status --json
-cargo run --bin promptvault-cli -- work-ai-provider-health --json
-cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 2 --json
-cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 10 --confirm-long-run --json
-cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- sources
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- sources --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- plan --source codex --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- import-batch --source antigravity-ide-transcripts --files 1 --reset --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- vault-audit --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- vault-audit --allow-source-file-deletion --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --output ~/Documents/PromptVault/all-prompts.md
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --output /tmp/promptvault-smoke.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --source antigravity-ide-conversation-db --output /tmp/promptvault-antigravity-ide-db.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --no-export --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- improve --prompt "Fix the failing parser test and verify it."
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- improve --json --prompt "make better"
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- improve --local --json --prompt "make better"
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- repair --json --limit 100 --count 3
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 25 --session-limit 200
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 25 --full-session-index
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --row-filter near-session-date-hint --full-session-index --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 25 --offset 25 --session-limit 200
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 25 --session-limit 200 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-candidates --limit 20 --needs-title-normalization --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-candidates --row-filter near-session-date-hint --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-proposals --row-filter near-session-date-hint --limit 5 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-log-normalization-candidates --limit 20 --needs-title-normalization --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-log-normalization-proposals --limit 20 --needs-title-normalization --ai --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-ai-provider-status --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-ai-provider-health --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-index --batch-files 25 --max-batches 2 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-index --batch-files 25 --max-batches 10 --confirm-long-run --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- serve --addr 127.0.0.1:5174
 ```
 
 Run `plan` before an unrestricted scan on large stores. It inventories matching source files, total bytes, large-file counts, and warnings without reading prompt bodies. Use `import-batch --source ID --files N` to persist one resumable source slice, advance that source's DB cursor in `import_states`, record file hashes/status in `source_file_states`, and append an audit row to `import_events`; after a source completes, later import batches process only new/changed/error files and reconcile stale prompt rows for changed files. Use `vault-audit --json` as the strict pre-delete gate; it prints no prompt bodies and reports `deletion_ready=false` unless DB integrity, completed imports, source-path coverage, per-file hash/status ledger checks, and live source-file presence pass. Use `vault-audit --allow-source-file-deletion --json` only after deliberate deletion/archival to accept missing files that still have sealed `ok` byte/hash ledgers; `strict_source_backed_ready` remains `false` in that case. Add `--allow-legacy-missing` only to explicitly accept already-lost files that were missing before PromptVault could hash them. Use `work-status-export` when an agent needs a compact project/day management view outside the app; it reuses the project progress-log plus sanitized session-evidence report, renders Markdown by default, returns grouped JSON rows with `--json`, classifies progress-log source artifact roles, separates current `--session-limit` index usage from total sanitized records stored in SQLite, accepts `--full-session-index` for full stored session verification without manually copying the stored count, accepts `--offset` with `--limit` for paging later project/day rows, and accepts `--row-filter near-session-date-hint` or `--row-filter stale-session-date-hint` to work high-priority one-day same-project session candidates before lower-confidence distant candidates. Use `work-session-evidence-candidates` to list project/day rows that remain unresolved after the selected session evidence index; when `--session-limit` is omitted it defaults to the full stored session index count, `--row-filter near-session-date-hint` narrows read-only candidates to same-date or one-day same-project hints, and `--needs-title-normalization` focuses the subset blocked by rough work-log titles. Use `work-session-evidence-proposals` to get read-only source-traced OpenAI/GLM/Codex-opt-in/local suggestions for those unresolved rows before syncing or deciding a queue item; the row filter narrows the candidate pool before proposal generation, the title-normalization filter focuses title-first proposal work, and the review queue records operator review-complete/deferred/rejected decisions without writing durable session evidence. Use `work-session-evidence-review-queue --row-filter near-session-date-hint`, `--row-filter stale-session-date-hint`, or `--review-state deferred` to narrow persisted queue views before truncation without changing candidate sync or stale marking behavior. Use `work-log-normalization-candidates --needs-title-normalization` and `work-log-normalization-proposals --needs-title-normalization` to focus AI/local title cleanup on rough project/day rows before attempting session-evidence review; normalization queue sync still uses the full proposal set so filtered partial runs do not mark unrelated pending rows stale. Use `work-ai-provider-status` to confirm whether OpenAI, GLM, or a local `codex exec` route is available before expecting AI-backed proposals; configured OpenAI/GLM rows list the specific work-management capabilities they can attempt. Use `work-ai-provider-health` to run minimal read-only live probes against configured providers and distinguish dead providers from payload/timeout-specific proposal failures. OpenAI/GLM HTTP routes default to a 12-second timeout; set `PROMPTVAULT_AI_HTTP_TIMEOUT_SECONDS` to a value from 1 to 120 when a slow provider needs a longer bounded attempt. Codex stays disabled by default; set `PROMPTVAULT_CODEX_WORK_PROVIDER=1` to enable the `work-summary`, `work-log-extraction`, `work-log-normalization`, and `session-evidence-proposals` routes, which run `codex exec` with read-only sandbox, ephemeral state, output-schema validation, and copied-evidence checks where applicable. `PROMPTVAULT_CODEX_TIMEOUT_SECONDS` can override the default 90-second timeout up to 300 seconds. Use `work-session-index` to keep the sanitized Codex/Codex CX session evidence index moving; short runs up to two batches are confirmation-free, while longer CLI/API runs require `--confirm-long-run` and the browser UI requires typing `긴 백필` before the long-continue action unlocks. The browser UI can run one source continuously from the plan table, select all available import sources, queue selected sources in order, and stop after the current batch without losing the saved cursor. Stored-prompt loading can be narrowed by text query, exact source label, prompt date, and workspace path so the permanent vault can be reviewed without re-scanning source files. The toolbar `빠른 스캔` action intentionally scans the responsive source set `antigravity-cli-conversation-db`, `antigravity-ide-conversation-db`, `gemini-tmp-chat`, `antigravity-cli-history`, `claude-code-history`, and `codex-cx`, capped at 5 prompts per source; use stored loading, planning/import, or explicit CLI `--source` scans when reviewing the large Codex or Hermes session trees. Omit `--limit` for a full CLI scan. Use `--source ID` to verify one source without scanning the whole history. Use `--source-limit N` to sample across selected sources while keeping the overall `--limit` cap. In limited scans, `total_files` and source `files_seen` count visited files only, not every matching file in the source root, and stored prompt persistence is incremental so older rows for that source are preserved. Use `--no-export` when an agent only needs JSON stats and should not create a large Markdown file. Use `--weakest-first` or `--preview-sort quality-asc` when the preview should prioritize the weakest prompts for repair. Source summaries include average prompt quality and weak-prompt counts so agents can prioritize noisy stores first. The scan command writes prompt bodies to the Markdown output path by default and prints only summary metadata to stdout. CLI scans return zero prompt bodies by default; use `--preview-limit N --include-prompts` only when an agent or test needs a bounded prompt preview in the JSON result. Stdout prompt previews are capped at 25 records and redacted for token/key/private-key risk patterns.
@@ -404,8 +404,7 @@ For browser-only QA, run the local bridge alongside Vite:
 
 ```bash
 npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
-cd src-tauri
-cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- serve --addr 127.0.0.1:5174
 ```
 
 The browser bridge exposes local-only `/api/health`, `/api/scan`, `/api/scan/cancel`, `/api/scan/progress`, `/api/prompts`, `/api/prompt-facets`, `/api/improve`, `/api/plan`, `/api/import-batch`, `/api/import-states`, `/api/import-events`, `/api/vault-audit`, `/api/work-summary`, `/api/work-status-export`, `/api/work-session-evidence-candidates`, `/api/work-session-evidence-nearby`, `/api/work-session-evidence-source-search`, `/api/work-session-evidence-source-proposals`, `/api/work-session-evidence-proposals`, `/api/work-session-evidence-review-queue`, `/api/work-session-evidence-review-queue/update`, `/api/work-session-evidence-review-apply`, `/api/work-session-evidence-reviewed-items`, `/api/work-ai-provider-status`, `/api/work-ai-provider-health`, `/api/work-log-normalization-candidates`, `/api/work-log-normalization-proposals`, `/api/work-log-normalization-review-queue`, `/api/work-log-normalization-review-queue/update`, `/api/work-log-normalization-apply`, `/api/work-summary-snapshots`, and `/api/work-session-index` endpoints so cmux or another in-app browser can exercise the same scan, scan cancellation, active scan progress with discovery counts, stored-prompt loading, stored facet summaries, planning, improvement, resumable import, saved cursor, import activity, vault deletion-readiness audit, project/day summaries, compact status exports, session-evidence review candidates, read-only nearby same-project session drilldowns, bounded redacted source-session search, copied source-search review proposals, read-only session-evidence proposals, persisted session-evidence review decisions, durable reviewed-decision audit saves and reloads, work-management AI provider readiness, work-management AI provider live-health probes, title-focused work-log normalization, saved summary history, and sanitized session-index backfill code paths without Tauri IPC. The browser Stop control returns partial scan results for review but does not write canceled partial scans into the permanent SQLite vault; completed browser scans still persist normally.
@@ -439,30 +438,31 @@ npm run check
 cd src-tauri
 cargo check
 cargo test
-cargo run --bin promptvault-cli -- sources --json
-cargo run --bin promptvault-cli -- plan --source codex --json
-cargo run --bin promptvault-cli -- import-batch --source antigravity-ide-transcripts --files 1 --reset --json
-cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md --json
-cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
-cargo run --bin promptvault-cli -- scan --source antigravity-ide-conversation-db --output /tmp/promptvault-antigravity-ide-db.md --json
-cargo run --bin promptvault-cli -- scan --no-export --json
-cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
-cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
-cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
-cargo run --bin promptvault-cli -- work-status-export --limit 8 --session-limit 200
-cargo run --bin promptvault-cli -- work-status-export --limit 8 --full-session-index
-cargo run --bin promptvault-cli -- work-status-export --limit 8 --offset 8 --session-limit 200
-cargo run --bin promptvault-cli -- work-status-export --row-filter near-session-date-hint --full-session-index --json
-cargo run --bin promptvault-cli -- work-status-export --limit 3 --session-limit 200 --json
-cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --needs-title-normalization --json
-cargo run --bin promptvault-cli -- work-session-evidence-candidates --row-filter near-session-date-hint --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --row-filter near-session-date-hint --limit 5 --json
-cargo run --bin promptvault-cli -- work-session-evidence-review-queue --row-filter near-session-date-hint --json
-cargo run --bin promptvault-cli -- work-ai-provider-status --json
-cargo run --bin promptvault-cli -- work-ai-provider-health --json
-cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 2 --json
-cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 10 --confirm-long-run --json
+cd ..
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- sources --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- plan --source codex --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- import-batch --source antigravity-ide-transcripts --files 1 --reset --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --output /tmp/promptvault-smoke.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --source antigravity-ide-conversation-db --output /tmp/promptvault-antigravity-ide-db.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --no-export --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 8 --session-limit 200
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 8 --full-session-index
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 8 --offset 8 --session-limit 200
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --row-filter near-session-date-hint --full-session-index --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 3 --session-limit 200 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-candidates --limit 20 --needs-title-normalization --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-candidates --row-filter near-session-date-hint --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-proposals --row-filter near-session-date-hint --limit 5 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-review-queue --row-filter near-session-date-hint --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-ai-provider-status --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-ai-provider-health --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-index --batch-files 25 --max-batches 2 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-index --batch-files 25 --max-batches 10 --confirm-long-run --json
 curl http://127.0.0.1:5174/api/health
 ```
 

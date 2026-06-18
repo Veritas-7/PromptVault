@@ -10,6 +10,10 @@ or machine-specific database contents.
 
 - Repository: public GitHub source repo.
 - App type: local-first Tauri + React + TypeScript prompt/work-history vault.
+- Active local macOS app: `/Users/wj/Ai/System/15_MacApp/promptvault.app`.
+  The deployed app bundle contains one executable, `Contents/MacOS/promptvault`;
+  the development CLI is separated into `src-tauri-cli/` so it is not bundled as
+  a duplicate app executable.
 - Default database: `~/Documents/PromptVault/promptvault.sqlite`.
 - Raw prompt/session source files and generated SQLite databases are not
   committed to this repository.
@@ -37,6 +41,10 @@ or machine-specific database contents.
   mark.
 - Work-management views group evidence by project/date and keep prompt-like
   text as supporting evidence rather than the product boundary.
+- The deployed local macOS app launches with `open`, keeps a `promptvault`
+  process alive, quits cleanly by bundle id `com.wj.promptvault`, and passes
+  ad-hoc `codesign --verify --deep --strict`. Apple Developer ID notarization is
+  not part of the current local build.
 
 ## Deletion-Readiness Boundary
 
@@ -44,8 +52,7 @@ PromptVault does not delete original source files. Before deleting or archiving
 source logs, run:
 
 ```bash
-cd src-tauri
-cargo run --bin promptvault-cli -- vault-audit --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- vault-audit --json
 ```
 
 Strict mode requires SQLite integrity, completed import cursors, per-file
@@ -54,8 +61,7 @@ ledger coverage, no parser/hash errors, and live source-file presence.
 After intentional deletion/archival, run:
 
 ```bash
-cd src-tauri
-cargo run --bin promptvault-cli -- vault-audit --allow-source-file-deletion --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- vault-audit --allow-source-file-deletion --json
 ```
 
 This accepts missing files only when they already have sealed `ok` byte/hash

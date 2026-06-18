@@ -3312,15 +3312,15 @@ function stopServer(child) {
 const bridge = spawnServer("bridge", "cargo", [
   "run",
   "--quiet",
-  "--bin",
-  "promptvault-cli",
+  "--manifest-path",
+  "src-tauri-cli/Cargo.toml",
   "--",
   "serve",
   "--addr",
   `${HOST}:${BRIDGE_PORT}`,
   "--database",
   DATABASE_PATH,
-], { cwd: join(PROJECT_ROOT, "src-tauri"), env: bridgeQaEnv() });
+], { cwd: PROJECT_ROOT, env: bridgeQaEnv() });
 const app = spawnServer("vite", "npm", ["run", "dev", "--", "--host", HOST, "--port", String(APP_PORT)]);
 
 try {

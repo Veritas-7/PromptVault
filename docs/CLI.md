@@ -5,34 +5,34 @@ PromptVault ships a Rust CLI binary for agent-native use. It is intentionally no
 ## Commands
 
 ```bash
-cargo run --bin promptvault-cli -- sources
-cargo run --bin promptvault-cli -- sources --json
-cargo run --bin promptvault-cli -- plan [--source ID[,ID...]] --json
-cargo run --bin promptvault-cli -- import-batch --source ID [--files N>0] [--reset] --json
-cargo run --bin promptvault-cli -- vault-audit [--database PATH] [--allow-source-file-deletion] [--allow-legacy-missing] --json
-cargo run --bin promptvault-cli -- scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export]
-cargo run --bin promptvault-cli -- scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] --json
-cargo run --bin promptvault-cli -- improve [--local] --prompt "TEXT"
-cargo run --bin promptvault-cli -- improve [--local] --json --prompt "TEXT"
-cargo run --bin promptvault-cli -- improve [--local] < prompt.txt
-cargo run --bin promptvault-cli -- repair [--source ID[,ID...]] [--limit N>0] [--count N>0] --json
-cargo run --bin promptvault-cli -- work-status-export [--limit N>0] [--offset N>=0] [--row-filter FILTER] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]
-cargo run --bin promptvault-cli -- work-session-evidence-candidates [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]
-cargo run --bin promptvault-cli -- work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--query TEXT] [--database PATH] [--json]
-cargo run --bin promptvault-cli -- work-session-evidence-source-search --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--json]
-cargo run --bin promptvault-cli -- work-session-evidence-source-proposals --candidate-id ID --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--database PATH] [--json]
-cargo run --bin promptvault-cli -- work-session-evidence-proposals [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]
-cargo run --bin promptvault-cli -- work-session-evidence-review-queue [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]
-cargo run --bin promptvault-cli -- work-session-evidence-review-queue-update --candidate-id ID --state approved|deferred|rejected [--reason TEXT] [--source-review-json JSON|--source-review-file PATH] [--limit N>0] [--database PATH] [--json]
-cargo run --bin promptvault-cli -- work-session-evidence-review-apply [--limit N>0] [--database PATH] [--json]
-cargo run --bin promptvault-cli -- work-session-evidence-reviewed-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]
-cargo run --bin promptvault-cli -- work-ai-provider-status [--json]
-cargo run --bin promptvault-cli -- work-log-normalization-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]
-cargo run --bin promptvault-cli -- work-log-normalization-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]
-cargo run --bin promptvault-cli -- work-log-normalization-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-proposals] [--refresh-session-index] [--ai] [--json]
-cargo run --bin promptvault-cli -- work-log-normalization-apply [--limit N>0] [--database PATH] [--json]
-cargo run --bin promptvault-cli -- work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]
-cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PATH]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- sources
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- sources --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- plan [--source ID[,ID...]] --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- import-batch --source ID [--files N>0] [--reset] --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- vault-audit [--database PATH] [--allow-source-file-deletion] [--allow-legacy-missing] --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- improve [--local] --prompt "TEXT"
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- improve [--local] --json --prompt "TEXT"
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- improve [--local] < prompt.txt
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- repair [--source ID[,ID...]] [--limit N>0] [--count N>0] --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export [--limit N>0] [--offset N>=0] [--row-filter FILTER] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-candidates [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-nearby --project NAME --date YYYY-MM-DD [--limit N>0] [--query TEXT] [--database PATH] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-source-search --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-source-proposals --candidate-id ID --source-path PATH --query TEXT [--limit N>0] [--max-lines N>0] [--database PATH] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-proposals [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-review-queue [--limit N>0] [--row-filter FILTER] [--session-limit N>0] [--database PATH] [--sync-candidates] [--refresh-session-index] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-review-queue-update --candidate-id ID --state approved|deferred|rejected [--reason TEXT] [--source-review-json JSON|--source-review-file PATH] [--limit N>0] [--database PATH] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-review-apply [--limit N>0] [--database PATH] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-reviewed-items [--limit N>0] [--database PATH] [--date YYYY-MM-DD] [--project NAME] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-ai-provider-status [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-log-normalization-candidates [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-log-normalization-proposals [--limit N>0] [--session-limit N>0] [--database PATH] [--refresh-session-index] [--needs-title-normalization] [--ai] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-log-normalization-review-queue [--limit N>0] [--session-limit N>0] [--database PATH] [--sync-proposals] [--refresh-session-index] [--ai] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-log-normalization-apply [--limit N>0] [--database PATH] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-index [--limit N>0] [--batch-files 1..500] [--max-batches N>0] [--until-complete] [--confirm-long-run] [--database PATH] [--reset] [--json]
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- serve [--addr 127.0.0.1:5174] [--database PATH]
 ```
 
 ## Contract
@@ -112,53 +112,53 @@ npm run check
 npm run qa:browser-bridge
 cargo check
 npm run build
-cargo run --bin promptvault-cli -- sources
-cargo run --bin promptvault-cli -- sources --json
-cargo run --bin promptvault-cli -- plan --source codex --json
-cargo run --bin promptvault-cli -- import-batch --source antigravity-ide-transcripts --files 1 --reset --json
-cargo run --bin promptvault-cli -- vault-audit --json
-cargo run --bin promptvault-cli -- vault-audit --allow-source-file-deletion --json
-set +e; cargo run --bin promptvault-cli -- sources --bogus; test "$?" -ne 0; set -e
-cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md
-cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
-cargo run --bin promptvault-cli -- scan --source antigravity-ide-conversation-db --output /tmp/promptvault-antigravity-ide-db.md --json
-cargo run --bin promptvault-cli -- scan --no-export --json
-cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
-cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
-cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.json.md --json
-cargo run --bin promptvault-cli -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
-cargo run --bin promptvault-cli -- improve --json --prompt "make better"
-cargo run --bin promptvault-cli -- improve --local --json --prompt "make better"
-set +e; cargo run --bin promptvault-cli -- improve --json --prompt ""; test "$?" -ne 0; set -e
-cargo run --bin promptvault-cli -- repair --json --limit 100 --count 3
-cargo run --bin promptvault-cli -- work-status-export --limit 8 --session-limit 200
-cargo run --bin promptvault-cli -- work-status-export --limit 8 --full-session-index
-cargo run --bin promptvault-cli -- work-status-export --limit 8 --offset 8 --session-limit 200
-cargo run --bin promptvault-cli -- work-status-export --row-filter same-date-session-hint --full-session-index --json
-cargo run --bin promptvault-cli -- work-status-export --limit 3 --session-limit 200 --json
-cargo run --bin promptvault-cli -- work-session-evidence-candidates --limit 20 --needs-title-normalization --json
-cargo run --bin promptvault-cli -- work-session-evidence-candidates --row-filter same-date-session-hint --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
-cargo run --bin promptvault-cli -- work-session-evidence-proposals --row-filter near-session-date-hint --limit 5 --json
-cargo run --bin promptvault-cli -- work-session-evidence-review-queue --sync-candidates --limit 20 --json
-cargo run --bin promptvault-cli -- work-session-evidence-review-queue --row-filter near-session-date-hint --json
-cargo run --bin promptvault-cli -- work-session-evidence-review-apply --limit 20 --json
-cargo run --bin promptvault-cli -- work-session-evidence-reviewed-items --limit 20 --json
-cargo run --bin promptvault-cli -- work-ai-provider-status --json
-cargo run --bin promptvault-cli -- work-log-normalization-candidates --limit 20 --needs-title-normalization --json
-cargo run --bin promptvault-cli -- work-log-normalization-proposals --limit 20 --needs-title-normalization --ai --json
-cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 2 --json
-cargo run --bin promptvault-cli -- work-session-index --batch-files 25 --max-batches 10 --confirm-long-run --json
-set +e; cargo run --bin promptvault-cli -- work-session-index --batch-files 1 --max-batches 3 --json; test "$?" -ne 0; set -e
-cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
-cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174 --database /tmp/promptvault-browser-qa.sqlite
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- sources
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- sources --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- plan --source codex --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- import-batch --source antigravity-ide-transcripts --files 1 --reset --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- vault-audit --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- vault-audit --allow-source-file-deletion --json
+set +e; cargo run --manifest-path src-tauri-cli/Cargo.toml -- sources --bogus; test "$?" -ne 0; set -e
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --output /tmp/promptvault-smoke.md
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --source antigravity-ide-conversation-db --output /tmp/promptvault-antigravity-ide-db.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --no-export --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --preview-limit 5 --weakest-first --no-export --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --preview-limit 5 --weakest-first --include-prompts --no-export --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --output /tmp/promptvault-smoke.json.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 100 --preview-limit 5 --include-markdown --output /tmp/promptvault-preview.md --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- improve --json --prompt "make better"
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- improve --local --json --prompt "make better"
+set +e; cargo run --manifest-path src-tauri-cli/Cargo.toml -- improve --json --prompt ""; test "$?" -ne 0; set -e
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- repair --json --limit 100 --count 3
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 8 --session-limit 200
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 8 --full-session-index
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 8 --offset 8 --session-limit 200
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --row-filter same-date-session-hint --full-session-index --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-status-export --limit 3 --session-limit 200 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-candidates --limit 20 --needs-title-normalization --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-candidates --row-filter same-date-session-hint --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-proposals --limit 20 --needs-title-normalization --ai --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-proposals --row-filter near-session-date-hint --limit 5 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-review-queue --sync-candidates --limit 20 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-review-queue --row-filter near-session-date-hint --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-review-apply --limit 20 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-evidence-reviewed-items --limit 20 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-ai-provider-status --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-log-normalization-candidates --limit 20 --needs-title-normalization --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-log-normalization-proposals --limit 20 --needs-title-normalization --ai --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-index --batch-files 25 --max-batches 2 --json
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-index --batch-files 25 --max-batches 10 --confirm-long-run --json
+set +e; cargo run --manifest-path src-tauri-cli/Cargo.toml -- work-session-index --batch-files 1 --max-batches 3 --json; test "$?" -ne 0; set -e
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- serve --addr 127.0.0.1:5174
+cargo run --manifest-path src-tauri-cli/Cargo.toml -- serve --addr 127.0.0.1:5174 --database /tmp/promptvault-browser-qa.sqlite
 curl http://127.0.0.1:5174/api/health
-set +e; cargo run --bin promptvault-cli -- scan --source missing-source --limit 1 --preview-limit 0 --no-export --json; test "$?" -ne 0; set -e
-set +e; cargo run --bin promptvault-cli -- scan --limit nope --no-export --json; test "$?" -ne 0; set -e
-set +e; cargo run --bin promptvault-cli -- scan --limit 0 --no-export --json; test "$?" -ne 0; set -e
-set +e; cargo run --bin promptvault-cli -- repair --limit 10 --count 0 --json; test "$?" -ne 0; set -e
-set +e; cargo run --bin promptvault-cli -- scan --limit 10 --no-export --json --source; test "$?" -ne 0; set -e
-set +e; cargo run --bin promptvault-cli -- scan --limit 10 --no-export --json --output /tmp/promptvault-no-export.md; test "$?" -ne 0; set -e
-set +e; cargo run --bin promptvault-cli -- scan --limit 10 --preview-sort latest --weakest-first --no-export --json; test "$?" -ne 0; set -e
-set +e; cargo run --bin promptvault-cli -- scna; test "$?" -ne 0; set -e
+set +e; cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --source missing-source --limit 1 --preview-limit 0 --no-export --json; test "$?" -ne 0; set -e
+set +e; cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit nope --no-export --json; test "$?" -ne 0; set -e
+set +e; cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 0 --no-export --json; test "$?" -ne 0; set -e
+set +e; cargo run --manifest-path src-tauri-cli/Cargo.toml -- repair --limit 10 --count 0 --json; test "$?" -ne 0; set -e
+set +e; cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 10 --no-export --json --source; test "$?" -ne 0; set -e
+set +e; cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 10 --no-export --json --output /tmp/promptvault-no-export.md; test "$?" -ne 0; set -e
+set +e; cargo run --manifest-path src-tauri-cli/Cargo.toml -- scan --limit 10 --preview-sort latest --weakest-first --no-export --json; test "$?" -ne 0; set -e
+set +e; cargo run --manifest-path src-tauri-cli/Cargo.toml -- scna; test "$?" -ne 0; set -e
 ```

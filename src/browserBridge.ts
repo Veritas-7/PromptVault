@@ -55,7 +55,7 @@ export function browserBridgeCommand(): string {
 
 function browserBridgeCommandForUrl(url: string): string {
   const parsed = new URL(url);
-  return `cd src-tauri && cargo run --bin promptvault-cli -- serve --addr ${parsed.hostname}:${parsed.port}`;
+  return `cargo run --manifest-path src-tauri-cli/Cargo.toml -- serve --addr ${parsed.hostname}:${parsed.port}`;
 }
 
 function storedBrowserBridgeUrl(): string | null {

@@ -5,4 +5,5 @@ useDefault = true
 description = "Ignore generated Tauri/Rust muda metadata false positives"
 paths = [
   '''^src-tauri/target/(debug|release)/deps/libmuda-[a-f0-9]+\.rmeta$''',
+  '''^src-tauri-cli/target/(debug|release)/deps/libmuda-[a-f0-9]+\.rmeta$''',
 ]

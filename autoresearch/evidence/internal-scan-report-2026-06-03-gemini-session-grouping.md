@@ -4,7 +4,7 @@ Generated: 2026-06-03T20:40:22+0900
 
 ## Local Evidence
 
-`/Users/wj/.gemini/tmp/wj/chats/session-2026-04-21T09-18-cc5794a8.json` has a top-level `sessionId` and each message has its own `id`. The parser was passing only the message object to `push_record`, so `extract_session_id` chose the message id.
+`/Users/example/.gemini/tmp/wj/chats/session-2026-04-21T09-18-cc5794a8.json` has a top-level `sessionId` and each message has its own `id`. The parser was passing only the message object to `push_record`, so `extract_session_id` chose the message id.
 
 ## RED
 

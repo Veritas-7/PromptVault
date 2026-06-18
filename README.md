@@ -4,6 +4,48 @@ PromptVault is a local-first Tauri + React + TypeScript workbench for collecting
 
 It extracts user-authored prompts, strips known injected context blocks, persists prompts to a permanent SQLite database, writes Markdown exports, shows daily/project/source/frequency/quality analytics, and recommends stronger development-agent prompts through OpenAI or GLM when configured, with a deterministic local fallback. In-app recommendations are saved as prompt-improvement history so prompt changes can be managed instead of treated as transient UI output.
 
+## Public Repository Safety
+
+This repository is safe to read as public source code. It contains the app,
+tests, docs, and public-safe audit notes. It does not contain local prompt
+databases, raw AI session logs, API keys, provider credentials, or generated
+prompt exports.
+
+PromptVault is local-first by design:
+
+- Source discovery resolves from the current macOS user's home directory.
+- Default data is written to `~/Documents/PromptVault/promptvault.sqlite`.
+- API keys are optional and read from local environment/config files only.
+- Missing API keys fall back to deterministic local rules.
+- The app never deletes original source logs automatically.
+
+## Quick Start
+
+```bash
+npm install
+npm run dev
+```
+
+In another shell, start the local browser bridge when testing outside Tauri:
+
+```bash
+cd src-tauri
+cargo run --bin promptvault-cli -- serve --addr 127.0.0.1:5174
+```
+
+For the native desktop app:
+
+```bash
+npm run tauri dev
+```
+
+For a full local quality gate:
+
+```bash
+npm run check
+npm run qa:browser-bridge
+```
+
 ## For People
 
 ### What It Does

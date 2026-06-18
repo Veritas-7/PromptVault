@@ -2,9 +2,9 @@
 
 Date: 2026-06-03
 
-Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
+Repo: `/Users/example/Ai/System/10_Projects/PromptVault`
 
-Resumed thread: `019e8bcb-66b7-7443-a79d-46fd3686eadc`
+Resumed thread: `redacted-session-id`
 
 Head before code commit: `17640f1a28535bb18c20c380cb7503e32c3e6d8d`
 

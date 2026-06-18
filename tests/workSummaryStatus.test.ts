@@ -416,7 +416,7 @@ function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = 
       source_file_roles: [{ text: "handoff-log", count: 1 }],
       top_titles: ["Status export"],
       sample_evidence: "Status export evidence",
-      latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+      latest_source_path: "/Users/example/Ai/System/10_Projects/PromptVault/working.md",
       latest_source_file: "working.md",
       latest_source_role: "handoff-log",
       session_evidence_count: 0,
@@ -443,7 +443,7 @@ function statusExportResult(overrides: Partial<ProjectWorkStatusExportResult> = 
       source_file_roles: [{ text: "handoff-log", count: 2 }, { text: "work-log", count: 1 }],
       top_titles: ["CareVault session evidence"],
       sample_evidence: "CareVault evidence",
-      latest_source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      latest_source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md",
       latest_source_file: "workingd.md",
       latest_source_role: "handoff-log",
       session_evidence_count: 9,
@@ -482,7 +482,7 @@ function snapshotsResult(overrides: Partial<ProjectWorkSummarySnapshotsResult> =
 function coverageResult(overrides: Partial<ProjectWorkLogCoverageResult> = {}): ProjectWorkLogCoverageResult {
   return {
     generated_at: "2026-06-09T00:00:00Z",
-    root_path: "/Users/wj/Ai/System/10_Projects",
+    root_path: "/Users/example/Ai/System/10_Projects",
     files_seen: 32,
     parsed_file_count: 28,
     unparsed_file_count: 4,
@@ -501,7 +501,7 @@ function candidatesResult(
 ): ProjectWorkLogExtractionCandidatesResult {
   return {
     generated_at: "2026-06-09T00:00:00Z",
-    root_path: "/Users/wj/Ai/System/10_Projects",
+    root_path: "/Users/example/Ai/System/10_Projects",
     files_seen: 32,
     skipped_parsed_file_count: 16,
     skipped_unreadable_file_count: 1,
@@ -525,7 +525,7 @@ function extractionCandidate(
   return {
     candidate_id: "work-log-RepoTutorStudio-a1b2c3d4",
     project: "RepoTutorStudio",
-    source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md",
+    source_path: "/Users/example/Ai/System/10_Projects/RepoTutorStudio/working.md",
     source_file: "working.md",
     reason: "unparsed_work_log",
     excerpt: "- 2026-06-04: Created project root.",
@@ -569,7 +569,7 @@ function reviewQueueItem(
     review_reason: "safe_ai_candidate_ready",
     provider_route: "ai_provider",
     project: "RepoTutorStudio",
-    source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md",
+    source_path: "/Users/example/Ai/System/10_Projects/RepoTutorStudio/working.md",
     source_file: "working.md",
     candidate_reason: "missing_dated_heading",
     excerpt: "- 2026-06-04: Created project root.",
@@ -586,7 +586,7 @@ function extractionResult(
 ): ProjectWorkLogExtractionProposalsResult {
   return {
     generated_at: "2026-06-09T00:00:00Z",
-    root_path: "/Users/wj/Ai/System/10_Projects",
+    root_path: "/Users/example/Ai/System/10_Projects",
     provider: "glm",
     provider_model: "glm-test-model",
     provider_runtime: "glm-chat-completions",
@@ -607,7 +607,7 @@ function extractionProposal(
   return {
     candidate_id: "work-log-RepoTutorStudio-a1b2c3d4",
     project: "RepoTutorStudio",
-    source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md",
+    source_path: "/Users/example/Ai/System/10_Projects/RepoTutorStudio/working.md",
     source_file: "working.md",
     date: "2026-06-04",
     title: "Created project root.",
@@ -1012,11 +1012,11 @@ function sessionEvidenceSourceProposal(
     candidate_id: candidate.candidate_id,
     project: candidate.project,
     date: candidate.date,
-    source_path: "/Users/wj/.codex/sessions/2026/06/09/source.jsonl",
+    source_path: "/Users/example/.codex/sessions/2026/06/09/source.jsonl",
     source_line_number: 42,
     source_session_id: "session-1",
     source_timestamp: "2026-06-09T12:00:00Z",
-    source_cwd: "/Users/wj/Ai/System/10_Projects/PromptVault",
+    source_cwd: "/Users/example/Ai/System/10_Projects/PromptVault",
     source_search_hit_id: "source-hit-1",
     proposal_kind: "manual_session_search",
     proposed_action: "Review copied source trace.",
@@ -1410,7 +1410,7 @@ test("work session index planned remaining text follows current batch controls",
       {
         source_id: "codex",
         source_label: "Codex",
-        root_path: "/Users/wj/.codex/sessions",
+        root_path: "/Users/example/.codex/sessions",
         total_files: 25150,
         next_file_index: 350,
         processed_files: 350,
@@ -1421,7 +1421,7 @@ test("work session index planned remaining text follows current batch controls",
       {
         source_id: "codex-cx",
         source_label: "Codex CX",
-        root_path: "/Users/wj/.codex-cx/sessions",
+        root_path: "/Users/example/.codex-cx/sessions",
         total_files: 11,
         next_file_index: 11,
         processed_files: 11,
@@ -1597,7 +1597,7 @@ test("work management readiness text summarizes coverage, session backfill, queu
       {
         source_id: "codex",
         source_label: "Codex",
-        root_path: "/Users/wj/.codex/sessions",
+        root_path: "/Users/example/.codex/sessions",
         total_files: 200,
         next_file_index: 110,
         processed_files: 110,
@@ -3497,7 +3497,7 @@ test("work session evidence source search helpers build review-safe queries", ()
           match_score: 1,
           matched_terms: ["promptvault"],
           excerpt:
-            "Codex session metadata indexed session project targets: /Users/wj/Ai/System/10_Projects/PromptVault",
+            "Codex session metadata indexed session project targets: /Users/example/Ai/System/10_Projects/PromptVault",
         }),
       ],
     })),
@@ -3512,7 +3512,7 @@ test("work session evidence source search helpers build review-safe queries", ()
           match_score: 1,
           matched_terms: ["promptvault"],
           excerpt:
-            "Codex session metadata indexed session project targets: /Users/wj/Ai/System/10_Projects/PromptVault",
+            "Codex session metadata indexed session project targets: /Users/example/Ai/System/10_Projects/PromptVault",
         }),
         sessionEvidenceNearbyItem({
           id: "specific-session",

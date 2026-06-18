@@ -5,7 +5,7 @@
   "code_commit": "b517991ef2f27b28f39efa5e89f156340f316191",
   "status": "pass",
   "local_evidence": {
-    "source_root": "/Users/wj/.gemini/tmp/wj/chats",
+    "source_root": "/Users/example/.gemini/tmp/wj/chats",
     "observed_shape": "Gemini tmp chat files contain a top-level sessionId and per-message id fields.",
     "example": "session-2026-04-21T09-18-cc5794a8.json starts with sessionId and messages[0].id."
   },

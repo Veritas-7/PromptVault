@@ -18,7 +18,7 @@ const SECRET_ENV_DIR = mkdtempSync(join(tmpdir(), "promptvault-browser-qa-env-")
 const SECRET_ENV_PATH = join(SECRET_ENV_DIR, "secrets.env");
 const START_TIMEOUT_MS = Number.parseInt(process.env.PROMPTVAULT_QA_START_TIMEOUT_MS ?? "90000", 10);
 const ANTIGRAVITY_QA_CONVERSATION_ROOT = join(
-  process.env.HOME ?? "/Users/wj",
+  process.env.HOME ?? "/Users/example",
   ".gemini",
   "antigravity-cli",
   "conversations",
@@ -160,7 +160,7 @@ function createAntigravityConversationDbFixture({ cwd, promptText, sourcePath = 
 function insertAntigravitySessionEvidenceFixture(queueItem, options = {}) {
   const project = queueItem.project;
   const evidenceDate = previousIsoDate(queueItem.date);
-  const cwd = `/Users/wj/Ai/System/10_Projects/${project}`;
+  const cwd = `/Users/example/Ai/System/10_Projects/${project}`;
   const sourcePath = options.sourcePath ?? ANTIGRAVITY_QA_SOURCE_PATH;
   const idPrefix = options.idPrefix ?? "qa-antigravity-session-evidence";
   const hashPrefix = options.hashPrefix ?? "qa-antigravity-session-evidence-hash";

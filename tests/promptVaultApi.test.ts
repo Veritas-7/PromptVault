@@ -260,7 +260,7 @@ function projectWorkSessionIndexPayload(overrides = {}) {
     source_states: [{
       source_id: "codex",
       source_label: "Codex",
-      root_path: "/Users/wj/.codex/sessions",
+      root_path: "/Users/example/.codex/sessions",
       total_files: 25145,
       next_file_index: 200,
       processed_files: 200,
@@ -270,7 +270,7 @@ function projectWorkSessionIndexPayload(overrides = {}) {
     }, {
       source_id: "codex-cx",
       source_label: "Codex CX",
-      root_path: "/Users/wj/.codex-cx/sessions",
+      root_path: "/Users/example/.codex-cx/sessions",
       total_files: 11,
       next_file_index: 11,
       processed_files: 11,
@@ -304,7 +304,7 @@ function projectWorkSummaryPayload(overrides = {}) {
         project: "PromptVault",
         title: "Bridge summary",
         status: "done",
-        source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+        source_path: "/Users/example/Ai/System/10_Projects/PromptVault/working.md",
         source_file: "working.md",
         evidence: "- Bridge summary",
         session_evidence_count: 1,
@@ -335,7 +335,7 @@ function projectWorkSummaryPayload(overrides = {}) {
         project: "PromptVault",
         title: "Bridge summary",
         status: "done",
-        source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+        source_path: "/Users/example/Ai/System/10_Projects/PromptVault/working.md",
         source_file: "working.md",
         evidence: "- Bridge summary",
         session_evidence_count: 1,
@@ -383,7 +383,7 @@ function projectWorkStatusExportPayload(overrides = {}) {
       source_file_roles: [{ text: "handoff-log", count: 2 }],
       top_titles: ["Status export UI"],
       sample_evidence: "Added status export UI evidence.",
-      latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+      latest_source_path: "/Users/example/Ai/System/10_Projects/PromptVault/working.md",
       latest_source_file: "working.md",
       latest_source_role: "handoff-log",
       session_evidence_count: 7,
@@ -441,7 +441,7 @@ function projectWorkSessionEvidenceCandidatesPayload(overrides = {}) {
       source_file_roles: [{ text: "handoff-log", count: 2 }],
       top_titles: ["Full-index evidence review"],
       sample_evidence: "Added full-index evidence review candidate.",
-      latest_source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+      latest_source_path: "/Users/example/Ai/System/10_Projects/PromptVault/working.md",
       latest_source_file: "working.md",
       latest_source_role: "handoff-log",
       reason: "unresolved_after_full_index,no_session_evidence,needs_title_normalization",
@@ -511,11 +511,11 @@ function projectWorkSessionEvidenceSourceReviewPayload(overrides = {}) {
     candidate_id: "session-evidence-PromptVault-a1b2c3d4e5",
     project: "PromptVault",
     date: "2026-06-09",
-    source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
     source_line_number: 12,
     source_session_id: "turn-source-hit-1",
     source_timestamp: "2026-06-09T01:00:00Z",
-    source_cwd: "/Users/wj/Ai/System/10_Projects/PromptVault",
+    source_cwd: "/Users/example/Ai/System/10_Projects/PromptVault",
     source_search_hit_id: "source-hit-1",
     proposal_kind: "manual_session_search",
     proposed_action:
@@ -618,10 +618,10 @@ function projectWorkSessionEvidenceNearbyPayload(overrides = {}) {
       id: "session-nearby-1",
       source: "Codex session metadata",
       session_id: "thread-nearby-1",
-      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
       timestamp: "2026-06-08T23:00:00Z",
       prompt_date: "2026-06-09",
-      cwd: "/Users/wj/Ai/System/10_Projects/PromptVault",
+      cwd: "/Users/example/Ai/System/10_Projects/PromptVault",
       date_distance_days: 0,
       match_score: 3,
       matched_terms: ["evidence", "nearby", "promptvault"],
@@ -633,7 +633,7 @@ function projectWorkSessionEvidenceNearbyPayload(overrides = {}) {
       id: "session-nearby-2",
       source: "Claude Code projects",
       session_id: "thread-nearby-2",
-      source_path: "/Users/wj/.claude/projects/promptvault.jsonl",
+      source_path: "/Users/example/.claude/projects/promptvault.jsonl",
       timestamp: null,
       prompt_date: "2026-06-08",
       cwd: null,
@@ -655,7 +655,7 @@ function projectWorkSessionEvidenceNearbyPayload(overrides = {}) {
 function projectWorkSessionEvidenceSourceSearchPayload(overrides = {}) {
   return {
     generated_at: "2026-06-09T00:05:00Z",
-    source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
     query: "PromptVault nearby evidence",
     query_term_count: 3,
     requested_limit: 5,
@@ -668,7 +668,7 @@ function projectWorkSessionEvidenceSourceSearchPayload(overrides = {}) {
       line_number: 12,
       session_id: "turn-source-hit-1",
       timestamp: "2026-06-09T01:00:00Z",
-      cwd: "/Users/wj/Ai/System/10_Projects/PromptVault",
+      cwd: "/Users/example/Ai/System/10_Projects/PromptVault",
       match_score: 3,
       matched_terms: ["evidence", "nearby", "promptvault"],
       excerpt: "PromptVault nearby evidence source hit.",
@@ -690,7 +690,7 @@ function projectWorkSessionEvidenceSourceProposalsPayload(overrides = {}) {
     candidate_id: "session-evidence-PromptVault-source-proposal",
     project: "PromptVault",
     date: "2026-06-10",
-    source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
     query: "PromptVault nearby evidence",
     query_term_count: 3,
     scanned_line_count: 42,
@@ -702,11 +702,11 @@ function projectWorkSessionEvidenceSourceProposalsPayload(overrides = {}) {
       candidate_id: "session-evidence-PromptVault-source-proposal",
       project: "PromptVault",
       date: "2026-06-10",
-      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
       source_line_number: 12,
       source_session_id: "turn-source-hit-1",
       source_timestamp: "2026-06-09T01:00:00Z",
-      source_cwd: "/Users/wj/Ai/System/10_Projects/PromptVault",
+      source_cwd: "/Users/example/Ai/System/10_Projects/PromptVault",
       source_search_hit_id: "source-hit-1",
       proposal_kind: "manual_session_search",
       proposed_action: "Review copied source-search trace from line 12 before approving any durable session-evidence record.",
@@ -734,7 +734,7 @@ function projectWorkSessionEvidenceSourceAuditItem(overrides = {}) {
     review_state: "pending_review",
     review_reason: "near_session_date_hint",
     outcome: "review_ready",
-    recommended_source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    recommended_source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
     recommended_session_id: "turn-source-hit-1",
     recommended_prompt_date: "2026-06-09",
     recommended_match_score: 3,
@@ -838,7 +838,7 @@ function projectWorkSummarySnapshotsPayload(overrides = {}) {
 function projectWorkLogCoveragePayload(overrides = {}) {
   return {
     generated_at: "2026-06-09T00:00:00Z",
-    root_path: "/Users/wj/Ai/System/10_Projects",
+    root_path: "/Users/example/Ai/System/10_Projects",
     files_seen: 2,
     parsed_file_count: 1,
     unparsed_file_count: 1,
@@ -848,7 +848,7 @@ function projectWorkLogCoveragePayload(overrides = {}) {
     work_item_count: 3,
     files: [{
       project: "PromptVault",
-      source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+      source_path: "/Users/example/Ai/System/10_Projects/PromptVault/working.md",
       source_file: "working.md",
       status: "parsed",
       work_item_count: 3,
@@ -857,7 +857,7 @@ function projectWorkLogCoveragePayload(overrides = {}) {
       modified_at: "2026-06-09T00:00:00Z",
     }, {
       project: "CareVault",
-      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/docs/progress.md",
+      source_path: "/Users/example/Ai/System/10_Projects/CareVault/docs/progress.md",
       source_file: "progress.md",
       status: "unparsed",
       work_item_count: 0,
@@ -873,7 +873,7 @@ function projectWorkLogCoveragePayload(overrides = {}) {
 function projectWorkLogCandidatesPayload(overrides = {}) {
   return {
     generated_at: "2026-06-09T00:00:00Z",
-    root_path: "/Users/wj/Ai/System/10_Projects",
+    root_path: "/Users/example/Ai/System/10_Projects",
     files_seen: 2,
     skipped_parsed_file_count: 1,
     skipped_unreadable_file_count: 0,
@@ -888,7 +888,7 @@ function projectWorkLogCandidatesPayload(overrides = {}) {
     candidates: [{
       candidate_id: "work-log-CareVault-a1b2c3d4e5",
       project: "CareVault",
-      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md",
       source_file: "workingd.md",
       reason: "missing_dated_heading",
       excerpt: "Ideas\n- Backfill older work notes",
@@ -923,7 +923,7 @@ function projectWorkLogReviewQueuePayload(overrides = {}) {
       review_reason: "risk_flags_require_local_review",
       provider_route: "local_review",
       project: "CareVault",
-      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md",
       source_file: "workingd.md",
       candidate_reason: "missing_dated_heading",
       excerpt: "Ideas\n- Backfill older work notes",
@@ -940,7 +940,7 @@ function projectWorkLogReviewQueuePayload(overrides = {}) {
 function projectWorkLogExtractionProposalsPayload(overrides = {}) {
   return {
     generated_at: "2026-06-09T00:00:00Z",
-    root_path: "/Users/wj/Ai/System/10_Projects",
+    root_path: "/Users/example/Ai/System/10_Projects",
     provider: "glm",
     provider_model: "glm-test-model",
     provider_runtime: "glm-chat-completions",
@@ -951,7 +951,7 @@ function projectWorkLogExtractionProposalsPayload(overrides = {}) {
     proposals: [{
       candidate_id: "work-log-CareVault-a1b2c3d4e5",
       project: "CareVault",
-      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md",
       source_file: "workingd.md",
       date: "2026-06-04",
       title: "Backfilled older work notes",
@@ -1086,7 +1086,7 @@ function projectWorkLogExtractionItemsPayload(overrides = {}) {
       used_ai: true,
       candidate_id: "work-log-CareVault-a1b2c3d4e5",
       project: "CareVault",
-      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md",
       source_file: "workingd.md",
       date: "2026-06-04",
       title: "Backfilled workingd notes",
@@ -1145,7 +1145,7 @@ function projectWorkLogNormalizationCandidatesPayload(overrides = {}) {
       date: "2026-06-09",
       title: "Backfilled workingd notes",
       status: "current",
-      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md",
       source_file: "workingd.md",
       reason: "no_ai_normalization,no_session_evidence",
       evidence: "2026-06-09: Backfilled workingd notes",
@@ -1180,7 +1180,7 @@ function projectWorkLogNormalizationProposalsPayload(overrides = {}) {
       candidate_id: "work-normalize-CareVault-a1b2c3d4e5f6",
       project: "CareVault",
       date: "2026-06-09",
-      source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+      source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md",
       source_file: "workingd.md",
       reason: "no_ai_normalization,no_session_evidence",
       original_title: "Backfilled workingd notes",
@@ -1395,7 +1395,7 @@ test("browser bridge work status export accepts status snapshot audit rows", asy
       source_file_roles: [{ text: "project-status", count: 1 }],
       top_titles: ["Project status snapshot updated"],
       sample_evidence: "SnapshotProject — Project Status",
-      latest_source_path: "/Users/wj/Ai/System/10_Projects/SnapshotProject/PROJECT_STATUS.md",
+      latest_source_path: "/Users/example/Ai/System/10_Projects/SnapshotProject/PROJECT_STATUS.md",
       latest_source_file: "PROJECT_STATUS.md",
       latest_source_role: "project-status",
       session_evidence_count: 0,
@@ -1987,7 +1987,7 @@ test("browser bridge work session evidence source search posts target and valida
   });
 
   const result = await searchProjectWorkSessionEvidenceSource({
-    source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
     query: "PromptVault nearby evidence",
     limit: 5,
     max_lines: 100000,
@@ -1996,7 +1996,7 @@ test("browser bridge work session evidence source search posts target and valida
   assert.match(requestPath, /\/api\/work-session-evidence-source-search$/);
   assert.deepEqual(JSON.parse(requestBody), {
     options: {
-      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
       query: "PromptVault nearby evidence",
       limit: 5,
       max_lines: 100000,
@@ -2025,7 +2025,7 @@ test("browser bridge work session evidence source search rejects duplicate hit i
 
   await assert.rejects(
     () => searchProjectWorkSessionEvidenceSource({
-      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
       query: "PromptVault nearby evidence",
       limit: 5,
     }),
@@ -2055,7 +2055,7 @@ test("browser bridge work session evidence source proposals posts target and val
 
   const result = await loadProjectWorkSessionEvidenceSourceProposals({
     candidate_id: "session-evidence-PromptVault-source-proposal",
-    source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+    source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
     query: "PromptVault nearby evidence",
     limit: 5,
     max_lines: 100000,
@@ -2065,7 +2065,7 @@ test("browser bridge work session evidence source proposals posts target and val
   assert.deepEqual(JSON.parse(requestBody), {
     options: {
       candidate_id: "session-evidence-PromptVault-source-proposal",
-      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
       query: "PromptVault nearby evidence",
       limit: 5,
       max_lines: 100000,
@@ -2096,7 +2096,7 @@ test("browser bridge work session evidence source proposals reject duplicate hit
   await assert.rejects(
     () => loadProjectWorkSessionEvidenceSourceProposals({
       candidate_id: "session-evidence-PromptVault-source-proposal",
-      source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl",
+      source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl",
       query: "PromptVault nearby evidence",
       limit: 5,
     }),
@@ -2253,7 +2253,7 @@ test("browser bridge work session index posts continue-from-cursor options", asy
         {
           source_id: "codex",
           source_label: "Codex",
-          root_path: "/Users/wj/.codex/sessions",
+          root_path: "/Users/example/.codex/sessions",
           total_files: 25145,
           next_file_index: 400,
           processed_files: 400,
@@ -2264,7 +2264,7 @@ test("browser bridge work session index posts continue-from-cursor options", asy
         {
           source_id: "codex-cx",
           source_label: "Codex CX",
-          root_path: "/Users/wj/.codex-cx/sessions",
+          root_path: "/Users/example/.codex-cx/sessions",
           total_files: 11,
           next_file_index: 11,
           processed_files: 11,
@@ -2521,7 +2521,7 @@ test("browser bridge work log coverage accepts pointer logs as non-gap files", a
       ...projectWorkLogCoveragePayload().files,
       {
         project: "CareVault",
-        source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md",
+        source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md",
         source_file: "workingd.md",
         status: "pointer",
         work_item_count: 0,
@@ -3030,7 +3030,7 @@ test("browser bridge work log freeze posts options and validates persistence", a
           ...projectWorkLogExtractionProposalsPayload().proposals[0],
           candidate_id: "work-log-freeze-PromptVault-b1b2c3d4e5",
           project: "PromptVault",
-          source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+          source_path: "/Users/example/Ai/System/10_Projects/PromptVault/working.md",
           source_file: "working.md",
           date: "2026-06-09",
           title: "Frozen management row",
@@ -3552,7 +3552,7 @@ test("browser bridge work summary rejects impossible session evidence counts", a
         project: "PromptVault",
         title: "Malformed bridge summary",
         status: "done",
-        source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+        source_path: "/Users/example/Ai/System/10_Projects/PromptVault/working.md",
         source_file: "working.md",
         evidence: "- Malformed bridge summary",
         session_evidence_count: 1,
@@ -3583,7 +3583,7 @@ test("browser bridge work session index rejects inconsistent source completion",
     source_states: [{
       source_id: "codex",
       source_label: "Codex",
-      root_path: "/Users/wj/.codex/sessions",
+      root_path: "/Users/example/.codex/sessions",
       total_files: 25145,
       next_file_index: 200,
       processed_files: 200,

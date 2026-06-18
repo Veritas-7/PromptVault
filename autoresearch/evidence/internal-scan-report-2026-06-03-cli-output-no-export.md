@@ -2,7 +2,7 @@
 
 Date: 2026-06-03
 
-Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
+Repo: `/Users/example/Ai/System/10_Projects/PromptVault`
 
 Head before this iteration: `726ff8a`
 

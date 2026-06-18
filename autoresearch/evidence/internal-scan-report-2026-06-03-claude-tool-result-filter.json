@@ -5,9 +5,9 @@
   "code_commit": "712a6d20d6e914974d8c344ceedd0b66561994b7",
   "status": "pass",
   "local_evidence": {
-    "source_root": "/Users/wj/.claude/projects",
+    "source_root": "/Users/example/.claude/projects",
     "observed_shape": "Claude project JSONL files can contain message.role=user records whose content array contains type=tool_result items.",
-    "example": "/Users/wj/.claude/projects/-Users-wj--aihub-runtime-workers-glm-G1/79b61ef6-e596-4ce2-9b89-22ac59836b9f.jsonl includes user-role tool_result content."
+    "example": "/Users/example/.claude/projects/-Users-wj--aihub-runtime-workers-glm-G1/79b61ef6-e596-4ce2-9b89-22ac59836b9f.jsonl includes user-role tool_result content."
   },
   "candidate": {
     "problem": "text_from_value extracted string content from array items without excluding tool_result blocks.",

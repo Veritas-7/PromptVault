@@ -20265,7 +20265,7 @@ fn word_regex() -> &'static Regex {
 fn project_path_regex() -> &'static Regex {
     static PROJECT_PATH_REGEX: OnceLock<Regex> = OnceLock::new();
     PROJECT_PATH_REGEX.get_or_init(|| {
-        Regex::new(r#"/Users/wj/Ai/System/10_Projects/[^\s`"'<>\]\)}]+"#)
+        Regex::new(r#"/Users/[^/\s`"'<>\]\)}]+/Ai/System/10_Projects/[^\s`"'<>\]\)}]+"#)
             .expect("project path regex")
     })
 }
@@ -22246,7 +22246,7 @@ mod tests {
 
         let result = improve_prompt_inner(ImproveRequest {
             prompt: "fix parsing".to_string(),
-            context: Some("Codex · /Users/wj/Ai/System/10_Projects/PromptVault".to_string()),
+            context: Some("Codex · /Users/example/Ai/System/10_Projects/PromptVault".to_string()),
             force_local: Some(true),
             prompt_id: Some("codex-history-row".to_string()),
             source: Some("Codex".to_string()),
@@ -23293,7 +23293,7 @@ mod tests {
         std::fs::create_dir_all(&root).expect("create temp root");
         std::fs::write(
             root.join("001.jsonl"),
-            r#"{"type":"turn_context","payload":{"cwd":"/Users/wj/Ai/System/10_Projects/PromptVault"}}
+            r#"{"type":"turn_context","payload":{"cwd":"/Users/example/Ai/System/10_Projects/PromptVault"}}
 {"type":"response_item","timestamp":"2026-06-18T01:02:03Z","payload":{"role":"user","content":[{"text":"Audit PromptVault before deleting source logs, run tests, and report blockers."}]}}
 "#,
         )
@@ -23714,7 +23714,7 @@ mod tests {
             format!(
                 "{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"streaming-test\"}}}}\n\
                  {{\"type\":\"response_item\",\"payload\":{{\"role\":\"assistant\",\"content\":[{{\"text\":\"{assistant_noise}\"}}]}}}}\n\
-                 {{\"type\":\"turn_context\",\"payload\":{{\"cwd\":\"/Users/wj/Ai/System/10_Projects/PromptVault\"}}}}\n\
+                 {{\"type\":\"turn_context\",\"payload\":{{\"cwd\":\"/Users/example/Ai/System/10_Projects/PromptVault\"}}}}\n\
                  {{\"type\":\"response_item\",\"payload\":{{\"role\":\"user\",\"content\":[{{\"text\":\"Optimize Codex JSONL import, keep cwd metadata, run cargo test, and report results.\"}}]}}}}\n"
             ),
         )
@@ -23733,7 +23733,7 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert_eq!(
             records[0].cwd.as_deref(),
-            Some("/Users/wj/Ai/System/10_Projects/PromptVault")
+            Some("/Users/example/Ai/System/10_Projects/PromptVault")
         );
         assert!(records[0].text.contains("Optimize Codex JSONL import"));
     }
@@ -23943,7 +23943,7 @@ mod tests {
     #[test]
     fn markdown_export_includes_prompts_by_project() {
         let mut prompt = record("project export");
-        prompt.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
+        prompt.cwd = Some("/Users/example/Ai/System/10_Projects/PromptVault".to_string());
         let prompts = vec![prompt];
         let stats = build_stats(&prompts, Vec::new());
 
@@ -24549,14 +24549,14 @@ Status: completed as a source-only/report-only hardening slice.
     #[test]
     fn project_work_session_prompt_index_groups_kst_days_and_project_keys() {
         let mut project_a = dated_record("session-a", "2026-06-08T15:13:32.844Z");
-        project_a.cwd = Some("/Users/wj/Ai/System/10_Projects/ExampleProject".to_string());
+        project_a.cwd = Some("/Users/example/Ai/System/10_Projects/ExampleProject".to_string());
         let mut project_b = dated_record("session-b", "2026-06-09T12:00:00Z");
         project_b.text =
-            "Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject.".to_string();
+            "Target source path: /Users/example/Ai/System/10_Projects/ExampleProject.".to_string();
         let mut fallback = dated_record("session-fallback", "2026-06-09T13:00:00Z");
         fallback.cwd = Some("/tmp/ExampleProject".to_string());
         let mut previous_day = dated_record("session-c", "2026-06-07T23:00:00Z");
-        previous_day.cwd = Some("/Users/wj/Ai/System/10_Projects/OtherProject".to_string());
+        previous_day.cwd = Some("/Users/example/Ai/System/10_Projects/OtherProject".to_string());
         let prompts = vec![project_a, project_b, fallback, previous_day];
 
         let prompt_index = project_work_session_prompt_index(&prompts);
@@ -24604,7 +24604,7 @@ Status: completed as a source-only/report-only hardening slice.
         let mut items = project_progress_work_items_from_text(&path, text);
         let mut matching = dated_record("matching-session-text", "2026-06-09T12:00:00Z");
         matching.source = "Codex".to_string();
-        matching.cwd = Some("/Users/wj".to_string());
+        matching.cwd = Some("/Users/example".to_string());
         matching.text =
             "Continue work in /tmp/ExampleProject and verify the project report.".to_string();
         let mut wrong_project = matching.clone();
@@ -24625,8 +24625,8 @@ Status: completed as a source-only/report-only hardening slice.
         let path = root.join("rollout-test.jsonl");
         std::fs::write(
             &path,
-            r#"{"timestamp":"2026-06-08T12:00:00Z","type":"session_meta","payload":{"id":"session-target","cwd":"/Users/wj"}}
-{"timestamp":"2026-06-08T12:01:00Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject. Continue autonomously."}]}}
+            r#"{"timestamp":"2026-06-08T12:00:00Z","type":"session_meta","payload":{"id":"session-target","cwd":"/Users/example"}}
+{"timestamp":"2026-06-08T12:01:00Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"Target source path: /Users/example/Ai/System/10_Projects/ExampleProject. Continue autonomously."}]}}
 "#,
         )
         .expect("write metadata jsonl");
@@ -24648,10 +24648,10 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(record.source, "Codex session metadata");
         assert_eq!(record.session_id, "session-target");
         assert_eq!(record.timestamp.as_deref(), Some("2026-06-08T12:01:00Z"));
-        assert_eq!(record.cwd.as_deref(), Some("/Users/wj"));
+        assert_eq!(record.cwd.as_deref(), Some("/Users/example"));
         assert!(record
             .text
-            .contains("/Users/wj/Ai/System/10_Projects/ExampleProject"));
+            .contains("/Users/example/Ai/System/10_Projects/ExampleProject"));
 
         std::fs::remove_dir_all(root).expect("remove metadata root");
     }
@@ -24669,8 +24669,8 @@ Status: completed as a source-only/report-only hardening slice.
         let path = root.join("rollout-session-time.jsonl");
         std::fs::write(
             &path,
-            r#"{"timestamp":"2026-06-08T01:33:16.751Z","type":"session_meta","payload":{"id":"session-time","cwd":"/Users/wj"}}
-{"timestamp":"2026-06-08T01:33:16.760Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject."}]}}
+            r#"{"timestamp":"2026-06-08T01:33:16.751Z","type":"session_meta","payload":{"id":"session-time","cwd":"/Users/example"}}
+{"timestamp":"2026-06-08T01:33:16.760Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/example/Ai/System/10_Projects/ExampleProject."}]}}
 "#,
         )
         .expect("write metadata jsonl");
@@ -24689,7 +24689,7 @@ Status: completed as a source-only/report-only hardening slice.
         .expect("parse metadata")
         .expect("metadata prompt");
         let mut items = project_progress_work_items_from_text_for_project(
-            &PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md"),
+            &PathBuf::from("/Users/example/Ai/System/10_Projects/ExampleProject/working.md"),
             r#"## Current Slice - 2026-06-08 Session date evidence
 
 - Verified that session evidence stays attached to the worklog date.
@@ -24719,9 +24719,9 @@ Status: completed as a source-only/report-only hardening slice.
         let path = root.join("rollout-latest-time.jsonl");
         std::fs::write(
             &path,
-            r#"{"timestamp":"2026-06-08T01:33:16.751Z","type":"session_meta","payload":{"id":"session-latest","cwd":"/Users/wj"}}
-{"timestamp":"2026-06-08T01:33:16.760Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject."}]}}
-{"timestamp":"2026-06-09T03:00:00.000Z","type":"turn_context","payload":{"cwd":"/Users/wj"}}
+            r#"{"timestamp":"2026-06-08T01:33:16.751Z","type":"session_meta","payload":{"id":"session-latest","cwd":"/Users/example"}}
+{"timestamp":"2026-06-08T01:33:16.760Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/example/Ai/System/10_Projects/ExampleProject."}]}}
+{"timestamp":"2026-06-09T03:00:00.000Z","type":"turn_context","payload":{"cwd":"/Users/example"}}
 "#,
         )
         .expect("write metadata jsonl");
@@ -24740,7 +24740,7 @@ Status: completed as a source-only/report-only hardening slice.
         .expect("parse metadata")
         .expect("metadata prompt");
         let mut items = project_progress_work_items_from_text_for_project(
-            &PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md"),
+            &PathBuf::from("/Users/example/Ai/System/10_Projects/ExampleProject/working.md"),
             r#"## Current Slice - 2026-06-09 Multi-day session evidence
 
 - Verified that long-running session evidence follows the latest session activity date.
@@ -24770,10 +24770,10 @@ Status: completed as a source-only/report-only hardening slice.
         let path = root.join("rollout-daily-records.jsonl");
         std::fs::write(
             &path,
-            r#"{"timestamp":"2026-06-08T01:00:00.000Z","type":"session_meta","payload":{"id":"session-daily","cwd":"/Users/wj"}}
-{"timestamp":"2026-06-08T01:01:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject."}]}}
-{"timestamp":"2026-06-09T03:00:00.000Z","type":"turn_context","payload":{"cwd":"/Users/wj"}}
-{"timestamp":"2026-06-10T04:00:00.000Z","type":"turn_context","payload":{"cwd":"/Users/wj"}}
+            r#"{"timestamp":"2026-06-08T01:00:00.000Z","type":"session_meta","payload":{"id":"session-daily","cwd":"/Users/example"}}
+{"timestamp":"2026-06-08T01:01:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/example/Ai/System/10_Projects/ExampleProject."}]}}
+{"timestamp":"2026-06-09T03:00:00.000Z","type":"turn_context","payload":{"cwd":"/Users/example"}}
+{"timestamp":"2026-06-10T04:00:00.000Z","type":"turn_context","payload":{"cwd":"/Users/example"}}
 "#,
         )
         .expect("write metadata jsonl");
@@ -24806,7 +24806,7 @@ Status: completed as a source-only/report-only hardening slice.
         );
 
         let mut items = project_progress_work_items_from_text_for_project(
-            &PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md"),
+            &PathBuf::from("/Users/example/Ai/System/10_Projects/ExampleProject/working.md"),
             r#"## Current Slice - 2026-06-08 First day
 
 - Work from first day.
@@ -24840,12 +24840,12 @@ Status: completed as a source-only/report-only hardening slice.
         std::fs::create_dir_all(&root).expect("create metadata budget root");
         let path = root.join("rollout-budget.jsonl");
         let mut lines = vec![
-            r#"{"timestamp":"2026-06-08T12:00:00Z","type":"session_meta","payload":{"id":"session-budget","cwd":"/Users/wj"}}"#.to_string(),
-            r#"{"timestamp":"2026-06-08T12:01:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/wj/Ai/System/10_Projects/ExampleProject."}]}}"#.to_string(),
+            r#"{"timestamp":"2026-06-08T12:00:00Z","type":"session_meta","payload":{"id":"session-budget","cwd":"/Users/example"}}"#.to_string(),
+            r#"{"timestamp":"2026-06-08T12:01:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Target source path: /Users/example/Ai/System/10_Projects/ExampleProject."}]}}"#.to_string(),
         ];
         for idx in 0..(PROJECT_WORK_METADATA_LINES_AFTER_PROJECT_PATH + 5) {
             lines.push(format!(
-                r#"{{"timestamp":"2026-06-08T12:{:02}:00Z","type":"turn_context","payload":{{"cwd":"/Users/wj"}}}}"#,
+                r#"{{"timestamp":"2026-06-08T12:{:02}:00Z","type":"turn_context","payload":{{"cwd":"/Users/example"}}}}"#,
                 idx + 2
             ));
         }
@@ -24869,7 +24869,7 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(record.session_id, "session-budget");
         assert!(record
             .text
-            .contains("/Users/wj/Ai/System/10_Projects/ExampleProject"));
+            .contains("/Users/example/Ai/System/10_Projects/ExampleProject"));
 
         std::fs::remove_dir_all(root).expect("remove metadata budget root");
     }
@@ -24888,8 +24888,8 @@ Status: completed as a source-only/report-only hardening slice.
             std::fs::write(
                 root.join(format!("rollout-{idx}.jsonl")),
                 format!(
-                    r#"{{"timestamp":"2026-06-09T0{idx}:00:00Z","type":"session_meta","payload":{{"id":"session-{idx}","cwd":"/Users/wj"}}}}
-{{"timestamp":"2026-06-09T0{idx}:01:00Z","type":"response_item","payload":{{"type":"message","role":"user","content":[{{"type":"input_text","text":"Work on /Users/wj/Ai/System/10_Projects/ExampleProject{idx} and also run raw prompt parsing."}}]}}}}
+                    r#"{{"timestamp":"2026-06-09T0{idx}:00:00Z","type":"session_meta","payload":{{"id":"session-{idx}","cwd":"/Users/example"}}}}
+{{"timestamp":"2026-06-09T0{idx}:01:00Z","type":"response_item","payload":{{"type":"message","role":"user","content":[{{"type":"input_text","text":"Work on /Users/example/Ai/System/10_Projects/ExampleProject{idx} and also run raw prompt parsing."}}]}}}}
 "#,
                 ),
             )
@@ -24926,7 +24926,7 @@ Status: completed as a source-only/report-only hardening slice.
         let mut matching = dated_record("matching-metadata", "2026-06-08T15:30:00Z");
         matching.source = "Codex session metadata".to_string();
         matching.text =
-            "Codex session project targets: /Users/wj/Ai/System/10_Projects/ExampleProject"
+            "Codex session project targets: /Users/example/Ai/System/10_Projects/ExampleProject"
                 .to_string();
 
         attach_session_evidence(&mut items, &[matching]);
@@ -25026,9 +25026,9 @@ Status: completed as a source-only/report-only hardening slice.
         let mut raw = dated_record("raw-session-index", "2026-06-08T15:30:00Z");
         raw.source = "Codex".to_string();
         raw.session_id = "thread-123".to_string();
-        raw.cwd = Some("/Users/wj".to_string());
+        raw.cwd = Some("/Users/example".to_string());
         raw.text =
-            "SECRET RAW USER TEXT /Users/wj/Ai/System/10_Projects/ExampleProject".to_string();
+            "SECRET RAW USER TEXT /Users/example/Ai/System/10_Projects/ExampleProject".to_string();
         raw.word_count = count_words(&raw.text);
         raw.char_count = raw.text.chars().count();
         raw.hash = hash_text(&raw.text);
@@ -25042,10 +25042,10 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(indexed.len(), 1);
         assert!(indexed[0]
             .text
-            .contains("/Users/wj/Ai/System/10_Projects/ExampleProject"));
+            .contains("/Users/example/Ai/System/10_Projects/ExampleProject"));
         assert!(!indexed[0].text.contains("SECRET RAW USER TEXT"));
 
-        let path = PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md");
+        let path = PathBuf::from("/Users/example/Ai/System/10_Projects/ExampleProject/working.md");
         let mut items = project_progress_work_items_from_text(
             &path,
             "## Current Slice - 2026-06-09 Indexed evidence\n\n- Use cached evidence.\n",
@@ -25068,7 +25068,7 @@ Status: completed as a source-only/report-only hardening slice.
         let mut prompt = dated_record("indexed-session-prefer", "2026-06-08T15:30:00Z");
         prompt.source = "Codex session metadata".to_string();
         prompt.text =
-            "Codex session project targets: /Users/wj/Ai/System/10_Projects/ExampleProject"
+            "Codex session project targets: /Users/example/Ai/System/10_Projects/ExampleProject"
                 .to_string();
         persist_project_work_session_index(&db_path, &[prompt]).expect("persist session index");
 
@@ -25187,8 +25187,8 @@ Status: completed as a source-only/report-only hardening slice.
             std::fs::write(
                 source_root.join(format!("session-{idx}.jsonl")),
                 format!(
-                    "{{\"timestamp\":\"{timestamp}\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"thread-{idx}\",\"cwd\":\"/Users/wj\"}}}}\n\
-                     {{\"timestamp\":\"{timestamp}\",\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"Target source path: /Users/wj/Ai/System/10_Projects/{project}\"}}]}}}}\n"
+                    "{{\"timestamp\":\"{timestamp}\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"thread-{idx}\",\"cwd\":\"/Users/example\"}}}}\n\
+                     {{\"timestamp\":\"{timestamp}\",\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"Target source path: /Users/example/Ai/System/10_Projects/{project}\"}}]}}}}\n"
                 ),
             )
             .expect("write session jsonl");
@@ -25271,7 +25271,7 @@ Status: completed as a source-only/report-only hardening slice.
         let source_root = root.join("claude-projects");
         std::fs::create_dir_all(&source_root).expect("create claude project root");
         let db_path = root.join("promptvault.sqlite");
-        let project_path = "/Users/wj/Ai/System/10_Projects/ClaudeCheckpointProject";
+        let project_path = "/Users/example/Ai/System/10_Projects/ClaudeCheckpointProject";
         std::fs::write(
             source_root.join("claude-session.jsonl"),
             serde_json::json!({
@@ -25347,8 +25347,8 @@ Status: completed as a source-only/report-only hardening slice.
             std::fs::write(
                 source_root.join(format!("session-{idx}.jsonl")),
                 format!(
-                    "{{\"timestamp\":\"{timestamp}\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"thread-batch-{idx}\",\"cwd\":\"/Users/wj\"}}}}\n\
-                     {{\"timestamp\":\"{timestamp}\",\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"Continue /Users/wj/Ai/System/10_Projects/{project}\"}}]}}}}\n"
+                    "{{\"timestamp\":\"{timestamp}\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"thread-batch-{idx}\",\"cwd\":\"/Users/example\"}}}}\n\
+                     {{\"timestamp\":\"{timestamp}\",\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"Continue /Users/example/Ai/System/10_Projects/{project}\"}}]}}}}\n"
                 ),
             )
             .expect("write session jsonl");
@@ -25519,7 +25519,7 @@ Status: completed as a source-only/report-only hardening slice.
 
     #[test]
     fn project_work_summaries_group_items_by_date_project_with_citations() {
-        let path = PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md");
+        let path = PathBuf::from("/Users/example/Ai/System/10_Projects/ExampleProject/working.md");
         let text = r#"## Current Slice - 2026-06-09 Parser repair
 
 - Fixed parser state mismatch.
@@ -25532,7 +25532,7 @@ Status: completed as a source-only/report-only hardening slice.
         let mut prompt = dated_record("summary-session", "2026-06-08T15:30:00Z");
         prompt.source = "Codex session metadata".to_string();
         prompt.text =
-            "Codex session project targets: /Users/wj/Ai/System/10_Projects/ExampleProject"
+            "Codex session project targets: /Users/example/Ai/System/10_Projects/ExampleProject"
                 .to_string();
         attach_session_evidence(&mut items, &[prompt]);
         let mut report = ProjectWorkReport {
@@ -25585,7 +25585,7 @@ Status: completed as a source-only/report-only hardening slice.
 
     #[test]
     fn project_work_status_export_groups_project_day_rows() {
-        let path = PathBuf::from("/Users/wj/Ai/System/10_Projects/ExampleProject/working.md");
+        let path = PathBuf::from("/Users/example/Ai/System/10_Projects/ExampleProject/working.md");
         let text = r#"## Current Slice - 2026-06-09 Parser repair | CLI export
 
 - Fixed parser state mismatch.
@@ -25598,7 +25598,7 @@ Status: completed as a source-only/report-only hardening slice.
         let mut prompt = dated_record("status-export-session", "2026-06-08T15:30:00Z");
         prompt.source = "Codex session metadata".to_string();
         prompt.text =
-            "Codex session project targets: /Users/wj/Ai/System/10_Projects/ExampleProject"
+            "Codex session project targets: /Users/example/Ai/System/10_Projects/ExampleProject"
                 .to_string();
         attach_session_evidence(&mut items, &[prompt]);
 
@@ -26112,7 +26112,9 @@ Status: completed as a source-only/report-only hardening slice.
                 }],
                 top_titles: vec![format!("{project} full-index evidence review")],
                 sample_evidence: format!("{project} still has no session evidence."),
-                latest_source_path: format!("/Users/wj/Ai/System/10_Projects/{project}/working.md"),
+                latest_source_path: format!(
+                    "/Users/example/Ai/System/10_Projects/{project}/working.md"
+                ),
                 latest_source_file: "working.md".to_string(),
                 latest_source_role: "handoff-log".to_string(),
                 session_evidence_count,
@@ -26191,7 +26193,9 @@ Status: completed as a source-only/report-only hardening slice.
             }],
             top_titles: vec![format!("{project} source-traced session evidence")],
             sample_evidence: sample_evidence.to_string(),
-            latest_source_path: format!("/Users/wj/Ai/System/10_Projects/{project}/workingd.md"),
+            latest_source_path: format!(
+                "/Users/example/Ai/System/10_Projects/{project}/workingd.md"
+            ),
             latest_source_file: "workingd.md".to_string(),
             latest_source_role: "handoff-log".to_string(),
             reason: if needs_title_normalization {
@@ -26380,7 +26384,7 @@ Status: completed as a source-only/report-only hardening slice.
             serde_json::json!({
                 "type": "turn_context",
                 "payload": {
-                    "cwd": "/Users/wj/Ai/System/10_Projects/NearbyProject"
+                    "cwd": "/Users/example/Ai/System/10_Projects/NearbyProject"
                 }
             })
         )
@@ -26437,7 +26441,7 @@ Status: completed as a source-only/report-only hardening slice.
         );
         assert_eq!(
             result.items[0].cwd.as_deref(),
-            Some("/Users/wj/Ai/System/10_Projects/NearbyProject")
+            Some("/Users/example/Ai/System/10_Projects/NearbyProject")
         );
         assert!(result.items[0].excerpt.contains("[REDACTED_"));
         assert!(!result.items[0].excerpt.contains("short-secret-value"));
@@ -26463,7 +26467,7 @@ Status: completed as a source-only/report-only hardening slice.
             serde_json::json!({
                 "type": "turn_context",
                 "payload": {
-                    "cwd": "/Users/wj/Ai/System/10_Projects/PromptVault"
+                    "cwd": "/Users/example/Ai/System/10_Projects/PromptVault"
                 }
             })
         )
@@ -26560,7 +26564,7 @@ Status: completed as a source-only/report-only hardening slice.
                     2,
                     "NearbyProject raw evidence includes api_key=short-secret-value",
                 ),
-                pb_string(11, "/Users/wj/Ai/System/10_Projects/NearbyProject"),
+                pb_string(11, "/Users/example/Ai/System/10_Projects/NearbyProject"),
             ]
             .concat(),
         );
@@ -26568,7 +26572,7 @@ Status: completed as a source-only/report-only hardening slice.
             19,
             &[
                 pb_string(2, "Unrelated project maintenance note"),
-                pb_string(11, "/Users/wj/Ai/System/10_Projects/OtherProject"),
+                pb_string(11, "/Users/example/Ai/System/10_Projects/OtherProject"),
             ]
             .concat(),
         );
@@ -26615,7 +26619,7 @@ Status: completed as a source-only/report-only hardening slice.
         );
         assert_eq!(
             result.items[0].cwd.as_deref(),
-            Some("/Users/wj/Ai/System/10_Projects/NearbyProject")
+            Some("/Users/example/Ai/System/10_Projects/NearbyProject")
         );
         assert!(result.items[0].excerpt.contains("[REDACTED_"));
         assert!(!result.items[0].excerpt.contains("short-secret-value"));
@@ -26637,7 +26641,7 @@ Status: completed as a source-only/report-only hardening slice.
         );
         let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
             generated_at: "2026-06-09T00:00:00Z".to_string(),
-            source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl".to_string(),
+            source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl".to_string(),
             query: "NearbyProject reviewed evidence".to_string(),
             query_term_count: 3,
             requested_limit: 5,
@@ -26650,7 +26654,7 @@ Status: completed as a source-only/report-only hardening slice.
                 line_number: 7,
                 session_id: Some("turn-source-hit-ready".to_string()),
                 timestamp: Some("2026-06-09T12:00:00Z".to_string()),
-                cwd: Some("/Users/wj/Ai/System/10_Projects/NearbyProject".to_string()),
+                cwd: Some("/Users/example/Ai/System/10_Projects/NearbyProject".to_string()),
                 match_score: 3,
                 matched_terms: vec![
                     "evidence".to_string(),
@@ -26712,7 +26716,7 @@ Status: completed as a source-only/report-only hardening slice.
         );
         let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
             generated_at: "2026-06-10T00:00:00Z".to_string(),
-            source_path: "/Users/wj/.codex/sessions/2026/06/09/rollout.jsonl".to_string(),
+            source_path: "/Users/example/.codex/sessions/2026/06/09/rollout.jsonl".to_string(),
             query: "RepoTutorStudio 2026-06-10 Resume Snapshot RepoTutor Studio".to_string(),
             query_term_count: 6,
             requested_limit: 5,
@@ -26725,7 +26729,7 @@ Status: completed as a source-only/report-only hardening slice.
                 line_number: 6,
                 session_id: Some("turn-source-hit-project-only".to_string()),
                 timestamp: Some("2026-06-09T12:00:00Z".to_string()),
-                cwd: Some("/Users/wj/Ai/System/10_Projects/RepoTutorStudio".to_string()),
+                cwd: Some("/Users/example/Ai/System/10_Projects/RepoTutorStudio".to_string()),
                 match_score: 3,
                 matched_terms: vec![
                     "repotutor".to_string(),
@@ -26782,7 +26786,7 @@ Status: completed as a source-only/report-only hardening slice.
         );
         let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
             generated_at: "2026-06-04T00:00:00Z".to_string(),
-            source_path: "/Users/wj/.codex/sessions/2026/06/01/rollout.jsonl".to_string(),
+            source_path: "/Users/example/.codex/sessions/2026/06/01/rollout.jsonl".to_string(),
             query: "oss-favorites 2026-06-04 git status main origin".to_string(),
             query_term_count: 6,
             requested_limit: 5,
@@ -26795,7 +26799,7 @@ Status: completed as a source-only/report-only hardening slice.
                 line_number: 7,
                 session_id: Some("turn-source-hit-project-git-generic".to_string()),
                 timestamp: Some("2026-06-01T04:50:38Z".to_string()),
-                cwd: Some("/Users/wj/Ai/System/10_Projects/oss-favorites".to_string()),
+                cwd: Some("/Users/example/Ai/System/10_Projects/oss-favorites".to_string()),
                 match_score: 4,
                 matched_terms: vec![
                     "git".to_string(),
@@ -26843,7 +26847,7 @@ Status: completed as a source-only/report-only hardening slice.
         );
         let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
             generated_at: "2026-05-31T00:00:00Z".to_string(),
-            source_path: "/Users/wj/.codex/sessions/2026/06/01/rollout.jsonl".to_string(),
+            source_path: "/Users/example/.codex/sessions/2026/06/01/rollout.jsonl".to_string(),
             query:
                 "120개 안정화 계획 docs/UX_STABILIZATION_120_PLAN.md 만들고 상태를 추적"
                     .to_string(),
@@ -26858,7 +26862,7 @@ Status: completed as a source-only/report-only hardening slice.
                 line_number: 7,
                 session_id: Some("turn-source-hit-docs-korean-generic".to_string()),
                 timestamp: Some("2026-06-01T04:50:38Z".to_string()),
-                cwd: Some("/Users/wj/Ai/System/10_Projects/oss-favorites".to_string()),
+                cwd: Some("/Users/example/Ai/System/10_Projects/oss-favorites".to_string()),
                 match_score: 3,
                 matched_terms: vec![
                     "docs".to_string(),
@@ -26905,7 +26909,7 @@ Status: completed as a source-only/report-only hardening slice.
         );
         let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
             generated_at: "2026-06-10T00:00:00Z".to_string(),
-            source_path: "/Users/wj/.codex/sessions/2026/06/01/rollout.jsonl".to_string(),
+            source_path: "/Users/example/.codex/sessions/2026/06/01/rollout.jsonl".to_string(),
             query: "oss-favorites 2026-06-10 autoresearch favorite metadata API".to_string(),
             query_term_count: 6,
             requested_limit: 5,
@@ -26918,7 +26922,7 @@ Status: completed as a source-only/report-only hardening slice.
                 line_number: 7,
                 session_id: Some("turn-source-hit-far-date".to_string()),
                 timestamp: Some("2026-06-01T04:50:38.585Z".to_string()),
-                cwd: Some("/Users/wj/Documents/Codex/2026-06-01/autoresearch-red-codex-http-127-0".to_string()),
+                cwd: Some("/Users/example/Documents/Codex/2026-06-01/autoresearch-red-codex-http-127-0".to_string()),
                 match_score: 5,
                 matched_terms: vec![
                     "api".to_string(),
@@ -26969,7 +26973,7 @@ Status: completed as a source-only/report-only hardening slice.
         );
         let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
             generated_at: "2026-06-04T00:00:00Z".to_string(),
-            source_path: "/Users/wj/.codex/sessions/2026/06/04/rollout.jsonl".to_string(),
+            source_path: "/Users/example/.codex/sessions/2026/06/04/rollout.jsonl".to_string(),
             query: "CareVault 2026-06-03 Correct app root".to_string(),
             query_term_count: 4,
             requested_limit: 5,
@@ -26982,7 +26986,7 @@ Status: completed as a source-only/report-only hardening slice.
                 line_number: 6,
                 session_id: Some("turn-source-hit-instruction-only".to_string()),
                 timestamp: Some("2026-06-04T01:36:46Z".to_string()),
-                cwd: Some("/Users/wj/Ai/System/10_Projects/CareVault".to_string()),
+                cwd: Some("/Users/example/Ai/System/10_Projects/CareVault".to_string()),
                 match_score: 5,
                 matched_terms: vec![
                     "10_projects".to_string(),
@@ -26991,7 +26995,7 @@ Status: completed as a source-only/report-only hardening slice.
                     "system".to_string(),
                     "users".to_string(),
                 ],
-                excerpt: "CareVault read-only sidecar QA. Workdir: /Users/wj/Ai/System/10_Projects/CareVault. Do not edit files. Do not run git writes. Inspect src/App.tsx only, focusing on user-triggered state-changing handlers. Return concise findings with handler names, UI labels if clear, and line references. Do not ask user questions.".to_string(),
+                excerpt: "CareVault read-only sidecar QA. Workdir: /Users/example/Ai/System/10_Projects/CareVault. Do not edit files. Do not run git writes. Inspect src/App.tsx only, focusing on user-triggered state-changing handlers. Return concise findings with handler names, UI labels if clear, and line references. Do not ask user questions.".to_string(),
                 word_count: 41,
                 char_count: 326,
                 risk_flags: Vec::new(),
@@ -27032,7 +27036,7 @@ Status: completed as a source-only/report-only hardening slice.
         );
         let source_search = ProjectWorkSessionEvidenceSourceSearchResult {
             generated_at: "2026-06-04T00:00:00Z".to_string(),
-            source_path: "/Users/wj/.codex/sessions/2026/06/04/rollout.jsonl".to_string(),
+            source_path: "/Users/example/.codex/sessions/2026/06/04/rollout.jsonl".to_string(),
             query: "CareVault implementation update Correct app root".to_string(),
             query_term_count: 5,
             requested_limit: 5,
@@ -27045,7 +27049,7 @@ Status: completed as a source-only/report-only hardening slice.
                 line_number: 6,
                 session_id: Some("turn-source-hit-read-only-audit-task".to_string()),
                 timestamp: Some("2026-06-04T00:42:05Z".to_string()),
-                cwd: Some("/Users/wj/Ai/System/10_Projects/CareVault".to_string()),
+                cwd: Some("/Users/example/Ai/System/10_Projects/CareVault".to_string()),
                 match_score: 5,
                 matched_terms: vec![
                     "10_projects".to_string(),
@@ -27054,7 +27058,7 @@ Status: completed as a source-only/report-only hardening slice.
                     "system".to_string(),
                     "users".to_string(),
                 ],
-                excerpt: "Read-only audit task in /Users/wj/Ai/System/10_Projects/CareVault. The main agent has already implemented and tested backup import failure UX and broad cmux QA. Your task: inspect src/App.tsx and working.md, then return a concise checklist. Do not edit files. Do not run git writes.".to_string(),
+                excerpt: "Read-only audit task in /Users/example/Ai/System/10_Projects/CareVault. The main agent has already implemented and tested backup import failure UX and broad cmux QA. Your task: inspect src/App.tsx and working.md, then return a concise checklist. Do not edit files. Do not run git writes.".to_string(),
                 word_count: 43,
                 char_count: 287,
                 risk_flags: Vec::new(),
@@ -27117,7 +27121,7 @@ Status: completed as a source-only/report-only hardening slice.
                     2,
                     "NearbyProject reviewed evidence source hit from Antigravity DB.",
                 ),
-                pb_string(11, "/Users/wj/Ai/System/10_Projects/NearbyProject"),
+                pb_string(11, "/Users/example/Ai/System/10_Projects/NearbyProject"),
             ]
             .concat(),
         );
@@ -27194,7 +27198,7 @@ Status: completed as a source-only/report-only hardening slice.
         std::fs::write(
             &source_path,
             [
-                r#"{"type":"turn_context","payload":{"cwd":"/Users/wj/Ai/System/10_Projects/AuditProject"}}"#,
+                r#"{"type":"turn_context","payload":{"cwd":"/Users/example/Ai/System/10_Projects/AuditProject"}}"#,
                 r#"{"type":"response_item","timestamp":"2026-06-08T12:00:00Z","payload":{"role":"user","content":"AuditProject implemented durable batch blocker summary source trace workflow and ran cargo test."}}"#,
                 "",
             ]
@@ -27906,7 +27910,7 @@ Status: completed as a source-only/report-only hardening slice.
                 project: "ExampleProject".to_string(),
                 title: "Parser repair".to_string(),
                 status: "current".to_string(),
-                source_path: "/Users/wj/Ai/System/10_Projects/ExampleProject/working.md"
+                source_path: "/Users/example/Ai/System/10_Projects/ExampleProject/working.md"
                     .to_string(),
                 source_file: "working.md".to_string(),
                 evidence: "Fixed parser state mismatch.".to_string(),
@@ -27980,7 +27984,7 @@ Status: completed as a source-only/report-only hardening slice.
                 project: "ExampleProject".to_string(),
                 title: "Parser repair".to_string(),
                 status: "current".to_string(),
-                source_path: "/Users/wj/Ai/System/10_Projects/ExampleProject/working.md"
+                source_path: "/Users/example/Ai/System/10_Projects/ExampleProject/working.md"
                     .to_string(),
                 source_file: "working.md".to_string(),
                 evidence: "Fixed parser state mismatch.".to_string(),
@@ -28053,7 +28057,7 @@ Status: completed as a source-only/report-only hardening slice.
                     project: "PromptVault".to_string(),
                     title: "persisted summary".to_string(),
                     status: "done".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md"
+                    source_path: "/Users/example/Ai/System/10_Projects/PromptVault/working.md"
                         .to_string(),
                     source_file: "working.md".to_string(),
                     evidence: "- persisted summary".to_string(),
@@ -28191,7 +28195,7 @@ Status: completed as a source-only/report-only hardening slice.
                 "project": "PromptVault",
                 "title": "saved summary",
                 "status": "done",
-                "source_path": "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+                "source_path": "/Users/example/Ai/System/10_Projects/PromptVault/working.md",
                 "source_file": "working.md",
                 "evidence": "- saved summary",
                 "session_evidence_count": 1,
@@ -28271,7 +28275,7 @@ Status: completed as a source-only/report-only hardening slice.
                     "project": project,
                     "title": "filtered summary",
                     "status": "done",
-                    "source_path": "/Users/wj/Ai/System/10_Projects/PromptVault/working.md",
+                    "source_path": "/Users/example/Ai/System/10_Projects/PromptVault/working.md",
                     "source_file": "working.md",
                     "evidence": "- filtered summary",
                     "session_evidence_count": 1,
@@ -29851,7 +29855,7 @@ Status: completed as a source-only/report-only hardening slice.
     fn accepted_work_log_extraction_proposals_become_project_work_items() {
         let proposals = ProjectWorkLogExtractionProposalsResult {
             generated_at: "2026-06-09T00:00:00Z".to_string(),
-            root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
+            root_path: "/Users/example/Ai/System/10_Projects".to_string(),
             provider: "glm".to_string(),
             provider_model: Some("glm-test-model".to_string()),
             provider_runtime: "glm-chat-completions".to_string(),
@@ -29863,7 +29867,8 @@ Status: completed as a source-only/report-only hardening slice.
                 ProjectWorkLogExtractionProposal {
                     candidate_id: "work-log-Beta-a1b2c3d4e5".to_string(),
                     project: "Beta".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/Beta/workingd.md".to_string(),
+                    source_path: "/Users/example/Ai/System/10_Projects/Beta/workingd.md"
+                        .to_string(),
                     source_file: "workingd.md".to_string(),
                     date: Some("2026-06-04".to_string()),
                     title: "Created project root".to_string(),
@@ -29878,7 +29883,8 @@ Status: completed as a source-only/report-only hardening slice.
                 ProjectWorkLogExtractionProposal {
                     candidate_id: "work-log-Gamma-b1b2c3d4e5".to_string(),
                     project: "Gamma".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/Gamma/workingd.md".to_string(),
+                    source_path: "/Users/example/Ai/System/10_Projects/Gamma/workingd.md"
+                        .to_string(),
                     source_file: "workingd.md".to_string(),
                     date: Some("2026-06-03".to_string()),
                     title: "Needs review".to_string(),
@@ -29891,7 +29897,8 @@ Status: completed as a source-only/report-only hardening slice.
                 ProjectWorkLogExtractionProposal {
                     candidate_id: "work-log-Delta-c1b2c3d4e5".to_string(),
                     project: "Delta".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/Delta/workingd.md".to_string(),
+                    source_path: "/Users/example/Ai/System/10_Projects/Delta/workingd.md"
+                        .to_string(),
                     source_file: "workingd.md".to_string(),
                     date: None,
                     title: "Missing date".to_string(),
@@ -29951,7 +29958,8 @@ Status: completed as a source-only/report-only hardening slice.
                 project: "PromptVault".to_string(),
                 title: "Existing parsed log".to_string(),
                 status: "done".to_string(),
-                source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md".to_string(),
+                source_path: "/Users/example/Ai/System/10_Projects/PromptVault/working.md"
+                    .to_string(),
                 source_file: "working.md".to_string(),
                 evidence: "- Existing parsed log".to_string(),
                 session_evidence_count: 0,
@@ -29962,7 +29970,7 @@ Status: completed as a source-only/report-only hardening slice.
         };
         let proposals = ProjectWorkLogExtractionProposalsResult {
             generated_at: "2026-06-09T00:00:00Z".to_string(),
-            root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
+            root_path: "/Users/example/Ai/System/10_Projects".to_string(),
             provider: "glm".to_string(),
             provider_model: Some("glm-test-model".to_string()),
             provider_runtime: "glm-chat-completions".to_string(),
@@ -29973,7 +29981,8 @@ Status: completed as a source-only/report-only hardening slice.
             proposals: vec![ProjectWorkLogExtractionProposal {
                 candidate_id: "work-log-CareVault-a1b2c3d4e5".to_string(),
                 project: "CareVault".to_string(),
-                source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md".to_string(),
+                source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md"
+                    .to_string(),
                 source_file: "workingd.md".to_string(),
                 date: Some("2026-06-04".to_string()),
                 title: "Backfilled older work notes".to_string(),
@@ -30033,7 +30042,8 @@ Status: completed as a source-only/report-only hardening slice.
                 project: "PromptVault".to_string(),
                 title: "Existing parsed log".to_string(),
                 status: "done".to_string(),
-                source_path: "/Users/wj/Ai/System/10_Projects/PromptVault/working.md".to_string(),
+                source_path: "/Users/example/Ai/System/10_Projects/PromptVault/working.md"
+                    .to_string(),
                 source_file: "working.md".to_string(),
                 evidence: "- Existing parsed log".to_string(),
                 session_evidence_count: 0,
@@ -30059,7 +30069,8 @@ Status: completed as a source-only/report-only hardening slice.
                 used_ai: true,
                 candidate_id: "work-log-CareVault-a1b2c3d4e5".to_string(),
                 project: "CareVault".to_string(),
-                source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md".to_string(),
+                source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md"
+                    .to_string(),
                 source_file: "workingd.md".to_string(),
                 date: "2026-06-04".to_string(),
                 title: "Backfilled older work notes".to_string(),
@@ -30847,7 +30858,7 @@ Status: completed as a source-only/report-only hardening slice.
             project: "SafeProject".to_string(),
             date: "2026-06-09".to_string(),
             source_path:
-                "/Users/wj/.codex/sessions/2026/06/09/rollout-safe-project.jsonl".to_string(),
+                "/Users/example/.codex/sessions/2026/06/09/rollout-safe-project.jsonl".to_string(),
             source_line_number: 42,
             source_session_id: Some("turn-safe-project-source".to_string()),
             source_timestamp: Some("2026-06-09T00:05:00Z".to_string()),
@@ -30951,7 +30962,7 @@ Status: completed as a source-only/report-only hardening slice.
         );
         assert_eq!(
             persisted_source_review.source_path,
-            "/Users/wj/.codex/sessions/2026/06/09/rollout-safe-project.jsonl"
+            "/Users/example/.codex/sessions/2026/06/09/rollout-safe-project.jsonl"
         );
 
         let second = run_project_work_session_evidence_review_apply(
@@ -31162,7 +31173,7 @@ Status: completed as a source-only/report-only hardening slice.
         ));
         let result = ProjectWorkLogExtractionProposalsResult {
             generated_at: "2026-06-09T00:00:00Z".to_string(),
-            root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
+            root_path: "/Users/example/Ai/System/10_Projects".to_string(),
             provider: "glm".to_string(),
             provider_model: Some("glm-test-model".to_string()),
             provider_runtime: "glm-chat-completions".to_string(),
@@ -31174,7 +31185,7 @@ Status: completed as a source-only/report-only hardening slice.
                 ProjectWorkLogExtractionProposal {
                     candidate_id: "work-log-CareVault-a1b2c3d4e5".to_string(),
                     project: "CareVault".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md"
+                    source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md"
                         .to_string(),
                     source_file: "workingd.md".to_string(),
                     date: Some("2026-06-04".to_string()),
@@ -31188,7 +31199,8 @@ Status: completed as a source-only/report-only hardening slice.
                 ProjectWorkLogExtractionProposal {
                     candidate_id: "work-log-Delta-c1b2c3d4e5".to_string(),
                     project: "Delta".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/Delta/workingd.md".to_string(),
+                    source_path: "/Users/example/Ai/System/10_Projects/Delta/workingd.md"
+                        .to_string(),
                     source_file: "workingd.md".to_string(),
                     date: None,
                     title: "Missing date".to_string(),
@@ -31201,7 +31213,8 @@ Status: completed as a source-only/report-only hardening slice.
                 ProjectWorkLogExtractionProposal {
                     candidate_id: "work-log-Gamma-b1b2c3d4e5".to_string(),
                     project: "Gamma".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/Gamma/workingd.md".to_string(),
+                    source_path: "/Users/example/Ai/System/10_Projects/Gamma/workingd.md"
+                        .to_string(),
                     source_file: "workingd.md".to_string(),
                     date: Some("2026-06-03".to_string()),
                     title: "Rejected note".to_string(),
@@ -31269,7 +31282,7 @@ Status: completed as a source-only/report-only hardening slice.
         ));
         let result = ProjectWorkLogExtractionProposalsResult {
             generated_at: "2026-06-09T00:00:00Z".to_string(),
-            root_path: "/Users/wj/Ai/System/10_Projects".to_string(),
+            root_path: "/Users/example/Ai/System/10_Projects".to_string(),
             provider: "local-extraction-rules".to_string(),
             provider_model: None,
             provider_runtime: "local-extraction-rules".to_string(),
@@ -31281,7 +31294,7 @@ Status: completed as a source-only/report-only hardening slice.
                 ProjectWorkLogExtractionProposal {
                     candidate_id: "work-log-CareVault-a1b2c3d4e5".to_string(),
                     project: "CareVault".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md"
+                    source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md"
                         .to_string(),
                     source_file: "workingd.md".to_string(),
                     date: Some("2026-06-04".to_string()),
@@ -31295,7 +31308,7 @@ Status: completed as a source-only/report-only hardening slice.
                 ProjectWorkLogExtractionProposal {
                     candidate_id: "work-log-RepoTutorStudio-a1b2c3d4e5".to_string(),
                     project: "RepoTutorStudio".to_string(),
-                    source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md"
+                    source_path: "/Users/example/Ai/System/10_Projects/RepoTutorStudio/working.md"
                         .to_string(),
                     source_file: "working.md".to_string(),
                     date: Some("2026-06-05".to_string()),
@@ -31348,7 +31361,7 @@ Status: completed as a source-only/report-only hardening slice.
         let approved = ProjectWorkLogExtractionCandidate {
             candidate_id: "work-log-CareVault-a1b2c3d4e5".to_string(),
             project: "CareVault".to_string(),
-            source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md".to_string(),
+            source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md".to_string(),
             source_file: "workingd.md".to_string(),
             reason: "missing_dated_heading".to_string(),
             excerpt: "- 2026-06-04: Backfilled older work notes".to_string(),
@@ -31360,7 +31373,8 @@ Status: completed as a source-only/report-only hardening slice.
         let pending = ProjectWorkLogExtractionCandidate {
             candidate_id: "work-log-RepoTutorStudio-b1b2c3d4e5".to_string(),
             project: "RepoTutorStudio".to_string(),
-            source_path: "/Users/wj/Ai/System/10_Projects/RepoTutorStudio/working.md".to_string(),
+            source_path: "/Users/example/Ai/System/10_Projects/RepoTutorStudio/working.md"
+                .to_string(),
             source_file: "working.md".to_string(),
             reason: "missing_dated_heading".to_string(),
             excerpt: "- 2026-06-05: Initialized work log parser".to_string(),
@@ -31459,7 +31473,7 @@ Status: completed as a source-only/report-only hardening slice.
         let approved = ProjectWorkLogExtractionCandidate {
             candidate_id: "work-log-CareVault-stale-approved-a1b2c3d4e5".to_string(),
             project: "CareVault".to_string(),
-            source_path: "/Users/wj/Ai/System/10_Projects/CareVault/workingd.md".to_string(),
+            source_path: "/Users/example/Ai/System/10_Projects/CareVault/workingd.md".to_string(),
             source_file: "workingd.md".to_string(),
             reason: "missing_dated_heading".to_string(),
             excerpt: "- 2026-06-04: Backfilled older work notes".to_string(),
@@ -31704,7 +31718,7 @@ Status: completed as a source-only/report-only hardening slice.
                     saved_at,
                     format!("work-log-{project}-{date}"),
                     project,
-                    format!("/Users/wj/Ai/System/10_Projects/{project}/workingd.md"),
+                    format!("/Users/example/Ai/System/10_Projects/{project}/workingd.md"),
                     date,
                     title,
                     format!("{date}: {title}"),
@@ -31798,7 +31812,7 @@ Status: completed as a source-only/report-only hardening slice.
             ) VALUES (
                 '2026-06-09T00:00:00Z', '2026-06-09T00:00:00Z', 'glm', 1,
                 'work-log-CareVault-legacy', 'CareVault',
-                '/Users/wj/Ai/System/10_Projects/CareVault/workingd.md', 'workingd.md',
+                '/Users/example/Ai/System/10_Projects/CareVault/workingd.md', 'workingd.md',
                 '2026-06-04', 'Legacy saved extraction', 'proposed',
                 '2026-06-04: Legacy saved extraction', 0.91, '[]'
             )",
@@ -32253,7 +32267,7 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(candidates.contains(&home.join(USER_SECRET_ENV_RELATIVE_PATH)));
         assert!(!candidates
             .iter()
-            .any(|path| path.to_string_lossy().contains("/Users/wj/")));
+            .any(|path| path.to_string_lossy().contains("/Users/example/")));
     }
 
     #[test]
@@ -33157,7 +33171,7 @@ Status: completed as a source-only/report-only hardening slice.
                     2,
                     "Fix src-tauri/src/lib.rs, preserve user files, run cargo test, and report PASS/FAIL in Markdown.",
                 ),
-                pb_string(11, "/Users/wj/Ai/System/10_Projects/PromptVault"),
+                pb_string(11, "/Users/example/Ai/System/10_Projects/PromptVault"),
             ]
             .concat(),
         );
@@ -33195,7 +33209,7 @@ Status: completed as a source-only/report-only hardening slice.
         assert!(records[0].text.contains("Fix src-tauri/src/lib.rs"));
         assert_eq!(
             records[0].cwd.as_deref(),
-            Some("/Users/wj/Ai/System/10_Projects/PromptVault")
+            Some("/Users/example/Ai/System/10_Projects/PromptVault")
         );
 
         std::fs::remove_file(&db_path).expect("remove test db");
@@ -33240,7 +33254,7 @@ Status: completed as a source-only/report-only hardening slice.
                 19,
                 &[
                     pb_string(2, "ok?"),
-                    pb_string(11, "/Users/wj/Ai/System/10_Projects/PromptVault"),
+                    pb_string(11, "/Users/example/Ai/System/10_Projects/PromptVault"),
                 ]
                 .concat(),
             ),
@@ -33266,7 +33280,7 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(records[0].text, "ok?");
         assert_eq!(
             records[0].cwd.as_deref(),
-            Some("/Users/wj/Ai/System/10_Projects/PromptVault")
+            Some("/Users/example/Ai/System/10_Projects/PromptVault")
         );
 
         std::fs::remove_file(&db_path).expect("remove test db");
@@ -33311,15 +33325,16 @@ Status: completed as a source-only/report-only hardening slice.
     #[test]
     fn prompts_by_project_counts_representative_project_keys() {
         let mut cwd_project = record("cwd-project");
-        cwd_project.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault/src-tauri".to_string());
+        cwd_project.cwd =
+            Some("/Users/example/Ai/System/10_Projects/PromptVault/src-tauri".to_string());
 
         let mut path_project = record("path-project");
         path_project.path =
-            "/Users/wj/Ai/System/10_Projects/CareVault/.claude/session.jsonl".to_string();
+            "/Users/example/Ai/System/10_Projects/CareVault/.claude/session.jsonl".to_string();
 
         let mut text_project = record("text-project");
         text_project.text =
-            "Continue /Users/wj/Ai/System/10_Projects/NuancedNarrator/working.md".to_string();
+            "Continue /Users/example/Ai/System/10_Projects/NuancedNarrator/working.md".to_string();
 
         let prompts = vec![
             cwd_project,
@@ -33779,7 +33794,7 @@ Status: completed as a source-only/report-only hardening slice.
         let db_path = root.join("promptvault.sqlite");
         let mut match_prompt = dated_record("stored-match", "2026-06-06T00:00:00Z");
         match_prompt.source = "Codex".to_string();
-        match_prompt.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
+        match_prompt.cwd = Some("/Users/example/Ai/System/10_Projects/PromptVault".to_string());
         let mut wrong_source = dated_record("stored-wrong-source", "2026-06-06T00:00:00Z");
         wrong_source.source = "Claude".to_string();
         wrong_source.cwd = match_prompt.cwd.clone();
@@ -33831,15 +33846,15 @@ Status: completed as a source-only/report-only hardening slice.
         let db_path = root.join("promptvault.sqlite");
 
         let mut cwd_project = dated_record("stored-cwd-project", "2026-06-06T00:00:00Z");
-        cwd_project.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
+        cwd_project.cwd = Some("/Users/example/Ai/System/10_Projects/PromptVault".to_string());
 
         let mut path_project = dated_record("stored-path-project", "2026-06-06T00:00:00Z");
         path_project.path =
-            "/Users/wj/Ai/System/10_Projects/CareVault/.codex/session.jsonl".to_string();
+            "/Users/example/Ai/System/10_Projects/CareVault/.codex/session.jsonl".to_string();
 
         let mut text_project = dated_record("stored-text-project", "2026-06-06T00:00:00Z");
         text_project.text =
-            "Review /Users/wj/Ai/System/10_Projects/NuancedNarrator/working.md".to_string();
+            "Review /Users/example/Ai/System/10_Projects/NuancedNarrator/working.md".to_string();
         text_project.word_count = count_words(&text_project.text);
         text_project.char_count = text_project.text.chars().count();
 
@@ -33893,21 +33908,21 @@ Status: completed as a source-only/report-only hardening slice.
         let db_path = root.join("promptvault.sqlite");
         let mut codex_today = dated_record("facet-codex-today", "2026-06-06T00:00:00Z");
         codex_today.source = "Codex".to_string();
-        codex_today.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
+        codex_today.cwd = Some("/Users/example/Ai/System/10_Projects/PromptVault".to_string());
         codex_today.text = "Make the PromptVault audit repeatable.".to_string();
         codex_today.word_count = count_words(&codex_today.text);
         codex_today.char_count = codex_today.text.chars().count();
         codex_today.quality.missing = vec!["verification".to_string()];
         let mut codex_yesterday = dated_record("facet-codex-yesterday", "2026-06-05T00:00:00Z");
         codex_yesterday.source = "Codex".to_string();
-        codex_yesterday.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
+        codex_yesterday.cwd = Some("/Users/example/Ai/System/10_Projects/PromptVault".to_string());
         codex_yesterday.text = codex_today.text.clone();
         codex_yesterday.word_count = codex_today.word_count;
         codex_yesterday.char_count = codex_today.char_count;
         codex_yesterday.quality.missing = vec!["verification".to_string()];
         let mut claude_today = dated_record("facet-claude-today", "2026-06-06T00:00:00Z");
         claude_today.source = "Claude".to_string();
-        claude_today.cwd = Some("/Users/wj/Ai/System/10_Projects/CareVault".to_string());
+        claude_today.cwd = Some("/Users/example/Ai/System/10_Projects/CareVault".to_string());
         let mut gemini_today = dated_record("facet-gemini-today", "2026-06-06T00:00:00Z");
         gemini_today.source = "Gemini".to_string();
         gemini_today.cwd = Some("/tmp/OtherProject".to_string());
@@ -33932,7 +33947,7 @@ Status: completed as a source-only/report-only hardening slice.
         assert_eq!(result.projects[0].count, 2);
         assert_eq!(
             result.workspaces[0].text,
-            "/Users/wj/Ai/System/10_Projects/PromptVault"
+            "/Users/example/Ai/System/10_Projects/PromptVault"
         );
         assert_eq!(result.workspaces[0].count, 2);
         assert_eq!(
@@ -34126,10 +34141,11 @@ Status: completed as a source-only/report-only hardening slice.
         let mut record = dated_record(id, timestamp);
         record.source = "Codex session metadata".to_string();
         record.session_id = format!("thread-{id}");
-        record.path = format!("/Users/wj/.codex/sessions/{id}.jsonl");
-        record.cwd = Some(format!("/Users/wj/Ai/System/10_Projects/{project}"));
-        record.text =
-            format!("Codex session project targets: /Users/wj/Ai/System/10_Projects/{project}");
+        record.path = format!("/Users/example/.codex/sessions/{id}.jsonl");
+        record.cwd = Some(format!("/Users/example/Ai/System/10_Projects/{project}"));
+        record.text = format!(
+            "Codex session project targets: /Users/example/Ai/System/10_Projects/{project}"
+        );
         record.word_count = count_words(&record.text);
         record.char_count = record.text.chars().count();
         record.hash = hash_text(&record.text);

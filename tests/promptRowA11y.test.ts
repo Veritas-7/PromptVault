@@ -21,7 +21,7 @@ function promptRecord(overrides: Partial<PromptRecord> = {}): PromptRecord {
     session_id: "session-1",
     path: "/tmp/session.jsonl",
     timestamp: "2026-06-06T12:00:00Z",
-    cwd: "/Users/wj",
+    cwd: "/Users/example",
     text: "Return exactly OK",
     word_count: 3,
     char_count: 17,
@@ -793,7 +793,7 @@ test("selected prompt metadata label separates visual chips", () => {
 
   assert.equal(
     selectedPromptMetaLabel(promptRecord()),
-    `선택한 프롬프트 메타데이터: Codex, ${timestamp}, /Users/wj, 품질 36 약함`,
+    `선택한 프롬프트 메타데이터: Codex, ${timestamp}, /Users/example, 품질 36 약함`,
   );
 });
 

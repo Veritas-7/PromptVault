@@ -4,7 +4,7 @@ Generated: 2026-06-03T20:43:54+0900
 
 ## Local Evidence
 
-Claude project JSONL files under `/Users/wj/.claude/projects` include harness-generated rows shaped like user messages but marked `isMeta=true`, including local-command caveat content. These are not user-authored prompts.
+Claude project JSONL files under `/Users/example/.claude/projects` include harness-generated rows shaped like user messages but marked `isMeta=true`, including local-command caveat content. These are not user-authored prompts.
 
 ## RED
 

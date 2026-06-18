@@ -5,7 +5,7 @@
   "code_commit": "742639db7aa65bae6f24068de0dc75ee4024d048",
   "status": "pass",
   "local_evidence": {
-    "source": "/Users/wj/.claude/history.jsonl",
+    "source": "/Users/example/.claude/history.jsonl",
     "observed_shape": "History includes slash command-only display records such as /exit, /clear, /login, and /model.",
     "preservation_rule": "Command strings with arguments, such as /sdd ... prompts, are preserved."
   },

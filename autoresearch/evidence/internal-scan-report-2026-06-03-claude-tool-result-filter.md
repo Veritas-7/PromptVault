@@ -4,7 +4,7 @@ Generated: 2026-06-03T20:47:45+0900
 
 ## Local Evidence
 
-Claude project JSONL files under `/Users/wj/.claude/projects` include `message.role=user` records whose content array contains `type=tool_result` items. Some of those tool result blocks carry string `content`, which the shared extractor previously treated as prompt text.
+Claude project JSONL files under `/Users/example/.claude/projects` include `message.role=user` records whose content array contains `type=tool_result` items. Some of those tool result blocks carry string `content`, which the shared extractor previously treated as prompt text.
 
 ## RED
 

@@ -1,3 +1,15 @@
+<!-- VERITAS_EDU_NOTICE_START -->
+> [!IMPORTANT]
+> **Educational / Work-in-Progress Notice**
+>
+> 이 소스는 교육 목적의 애플리케이션이며, 아직 지속적으로 개발 중인 미완성 앱입니다. 자유롭게 사용, 학습, fork, 수정, 배포할 수 있습니다.
+>
+> This source code is for an educational-purpose application and remains an unfinished work in progress. You may freely use, study, fork, modify, and distribute it.
+>
+> Provided "as is", without warranty. Third-party open-source components remain under their original licenses. See [LICENSE](./LICENSE), [NOTICE.md](./NOTICE.md), and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+
+<!-- VERITAS_EDU_NOTICE_END -->
+
 # PromptVault
 
 PromptVault is a local-first Tauri + React + TypeScript workbench for collecting user prompts from local Claude Code, Google Antigravity, Codex CLI, Codex app/session, and Hermes CLI/app stores.

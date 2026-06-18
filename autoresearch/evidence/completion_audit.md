@@ -16,11 +16,13 @@ absolute paths.
 | Local-first architecture | Source discovery resolves from the current user's home directory | PASS |
 | Incremental imports | `import-batch` stores cursors and per-file ledgers, then processes only new/changed/error/missing files after completion | PASS |
 | Hermes support | Hermes CLI/profile/app source specs and JSON/JSONL user-message parsing are implemented | PASS |
+| Hermes/Antigravity date coverage | Missing explicit timestamps fall back to filename timestamps, then source file modified time | PASS |
 | Vault deletion audit | `vault-audit` checks SQLite integrity, completed cursors, source-path coverage, per-file ledger status, live source-file presence, and parser/hash errors | PASS |
+| Deletion readiness status | `vault-audit` reports `deletion_readiness_status` to separate strict, blocked, sealed-missing, and legacy-missing states | PASS |
 | Live source deletion detection | `vault_audit_detects_live_deleted_files_without_import_refresh` covers deletion before a later import refresh | PASS |
 | Browser bridge audit path | `/api/vault-audit` shares the same DB-backed audit path as CLI/Tauri | PASS |
-| Stored search/facets | Stored prompts can be filtered by source/date/project/workspace/text and summarized by facets | PASS |
-| Prompt-improvement safety | External AI routes are optional and risk-pattern prompt/context text is blocked or redacted before external routing | PASS |
+| Stored search/facets | Stored prompts can be filtered by source/date/project/workspace/text, accelerated by SQLite FTS5 when available, and summarized by facets | PASS |
+| Prompt-improvement safety | External AI routes are optional, risk-pattern prompt/context text is blocked or redacted before external routing, and local fallback preserves short multi-clause requests | PASS |
 | Work-management boundary | Project/date work views keep prompts as supporting evidence, not the core product boundary | PASS |
 
 ## Verification Commands
@@ -29,6 +31,9 @@ absolute paths.
 cargo fmt --check
 cargo test --lib vault_audit --quiet
 cargo test --lib import_batch_marks_missing_stored_paths --quiet
+cargo test --lib load_stored_prompts_uses_fts_index_for_text_queries --quiet
+cargo test --lib timestamp_from_source_path_falls_back_to_file_modified_time --quiet
+cargo test --lib local_improvement --quiet
 cargo test --bin promptvault-cli bridge_ --quiet
 npm run check
 npm run qa:browser-bridge

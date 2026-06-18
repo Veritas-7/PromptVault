@@ -25,9 +25,16 @@ or machine-specific database contents.
 - Hermes CLI/profile/app sources are supported alongside Codex, Codex CX,
   Claude, Antigravity, Gemini, and project progress logs.
 - Stored prompt search supports source, date, project, workspace, quality, and
-  prompt text filtering.
+  prompt text filtering. SQLite FTS5 is used for stored text search when
+  available, with regular SQLite filtering as a fallback.
+- Timestamp fallback now covers explicit source timestamps, epoch-millis file
+  names, compact `YYYYMMDD_HHMMSS` file names, and source file modified time.
+  This reduces `unknown-date` rows for Hermes and Antigravity conversation
+  sources that do not always store explicit timestamps.
 - Prompt improvement can use configured OpenAI/GLM providers, with deterministic
-  local fallback when providers are unavailable.
+  local fallback when providers are unavailable. The local fallback preserves
+  short multi-clause user requests instead of truncating at the first question
+  mark.
 - Work-management views group evidence by project/date and keep prompt-like
   text as supporting evidence rather than the product boundary.
 
@@ -54,6 +61,10 @@ cargo run --bin promptvault-cli -- vault-audit --allow-source-file-deletion --js
 This accepts missing files only when they already have sealed `ok` byte/hash
 ledger rows. Use `--allow-legacy-missing` only when explicitly accepting files
 that were already missing before PromptVault could hash them.
+
+Audit output includes `deletion_readiness_status` so operators can distinguish
+strict readiness from policy-accepted states such as sealed missing files or
+explicitly accepted legacy missing files.
 
 ## Verification Gates
 

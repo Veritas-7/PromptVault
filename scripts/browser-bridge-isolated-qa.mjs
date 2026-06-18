@@ -2020,6 +2020,7 @@ async function runBrowserQa() {
     const sourceProposalApproveButton = page
       .locator(`[data-work-session-evidence-source-proposals="${firstSourceSearchSessionId}"] [data-approve-work-session-evidence-source-proposal]`)
       .first();
+    let latestSourceProposalQueueItem = null;
     if (await sourceProposalApproveButton.count()) {
       const sourceProposalHitId = await sourceProposalApproveButton.getAttribute(
         "data-approve-work-session-evidence-source-proposal",
@@ -2052,15 +2053,27 @@ async function runBrowserQa() {
           JSON.stringify(sourceProposalApprovedRow ?? null)
         }`);
       }
+      latestSourceProposalQueueItem = sourceProposalApprovedRow;
       workSessionEvidenceSourceProposalUiStateAfterApprove =
         `${sourceProposalApprovedRow.review_state} · ${sourceProposalApprovedRow.review_reason}`;
     } else {
       workSessionEvidenceSourceProposalUiStateAfterApprove =
         "no review-ready source proposal approval button";
     }
-    const riskQueueItem = workSessionEvidenceReviewQueue.items.find(
-      (item) => item.candidate_id === firstNearbyCandidateId,
-    );
+    if (!latestSourceProposalQueueItem) {
+      const latestSourceProposalQueue = await bridgeJson(
+        page,
+        "/api/work-session-evidence-review-queue",
+        { options: { limit: 200 } },
+      );
+      latestSourceProposalQueueItem = latestSourceProposalQueue.items.find(
+        (item) => item.candidate_id === firstNearbyCandidateId,
+      ) ?? null;
+    }
+    const riskQueueItem = latestSourceProposalQueueItem
+      ?? workSessionEvidenceReviewQueue.items.find(
+        (item) => item.candidate_id === firstNearbyCandidateId,
+      );
     if (!riskQueueItem) {
       throw new Error(`Could not find queue item for source proposal risk fixture: ${firstNearbyCandidateId}`);
     }

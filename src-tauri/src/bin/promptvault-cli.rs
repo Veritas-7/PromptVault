@@ -264,6 +264,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("PromptVault vault audit");
             println!("database: {}", result.database_path);
+            println!(
+                "deletion_readiness_status: {}",
+                result.deletion_readiness_status
+            );
             println!("deletion_ready: {}", result.deletion_ready);
             println!(
                 "strict_source_backed_ready: {}",

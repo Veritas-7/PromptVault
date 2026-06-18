@@ -1,4 +1,4 @@
-use chrono::{FixedOffset, Local, NaiveDate, TimeZone, Utc};
+use chrono::{FixedOffset, Local, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use regex::{Captures, Regex};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, ToSql};
 use serde::{Deserialize, Serialize};
@@ -1620,6 +1620,7 @@ pub struct VaultAuditResult {
     pub integrity_check: Vec<String>,
     pub allow_source_file_deletion: bool,
     pub allow_legacy_missing: bool,
+    pub deletion_readiness_status: String,
     pub strict_source_backed_ready: bool,
     pub deletion_ready: bool,
     pub total_prompts: usize,
@@ -4849,6 +4850,16 @@ pub fn run_vault_audit(
         .values()
         .map(|state| state.unsealed_missing_files)
         .sum();
+    let strict_source_backed_ready = strict_blockers.is_empty();
+    let deletion_ready = blockers.is_empty();
+    let deletion_readiness_status = vault_deletion_readiness_status(
+        strict_source_backed_ready,
+        deletion_ready,
+        allow_source_file_deletion,
+        allow_legacy_missing,
+        file_state_ledger_backed_missing_count,
+        file_state_legacy_missing_count,
+    );
 
     Ok(VaultAuditResult {
         generated_at,
@@ -4857,8 +4868,9 @@ pub fn run_vault_audit(
         integrity_check,
         allow_source_file_deletion,
         allow_legacy_missing,
-        strict_source_backed_ready: strict_blockers.is_empty(),
-        deletion_ready: blockers.is_empty(),
+        deletion_readiness_status,
+        strict_source_backed_ready,
+        deletion_ready,
         total_prompts,
         source_count,
         source_path_count,
@@ -4880,6 +4892,29 @@ pub fn run_vault_audit(
         blockers,
         warnings,
     })
+}
+
+fn vault_deletion_readiness_status(
+    strict_source_backed_ready: bool,
+    deletion_ready: bool,
+    allow_source_file_deletion: bool,
+    allow_legacy_missing: bool,
+    ledger_backed_missing_count: usize,
+    legacy_missing_count: usize,
+) -> String {
+    if strict_source_backed_ready {
+        return "strict-ready".to_string();
+    }
+    if !deletion_ready {
+        return "blocked".to_string();
+    }
+    if allow_legacy_missing && legacy_missing_count > 0 {
+        return "accepted-with-legacy-missing".to_string();
+    }
+    if allow_source_file_deletion && ledger_backed_missing_count > 0 {
+        return "accepted-with-sealed-missing".to_string();
+    }
+    "accepted-with-operator-policy".to_string()
 }
 
 fn read_sqlite_integrity_check(
@@ -7043,11 +7078,10 @@ fn push_hermes_user_message(
                 .or_else(|| session.get("session_start"))
                 .or_else(|| session.get("last_updated"))
                 .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| timestamp_from_source_path(path))
             {
-                object.insert(
-                    "timestamp".to_string(),
-                    Value::String(timestamp.to_string()),
-                );
+                object.insert("timestamp".to_string(), Value::String(timestamp));
             }
         }
     }
@@ -7140,6 +7174,7 @@ fn parse_antigravity_conversation_sqlite(
         .and_then(|name| name.to_str())
         .unwrap_or("unknown-antigravity-conversation")
         .to_string();
+    let timestamp = timestamp_from_source_path(path);
     let mut records = Vec::new();
 
     for row in rows {
@@ -7150,6 +7185,7 @@ fn parse_antigravity_conversation_sqlite(
             let value = serde_json::json!({
                 "conversation_id": conversation_id,
                 "idx": idx,
+                "timestamp": timestamp,
             });
             push_record(&mut records, source, path, &value, cwd, text);
         }
@@ -11140,6 +11176,7 @@ fn read_project_work_session_evidence_source_search_antigravity_sqlite_items(
         .and_then(|name| name.to_str())
         .unwrap_or("unknown-antigravity-conversation")
         .to_string();
+    let timestamp = timestamp_from_source_path(path);
     let mut scanned_line_count = 0;
     let mut matched_line_count = 0;
     let mut items = Vec::new();
@@ -11162,7 +11199,7 @@ fn read_project_work_session_evidence_source_search_antigravity_sqlite_items(
             .unwrap_or(row_index + 1);
         let prompt = ProjectWorkSessionEvidenceSourceSearchPrompt {
             session_id: Some(session_id.clone()),
-            timestamp: None,
+            timestamp: timestamp.clone(),
             cwd: best_workspace_candidate(&strings),
             text,
         };
@@ -15331,6 +15368,58 @@ fn format_epoch(value: i64) -> String {
         .unwrap_or_else(|| value.to_string())
 }
 
+fn timestamp_from_source_path(path: &Path) -> Option<String> {
+    timestamp_from_path_name(path).or_else(|| timestamp_from_file_modified_at(path))
+}
+
+fn timestamp_from_path_name(path: &Path) -> Option<String> {
+    let stem = path.file_stem()?.to_str()?;
+    if let Some(timestamp) = timestamp_from_path_epoch_millis(stem) {
+        return Some(timestamp);
+    }
+    timestamp_from_path_compact_datetime(stem)
+}
+
+fn timestamp_from_path_epoch_millis(stem: &str) -> Option<String> {
+    let bytes = stem.as_bytes();
+    let mut start = 0;
+    while start < bytes.len() {
+        while start < bytes.len() && !bytes[start].is_ascii_digit() {
+            start += 1;
+        }
+        let mut end = start;
+        while end < bytes.len() && bytes[end].is_ascii_digit() {
+            end += 1;
+        }
+        if end.saturating_sub(start) == 13 {
+            let millis = stem[start..end].parse::<u128>().ok()?;
+            if let Some(timestamp) = timestamp_millis_to_rfc3339(millis) {
+                return Some(timestamp);
+            }
+        }
+        start = end.saturating_add(1);
+    }
+    None
+}
+
+fn timestamp_from_path_compact_datetime(stem: &str) -> Option<String> {
+    let compact_datetime_regex = Regex::new(r"(?P<date>\d{8})[_-](?P<time>\d{6})").ok()?;
+    let captures = compact_datetime_regex.captures(stem)?;
+    let date = captures.name("date")?.as_str();
+    let time = captures.name("time")?.as_str();
+    let datetime = NaiveDateTime::parse_from_str(&format!("{date}{time}"), "%Y%m%d%H%M%S").ok()?;
+    let kst = FixedOffset::east_opt(9 * 60 * 60)?;
+    kst.from_local_datetime(&datetime)
+        .single()
+        .map(|timestamp| timestamp.to_rfc3339())
+}
+
+fn timestamp_from_file_modified_at(path: &Path) -> Option<String> {
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    let timestamp: chrono::DateTime<Utc> = modified.into();
+    Some(timestamp.to_rfc3339())
+}
+
 fn extract_session_id(value: &Value) -> Option<String> {
     for key in [
         "sessionId",
@@ -15962,6 +16051,8 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
         CREATE INDEX IF NOT EXISTS idx_prompts_date ON prompts(prompt_date);
         CREATE INDEX IF NOT EXISTS idx_prompts_source ON prompts(source);
         CREATE INDEX IF NOT EXISTS idx_prompts_quality ON prompts(quality_score);
+        CREATE INDEX IF NOT EXISTS idx_prompts_cwd ON prompts(cwd);
+        CREATE INDEX IF NOT EXISTS idx_prompts_source_path ON prompts(source_path);
         CREATE TABLE IF NOT EXISTS source_summaries (
             scan_run_id INTEGER NOT NULL,
             source_id TEXT NOT NULL,
@@ -16290,9 +16381,53 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             ON project_work_summary_snapshots(created_at DESC);
         ",
     )?;
+    ensure_prompt_search_schema(conn)?;
     ensure_project_work_log_extraction_items_schema(conn)?;
     ensure_project_work_session_evidence_review_schema(conn)?;
     ensure_project_work_summary_snapshot_schema(conn)?;
+    Ok(())
+}
+
+fn ensure_prompt_search_schema(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    if conn
+        .execute_batch(
+            "
+            CREATE VIRTUAL TABLE IF NOT EXISTS prompt_text_fts
+            USING fts5(prompt_id UNINDEXED, text, source, source_path, cwd, prompt_date);
+            CREATE TRIGGER IF NOT EXISTS prompt_text_fts_insert
+            AFTER INSERT ON prompts BEGIN
+                INSERT INTO prompt_text_fts(rowid, prompt_id, text, source, source_path, cwd, prompt_date)
+                VALUES (new.rowid, new.id, new.text, new.source, new.source_path, COALESCE(new.cwd, ''), new.prompt_date);
+            END;
+            CREATE TRIGGER IF NOT EXISTS prompt_text_fts_delete
+            AFTER DELETE ON prompts BEGIN
+                DELETE FROM prompt_text_fts WHERE rowid = old.rowid;
+            END;
+            CREATE TRIGGER IF NOT EXISTS prompt_text_fts_update
+            AFTER UPDATE ON prompts BEGIN
+                DELETE FROM prompt_text_fts WHERE rowid = old.rowid;
+                INSERT INTO prompt_text_fts(rowid, prompt_id, text, source, source_path, cwd, prompt_date)
+                VALUES (new.rowid, new.id, new.text, new.source, new.source_path, COALESCE(new.cwd, ''), new.prompt_date);
+            END;
+            ",
+        )
+        .is_err()
+    {
+        return Ok(());
+    }
+
+    let prompt_count: i64 = conn.query_row("SELECT COUNT(*) FROM prompts", [], |row| row.get(0))?;
+    let fts_count: i64 =
+        conn.query_row("SELECT COUNT(*) FROM prompt_text_fts", [], |row| row.get(0))?;
+    if prompt_count != fts_count {
+        conn.execute("DELETE FROM prompt_text_fts", [])?;
+        conn.execute(
+            "INSERT INTO prompt_text_fts(rowid, prompt_id, text, source, source_path, cwd, prompt_date)
+             SELECT rowid, id, text, source, source_path, COALESCE(cwd, ''), prompt_date
+             FROM prompts",
+            [],
+        )?;
+    }
     Ok(())
 }
 
@@ -19650,6 +19785,23 @@ fn read_stored_prompts(
     filters: &StoredPromptFilters<'_>,
     preview_sort: PreviewSort,
 ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    if let Some(fts_query) = stored_prompt_fts_match_query(filters.query) {
+        if stored_prompt_fts_available(conn)? {
+            let prompts = read_stored_prompts_fts(conn, limit, filters, preview_sort, &fts_query)?;
+            if !prompts.is_empty() {
+                return Ok(prompts);
+            }
+        }
+    }
+    read_stored_prompts_like(conn, limit, filters, preview_sort)
+}
+
+fn read_stored_prompts_like(
+    conn: &Connection,
+    limit: usize,
+    filters: &StoredPromptFilters<'_>,
+    preview_sort: PreviewSort,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
     let order_by = match preview_sort {
         PreviewSort::Latest => "COALESCE(timestamp, last_seen_at, first_seen_at, '') DESC, id DESC",
         PreviewSort::QualityAsc => {
@@ -19747,10 +19899,122 @@ fn read_stored_prompts(
     Ok(prompts)
 }
 
+fn read_stored_prompts_fts(
+    conn: &Connection,
+    limit: usize,
+    filters: &StoredPromptFilters<'_>,
+    preview_sort: PreviewSort,
+    fts_query: &str,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let order_by = match preview_sort {
+        PreviewSort::Latest => {
+            "COALESCE(prompts.timestamp, prompts.last_seen_at, prompts.first_seen_at, '') DESC, prompts.id DESC"
+        }
+        PreviewSort::QualityAsc => {
+            "prompts.quality_score ASC, prompts.prompt_date DESC, COALESCE(prompts.timestamp, prompts.last_seen_at, '') DESC"
+        }
+        PreviewSort::QualityDesc => {
+            "prompts.quality_score DESC, prompts.prompt_date DESC, COALESCE(prompts.timestamp, prompts.last_seen_at, '') DESC"
+        }
+    };
+    let sql = format!(
+        "SELECT prompts.id, prompts.hash, prompts.source, prompts.session_id,
+            prompts.source_path, prompts.timestamp, prompts.cwd, prompts.text,
+            prompts.word_count, prompts.char_count, prompts.risk_flags_json,
+            prompts.quality_json
+         FROM prompts
+         JOIN prompt_text_fts ON prompt_text_fts.rowid = prompts.rowid
+         WHERE prompt_text_fts MATCH ?1
+           AND (?2 = '' OR prompts.source = ?2)
+           AND (?3 = '' OR prompts.prompt_date = ?3)
+           AND (?4 = ''
+                OR LOWER(COALESCE(prompts.cwd, '')) LIKE ?5
+                OR LOWER(COALESCE(prompts.cwd, '')) LIKE ?6
+                OR LOWER(prompts.source_path) LIKE ?5
+                OR LOWER(prompts.source_path) LIKE ?6
+                OR LOWER(prompts.text) LIKE ?5
+                OR LOWER(prompts.text) LIKE ?6)
+           AND (?7 = '' OR LOWER(COALESCE(prompts.cwd, '')) LIKE ?8)
+         ORDER BY {order_by}
+         LIMIT ?9"
+    );
+    let (project_child_like, project_root_like) = stored_project_filter_patterns(filters.project);
+    let workspace_lower = filters.workspace.to_lowercase();
+    let workspace_like = format!("%{workspace_lower}%");
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(
+            rusqlite::params![
+                fts_query,
+                filters.source,
+                filters.date,
+                filters.project.to_lowercase(),
+                project_child_like,
+                project_root_like,
+                workspace_lower,
+                workspace_like,
+                limit as i64,
+            ],
+            |row| {
+                Ok(StoredPromptRow {
+                    id: row.get(0)?,
+                    hash: row.get(1)?,
+                    source: row.get(2)?,
+                    session_id: row.get(3)?,
+                    path: row.get(4)?,
+                    timestamp: row.get(5)?,
+                    cwd: row.get(6)?,
+                    text: row.get(7)?,
+                    word_count: row.get::<_, i64>(8)? as usize,
+                    char_count: row.get::<_, i64>(9)? as usize,
+                    risk_flags_json: row.get(10)?,
+                    quality_json: row.get(11)?,
+                })
+            },
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut prompts = rows
+        .into_iter()
+        .map(stored_prompt_row_into_prompt)
+        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
+    if preview_sort == PreviewSort::Latest {
+        prompts.reverse();
+    }
+    Ok(prompts)
+}
+
+fn stored_prompt_row_into_prompt(
+    row: StoredPromptRow,
+) -> Result<PromptRecord, Box<dyn std::error::Error>> {
+    Ok(PromptRecord {
+        id: row.id,
+        source: row.source,
+        session_id: row.session_id,
+        path: row.path,
+        timestamp: row.timestamp,
+        cwd: row.cwd,
+        text: row.text,
+        word_count: row.word_count,
+        char_count: row.char_count,
+        hash: row.hash,
+        risk_flags: serde_json::from_str(&row.risk_flags_json)?,
+        quality: serde_json::from_str(&row.quality_json)?,
+    })
+}
+
 fn count_stored_prompt_matches(
     conn: &Connection,
     filters: &StoredPromptFilters<'_>,
 ) -> Result<usize, Box<dyn std::error::Error>> {
+    if let Some(fts_query) = stored_prompt_fts_match_query(filters.query) {
+        if stored_prompt_fts_available(conn)? {
+            let count = count_stored_prompt_matches_fts(conn, filters, &fts_query)?;
+            if count > 0 {
+                return Ok(count);
+            }
+        }
+    }
     let query_lower = filters.query.to_lowercase();
     let like = format!("%{query_lower}%");
     let (project_child_like, project_root_like) = stored_project_filter_patterns(filters.project);
@@ -19788,6 +20052,64 @@ fn count_stored_prompt_matches(
         |row| row.get(0),
     )?;
     Ok(count as usize)
+}
+
+fn count_stored_prompt_matches_fts(
+    conn: &Connection,
+    filters: &StoredPromptFilters<'_>,
+    fts_query: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let (project_child_like, project_root_like) = stored_project_filter_patterns(filters.project);
+    let workspace_lower = filters.workspace.to_lowercase();
+    let workspace_like = format!("%{workspace_lower}%");
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM prompts
+         JOIN prompt_text_fts ON prompt_text_fts.rowid = prompts.rowid
+         WHERE prompt_text_fts MATCH ?1
+           AND (?2 = '' OR prompts.source = ?2)
+           AND (?3 = '' OR prompts.prompt_date = ?3)
+           AND (?4 = ''
+                OR LOWER(COALESCE(prompts.cwd, '')) LIKE ?5
+                OR LOWER(COALESCE(prompts.cwd, '')) LIKE ?6
+                OR LOWER(prompts.source_path) LIKE ?5
+                OR LOWER(prompts.source_path) LIKE ?6
+                OR LOWER(prompts.text) LIKE ?5
+                OR LOWER(prompts.text) LIKE ?6)
+           AND (?7 = '' OR LOWER(COALESCE(prompts.cwd, '')) LIKE ?8)",
+        rusqlite::params![
+            fts_query,
+            filters.source,
+            filters.date,
+            filters.project.to_lowercase(),
+            project_child_like,
+            project_root_like,
+            workspace_lower,
+            workspace_like,
+        ],
+        |row| row.get(0),
+    )?;
+    Ok(count as usize)
+}
+
+fn stored_prompt_fts_available(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='prompt_text_fts'",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+fn stored_prompt_fts_match_query(query: &str) -> Option<String> {
+    let terms = word_regex()
+        .find_iter(query)
+        .take(16)
+        .map(|item| item.as_str().trim_matches('\'').trim())
+        .filter(|term| !term.is_empty())
+        .map(|term| format!("\"{}\"", term.replace('"', "\"\"")))
+        .collect::<Vec<_>>();
+    (!terms.is_empty()).then(|| terms.join(" AND "))
 }
 
 fn stored_project_filter_patterns(project: &str) -> (String, String) {
@@ -20610,7 +20932,14 @@ fn local_improvement(prompt: &str, context: Option<&str>, warnings: Vec<String>)
 }
 
 fn first_sentence(prompt: &str) -> Option<String> {
-    prompt
+    let trimmed = prompt.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.chars().count() <= 240 {
+        return Some(trimmed.to_string());
+    }
+    trimmed
         .split(['.', '?', '!', '\n', '。', '？', '！'])
         .map(str::trim)
         .find(|line| !line.is_empty())
@@ -21626,6 +21955,18 @@ mod tests {
         let result = local_improvement("Fix the failing parser test.", None, Vec::new());
         assert!(result.revised_prompt.contains("목표:"));
         assert!(result.revised_prompt.contains("완료 전 실제 명령"));
+    }
+
+    #[test]
+    fn local_improvement_preserves_short_multi_clause_request() {
+        let result = local_improvement(
+            "우리 클로드, 코덱스에 peer mcp 있어서 여러 ai가 협업가능하잖아? antigravity cli에도 전역설정으로 Peer mcp 설치해줘.",
+            None,
+            Vec::new(),
+        );
+
+        assert!(result.revised_prompt.contains("antigravity cli"));
+        assert!(result.revised_prompt.contains("Peer mcp 설치"));
     }
 
     #[test]
@@ -22959,6 +23300,12 @@ mod tests {
             r#"{"role":"user","content":"Hermes JSONL user prompt should import.","session_id":"hermes-jsonl-1","timestamp":"2026-06-18T03:04:05Z"}"#,
         )
         .expect("write hermes jsonl");
+        let fallback_jsonl_path = root.join("20260411_121219_d75f4c6e.jsonl");
+        std::fs::write(
+            &fallback_jsonl_path,
+            r#"{"role":"user","content":"Hermes filename timestamp fallback prompt should import.","session_id":"hermes-jsonl-fallback"}"#,
+        )
+        .expect("write hermes fallback jsonl");
         let source = SourceSpec {
             id: "test-hermes",
             label: "Test Hermes",
@@ -22975,12 +23322,16 @@ mod tests {
         );
         records
             .extend(parse_hermes_session_file(&source, &jsonl_path).expect("parse hermes jsonl"));
+        records.extend(
+            parse_hermes_session_file(&source, &fallback_jsonl_path)
+                .expect("parse hermes fallback jsonl"),
+        );
         let texts = records
             .iter()
             .map(|record| record.text.as_str())
             .collect::<Vec<_>>();
 
-        assert_eq!(records.len(), 3);
+        assert_eq!(records.len(), 4);
         assert!(texts
             .iter()
             .any(|text| text.contains("Hermes CLI user prompt should import")));
@@ -22990,6 +23341,14 @@ mod tests {
         assert!(texts
             .iter()
             .any(|text| text.contains("Hermes JSONL user prompt should import")));
+        let fallback_record = records
+            .iter()
+            .find(|record| record.text.contains("filename timestamp fallback"))
+            .expect("fallback timestamp record");
+        assert_eq!(
+            prompt_date(fallback_record.timestamp.as_deref()),
+            "2026-04-11"
+        );
         assert!(records
             .iter()
             .all(|record| !record.text.contains("system should not import")));
@@ -23588,12 +23947,36 @@ mod tests {
         .expect("audit refreshed missing path with legacy acceptance");
         assert!(deletion_with_legacy.deletion_ready);
         assert!(!deletion_with_legacy.strict_source_backed_ready);
+        assert_eq!(
+            deletion_with_legacy.deletion_readiness_status,
+            "accepted-with-legacy-missing"
+        );
         assert!(deletion_with_legacy
             .warnings
             .iter()
             .any(|warning| warning.contains("allow_legacy_missing")));
 
         std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn vault_deletion_readiness_status_labels_policy_modes() {
+        assert_eq!(
+            vault_deletion_readiness_status(true, true, false, false, 0, 0),
+            "strict-ready"
+        );
+        assert_eq!(
+            vault_deletion_readiness_status(false, false, true, true, 1, 1),
+            "blocked"
+        );
+        assert_eq!(
+            vault_deletion_readiness_status(false, true, true, false, 1, 0),
+            "accepted-with-sealed-missing"
+        );
+        assert_eq!(
+            vault_deletion_readiness_status(false, true, true, true, 0, 1),
+            "accepted-with-legacy-missing"
+        );
     }
 
     #[test]
@@ -27091,7 +27474,7 @@ Status: completed as a source-only/report-only hardening slice.
     #[test]
     fn session_evidence_source_proposals_accept_antigravity_db_search_hits() {
         let path = std::env::temp_dir().join(format!(
-            "promptvault-session-source-proposals-antigravity-{}.db",
+            "promptvault-session-source-proposals-antigravity-20260609_120000-{}.db",
             std::process::id()
         ));
         let _ = std::fs::remove_file(&path);
@@ -33139,7 +33522,7 @@ Status: completed as a source-only/report-only hardening slice.
     #[test]
     fn parses_antigravity_conversation_db_user_steps() {
         let db_path = std::env::temp_dir().join(format!(
-            "promptvault-antigravity-test-{}.db",
+            "promptvault-antigravity-test-1781154680874-{}.db",
             std::process::id()
         ));
         let _ = std::fs::remove_file(&db_path);
@@ -33211,8 +33594,29 @@ Status: completed as a source-only/report-only hardening slice.
             records[0].cwd.as_deref(),
             Some("/Users/example/Ai/System/10_Projects/PromptVault")
         );
+        assert_eq!(prompt_date(records[0].timestamp.as_deref()), "2026-06-11");
 
         std::fs::remove_file(&db_path).expect("remove test db");
+    }
+
+    #[test]
+    fn timestamp_from_source_path_falls_back_to_file_modified_time() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-source-mtime-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create source mtime root");
+        let path = root.join("61bd7816-7c89-4dca-8aae-212003b17e08.db");
+        std::fs::write(&path, "conversation fixture").expect("write source mtime file");
+
+        let timestamp = timestamp_from_source_path(&path).expect("mtime fallback timestamp");
+        assert_ne!(prompt_date(Some(&timestamp)), "unknown-date");
+        assert!(timestamp.contains('T'));
+
+        std::fs::remove_dir_all(root).expect("remove source mtime root");
     }
 
     #[test]
@@ -33734,6 +34138,61 @@ Status: completed as a source-only/report-only hardening slice.
         );
 
         std::fs::remove_dir_all(root).expect("remove load stored root");
+    }
+
+    #[test]
+    fn load_stored_prompts_uses_fts_index_for_text_queries() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-load-fts-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create load fts root");
+        let db_path = root.join("promptvault.sqlite");
+        let mut needle = dated_record("stored-fts-needle", "2026-06-06T00:00:00Z");
+        needle.source = "Codex".to_string();
+        needle.cwd = Some("/Users/example/Ai/System/10_Projects/PromptVault".to_string());
+        needle.text = "Use semantic needle phrase for PromptVault stored FTS search.".to_string();
+        needle.word_count = count_words(&needle.text);
+        needle.char_count = needle.text.chars().count();
+        needle.quality = assess_prompt_quality(&needle.text, &[]);
+        let mut other = dated_record("stored-fts-other", "2026-06-06T00:00:00Z");
+        other.text = "Review unrelated prompt history without matching search terms.".to_string();
+        other.word_count = count_words(&other.text);
+        other.char_count = other.text.chars().count();
+        other.quality = assess_prompt_quality(&other.text, &[]);
+        let prompts = vec![needle, other];
+        let stats = build_stats(&prompts, Vec::new());
+        persist_scan_result(&db_path, "2026-06-06T00:01:00Z", &prompts, &stats, &[])
+            .expect("persist prompt vault");
+
+        let conn = open_promptvault_database(&db_path).expect("open fts db");
+        assert!(stored_prompt_fts_available(&conn).expect("fts availability"));
+        let fts_rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM prompt_text_fts", [], |row| row.get(0))
+            .expect("count fts rows");
+        assert_eq!(fts_rows, 2);
+        drop(conn);
+
+        let result = run_load_stored_prompts(StoredPromptsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(10),
+            query: Some("semantic needle".to_string()),
+            source: Some("Codex".to_string()),
+            date: Some("2026-06-06".to_string()),
+            project: Some("PromptVault".to_string()),
+            workspace: Some("PromptVault".to_string()),
+            preview_sort: Some("quality-asc".to_string()),
+        })
+        .expect("load fts stored prompts");
+
+        assert_eq!(result.returned_prompt_count, 1);
+        assert_eq!(result.prompts[0].id, "stored-fts-needle");
+        assert_eq!(result.stats.total_prompts, 1);
+
+        std::fs::remove_dir_all(root).expect("remove load fts root");
     }
 
     #[test]

@@ -118,7 +118,29 @@ Scans persist by default to:
 
 The database stores scan runs, prompt records, source summaries, first/last seen timestamps, quality scores, ISO prompt dates, resumable import state, per-file import state, import events, and prompt-improvement events. Re-running a scan upserts by stable prompt ID, so existing prompt records are updated instead of duplicated. Incremental imports keep a per-file byte count, modified time, content SHA-256, prompt count, parse status, and missing-source marker; changed files are reprocessed and stale prompt rows from that file are removed. In-app recommendation events are appended to `prompt_improvements` with prompt id, source, provider, quality delta, rationale, checklist, warnings, and revised prompt text.
 
+Stored prompt text search uses a SQLite FTS5 index when available and falls
+back to regular SQLite filtering if FTS cannot be created. Text search can be
+combined with exact source label, prompt date, project, workspace, and sort
+filters, so stored review does not need to rescan raw source files.
+
+Prompt dates are extracted from source timestamps when present. For sources
+that omit explicit timestamps, PromptVault falls back to recognized filename
+timestamps such as epoch-millis and compact `YYYYMMDD_HHMMSS`, then to the
+source file's modified time. This is especially useful for Hermes JSONL files
+and Antigravity CLI/IDE SQLite conversation DBs that use UUID file names.
+
 Before treating the SQLite vault as a replacement for original source logs, run `cargo run --bin promptvault-cli -- vault-audit --json`. The default audit is strict: `deletion_ready` stays `false` unless SQLite integrity passes, import cursors are complete, every imported source has per-file hash/status ledger coverage, and every source file is still present with no parser/hash error. If originals have already been deleted after a successful import, run `cargo run --bin promptvault-cli -- vault-audit --allow-source-file-deletion --json`; this accepts only missing files that still have sealed `ok` byte/hash ledger rows and keeps `strict_source_backed_ready=false` so the report shows that live originals are gone. `--allow-legacy-missing` is a separate explicit acceptance for files that were already missing before a ledger refresh and therefore cannot be rehashed. The app does not delete originals for you.
+
+Audit results include `deletion_readiness_status`:
+
+- `strict-ready`: strict live-source and DB checks pass.
+- `blocked`: deletion is not safe under the selected policy.
+- `accepted-with-sealed-missing`: missing files are accepted only because their
+  sealed file ledger proves they were imported before deletion.
+- `accepted-with-legacy-missing`: already-missing legacy files were explicitly
+  accepted with `--allow-legacy-missing`.
+- `accepted-with-operator-policy`: the selected policy allows deletion even
+  though strict live-source readiness is not true.
 
 ## For Agents and LLMs
 

@@ -4968,34 +4968,6 @@ fn read_vault_audit_file_aggregates(
             COUNT(*) AS total_files,
             SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END) AS ok_files,
             SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_files,
-            SUM(CASE WHEN missing_at IS NOT NULL THEN 1 ELSE 0 END) AS missing_files,
-            SUM(CASE
-                WHEN missing_at IS NOT NULL
-                    AND status = 'ok'
-                    AND byte_count > 0
-                    AND TRIM(content_sha256) <> ''
-                THEN 1 ELSE 0 END) AS ledger_backed_missing_files,
-            SUM(CASE
-                WHEN missing_at IS NOT NULL
-                    AND status = 'missing'
-                    AND byte_count = 0
-                    AND content_sha256 = ''
-                    AND error = 'source file missing before file-state ledger refresh'
-                THEN 1 ELSE 0 END) AS legacy_missing_files,
-            SUM(CASE
-                WHEN missing_at IS NOT NULL
-                    AND NOT (
-                        status = 'ok'
-                        AND byte_count > 0
-                        AND TRIM(content_sha256) <> ''
-                    )
-                    AND NOT (
-                        status = 'missing'
-                        AND byte_count = 0
-                        AND content_sha256 = ''
-                        AND error = 'source file missing before file-state ledger refresh'
-                    )
-                THEN 1 ELSE 0 END) AS unsealed_missing_files,
             SUM(prompt_count) AS prompt_count,
             SUM(byte_count) AS byte_count
          FROM source_file_states
@@ -5010,12 +4982,12 @@ fn read_vault_audit_file_aggregates(
                     total_files: row.get::<_, i64>(2)? as usize,
                     ok_files: row.get::<_, i64>(3)? as usize,
                     error_files: row.get::<_, i64>(4)? as usize,
-                    missing_files: row.get::<_, i64>(5)? as usize,
-                    ledger_backed_missing_files: row.get::<_, i64>(6)? as usize,
-                    legacy_missing_files: row.get::<_, i64>(7)? as usize,
-                    unsealed_missing_files: row.get::<_, i64>(8)? as usize,
-                    prompt_count: row.get::<_, i64>(9)? as usize,
-                    byte_count: row.get::<_, i64>(10)? as u64,
+                    missing_files: 0,
+                    ledger_backed_missing_files: 0,
+                    legacy_missing_files: 0,
+                    unsealed_missing_files: 0,
+                    prompt_count: row.get::<_, i64>(5)? as usize,
+                    byte_count: row.get::<_, i64>(6)? as u64,
                     status_counts: Vec::new(),
                 },
             ))
@@ -5040,6 +5012,46 @@ fn read_vault_audit_file_aggregates(
         let (source_id, item) = row?;
         if let Some(aggregate) = rows.get_mut(&source_id) {
             aggregate.status_counts.push(item);
+        }
+    }
+
+    let mut live_stmt = conn.prepare(
+        "SELECT source_id, source_path, byte_count, content_sha256, status, error, missing_at
+         FROM source_file_states
+         ORDER BY source_id ASC, source_path ASC",
+    )?;
+    for row in live_stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, i64>(2)? as u64,
+            row.get::<_, String>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, Option<String>>(5)?,
+            row.get::<_, Option<String>>(6)?,
+        ))
+    })? {
+        let (source_id, source_path, byte_count, content_sha256, status, error, missing_at) = row?;
+        let ledger_marked_missing = missing_at.is_some();
+        let live_missing = !Path::new(&source_path).exists();
+        if !ledger_marked_missing && !live_missing {
+            continue;
+        }
+        if let Some(aggregate) = rows.get_mut(&source_id) {
+            aggregate.missing_files += 1;
+            let has_hash_ledger =
+                status == "ok" && byte_count > 0 && !content_sha256.trim().is_empty();
+            let legacy_missing = status == "missing"
+                && byte_count == 0
+                && content_sha256.is_empty()
+                && error.as_deref() == Some("source file missing before file-state ledger refresh");
+            if has_hash_ledger {
+                aggregate.ledger_backed_missing_files += 1;
+            } else if legacy_missing {
+                aggregate.legacy_missing_files += 1;
+            } else {
+                aggregate.unsealed_missing_files += 1;
+            }
         }
     }
     Ok(rows)
@@ -23381,6 +23393,60 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.contains("sealed ok byte/hash ledger rows")));
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn vault_audit_detects_live_deleted_files_without_import_refresh() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-vault-audit-live-missing-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        let source_path = root.join("001.jsonl");
+        std::fs::write(
+            &source_path,
+            r#"{"type":"response_item","timestamp":"2026-06-18T01:02:03Z","payload":{"role":"user","content":[{"text":"Detect live deletion immediately from vault audit."}]}}"#,
+        )
+        .expect("write prompt file");
+        let db_path = root.join("promptvault.sqlite");
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        run_import_batch_for_source(&db_path, source, 10, true, Some(10))
+            .expect("import audit fixture");
+        std::fs::remove_file(&source_path).expect("remove sealed source file without refresh");
+
+        let strict_audit = run_vault_audit(VaultAuditOptions {
+            database_path: Some(db_path.display().to_string()),
+            ..Default::default()
+        })
+        .expect("strict audit vault");
+        assert!(!strict_audit.deletion_ready);
+        assert!(!strict_audit.strict_source_backed_ready);
+        assert_eq!(strict_audit.file_state_missing_count, 1);
+        assert_eq!(strict_audit.file_state_ledger_backed_missing_count, 1);
+
+        let deletion_audit = run_vault_audit(VaultAuditOptions {
+            database_path: Some(db_path.display().to_string()),
+            allow_source_file_deletion: Some(true),
+            ..Default::default()
+        })
+        .expect("deletion-mode audit vault");
+        assert!(
+            deletion_audit.deletion_ready,
+            "{:?}",
+            deletion_audit.blockers
+        );
+        assert!(!deletion_audit.strict_source_backed_ready);
 
         std::fs::remove_dir_all(root).expect("remove temp root");
     }

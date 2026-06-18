@@ -16,6 +16,9 @@ Current Active Work:
   reports `deletion_ready=false` when any source file is missing.
 - `vault-audit --allow-source-file-deletion --json` now accepts only missing
   files that already have sealed `ok` byte/hash ledger rows.
+- `vault-audit` now also stats `source_file_states.source_path`, so a source
+  file deleted after import is detected immediately even before another
+  `import-batch` refresh marks `missing_at`.
 - `--allow-legacy-missing` is a separate explicit acceptance for files that were
   already missing before PromptVault could hash them.
 - The JSON/CLI result now reports `strict_source_backed_ready`,
@@ -46,7 +49,8 @@ Verification:
 - PASS: `cargo test --lib vault_audit --quiet`.
 - PASS: `cargo test --lib import_batch_marks_missing_stored_paths --quiet`.
 - PASS: `cargo test --bin promptvault-cli bridge_ --quiet`.
-- PASS: real strict and delete-mode permanent-vault audits.
+- PASS: live-stat deletion test inside `cargo test --lib vault_audit --quiet`.
+- PASS: real delete-mode permanent-vault audit after live-stat hardening.
 - PASS: `npm run check`.
 - PASS: `npm run qa:browser-bridge`.
 

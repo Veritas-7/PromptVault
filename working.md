@@ -6,6 +6,60 @@ Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019eb503-f8ed-7df2-8275-7da158b188eb`
 
+## Resume Snapshot - 2026-06-18 18:42 KST
+
+Current Active Work:
+
+- Added explicit deletion-mode semantics to `vault-audit` without weakening the
+  default strict gate.
+- Default `vault-audit --json` still requires live source-file presence and
+  reports `deletion_ready=false` when any source file is missing.
+- `vault-audit --allow-source-file-deletion --json` now accepts only missing
+  files that already have sealed `ok` byte/hash ledger rows.
+- `--allow-legacy-missing` is a separate explicit acceptance for files that were
+  already missing before PromptVault could hash them.
+- The JSON/CLI result now reports `strict_source_backed_ready`,
+  `strict_blockers`, and missing-file splits:
+  `file_state_ledger_backed_missing_count`,
+  `file_state_legacy_missing_count`, and
+  `file_state_unsealed_missing_count`.
+
+Current Permanent Vault Evidence:
+
+- Strict audit:
+  `deletion_ready=false`, `strict_source_backed_ready=false`.
+- Delete-mode audit:
+  `cargo run --quiet --bin promptvault-cli -- vault-audit --allow-source-file-deletion --allow-legacy-missing --json`
+  reports `deletion_ready=true`, `strict_source_backed_ready=false`, and
+  `blockers=[]`.
+- Stored prompts: `105673`.
+- SQLite size: `452M` at `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+- File-state rows: `41452` total, `41040` ok, `0` error, `412` missing.
+- Missing split: `0` ledger-backed missing, `412` legacy missing, `0` unsealed
+  missing.
+- Known warning: `107` stored prompt rows still use `unknown-date`; those remain
+  searchable but are incomplete for day-level review.
+
+Verification:
+
+- PASS: `cargo fmt --check`.
+- PASS: `cargo test --lib vault_audit --quiet`.
+- PASS: `cargo test --lib import_batch_marks_missing_stored_paths --quiet`.
+- PASS: `cargo test --bin promptvault-cli bridge_ --quiet`.
+- PASS: real strict and delete-mode permanent-vault audits.
+- PASS: `npm run check`.
+- PASS: `npm run qa:browser-bridge`.
+
+Known Exclusions / Operator Boundary:
+
+- PromptVault still does not delete originals automatically.
+- The existing 412 Claude source files were already missing before ledger
+  refresh, so their prompt rows are preserved but cannot be independently
+  rehashed. Delete-mode readiness requires the operator to explicitly accept
+  that legacy condition with `--allow-legacy-missing`.
+- For any currently present source file, future deletion is auditable only after
+  it has a sealed `ok` byte/hash row in `source_file_states`.
+
 ## Resume Snapshot - 2026-06-18 18:10 KST
 
 Long-Term Goal:

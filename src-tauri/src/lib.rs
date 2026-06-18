@@ -1599,10 +1599,15 @@ pub struct VaultAuditSource {
     pub file_state_ok_files: usize,
     pub file_state_error_files: usize,
     pub file_state_missing_files: usize,
+    pub file_state_ledger_backed_missing_files: usize,
+    pub file_state_legacy_missing_files: usize,
+    pub file_state_unsealed_missing_files: usize,
     pub file_state_prompt_count: usize,
     pub file_state_byte_count: u64,
     pub file_state_status_counts: Vec<FrequencyItem>,
+    pub strict_source_backed_ready: bool,
     pub deletion_ready: bool,
+    pub strict_blockers: Vec<String>,
     pub blockers: Vec<String>,
     pub warnings: Vec<String>,
 }
@@ -1613,6 +1618,9 @@ pub struct VaultAuditResult {
     pub database_path: String,
     pub database_integrity_ok: bool,
     pub integrity_check: Vec<String>,
+    pub allow_source_file_deletion: bool,
+    pub allow_legacy_missing: bool,
+    pub strict_source_backed_ready: bool,
     pub deletion_ready: bool,
     pub total_prompts: usize,
     pub source_count: usize,
@@ -1627,7 +1635,11 @@ pub struct VaultAuditResult {
     pub file_state_ok_count: usize,
     pub file_state_error_count: usize,
     pub file_state_missing_count: usize,
+    pub file_state_ledger_backed_missing_count: usize,
+    pub file_state_legacy_missing_count: usize,
+    pub file_state_unsealed_missing_count: usize,
     pub sources: Vec<VaultAuditSource>,
+    pub strict_blockers: Vec<String>,
     pub blockers: Vec<String>,
     pub warnings: Vec<String>,
 }
@@ -1673,6 +1685,8 @@ pub struct ImportEventsOptions {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct VaultAuditOptions {
     pub database_path: Option<String>,
+    pub allow_source_file_deletion: Option<bool>,
+    pub allow_legacy_missing: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -4692,6 +4706,9 @@ struct VaultAuditFileAggregate {
     ok_files: usize,
     error_files: usize,
     missing_files: usize,
+    ledger_backed_missing_files: usize,
+    legacy_missing_files: usize,
+    unsealed_missing_files: usize,
     prompt_count: usize,
     byte_count: u64,
     status_counts: Vec<FrequencyItem>,
@@ -4711,6 +4728,8 @@ pub fn run_vault_audit(
         return Err("vault-audit database path requires a non-empty value".into());
     }
     let generated_at = Utc::now().to_rfc3339();
+    let allow_source_file_deletion = options.allow_source_file_deletion.unwrap_or(false);
+    let allow_legacy_missing = options.allow_legacy_missing.unwrap_or(false);
     let database_path = options
         .database_path
         .as_deref()
@@ -4740,20 +4759,31 @@ pub fn run_vault_audit(
     let seeds =
         build_vault_audit_source_seeds(&import_states, &file_aggregates, &prompt_aggregates);
     let mut blockers = Vec::new();
+    let mut strict_blockers = Vec::new();
     let mut warnings = Vec::new();
     if !database_integrity_ok {
-        blockers.push(format!(
-            "SQLite integrity_check failed: {}",
-            integrity_check.join("; ")
-        ));
+        push_audit_blocker(
+            &mut blockers,
+            &mut strict_blockers,
+            format!(
+                "SQLite integrity_check failed: {}",
+                integrity_check.join("; ")
+            ),
+        );
     }
     if total_prompts == 0 {
-        blockers.push("No stored prompts are present in the vault database.".to_string());
+        push_audit_blocker(
+            &mut blockers,
+            &mut strict_blockers,
+            "No stored prompts are present in the vault database.".to_string(),
+        );
     }
     if empty_text_prompt_count > 0 {
-        blockers.push(format!(
-            "{empty_text_prompt_count} stored prompt rows have empty text."
-        ));
+        push_audit_blocker(
+            &mut blockers,
+            &mut strict_blockers,
+            format!("{empty_text_prompt_count} stored prompt rows have empty text."),
+        );
     }
     if unknown_date_prompt_count > 0 {
         warnings.push(format!(
@@ -4766,7 +4796,17 @@ pub fn run_vault_audit(
         let import_state = import_by_id.get(&seed.source_id);
         let file_state = file_aggregates.get(&seed.source_id);
         let prompt_state = prompt_aggregates.get(&seed.source_label);
-        let source = build_vault_audit_source(seed, import_state, file_state, prompt_state);
+        let source = build_vault_audit_source(
+            seed,
+            import_state,
+            file_state,
+            prompt_state,
+            allow_source_file_deletion,
+            allow_legacy_missing,
+        );
+        for blocker in &source.strict_blockers {
+            strict_blockers.push(format!("{}: {blocker}", source.source_label));
+        }
         for blocker in &source.blockers {
             blockers.push(format!("{}: {blocker}", source.source_label));
         }
@@ -4797,12 +4837,27 @@ pub fn run_vault_audit(
         .values()
         .map(|state| state.missing_files)
         .sum();
+    let file_state_ledger_backed_missing_count = file_aggregates
+        .values()
+        .map(|state| state.ledger_backed_missing_files)
+        .sum();
+    let file_state_legacy_missing_count = file_aggregates
+        .values()
+        .map(|state| state.legacy_missing_files)
+        .sum();
+    let file_state_unsealed_missing_count = file_aggregates
+        .values()
+        .map(|state| state.unsealed_missing_files)
+        .sum();
 
     Ok(VaultAuditResult {
         generated_at,
         database_path: database_path.display().to_string(),
         database_integrity_ok,
         integrity_check,
+        allow_source_file_deletion,
+        allow_legacy_missing,
+        strict_source_backed_ready: strict_blockers.is_empty(),
         deletion_ready: blockers.is_empty(),
         total_prompts,
         source_count,
@@ -4817,7 +4872,11 @@ pub fn run_vault_audit(
         file_state_ok_count,
         file_state_error_count,
         file_state_missing_count,
+        file_state_ledger_backed_missing_count,
+        file_state_legacy_missing_count,
+        file_state_unsealed_missing_count,
         sources,
+        strict_blockers,
         blockers,
         warnings,
     })
@@ -4910,6 +4969,33 @@ fn read_vault_audit_file_aggregates(
             SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END) AS ok_files,
             SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_files,
             SUM(CASE WHEN missing_at IS NOT NULL THEN 1 ELSE 0 END) AS missing_files,
+            SUM(CASE
+                WHEN missing_at IS NOT NULL
+                    AND status = 'ok'
+                    AND byte_count > 0
+                    AND TRIM(content_sha256) <> ''
+                THEN 1 ELSE 0 END) AS ledger_backed_missing_files,
+            SUM(CASE
+                WHEN missing_at IS NOT NULL
+                    AND status = 'missing'
+                    AND byte_count = 0
+                    AND content_sha256 = ''
+                    AND error = 'source file missing before file-state ledger refresh'
+                THEN 1 ELSE 0 END) AS legacy_missing_files,
+            SUM(CASE
+                WHEN missing_at IS NOT NULL
+                    AND NOT (
+                        status = 'ok'
+                        AND byte_count > 0
+                        AND TRIM(content_sha256) <> ''
+                    )
+                    AND NOT (
+                        status = 'missing'
+                        AND byte_count = 0
+                        AND content_sha256 = ''
+                        AND error = 'source file missing before file-state ledger refresh'
+                    )
+                THEN 1 ELSE 0 END) AS unsealed_missing_files,
             SUM(prompt_count) AS prompt_count,
             SUM(byte_count) AS byte_count
          FROM source_file_states
@@ -4925,8 +5011,11 @@ fn read_vault_audit_file_aggregates(
                     ok_files: row.get::<_, i64>(3)? as usize,
                     error_files: row.get::<_, i64>(4)? as usize,
                     missing_files: row.get::<_, i64>(5)? as usize,
-                    prompt_count: row.get::<_, i64>(6)? as usize,
-                    byte_count: row.get::<_, i64>(7)? as u64,
+                    ledger_backed_missing_files: row.get::<_, i64>(6)? as usize,
+                    legacy_missing_files: row.get::<_, i64>(7)? as usize,
+                    unsealed_missing_files: row.get::<_, i64>(8)? as usize,
+                    prompt_count: row.get::<_, i64>(9)? as usize,
+                    byte_count: row.get::<_, i64>(10)? as u64,
                     status_counts: Vec::new(),
                 },
             ))
@@ -5033,11 +5122,22 @@ fn build_vault_audit_source_seeds(
     seeds
 }
 
+fn push_audit_blocker(
+    blockers: &mut Vec<String>,
+    strict_blockers: &mut Vec<String>,
+    message: String,
+) {
+    blockers.push(message.clone());
+    strict_blockers.push(message);
+}
+
 fn build_vault_audit_source(
     seed: VaultAuditSourceSeed,
     import_state: Option<&ImportState>,
     file_state: Option<&VaultAuditFileAggregate>,
     prompt_state: Option<&VaultAuditPromptAggregate>,
+    allow_source_file_deletion: bool,
+    allow_legacy_missing: bool,
 ) -> VaultAuditSource {
     let stored_prompt_count = prompt_state
         .map(|state| state.stored_prompt_count)
@@ -5058,6 +5158,15 @@ fn build_vault_audit_source(
     let file_state_ok_files = file_state.map(|state| state.ok_files).unwrap_or(0);
     let file_state_error_files = file_state.map(|state| state.error_files).unwrap_or(0);
     let file_state_missing_files = file_state.map(|state| state.missing_files).unwrap_or(0);
+    let file_state_ledger_backed_missing_files = file_state
+        .map(|state| state.ledger_backed_missing_files)
+        .unwrap_or(0);
+    let file_state_legacy_missing_files = file_state
+        .map(|state| state.legacy_missing_files)
+        .unwrap_or(0);
+    let file_state_unsealed_missing_files = file_state
+        .map(|state| state.unsealed_missing_files)
+        .unwrap_or(0);
     let file_state_prompt_count = file_state.map(|state| state.prompt_count).unwrap_or(0);
     let file_state_byte_count = file_state.map(|state| state.byte_count).unwrap_or(0);
     let file_state_status_counts = file_state
@@ -5065,46 +5174,97 @@ fn build_vault_audit_source(
         .unwrap_or_default();
 
     let mut blockers = Vec::new();
+    let mut strict_blockers = Vec::new();
     let mut warnings = Vec::new();
     if stored_prompt_count > 0 && import_state.is_none() {
-        blockers.push(
+        push_audit_blocker(
+            &mut blockers,
+            &mut strict_blockers,
             "stored prompts exist but the source has no import_states cursor row".to_string(),
         );
     }
     if import_state.is_some() && !import_completed {
-        blockers.push(format!(
-            "import is incomplete: processed {import_processed_files} of {import_total_files} files"
-        ));
+        push_audit_blocker(
+            &mut blockers,
+            &mut strict_blockers,
+            format!(
+                "import is incomplete: processed {import_processed_files} of {import_total_files} files"
+            ),
+        );
     }
     if import_total_files > 0 && file_state_total_files == 0 {
-        blockers.push(
+        push_audit_blocker(
+            &mut blockers,
+            &mut strict_blockers,
             "source has imported files but no source_file_states hash ledger rows".to_string(),
         );
     }
     if import_total_files > 0 && file_state_total_files < import_total_files {
-        blockers.push(format!(
-            "source_file_states covers {file_state_total_files} of {import_total_files} imported files"
-        ));
+        push_audit_blocker(
+            &mut blockers,
+            &mut strict_blockers,
+            format!(
+                "source_file_states covers {file_state_total_files} of {import_total_files} imported files"
+            ),
+        );
     }
     if stored_source_path_count > 0 && file_state_total_files < stored_source_path_count {
-        blockers.push(format!(
-            "stored prompts reference {stored_source_path_count} source paths but the file-state ledger has {file_state_total_files} files"
-        ));
+        push_audit_blocker(
+            &mut blockers,
+            &mut strict_blockers,
+            format!(
+                "stored prompts reference {stored_source_path_count} source paths but the file-state ledger has {file_state_total_files} files"
+            ),
+        );
     }
     if file_state_error_files > 0 {
-        blockers.push(format!(
-            "{file_state_error_files} source files have parser/hash errors"
-        ));
+        push_audit_blocker(
+            &mut blockers,
+            &mut strict_blockers,
+            format!("{file_state_error_files} source files have parser/hash errors"),
+        );
     }
     if file_state_missing_files > 0 {
-        blockers.push(format!(
-            "{file_state_missing_files} source files are marked missing from the current filesystem"
-        ));
+        let strict_missing_blocker =
+            format!("{file_state_missing_files} source files are marked missing from the current filesystem");
+        strict_blockers.push(strict_missing_blocker.clone());
+        if !allow_source_file_deletion {
+            blockers.push(strict_missing_blocker);
+        } else {
+            if file_state_ledger_backed_missing_files > 0 {
+                warnings.push(format!(
+                    "{file_state_ledger_backed_missing_files} missing source files have sealed ok byte/hash ledger rows and are accepted by deletion mode"
+                ));
+            }
+            if file_state_legacy_missing_files > 0 {
+                let legacy_message = format!(
+                    "{file_state_legacy_missing_files} source files were already missing before the file-state ledger refresh and cannot be rehashed"
+                );
+                if allow_legacy_missing {
+                    warnings.push(format!(
+                        "{legacy_message}; accepted by allow_legacy_missing"
+                    ));
+                } else {
+                    blockers.push(format!(
+                        "{legacy_message}; restore from backup or pass allow_legacy_missing only after accepting those already-lost originals"
+                    ));
+                }
+            }
+            if file_state_unsealed_missing_files > 0 {
+                blockers.push(format!(
+                    "{file_state_unsealed_missing_files} missing source files do not have deletion-safe hash ledgers"
+                ));
+            }
+        }
     }
     if import_total_files > 0 && file_state_ok_files < import_total_files {
-        blockers.push(format!(
-            "only {file_state_ok_files} of {import_total_files} source files have ok file-state rows"
-        ));
+        push_audit_blocker(
+            &mut blockers,
+            &mut strict_blockers,
+            format!(
+                "only {file_state_ok_files} of {import_total_files} source files have ok file-state rows"
+            ),
+        );
     }
     if unknown_date_prompt_count > 0 {
         warnings.push(format!(
@@ -5133,10 +5293,15 @@ fn build_vault_audit_source(
         file_state_ok_files,
         file_state_error_files,
         file_state_missing_files,
+        file_state_ledger_backed_missing_files,
+        file_state_legacy_missing_files,
+        file_state_unsealed_missing_files,
         file_state_prompt_count,
         file_state_byte_count,
         file_state_status_counts,
+        strict_source_backed_ready: strict_blockers.is_empty(),
         deletion_ready: blockers.is_empty(),
+        strict_blockers,
         blockers,
         warnings,
     }
@@ -23133,11 +23298,17 @@ mod tests {
             .expect("import audit fixture");
         let audit = run_vault_audit(VaultAuditOptions {
             database_path: Some(db_path.display().to_string()),
+            ..Default::default()
         })
         .expect("audit vault");
 
         assert!(audit.database_integrity_ok);
         assert!(audit.deletion_ready, "{:?}", audit.blockers);
+        assert!(
+            audit.strict_source_backed_ready,
+            "{:?}",
+            audit.strict_blockers
+        );
         assert_eq!(audit.total_prompts, 1);
         assert_eq!(audit.file_state_total_count, 1);
         assert_eq!(audit.file_state_ok_count, 1);
@@ -23146,6 +23317,70 @@ mod tests {
             .sources
             .iter()
             .any(|source| source.source_id == "test-codex" && source.deletion_ready));
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn vault_audit_accepts_ledger_backed_missing_files_in_deletion_mode() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-vault-audit-sealed-missing-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        let source_path = root.join("001.jsonl");
+        std::fs::write(
+            &source_path,
+            r#"{"type":"response_item","timestamp":"2026-06-18T01:02:03Z","payload":{"role":"user","content":[{"text":"Seal this prompt before deleting the original source file."}]}}"#,
+        )
+        .expect("write prompt file");
+        let db_path = root.join("promptvault.sqlite");
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        run_import_batch_for_source(&db_path, source.clone(), 10, true, Some(10))
+            .expect("import audit fixture");
+        std::fs::remove_file(&source_path).expect("remove sealed source file");
+        run_import_batch_for_source(&db_path, source, 10, false, Some(10))
+            .expect("mark sealed source file missing");
+
+        let strict_audit = run_vault_audit(VaultAuditOptions {
+            database_path: Some(db_path.display().to_string()),
+            ..Default::default()
+        })
+        .expect("strict audit vault");
+        assert!(!strict_audit.deletion_ready);
+        assert!(!strict_audit.strict_source_backed_ready);
+        assert_eq!(strict_audit.file_state_missing_count, 1);
+        assert_eq!(strict_audit.file_state_ledger_backed_missing_count, 1);
+        assert_eq!(strict_audit.file_state_legacy_missing_count, 0);
+        assert_eq!(strict_audit.file_state_unsealed_missing_count, 0);
+
+        let deletion_audit = run_vault_audit(VaultAuditOptions {
+            database_path: Some(db_path.display().to_string()),
+            allow_source_file_deletion: Some(true),
+            ..Default::default()
+        })
+        .expect("deletion-mode audit vault");
+
+        assert!(
+            deletion_audit.deletion_ready,
+            "{:?}",
+            deletion_audit.blockers
+        );
+        assert!(!deletion_audit.strict_source_backed_ready);
+        assert!(deletion_audit.blockers.is_empty());
+        assert!(deletion_audit
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("sealed ok byte/hash ledger rows")));
 
         std::fs::remove_dir_all(root).expect("remove temp root");
     }
@@ -23181,6 +23416,7 @@ mod tests {
 
         let audit = run_vault_audit(VaultAuditOptions {
             database_path: Some(db_path.display().to_string()),
+            ..Default::default()
         })
         .expect("audit vault");
 
@@ -23246,6 +23482,7 @@ mod tests {
             .expect("refresh import after missing source path");
         let audit = run_vault_audit(VaultAuditOptions {
             database_path: Some(db_path.display().to_string()),
+            ..Default::default()
         })
         .expect("audit refreshed missing path");
         let source = audit
@@ -23255,12 +23492,40 @@ mod tests {
             .expect("audit source row");
 
         assert!(!audit.deletion_ready);
+        assert!(!audit.strict_source_backed_ready);
         assert_eq!(source.file_state_missing_files, 1);
+        assert_eq!(source.file_state_ledger_backed_missing_files, 0);
+        assert_eq!(source.file_state_legacy_missing_files, 1);
+        assert_eq!(source.file_state_unsealed_missing_files, 0);
         assert_eq!(source.file_state_error_files, 0);
         assert!(source
             .blockers
             .iter()
             .any(|blocker| blocker.contains("marked missing")));
+
+        let deletion_without_legacy = run_vault_audit(VaultAuditOptions {
+            database_path: Some(db_path.display().to_string()),
+            allow_source_file_deletion: Some(true),
+            ..Default::default()
+        })
+        .expect("audit refreshed missing path without legacy acceptance");
+        assert!(!deletion_without_legacy.deletion_ready);
+        assert!(deletion_without_legacy.blockers.iter().any(|blocker| {
+            blocker.contains("already missing before the file-state ledger refresh")
+        }));
+
+        let deletion_with_legacy = run_vault_audit(VaultAuditOptions {
+            database_path: Some(db_path.display().to_string()),
+            allow_source_file_deletion: Some(true),
+            allow_legacy_missing: Some(true),
+        })
+        .expect("audit refreshed missing path with legacy acceptance");
+        assert!(deletion_with_legacy.deletion_ready);
+        assert!(!deletion_with_legacy.strict_source_backed_ready);
+        assert!(deletion_with_legacy
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("allow_legacy_missing")));
 
         std::fs::remove_dir_all(root).expect("remove temp root");
     }

@@ -241,6 +241,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         "vault-audit" => {
             let json = take_flag(&mut args, "--json");
+            let allow_source_file_deletion = take_flag(&mut args, "--allow-source-file-deletion");
+            let allow_legacy_missing = take_flag(&mut args, "--allow-legacy-missing");
             let mut database_path = None;
             let mut iter = args.into_iter();
             while let Some(arg) = iter.next() {
@@ -251,7 +253,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     other => return Err(format!("unknown vault-audit argument: {other}").into()),
                 }
             }
-            let result = run_vault_audit(VaultAuditOptions { database_path })?;
+            let result = run_vault_audit(VaultAuditOptions {
+                database_path,
+                allow_source_file_deletion: Some(allow_source_file_deletion),
+                allow_legacy_missing: Some(allow_legacy_missing),
+            })?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
                 return Ok(());
@@ -259,6 +265,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("PromptVault vault audit");
             println!("database: {}", result.database_path);
             println!("deletion_ready: {}", result.deletion_ready);
+            println!(
+                "strict_source_backed_ready: {}",
+                result.strict_source_backed_ready
+            );
+            println!(
+                "allow_source_file_deletion: {}",
+                result.allow_source_file_deletion
+            );
+            println!("allow_legacy_missing: {}", result.allow_legacy_missing);
             println!("database_integrity_ok: {}", result.database_integrity_ok);
             println!("prompts: {}", result.total_prompts);
             println!("sources: {}", result.source_count);
@@ -271,12 +286,21 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 result.completed_import_source_count, result.import_source_count
             );
             println!(
-                "file_states: {} ok / {} total, errors {}, missing {}",
+                "file_states: {} ok / {} total, errors {}, missing {} (sealed {}, legacy {}, unsealed {})",
                 result.file_state_ok_count,
                 result.file_state_total_count,
                 result.file_state_error_count,
-                result.file_state_missing_count
+                result.file_state_missing_count,
+                result.file_state_ledger_backed_missing_count,
+                result.file_state_legacy_missing_count,
+                result.file_state_unsealed_missing_count
             );
+            if !result.strict_blockers.is_empty() {
+                println!("strict_blockers:");
+                for blocker in &result.strict_blockers {
+                    println!("- {blocker}");
+                }
+            }
             if !result.blockers.is_empty() {
                 println!("blockers:");
                 for blocker in &result.blockers {
@@ -291,9 +315,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             for source in &result.sources {
                 println!(
-                    "{}\tready={}\tstored={}\tpaths={}\timport={}/{}\tfiles_ok={}/{}\terrors={}\tmissing={}",
+                    "{}\tready={}\tstrict={}\tstored={}\tpaths={}\timport={}/{}\tfiles_ok={}/{}\terrors={}\tmissing={}\tsealed_missing={}\tlegacy_missing={}\tunsealed_missing={}",
                     source.source_id,
                     source.deletion_ready,
+                    source.strict_source_backed_ready,
                     source.stored_prompt_count,
                     source.stored_source_path_count,
                     source.import_processed_files,
@@ -301,7 +326,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     source.file_state_ok_files,
                     source.file_state_total_files,
                     source.file_state_error_files,
-                    source.file_state_missing_files
+                    source.file_state_missing_files,
+                    source.file_state_ledger_backed_missing_files,
+                    source.file_state_legacy_missing_files,
+                    source.file_state_unsealed_missing_files
                 );
             }
         }
@@ -3441,7 +3469,7 @@ fn help_text() -> String {
         "  sources [--json]\n",
         "  plan [--source ID[,ID...]] [--json]\n",
         "  import-batch --source ID [--files N>0] [--reset] [--json]\n",
-        "  vault-audit [--database PATH] [--json]\n",
+        "  vault-audit [--database PATH] [--allow-source-file-deletion] [--allow-legacy-missing] [--json]\n",
         "  scan [--source ID[,ID...]] [--limit N>0] [--source-limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc | --weakest-first] [--include-prompts] [--include-markdown] [--no-export] [--no-persist] [--json]\n",
         "  improve [--json] [--local] --prompt TEXT\n",
         "  improve [--json] [--local] < prompt.txt\n",
@@ -3481,7 +3509,7 @@ fn help_text() -> String {
         "Rules:\n",
         "  plan inventories matching source files without reading prompt bodies.\n",
         "  import-batch persists one resumable source slice and updates its DB cursor.\n",
-        "  vault-audit is the pre-delete gate: it reports deletion_ready=false unless SQLite integrity, completed import cursors, per-file source_file_states hash ledgers, and source-path coverage all pass.\n",
+        "  vault-audit is the pre-delete gate: strict mode reports deletion_ready=false unless SQLite integrity, completed import cursors, per-file source_file_states hash ledgers, source-path coverage, and live source-file presence all pass. --allow-source-file-deletion accepts already-deleted files only when sealed ok byte/hash ledger rows exist; --allow-legacy-missing must be explicit for files that were already gone before ledger refresh.\n",
         "  --source-limit caps prompts read from each selected source while --limit still caps the full scan.\n",
         "  --no-persist keeps scan results out of the PromptVault database.\n",
         "  work-report reads project progress logs and groups slice work by date and project.\n",
@@ -5119,6 +5147,10 @@ mod tests {
         assert!(help.contains("plan inventories matching source files"));
         assert!(help.contains("import-batch --source ID [--files N>0]"));
         assert!(help.contains("import-batch persists one resumable source slice"));
+        assert!(help.contains(
+            "vault-audit [--database PATH] [--allow-source-file-deletion] [--allow-legacy-missing] [--json]"
+        ));
+        assert!(help.contains("--allow-source-file-deletion accepts already-deleted files"));
         assert!(help.contains(
             "work-report [--limit N>0] [--session-limit N>0|--full-session-index] [--database PATH] [--refresh-session-index] [--json]"
         ));

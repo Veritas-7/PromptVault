@@ -9,7 +9,7 @@ cargo run --bin promptvault-cli -- sources
 cargo run --bin promptvault-cli -- sources --json
 cargo run --bin promptvault-cli -- plan [--source ID[,ID...]] --json
 cargo run --bin promptvault-cli -- import-batch --source ID [--files N>0] [--reset] --json
-cargo run --bin promptvault-cli -- vault-audit [--database PATH] --json
+cargo run --bin promptvault-cli -- vault-audit [--database PATH] [--allow-source-file-deletion] [--allow-legacy-missing] --json
 cargo run --bin promptvault-cli -- scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export]
 cargo run --bin promptvault-cli -- scan [--source ID[,ID...]] [--limit N>0] [--output PATH] [--preview-limit N>=0] [--preview-sort latest|quality-asc|quality-desc] [--weakest-first] [--include-prompts] [--include-markdown] [--no-export] --json
 cargo run --bin promptvault-cli -- improve [--local] --prompt "TEXT"
@@ -44,7 +44,9 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `import-batch --source ID` reads the next resumable file slice for one source, persists prompts, stores that source's cursor in SQLite `import_states`, stores per-file byte/mtime/hash/status in `source_file_states`, and appends a persistent activity row to `import_events`.
 - After a source has completed, `import-batch` still detects new, changed, and previously errored files without reparsing every file; changed files reconcile stale prompt rows for that file.
 - `import-batch --reset` restarts the cursor for that source before importing the requested slice.
-- `vault-audit --json` is the pre-delete gate for raw source logs. It prints no prompt bodies and reports `deletion_ready=false` unless SQLite integrity, completed import cursors, source-path coverage, and per-file `source_file_states` hash/status ledger checks pass.
+- `vault-audit --json` is the strict pre-delete gate for raw source logs. It prints no prompt bodies and reports `deletion_ready=false` unless SQLite integrity, completed import cursors, source-path coverage, per-file `source_file_states` hash/status ledger checks, and live source-file presence pass.
+- `vault-audit --allow-source-file-deletion --json` is the post-delete/archive verification mode. It accepts missing files only when they still have sealed `ok` byte/hash ledger rows and keeps `strict_source_backed_ready=false` to show live originals are gone.
+- `--allow-legacy-missing` is separate explicit acceptance for files that were already missing before PromptVault could hash them. Without it, those legacy rows keep `deletion_ready=false`.
 - Treat `deletion_ready=false` as a hard stop before deleting or archiving original source files. PromptVault never deletes originals automatically.
 - `help`, `--help`, and no-argument invocation print help and exit 0.
 - Unknown commands print help plus an error and exit non-zero.
@@ -115,6 +117,7 @@ cargo run --bin promptvault-cli -- sources --json
 cargo run --bin promptvault-cli -- plan --source codex --json
 cargo run --bin promptvault-cli -- import-batch --source antigravity-ide-transcripts --files 1 --reset --json
 cargo run --bin promptvault-cli -- vault-audit --json
+cargo run --bin promptvault-cli -- vault-audit --allow-source-file-deletion --json
 set +e; cargo run --bin promptvault-cli -- sources --bogus; test "$?" -ne 0; set -e
 cargo run --bin promptvault-cli -- scan --limit 100 --output /tmp/promptvault-smoke.md
 cargo run --bin promptvault-cli -- scan --source antigravity-cli-conversation-db --output /tmp/promptvault-antigravity-db.md --json

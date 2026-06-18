@@ -22,7 +22,8 @@ Last updated: 2026-06-18
 | Vault deletion-readiness gate | `vault-audit` checks SQLite integrity, completed import cursors, per-file `source_file_states`, source-path coverage, parser/hash errors, and missing source files without printing prompt bodies | PASS |
 | Browser bridge vault audit | `/api/vault-audit` shares the same DB-backed audit path as CLI/Tauri and is covered by bridge database-lock tests | PASS |
 | Permanent vault file-state backfill | Current source files were reprocessed into `source_file_states`: `41452` rows, `41040` ok, `0` parser/hash errors, `412` missing historical Claude files | PASS_WITH_NOTE |
-| Permanent vault delete readiness | `vault-audit` reports `deletion_ready=false` because 412 historical `Claude Code projects` source files are already missing; the 461 stored prompt rows are unique and were not pruned | BLOCKED_BY_MISSING_ORIGINALS |
+| Vault deletion-mode audit | `vault-audit --allow-source-file-deletion --allow-legacy-missing --json` reports `deletion_ready=true`, `blockers=[]`, and keeps `strict_source_backed_ready=false` so already-missing originals remain visible | PASS_WITH_OPERATOR_ACCEPTANCE |
+| Strict permanent vault delete readiness | Default `vault-audit --json` reports `deletion_ready=false` because 412 historical `Claude Code projects` source files were already missing before ledger refresh; the 461 stored prompt rows are unique and were not pruned | BLOCKED_BY_LEGACY_MISSING_ORIGINALS |
 
 Additional verification commands:
 
@@ -41,6 +42,7 @@ npm run check:release
 git diff --check
 gitleaks dir . --no-banner --redact
 cargo run --quiet --bin promptvault-cli -- vault-audit --json
+cargo run --quiet --bin promptvault-cli -- vault-audit --allow-source-file-deletion --allow-legacy-missing --json
 ```
 
 ## Requirement Map
@@ -50,7 +52,7 @@ cargo run --quiet --bin promptvault-cli -- vault-audit --json
 | Tauri + TypeScript web app | `src/App.tsx`, `src/App.css`, `src-tauri/src/lib.rs`, `src-tauri/tauri.conf.json` | PASS |
 | Source folder under `10_Projects` | `/Users/wj/Ai/System/10_Projects/PromptVault` | PASS |
 | Own source repo boundary | Nested `.git` initialized in PromptVault | PASS |
-| Private GitHub repo 1:1 | `https://github.com/Veritas-7/PromptVault`, verified private with `gh repo view` | PASS |
+| GitHub repo 1:1 | `https://github.com/Veritas-7/PromptVault`, verified public with `gh repo view --json isPrivate,visibility` | PASS |
 | Find Claude Code, Antigravity, Codex session stores | `docs/SOURCE_DISCOVERY.md`; CLI `sources --json` returned all configured roots | PASS |
 | Sources command argument safety | `sources` accepts `--json` and rejects unknown extra args with non-zero exit | PASS |
 | Extract only user prompts | Parsers filter user-role/user-input records; Codex injected `AGENTS.md` and `<environment_context>` blocks are stripped | PASS |

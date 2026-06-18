@@ -217,3 +217,59 @@ cargo run --quiet --bin promptvault-cli -- --help
 - Full-dir secret scans intentionally skip only generated Tauri/Rust `libmuda*.rmeta` metadata under ignored `src-tauri/target/`. Git commit-range scans are still required before GitHub-bound pushes.
 - Antigravity raw `.pb` conversation files are still deferred because no stable local schema has been verified for separating user prompts from model/tool output. SQLite `conversations/*.db` is implemented only for the confirmed `steps.step_type=14` user-input lane.
 - Direct Codex SDK prompt rewriting is documented but not enabled by default, because the official SDK is agent/workflow oriented and prompt rewriting is safer through a narrow chat-completion path.
+
+## 2026-06-18 File-State Import and Hermes Backfill
+
+Observed results:
+
+- File-state import: PASS. `import-batch` now stores per-file byte count,
+  modified time, content SHA-256, prompt count, parse status, parse timestamp,
+  and missing-source marker in `source_file_states`.
+- Changed-file reconciliation: PASS. A completed source reprocesses changed
+  files and removes stale prompt rows for that changed file after successful
+  reparse.
+- Hermes parser coverage: PASS. Hermes CLI/profile/app source specs were added
+  and the parser extracts `role=user` messages from `messages[]`,
+  `request.body.messages[]`, and top-level JSONL rows.
+- Hermes source plan on this machine:
+  - `hermes-cli-sessions`: `7647` files, `1956385647` bytes.
+  - `hermes-profile-sessions`: `2343` files, `204943112` bytes.
+  - `hermes-app-storage`: `0` matching session-like files.
+- Permanent DB Hermes backfill: PASS.
+  - `hermes-cli-sessions`: `7647 / 7647`, stored `11512` prompts.
+  - `hermes-profile-sessions`: `2343 / 2343`, stored `2167` prompts.
+  - `hermes-app-storage`: `0 / 0`, completed empty.
+  - All Hermes CLI/profile `source_file_states` rows were `ok`; no missing rows.
+- Permanent DB after Hermes backfill:
+  - Total prompts: `105451`.
+  - SQLite path: `/Users/wj/Documents/PromptVault/promptvault.sqlite`.
+  - SQLite size: `436M` by `ls -lh`, `437M` by `du -h`; WAL `0B`.
+- Import-batch performance hardening: PASS. Process samples found expensive
+  import-time phrase stats/redaction and risk regex scanning on long Hermes
+  prompt bodies; `import-batch` now uses lightweight stats and fast risk
+  heuristics while preserving precise regex redaction for display/export paths.
+
+Verification:
+
+- `cargo fmt --check`: PASS.
+- `cargo test --lib import_batch`: PASS, 4 tests.
+- `cargo test --lib hermes`: PASS, 1 test.
+- `cargo test --lib risk`: PASS, 4 tests.
+- `cargo test --lib stored_prompt_facets`: PASS, 4 tests.
+- `cargo test --lib project_progress_work_items_safe_date_titles_allow_authorization_and_slug_headings`: PASS.
+- `npm run qa:browser-bridge`: PASS.
+- `npm run check`: PASS, including UI tests, build, Rust tests, doc-tests, and
+  clippy `-D warnings`.
+- `git diff --check`: PASS.
+- `gitleaks dir . --no-banner --redact`: PASS, scanned about `939 MB`, no leaks.
+
+Residual risks:
+
+- The permanent DB now contains enough Hermes CLI/profile data for local review,
+  but deleting original raw histories should still be treated as an operator
+  retention decision. PromptVault preserves already-vaulted prompt rows when a
+  source file later disappears, marking the file state with `missing_at` instead
+  of deleting stored prompts.
+- Hermes app storage had no matching session-like JSON/JSONL files on this
+  machine. If a future Hermes app version stores conversations in LevelDB or a
+  different binary store, a separate parser will be needed.

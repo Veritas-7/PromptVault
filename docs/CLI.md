@@ -40,7 +40,8 @@ cargo run --bin promptvault-cli -- serve [--addr 127.0.0.1:5174] [--database PAT
 - `sources` accepts only `--json`; unknown extra arguments exit non-zero.
 - `plan` inventories matching source files, byte totals, large-file counts, and newest modified timestamps without reading prompt bodies.
 - `plan --source ID` restricts planning to one source ID from `sources`; repeat it or pass comma-separated IDs for multiple sources.
-- `import-batch --source ID` reads the next resumable file slice for one source, persists prompts, stores that source's cursor in SQLite `import_states`, and appends a persistent activity row to `import_events`.
+- `import-batch --source ID` reads the next resumable file slice for one source, persists prompts, stores that source's cursor in SQLite `import_states`, stores per-file byte/mtime/hash/status in `source_file_states`, and appends a persistent activity row to `import_events`.
+- After a source has completed, `import-batch` still detects new, changed, and previously errored files without reparsing every file; changed files reconcile stale prompt rows for that file.
 - `import-batch --reset` restarts the cursor for that source before importing the requested slice.
 - `help`, `--help`, and no-argument invocation print help and exit 0.
 - Unknown commands print help plus an error and exit non-zero.

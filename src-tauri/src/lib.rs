@@ -1516,6 +1516,21 @@ pub struct ImportState {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone)]
+struct SourceFileImportState {
+    source_id: String,
+    source_label: String,
+    source_path: String,
+    byte_count: u64,
+    modified_ms: u128,
+    content_sha256: String,
+    prompt_count: usize,
+    status: String,
+    error: Option<String>,
+    parsed_at: String,
+    missing_at: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportBatchResult {
     pub generated_at: String,
@@ -1749,6 +1764,7 @@ enum SourceKind {
     ClaudeProjectJsonl,
     ClaudeTranscriptJsonl,
     ClaudeHistoryJsonl,
+    HermesSessionJson,
     AntigravityTranscriptJsonl,
     AntigravityHistoryJsonl,
     AntigravityConversationSqlite,
@@ -4739,19 +4755,50 @@ fn run_import_batch_for_source(
         .sum::<u64>();
 
     let conn = open_promptvault_database(database_path)?;
+    if reset {
+        delete_source_file_import_states(&conn, source.id)?;
+    }
     let previous_state = if reset {
         None
     } else {
         read_import_state(&conn, source.id)?
     };
-    let batch_start_index = previous_state
+    let known_file_states = if reset {
+        HashMap::new()
+    } else {
+        read_source_file_import_states(&conn, source.id)?
+    };
+    let current_paths = candidates
+        .iter()
+        .map(|candidate| candidate.path.display().to_string())
+        .collect::<BTreeSet<_>>();
+    mark_missing_source_file_import_states(&conn, source.id, &current_paths, &generated_at)?;
+
+    let resume_start_index = previous_state
         .as_ref()
         .map(|state| state.next_file_index.min(total_files))
         .unwrap_or(0);
-    let batch_end_index = batch_start_index
-        .saturating_add(file_batch_size)
-        .min(total_files);
-    let batch_candidates = &candidates[batch_start_index..batch_end_index];
+    let due_candidates = candidates
+        .iter()
+        .enumerate()
+        .filter(|(index, candidate)| {
+            reset
+                || *index >= resume_start_index
+                || source_file_needs_import(
+                    candidate,
+                    known_file_states.get(&candidate.path.display().to_string()),
+                )
+        })
+        .collect::<Vec<_>>();
+    let due_count = due_candidates.len();
+    let batch_candidates = due_candidates
+        .into_iter()
+        .take(file_batch_size)
+        .collect::<Vec<_>>();
+    let batch_start_index = batch_candidates
+        .first()
+        .map(|(index, _)| *index)
+        .unwrap_or(resume_start_index.min(total_files));
 
     let mut summary = SourceSummary {
         id: source.id.to_string(),
@@ -4764,15 +4811,59 @@ fn run_import_batch_for_source(
         status: source_plan.status.clone(),
         notes: source_plan.notes.clone(),
     };
-    let mut prompts = collect_from_candidates(
-        &source,
-        &mut summary,
-        batch_candidates,
-        usize::MAX,
-        None,
-        None,
-        0,
-    )?;
+    let mut prompts = Vec::new();
+    let mut seen_keys = HashSet::new();
+    let mut processed_file_states = Vec::new();
+    let mut processed_file_prompt_ids = Vec::new();
+    for (_, candidate) in &batch_candidates {
+        summary.files_seen += 1;
+        let source_path = candidate.path.display().to_string();
+        match parse_source_file(&source, &candidate.path) {
+            Ok(records) => {
+                let mut file_prompt_ids = BTreeSet::new();
+                let prompt_count = records.len();
+                for record in records {
+                    file_prompt_ids.insert(record.id.clone());
+                    let key = (record.source.clone(), record.hash.clone());
+                    if seen_keys.insert(key) {
+                        prompts.push(record);
+                    }
+                }
+                let content_sha256 = hash_source_file(&candidate.path)?;
+                processed_file_prompt_ids.push((source_path.clone(), file_prompt_ids));
+                processed_file_states.push(SourceFileImportState {
+                    source_id: source.id.to_string(),
+                    source_label: source.label.to_string(),
+                    source_path,
+                    byte_count: candidate.byte_count,
+                    modified_ms: candidate.modified_ms,
+                    content_sha256,
+                    prompt_count,
+                    status: "ok".to_string(),
+                    error: None,
+                    parsed_at: generated_at.clone(),
+                    missing_at: None,
+                });
+            }
+            Err(err) => {
+                let error = err.to_string();
+                warnings.push(format!("{} 건너뜀: {error}", candidate.path.display()));
+                processed_file_states.push(SourceFileImportState {
+                    source_id: source.id.to_string(),
+                    source_label: source.label.to_string(),
+                    source_path,
+                    byte_count: candidate.byte_count,
+                    modified_ms: candidate.modified_ms,
+                    content_sha256: String::new(),
+                    prompt_count: 0,
+                    status: "error".to_string(),
+                    error: Some(error),
+                    parsed_at: generated_at.clone(),
+                    missing_at: None,
+                });
+            }
+        }
+    }
     summary.prompts_found = prompts.len();
     summarize_source_quality(&mut summary, &prompts);
     promote_source_notes_to_warning(&source, &mut summary, &mut warnings);
@@ -4783,14 +4874,24 @@ fn run_import_batch_for_source(
     });
     prompts.dedup_by(|a, b| a.hash == b.hash && a.source == b.source);
 
-    let stats = build_stats(&prompts, vec![summary]);
+    let stats = build_import_batch_stats(&prompts, vec![summary]);
     let persistence =
         persist_incremental_scan_result(database_path, &generated_at, &prompts, &stats, &warnings)?;
-    let imported_prompt_count = previous_state
-        .map(|state| state.imported_prompt_count)
-        .unwrap_or(0)
-        .saturating_add(prompts.len());
-    let completed = batch_end_index >= total_files;
+    for (source_path, prompt_ids) in &processed_file_prompt_ids {
+        reconcile_stored_source_file_prompts(&conn, source.label, source_path, prompt_ids)?;
+    }
+    for file_state in &processed_file_states {
+        upsert_source_file_import_state(&conn, file_state)?;
+    }
+    let imported_prompt_count = count_stored_prompts_for_source(&conn, source.label)?;
+    let max_processed_index = batch_candidates
+        .iter()
+        .map(|(index, _)| index.saturating_add(1))
+        .max()
+        .unwrap_or(resume_start_index);
+    let batch_end_index = resume_start_index.max(max_processed_index).min(total_files);
+    let remaining_due_count = due_count.saturating_sub(batch_candidates.len());
+    let completed = batch_end_index >= total_files && remaining_due_count == 0;
     let state = ImportState {
         source_id: source.id.to_string(),
         source_label: source.label.to_string(),
@@ -5422,6 +5523,24 @@ fn source_specs_for_home(home: &Path) -> Vec<SourceSpec> {
             kind: SourceKind::ClaudeHistoryJsonl,
         },
         SourceSpec {
+            id: "hermes-cli-sessions",
+            label: "Hermes CLI sessions",
+            root: home.join(".hermes/sessions"),
+            kind: SourceKind::HermesSessionJson,
+        },
+        SourceSpec {
+            id: "hermes-profile-sessions",
+            label: "Hermes profile sessions",
+            root: home.join(".hermes/profiles"),
+            kind: SourceKind::HermesSessionJson,
+        },
+        SourceSpec {
+            id: "hermes-app-storage",
+            label: "Hermes app storage",
+            root: home.join("Library/Application Support/Hermes"),
+            kind: SourceKind::HermesSessionJson,
+        },
+        SourceSpec {
             id: "antigravity-cli-transcripts",
             label: "Antigravity CLI transcripts",
             root: home.join(".gemini/antigravity-cli/brain"),
@@ -5575,6 +5694,7 @@ fn parse_source_file(
         SourceKind::ClaudeProjectJsonl => parse_claude_project_jsonl(source, file),
         SourceKind::ClaudeTranscriptJsonl => parse_claude_transcript_jsonl(source, file),
         SourceKind::ClaudeHistoryJsonl => parse_claude_history_jsonl(source, file),
+        SourceKind::HermesSessionJson => parse_hermes_session_file(source, file),
         SourceKind::AntigravityTranscriptJsonl => parse_antigravity_transcript_jsonl(source, file),
         SourceKind::AntigravityHistoryJsonl => parse_antigravity_history_jsonl(source, file),
         SourceKind::AntigravityConversationSqlite => {
@@ -5761,6 +5881,29 @@ fn source_file_matches(path: &Path, kind: SourceKind) -> bool {
         | SourceKind::ClaudeTranscriptJsonl
         | SourceKind::ClaudeHistoryJsonl
         | SourceKind::AntigravityHistoryJsonl => path.extension().is_some_and(|ext| ext == "jsonl"),
+        SourceKind::HermesSessionJson => {
+            let extension_matches =
+                path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| {
+                        ext.eq_ignore_ascii_case("json") || ext.eq_ignore_ascii_case("jsonl")
+                    });
+            if !extension_matches {
+                return false;
+            }
+            let file_name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default();
+            let is_session_file = file_name.starts_with("session_")
+                || file_name.starts_with("request_dump_")
+                || file_name.ends_with(".jsonl");
+            let path_text = path.to_string_lossy();
+            is_session_file
+                && !path_text.contains("/backups/")
+                && !path_text.contains("/node_modules/")
+                && !path_text.contains("/.git/")
+        }
         SourceKind::AntigravityTranscriptJsonl => {
             path_str.ends_with("/.system_generated/logs/transcript.jsonl")
                 || path_str.ends_with("/.system_generated/logs/transcript_full.jsonl")
@@ -5800,8 +5943,33 @@ fn source_should_descend(path: &Path, kind: SourceKind) -> bool {
             .file_name()
             .and_then(|name| name.to_str())
             .is_none_or(|name| !is_ignored_project_progress_dir(name)),
+        SourceKind::HermesSessionJson if path.is_dir() => path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_none_or(|name| !is_ignored_hermes_session_dir(name)),
         _ => true,
     }
+}
+
+fn is_ignored_hermes_session_dir(name: &str) -> bool {
+    matches!(
+        name,
+        ".git"
+            | ".pytest_cache"
+            | "backups"
+            | "Cache"
+            | "Code Cache"
+            | "Crashpad"
+            | "DawnGraphiteCache"
+            | "DawnWebGPUCache"
+            | "GPUCache"
+            | "Local Storage"
+            | "Session Storage"
+            | "Shared Dictionary"
+            | "node_modules"
+            | "runtime"
+            | "venv"
+    )
 }
 
 fn is_ignored_project_progress_dir(name: &str) -> bool {
@@ -6077,6 +6245,134 @@ fn parse_claude_history_jsonl(
         push_record(&mut records, source, path, &value, cwd, text);
     }
     Ok(records)
+}
+
+fn parse_hermes_session_file(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    if path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("jsonl"))
+    {
+        return parse_hermes_session_jsonl(source, path);
+    }
+    parse_hermes_session_json(source, path)
+}
+
+fn parse_hermes_session_json(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut text = String::new();
+    File::open(path)?.read_to_string(&mut text)?;
+    let value: Value = serde_json::from_str(&text)?;
+    let mut records = Vec::new();
+    collect_hermes_user_messages(source, path, &value, &mut records);
+    Ok(records)
+}
+
+fn parse_hermes_session_jsonl(
+    source: &SourceSpec,
+    path: &Path,
+) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+    let mut records = Vec::new();
+    for_each_jsonl_line(path, |line| {
+        let value: Value = serde_json::from_str(&line)?;
+        collect_hermes_user_messages(source, path, &value, &mut records);
+        Ok(())
+    })?;
+    Ok(records)
+}
+
+fn collect_hermes_user_messages(
+    source: &SourceSpec,
+    path: &Path,
+    value: &Value,
+    records: &mut Vec<PromptRecord>,
+) {
+    if let Some(messages) = value.get("messages").and_then(Value::as_array) {
+        for message in messages {
+            push_hermes_user_message(source, path, value, message, records);
+        }
+    }
+    if let Some(messages) = value
+        .pointer("/request/body/messages")
+        .and_then(Value::as_array)
+    {
+        for message in messages {
+            push_hermes_user_message(source, path, value, message, records);
+        }
+    }
+    if value.get("role").and_then(Value::as_str) == Some("user") {
+        push_hermes_user_message(source, path, value, value, records);
+    }
+}
+
+fn push_hermes_user_message(
+    source: &SourceSpec,
+    path: &Path,
+    session: &Value,
+    message: &Value,
+    records: &mut Vec<PromptRecord>,
+) {
+    if message.get("role").and_then(Value::as_str) != Some("user") {
+        return;
+    }
+    let text = text_from_value(message.get("content"));
+    let mut metadata = message.clone();
+    if let Some(object) = metadata.as_object_mut() {
+        if let Some(session_id) = session.get("session_id").and_then(Value::as_str) {
+            object.insert(
+                "session_id".to_string(),
+                Value::String(session_id.to_string()),
+            );
+        }
+        if !object.contains_key("timestamp") {
+            if let Some(timestamp) = session
+                .get("timestamp")
+                .or_else(|| session.get("session_start"))
+                .or_else(|| session.get("last_updated"))
+                .and_then(Value::as_str)
+            {
+                object.insert(
+                    "timestamp".to_string(),
+                    Value::String(timestamp.to_string()),
+                );
+            }
+        }
+    }
+    let cwd = hermes_cwd_from_session(session).or_else(|| hermes_profile_from_path(path));
+    push_record(records, source, path, &metadata, cwd, text);
+}
+
+fn hermes_cwd_from_session(session: &Value) -> Option<String> {
+    for pointer in [
+        "/cwd",
+        "/workspace",
+        "/request/body/cwd",
+        "/request/body/workspace",
+        "/metadata/cwd",
+        "/metadata/workspace",
+    ] {
+        if let Some(value) = session.pointer(pointer).and_then(Value::as_str) {
+            if !value.trim().is_empty() {
+                return Some(value.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn hermes_profile_from_path(path: &Path) -> Option<String> {
+    let parts = path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect::<Vec<_>>();
+    parts.windows(2).find_map(|window| {
+        (window[0] == "profiles").then(|| format!("hermes-profile:{}", window[1]))
+    })
 }
 
 fn parse_antigravity_transcript_jsonl(
@@ -10060,7 +10356,9 @@ fn read_project_work_session_evidence_source_search_items(
                 max_lines,
             )
         }
-        SourceKind::GeminiTmpChatJson | SourceKind::ProjectProgressMarkdown => {
+        SourceKind::HermesSessionJson
+        | SourceKind::GeminiTmpChatJson
+        | SourceKind::ProjectProgressMarkdown => {
             Err("work-session-evidence-source-search unsupported source kind".into())
         }
     }
@@ -14355,12 +14653,132 @@ fn count_words(text: &str) -> usize {
 
 fn detect_risks(text: &str) -> Vec<String> {
     let mut flags = Vec::new();
-    for (label, regex) in risk_regexes() {
-        if regex.is_match(text) {
-            flags.push(label.to_string());
+    for (label, _) in risk_regexes() {
+        match *label {
+            "possible_api_key" => {
+                if text_has_possible_api_key_risk(text) {
+                    flags.push(label.to_string());
+                }
+                continue;
+            }
+            "private_key" => {
+                if text.contains("-----BEGIN") && text.contains("PRIVATE KEY") {
+                    flags.push(label.to_string());
+                }
+                continue;
+            }
+            "long_base64_like_token" => {
+                if text_has_long_base64_like_token(text) {
+                    flags.push(label.to_string());
+                }
+                continue;
+            }
+            _ => {}
         }
     }
     flags
+}
+
+fn text_has_possible_api_key_risk(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    if ["ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"]
+        .iter()
+        .any(|needle| lower.contains(needle))
+    {
+        return true;
+    }
+    if lower.contains("-----begin") && lower.contains("private key") {
+        return true;
+    }
+    if ["--user", "--cookie", "set-cookie:"]
+        .iter()
+        .any(|needle| lower.contains(needle))
+    {
+        return true;
+    }
+    if ["bearer ", "basic "]
+        .iter()
+        .any(|needle| auth_scheme_has_token(&lower, needle))
+    {
+        return true;
+    }
+    [
+        "authorization",
+        "cookie",
+        "api_key",
+        "api-key",
+        "api key",
+        "access_key",
+        "access-key",
+        "access token",
+        "refresh token",
+        "secret",
+        "password",
+        "credential",
+        "signature",
+    ]
+    .iter()
+    .any(|key| sensitive_key_has_assignment(&lower, key))
+}
+
+fn sensitive_key_has_assignment(text: &str, key: &str) -> bool {
+    let mut offset = 0usize;
+    while let Some(position) = text[offset..].find(key) {
+        let after_key = offset + position + key.len();
+        let rest = text[after_key..].trim_start_matches([' ', '\t', '"', '\'']);
+        if rest.starts_with(':') || rest.starts_with('=') {
+            return true;
+        }
+        offset = after_key;
+    }
+    false
+}
+
+fn auth_scheme_has_token(text: &str, scheme: &str) -> bool {
+    let mut offset = 0usize;
+    while let Some(position) = text[offset..].find(scheme) {
+        let start = offset + position + scheme.len();
+        let token_len = text[start..]
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '='))
+            .count();
+        if token_len >= 16 {
+            return true;
+        }
+        offset = start;
+    }
+    false
+}
+
+fn text_has_long_base64_like_token(text: &str) -> bool {
+    let mut run_len = 0usize;
+    let mut dotted_parts = [0usize; 3];
+    let mut dotted_part_index = 0usize;
+    for byte in text.bytes().chain(std::iter::once(b' ')) {
+        let token_char = byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-');
+        if token_char {
+            run_len += 1;
+            if dotted_part_index < dotted_parts.len() {
+                dotted_parts[dotted_part_index] += 1;
+            }
+            if run_len >= 48 {
+                return true;
+            }
+            continue;
+        }
+        if byte == b'.' && dotted_part_index < 2 && dotted_parts[dotted_part_index] >= 10 {
+            dotted_part_index += 1;
+            run_len = 0;
+            continue;
+        }
+        if dotted_part_index == 2 && dotted_parts.iter().all(|len| *len >= 10) {
+            return true;
+        }
+        run_len = 0;
+        dotted_parts = [0; 3];
+        dotted_part_index = 0;
+    }
+    false
 }
 
 pub fn redact_sensitive_text(text: &str) -> String {
@@ -14578,6 +14996,40 @@ fn build_stats(prompts: &[PromptRecord], source_summaries: Vec<SourceSummary>) -
         top_words: top_words(prompts, 40),
         top_phrases: top_phrases(prompts, 30),
         repeated_prompts: repeated_prompts(prompts, 20),
+        top_quality_gaps: top_quality_gaps(prompts, 20),
+        prompts_by_date: prompts_by_date(prompts, 40),
+        prompts_by_project: prompts_by_project(prompts, 40),
+        source_summaries,
+    }
+}
+
+fn build_import_batch_stats(
+    prompts: &[PromptRecord],
+    source_summaries: Vec<SourceSummary>,
+) -> ScanStats {
+    let total_words = prompts.iter().map(|prompt| prompt.word_count).sum();
+    let average_words = if prompts.is_empty() {
+        0.0
+    } else {
+        total_words as f64 / prompts.len() as f64
+    };
+
+    ScanStats {
+        total_prompts: prompts.len(),
+        total_files: source_summaries
+            .iter()
+            .map(|source| source.files_seen)
+            .sum(),
+        total_words,
+        average_words,
+        average_quality: average_quality(prompts),
+        weak_prompt_count: prompts
+            .iter()
+            .filter(|prompt| prompt.quality.band == "weak")
+            .count(),
+        top_words: Vec::new(),
+        top_phrases: Vec::new(),
+        repeated_prompts: Vec::new(),
         top_quality_gaps: top_quality_gaps(prompts, 20),
         prompts_by_date: prompts_by_date(prompts, 40),
         prompts_by_project: prompts_by_project(prompts, 40),
@@ -14846,6 +15298,22 @@ fn ensure_promptvault_schema(conn: &Connection) -> Result<(), Box<dyn std::error
             ON import_events(generated_at DESC);
         CREATE INDEX IF NOT EXISTS idx_import_events_source
             ON import_events(source_id, generated_at DESC);
+        CREATE TABLE IF NOT EXISTS source_file_states (
+            source_id TEXT NOT NULL,
+            source_label TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            byte_count INTEGER NOT NULL,
+            modified_ms INTEGER NOT NULL,
+            content_sha256 TEXT NOT NULL,
+            prompt_count INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            error TEXT,
+            parsed_at TEXT NOT NULL,
+            missing_at TEXT,
+            PRIMARY KEY(source_id, source_path)
+        );
+        CREATE INDEX IF NOT EXISTS idx_source_file_states_source
+            ON source_file_states(source_id, status, missing_at);
         CREATE TABLE IF NOT EXISTS prompt_improvements (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             created_at TEXT NOT NULL,
@@ -18103,6 +18571,12 @@ fn refresh_import_metadata_source_labels(
              WHERE source_id = ?2 AND source_label <> ?1",
             rusqlite::params![source.label, source.id],
         )?;
+        conn.execute(
+            "UPDATE source_file_states
+             SET source_label = ?1
+             WHERE source_id = ?2 AND source_label <> ?1",
+            rusqlite::params![source.label, source.id],
+        )?;
     }
     Ok(())
 }
@@ -18140,6 +18614,191 @@ fn upsert_import_state(
         ],
     )?;
     Ok(())
+}
+
+fn read_source_file_import_states(
+    conn: &Connection,
+    source_id: &str,
+) -> Result<HashMap<String, SourceFileImportState>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare(
+        "SELECT source_id, source_label, source_path, byte_count, modified_ms,
+            content_sha256, prompt_count, status, error, parsed_at, missing_at
+         FROM source_file_states
+         WHERE source_id = ?1",
+    )?;
+    let states = stmt
+        .query_map([source_id], |row| {
+            Ok(SourceFileImportState {
+                source_id: row.get(0)?,
+                source_label: row.get(1)?,
+                source_path: row.get(2)?,
+                byte_count: row.get::<_, i64>(3)? as u64,
+                modified_ms: row.get::<_, i64>(4)? as u128,
+                content_sha256: row.get(5)?,
+                prompt_count: row.get::<_, i64>(6)? as usize,
+                status: row.get(7)?,
+                error: row.get(8)?,
+                parsed_at: row.get(9)?,
+                missing_at: row.get(10)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(states
+        .into_iter()
+        .map(|state| (state.source_path.clone(), state))
+        .collect())
+}
+
+fn upsert_source_file_import_state(
+    conn: &Connection,
+    state: &SourceFileImportState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute(
+        "INSERT INTO source_file_states (
+            source_id, source_label, source_path, byte_count, modified_ms,
+            content_sha256, prompt_count, status, error, parsed_at, missing_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+        ON CONFLICT(source_id, source_path) DO UPDATE SET
+            source_label = excluded.source_label,
+            byte_count = excluded.byte_count,
+            modified_ms = excluded.modified_ms,
+            content_sha256 = excluded.content_sha256,
+            prompt_count = excluded.prompt_count,
+            status = excluded.status,
+            error = excluded.error,
+            parsed_at = excluded.parsed_at,
+            missing_at = excluded.missing_at",
+        params![
+            &state.source_id,
+            &state.source_label,
+            &state.source_path,
+            state.byte_count as i64,
+            state.modified_ms.min(i64::MAX as u128) as i64,
+            &state.content_sha256,
+            state.prompt_count as i64,
+            &state.status,
+            state.error.as_deref(),
+            &state.parsed_at,
+            state.missing_at.as_deref(),
+        ],
+    )?;
+    Ok(())
+}
+
+fn delete_source_file_import_states(
+    conn: &Connection,
+    source_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute(
+        "DELETE FROM source_file_states WHERE source_id = ?1",
+        [source_id],
+    )?;
+    Ok(())
+}
+
+fn mark_missing_source_file_import_states(
+    conn: &Connection,
+    source_id: &str,
+    current_paths: &BTreeSet<String>,
+    missing_at: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let states = read_source_file_import_states(conn, source_id)?;
+    for source_path in states.keys().filter(|path| !current_paths.contains(*path)) {
+        conn.execute(
+            "UPDATE source_file_states
+             SET missing_at = ?1
+             WHERE source_id = ?2 AND source_path = ?3 AND missing_at IS NULL",
+            params![missing_at, source_id, source_path],
+        )?;
+    }
+    Ok(())
+}
+
+fn source_file_needs_import(
+    candidate: &SourceFileCandidate,
+    state: Option<&SourceFileImportState>,
+) -> bool {
+    let Some(state) = state else {
+        return true;
+    };
+    state.status != "ok"
+        || state.missing_at.is_some()
+        || state.byte_count != candidate.byte_count
+        || state.modified_ms != candidate.modified_ms
+        || state.content_sha256.is_empty()
+}
+
+fn hash_source_file(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let bytes_read = reader.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn reconcile_stored_source_file_prompts(
+    conn: &Connection,
+    source_label: &str,
+    source_path: &str,
+    prompt_ids: &BTreeSet<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if prompt_ids.is_empty() {
+        conn.execute(
+            "DELETE FROM prompts WHERE source = ?1 AND source_path = ?2",
+            params![source_label, source_path],
+        )?;
+        return Ok(());
+    }
+
+    let mut stmt = conn.prepare(
+        "SELECT id FROM prompts
+         WHERE source = ?1 AND source_path = ?2",
+    )?;
+    let existing_ids = stmt
+        .query_map(params![source_label, source_path], |row| {
+            row.get::<_, String>(0)
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let stale_ids = existing_ids
+        .into_iter()
+        .filter(|id| !prompt_ids.contains(id))
+        .collect::<Vec<_>>();
+    for chunk in stale_ids.chunks(SQLITE_DELETE_CHUNK_SIZE) {
+        let placeholders = std::iter::repeat_n("?", chunk.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "DELETE FROM prompts
+             WHERE source = ? AND source_path = ? AND id IN ({placeholders})"
+        );
+        let mut params: Vec<&dyn ToSql> = Vec::with_capacity(chunk.len() + 2);
+        params.push(&source_label);
+        params.push(&source_path);
+        for id in chunk {
+            params.push(id);
+        }
+        conn.execute(&sql, params.as_slice())?;
+    }
+    Ok(())
+}
+
+fn count_stored_prompts_for_source(
+    conn: &Connection,
+    source_label: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let count = conn.query_row(
+        "SELECT COUNT(*) FROM prompts WHERE source = ?1",
+        [source_label],
+        |row| row.get::<_, i64>(0),
+    )?;
+    Ok(count as usize)
 }
 
 fn insert_import_event(
@@ -21443,6 +22102,149 @@ mod tests {
             .expect("read prompt count");
         assert_eq!(next_file_index, 2);
         assert_eq!(stored_prompts, 2);
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn import_batch_reprocesses_modified_completed_file_without_stale_prompts() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-import-modified-file-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        let prompt_path = root.join("001.jsonl");
+        std::fs::write(
+            &prompt_path,
+            r#"{"type":"response_item","payload":{"role":"user","content":[{"text":"Initial prompt should be replaced after source file changes."}]}}"#,
+        )
+        .expect("write initial prompt");
+        let db_path = root.join("promptvault.sqlite");
+        let source = SourceSpec {
+            id: "test-codex",
+            label: "Test Codex",
+            root: root.clone(),
+            kind: SourceKind::CodexJsonl,
+        };
+
+        let first = run_import_batch_for_source(&db_path, source.clone(), 10, true, Some(10))
+            .expect("initial import batch");
+        assert!(first.state.completed);
+        assert_eq!(first.state.imported_prompt_count, 1);
+
+        std::thread::sleep(std::time::Duration::from_millis(25));
+        std::fs::write(
+            &prompt_path,
+            r#"{"type":"response_item","payload":{"role":"user","content":[{"text":"Updated prompt should be the only stored row for this file."}]}}"#,
+        )
+        .expect("write updated prompt");
+
+        let second = run_import_batch_for_source(&db_path, source, 10, false, Some(10))
+            .expect("modified file import batch");
+        assert_eq!(second.batch_start_index, 0);
+        assert_eq!(second.batch_file_count, 1);
+        assert_eq!(second.batch_prompt_count, 1);
+        assert!(second.state.completed);
+        assert_eq!(second.state.imported_prompt_count, 1);
+
+        let conn = Connection::open(&db_path).expect("open import db");
+        let stored_prompts: i64 = conn
+            .query_row("SELECT COUNT(*) FROM prompts", [], |row| row.get(0))
+            .expect("read prompt count");
+        let stored_text: String = conn
+            .query_row("SELECT text FROM prompts", [], |row| row.get(0))
+            .expect("read stored text");
+        assert_eq!(stored_prompts, 1);
+        assert!(stored_text.contains("Updated prompt should be the only stored row"));
+        assert!(!stored_text.contains("Initial prompt should be replaced"));
+        drop(conn);
+
+        std::fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn parse_hermes_session_json_extracts_user_messages_only() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-hermes-session-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(root.join("profiles/default")).expect("create temp root");
+        let session_path = root.join("profiles/default/session_20260618.json");
+        std::fs::write(
+            &session_path,
+            r#"{
+              "session_id":"hermes-session-1",
+              "session_start":"2026-06-18T01:02:03Z",
+              "messages":[
+                {"role":"system","content":"system prompt should not import"},
+                {"role":"user","content":"Hermes CLI user prompt should import."},
+                {"role":"assistant","content":"assistant answer should not import"}
+              ]
+            }"#,
+        )
+        .expect("write hermes session");
+        let request_path = root.join("request_dump_20260618.json");
+        std::fs::write(
+            &request_path,
+            r#"{
+              "session_id":"hermes-request-1",
+              "timestamp":"2026-06-18T02:03:04Z",
+              "request":{"body":{"messages":[
+                {"role":"system","content":"request system should not import"},
+                {"role":"user","content":[{"text":"Hermes app request user prompt should import."}]}
+              ]}}
+            }"#,
+        )
+        .expect("write hermes request dump");
+        let jsonl_path = root.join("session_stream.jsonl");
+        std::fs::write(
+            &jsonl_path,
+            r#"{"role":"user","content":"Hermes JSONL user prompt should import.","session_id":"hermes-jsonl-1","timestamp":"2026-06-18T03:04:05Z"}"#,
+        )
+        .expect("write hermes jsonl");
+        let source = SourceSpec {
+            id: "test-hermes",
+            label: "Test Hermes",
+            root: root.clone(),
+            kind: SourceKind::HermesSessionJson,
+        };
+
+        let mut records = Vec::new();
+        records.extend(
+            parse_hermes_session_file(&source, &session_path).expect("parse hermes session"),
+        );
+        records.extend(
+            parse_hermes_session_file(&source, &request_path).expect("parse hermes request"),
+        );
+        records
+            .extend(parse_hermes_session_file(&source, &jsonl_path).expect("parse hermes jsonl"));
+        let texts = records
+            .iter()
+            .map(|record| record.text.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(records.len(), 3);
+        assert!(texts
+            .iter()
+            .any(|text| text.contains("Hermes CLI user prompt should import")));
+        assert!(texts
+            .iter()
+            .any(|text| text.contains("Hermes app request user prompt should import")));
+        assert!(texts
+            .iter()
+            .any(|text| text.contains("Hermes JSONL user prompt should import")));
+        assert!(records
+            .iter()
+            .all(|record| !record.text.contains("system should not import")));
+        assert!(records
+            .iter()
+            .all(|record| !record.text.contains("assistant answer should not import")));
 
         std::fs::remove_dir_all(root).expect("remove temp root");
     }

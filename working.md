@@ -52405,3 +52405,77 @@ Verification:
   - A duplicate cmux browser surface created by `cmux open --surface` was
     closed; PromptVault workspace was left with the original browser
     `surface:17`.
+
+## 2026-06-18 - File-State Import and Hermes Source Support
+
+Goal:
+
+- Raise PromptVault from cursor-only incremental import to file-tracked import
+  suitable for durable prompt vaulting.
+- Add Hermes CLI/app source coverage for observed local session/request JSON
+  formats.
+
+Changes:
+
+- Added Hermes source specs:
+  - `hermes-cli-sessions`: `~/.hermes/sessions`
+  - `hermes-profile-sessions`: `~/.hermes/profiles`
+  - `hermes-app-storage`: `~/Library/Application Support/Hermes`
+- Added a Hermes JSON/JSONL parser for `messages[]`,
+  `request.body.messages[]`, and top-level `role=user` rows.
+- Added `source_file_states` SQLite metadata with source path, byte count,
+  modified time, content SHA-256, prompt count, parse status, parse time, and
+  missing-source marker.
+- Changed `import-batch` so completed sources can still detect and reprocess
+  new, changed, or previously errored files without reparsing every file.
+- Added file-level reconciliation for changed files so stale prompt rows from
+  that file are removed after a successful reparse.
+- Preserved deleted/missing source files as `missing_at` state instead of
+  deleting already-vaulted prompt rows, so the permanent DB remains useful after
+  original source cleanup.
+- Updated README, CLI docs, and source discovery docs for Hermes and the
+  file-state import semantics.
+
+Focused verification so far:
+
+- `cargo test --lib import_batch_reprocesses_modified_completed_file_without_stale_prompts`: PASS.
+- `cargo test --lib parse_hermes_session_json_extracts_user_messages_only`: PASS.
+- `cargo test --lib import_batch_persists_resume_state`: PASS.
+- `cargo test --lib import_batch_records_persistent_import_events`: PASS.
+
+Live Hermes backfill:
+
+- `cargo run --bin promptvault-cli -- sources --json` showed all Hermes roots
+  present:
+  - `hermes-cli-sessions`: `/Users/wj/.hermes/sessions`
+  - `hermes-profile-sessions`: `/Users/wj/.hermes/profiles`
+  - `hermes-app-storage`: `/Users/wj/Library/Application Support/Hermes`
+- `plan --source hermes-cli-sessions,hermes-profile-sessions,hermes-app-storage`
+  reported:
+  - CLI: `7647` files, `1956385647` bytes.
+  - Profile: `2343` files, `204943112` bytes.
+  - App storage: `0` session-like files.
+- Actual permanent DB import completed:
+  - `hermes-cli-sessions`: `7647 / 7647`, stored `11512` prompts.
+  - `hermes-profile-sessions`: `2343 / 2343`, stored `2167` prompts.
+  - `hermes-app-storage`: `0 / 0`, completed empty.
+  - Hermes source-file states: all matching CLI/profile files status `ok`;
+    no `missing_at` rows.
+  - Total permanent DB prompts after Hermes backfill: `105451`.
+  - DB size: `/Users/wj/Documents/PromptVault/promptvault.sqlite` `436M`
+    (`du`: `437M`), WAL `0B`.
+- During the first Hermes CLI backfill, process samples found two performance
+  bottlenecks:
+  - `build_stats -> top_phrases -> redact_sensitive_text` during import-batch
+    response stats.
+  - `detect_risks` regex over very long Hermes prompt bodies.
+- Fixed both before completing the backfill:
+  - `import-batch` now uses lightweight stats instead of expensive frequency
+    phrase calculation.
+  - import-time risk detection now uses fast heuristic/token scanners; precise
+    regex redaction remains in `redact_sensitive_text`.
+- Post-fix JSON output checks:
+  - `/tmp/promptvault-hermes-profile-1.json`: `jq` OK.
+  - `/tmp/promptvault-hermes-profile-2.json`: `jq` OK.
+  - `/tmp/promptvault-hermes-profile-3.json`: `jq` OK.
+  - `/tmp/promptvault-hermes-app.json`: `jq` OK.

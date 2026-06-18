@@ -3495,6 +3495,10 @@ function parseStoredPromptFacetsResult(value: unknown): StoredPromptFacetsResult
         || !frequencyTextsAreUnique(value.projects)
       )
     )
+    || !isFrequencyItemsWithinTotal(value.repeated_prompts, value.total_prompts)
+    || !frequencyTextsAreUnique(value.repeated_prompts)
+    || !isFrequencyItemsEachWithinTotal(value.top_quality_gaps, value.total_prompts)
+    || !frequencyTextsAreUnique(value.top_quality_gaps)
     || !isFrequencyItemsWithinTotal(value.workspaces, value.total_prompts)
     || !frequencyTextsAreUnique(value.workspaces)) {
     throw new Error(MALFORMED_BRIDGE_RESPONSE_MESSAGE);

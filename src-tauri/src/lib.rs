@@ -1575,6 +1575,8 @@ pub struct StoredPromptFacetsResult {
     pub sources: Vec<FrequencyItem>,
     pub dates: Vec<FrequencyItem>,
     pub projects: Vec<FrequencyItem>,
+    pub repeated_prompts: Vec<FrequencyItem>,
+    pub top_quality_gaps: Vec<FrequencyItem>,
     pub workspaces: Vec<FrequencyItem>,
 }
 
@@ -4637,6 +4639,8 @@ pub fn run_list_stored_prompt_facets(
     )?;
     ensure_unknown_date_facet(&conn, &mut dates, limit)?;
     let projects = read_stored_prompt_project_facets(&conn, limit)?;
+    let repeated_prompts = read_stored_prompt_repeated_facets(&conn, limit)?;
+    let top_quality_gaps = read_stored_prompt_quality_gap_facets(&conn, limit)?;
     let workspaces =
         read_stored_prompt_facet(&conn, "COALESCE(cwd, '')", "COALESCE(cwd, '') <> ''", limit)?;
 
@@ -4647,6 +4651,8 @@ pub fn run_list_stored_prompt_facets(
         sources,
         dates,
         projects,
+        repeated_prompts,
+        top_quality_gaps,
         workspaces,
     })
 }
@@ -14651,12 +14657,7 @@ fn top_phrases(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
 fn repeated_prompts(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
     let mut counts: HashMap<String, usize> = HashMap::new();
     for prompt in prompts {
-        let normalized = frequency_safe_prompt_text(&prompt.text);
-        let short = normalized
-            .chars()
-            .take(180)
-            .collect::<String>()
-            .replace('\n', " ");
+        let short = repeated_prompt_start(&prompt.text);
         *counts.entry(short).or_default() += 1;
     }
     rank_counts(counts, limit)
@@ -14667,6 +14668,14 @@ fn repeated_prompts(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem
 
 fn frequency_safe_prompt_text(text: &str) -> String {
     redact_sensitive_text(&text.to_lowercase())
+}
+
+fn repeated_prompt_start(text: &str) -> String {
+    frequency_safe_prompt_text(text)
+        .chars()
+        .take(180)
+        .collect::<String>()
+        .replace('\n', " ")
 }
 
 fn top_quality_gaps(prompts: &[PromptRecord], limit: usize) -> Vec<FrequencyItem> {
@@ -18404,6 +18413,52 @@ fn read_stored_prompt_project_facets(
         *counts
             .entry(prompt_project_key_from_parts(cwd, &path, &text))
             .or_default() += 1;
+    }
+    Ok(rank_counts(counts, limit))
+}
+
+fn read_stored_prompt_repeated_facets(
+    conn: &Connection,
+    limit: usize,
+) -> Result<Vec<FrequencyItem>, Box<dyn std::error::Error>> {
+    let candidate_limit = limit.saturating_mul(5).max(limit);
+    let mut stmt = conn.prepare(
+        "SELECT MIN(text) AS sample_text,
+                COUNT(*) AS prompt_count
+         FROM prompts
+         GROUP BY LOWER(SUBSTR(REPLACE(text, char(10), ' '), 1, 180))
+         HAVING prompt_count > 1
+         ORDER BY prompt_count DESC, LOWER(SUBSTR(REPLACE(MIN(text), char(10), ' '), 1, 180)) ASC
+         LIMIT ?1",
+    )?;
+    let mut rows = stmt.query([candidate_limit as i64])?;
+    let mut counts = HashMap::new();
+    while let Some(row) = rows.next()? {
+        let sample_text: String = row.get(0)?;
+        let prompt_count = row.get::<_, i64>(1)? as usize;
+        let safe_start = repeated_prompt_start(&sample_text);
+        *counts.entry(safe_start).or_default() += prompt_count;
+    }
+    Ok(rank_counts(counts, limit)
+        .into_iter()
+        .filter(|item| item.count > 1)
+        .collect())
+}
+
+fn read_stored_prompt_quality_gap_facets(
+    conn: &Connection,
+    limit: usize,
+) -> Result<Vec<FrequencyItem>, Box<dyn std::error::Error>> {
+    let mut stmt = conn.prepare("SELECT quality_json FROM prompts")?;
+    let mut rows = stmt.query([])?;
+    let mut counts = HashMap::new();
+    while let Some(row) = rows.next()? {
+        let quality_json: String = row.get(0)?;
+        if let Ok(quality) = serde_json::from_str::<PromptQuality>(&quality_json) {
+            for gap in quality.missing {
+                *counts.entry(gap).or_default() += 1;
+            }
+        }
     }
     Ok(rank_counts(counts, limit))
 }
@@ -31971,9 +32026,17 @@ Status: completed as a source-only/report-only hardening slice.
         let mut codex_today = dated_record("facet-codex-today", "2026-06-06T00:00:00Z");
         codex_today.source = "Codex".to_string();
         codex_today.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
+        codex_today.text = "Make the PromptVault audit repeatable.".to_string();
+        codex_today.word_count = count_words(&codex_today.text);
+        codex_today.char_count = codex_today.text.chars().count();
+        codex_today.quality.missing = vec!["verification".to_string()];
         let mut codex_yesterday = dated_record("facet-codex-yesterday", "2026-06-05T00:00:00Z");
         codex_yesterday.source = "Codex".to_string();
         codex_yesterday.cwd = Some("/Users/wj/Ai/System/10_Projects/PromptVault".to_string());
+        codex_yesterday.text = codex_today.text.clone();
+        codex_yesterday.word_count = codex_today.word_count;
+        codex_yesterday.char_count = codex_today.char_count;
+        codex_yesterday.quality.missing = vec!["verification".to_string()];
         let mut claude_today = dated_record("facet-claude-today", "2026-06-06T00:00:00Z");
         claude_today.source = "Claude".to_string();
         claude_today.cwd = Some("/Users/wj/Ai/System/10_Projects/CareVault".to_string());
@@ -32004,8 +32067,109 @@ Status: completed as a source-only/report-only hardening slice.
             "/Users/wj/Ai/System/10_Projects/PromptVault"
         );
         assert_eq!(result.workspaces[0].count, 2);
+        assert_eq!(
+            result.repeated_prompts[0].text,
+            "make the promptvault audit repeatable."
+        );
+        assert_eq!(result.repeated_prompts[0].count, 2);
+        assert_eq!(result.top_quality_gaps[0].text, "verification");
+        assert_eq!(result.top_quality_gaps[0].count, 2);
 
         std::fs::remove_dir_all(root).expect("remove facets root");
+    }
+
+    #[test]
+    fn stored_prompt_facets_redact_repeated_prompt_secrets_before_truncation() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-secret-facets-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create secret facets root");
+        let db_path = root.join("promptvault.sqlite");
+        let secret_body = "supersecretprivatekeymaterial".repeat(12);
+        let secret_prompt = format!(
+            "Rotate the local fixture.\n-----BEGIN TEST PRIVATE KEY-----\n{secret_body}\n-----END TEST PRIVATE KEY-----\nThen run cargo test."
+        );
+        let mut first = dated_record("stored-secret-repeat-a", "2026-06-08T00:00:00Z");
+        first.text = secret_prompt.clone();
+        first.word_count = count_words(&first.text);
+        first.char_count = first.text.chars().count();
+        first.risk_flags = detect_risks(&first.text);
+        first.quality = assess_prompt_quality(&first.text, &first.risk_flags);
+        let mut second = dated_record("stored-secret-repeat-b", "2026-06-08T00:01:00Z");
+        second.text = secret_prompt;
+        second.word_count = count_words(&second.text);
+        second.char_count = second.text.chars().count();
+        second.risk_flags = detect_risks(&second.text);
+        second.quality = assess_prompt_quality(&second.text, &second.risk_flags);
+        let prompts = vec![first, second];
+        let stats = build_stats(&prompts, Vec::new());
+        persist_scan_result(&db_path, "2026-06-08T00:02:00Z", &prompts, &stats, &[])
+            .expect("persist secret facets");
+
+        let facets = run_list_stored_prompt_facets(StoredPromptFacetsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(5),
+        })
+        .expect("list secret facets");
+        let repeated_text = facets
+            .repeated_prompts
+            .iter()
+            .map(|item| item.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(repeated_text.contains("REDACTED_PRIVATE_KEY"));
+        assert!(!repeated_text.contains("begin test private key"));
+        assert!(!repeated_text.contains(&secret_body.to_lowercase()));
+
+        std::fs::remove_dir_all(root).expect("remove secret facets root");
+    }
+
+    #[test]
+    fn stored_prompt_facets_skip_corrupt_quality_json_rows() {
+        let root = std::env::temp_dir().join(format!(
+            "promptvault-corrupt-quality-facets-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create corrupt quality facets root");
+        let db_path = root.join("promptvault.sqlite");
+        let mut valid = dated_record("stored-valid-quality", "2026-06-08T00:00:00Z");
+        valid.quality.missing = vec!["verification".to_string()];
+        let mut corrupt = dated_record("stored-corrupt-quality", "2026-06-08T00:01:00Z");
+        corrupt.quality.missing = vec!["context".to_string()];
+        let prompts = vec![valid, corrupt];
+        let stats = build_stats(&prompts, Vec::new());
+        persist_scan_result(&db_path, "2026-06-08T00:02:00Z", &prompts, &stats, &[])
+            .expect("persist corrupt quality facets");
+        let conn = Connection::open(&db_path).expect("open corrupt quality db");
+        conn.execute(
+            "UPDATE prompts SET quality_json = '{not-json' WHERE id = ?1",
+            ["stored-corrupt-quality"],
+        )
+        .expect("corrupt one quality row");
+
+        let facets = run_list_stored_prompt_facets(StoredPromptFacetsOptions {
+            database_path: Some(db_path.display().to_string()),
+            limit: Some(5),
+        })
+        .expect("list corrupt quality facets");
+
+        assert_eq!(facets.total_prompts, 2);
+        assert_eq!(facets.top_quality_gaps[0].text, "verification");
+        assert_eq!(facets.top_quality_gaps[0].count, 1);
+        assert!(facets
+            .top_quality_gaps
+            .iter()
+            .all(|item| item.text != "context"));
+
+        std::fs::remove_dir_all(root).expect("remove corrupt quality facets root");
     }
 
     #[test]

@@ -4445,6 +4445,32 @@ test("browser bridge import events reject total count below returned rows", asyn
   );
 });
 
+test("browser bridge stored facets accept full-vault prompt management stats", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_prompts: 4,
+    sources: [{ text: "Codex", count: 4 }],
+    dates: [{ text: "2026-06-07", count: 4 }],
+    projects: [{ text: "PromptVault", count: 4 }],
+    repeated_prompts: [{ text: "fix promptvault import", count: 3 }],
+    top_quality_gaps: [{ text: "verification", count: 2 }],
+    workspaces: [{ text: "/tmp/PromptVault", count: 4 }],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const result = await listStoredPromptFacets();
+
+  assert.equal(result.total_prompts, 4);
+  assert.deepEqual(result.repeated_prompts, [{ text: "fix promptvault import", count: 3 }]);
+  assert.deepEqual(result.top_quality_gaps, [{ text: "verification", count: 2 }]);
+});
+
 test("browser bridge stored facets reject malformed successful payloads", async (t) => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ database_path: "/tmp/promptvault.sqlite" }), {
@@ -4569,6 +4595,35 @@ test("browser bridge stored facets reject project counts beyond total prompts", 
       assert(error instanceof Error);
       assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
       assert.doesNotMatch(error.message, /count: 2|toLocaleString|RangeError|undefined/);
+      return true;
+    },
+  );
+});
+
+test("browser bridge stored facets reject repeated prompt counts beyond total prompts", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    generated_at: "2026-06-07T00:00:00Z",
+    database_path: "/tmp/promptvault.sqlite",
+    total_prompts: 1,
+    sources: [{ text: "Codex", count: 1 }],
+    dates: [{ text: "2026-06-07", count: 1 }],
+    repeated_prompts: [{ text: "fix promptvault import", count: 2 }],
+    top_quality_gaps: [],
+    workspaces: [{ text: "PromptVault", count: 1 }],
+  }), {
+    status: 200,
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(
+    () => listStoredPromptFacets(),
+    (error) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /브라우저 브리지 응답 형식이 올바르지 않습니다/);
+      assert.doesNotMatch(error.message, /fix promptvault import|count: 2|toLocaleString|RangeError|undefined/);
       return true;
     },
   );

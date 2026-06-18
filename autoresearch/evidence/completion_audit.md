@@ -2,6 +2,35 @@
 
 Date: 2026-06-03
 
+Last updated: 2026-06-18
+
+## 2026-06-18 Delta
+
+| Area | Evidence | Status |
+|---|---|---|
+| Full-vault stored repeated facets | `StoredPromptFacetsResult.repeated_prompts`; stored-mode stats prefer backend facets over preview-limited scan stats | PASS |
+| Repeated facet secret safety | `repeated_prompt_start` redacts full stored sample before truncating the visible prompt start | PASS |
+| Corrupt stored quality-row tolerance | `read_stored_prompt_quality_gap_facets` skips malformed `quality_json` rows instead of failing `/api/prompt-facets` | PASS |
+| Browser bridge work-log coverage QA | `data-work-log-coverage-status` exposes raw status for automation while UI keeps localized labels | PASS |
+| UI focus and touch polish | `src/App.css` adds focus-visible rings, search focus state, wrapped notices, mobile stacked controls, and 44px+ compact targets | PASS |
+| Bridge/API validation | `tests/promptVaultApi.test.ts` covers stored repeated facets and quality gaps | PASS |
+| Full local quality gate | `npm run check` passed frontend tests/build, Rust build, Rust tests, and strict clippy | PASS |
+| Isolated browser QA | `npm run qa:browser-bridge` passed after the work-log coverage status fix | PASS |
+| Secret scan | `gitleaks dir . --no-banner --redact` | PASS |
+
+Additional verification commands:
+
+```bash
+cargo fmt --check
+cargo test --lib stored_prompt_facets
+node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/qualityGaps.test.ts tests/storedFacetStatus.test.ts
+node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts tests/workSummaryStatus.test.ts
+npm run qa:browser-bridge
+npm run check
+git diff --check
+gitleaks dir . --no-banner --redact
+```
+
 ## Requirement Map
 
 | Requirement | Evidence | Status |

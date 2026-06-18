@@ -2532,7 +2532,11 @@ async function runBrowserQa() {
       const emptyText = document.querySelector('[data-empty-work-log-coverage="true"]')?.textContent ?? "";
       const rowsAreGapLogs = rows.length > 0 && rows.every((row) => {
         const text = row.textContent ?? "";
-        return text.includes("unparsed") || text.includes("unreadable");
+        const status = row.getAttribute("data-work-log-coverage-status") ?? "";
+        return status === "unparsed"
+          || status === "unreadable"
+          || text.includes("unparsed")
+          || text.includes("unreadable");
       });
       return metaText.includes("작업로그 필터")
         && metaText.includes("필터 1개")

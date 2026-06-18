@@ -176,6 +176,8 @@ export interface StoredPromptFacetsResult {
   sources: FrequencyItem[];
   dates: FrequencyItem[];
   projects?: FrequencyItem[];
+  repeated_prompts: FrequencyItem[];
+  top_quality_gaps: FrequencyItem[];
   workspaces: FrequencyItem[];
 }
 

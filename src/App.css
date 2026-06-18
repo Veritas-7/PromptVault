@@ -38,10 +38,23 @@ button {
   gap: 8px;
   min-height: 38px;
   padding: 0 13px;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out,
+    color 160ms ease-out,
+    transform 160ms ease-out;
 }
 
 button:hover {
   border-color: #637a69;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(82, 121, 111, 0.24);
+  outline-offset: 2px;
 }
 
 button:disabled {
@@ -156,6 +169,11 @@ h3 {
   border-color: #213629;
   color: #f7fbf6;
   font-weight: 700;
+}
+
+.primary:hover {
+  background: #182a20;
+  border-color: #182a20;
 }
 
 .secondary-action {
@@ -583,6 +601,7 @@ h3 {
   border-radius: 8px;
   color: #38483e;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   min-height: 42px;
   overflow-wrap: anywhere;
@@ -867,6 +886,7 @@ h3 {
   background: #fff;
   border: 1px solid #d9e0d8;
   border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(31, 41, 51, 0.04);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -1275,6 +1295,7 @@ h3 {
 .frequency-item strong {
   color: #59685d;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .frequency-overflow {
@@ -1298,6 +1319,11 @@ h3 {
   height: 34px;
   padding: 0 8px;
   width: min(210px, 48%);
+}
+
+.searchbox:focus-within {
+  border-color: #52796f;
+  box-shadow: 0 0 0 3px rgba(82, 121, 111, 0.16);
 }
 
 .prompt-list-panel .panel-heading > span {
@@ -1573,6 +1599,27 @@ h3 {
   .actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  button,
+  .searchbox,
+  .prompt-list-panel .searchbox {
+    width: 100%;
+  }
+
+  button,
+  .inline-action,
+  .compact-action,
+  .notice-action,
+  .local-recommendation-toggle,
+  .session-limit-control,
+  .searchbox,
+  .limit-control input,
+  .session-limit-control input,
+  .stored-filter-control input,
+  .work-summary-filter-row input,
+  .work-summary-filter-row select {
+    min-height: 44px;
   }
 
   .metrics,

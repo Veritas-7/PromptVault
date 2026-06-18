@@ -1290,11 +1290,23 @@ function App() {
     improvementFailureMessage !== null,
   );
   const qualityGapItems = useMemo(() => {
-    return (result?.stats.top_quality_gaps ?? []).map((item) => ({
+    const items = resultOrigin === "stored"
+      ? storedFacetsResult?.top_quality_gaps ?? result?.stats.top_quality_gaps ?? []
+      : result?.stats.top_quality_gaps ?? [];
+    return items.map((item) => ({
       ...item,
       text: qualityGapLabel(item.text),
     }));
-  }, [result?.stats.top_quality_gaps]);
+  }, [result?.stats.top_quality_gaps, resultOrigin, storedFacetsResult?.top_quality_gaps]);
+  const repeatedPromptItems = resultOrigin === "stored"
+    ? storedFacetsResult?.repeated_prompts ?? result?.stats.repeated_prompts ?? []
+    : result?.stats.repeated_prompts ?? [];
+  const promptDateItems = resultOrigin === "stored"
+    ? storedFacetsResult?.dates ?? result?.stats.prompts_by_date ?? []
+    : result?.stats.prompts_by_date ?? [];
+  const promptProjectItems = resultOrigin === "stored"
+    ? storedFacetsResult?.projects ?? result?.stats.prompts_by_project ?? []
+    : result?.stats.prompts_by_project ?? [];
   const storedLoadFailureMessage = storedLoadFailureText(storedLoadState, storedFilterCount);
   const storedSourceSuggestions = useMemo(() => {
     const sourceLabels = storedFacetsResult?.sources.map((source) => source.text)
@@ -6348,7 +6360,11 @@ function App() {
           visibleWorkLogCoverageFiles.length ? (
             <div className="work-summary-list" data-work-log-coverage="true">
               {visibleWorkLogCoverageFiles.map((file) => (
-                <article className="work-summary-row work-log-coverage-row" key={file.source_path}>
+                <article
+                  className="work-summary-row work-log-coverage-row"
+                  data-work-log-coverage-status={file.status}
+                  key={file.source_path}
+                >
                   <div>
                     <strong>{file.project}</strong>
                     <span>{file.source_file}</span>
@@ -8485,17 +8501,17 @@ function App() {
             />
             <FrequencyColumn
               title="반복"
-              items={result?.stats.repeated_prompts ?? []}
+              items={repeatedPromptItems}
               emptyText={frequencyEmptyText(hasPromptResult, "반복")}
             />
             <FrequencyColumn
               title="날짜"
-              items={result?.stats.prompts_by_date ?? []}
+              items={promptDateItems}
               emptyText={frequencyEmptyText(hasPromptResult, "날짜")}
             />
             <FrequencyColumn
               title="프로젝트"
-              items={result?.stats.prompts_by_project ?? []}
+              items={promptProjectItems}
               emptyText={frequencyEmptyText(hasPromptResult, "프로젝트")}
             />
             <FrequencyColumn
@@ -8776,12 +8792,21 @@ function FrequencyColumn({
       <h3>{title}</h3>
       {items.length ? (
         <>
-          {visibleItems.map((item) => (
-            <div className="frequency-item" key={`${title}-${item.text}`}>
-              <span>{redactSensitiveDisplayText(item.text)}</span>
-              <strong>{item.count}</strong>
-            </div>
-          ))}
+          {visibleItems.map((item) => {
+            const safeText = redactSensitiveDisplayText(item.text);
+            const countText = item.count.toLocaleString();
+            return (
+              <div
+                aria-label={`${title}: ${safeText}, ${countText}회`}
+                className="frequency-item"
+                key={`${title}-${item.text}`}
+                title={`${safeText} · ${countText}회`}
+              >
+                <span>{safeText}</span>
+                <strong>{countText}</strong>
+              </div>
+            );
+          })}
           {hiddenItemCount > 0 ? (
             <p className="frequency-overflow" data-frequency-overflow={title}>
               {title} 외 {hiddenItemCount.toLocaleString()}개 항목이 더 있습니다.

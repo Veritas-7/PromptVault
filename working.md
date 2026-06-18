@@ -1,10 +1,131 @@
 # PromptVault Working Log
 
-Updated: 2026-06-11 16:23 KST
+Updated: 2026-06-18 KST
 
 Repo: `/Users/wj/Ai/System/10_Projects/PromptVault`
 
 Resumed from Codex thread: `019eb503-f8ed-7df2-8275-7da158b188eb`
+
+## Resume Snapshot - 2026-06-18 KST
+
+Long-Term Goal:
+
+- Keep PromptVault production-ready for full local prompt/work-log management:
+  permanent prompt facets, stored prompt inspection, review queues, source
+  evidence, and local/browser QA should stay secret-safe, resumable, and usable
+  on desktop and mobile widths.
+
+Current Active Work:
+
+- Completed the remaining hardening slice from the 2026-06-11 stored-facet
+  work.
+- Used parallel audit lanes for backend/API and UI/UX review. Confirmed and
+  fixed two backend risks: repeated-prompt facet display text is now redacted
+  before truncation, and corrupt stored `quality_json` rows no longer fail the
+  full `/api/prompt-facets` refresh.
+- Polished UI focus/touch behavior for repeated controls, search boxes, compact
+  actions, notice actions, stored filters, and mobile stacked controls.
+- Added a raw `data-work-log-coverage-status` attribute for work-log coverage
+  rows so browser QA can verify exact machine status while the UI keeps Korean
+  display labels.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: redaction-before-truncation helper for repeated
+  prompt facets; skip malformed stored quality JSON rows; new regression tests.
+- `src/App.tsx`: frequency rows use redacted display/title/ARIA text and
+  localized counts; work-log coverage rows expose raw status as data.
+- `src/App.css`: focus-visible rings, hover affordance, panel/search polish,
+  wrapped notices, and mobile 44px+ targets for compact controls.
+- `scripts/browser-bridge-isolated-qa.mjs`: verifies work-log coverage status
+  from the raw data attribute instead of localized visible text.
+- `README.md`, `autoresearch/evidence/completion_audit.md`: updated completion
+  evidence for the stored-facet hardening and UI/QA slice.
+
+Verification:
+
+- PASS: `cargo fmt --check`.
+- PASS: `cargo test --lib stored_prompt_facets` (`4` stored-facet tests).
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts tests/qualityGaps.test.ts tests/storedFacetStatus.test.ts`
+  (`226` tests).
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/workLogCoverageFilters.test.ts tests/workSummaryStatus.test.ts`
+  (`57` tests).
+- PASS: `npm run qa:browser-bridge`.
+- PASS: `npm run check` (frontend tests/build, Rust build, Rust tests, strict
+  clippy).
+
+Known Exclusions / Next Continuation:
+
+- No known failing gate after this slice. Before the next release/push, rerun
+  `git diff --check`, `gitleaks dir . --no-banner --redact`, and remote sync
+  verification from the repo root.
+
+## Resume Snapshot - 2026-06-11 17:20 KST
+
+Long-Term Goal:
+
+- Verify and keep PromptVault suitable for full prompt management: all reachable
+  local prompt sources imported into the permanent vault, usable source/date/
+  project/workspace filters, stats for frequently reused prompts, and prompt
+  improvement guidance with saved recommendation history.
+
+Current Active Work:
+
+- Completion audit found one real weakness: stored prompt loads returned
+  preview-limited `ScanStats`, so the UI's "repeated prompt" and quality-gap
+  stats could reflect the loaded preview slice rather than the full permanent
+  vault.
+- Implemented full-vault stored facets for `repeated_prompts` and
+  `top_quality_gaps`; stored-mode UI stats now prefer those full-vault facets
+  for repeated prompts, date/project facets, and quality gaps.
+- First full-text redaction implementation was too slow for UI refresh
+  (`/api/prompt-facets` exceeded 90s on the 92k-row permanent vault), so the
+  repeated facet was changed to use SQLite grouped prompt-start candidates and
+  redact only the top candidates.
+
+Runtime Evidence Before Patch:
+
+- Temporary browser bridge on `127.0.0.1:5189` against
+  `/Users/wj/Documents/PromptVault/promptvault.sqlite` returned:
+  - `/api/prompt-facets`: `total_prompts=92263`, top sources/dates/projects/
+    workspaces from the permanent vault.
+  - `/api/prompts` with `project=PromptVault`, `preview_sort=quality_asc`:
+    returned PromptVault-only stored prompts with date/project/quality-gap
+    stats and `persistence.stored_prompt_count=92263`.
+  - `/api/improve` with selected stored prompt context persisted local
+    recommendation history as `improvement_event_id=9`.
+
+Changes:
+
+- `src-tauri/src/lib.rs`: `StoredPromptFacetsResult` now includes full-vault
+  repeated prompt starts and quality-gap facets; backend tests cover both.
+- `src/types.ts`, `src/promptVaultApi.ts`: bridge/API type and validation for
+  full-vault prompt-management stats.
+- `src/App.tsx`: stored-mode statistics panel uses full-vault facet data for
+  repeated prompts, date/project buckets, and quality gaps.
+- `tests/promptVaultApi.test.ts`: bridge acceptance/rejection tests for the new
+  stored facet stats.
+- `README.md`: documented that stored facet refreshes include full-vault
+  repeated prompt and quality-gap counts.
+
+Verification So Far:
+
+- PASS: `cargo fmt --check`.
+- PASS: `cargo test --lib stored_prompt_facets` (`2` passed).
+- PASS:
+  `node --disable-warning=ExperimentalWarning --experimental-transform-types --test tests/promptVaultApi.test.ts`
+  (`218` passed).
+- PASS: `npm run build` (existing Vite chunk-size warning only).
+- PASS after optimization: `/api/prompt-facets` against the permanent DB
+  returned `total_prompts=92263`, full-vault repeated prompt starts, and
+  quality gaps in `real 4.39s`.
+
+Known Exclusions / Next Continuation:
+
+- Run final full `npm run check`, secret/whitespace gates, commit/push, then
+  perform a completion audit against the prompt-management objective.
 
 ## Resume Snapshot - 2026-06-11 16:23 KST
 
